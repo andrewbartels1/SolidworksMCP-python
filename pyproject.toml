@@ -1,0 +1,259 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "solidworks-mcp-python"
+version = "1.0.0"
+description = "SolidWorks MCP Server with FastMCP and PydanticAI - Python Implementation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Andrew", email = "your-email@example.com" },
+]
+maintainers = [
+    { name = "Andrew", email = "your-email@example.com" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Software Distribution",
+]
+
+dependencies = [
+    "fastmcp>=0.4.0",
+    "pydantic>=2.5.0",
+    "pydantic-ai>=0.0.13",
+    "pywin32>=306; platform_system=='Windows'",
+    "pywin32-ctypes>=0.2.0; platform_system=='Windows'",
+    "loguru>=0.7.0",
+    "typing-extensions>=4.8.0",
+    "httpx>=0.24.0",
+    "uvicorn>=0.24.0",
+    "python-dotenv>=1.0.0",
+    "jinja2>=3.1.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.19.0",
+    "urllib3>=2.2.0",
+    "charset-normalizer>=3.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing framework
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0", 
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-xdist>=3.3.0",
+    "pytest-benchmark>=4.0.0",
+    
+    # Code quality and linting
+    "coverage[toml]>=7.3.0",
+    "mypy>=1.6.0",
+    "ruff>=0.1.0",
+    "black>=23.9.0",
+    
+    # Documentation validation
+    "pydocstyle>=6.3.0",  # Google style docstring validation
+    "doc8>=1.1.0",  # Documentation linting
+    "sphinx>=7.0.0",  # API documentation generation
+    "sphinx-autodoc-typehints>=1.24.0",
+    
+    # Development workflow
+    "pre-commit>=3.4.0",
+    "tox>=4.11.0",
+    "factory-boy>=3.3.0",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-xdist>=3.3.0",
+    "coverage[toml]>=7.3.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocs-include-markdown-plugin>=6.0.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.0",
+    "mkdocs-section-index>=0.3.0",
+    "mkdocs-autorefs>=0.5.0",
+    "mkdocs-minify-plugin>=0.7.0",
+    "mike>=2.0.0",  # For versioning
+    "pygments>=2.16.0",  # For syntax highlighting
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/solidworks-mcp-python"
+"Bug Reports" = "https://github.com/yourusername/solidworks-mcp-python/issues"
+"Source" = "https://github.com/yourusername/solidworks-mcp-python"
+
+[project.scripts]
+solidworks-mcp = "solidworks_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/solidworks_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/examples",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+    "--color=yes",
+    "--durations=10",
+    "--cov=src/solidworks_mcp",
+    "--cov-report=html:htmlcov",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--cov-fail-under=90",
+    "--asyncio-mode=auto",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "adapter: Adapter-specific tests",
+    "tools: Tool functionality tests",
+    "server: Server lifecycle tests",
+    "performance: Performance tests",
+    "security: Security-related tests",
+    "slow: Tests that take longer to run",
+    "windows_only: Tests that require Windows OS",
+    "solidworks_only: Tests that require SolidWorks installation",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+collect_ignore = ["setup.py", "conftest.py"]
+asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+timeout = 300
+
+[tool.coverage.run]
+source = ["src/solidworks_mcp"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+# Ignore missing imports for Windows-specific modules on other platforms
+[[tool.mypy.overrides]]
+module = [
+    "win32com.*",
+    "pythoncom",
+    "pywintypes",
+    "win32api",
+    "win32con",
+]
+ignore_missing_imports = true
+
+[tool.black]
+target-version = ["py311"]
+line-length = 88
+skip-string-normalization = false
+extend-exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+unfixable = ["B"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402"]
+"**/{tests,docs,tools}/*" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["solidworks_mcp"]
