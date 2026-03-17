@@ -23,12 +23,26 @@ def find_tools_in_file(file_path: Path) -> List[str]:
         tools = []
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # Check if function has @mcp.tool() decorator
                 for decorator in node.decorator_list:
+                    is_tool_decorator = False
+
+                    # Handles @mcp.tool and @tool
                     if (hasattr(decorator, "attr") and decorator.attr == "tool") or (
                         hasattr(decorator, "id") and decorator.id == "tool"
                     ):
+                        is_tool_decorator = True
+
+                    # Handles @mcp.tool(...) and @tool(...)
+                    if isinstance(decorator, ast.Call):
+                        func = decorator.func
+                        if (hasattr(func, "attr") and func.attr == "tool") or (
+                            hasattr(func, "id") and func.id == "tool"
+                        ):
+                            is_tool_decorator = True
+
+                    if is_tool_decorator:
                         tools.append(node.name)
                         break
 
@@ -55,7 +69,10 @@ def check_function_docstring(file_path: Path, function_name: str) -> bool:
         tree = ast.parse(content)
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == function_name:
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == function_name
+            ):
                 # Check if function has a docstring
                 if (
                     node.body
@@ -84,7 +101,8 @@ def main():
     Returns:
         tuple: (exit_code, total_tools, documented_tools)
     """
-    src_path = Path(__file__).parent / "src" / "solidworks_mcp" / "tools"
+    project_root = Path(__file__).resolve().parents[2]
+    src_path = project_root / "src" / "solidworks_mcp" / "tools"
 
     if not src_path.exists():
         print(f"Tools directory not found: {src_path}")

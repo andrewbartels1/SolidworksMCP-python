@@ -52,6 +52,7 @@ def validate_test_structure(project_root: Path) -> bool:
         "test_integration.py",
     ]
 
+    print("\n🔍 Validating test structure...", project_root)
     tests_dir = project_root / "tests"
     missing_files = []
 
@@ -80,7 +81,7 @@ def run_tests_with_coverage(project_root: Path) -> dict[str, Any]:
 
     # Run pytest with coverage
     cmd = [
-        "python",
+        sys.executable,
         "-m",
         "pytest",
         "--verbose",
@@ -132,7 +133,7 @@ def run_specific_test_categories(project_root: Path) -> dict[str, Any]:
         print(f"\n🔍 Testing {category} tools...")
 
         cmd = [
-            "python",
+            sys.executable,
             "-m",
             "pytest",
             "--verbose",
@@ -271,7 +272,7 @@ def validate_documentation(project_root: Path) -> dict[str, Any]:
         "docs/getting-started/installation.md",
         "docs/getting-started/quickstart.md",
         "mkdocs.yml",
-        "DOCUMENTATION_PROGRESS.md",
+        "docs/DOCUMENTATION_PROGRESS.md",
     ]
 
     missing_docs = []
@@ -299,7 +300,7 @@ def validate_documentation(project_root: Path) -> dict[str, Any]:
 
 def main():
     """Main test validation and coverage analysis."""
-    project_root = Path(__file__).parent
+    project_root = Path(__file__).resolve().parents[2]
 
     print("🚀 SolidWorks MCP Server - Comprehensive Test Suite")
     print(f"📁 Project root: {project_root}")

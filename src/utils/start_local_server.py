@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 # Add src to path for development
-project_root = Path(__file__).parent
+project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root / "src"))
 
 from solidworks_mcp.config import (
@@ -28,7 +28,7 @@ from solidworks_mcp.config import (
     AdapterType,
 )
 from solidworks_mcp.server import SolidWorksMCPServer
-from solidworks_mcp.utils.logger import setup_logging
+from solidworks_mcp.utils.logging import setup_logging
 
 
 def create_local_config(
@@ -211,7 +211,7 @@ def print_connection_info(config: SolidWorksMCPConfig) -> None:
             "solidworks": {
                 "command": "python",
                 "args": [
-                    str(project_root / "start_local_server.py"),
+                    str(project_root / "src" / "utils" / "start_local_server.py"),
                     "--mock" if config.mock_solidworks else "--real",
                     f"--port={config.port}",
                     f"--security={config.security_level.value}",
@@ -285,7 +285,7 @@ async def main():
     )
 
     # Setup logging
-    setup_logging(config.log_level)
+    setup_logging(config)
     logger = logging.getLogger(__name__)
 
     print_startup_banner(config)

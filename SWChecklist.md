@@ -1,7 +1,7 @@
 # SolidWorks MCP Server Tools Checklist
 
 ## 📊 Tool Status Overview
-- **Total Tools**: 88
+- **Total Tools**: 76 tools
 - **Categories**: 11
 - **Status**: All Fixed and Operational (as of 2025-01-11)
 
