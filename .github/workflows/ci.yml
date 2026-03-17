@@ -37,4 +37,5 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
-          use_oidc: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
