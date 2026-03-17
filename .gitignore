@@ -60,3 +60,4 @@ venv/
 __pycache__/
 *.pyc
 EOF < /dev/null
+.prettierrc
