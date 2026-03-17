@@ -7,12 +7,25 @@ A Python Model Context Protocol (MCP) server for SolidWorks automation, focused 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2025-red)](https://www.solidworks.com/)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-0A66C2)](https://andrewbartels1.github.io/SolidworksMCP-python/)
+[![Tests](https://github.com/andrewbartels1/SolidworksMCP-python/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewbartels1/SolidworksMCP-python/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
 ## Overview
 
 This repository contains the Python implementation of the SolidWorks MCP server. It provides 90+ tools across modeling, sketching, drawing, export, analysis, automation, templates, and macro workflows.
 
 The project is still evolving. Expect some rough edges, but the current direction is Python-first, FastMCP-based, and documented through MkDocs.
+
+## Motivation and Origins
+
+This project exists to explore a Python-first approach to SolidWorks automation through MCP, with an emphasis on local development, clearer documentation, testability, and experimentation around CAD-focused agent workflows.
+
+It is also directly inspired by the original TypeScript project created by vespo92. If you are looking for the original concept, earlier implementation approach, or the upstream source that sparked this rewrite, see:
+
+- Original repository: https://github.com/vespo92/SolidworksMCP-TS
+
+This repository is an independent Python implementation rather than a continuation of that TypeScript codebase, but the original project deserves clear credit for the initial idea and direction.
 
 ## What This Repo Is
 

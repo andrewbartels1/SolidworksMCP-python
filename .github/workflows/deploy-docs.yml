@@ -20,9 +20,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          activate-environment: solidworks_mcp
+          environment-file: solidworks_mcp.yml
+
+      - name: Install package
+        shell: bash -el {0}
+        run: conda run -n solidworks_mcp pip install -e ".[dev,docs]"
+
+      - name: Run test suite
+        shell: bash -el {0}
+        run: make test
+
   # Build job
   build:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -6,30 +6,35 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   test:
-    runs-on: windows-latest
-    
-    strategy:
-      matrix:
-        node-version: [20.x]
-    
+    runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-    
-    - name: Install dependencies
-      run: npm install
-    
-    - name: Build
-      run: npm run build
-    
-    - name: Run tests
-      run: npm test -- --run
-    
-    - name: Check types
-      run: npm run typecheck
+      - uses: actions/checkout@v4
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          activate-environment: solidworks_mcp
+          environment-file: solidworks_mcp.yml
+
+      - name: Install package
+        shell: bash -el {0}
+        run: conda run -n solidworks_mcp pip install -e ".[dev,docs]"
+
+      - name: Run tests
+        shell: bash -el {0}
+        run: make test
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          use_oidc: true

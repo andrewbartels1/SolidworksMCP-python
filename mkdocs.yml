@@ -1,10 +1,10 @@
 site_name: SolidWorks MCP Server
-site_url: https://yourusername.github.io/SolidworksMCP-python
+site_url: https://andrewbartels1.github.io/SolidworksMCP-python
 site_description: Python MCP server for SolidWorks automation with 90+ tools
 
 # Repository
 repo_name: SolidworksMCP-python
-repo_url: https://github.com/yourusername/SolidworksMCP-python
+repo_url: https://github.com/andrewbartels1/SolidworksMCP-python
 edit_uri: edit/main/docs/
 
 # Navigation
