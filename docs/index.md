@@ -80,8 +80,8 @@ flowchart TB
     Server --> Router["Intelligent Router"]
     Router --> Analyzer["Complexity Analyzer"]
     
-    Analyzer -->|Simple Operations| COM["Direct COM API"]
-    Analyzer -->|Complex Operations| VBA["VBA Generation"]
+    Analyzer -->|"Simple Operations"| COM["Direct COM API"]
+    Analyzer -->|"Complex Operations"| VBA["VBA Generation"]
     
     COM --> SW["SolidWorks Application"]
     VBA --> SW

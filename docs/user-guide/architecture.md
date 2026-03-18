@@ -86,14 +86,14 @@ Advanced analysis engine that examines operations to determine the best executio
 ```mermaid
 flowchart TD
     A[Tool Request] --> B{Parameter Count}
-    B -->|≤12| C{Operation Type}
-    B -->|>12| D[VBA Generator]
+    B -->|"≤12"| C{Operation Type}
+    B -->|">12"| D[VBA Generator]
     
     C -->|Simple| E[Direct COM]
     C -->|Complex| F{Performance History}
     
-    F -->|Good COM History| E
-    F -->|Poor COM History| D
+    F -->|"Good COM History"| E
+    F -->|"Poor COM History"| D
     
     E --> G{Success?}
     D --> H{Success?}
@@ -105,8 +105,8 @@ flowchart TD
     H -->|No| K[Error Handler]
     
     J --> L{Retry Count}
-    L -->|< Max| D
-    L -->|= Max| M[Report Failure]
+    L -->|"< Max"| D
+    L -->|"= Max"| M[Report Failure]
 ```
 
 ### 3. Adapter Architecture
