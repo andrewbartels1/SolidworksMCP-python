@@ -59,7 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mkdocs-material mkdocstrings[python] mkdocs-gen-files mkdocs-literate-nav mkdocs-section-index mkdocs-autorefs mkdocs-minify-plugin mkdocs-awesome-pages-plugin
+          pip install mkdocs-material mkdocstrings[python] mkdocs-gen-files mkdocs-literate-nav mkdocs-section-index mkdocs-autorefs mkdocs-minify-plugin mkdocs-awesome-pages-plugin mkdocs-mermaid2-plugin
 
       - name: Setup Pages
         id: pages
