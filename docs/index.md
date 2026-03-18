@@ -40,19 +40,47 @@ Four-tier security model for different deployment scenarios:
 
 ## Quick Start
 
-```bash
-# Clone and setup
-git clone https://github.com/yourusername/SolidworksMCP-python.git
+Choose the path that matches your setup:
+
+### Windows only
+
+Use this when SolidWorks and the MCP server run on the same Windows machine.
+
+```powershell
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
 cd SolidworksMCP-python
-
-# Create conda environment and install
-make install
-mamba activate solidworks_mcp
-uv pip install -e .[dev,test,docs]
-
-# Run the server
+conda create -n solidworks_mcp python=3.11
+conda activate solidworks_mcp
+pip install -e ".[dev,test,docs]"
 python -m solidworks_mcp.server
 ```
+
+### Linux / WSL only
+
+Use this for mock-mode development, tests, and documentation work.
+
+```bash
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
+cd SolidworksMCP-python
+make install
+make test
+make docs
+```
+
+### Linux / WSL client + Windows host
+
+Use this when SolidWorks runs on Windows and your client or development workflow runs on Linux/WSL.
+
+```powershell
+python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+```
+
+```bash
+make install
+make test
+```
+
+Then connect your client to `http://<windows-host-ip>:8000`.
 
 ## Tool Categories
 

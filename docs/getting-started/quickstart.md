@@ -6,47 +6,82 @@ Get up and running with SolidWorks automation in under 5 minutes!
 
 Before starting, ensure you have:
 
-- ✅ Windows 10/11
+- ✅ Python 3.11+
+- ✅ One environment manager: conda, mamba, or micromamba
+- ✅ Windows 10/11 with SolidWorks installed for real automation
+- ✅ Linux/WSL if you want mock-mode development or a remote client workflow
 
-- ✅ SolidWorks 2020+ installed
+## Choose Your Path
 
-- ✅ Python 3.12+ (conda recommended)
+### Option A: Windows only
 
-- ✅ Administrator privileges
+Use this when SolidWorks and the MCP server run on the same Windows machine.
+
+### Option B: Linux / WSL only
+
+Use this for mock-mode development, tests, and docs. Real COM automation is not available in this path.
+
+### Option C: Linux / WSL client + Windows host
+
+Use this when SolidWorks runs on Windows and your MCP client or development workflow runs on Linux/WSL.
 
 ## 1. Installation (2 minutes)
 
-```bash
+### Option A: Windows only
 
-# Clone and setup
-
-git clone https://github.com/yourusername/SolidworksMCP-python.git
-
+```powershell
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
 cd SolidworksMCP-python
-
-
-
-# Automated setup with mamba/conda
-
-make install
-
-
-
-# Activate environment
-
-mamba activate solidworks_mcp
-
-uv pip install -e ".[dev,test,docs]"
-
+conda create -n solidworks_mcp python=3.11
+conda activate solidworks_mcp
+pip install -e ".[dev,test,docs]"
 ```
+
+### Option B: Linux / WSL only
+
+```bash
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
+cd SolidworksMCP-python
+make install
+```
+
+### Option C: Linux / WSL client + Windows host
+
+1. On the Windows host:
+
+```powershell
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
+cd SolidworksMCP-python
+conda create -n solidworks_mcp python=3.11
+conda activate solidworks_mcp
+pip install -e ".[dev,test,docs]"
+python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+```
+
+2. On the Linux/WSL machine:
+
+```bash
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
+cd SolidworksMCP-python
+make install
+make test
+```
+
+3. Point your client to `http://<windows-host-ip>:8000`.
 
 ## 2. First Automation (2 minutes)
 
 ### Start SolidWorks
 
-Launch SolidWorks before running the MCP server.
+Launch SolidWorks before running the MCP server on the Windows host.
+
+- Option A: launch SolidWorks locally on the same Windows machine.
+- Option B: skip this step and use mock mode.
+- Option C: launch SolidWorks on the Windows host, not inside Linux/WSL.
 
 ### Test Connection
+
+Use this Python check for Option A or Option C on the Windows host:
 
 ```python
 
@@ -80,7 +115,16 @@ print(f\"SolidWorks Version: {info.get('version')}\")
 
 ```
 
+For Option B, validate the local development setup with:
+
+```bash
+make test
+make run
+```
+
 ### Run Your First Tool
+
+Run this on Windows where the SolidWorks adapter is available:
 
 ```python
 
@@ -112,7 +156,7 @@ print(f\"Rectangle added: {rect_result['message']}\")
 
 ```bash
 
-python verify_tool_count.py
+python utils/verify_tool_count.py
 
 ```
 
@@ -327,13 +371,28 @@ batch_export_drawings()
 regsvr32 "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldworks.tlb"
 ```
 
-### Environment Issues
+### Windows Environment Issues
+
+```powershell
+# Clean reinstall
+conda env remove -n solidworks_mcp
+conda create -n solidworks_mcp python=3.11
+conda activate solidworks_mcp
+pip install -e ".[dev,test,docs]"
+```
+
+### Linux / WSL Environment Issues
 
 ```bash
-# Clean reinstall
-mamba env remove -n solidworks_mcp
 make install
+make test
 ```
+
+### WSL / Linux Cannot Reach Windows Host
+
+- Ensure the Windows host is running `python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000`.
+- Use the Windows host IP address instead of `localhost` when needed.
+- Confirm Windows Firewall allows inbound connections on port 8000.
 
 ### Permission Issues
 

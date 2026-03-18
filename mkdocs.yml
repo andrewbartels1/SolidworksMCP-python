@@ -16,6 +16,7 @@ nav:
   - User Guide:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
+      - Platform and Connectivity: user-guide/platform-connectivity.md
 
 # Theme configuration
 theme:
