@@ -61,3 +61,6 @@ __pycache__/
 *.pyc
 EOF < /dev/null
 .prettierrc
+
+# docs folder (if built locally)
+site/

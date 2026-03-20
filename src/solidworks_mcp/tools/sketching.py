@@ -1593,6 +1593,13 @@ async def register_sketching_tools(
     async def tutorial_simple_hole(
         input_data: TutorialSimpleHoleInput,
     ) -> dict[str, Any]:
+        """
+        Create a simple hole as a guided tutorial workflow.
+
+        Builds a sketch circle on the selected plane, exits the sketch,
+        and creates a cut feature using the supplied diameter and depth.
+        Useful as an end-to-end example of a basic subtractive feature.
+        """
         try:
             steps: list[dict[str, Any]] = []
 

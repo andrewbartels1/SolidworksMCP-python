@@ -124,6 +124,8 @@ Ready to automate your SolidWorks workflows? Check out our comprehensive guides:
 
 - [**Installation Guide**](getting-started/installation.md) - Set up your development environment
 - [**Quick Start**](getting-started/quickstart.md) - Your first SolidWorks automation  
+- [**VS Code MCP Setup**](getting-started/vscode-mcp-setup.md) - Connect VS Code and GitHub Copilot to this server
+- [**Claude Code MCP Setup**](getting-started/claude-code-setup.md) - Connect Claude Code to this server
 - [**Architecture Overview**](user-guide/architecture.md) - Understand the system design
 - [**Tools Overview**](user-guide/tools-overview.md) - Explore all 90+ available tools
 

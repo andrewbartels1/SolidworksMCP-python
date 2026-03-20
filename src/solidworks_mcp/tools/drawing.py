@@ -918,6 +918,12 @@ async def register_drawing_tools(
     async def create_technical_drawing(
         input_data: DrawingCreationInput,
     ) -> dict[str, Any]:
+        """
+        Create a technical drawing from a SolidWorks part or assembly.
+
+        Supports selecting a template, output path, sheet format, scale,
+        and optional auto-population of standard views for documentation.
+        """
         try:
             if hasattr(adapter, "create_technical_drawing"):
                 result = await adapter.create_technical_drawing(input_data.model_dump())
@@ -952,6 +958,12 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_drawing_view(input_data: DrawingViewInput) -> dict[str, Any]:
+        """
+        Add, update, or remove a drawing view in an existing drawing.
+
+        Supports configuring the target drawing, view type, parent view,
+        scale, and placement coordinates for common drawing view workflows.
+        """
         try:
             if hasattr(adapter, "add_drawing_view"):
                 result = await adapter.add_drawing_view(input_data.model_dump())
@@ -983,6 +995,12 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_annotation(input_data: AnnotationInput) -> dict[str, Any]:
+        """
+        Add an annotation such as a note, balloon, or surface symbol.
+
+        Places annotation text in a drawing with optional font size,
+        leader attachment, and title-block style metadata fields.
+        """
         try:
             if hasattr(adapter, "add_annotation"):
                 result = await adapter.add_annotation(input_data.model_dump())
@@ -1014,6 +1032,12 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def update_title_block(input_data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Update title block fields for the active drawing.
+
+        Applies drawing metadata such as title, drawing number, and
+        approval fields to keep documentation aligned with standards.
+        """
         try:
             if hasattr(adapter, "update_title_block"):
                 result = await adapter.update_title_block(input_data)

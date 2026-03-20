@@ -351,6 +351,12 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def manage_file_properties(input_data: FileOperationInput) -> dict[str, Any]:
+        """
+        Read, update, copy, move, rename, or delete file-related properties.
+
+        Uses the requested operation and file paths to manage SolidWorks file
+        metadata or related file lifecycle tasks through the active adapter.
+        """
         try:
             if hasattr(adapter, "manage_file_properties"):
                 result = await adapter.manage_file_properties(input_data.model_dump())
@@ -379,6 +385,12 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def convert_file_format(input_data: FormatConversionInput) -> dict[str, Any]:
+        """
+        Convert a SolidWorks file from one format to another.
+
+        Supports exporting source files to target formats such as STEP,
+        IGES, STL, PDF, or other adapter-supported conversion outputs.
+        """
         try:
             if hasattr(adapter, "convert_file_format"):
                 result = await adapter.convert_file_format(input_data.model_dump())
@@ -408,6 +420,12 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def batch_file_operations(input_data: FileOperationInput) -> dict[str, Any]:
+        """
+        Run a file operation across multiple files as a batch workflow.
+
+        Intended for repetitive file management tasks such as copying,
+        moving, renaming, or deleting groups of SolidWorks documents.
+        """
         try:
             if hasattr(adapter, "batch_file_operations"):
                 result = await adapter.batch_file_operations(input_data.model_dump())
