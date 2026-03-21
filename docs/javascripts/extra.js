@@ -1,62 +1,21 @@
 // Extra JavaScript for SolidWorks MCP documentation
 
-// Initialize Mermaid with theme support
-document.addEventListener('DOMContentLoaded', function() {
-    // Set up Mermaid with dynamic theming
-    if (typeof mermaid !== 'undefined') {
-        // Detect theme from palette
-        const palette = __md_get('__palette');
-        const isDark = palette && palette.index === 1;
-        
-        mermaid.initialize({
-            startOnLoad: true,
-            theme: isDark ? 'dark' : 'default',
-            themeVariables: {
-                fontFamily: 'Roboto, sans-serif'
-            },
-            flowchart: {
-                useMaxWidth: true,
-                htmlLabels: true,
-                curve: 'basis'
-            },
-            gitgraph: {
-                theme: isDark ? 'dark' : 'base'
-            }
-        });
-        
-        // Re-render on theme change
-        var ref = document.querySelector('[data-md-component=palette]');
-        if (ref) {
-            ref.addEventListener('change', function() {
-                const newPalette = __md_get('__palette');
-                const newIsDark = newPalette && newPalette.index === 1;
-                mermaid.initialize({
-                    theme: newIsDark ? 'dark' : 'default'
-                });
-                // Re-render existing diagrams
-                document.querySelectorAll('.mermaid').forEach(function(element) {
-                    if (element.getAttribute('data-processed')) {
-                        element.removeAttribute('data-processed');
-                        element.innerHTML = element.getAttribute('data-original') || element.innerHTML;
-                    }
-                });
-                mermaid.init(undefined, document.querySelectorAll('.mermaid'));
-            });
-        }
-    }
-    
-    // Add copy buttons to code blocks
+function enhancePage(root) {
     addCopyButtons();
-    
-    // Add status indicators
     addStatusIndicators();
-    
-    // Enhance badge rendering
     enhanceBadges();
-    
-    // Enhanced navigation
     enhanceNavigation();
-});
+}
+
+if (typeof document$ !== 'undefined') {
+    document$.subscribe(function() {
+        enhancePage(document);
+    });
+} else {
+    document.addEventListener('DOMContentLoaded', function() {
+        enhancePage(document);
+    });
+}
 
 function addCopyButtons() {
     // Add copy buttons to all code blocks

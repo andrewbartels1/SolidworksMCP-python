@@ -101,8 +101,8 @@ plugins:
             show_signature: true
             show_signature_annotations: true
             separate_signature: true
-  - minify:
-      minify_html: true
+  - mermaid2:
+      javascript: https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
 
 # Extensions
 markdown_extensions:
@@ -121,10 +121,16 @@ markdown_extensions:
       smart_enable: all
   - pymdownx.caret
   - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
   - pymdownx.emoji:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
       emoji_index: !!python/name:material.extensions.emoji.twemoji
   - pymdownx.highlight:
+      guess_lang: false
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
@@ -136,12 +142,6 @@ markdown_extensions:
       repo: SolidworksMCP-python
   - pymdownx.mark
   - pymdownx.smartsymbols
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.extra
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.tasklist:
@@ -167,7 +167,6 @@ extra_javascript:
   - javascripts/mathjax.js
   - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-  - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
   - javascripts/extra.js
 
 # Copyright
