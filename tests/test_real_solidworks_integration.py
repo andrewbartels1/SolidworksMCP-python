@@ -6,8 +6,10 @@ pywin32. They are disabled by default and only run when explicitly enabled.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
+from collections import Counter
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -28,6 +30,7 @@ from src.solidworks_mcp.tools.modeling import (
     CreatePartInput,
     OpenModelInput,
 )
+from src.solidworks_mcp.tools.sketching import AddCircleInput, CreateSketchInput
 
 
 REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
@@ -43,6 +46,10 @@ def _find_tool(server: SolidWorksMCPServer, tool_name: str):
         if tool.name == tool_name:
             return tool.func
     raise AssertionError(f"Tool '{tool_name}' not found")
+
+
+def _tool_names(server: SolidWorksMCPServer) -> list[str]:
+    return sorted(tool.name for tool in server.mcp._tools)
 
 
 @pytest_asyncio.fixture
@@ -102,6 +109,69 @@ def integration_output_dir() -> Path:
     output_dir = Path("tests") / ".generated" / "solidworks_integration"
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.windows_only
+@pytest.mark.solidworks_only
+async def test_real_registered_tool_catalog_snapshot(
+    real_server: SolidWorksMCPServer,
+    integration_output_dir: Path,
+) -> None:
+    """Verify tool catalog coverage and persist a local snapshot for auditing."""
+    tool_names = _tool_names(real_server)
+    duplicate_counts = {
+        name: count for name, count in Counter(tool_names).items() if count > 1
+    }
+    allowed_duplicate_counts = {
+        # Intentional aliases registered from different tool categories.
+        "start_macro_recording": 2,
+        "stop_macro_recording": 2,
+    }
+
+    assert duplicate_counts == allowed_duplicate_counts, (
+        f"Unexpected duplicate tool names: {duplicate_counts}"
+    )
+
+    unique_tool_names = set(tool_names)
+    assert len(tool_names) >= 77, f"Expected at least 77 tools, got {len(tool_names)}"
+
+    expected_core_tools = {
+        # Modeling / file lifecycle
+        "create_part",
+        "create_assembly",
+        "create_drawing",
+        "open_model",
+        "close_model",
+        "save_file",
+        "save_as",
+        # Sketching
+        "create_sketch",
+        "add_circle",
+        "exit_sketch",
+        # Analysis / export
+        "get_mass_properties",
+        "check_interference",
+        "export_step",
+        # Automation / templates / macros / drawing analysis
+        "batch_process_files",
+        "generate_vba_extrusion",
+        "extract_template",
+        "start_macro_recording",
+        "analyze_drawing_comprehensive",
+    }
+
+    missing = sorted(expected_core_tools.difference(unique_tool_names))
+    assert not missing, f"Missing expected tools: {missing}"
+
+    snapshot_path = integration_output_dir / "tool_catalog_snapshot.json"
+    snapshot = {
+        "tool_count": len(tool_names),
+        "tools": tool_names,
+    }
+    snapshot_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+    assert snapshot_path.exists(), f"Expected snapshot file at {snapshot_path}"
 
 
 @pytest.mark.asyncio
@@ -192,3 +262,165 @@ async def test_real_assembly_create_and_save(
 
     close_result = await close_model(CloseModelInput(save=False))
     assert close_result["status"] in {"success", "error"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.windows_only
+@pytest.mark.solidworks_only
+async def test_real_cross_category_minimal_smoke(
+    real_server: SolidWorksMCPServer,
+    integration_output_dir: Path,
+) -> None:
+    """Run a deterministic low-risk workflow touching multiple tool categories."""
+    create_part = _find_tool(real_server, "create_part")
+    create_sketch = _find_tool(real_server, "create_sketch")
+    add_circle = _find_tool(real_server, "add_circle")
+    exit_sketch = _find_tool(real_server, "exit_sketch")
+    save_as = _find_tool(real_server, "save_as")
+    save_file = _find_tool(real_server, "save_file")
+    close_model = _find_tool(real_server, "close_model")
+
+    part_result = await create_part(CreatePartInput(name="MCP_CrossCategory_Smoke"))
+    assert part_result["status"] == "success", part_result
+
+    sketch_result = await create_sketch(
+        CreateSketchInput(
+            plane="Front Plane",
+            sketch_name="SmokeSketch",
+        )
+    )
+    if sketch_result["status"] == "error":
+        # Known intermittent COM mismatch on some local SolidWorks installs.
+        if "Type mismatch" in sketch_result.get("message", ""):
+            pytest.skip(
+                f"Skipping sketch smoke due local COM mismatch: {sketch_result}"
+            )
+    assert sketch_result["status"] == "success", sketch_result
+
+    circle_result = await add_circle(
+        AddCircleInput(
+            center_x=0.0,
+            center_y=0.0,
+            radius=0.01,
+            construction=False,
+        )
+    )
+    assert circle_result["status"] == "success", circle_result
+
+    exit_result = await exit_sketch()
+    assert exit_result["status"] == "success", exit_result
+
+    smoke_part_path = integration_output_dir / "mcp_cross_category_smoke.sldprt"
+    save_as_result = await save_as(
+        SaveAsInput(
+            file_path=str(smoke_part_path),
+            format_type="solidworks",
+            overwrite=True,
+        )
+    )
+    assert save_as_result["status"] == "success", save_as_result
+    assert smoke_part_path.exists(), f"Expected saved part at {smoke_part_path}"
+
+    save_result = await save_file(SaveFileInput(force_save=True))
+    assert save_result["status"] == "success", save_result
+
+    close_result = await close_model(CloseModelInput(save=True))
+    assert close_result["status"] in {"success", "error"}
+
+
+@pytest.mark.skipif(
+    not _real_solidworks_enabled(),
+    reason="Real SolidWorks integration disabled (set SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=true)",
+)
+@pytest.mark.windows_only
+@pytest.mark.solidworks_only
+async def test_real_load_save_lifecycle(
+    real_server: SolidWorksMCPServer,
+    integration_output_dir: Path,
+) -> None:
+    """Test comprehensive load/save/open lifecycle with real SolidWorks.
+
+    Validates the full document lifecycle:
+    1. Create a part
+    2. Add sketch and geometry
+    3. Save the part
+    4. Close the part
+    5. Load the part using load_part convenience tool
+    6. Verify the document is open
+    7. Save again using save_part convenience tool
+    8. Close the document
+
+    This test ensures that newly added convenience tools (load_part, save_part)
+    integrate properly with the existing SolidWorks CAD workflow.
+    """
+    create_part = _find_tool(real_server, "create_part")
+    create_sketch = _find_tool(real_server, "create_sketch")
+    add_circle = _find_tool(real_server, "add_circle")
+    exit_sketch = _find_tool(real_server, "exit_sketch")
+    save_part = _find_tool(real_server, "save_part")
+    load_part = _find_tool(real_server, "load_part")
+    close_model = _find_tool(real_server, "close_model")
+
+    # Step 1: Create a new part
+    part_result = await create_part(CreatePartInput(name="MCP_LoadSave_Lifecycle"))
+    assert part_result["status"] == "success", part_result
+
+    # Step 2: Add sketch with geometry
+    sketch_result = await create_sketch(
+        CreateSketchInput(
+            plane="Front Plane",
+            sketch_name="LifecycleSketch",
+        )
+    )
+    if sketch_result["status"] == "error":
+        if "Type mismatch" in sketch_result.get("message", ""):
+            pytest.skip(
+                f"Skipping lifecycle test due to local COM mismatch: {sketch_result}"
+            )
+    assert sketch_result["status"] == "success", sketch_result
+
+    circle_result = await add_circle(
+        AddCircleInput(
+            center_x=0.0,
+            center_y=0.0,
+            radius=0.015,
+            construction=False,
+        )
+    )
+    assert circle_result["status"] == "success", circle_result
+
+    exit_result = await exit_sketch()
+    assert exit_result["status"] == "success", exit_result
+
+    # Step 3: Save the part using save_part convenience tool
+    lifecycle_part_path = integration_output_dir / "mcp_load_save_lifecycle.sldprt"
+    save_result = await save_part(
+        {
+            "file_path": str(lifecycle_part_path),
+            "overwrite": True,
+        }
+    )
+    assert save_result["status"] == "success", save_result
+    assert lifecycle_part_path.exists(), f"Expected saved part at {lifecycle_part_path}"
+
+    # Step 4: Close the part
+    close_result = await close_model(CloseModelInput(save=False))
+    assert close_result["status"] in {"success", "error"}
+
+    # Step 5: Verify the file exists and load it using load_part convenience tool
+    assert lifecycle_part_path.exists(), (
+        f"Part file should exist at {lifecycle_part_path}"
+    )
+    load_result = await load_part({"file_path": str(lifecycle_part_path)})
+    assert load_result["status"] == "success", load_result
+    assert load_result["model"]["type"] == "Part", "Loaded model should be a Part"
+    assert load_result["model"]["name"] is not None, "Model should have a name"
+
+    # Step 6: Save again using save_part (without path, should save to current location)
+    save_again_result = await save_part({})
+    assert save_again_result["status"] == "success", save_again_result
+
+    # Step 7: Close the reloaded part
+    close_final_result = await close_model(CloseModelInput(save=True))
+    assert close_final_result["status"] in {"success", "error"}

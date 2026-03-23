@@ -28,7 +28,9 @@ class TestFileManagementTools:
         tool_count = await register_file_management_tools(
             mcp_server, mock_adapter, mock_config
         )
-        assert tool_count == 3
+        # Ensure the reported tool count matches the number of tools actually registered
+        registered_tool_names = {tool.name for tool in mcp_server._tools}
+        assert tool_count == len(registered_tool_names)
 
     @pytest.mark.asyncio
     async def test_manage_file_properties_success(

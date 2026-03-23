@@ -75,6 +75,38 @@ class FormatConversionInput(CompatInput):
     )
 
 
+class LoadPartInput(CompatInput):
+    """Input schema for loading a part file."""
+
+    file_path: str = Field(description="Full path to the .sldprt file")
+
+
+class LoadAssemblyInput(CompatInput):
+    """Input schema for loading an assembly file."""
+
+    file_path: str = Field(description="Full path to the .sldasm file")
+
+
+class SavePartInput(CompatInput):
+    """Input schema for saving a part file."""
+
+    file_path: str | None = Field(
+        default=None,
+        description="Optional output path. If omitted, saves the active part to its existing location.",
+    )
+    overwrite: bool = Field(default=True, description="Overwrite existing file")
+
+
+class SaveAssemblyInput(CompatInput):
+    """Input schema for saving an assembly file."""
+
+    file_path: str | None = Field(
+        default=None,
+        description="Optional output path. If omitted, saves the active assembly to its existing location.",
+    )
+    overwrite: bool = Field(default=True, description="Overwrite existing file")
+
+
 async def register_file_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -109,7 +141,11 @@ async def register_file_management_tools(
 
     def _coerce_input(model_cls, payload):
         """Accept legacy dict payloads from compatibility wrapper as well as model instances."""
-        return payload if isinstance(payload, model_cls) else model_cls.model_validate(payload)
+        return (
+            payload
+            if isinstance(payload, model_cls)
+            else model_cls.model_validate(payload)
+        )
 
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
@@ -490,5 +526,330 @@ async def register_file_management_tools(
             logger.error(f"Error in batch_file_operations tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 3  # Legacy count expected by tests
+    @mcp.tool()
+    async def load_part(input_data: LoadPartInput) -> dict[str, Any]:
+        """
+        Load (open) a SolidWorks part file.
+
+        Convenience wrapper that opens a .sldprt file and makes it the active
+        document. Provides a simpler alternative to open_model for parts.
+
+        Args:
+            input_data (LoadPartInput): Contains:
+                - file_path (str): Absolute path to the .sldprt file
+
+        Returns:
+            dict[str, Any]: Operation result containing:
+                - status (str): "success" or "error"
+                - message (str): Operation description
+                - model (dict): Model information (name, type, path, configuration)
+                - execution_time (float): Operation time in seconds
+
+        Example:
+            ```python
+            result = await load_part({
+                "file_path": "C:/Projects/bracket.sldprt"
+            })
+
+            if result["status"] == "success":
+                print(f"Loaded: {result['model']['name']}")
+            ```
+
+        Note:
+            - File must be a valid .sldprt (part) file
+            - Path must be absolute and accessible
+        """
+        try:
+            input_data = _coerce_input(LoadPartInput, input_data)
+            # Ensure file path ends with .sldprt
+            file_path = input_data.file_path
+            if not file_path.lower().endswith(".sldprt"):
+                return {
+                    "status": "error",
+                    "message": f"File must be a .sldprt part file: {file_path}",
+                }
+
+            result = await adapter.open_model(file_path)
+            if result.is_success:
+                model = result.data
+                title = _result_value(model, "title", "name", default=file_path)
+                path = _result_value(model, "path", "file_path", default=file_path)
+                configuration = _result_value(model, "configuration", default="Default")
+                return {
+                    "status": "success",
+                    "message": f"Loaded part: {title}",
+                    "model": {
+                        "name": title,
+                        "type": "Part",
+                        "path": path,
+                        "configuration": configuration,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to load part: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in load_part tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def load_assembly(input_data: LoadAssemblyInput) -> dict[str, Any]:
+        """
+        Load (open) a SolidWorks assembly file.
+
+        Convenience wrapper that opens a .sldasm file and makes it the active
+        document. Provides a simpler alternative to open_model for assemblies.
+
+        Args:
+            input_data (LoadAssemblyInput): Contains:
+                - file_path (str): Absolute path to the .sldasm file
+
+        Returns:
+            dict[str, Any]: Operation result containing:
+                - status (str): "success" or "error"
+                - message (str): Operation description
+                - model (dict): Model information (name, type, path, configuration)
+                - execution_time (float): Operation time in seconds
+
+        Example:
+            ```python
+            result = await load_assembly({
+                "file_path": "C:/Projects/machine_assembly.sldasm"
+            })
+
+            if result["status"] == "success":
+                print(f"Loaded: {result['model']['name']}")
+            ```
+
+        Note:
+            - File must be a valid .sldasm (assembly) file
+            - Path must be absolute and accessible
+        """
+        try:
+            input_data = _coerce_input(LoadAssemblyInput, input_data)
+            # Ensure file path ends with .sldasm
+            file_path = input_data.file_path
+            if not file_path.lower().endswith(".sldasm"):
+                return {
+                    "status": "error",
+                    "message": f"File must be a .sldasm assembly file: {file_path}",
+                }
+
+            result = await adapter.open_model(file_path)
+            if result.is_success:
+                model = result.data
+                title = _result_value(model, "title", "name", default=file_path)
+                path = _result_value(model, "path", "file_path", default=file_path)
+                configuration = _result_value(model, "configuration", default="Default")
+                return {
+                    "status": "success",
+                    "message": f"Loaded assembly: {title}",
+                    "model": {
+                        "name": title,
+                        "type": "Assembly",
+                        "path": path,
+                        "configuration": configuration,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to load assembly: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in load_assembly tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def save_part(input_data: SavePartInput | None = None) -> dict[str, Any]:
+        """
+        Save the active SolidWorks part document.
+
+        Convenience wrapper that saves the currently active part. If no file_path
+        is provided, saves to the existing location. Otherwise, saves as a new file.
+
+        Args:
+            input_data (SavePartInput, optional): Contains:
+                - file_path (str, optional): Output path for save-as. If omitted, saves to current location.
+                - overwrite (bool): Overwrite existing file (default: True)
+
+        Returns:
+            dict[str, Any]: Save operation result containing:
+                - status (str): "success" or "error"
+                - message (str): Operation description
+                - file_path (str): Path where file was saved
+                - execution_time (float): Operation time in seconds
+
+        Example:
+            ```python
+            # Save to current location
+            result = await save_part()
+
+            # Save as new file
+            result = await save_part({
+                "file_path": "C:/Projects/bracket_v2.sldprt",
+                "overwrite": False
+            })
+
+            if result["status"] == "success":
+                print(f"Part saved to {result['file_path']}")
+            ```
+
+        Note:
+            - Active document must be a part file
+            - When saving to new location, ensure path ends with .sldprt
+        """
+        try:
+            if input_data is None:
+                input_data = SavePartInput()
+            else:
+                input_data = _coerce_input(SavePartInput, input_data)
+
+            # If file_path provided, use save_as; otherwise use regular save
+            if input_data.file_path:
+                # Normalize and validate provided path
+                file_path = input_data.file_path.strip()
+                if not file_path:
+                    return {
+                        "status": "error",
+                        "message": "Invalid file_path: path is empty or whitespace.",
+                    }
+                # Detect paths that are effectively just the extension (e.g., ".sldprt")
+                cleaned = file_path.strip()
+                if cleaned.count(".") == 1 and cleaned.startswith(".") and cleaned[1:].lower() == "sldprt":
+                    return {
+                        "status": "error",
+                        "message": "Invalid file_path: missing base filename before extension.",
+                    }
+                # Ensure path ends with .sldprt for parts
+                if not file_path.lower().endswith(".sldprt"):
+                    file_path = file_path.rsplit(".", 1)[0] + ".sldprt"
+
+                result = await adapter.save_file(file_path)
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Part saved as: {file_path}",
+                        "file_path": file_path,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": f"Failed to save part: {result.error}",
+                }
+            else:
+                # Save to current location
+                result = await adapter.save_file(None)
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": "Part saved successfully",
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": f"Failed to save part: {result.error}",
+                }
+        except Exception as e:
+            logger.error(f"Error in save_part tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def save_assembly(
+        input_data: SaveAssemblyInput | None = None,
+    ) -> dict[str, Any]:
+        """
+        Save the active SolidWorks assembly document.
+
+        Convenience wrapper that saves the currently active assembly. If no file_path
+        is provided, saves to the existing location. Otherwise, saves as a new file.
+
+        Args:
+            input_data (SaveAssemblyInput, optional): Contains:
+                - file_path (str, optional): Output path for save-as. If omitted, saves to current location.
+                - overwrite (bool): Overwrite existing file (default: True)
+
+        Returns:
+            dict[str, Any]: Save operation result containing:
+                - status (str): "success" or "error"
+                - message (str): Operation description
+                - file_path (str): Path where file was saved
+                - execution_time (float): Operation time in seconds
+
+        Example:
+            ```python
+            # Save to current location
+            result = await save_assembly()
+
+            # Save as new file
+            result = await save_assembly({
+                "file_path": "C:/Projects/machine_v2.sldasm",
+                "overwrite": False
+            })
+
+            if result["status"] == "success":
+                print(f"Assembly saved to {result['file_path']}")
+            ```
+
+        Note:
+            - Active document must be an assembly file
+            - When saving to new location, ensure path ends with .sldasm
+        """
+        try:
+            if input_data is None:
+                input_data = SaveAssemblyInput()
+            else:
+                input_data = _coerce_input(SaveAssemblyInput, input_data)
+
+            # If file_path provided, use save_as; otherwise use regular save
+            if input_data.file_path:
+                # Ensure path ends with .sldasm for assemblies
+                file_path = input_data.file_path
+                if not file_path.lower().endswith(".sldasm"):
+                    file_path = file_path.rsplit(".", 1)[0] + ".sldasm"
+
+                result = await adapter.save_file(file_path)
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Assembly saved as: {file_path}",
+                        "file_path": file_path,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": f"Failed to save assembly: {result.error}",
+                }
+            else:
+                # Save to current location
+                result = await adapter.save_file(None)
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": "Assembly saved successfully",
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": f"Failed to save assembly: {result.error}",
+                }
+        except Exception as e:
+            logger.error(f"Error in save_assembly tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    tool_count = 10  # Total number of registered tools in this module
     return tool_count
