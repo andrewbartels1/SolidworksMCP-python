@@ -19,16 +19,17 @@ function Test-MicromambaEnv {
 function dev-help {
     Write-Host "Available Commands:" -ForegroundColor Green
     Write-Host ""
-    Write-Host "dev-install     - Install dependencies and setup environment"
-    Write-Host "dev-test        - Run test suite with coverage"
-    Write-Host "dev-test-full   - Run full suite including real SolidWorks integration tests"
-    Write-Host "dev-test-clean  - Remove generated integration test artifacts"
-    Write-Host "dev-docs        - Serve documentation locally (http://localhost:8000)"
-    Write-Host "dev-build       - Build package for distribution"
-    Write-Host "dev-run         - Start the MCP server"
-    Write-Host "dev-clean       - Clean build artifacts"
-    Write-Host "dev-lint        - Run code linting (ruff)"
-    Write-Host "dev-format      - Format code (ruff)"
+    Write-Host "dev-install           - Install dependencies and setup environment"
+    Write-Host "dev-test              - Run test suite with coverage"
+    Write-Host "dev-test-full         - Run full suite including real SolidWorks integration tests"
+    Write-Host "dev-test-clean        - Remove generated integration test artifacts"
+    Write-Host "dev-docs              - Serve documentation locally (http://localhost:8000)"
+    Write-Host "dev-docs-discovery    - Index SolidWorks COM/VBA documentation (Windows-only)"
+    Write-Host "dev-build             - Build package for distribution"
+    Write-Host "dev-run               - Start the MCP server"
+    Write-Host "dev-clean             - Clean build artifacts"
+    Write-Host "dev-lint              - Run code linting (ruff)"
+    Write-Host "dev-format            - Format code (ruff)"
     Write-Host ""
 }
 
@@ -115,6 +116,69 @@ function dev-docs {
     Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow
     Write-Host ""
     micromamba run -n solidworks_mcp mkdocs serve --dev-addr=localhost:8000
+}
+
+function dev-docs-discovery {
+    Write-Host "Indexing SolidWorks COM and VBA documentation..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Check if running on Windows
+    if ($IsWindows -or $PSVersionTable.Platform -eq "Win32NT") {
+        # Check if SolidWorks is running
+        $swProcess = Get-Process | Where-Object { $_.ProcessName -like "*sldworks*" -or $_.ProcessName -like "*SLDWORKS*" }
+        
+        if ($null -eq $swProcess) {
+            Write-Host "Warning: SolidWorks does not appear to be running." -ForegroundColor Yellow
+            Write-Host "Please start SolidWorks and try again." -ForegroundColor Yellow
+            return
+        }
+        
+        Write-Host "SolidWorks is running; proceeding with documentation discovery..." -ForegroundColor Green
+        Write-Host ""
+        
+        # Run the docs discovery Python script
+        $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
+        micromamba run -n solidworks_mcp python -c @"
+import asyncio
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / 'src'))
+
+from solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
+
+try:
+    discovery = SolidWorksDocsDiscovery()
+    index = discovery.discover_all()
+    output_file = discovery.save_index()
+    summary = discovery.create_search_summary()
+    
+    print("\n" + "="*60)
+    print("Documentation Discovery Complete!")
+    print("="*60)
+    print(f"COM Objects Discovered: {summary['total_com_objects']}")
+    print(f"Methods Indexed: {summary['total_methods']}")
+    print(f"Properties Indexed: {summary['total_properties']}")
+    print(f"SolidWorks Version: {summary['solidworks_version']}")
+    print(f"VBA Libraries Available: {len(summary['available_vba_libs'])}")
+    if output_file:
+        print(f"\nIndex saved to: {output_file}")
+    print("="*60 + "\n")
+    
+except Exception as e:
+    print(f"Error during discovery: {e}", file=sys.stderr)
+    sys.exit(1)
+"@
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Documentation indexing complete!" -ForegroundColor Green
+            Write-Host "Index file: .generated/docs-index/solidworks_docs_index.json" -ForegroundColor Yellow
+        } else {
+            Write-Host "Documentation discovery failed" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Error: Documentation discovery only works on Windows" -ForegroundColor Red
+        Write-Host "This requires COM access to SolidWorks and win32com" -ForegroundColor Yellow
+    }
 }
 
 function dev-build {

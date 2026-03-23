@@ -28,7 +28,9 @@ nav:
       - Tools Overview: user-guide/tools-overview.md
       - Platform and Connectivity: user-guide/platform-connectivity.md
       - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md
+      - Prompting Best Practices: user-guide/prompting-best-practices.md
       - Integration Testing: user-guide/integration-testing.md
+      - Real Tool Validation Matrix: user-guide/real-tool-validation-matrix.md
 
 # Theme configuration
 theme:

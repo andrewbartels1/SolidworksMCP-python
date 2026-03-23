@@ -1,113 +1,112 @@
 # SolidWorks MCP Server
 
-Python MCP server for SolidWorks automation with 90+ tools (modeling, sketching, drawing, export, analysis, automation, templates, and macros).
+Python MCP server for SolidWorks automation with 70+ tools (modeling, sketching, drawing, export, analysis, automation, templates, and macros).
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
-[![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2025-red)](https://www.solidworks.com/)
 
-## Choose Your Setup Path
+## What Works (Verified Windows Setup)
 
-| Path | Use case | SolidWorks required | Recommended commands |
-| --- | --- | --- | --- |
-| Windows only | Real CAD automation on one machine | Yes | Conda + PowerShell |
-| Linux/WSL only | Mock-mode dev, tests, docs | No | Make |
-| WSL/Linux + Windows host | Client/dev on Linux, real CAD on Windows | Windows host only | Make (Linux side) + PowerShell (Windows host) |
+This is the setup path that was validated end-to-end:
+
+1. Install Python from python.org (Windows installer).
+2. Enable **Add python.exe to PATH** during install.
+3. Install this project into a local `.venv`.
+4. Launch MCP from `.venv\Scripts\python.exe` (not from WSL).
+
+When this is correct, startup logs show:
+
+- `Platform: Windows`
+- `SolidWorks COM interface is available`
+- `Registered 76 SolidWorks tools`
+- `Connected to SolidWorks`
 
 ## Requirements
 
-- Python 3.11+
-- One environment manager: conda, mamba, or micromamba
-- Windows 10/11 + SolidWorks 2019+ for real COM automation
+- Windows 10/11 for real SolidWorks COM automation.
+- Python 3.11+ from python.org.
+- Git.
+- SolidWorks installed and launched at least once.
 
-Maker note: SolidWorks Maker is for non-commercial personal use and is commonly described as limited to $2,000 USD annual profit. Verify current license terms directly with SolidWorks before production use.
+Linux/WSL is still useful for docs/tests/mock mode, but not for direct COM automation.
 
-## Quick Start (Step-by-Step)
-
-### Option A: Windows only (real SolidWorks automation)
+## Quick Start (Windows, python.org)
 
 ```powershell
 git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
 cd SolidworksMCP-python
 
-conda create -n solidworks_mcp python=3.11
-conda activate solidworks_mcp
-pip install -e ".[dev,test,docs]"
-
-pytest
-python -m solidworks_mcp.server
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-### Option B: Linux/WSL only (mock mode mcp host and docs)
-
-```bash
-git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
-cd SolidworksMCP-python
-
-make install
-make test
-make docs
-```
-
-### Option C: WSL/Linux client + Windows SolidWorks host
-
-1. On Windows host, install SolidWorks and run:
+Start server manually:
 
 ```powershell
-python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m solidworks_mcp.server
 ```
 
-1. On WSL/Linux client, develop/test with:
-
-```bash
-make install
-make test
-```
-
-1. Connect your client to http://<windows-host-ip>:8000.
-
-## Common Commands
-
-### Linux/WSL (Make)
-
-```bash
-make install
-make test
-make docs
-make run
-make lint
-make format
-```
-
-### Windows PowerShell (direct)
+Or use the helper script:
 
 ```powershell
-conda activate solidworks_mcp
-pytest --cov=solidworks_mcp
-python -m solidworks_mcp.server
-python -m solidworks_mcp.server --mock
-python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
 ```
 
-## Documentation
+## VS Code MCP Configuration (Windows)
 
-- [docs/index.md](docs/index.md)
-- [docs/getting-started/installation.md](docs/getting-started/installation.md)
-- [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
-- [docs/user-guide/architecture.md](docs/user-guide/architecture.md)
-- [docs/user-guide/tools-overview.md](docs/user-guide/tools-overview.md)
+Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
+
+```json
+{
+  "servers": {
+    "solidworks-mcp-server": {
+      "type": "stdio",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
+      ]
+    }
+  }
+}
+```
+
+Replace the script path with your local repository path.
+
+## Common Windows Fixes
+
+If `python` is not found:
+
+```powershell
+python --version
+```
+
+If this opens Microsoft Store or fails, reinstall Python from python.org and enable PATH.
+
+If startup fails with `ModuleNotFoundError: solidworks_mcp`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+If startup fails with `ModuleNotFoundError: fastmcp`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+## Docs
+
+- [Installation](docs/getting-started/installation.md)
+- [Quick Start](docs/getting-started/quickstart.md)
+- [VS Code MCP Setup](docs/getting-started/vscode-mcp-setup.md)
+- [Architecture](docs/user-guide/architecture.md)
 
 ## License
 
 MIT License. See [LICENSE](LICENSE).
-0
-## TODO (& Next Steps)
-
-- [ ] Add end-to-end load/save smoke coverage for parts and assemblies in real SolidWorks integration tests.
-- [ ] Add dedicated tools for explicit document lifecycle operations (load part, load assembly, save active, save as, save all).
-- [ ] Add tool-level safeguards for save targets (path validation, overwrite policy, extension checks).
-- [ ] Add a docs discovery tool that indexes all available COM and VBA commands for the installed SolidWorks version.
-- [ ] Support local documentation query mode for SolidWorks Help/API references when context is too large for prompt input.
-- [ ] Evaluate optional RAG backend for docs discovery (sqlite-vec, LangChain, or equivalent local vector index).
-- [ ] Add deterministic regression tests for docs discovery against known COM/VBA symbols.
