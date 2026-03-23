@@ -6,6 +6,7 @@ providing real SolidWorks automation capabilities on Windows platforms.
 """
 
 import asyncio
+import os
 import platform
 import time
 from datetime import datetime
@@ -240,13 +241,18 @@ class PyWin32Adapter(SolidWorksAdapter):
         """
         healthy = self.is_connected()
 
+        # Support both callable COM method and property-style RevisionNumber.
+        sw_version: str | None = None
+        if self.swApp:
+            try:
+                rev_value = getattr(self.swApp, "RevisionNumber", None)
+                sw_version = rev_value() if callable(rev_value) else rev_value
+            except Exception:
+                sw_version = None
+
         # Try a simple operation to verify connection
         if healthy:
-            try:
-                version = self.swApp.RevisionNumber()
-                healthy = version is not None
-            except Exception:
-                healthy = False
+            healthy = sw_version is not None
 
         return AdapterHealth(
             healthy=healthy,
@@ -258,9 +264,7 @@ class PyWin32Adapter(SolidWorksAdapter):
             connection_status="connected" if healthy else "disconnected",
             metrics={
                 "adapter_type": "pywin32",
-                "sw_version": getattr(self.swApp, "RevisionNumber", lambda: "Unknown")()
-                if self.swApp
-                else None,
+                "sw_version": sw_version or "Unknown",
                 "current_model": self.currentModel.GetTitle()
                 if self.currentModel
                 else None,
@@ -355,8 +359,10 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _open_operation():
+            resolved_path = os.path.abspath(file_path)
+
             # Determine document type from extension
-            file_path_lower = file_path.lower()
+            file_path_lower = resolved_path.lower()
             if file_path_lower.endswith(".sldprt"):
                 doc_type = self.constants["swDocPART"]
                 model_type = "Part"
@@ -367,14 +373,14 @@ class PyWin32Adapter(SolidWorksAdapter):
                 doc_type = self.constants["swDocDRAWING"]
                 model_type = "Drawing"
             else:
-                raise ValueError(f"Unsupported file type: {file_path}")
+                raise ValueError(f"Unsupported file type: {resolved_path}")
 
             # Open the document
             errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
             warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
 
             model = self.swApp.OpenDoc6(
-                file_path,
+                resolved_path,
                 doc_type,
                 1,  # swOpenDocOptions_Silent
                 "",
@@ -383,29 +389,32 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
             if not model:
-                raise Exception(f"Failed to open model: {file_path}")
+                raise Exception(f"Failed to open model: {resolved_path}")
 
             # Set as current model
             self.currentModel = model
 
-            # Get model info
-            title = model.GetTitle()
-            config = (
-                model.GetActiveConfiguration().GetName()
-                if model.GetActiveConfiguration()
-                else "Default"
-            )
+            # Get model info (COM may expose methods as values on some setups)
+            title = self._read_model_title(model)
+
+            try:
+                active_config = model.GetActiveConfiguration()
+                config = active_config.GetName() if active_config else "Default"
+            except Exception:
+                config = "Default"
 
             return SolidWorksModel(
-                path=file_path,
+                path=resolved_path,
                 name=title,
                 type=model_type,
                 is_active=True,
                 configuration=config,
                 properties={
-                    "last_modified": model.GetSaveTime()
-                    if hasattr(model, "GetSaveTime")
-                    else None,
+                    "last_modified": (
+                        model.GetSaveTime()
+                        if callable(getattr(model, "GetSaveTime", None))
+                        else None
+                    ),
                 },
             )
 
@@ -449,6 +458,56 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("close_model", _close_operation)
 
+    def _resolve_template_path(
+        self, preferred_indices: list[int], extension: str
+    ) -> str | None:
+        """Resolve a SolidWorks template path from user preferences.
+
+        Installations vary by where template paths are stored; this probes multiple
+        slots and prefers existing files with the expected extension.
+        """
+        existing_match: str | None = None
+        first_non_empty: str | None = None
+
+        for index in preferred_indices:
+            try:
+                template = self.swApp.GetUserPreferenceStringValue(index)
+            except Exception:
+                continue
+
+            if not template or not isinstance(template, str):
+                continue
+
+            if first_non_empty is None:
+                first_non_empty = template
+
+            if template.lower().endswith(extension.lower()) and os.path.exists(
+                template
+            ):
+                existing_match = template
+                break
+
+        return existing_match or first_non_empty
+
+    def _read_model_title(self, model: Any) -> str:
+        """Read model title regardless of COM exposing method or value."""
+        try:
+            title_attr = getattr(model, "GetTitle", None)
+            if callable(title_attr):
+                title = title_attr()
+            else:
+                title = title_attr
+            if isinstance(title, str) and title:
+                return title
+        except Exception:
+            pass
+
+        title_value = getattr(model, "Title", None)
+        if isinstance(title_value, str) and title_value:
+            return title_value
+
+        return "Untitled"
+
     async def create_part(self) -> AdapterResult[SolidWorksModel]:
         """Create a new part document."""
         if not self.is_connected():
@@ -457,21 +516,36 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _create_operation():
-            model = self.swApp.NewDocument(
-                self.swApp.GetUserPreferenceStringValue(0),  # Default part template
-                0,  # Paper size (not used for parts)
-                0,  # Width (not used for parts)
-                0,  # Height (not used for parts)
-            )
+            model = None
+
+            # Prefer native helper if available on this installation.
+            try:
+                new_part = getattr(self.swApp, "NewPart", None)
+                if callable(new_part):
+                    model = new_part()
+            except Exception:
+                model = None
+
+            if not model:
+                part_template = self._resolve_template_path([8, 0, 1, 2, 3], ".prtdot")
+                if not part_template:
+                    raise Exception("No part template configured in SolidWorks")
+
+                model = self.swApp.NewDocument(
+                    part_template,
+                    0,  # Paper size (not used for parts)
+                    0,  # Width (not used for parts)
+                    0,  # Height (not used for parts)
+                )
 
             if not model:
                 raise Exception("Failed to create new part")
 
             self.currentModel = model
-            title = model.GetTitle()
+            title = self._read_model_title(model)
 
             return SolidWorksModel(
-                path=f"",  # New document, no path yet
+                path="",  # New document, no path yet
                 name=title,
                 type="Part",
                 is_active=True,
@@ -489,22 +563,27 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _create_operation():
-            # Get assembly template
-            asm_template = self.swApp.GetUserPreferenceStringValue(
-                2
-            )  # Assembly template
-            if not asm_template:
-                asm_template = self.swApp.GetUserPreferenceStringValue(0).replace(
-                    "Part", "Assembly"
-                )
+            model = None
 
-            model = self.swApp.NewDocument(asm_template, 0, 0, 0)
+            try:
+                new_assembly = getattr(self.swApp, "NewAssembly", None)
+                if callable(new_assembly):
+                    model = new_assembly()
+            except Exception:
+                model = None
+
+            if not model:
+                asm_template = self._resolve_template_path([9, 2, 3, 1, 0], ".asmdot")
+                if not asm_template:
+                    raise Exception("No assembly template configured in SolidWorks")
+
+                model = self.swApp.NewDocument(asm_template, 0, 0, 0)
 
             if not model:
                 raise Exception("Failed to create new assembly")
 
             self.currentModel = model
-            title = model.GetTitle()
+            title = self._read_model_title(model)
 
             return SolidWorksModel(
                 path="",
@@ -1390,15 +1469,65 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _save_operation():
+            def _is_success(value: Any) -> bool:
+                # COM save APIs may return bool OR an integer status code
+                # where 0 indicates success.
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, (int, float)):
+                    return value == 0
+                return bool(value)
+
             if file_path:
-                # Save as new file
-                success = self.currentModel.SaveAs3(file_path, 0, 2)
-                if not success:
-                    raise Exception(f"Failed to save as: {file_path}")
+                resolved_path = os.path.abspath(file_path)
+                os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+
+                # If another SolidWorks document has this path open (for example
+                # from a previous run), close it so SaveAs can overwrite.
+                if self.swApp:
+                    try:
+                        self.swApp.CloseDoc(resolved_path)
+                    except Exception:
+                        pass
+
+                # Remove stale copy when possible (may fail if still locked).
+                if os.path.exists(resolved_path):
+                    try:
+                        os.remove(resolved_path)
+                    except Exception:
+                        pass
+
+                # Save as new file.
+                save_as3_result = self.currentModel.SaveAs3(resolved_path, 0, 0)
+                if not _is_success(save_as3_result):
+                    save_as = getattr(self.currentModel, "SaveAs", None)
+                    if callable(save_as):
+                        fallback_result = save_as(resolved_path)
+                        if not _is_success(fallback_result):
+                            raise Exception(f"Failed to save as: {resolved_path}")
+                    else:
+                        raise Exception(f"Failed to save as: {resolved_path}")
+
+                if not os.path.exists(resolved_path):
+                    raise Exception(f"File not written after save: {resolved_path}")
             else:
                 # Save current file
-                success = self.currentModel.Save3(1, None, None)
-                if not success:
+                try:
+                    save_result = self.currentModel.Save3(1, None, None)
+                except Exception:
+                    save_fn = getattr(self.currentModel, "Save", None)
+                    if callable(save_fn):
+                        save_result = save_fn()
+                    else:
+                        raise
+                if not _is_success(save_result):
+                    # Some SolidWorks versions return a non-success value when the
+                    # document is already clean; if a valid file still exists,
+                    # treat this as a successful no-op save.
+                    path_attr = getattr(self.currentModel, "GetPathName", "")
+                    model_path = path_attr() if callable(path_attr) else path_attr
+                    if model_path and os.path.exists(model_path):
+                        return None
                     raise Exception("Failed to save file")
 
             return None

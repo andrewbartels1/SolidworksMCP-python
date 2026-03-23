@@ -62,11 +62,11 @@ class AddNoteInput(BaseModel):
 class CreateSectionViewInput(BaseModel):
     """Input schema for creating section views."""
 
-    section_line_start: tuple[float, float] = Field(
-        description="Start point of section line (x, y)"
+    section_line_start: list[float] = Field(
+        description="Start point of section line as [x, y]"
     )
-    section_line_end: tuple[float, float] = Field(
-        description="End point of section line (x, y)"
+    section_line_end: list[float] = Field(
+        description="End point of section line as [x, y]"
     )
     view_position_x: float = Field(description="X position for section view")
     view_position_y: float = Field(description="Y position for section view")

@@ -77,11 +77,23 @@ async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
     try:
         yield server
     finally:
-        close_tool = _find_tool(server, "close_model")
-        try:
-            await close_tool(CloseModelInput(save=False))
-        except Exception:
-            pass
+        # Close only documents that were opened/created during this test session.
+        # Unwrap circuit-breaker/pool wrappers to reach the pywin32 adapter directly.
+        underlying = server.adapter
+        while hasattr(underlying, "adapter"):
+            underlying = underlying.adapter
+        if hasattr(underlying, "close_all_session_docs"):
+            try:
+                await underlying.close_all_session_docs()
+            except Exception:
+                pass
+        else:
+            # Fallback: close only the current active model
+            close_tool = _find_tool(server, "close_model")
+            try:
+                await close_tool(CloseModelInput(save=False))
+            except Exception:
+                pass
         await server.stop()
 
 

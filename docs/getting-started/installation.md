@@ -215,7 +215,7 @@ conda activate solidworks_mcp
 
 - Ensure SolidWorks is installed and has been launched at least once.
 - You must be on Windows with SolidWorks COM available.
-- Re-run COM check: `python -c "import win32com.client"`.
+- Re-run COM check: `python -c "import win32com.client"`. (should run without printing any errors)
 - If pywin32 is not working, reinstall it: `pip install --force-reinstall pywin32`.
 
 ### Import errors or missing dependencies

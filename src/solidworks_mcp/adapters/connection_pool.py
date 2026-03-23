@@ -242,17 +242,37 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "close_model", lambda adapter: adapter.close_model(save)
         )
 
-    async def create_part(self):
-        """Create part using pool."""
+    async def save_file(self, file_path: str | None = None):
+        """Save model using pool."""
         return await self._execute_with_pool(
-            "create_part", lambda adapter: adapter.create_part()
+            "save_file", lambda adapter: adapter.save_file(file_path)
         )
 
-    async def create_assembly(self):
+    async def create_part(self, name: str | None = None, units: str | None = None):
+        """Create part using pool."""
+
+        async def _op(adapter):
+            if name is None and units is None:
+                return await adapter.create_part()
+            try:
+                return await adapter.create_part(name, units)
+            except TypeError:
+                return await adapter.create_part()
+
+        return await self._execute_with_pool("create_part", _op)
+
+    async def create_assembly(self, name: str | None = None):
         """Create assembly using pool."""
-        return await self._execute_with_pool(
-            "create_assembly", lambda adapter: adapter.create_assembly()
-        )
+
+        async def _op(adapter):
+            if name is None:
+                return await adapter.create_assembly()
+            try:
+                return await adapter.create_assembly(name)
+            except TypeError:
+                return await adapter.create_assembly()
+
+        return await self._execute_with_pool("create_assembly", _op)
 
     async def create_drawing(self):
         """Create drawing using pool."""

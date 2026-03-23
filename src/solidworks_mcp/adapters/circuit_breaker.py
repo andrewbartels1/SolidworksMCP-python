@@ -172,11 +172,24 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "close_model", lambda: self.adapter.close_model(save)
         )
 
-    async def create_part(self):
-        """Create part through circuit breaker."""
+    async def save_file(self, file_path: str | None = None):
+        """Save model through circuit breaker."""
         return await self._execute_with_circuit_breaker(
-            "create_part", lambda: self.adapter.create_part()
+            "save_file", lambda: self.adapter.save_file(file_path)
         )
+
+    async def create_part(self, name: str | None = None, units: str | None = None):
+        """Create part through circuit breaker."""
+
+        async def _op():
+            if name is None and units is None:
+                return await self.adapter.create_part()
+            try:
+                return await self.adapter.create_part(name, units)
+            except TypeError:
+                return await self.adapter.create_part()
+
+        return await self._execute_with_circuit_breaker("create_part", _op)
 
     async def call(self, operation):
         """Legacy call API used by tests."""
@@ -192,11 +205,18 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             self._record_failure()
             raise
 
-    async def create_assembly(self):
+    async def create_assembly(self, name: str | None = None):
         """Create assembly through circuit breaker."""
-        return await self._execute_with_circuit_breaker(
-            "create_assembly", lambda: self.adapter.create_assembly()
-        )
+
+        async def _op():
+            if name is None:
+                return await self.adapter.create_assembly()
+            try:
+                return await self.adapter.create_assembly(name)
+            except TypeError:
+                return await self.adapter.create_assembly()
+
+        return await self._execute_with_circuit_breaker("create_assembly", _op)
 
     async def create_drawing(self):
         """Create drawing through circuit breaker."""

@@ -380,6 +380,7 @@ class TestFileManagementTools:
     ):
         """Test save_as and get_file_properties simulated success branches."""
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part("CoveragePart", "mm")
 
         save_as_tool = None
         properties_tool = None
@@ -405,6 +406,154 @@ class TestFileManagementTools:
         properties_result = await properties_tool()
         assert properties_result["status"] == "success"
         assert properties_result["properties"]["file_name"] == "Example.sldprt"
+
+    @pytest.mark.asyncio
+    async def test_save_as_solidworks_path_success_and_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover save_as SolidWorks save_file branch for both success and error."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_as_tool = None
+        for tool in mcp_server._tools:
+            if tool.name == "save_as":
+                save_as_tool = tool.handler
+                break
+
+        assert save_as_tool is not None
+
+        mock_adapter.save_file = AsyncMock(
+            return_value=Mock(is_success=True, execution_time=0.11)
+        )
+        success_result = await save_as_tool(
+            input_data=SaveAsInput(
+                file_path="C:/tmp/renamed_part.sldprt",
+                format_type="solidworks",
+                overwrite=True,
+            )
+        )
+        assert success_result["status"] == "success"
+        assert success_result["format"] == "solidworks"
+
+        mock_adapter.save_file = AsyncMock(
+            return_value=Mock(is_success=False, error="save blocked")
+        )
+        error_result = await save_as_tool(
+            input_data=SaveAsInput(
+                file_path="C:/tmp/renamed_part.sldprt",
+                format_type="sldprt",
+                overwrite=True,
+            )
+        )
+        assert error_result["status"] == "error"
+        assert "save blocked" in error_result["message"]
+
+    @pytest.mark.asyncio
+    async def test_save_as_export_error_and_fallback_without_methods(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover save_as export error branch and no-method fallback branch."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_as_tool = None
+        for tool in mcp_server._tools:
+            if tool.name == "save_as":
+                save_as_tool = tool.handler
+                break
+
+        assert save_as_tool is not None
+
+        mock_adapter.export_file = AsyncMock(
+            return_value=Mock(is_success=False, error="export failed")
+        )
+        export_error = await save_as_tool(
+            input_data=SaveAsInput(
+                file_path="C:/tmp/part.stl",
+                format_type="stl",
+                overwrite=True,
+            )
+        )
+        assert export_error["status"] == "error"
+        assert "export failed" in export_error["message"]
+
+        fallback_server = Mock()
+        fallback_server._tools = []
+
+        def _tool_decorator():
+            def _register(func):
+                fallback_server._tools.append(Mock(name=func.__name__, handler=func))
+                fallback_server._tools[-1].name = func.__name__
+                return func
+
+            return _register
+
+        fallback_server.tool = _tool_decorator
+        await register_file_management_tools(fallback_server, object(), mock_config)
+
+        fallback_save_as = None
+        for tool in fallback_server._tools:
+            if tool.name == "save_as":
+                fallback_save_as = tool.handler
+                break
+
+        assert fallback_save_as is not None
+        fallback_result = await fallback_save_as(
+            input_data=SaveAsInput(
+                file_path="C:/tmp/fallback.step",
+                format_type="step",
+                overwrite=False,
+            )
+        )
+        assert fallback_result["status"] == "success"
+        assert fallback_result["file_path"].endswith("fallback.step")
+
+    @pytest.mark.asyncio
+    async def test_save_as_exception_path(self, mcp_server, mock_adapter, mock_config):
+        """Cover save_as unexpected exception branch."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_as_tool = None
+        for tool in mcp_server._tools:
+            if tool.name == "save_as":
+                save_as_tool = tool.handler
+                break
+
+        assert save_as_tool is not None
+
+        mock_adapter.export_file = AsyncMock(side_effect=RuntimeError("boom"))
+        result = await save_as_tool(
+            input_data=SaveAsInput(
+                file_path="C:/tmp/crash.stl",
+                format_type="stl",
+                overwrite=True,
+            )
+        )
+        assert result["status"] == "error"
+        assert "Unexpected error" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_batch_file_operations_adapter_error_path(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover batch_file_operations branch when adapter returns non-success."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.batch_file_operations = AsyncMock(
+            return_value=Mock(is_success=False, error="batch rejected")
+        )
+
+        batch_tool = None
+        for tool in mcp_server._tools:
+            if tool.name == "batch_file_operations":
+                batch_tool = tool.handler
+                break
+
+        assert batch_tool is not None
+        result = await batch_tool(
+            input_data=FileOperationInput(file_path="./parts", operation="batch")
+        )
+        assert result["status"] == "error"
+        assert "batch rejected" in result["message"]
 
     @pytest.mark.asyncio
     async def test_manage_convert_batch_exception_paths(

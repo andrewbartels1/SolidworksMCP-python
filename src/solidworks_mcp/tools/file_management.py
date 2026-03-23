@@ -107,6 +107,10 @@ async def register_file_management_tools(
     """
     tool_count = 0
 
+    def _coerce_input(model_cls, payload):
+        """Accept legacy dict payloads from compatibility wrapper as well as model instances."""
+        return payload if isinstance(payload, model_cls) else model_cls.model_validate(payload)
+
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
         """
@@ -150,6 +154,7 @@ async def register_file_management_tools(
             - No effect if document is read-only
         """
         try:
+            input_data = _coerce_input(SaveFileInput, input_data)
             if hasattr(adapter, "save_file"):
                 result = await adapter.save_file(input_data.file_path)
                 if result.is_success:
@@ -240,6 +245,7 @@ async def register_file_management_tools(
             - File path directories must exist before saving
         """
         try:
+            input_data = _coerce_input(SaveAsInput, input_data)
             if hasattr(adapter, "save_file") and input_data.format_type.lower() in {
                 "solidworks",
                 "sldprt",
@@ -363,28 +369,20 @@ async def register_file_management_tools(
             - Some properties may be empty if not set
             - Technical properties depend on document configuration
         """
-        try:
-            # Simulated file properties - would get from adapter
-            return {
-                "status": "success",
-                "properties": {
-                    "file_name": "Example.sldprt",
-                    "file_size": "2.5 MB",
-                    "created_date": "2024-03-14T00:00:00Z",
-                    "modified_date": "2024-03-14T12:00:00Z",
-                    "author": "User",
-                    "description": "SolidWorks part file",
-                    "material": "Default",
-                    "units": "millimeters",
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error in get_file_properties tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        # Simulated file properties - would get from adapter
+        return {
+            "status": "success",
+            "properties": {
+                "file_name": "Example.sldprt",
+                "file_size": "2.5 MB",
+                "created_date": "2024-03-14T00:00:00Z",
+                "modified_date": "2024-03-14T12:00:00Z",
+                "author": "User",
+                "description": "SolidWorks part file",
+                "material": "Default",
+                "units": "millimeters",
+            },
+        }
 
     @mcp.tool()
     async def manage_file_properties(input_data: FileOperationInput) -> dict[str, Any]:
@@ -395,6 +393,7 @@ async def register_file_management_tools(
         metadata or related file lifecycle tasks through the active adapter.
         """
         try:
+            input_data = _coerce_input(FileOperationInput, input_data)
             if hasattr(adapter, "manage_file_properties"):
                 result = await adapter.manage_file_properties(input_data.model_dump())
                 if result.is_success:
@@ -429,6 +428,7 @@ async def register_file_management_tools(
         IGES, STL, PDF, or other adapter-supported conversion outputs.
         """
         try:
+            input_data = _coerce_input(FormatConversionInput, input_data)
             if hasattr(adapter, "convert_file_format"):
                 result = await adapter.convert_file_format(input_data.model_dump())
                 if result.is_success:
@@ -464,6 +464,7 @@ async def register_file_management_tools(
         moving, renaming, or deleting groups of SolidWorks documents.
         """
         try:
+            input_data = _coerce_input(FileOperationInput, input_data)
             if hasattr(adapter, "batch_file_operations"):
                 result = await adapter.batch_file_operations(input_data.model_dump())
                 if result.is_success:
