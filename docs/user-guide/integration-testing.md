@@ -5,6 +5,12 @@ This project now includes two test modes:
 - Default mode: fast tests, mock-friendly, no real SolidWorks dependency.
 - Full mode: includes real SolidWorks integration tests.
 
+The real integration suite is intentionally deterministic and low-risk:
+
+- It validates the full registered MCP tool catalog.
+- It executes practical smoke workflows for real COM connectivity.
+- It cleans generated artifacts automatically.
+
 ## Default Test Mode
 
 Run this in everyday development:
@@ -52,6 +58,14 @@ They validate:
 1. Connection and health check against a real SolidWorks instance.
 2. Part creation, save-as, close, reopen, and save.
 3. Assembly creation and save-as.
+4. Tool catalog snapshot validation (all registered tool names).
+5. Cross-category minimal workflow (part + sketch + save lifecycle).
+
+The suite writes a snapshot report to:
+
+- tests/.generated/solidworks_integration/tool_catalog_snapshot.json
+
+This makes tool registration regressions easy to detect during upgrades.
 
 ## Marker Strategy
 
@@ -63,6 +77,17 @@ Real tests are intentionally gated by markers and environment:
 - SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=true
 
 This keeps regular test runs deterministic and fast while still supporting full end-to-end validation when requested.
+
+## All-Tools Validation Strategy
+
+For a large MCP tool set, deterministic validation is split into two layers:
+
+1. Catalog validation for all tools.
+2. Real execution smoke validation for lifecycle-critical flows.
+
+See detailed matrix and rationale:
+
+- user-guide/real-tool-validation-matrix.md
 
 ## Common Setup Checklist
 
@@ -85,3 +110,14 @@ If file save/open fails:
 - Verify output folder permissions.
 - Check that no modal dialog is blocking SolidWorks UI.
 - Retry with simple file names and short paths.
+
+If sketch or feature operations fail intermittently:
+
+- Confirm active document is the expected part/assembly.
+- Ensure reference planes are visible and selectable.
+- Avoid interacting with SolidWorks UI while tools execute.
+
+## Related Guides
+
+- user-guide/solidworks-ui-llm-tutorial.md
+- user-guide/prompting-best-practices.md

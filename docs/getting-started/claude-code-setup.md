@@ -52,14 +52,14 @@ claude --version
 
 ## Step 2: Add the SolidWorks MCP Server
 
-### Option A: Windows only
+### Option A: Windows only (recommended)
 
 Use this when Claude Code, the MCP server, and SolidWorks all run on the same Windows machine.
 
 Run this from the project root:
 
 ```powershell
-claude mcp add --transport stdio --scope project solidworks-mcp -- cmd /c conda run -n solidworks_mcp python -m solidworks_mcp.server
+claude mcp add --transport stdio --scope project solidworks-mcp -- powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
 ```
 
 Why this command uses `cmd /c`:
@@ -82,11 +82,10 @@ This path does not control the real SolidWorks desktop app.
 1. Start the MCP server on the Windows host:
 
 ```powershell
-conda activate solidworks_mcp
-python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
 ```
 
-2. On the Linux / WSL side, add the remote server:
+1. On the Linux / WSL side, add the remote server:
 
 ```bash
 claude mcp add --transport http --scope project solidworks-mcp http://YOUR-WINDOWS-IP:8000
@@ -184,7 +183,7 @@ Claude Code is not installed correctly or is not on your `PATH` yet.
 
 Common causes:
 
-- The Conda environment does not exist.
+- The `.venv` environment is missing or incomplete.
 - The project dependencies are not installed.
 - `make` is not installed on Linux / WSL.
 - The Windows host server is not actually running for the HTTP setup.
@@ -221,13 +220,12 @@ A typical `stdio` example looks like this:
       "command": "cmd",
       "args": [
         "/c",
-        "conda",
-        "run",
-        "-n",
-        "solidworks_mcp",
-        "python",
-        "-m",
-        "solidworks_mcp.server"
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\run-mcp.ps1"
       ]
     }
   }

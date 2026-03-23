@@ -138,3 +138,34 @@ Create a new assembly and save it to C:\\Temp\\mcp_demo\\demo_assembly.sldasm.
 ```text
 Close open documents without additional edits.
 ```
+
+## 8. Deterministic Prompting Playbook
+
+For reliable UI-driven automation, use this sequence in every longer run:
+
+1. Ask for a connection/health check.
+2. Ask for active-document confirmation.
+3. Run one guarded operation block.
+4. Validate outputs (file path, doc type, major dimensions).
+5. Continue only after validation succeeds.
+
+Guarded operation block template:
+
+```text
+Execute these steps in order and stop on first failure.
+After each step, return tool name, status, and key outputs.
+Do not continue if any tool returns error.
+```
+
+If a step fails:
+
+- Retry once with minimal parameter changes.
+- If retry fails, stop and request user direction.
+
+This minimizes accidental drift from the intended CAD workflow and prevents compounding failures.
+
+## 9. Additional Prompt Examples
+
+For a full copy/paste prompt cookbook, see:
+
+- user-guide/prompting-best-practices.md

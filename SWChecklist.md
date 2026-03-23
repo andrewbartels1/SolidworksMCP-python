@@ -8,13 +8,34 @@
 
 ## 📌 Backlog
 
-- [ ] Add end-to-end load/save smoke coverage for parts and assemblies in real SolidWorks integration tests
-- [ ] Add dedicated tools for explicit document lifecycle operations (load part, load assembly, save active, save as, save all)
+- [x] ✅ Add end-to-end load/save smoke coverage for parts and assemblies in real SolidWorks integration tests
+  - **Completed**: test_real_load_save_lifecycle in tests/test_real_solidworks_integration.py
+  
+- [x] ✅ Add dedicated tools for explicit document lifecycle operations (load part, load assembly, save active, save as, save all)
+  - **Completed**: 4 lifecycle tools added to file_management.py (load_part, load_assembly, save_part, save_assembly)
+  
+- [x] ✅ Add explicit convenience wrappers: load_part, load_assembly, save_part, save_assembly (on top of generic open/save tools)
+  - **Completed**: See file_management.py tool definitions + SolidWorksDocsDiscovery detailed documentation
+  
 - [ ] Add tool-level safeguards for save targets (path validation, overwrite policy, extension checks)
-- [ ] Add a "docs discovery" tool that indexes all available COM and VBA commands for the installed SolidWorks version
+  - **Status**: Partially implemented in save_part/save_assembly (extension validation); path validation TBD
+  
+- [x] ✅ Add a "docs discovery" tool that indexes all available COM and VBA commands for the installed SolidWorks version
+  - **Completed**: discover_solidworks_docs tool in src/solidworks_mcp/tools/docs_discovery.py
+  - **How to Use**: Run `dev-docs-discovery` in dev-commands.ps1 (Windows-only)
+  
+- [ ] Add a local docs-query tool that reads installed SolidWorks API help and VBA references directly for the active version
+  - **Status**: Architecture documented; implementation TBD
+  - **Note**: Depends on completing docs-discovery tool (✅ done)
+  
 - [ ] Support local documentation querying mode for SolidWorks Help/API references when context is too large for prompt input
+  - **Status**: Design ready (build on docs_discovery_index.json); RAG backend needed
+  
 - [ ] Evaluate optional RAG backend for docs discovery (sqlite-vec, LangChain, or equivalent local vector index)
-- [ ] Add deterministic regression tests for docs discovery against known COM/VBA symbols
+  - **Status**: Awaiting design phase; docs_discovery provides JSON input
+  
+- [x] ✅ Add deterministic regression tests for docs discovery against known COM/VBA symbols
+  - **Completed**: 4 tests in tests/test_tools_docs_discovery.py
 
 ---
 

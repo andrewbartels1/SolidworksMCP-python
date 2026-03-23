@@ -21,14 +21,14 @@ This guide explains how to run SolidWorks MCP when your day-to-day workflow is L
 
 === "Windows (PowerShell)"
     ```powershell
-    conda run -n solidworks_mcp python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+    .\.venv\Scripts\python.exe -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
     ```
 
-Equivalent forms for different env managers:
+Equivalent local stdio start:
 
 === "Windows (PowerShell)"
     ```powershell
-    conda run -n solidworks_mcp python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
     ```
 
 ## Connect From Linux / WSL Client
@@ -41,8 +41,8 @@ Run these checks on Windows where SolidWorks is installed.
 
 === "Windows (PowerShell)"
     ```powershell
-    python -c "import win32com.client; print('win32com import OK')"
-    python -c "import win32com.client as w; app=w.Dispatch('SldWorks.Application'); print('SldWorks COM dispatch OK')"
+    .\.venv\Scripts\python.exe -c "import win32com.client; print('win32com import OK')"
+    .\.venv\Scripts\python.exe -c "import win32com.client as w; app=w.Dispatch('SldWorks.Application'); print('SldWorks COM dispatch OK')"
     ```
 
 If COM dispatch fails:

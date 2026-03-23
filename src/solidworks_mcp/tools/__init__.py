@@ -19,6 +19,7 @@ from .file_management import register_file_management_tools
 from .vba_generation import register_vba_generation_tools
 from .template_management import register_template_management_tools
 from .macro_recording import register_macro_recording_tools
+from .docs_discovery import register_docs_discovery_tools
 
 
 async def register_tools(mcp: FastMCP, adapter, config) -> int:
@@ -39,6 +40,7 @@ async def register_tools(mcp: FastMCP, adapter, config) -> int:
     tool_count += await register_vba_generation_tools(mcp, adapter, config)
     tool_count += await register_template_management_tools(mcp, adapter, config)
     tool_count += await register_macro_recording_tools(mcp, adapter, config)
+    tool_count += await register_docs_discovery_tools(mcp, adapter, config)
 
     logger.info(f"Registered {tool_count} SolidWorks tools")
     return tool_count

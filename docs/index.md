@@ -45,15 +45,23 @@ Choose the path that matches your setup:
 ### Windows only
 
 Use this when SolidWorks and the MCP server run on the same Windows machine.
+This is the verified setup path.
 
 ```powershell
 git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
 cd SolidworksMCP-python
-conda create -n solidworks_mcp python=3.11
-conda activate solidworks_mcp
-pip install -e ".[dev,test,docs]"
-python -m solidworks_mcp.server
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv\Scripts\python.exe -m pip install -e .
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
 ```
+
+Healthy startup logs include:
+
+- `Platform: Windows`
+- `SolidWorks COM interface is available`
+- `Registered 76 SolidWorks tools`
+- `Connected to SolidWorks`
 
 ### Linux / WSL only
 
@@ -72,7 +80,7 @@ make docs
 Use this when SolidWorks runs on Windows and your client or development workflow runs on Linux/WSL.
 
 ```powershell
-python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
 ```
 
 ```bash
