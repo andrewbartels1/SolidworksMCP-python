@@ -21,6 +21,10 @@ class SaveFileInput(CompatInput):
     """Input schema for saving a file."""
 
     force_save: bool = Field(default=True, description="Force save even if no changes")
+    file_path: str | None = Field(
+        default=None,
+        description="Optional output path. If omitted, saves the current active document.",
+    )
 
 
 class SaveAsInput(CompatInput):
@@ -146,13 +150,8 @@ async def register_file_management_tools(
             - No effect if document is read-only
         """
         try:
-            payload = (
-                input_data.model_dump()
-                if hasattr(input_data, "model_dump")
-                else dict(input_data)
-            )
             if hasattr(adapter, "save_file"):
-                result = await adapter.save_file(payload)
+                result = await adapter.save_file(input_data.file_path)
                 if result.is_success:
                     return {
                         "status": "success",
@@ -241,7 +240,45 @@ async def register_file_management_tools(
             - File path directories must exist before saving
         """
         try:
-            # For now, we'll simulate save as operation
+            if hasattr(adapter, "save_file") and input_data.format_type.lower() in {
+                "solidworks",
+                "sldprt",
+                "sldasm",
+                "slddrw",
+            }:
+                result = await adapter.save_file(input_data.file_path)
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"File saved as: {input_data.file_path}",
+                        "file_path": input_data.file_path,
+                        "format": input_data.format_type,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to save file",
+                }
+
+            if hasattr(adapter, "export_file"):
+                result = await adapter.export_file(
+                    input_data.file_path,
+                    input_data.format_type,
+                )
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"File exported as: {input_data.file_path}",
+                        "file_path": input_data.file_path,
+                        "format": input_data.format_type,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to export file",
+                }
+
+            # Fallback for adapters without save/export support.
             return {
                 "status": "success",
                 "message": f"File saved as: {input_data.file_path}",

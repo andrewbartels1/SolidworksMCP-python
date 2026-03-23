@@ -27,6 +27,8 @@ nav:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
       - Platform and Connectivity: user-guide/platform-connectivity.md
+      - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md
+      - Integration Testing: user-guide/integration-testing.md
 
 # Theme configuration
 theme:

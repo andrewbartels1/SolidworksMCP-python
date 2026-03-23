@@ -89,7 +89,7 @@ Use this only after you have created the `solidworks_mcp` Conda environment.
 
 ### Option B: Linux / WSL only
 
-Use this when you only want mock-mode development, docs, and tests.
+Use this when you only want development, docs, and tests.
 
 If you store the config inside this repository as `.vscode/mcp.json`, use:
 
@@ -97,12 +97,20 @@ If you store the config inside this repository as `.vscode/mcp.json`, use:
 {
   "servers": {
     "solidworks-mcp-server": {
-      "type": "stdio",
-      "command": "make",
-      "args": [
-        "run"
-      ]
-    }
+   "type": "stdio",
+   "command": "C:\\Windows\\System32\\wsl.exe",
+   "args": [
+    "-d",
+    "Ubuntu-24.04",
+    "--",
+    "/home/andrew/.local/bin/micromamba",
+    "run",
+    "-n",
+    "solidworks_mcp",
+    "python",
+    "-m",
+    "solidworks_mcp.server"
+   ]
   },
   "inputs": []
 }

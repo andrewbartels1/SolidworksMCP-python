@@ -1,6 +1,6 @@
 # SolidWorks MCP Server - Simplified Makefile
 
-.PHONY: help install test docs build run clean lint format
+.PHONY: help install test test-full test-clean docs build run clean lint format
 
 # Default target
 .DEFAULT_GOAL := help
@@ -22,6 +22,8 @@ help: ## Show available commands
 	@echo "$(GREEN)Core Commands:$(NC)"
 	@echo "  $(YELLOW)install$(NC)     Install dependencies and setup environment"
 	@echo "  $(YELLOW)test$(NC)        Run test suite with coverage"
+	@echo "  $(YELLOW)test-full$(NC)   Run full suite including real SolidWorks integration tests"
+	@echo "  $(YELLOW)test-clean$(NC)  Remove generated integration test artifacts"
 	@echo "  $(YELLOW)docs$(NC)        Serve documentation locally"
 	@echo "  $(YELLOW)build$(NC)       Build package for distribution"
 	@echo "  $(YELLOW)run$(NC)         Start the MCP server"
@@ -45,12 +47,36 @@ test: ## Run test suite with coverage
 		exit 1; \
 	fi
 	PY_KEY_VALUE_DISABLE_BEARTYPE=true $(CONDA_CMD) run -n solidworks_mcp python -m pytest tests/ \
+		-m "not solidworks_only" \
 		--cov=src/solidworks_mcp \
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \
 		--cov-report=xml:coverage.xml \
 		--durations=10 \
 		-v
+
+test-full: ## Run full suite including real SolidWorks integration tests (Windows + SolidWorks)
+	@echo "$(BLUE)Running full test suite (including real SolidWorks integration)...$(NC)"
+	@if [ -z "$(CONDA_CMD)" ]; then \
+		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \
+		exit 1; \
+	fi
+	PY_KEY_VALUE_DISABLE_BEARTYPE=true SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=true $(CONDA_CMD) run -n solidworks_mcp python -m pytest tests/ \
+		--cov=src/solidworks_mcp \
+		--cov-report=term-missing \
+		--cov-report=html:htmlcov \
+		--cov-report=xml:coverage.xml \
+		--durations=10 \
+		-v
+	@$(MAKE) test-clean
+
+test-clean: ## Remove generated SolidWorks integration artifacts
+	@echo "$(BLUE)Cleaning generated integration artifacts...$(NC)"
+	@if [ -z "$(CONDA_CMD)" ]; then \
+		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \
+		exit 1; \
+	fi
+	$(CONDA_CMD) run -n solidworks_mcp python tests/scripts/cleanup_generated_integration_artifacts.py
 
 docs: ## Serve documentation locally
 	@echo "$(BLUE)Starting documentation server...$(NC)"

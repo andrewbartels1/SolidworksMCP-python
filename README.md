@@ -58,14 +58,14 @@ make docs
 python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
 ```
 
-2. On WSL/Linux client, develop/test with:
+1. On WSL/Linux client, develop/test with:
 
 ```bash
 make install
 make test
 ```
 
-3. Connect your client to http://<windows-host-ip>:8000.
+1. Connect your client to http://<windows-host-ip>:8000.
 
 ## Common Commands
 
@@ -101,3 +101,13 @@ python -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
 ## License
 
 MIT License. See [LICENSE](LICENSE).
+0
+## TODO (& Next Steps)
+
+- [ ] Add end-to-end load/save smoke coverage for parts and assemblies in real SolidWorks integration tests.
+- [ ] Add dedicated tools for explicit document lifecycle operations (load part, load assembly, save active, save as, save all).
+- [ ] Add tool-level safeguards for save targets (path validation, overwrite policy, extension checks).
+- [ ] Add a docs discovery tool that indexes all available COM and VBA commands for the installed SolidWorks version.
+- [ ] Support local documentation query mode for SolidWorks Help/API references when context is too large for prompt input.
+- [ ] Evaluate optional RAG backend for docs discovery (sqlite-vec, LangChain, or equivalent local vector index).
+- [ ] Add deterministic regression tests for docs discovery against known COM/VBA symbols.
