@@ -45,7 +45,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
         self.state = CircuitState.CLOSED
         self.failure_count = 0
-        self.last_failure_time = 0
+        self.last_failure_time: float = 0.0
         self.half_open_calls = 0
 
     def _should_allow_request(self) -> bool:
@@ -352,7 +352,7 @@ class CircuitBreaker:
         self.expected_exception = expected_exception
         self.state = CircuitState.CLOSED
         self.failure_count = 0
-        self.last_failure_time = 0.0
+        self.last_failure_time = 0
 
     async def call(self, operation):
         if self.state == CircuitState.OPEN:

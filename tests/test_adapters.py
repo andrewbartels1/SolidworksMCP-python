@@ -672,6 +672,53 @@ class TestPyWin32AdapterBranches:
         assert [row["name"] for row in result.data] == ["Boss-Extrude1", "Sketch1"]
 
     @pytest.mark.asyncio
+    async def test_list_features_suppressed_fallback_uses_is_suppressed2(
+        self, monkeypatch
+    ):
+        """When IsSuppressed is unavailable, list_features should fallback to IsSuppressed2."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _Feature:
+            Name = "SuppressedCut"
+
+            def GetTypeName2(self):
+                return "Cut"
+
+            def IsSuppressed(self):
+                raise RuntimeError("IsSuppressed unavailable")
+
+            def IsSuppressed2(self, *_args):
+                return (True,)
+
+            def GetNextFeature(self):
+                return None
+
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: _Feature(),
+            FeatureManager=SimpleNamespace(GetFeatureCount=lambda _all: 0),
+        )
+
+        hidden = await adapter.list_features(include_suppressed=False)
+        shown = await adapter.list_features(include_suppressed=True)
+
+        assert hidden.is_success
+        assert hidden.data == []
+        assert shown.is_success
+        assert len(shown.data) == 1
+        assert shown.data[0]["suppressed"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_configurations_supports_tuple_property(self, monkeypatch):
+        """list_configurations should handle COM variants exposing names as tuple properties."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = SimpleNamespace(GetConfigurationNames=("Default", "Alt"))
+        result = await adapter.list_configurations()
+
+        assert result.is_success
+        assert result.data == ["Default", "Alt"]
+
+    @pytest.mark.asyncio
     async def test_connect_disconnect_and_document_creation_paths(self, monkeypatch):
         """Test COM connect lifecycle plus model creation/open branches with mocks."""
         adapter = self._build_adapter(monkeypatch)
@@ -883,6 +930,370 @@ class TestPyWin32AdapterBranches:
         assert feature_manager.FeatureExtruThin2.called
         assert feature_manager.FeatureRevolve2.called
         assert feature_manager.FeatureCut3.called
+
+    @pytest.mark.asyncio
+    async def test_sketch_methods_guard_and_failure_paths(self, monkeypatch):
+        """Cover no-active-sketch guards and per-entity creation failures."""
+        adapter = self._build_adapter(monkeypatch)
+
+        # Guard returns when sketch manager is missing.
+        for call in (
+            adapter.add_line(0, 0, 1, 1),
+            adapter.add_circle(0, 0, 1),
+            adapter.add_rectangle(0, 0, 1, 1),
+            adapter.add_arc(0, 0, 1, 0, 0, 1),
+            adapter.add_spline(
+                [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 0.0}]
+            ),
+            adapter.add_centerline(0, 0, 1, 1),
+            adapter.add_polygon(0, 0, 1, 5),
+            adapter.add_ellipse(0, 0, 2, 1),
+            adapter.add_sketch_constraint("L1", None, "parallel"),
+        ):
+            result = await call
+            assert result.is_error
+
+        adapter.currentSketchManager = SimpleNamespace(
+            CreateLine=Mock(return_value=None),
+            CreateCircleByRadius=Mock(return_value=None),
+            CreateCornerRectangle=Mock(return_value=None),
+            CreateArc=Mock(return_value=None),
+            CreateSpline2=Mock(return_value=None),
+            CreateCenterLine=Mock(return_value=None),
+            CreatePolygon=Mock(return_value=None),
+            CreateEllipse=Mock(return_value=None),
+        )
+
+        assert "Failed to create line" in (
+            (await adapter.add_line(0, 0, 1, 1)).error or ""
+        )
+        assert "Failed to create circle" in (
+            (await adapter.add_circle(0, 0, 1)).error or ""
+        )
+        assert "Failed to create rectangle" in (
+            (await adapter.add_rectangle(0, 0, 1, 1)).error or ""
+        )
+        assert "Failed to create arc" in (
+            (await adapter.add_arc(0, 0, 1, 0, 0, 1)).error or ""
+        )
+        assert "Failed to create spline" in (
+            (
+                await adapter.add_spline(
+                    [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 0.0}]
+                )
+            ).error
+            or ""
+        )
+        assert "Failed to create centerline" in (
+            (await adapter.add_centerline(0, 0, 1, 1)).error or ""
+        )
+        assert "Failed to create polygon" in (
+            (await adapter.add_polygon(0, 0, 1, 5)).error or ""
+        )
+        assert "Failed to create ellipse" in (
+            (await adapter.add_ellipse(0, 0, 2, 1)).error or ""
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_sketch_plane_selection_fallback_paths(self, monkeypatch):
+        """Cover create_sketch feature-lookup/SelectByID2 fallback and InsertSketch variants."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _FakeComError(Exception):
+            pass
+
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            SimpleNamespace(com_error=_FakeComError),
+            raising=False,
+        )
+
+        class _PlaneFeature:
+            def Select2(self, *_args):
+                return True
+
+        feature_calls = {"count": 0}
+
+        def _feature_by_name(_name):
+            feature_calls["count"] += 1
+            if feature_calls["count"] == 1:
+                raise RuntimeError("feature lookup failed")
+            return _PlaneFeature()
+
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=_feature_by_name,
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            SketchManager=SimpleNamespace(
+                InsertSketch=Mock(side_effect=[_FakeComError("variant"), None])
+            ),
+            GetActiveSketch2=Mock(side_effect=RuntimeError("no active sketch object")),
+        )
+
+        sketch_result = await adapter.create_sketch("Top")
+        assert sketch_result.is_success
+        assert str(sketch_result.data).startswith("Sketch_")
+
+        # Force total selection failure to cover explicit error branch.
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=Mock(side_effect=RuntimeError("lookup failed")),
+            Extension=SimpleNamespace(
+                SelectByID2=Mock(side_effect=RuntimeError("select failed"))
+            ),
+            SketchManager=SimpleNamespace(InsertSketch=Mock(return_value=None)),
+        )
+        failed = await adapter.create_sketch("Top")
+        assert failed.is_error
+        assert "Failed to select plane" in (failed.error or "")
+
+    @pytest.mark.asyncio
+    async def test_save_file_fallback_and_noop_paths(self, monkeypatch, tmp_path):
+        """Cover save_file fallback branches: SaveAs fallback, Save3 fallback, and clean-file no-op."""
+        adapter = self._build_adapter(monkeypatch)
+
+        target = tmp_path / "out.sldprt"
+
+        # SaveAs3 fails, SaveAs fallback also fails -> explicit error branch.
+        adapter.swApp = SimpleNamespace(
+            CloseDoc=Mock(side_effect=RuntimeError("locked"))
+        )
+        adapter.currentModel = SimpleNamespace(
+            SaveAs3=Mock(return_value=1),
+            SaveAs=Mock(return_value=1),
+        )
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.os.remove",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(PermissionError("locked")),
+        )
+        failed_save_as = await adapter.save_file(str(target))
+        assert failed_save_as.is_error
+        assert "Failed to save as" in (failed_save_as.error or "")
+
+        # SaveAs3 reports numeric success but file is still missing -> file-not-written error.
+        adapter.currentModel = SimpleNamespace(SaveAs3=Mock(return_value=0))
+        missing_output = await adapter.save_file(str(target))
+        assert missing_output.is_error
+        assert "File not written after save" in (missing_output.error or "")
+
+        # Save3 raises; fallback Save returns non-success, but existing path means no-op success.
+        existing = tmp_path / "existing.sldprt"
+        existing.write_text("x", encoding="utf-8")
+        adapter.currentModel = SimpleNamespace(
+            Save3=Mock(side_effect=RuntimeError("Save3 unavailable")),
+            Save=Mock(return_value=1),
+            GetPathName=Mock(return_value=str(existing)),
+        )
+        no_op = await adapter.save_file()
+        assert no_op.is_success
+
+    @pytest.mark.asyncio
+    async def test_feature_and_configuration_edge_paths(self, monkeypatch):
+        """Cover list_features/list_configurations edge cases and guarded feature ops."""
+        adapter = self._build_adapter(monkeypatch)
+
+        # Guard branches on no active model.
+        assert (await adapter.list_configurations()).is_error
+        assert (
+            await adapter.create_cut_extrude(
+                SimpleNamespace(depth=1.0, draft_angle=0.0, reverse_direction=False)
+            )
+        ).is_error
+        assert (await adapter.add_fillet(1.0, ["E1"])).is_error
+        assert (await adapter.add_chamfer(1.0, ["E1"])).is_error
+        assert (await adapter.rebuild_model()).is_error
+
+        class _Feature:
+            def __init__(self, name, next_feature=None):
+                self.Name = name
+                self._next = next_feature
+
+            def IsSuppressed(self):
+                raise RuntimeError("fallback")
+
+            def IsSuppressed2(self, *_args):
+                return 1
+
+            def GetTypeName2(self):
+                raise RuntimeError("unknown type")
+
+            def GetNextFeature(self):
+                raise RuntimeError("walk break")
+
+        dup = _Feature("Dup")
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: dup,
+            FeatureManager=SimpleNamespace(
+                GetFeatureCount=Mock(side_effect=RuntimeError("count fail"))
+            ),
+            FeatureByPositionReverse=Mock(side_effect=RuntimeError("reverse fail")),
+        )
+        listed = await adapter.list_features(include_suppressed=True)
+        assert listed.is_success
+        assert listed.data and listed.data[0]["type"] == "Unknown"
+
+        # list_configurations callable/None/string/list branches.
+        adapter.currentModel = SimpleNamespace(
+            GetConfigurationNames=Mock(return_value=None)
+        )
+        assert (await adapter.list_configurations()).data == []
+        adapter.currentModel = SimpleNamespace(GetConfigurationNames="Default")
+        assert (await adapter.list_configurations()).data == ["Default"]
+        adapter.currentModel = SimpleNamespace(GetConfigurationNames=["Default", "Alt"])
+        assert (await adapter.list_configurations()).data == ["Default", "Alt"]
+
+    @pytest.mark.asyncio
+    async def test_feature_creation_failure_paths(self, monkeypatch):
+        """Cover failure branches for cut/fillet/chamfer feature creation."""
+        adapter = self._build_adapter(monkeypatch)
+        model = SimpleNamespace(
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            FeatureManager=SimpleNamespace(
+                FeatureCut3=Mock(return_value=None),
+                FeatureFillet3=Mock(return_value=None),
+                FeatureChamfer=Mock(return_value=None),
+            ),
+        )
+        adapter.currentModel = model
+
+        cut_fail = await adapter.create_cut_extrude(
+            SimpleNamespace(depth=2.0, draft_angle=0.0, reverse_direction=False)
+        )
+        assert cut_fail.is_error
+        assert "Failed to create cut extrude feature" in (cut_fail.error or "")
+
+        fillet_select_fail = await adapter.add_fillet(1.0, ["Edge1"])
+        chamfer_select_fail = await adapter.add_chamfer(1.0, ["Edge1"])
+        assert fillet_select_fail.is_error
+        assert "Failed to select edge" in (fillet_select_fail.error or "")
+        assert chamfer_select_fail.is_error
+        assert "Failed to select edge" in (chamfer_select_fail.error or "")
+
+        model.Extension.SelectByID2 = Mock(return_value=True)
+        fillet_create_fail = await adapter.add_fillet(1.0, ["Edge1"])
+        chamfer_create_fail = await adapter.add_chamfer(1.0, ["Edge1"])
+        assert fillet_create_fail.is_error
+        assert "Failed to create fillet" in (fillet_create_fail.error or "")
+        assert chamfer_create_fail.is_error
+        assert "Failed to create chamfer" in (chamfer_create_fail.error or "")
+
+    @pytest.mark.asyncio
+    async def test_title_template_and_document_type_fallbacks(self, monkeypatch):
+        """Cover _read_model_title, _resolve_template_path, and _get_document_type fallback branches."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _ModelWithTitleProperty:
+            GetTitle = 123
+            Title = "FromTitleProperty"
+
+        class _ModelUntitled:
+            def GetTitle(self):
+                raise RuntimeError("title fail")
+
+            Title = None
+
+        assert adapter._read_model_title(_ModelWithTitleProperty()) == "FromTitleProperty"
+        assert adapter._read_model_title(_ModelUntitled()) == "Untitled"
+
+        adapter.swApp = SimpleNamespace(
+            GetUserPreferenceStringValue=Mock(
+                side_effect=lambda idx: {
+                    8: "C:/Templates/Part.prtdot",
+                    0: "C:/Templates/Backup.prtdot",
+                }.get(idx, "")
+            )
+        )
+        monkeypatch.setattr("src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists", lambda p: str(p).endswith("Part.prtdot"))
+        resolved = adapter._resolve_template_path([8, 0], ".prtdot")
+        assert resolved and resolved.endswith("Part.prtdot")
+
+        adapter.currentModel = None
+        assert adapter._get_document_type() == "Unknown"
+
+    @pytest.mark.asyncio
+    async def test_create_part_and_assembly_no_template_paths(self, monkeypatch):
+        """Cover create_part/create_assembly branches where native creators fail and no template exists."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.swApp = SimpleNamespace(
+            NewPart=Mock(side_effect=RuntimeError("native part failed")),
+            NewAssembly=Mock(side_effect=RuntimeError("native asm failed")),
+            GetUserPreferenceStringValue=Mock(return_value=""),
+            NewDocument=Mock(return_value=None),
+        )
+
+        part_result = await adapter.create_part()
+        asm_result = await adapter.create_assembly()
+        assert part_result.is_error
+        assert "No part template configured" in (part_result.error or "")
+        assert asm_result.is_error
+        assert "No assembly template configured" in (asm_result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_save_guard_non_numeric_success_and_rebuild_failure(self, monkeypatch):
+        """Cover save guard path, non-numeric Save3 success, and rebuild operation failure branch."""
+        adapter = self._build_adapter(monkeypatch)
+
+        no_model_save = await adapter.save_file()
+        assert no_model_save.is_error
+
+        adapter.currentModel = SimpleNamespace(
+            Save3=Mock(return_value=object()),
+            ForceRebuild3=Mock(return_value=False),
+        )
+        # non-numeric truthy value follows bool(value) branch in _is_success
+        save_success = await adapter.save_file()
+        assert save_success.is_success
+
+        rebuild_fail = await adapter.rebuild_model()
+        assert rebuild_fail.is_error
+        assert "Failed to rebuild model" in (rebuild_fail.error or "")
+
+    @pytest.mark.asyncio
+    async def test_list_features_additional_fallback_branches(self, monkeypatch):
+        """Cover list_features branches for nested suppression failures, dedupe, and reverse traversal errors."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _Feature:
+            def __init__(self, name: str, next_feature=None):
+                self.Name = name
+                self._next = next_feature
+
+            def IsSuppressed(self):
+                raise RuntimeError("primary suppression unavailable")
+
+            def IsSuppressed2(self, *_args):
+                raise RuntimeError("secondary suppression unavailable")
+
+            def GetTypeName2(self):
+                return "Boss"
+
+            def GetNextFeature(self):
+                return self._next
+
+        duplicate_1 = _Feature("Dup")
+        duplicate_2 = _Feature("Dup")
+        duplicate_1._next = duplicate_2
+        duplicate_2._next = None
+
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: duplicate_1,
+            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(side_effect=RuntimeError("count unavailable"))),
+            FeatureByPositionReverse=Mock(side_effect=RuntimeError("reverse fail")),
+        )
+
+        listed = await adapter.list_features(include_suppressed=True)
+        assert listed.is_success
+        assert len(listed.data) == 1  # dedupe branch
+        assert listed.data[0]["suppressed"] is False
+
+        # Cover _append_feature early return when reverse traversal yields None.
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: None,
+            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(return_value=1)),
+            FeatureByPositionReverse=Mock(return_value=None),
+        )
+        none_feature = await adapter.list_features(include_suppressed=True)
+        assert none_feature.is_success
+        assert none_feature.data == []
 
 
 class TestMockAdapterAdditionalCoverage:

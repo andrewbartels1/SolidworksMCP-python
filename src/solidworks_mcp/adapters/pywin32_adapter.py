@@ -244,11 +244,9 @@ class PyWin32Adapter(SolidWorksAdapter):
         # Support both callable COM method and property-style RevisionNumber.
         sw_version: str | None = None
         if self.swApp:
-            try:
-                rev_value = getattr(self.swApp, "RevisionNumber", None)
-                sw_version = rev_value() if callable(rev_value) else rev_value
-            except Exception:
-                sw_version = None
+            sw_version = self._attempt(
+                lambda: self._get_attr_or_call(self.swApp, "RevisionNumber")
+            )
 
         # Try a simple operation to verify connection
         if healthy:
@@ -328,6 +326,29 @@ class PyWin32Adapter(SolidWorksAdapter):
                 execution_time=execution_time,
             )
 
+    def _attempt(self, operation, default=None):
+        """Execute an operation and return default on failure.
+
+        Keep non-critical fallback handling in one place instead of scattering
+        broad try/except blocks throughout operation code.
+        """
+        try:
+            return operation()
+        except Exception:
+            return default
+
+    def _attempt_with_error(self, operation):
+        """Execute an operation and return a tuple of (result, error)."""
+        try:
+            return operation(), None
+        except Exception as exc:
+            return None, exc
+
+    def _get_attr_or_call(self, obj: Any, attr_name: str):
+        """Return obj.attr_name(), or obj.attr_name when it is not callable."""
+        attr = getattr(obj, attr_name, None)
+        return attr() if callable(attr) else attr
+
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Open a SolidWorks model file.
 
@@ -397,11 +418,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             # Get model info (COM may expose methods as values on some setups)
             title = self._read_model_title(model)
 
-            try:
-                active_config = model.GetActiveConfiguration()
-                config = active_config.GetName() if active_config else "Default"
-            except Exception:
-                config = "Default"
+            active_config = self._attempt(lambda: model.GetActiveConfiguration())
+            config = (
+                self._attempt(lambda: active_config.GetName(), default="Default")
+                if active_config
+                else "Default"
+            )
 
             return SolidWorksModel(
                 path=resolved_path,
@@ -470,10 +492,9 @@ class PyWin32Adapter(SolidWorksAdapter):
         first_non_empty: str | None = None
 
         for index in preferred_indices:
-            try:
-                template = self.swApp.GetUserPreferenceStringValue(index)
-            except Exception:
-                continue
+            template = self._attempt(
+                lambda idx=index: self.swApp.GetUserPreferenceStringValue(idx)
+            )
 
             if not template or not isinstance(template, str):
                 continue
@@ -491,16 +512,9 @@ class PyWin32Adapter(SolidWorksAdapter):
 
     def _read_model_title(self, model: Any) -> str:
         """Read model title regardless of COM exposing method or value."""
-        try:
-            title_attr = getattr(model, "GetTitle", None)
-            if callable(title_attr):
-                title = title_attr()
-            else:
-                title = title_attr
-            if isinstance(title, str) and title:
-                return title
-        except Exception:
-            pass
+        title = self._attempt(lambda: self._get_attr_or_call(model, "GetTitle"))
+        if isinstance(title, str) and title:
+            return title
 
         title_value = getattr(model, "Title", None)
         if isinstance(title_value, str) and title_value:
@@ -519,12 +533,9 @@ class PyWin32Adapter(SolidWorksAdapter):
             model = None
 
             # Prefer native helper if available on this installation.
-            try:
-                new_part = getattr(self.swApp, "NewPart", None)
-                if callable(new_part):
-                    model = new_part()
-            except Exception:
-                model = None
+            new_part = getattr(self.swApp, "NewPart", None)
+            if callable(new_part):
+                model = self._attempt(new_part)
 
             if not model:
                 part_template = self._resolve_template_path([8, 0, 1, 2, 3], ".prtdot")
@@ -565,12 +576,9 @@ class PyWin32Adapter(SolidWorksAdapter):
         def _create_operation():
             model = None
 
-            try:
-                new_assembly = getattr(self.swApp, "NewAssembly", None)
-                if callable(new_assembly):
-                    model = new_assembly()
-            except Exception:
-                model = None
+            new_assembly = getattr(self.swApp, "NewAssembly", None)
+            if callable(new_assembly):
+                model = self._attempt(new_assembly)
 
             if not model:
                 asm_template = self._resolve_template_path([9, 2, 3, 1, 0], ".asmdot")
@@ -840,19 +848,26 @@ class PyWin32Adapter(SolidWorksAdapter):
             for candidate in plane_candidates:
                 if not candidate:
                     continue
-                try:
-                    plane_feature = self.currentModel.FeatureByName(candidate)
-                    if plane_feature and plane_feature.Select2(False, 0):
-                        selected = True
-                        break
-                except Exception as exc:
-                    selection_error = exc
+                plane_feature, selection_error_candidate = self._attempt_with_error(
+                    lambda c=candidate: self.currentModel.FeatureByName(c)
+                )
+                if selection_error_candidate:
+                    selection_error = selection_error_candidate
+                    continue
+                selected = bool(
+                    plane_feature
+                    and self._attempt(
+                        lambda pf=plane_feature: pf.Select2(False, 0), default=False
+                    )
+                )
+                if selected:
+                    break
 
             # Fallback to SelectByID2 with callout variants for compatibility.
             if not selected:
                 for callout in ("", None, 0):
-                    try:
-                        selected = self.currentModel.Extension.SelectByID2(
+                    selected, selection_error_candidate = self._attempt_with_error(
+                        lambda co=callout: self.currentModel.Extension.SelectByID2(
                             actual_plane,
                             "PLANE",
                             0,
@@ -860,13 +875,15 @@ class PyWin32Adapter(SolidWorksAdapter):
                             0,
                             False,
                             0,
-                            callout,
+                            co,
                             0,
                         )
-                        if selected:
-                            break
-                    except Exception as exc:
-                        selection_error = exc
+                    )
+                    if selection_error_candidate:
+                        selection_error = selection_error_candidate
+                        continue
+                    if selected:
+                        break
 
             if not selected:
                 if selection_error:
@@ -884,10 +901,9 @@ class PyWin32Adapter(SolidWorksAdapter):
                 self.currentSketch = self.currentSketchManager.InsertSketch()
 
             if not self.currentSketch:
-                try:
-                    self.currentSketch = self.currentModel.GetActiveSketch2()
-                except Exception:
-                    self.currentSketch = None
+                self.currentSketch = self._attempt(
+                    lambda: self.currentModel.GetActiveSketch2()
+                )
 
             if self.currentSketch and hasattr(self.currentSketch, "Name"):
                 return self.currentSketch.Name
@@ -1460,10 +1476,7 @@ class PyWin32Adapter(SolidWorksAdapter):
             os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
 
             if os.path.exists(resolved_path):
-                try:
-                    os.remove(resolved_path)
-                except Exception:
-                    pass
+                self._attempt(lambda: os.remove(resolved_path))
 
             # Save/export the file
             success = self.currentModel.SaveAs3(
@@ -1547,17 +1560,11 @@ class PyWin32Adapter(SolidWorksAdapter):
                 # If another SolidWorks document has this path open (for example
                 # from a previous run), close it so SaveAs can overwrite.
                 if self.swApp:
-                    try:
-                        self.swApp.CloseDoc(resolved_path)
-                    except Exception:
-                        pass
+                    self._attempt(lambda: self.swApp.CloseDoc(resolved_path))
 
                 # Remove stale copy when possible (may fail if still locked).
                 if os.path.exists(resolved_path):
-                    try:
-                        os.remove(resolved_path)
-                    except Exception:
-                        pass
+                    self._attempt(lambda: os.remove(resolved_path))
 
                 # Save as new file.
                 save_as3_result = self.currentModel.SaveAs3(resolved_path, 0, 0)
@@ -1574,14 +1581,15 @@ class PyWin32Adapter(SolidWorksAdapter):
                     raise Exception(f"File not written after save: {resolved_path}")
             else:
                 # Save current file
-                try:
-                    save_result = self.currentModel.Save3(1, None, None)
-                except Exception:
+                save_result = self._attempt(
+                    lambda: self.currentModel.Save3(1, None, None)
+                )
+                if save_result is None:
                     save_fn = getattr(self.currentModel, "Save", None)
                     if callable(save_fn):
                         save_result = save_fn()
                     else:
-                        raise
+                        raise Exception("Failed to save file")
                 if not _is_success(save_result):
                     # Some SolidWorks versions return a non-success value when the
                     # document is already clean; if a valid file still exists,
@@ -1650,27 +1658,29 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             def _is_suppressed(feature: Any) -> bool:
                 # Prefer parameter-less calls to avoid COM optional-arg marshalling issues.
-                try:
-                    return bool(feature.IsSuppressed())
-                except Exception:
-                    try:
-                        suppressed_result = feature.IsSuppressed2(0, [])
-                        if isinstance(suppressed_result, (tuple, list)):
-                            return bool(suppressed_result[0]) if suppressed_result else False
-                        return bool(suppressed_result)
-                    except Exception:
-                        return False
+                suppressed_direct = self._attempt(
+                    lambda: feature.IsSuppressed(), default=None
+                )
+                if suppressed_direct is not None:
+                    return bool(suppressed_direct)
+
+                suppressed_result = self._attempt(
+                    lambda: feature.IsSuppressed2(0, []), default=None
+                )
+                if isinstance(suppressed_result, (tuple, list)):
+                    return bool(suppressed_result[0]) if suppressed_result else False
+                return (
+                    bool(suppressed_result) if suppressed_result is not None else False
+                )
 
             def _append_feature(feature: Any, position: int) -> None:
                 if not feature:
                     return
 
                 name = str(getattr(feature, "Name", ""))
-                feature_type = ""
-                try:
-                    feature_type = str(feature.GetTypeName2())
-                except Exception:
-                    feature_type = "Unknown"
+                feature_type = str(
+                    self._attempt(lambda: feature.GetTypeName2(), default="Unknown")
+                )
 
                 dedupe_key = (name, feature_type)
                 if dedupe_key in seen:
@@ -1691,10 +1701,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 )
 
             # Primary path: feature-tree traversal from model root.
-            try:
-                feature = self.currentModel.FirstFeature()
-            except Exception:
-                feature = None
+            feature = self._attempt(lambda: self.currentModel.FirstFeature())
 
             pos = 0
             guard = 0
@@ -1702,25 +1709,29 @@ class PyWin32Adapter(SolidWorksAdapter):
                 _append_feature(feature, pos)
                 pos += 1
                 guard += 1
-                try:
-                    feature = feature.GetNextFeature()
-                except Exception:
+                next_feature = self._attempt(
+                    lambda current_feature=feature: current_feature.GetNextFeature()
+                )
+                if next_feature is None:
                     break
+                feature = next_feature
 
             if features:
                 return features
 
             # Fallback path: reverse position traversal via model API.
-            try:
-                feature_manager = self.currentModel.FeatureManager
-                count = int(feature_manager.GetFeatureCount(True) or 0)
-            except Exception:
-                count = 0
+            feature_manager = getattr(self.currentModel, "FeatureManager", None)
+            count = self._attempt(
+                lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0
+            )
 
             for reverse_pos in range(1, count + 1):
-                try:
-                    feature = self.currentModel.FeatureByPositionReverse(reverse_pos)
-                except Exception:
+                feature = self._attempt(
+                    lambda pos=reverse_pos: self.currentModel.FeatureByPositionReverse(
+                        pos
+                    )
+                )
+                if feature is None:
                     continue
 
                 # Convert reverse order to stable forward-ish index.
