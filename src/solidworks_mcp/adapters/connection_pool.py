@@ -46,6 +46,48 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self._lock = asyncio.Lock()
         self.timeout = timeout if timeout is not None else 30.0
 
+    async def _attempt_async(self, operation, default=None):
+        """Run an async operation and return default on failure."""
+        try:
+            return await operation()
+        except Exception:
+            return default
+
+    async def _attempt_async_with_error(self, operation):
+        """Run an async operation and return (result, error)."""
+        try:
+            return await operation(), None
+        except Exception as exc:
+            return None, exc
+
+    def _attempt_sync(self, operation, default=None):
+        """Run a sync operation and return default on failure."""
+        try:
+            return operation()
+        except Exception:
+            return default
+
+    async def _invoke_with_optional_args(self, adapter, method_name: str, *args):
+        """Invoke adapter method with args, retrying without args on signature mismatch."""
+        method = getattr(adapter, method_name)
+        try:
+            return await method(*args)
+        except TypeError:
+            return await method()
+
+    async def _replace_failed_adapter(self):
+        """Create, connect, and return a replacement adapter.
+
+        Returns None on success, or the captured exception on failure.
+        """
+        try:
+            new_adapter = self.adapter_factory()
+            await new_adapter.connect()
+            await self._return_adapter(new_adapter)
+            return None
+        except Exception as exc:
+            return exc
+
     @property
     def size(self) -> int:
         return len(self.pool)
@@ -129,17 +171,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
                 if adapter:
                     # Don't return failed adapter to pool, create a new one
-                    try:
-                        await adapter.disconnect()
-                    except:
-                        pass
+                    await self._attempt_async(lambda: adapter.disconnect())
 
-                    try:
-                        # Create replacement adapter
-                        new_adapter = self.adapter_factory()
-                        await new_adapter.connect()
-                        await self._return_adapter(new_adapter)
-                    except Exception as replacement_error:
+                    replacement_error = await self._attempt_async(
+                        self._replace_failed_adapter
+                    )
+                    if replacement_error is not None:
                         logger.error(
                             f"Failed to create replacement adapter: {replacement_error}"
                         )
@@ -162,10 +199,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
     async def disconnect(self) -> None:
         """Disconnect all adapters in the pool."""
         for adapter in self.pool:
-            try:
-                await adapter.disconnect()
-            except Exception as e:
-                logger.warning(f"Error disconnecting adapter: {e}")
+            _, error = await self._attempt_async_with_error(
+                lambda current_adapter=adapter: current_adapter.disconnect()
+            )
+            if error is not None:
+                logger.warning(f"Error disconnecting adapter: {error}")
 
         self.pool.clear()
 
@@ -204,13 +242,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         # Check health of all adapters
         for adapter in self.pool:
-            try:
-                health = await adapter.health_check()
-                if health.healthy:
-                    healthy_count += 1
-                total_response_time += health.average_response_time
-            except Exception:
-                pass
+            health = await self._attempt_async(
+                lambda current_adapter=adapter: current_adapter.health_check()
+            )
+            if not health:
+                continue
+            if health.healthy:
+                healthy_count += 1
+            total_response_time += health.average_response_time
 
         avg_response_time = total_response_time / len(self.pool) if self.pool else 0
 
@@ -254,10 +293,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         async def _op(adapter):
             if name is None and units is None:
                 return await adapter.create_part()
-            try:
-                return await adapter.create_part(name, units)
-            except TypeError:
-                return await adapter.create_part()
+            return await self._invoke_with_optional_args(
+                adapter,
+                "create_part",
+                name,
+                units,
+            )
 
         return await self._execute_with_pool("create_part", _op)
 
@@ -267,10 +308,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         async def _op(adapter):
             if name is None:
                 return await adapter.create_assembly()
-            try:
-                return await adapter.create_assembly(name)
-            except TypeError:
-                return await adapter.create_assembly()
+            return await self._invoke_with_optional_args(
+                adapter,
+                "create_assembly",
+                name,
+            )
 
         return await self._execute_with_pool("create_assembly", _op)
 

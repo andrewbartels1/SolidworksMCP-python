@@ -48,6 +48,13 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         self.last_failure_time: float = 0.0
         self.half_open_calls = 0
 
+    async def _invoke_with_optional_args(self, method, *args):
+        """Invoke adapter method with args, retrying without args on signature mismatch."""
+        try:
+            return await method(*args)
+        except TypeError:
+            return await method()
+
     def _should_allow_request(self) -> bool:
         """Check if request should be allowed through circuit breaker."""
         if self.state == CircuitState.CLOSED:
@@ -183,10 +190,11 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         async def _op():
             if name is None and units is None:
                 return await self.adapter.create_part()
-            try:
-                return await self.adapter.create_part(name, units)
-            except TypeError:
-                return await self.adapter.create_part()
+            return await self._invoke_with_optional_args(
+                self.adapter.create_part,
+                name,
+                units,
+            )
 
         return await self._execute_with_circuit_breaker("create_part", _op)
 
@@ -210,10 +218,10 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         async def _op():
             if name is None:
                 return await self.adapter.create_assembly()
-            try:
-                return await self.adapter.create_assembly(name)
-            except TypeError:
-                return await self.adapter.create_assembly()
+            return await self._invoke_with_optional_args(
+                self.adapter.create_assembly,
+                name,
+            )
 
         return await self._execute_with_circuit_breaker("create_assembly", _op)
 
