@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 340" font-family="Arial, sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#424242"/>
+    </marker>
+    <marker id="arr2" markerWidth="7" markerHeight="5" refX="0" refY="2.5" orient="auto">
+      <polygon points="7 0, 0 2.5, 7 5" fill="#424242"/>
+    </marker>
+  </defs>
+
+  <rect width="560" height="340" fill="#FAFAFA" rx="8"/>
+  <rect width="560" height="340" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
+
+  <text x="280" y="26" text-anchor="middle" font-size="15" font-weight="bold" fill="#212121">Mounting Plate — 120 × 80 mm (top view)</text>
+  <text x="280" y="43" text-anchor="middle" font-size="11" fill="#757575">Recipe 4 · 4 corner holes Ø10 mm, 10 mm offset · Front plane extrusion 8 mm</text>
+
+  <!-- Main plate outline -->
+  <rect x="100" y="75" width="290" height="190" fill="#E3F2FD" stroke="#1565C0" stroke-width="2.5" rx="2"/>
+
+  <!-- 4 corner holes — circles -->
+  <!-- Top-left -->
+  <circle cx="130" cy="105" r="14" fill="white" stroke="#1565C0" stroke-width="2"/>
+  <circle cx="130" cy="105" r="2" fill="#1565C0"/>
+  <!-- Top-right -->
+  <circle cx="360" cy="105" r="14" fill="white" stroke="#1565C0" stroke-width="2"/>
+  <circle cx="360" cy="105" r="2" fill="#1565C0"/>
+  <!-- Bottom-left -->
+  <circle cx="130" cy="235" r="14" fill="white" stroke="#1565C0" stroke-width="2"/>
+  <circle cx="130" cy="235" r="2" fill="#1565C0"/>
+  <!-- Bottom-right -->
+  <circle cx="360" cy="235" r="14" fill="white" stroke="#1565C0" stroke-width="2"/>
+  <circle cx="360" cy="235" r="2" fill="#1565C0"/>
+
+  <!-- centerline through holes -->
+  <line x1="120" y1="105" x2="140" y2="105" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="130" y1="95"  x2="130" y2="115" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="350" y1="105" x2="370" y2="105" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="360" y1="95"  x2="360" y2="115" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="120" y1="235" x2="140" y2="235" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="130" y1="225" x2="130" y2="245" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="350" y1="235" x2="370" y2="235" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <line x1="360" y1="225" x2="360" y2="245" stroke="#D32F2F" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+  <!-- Hole offset dimensions (10 mm from edge) -->
+  <!-- Left offset: plate left edge to hole center -->
+  <line x1="100" y1="120" x2="130" y2="120" stroke="#424242" stroke-width="1"/>
+  <line x1="100" y1="116" x2="100" y2="124" stroke="#424242" stroke-width="1"/>
+  <line x1="130" y1="116" x2="130" y2="124" stroke="#424242" stroke-width="1"/>
+  <text x="115" y="134" text-anchor="middle" font-size="10" fill="#424242">10</text>
+
+  <!-- Top offset: plate top edge to hole center -->
+  <line x1="147" y1="75" x2="147" y2="105" stroke="#424242" stroke-width="1"/>
+  <line x1="143" y1="75"  x2="151" y2="75"  stroke="#424242" stroke-width="1"/>
+  <line x1="143" y1="105" x2="151" y2="105" stroke="#424242" stroke-width="1"/>
+  <text x="160" y="92" text-anchor="start" font-size="10" fill="#424242">10</text>
+
+  <!-- Hole diameter callout -->
+  <line x1="360" y1="235" x2="420" y2="200" stroke="#616161" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="422" y="196" font-size="11" fill="#212121" font-weight="bold">Ø10 mm</text>
+  <text x="422" y="210" font-size="10" fill="#757575">add_circle × 4</text>
+
+  <!-- Width dimension (bottom) -->
+  <line x1="100" y1="282" x2="390" y2="282" stroke="#424242" stroke-width="1.2"/>
+  <line x1="100" y1="275" x2="100" y2="289" stroke="#424242" stroke-width="1.2"/>
+  <line x1="390" y1="275" x2="390" y2="289" stroke="#424242" stroke-width="1.2"/>
+  <line x1="100" y1="282" x2="113" y2="282" stroke="#424242" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="390" y1="282" x2="377" y2="282" stroke="#424242" stroke-width="1.2" marker-end="url(#arr2)"/>
+  <text x="245" y="300" text-anchor="middle" font-size="13" fill="#212121" font-weight="bold">120 mm</text>
+
+  <!-- Height dimension (right) -->
+  <line x1="405" y1="75"  x2="405" y2="265" stroke="#424242" stroke-width="1.2"/>
+  <line x1="398" y1="75"  x2="412" y2="75"  stroke="#424242" stroke-width="1.2"/>
+  <line x1="398" y1="265" x2="412" y2="265" stroke="#424242" stroke-width="1.2"/>
+  <line x1="405" y1="75"  x2="405" y2="88"  stroke="#424242" stroke-width="1.2" marker-end="url(#arr2)"/>
+  <line x1="405" y1="265" x2="405" y2="252" stroke="#424242" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="430" y="175" text-anchor="start" font-size="13" fill="#212121" font-weight="bold">80 mm</text>
+
+  <!-- Center of plate marker -->
+  <line x1="241" y1="160" x2="249" y2="170" stroke="#9E9E9E" stroke-width="1"/>
+  <line x1="249" y1="160" x2="241" y2="170" stroke="#9E9E9E" stroke-width="1"/>
+
+  <!-- Thickness note -->
+  <rect x="18" y="305" width="524" height="26" fill="#E8F5E9" stroke="#2E7D32" rx="5"/>
+  <text x="28" y="322" font-size="11" fill="#1B5E20">Extrusion depth = 8 mm (into the screen) · add_rectangle(-60,-40,60,40) centred at origin on Front plane</text>
+</svg>

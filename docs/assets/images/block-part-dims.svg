@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 340" font-family="Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#424242"/>
+    </marker>
+    <marker id="arr2" markerWidth="7" markerHeight="5" refX="0" refY="2.5" orient="auto">
+      <polygon points="7 0, 0 2.5, 7 5" fill="#424242"/>
+    </marker>
+  </defs>
+
+  <rect width="480" height="340" fill="#FAFAFA" rx="8"/>
+  <rect width="480" height="340" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
+
+  <text x="240" y="26" text-anchor="middle" font-size="15" font-weight="bold" fill="#212121">Simple Block — 100 × 60 × 20 mm</text>
+  <text x="240" y="43" text-anchor="middle" font-size="11" fill="#757575">Recipe 1 · create_extrusion · Sketch on Front plane</text>
+
+  <!-- Isometric block faces -->
+  <!-- Front face (XY) -->
+  <polygon points="100,230 260,230 260,160 100,160"
+           fill="#BBDEFB" stroke="#1565C0" stroke-width="2"/>
+  <!-- Top face -->
+  <polygon points="100,160 260,160 320,110 160,110"
+           fill="#90CAF9" stroke="#1565C0" stroke-width="2"/>
+  <!-- Right face -->
+  <polygon points="260,160 320,110 320,180 260,230"
+           fill="#64B5F6" stroke="#1565C0" stroke-width="2"/>
+
+  <!-- Width dimension (bottom of front face) -->
+  <line x1="100" y1="248" x2="260" y2="248" stroke="#424242" stroke-width="1.2"/>
+  <line x1="100" y1="241" x2="100" y2="255" stroke="#424242" stroke-width="1.2"/>
+  <line x1="260" y1="241" x2="260" y2="255" stroke="#424242" stroke-width="1.2"/>
+  <line x1="100" y1="248" x2="113" y2="248" stroke="#424242" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="260" y1="248" x2="247" y2="248" stroke="#424242" stroke-width="1.2" marker-end="url(#arr2)"/>
+  <text x="180" y="263" text-anchor="middle" font-size="12" fill="#212121" font-weight="bold">100 mm</text>
+
+  <!-- Height dimension (left of front face) -->
+  <line x1="82" y1="160" x2="82" y2="230" stroke="#424242" stroke-width="1.2"/>
+  <line x1="75" y1="160" x2="89" y2="160" stroke="#424242" stroke-width="1.2"/>
+  <line x1="75" y1="230" x2="89" y2="230" stroke="#424242" stroke-width="1.2"/>
+  <line x1="82" y1="230" x2="82" y2="217" stroke="#424242" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="82" y1="160" x2="82" y2="173" stroke="#424242" stroke-width="1.2" marker-end="url(#arr2)"/>
+  <text x="62" y="200" text-anchor="middle" font-size="12" fill="#212121" font-weight="bold" transform="rotate(-90,62,200)">60 mm</text>
+
+  <!-- Depth dimension (right side top) -->
+  <line x1="260" y1="140" x2="320" y2="90" stroke="#424242" stroke-width="1.2"/>
+  <line x1="256" y1="158" x2="264" y2="160" stroke="#424242" stroke-width="1.2"/>
+  <line x1="316" y1="107" x2="324" y2="110" stroke="#424242" stroke-width="1.2"/>
+  <text x="305" y="138" font-size="12" fill="#212121" font-weight="bold">20 mm</text>
+  <text x="298" y="151" font-size="10" fill="#757575">(depth/extrusion)</text>
+
+  <!-- Sketch annotations -->
+  <text x="175" y="200" text-anchor="middle" font-size="11" fill="#0D47A1" font-style="italic">Sketch1</text>
+  <text x="175" y="214" text-anchor="middle" font-size="11" fill="#0D47A1" font-style="italic">(Front plane)</text>
+
+  <!-- Call sequence box -->
+  <rect x="18" y="285" width="444" height="42" fill="#E3F2FD" stroke="#1565C0" rx="5"/>
+  <text x="28" y="301" font-size="11" fill="#0D47A1" font-weight="bold">Tool sequence:</text>
+  <text x="28" y="319" font-size="11" fill="#1A237E">create_part → create_sketch(Front) → add_rectangle(-50,-30,50,30) → exit_sketch → create_extrusion(depth=20) → save_as</text>
+</svg>

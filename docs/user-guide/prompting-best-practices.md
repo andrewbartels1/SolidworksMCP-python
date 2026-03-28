@@ -15,6 +15,10 @@ Most failures are caused by:
 
 ## Golden Prompt Format
 
+Every reliable prompt has four required sections. Miss any one and you risk silent failures or hallucinated dimensions:
+
+![Anatomy of a good prompt](../assets/images/prompt-anatomy.svg)
+
 Use this exact structure for repeatable results:
 
 ```text
@@ -39,6 +43,10 @@ Verification:
 - After each tool call, print: tool name, status, key output.
 - At the end, summarize final dimensions and output file paths.
 ```
+
+The part this prompt describes looks like this (top view):
+
+![Mounting plate top view with hole positions and dimensions](../assets/images/mounting-plate.svg)
 
 ## UI Interaction Rules
 

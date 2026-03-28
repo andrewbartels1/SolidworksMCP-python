@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" font-family="Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#424242"/>
+    </marker>
+    <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1565C0"/>
+    </marker>
+    <marker id="arrowhead-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#C62828"/>
+    </marker>
+    <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2E7D32"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="520" height="360" fill="#FAFAFA" rx="8" ry="8"/>
+  <rect width="520" height="360" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8" ry="8"/>
+
+  <!-- Title -->
+  <text x="260" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#212121">SolidWorks Default Reference Planes</text>
+  <text x="260" y="46" text-anchor="middle" font-size="11" fill="#757575">Front · Top · Right — use these exact names in every tool call</text>
+
+  <!-- Origin -->
+  <circle cx="220" cy="210" r="5" fill="#212121"/>
+  <text x="210" y="228" font-size="11" fill="#424242" text-anchor="middle">Origin</text>
+
+  <!-- X axis (horizontal right) — Red -->
+  <line x1="220" y1="210" x2="360" y2="210" stroke="#C62828" stroke-width="2.5" marker-end="url(#arrowhead-red)"/>
+  <text x="368" y="215" font-size="13" fill="#C62828" font-weight="bold">X</text>
+
+  <!-- Y axis (vertical up) — Green -->
+  <line x1="220" y1="210" x2="220" y2="75" stroke="#2E7D32" stroke-width="2.5" marker-end="url(#arrowhead-green)"/>
+  <text x="225" y="68" font-size="13" fill="#2E7D32" font-weight="bold">Y</text>
+
+  <!-- Z axis (isometric — toward viewer) — Blue -->
+  <line x1="220" y1="210" x2="110" y2="280" stroke="#1565C0" stroke-width="2.5" marker-end="url(#arrowhead-blue)"/>
+  <text x="96" y="294" font-size="13" fill="#1565C0" font-weight="bold">Z</text>
+
+  <!-- FRONT PLANE — the XY plane, shown as a tilted parallelogram -->
+  <polygon points="140,98 300,98 300,258 140,258"
+           fill="#E3F2FD" fill-opacity="0.55" stroke="#1565C0" stroke-width="1.8" stroke-dasharray="5,3"/>
+  <text x="220" y="185" text-anchor="middle" font-size="13" fill="#1565C0" font-weight="bold">FRONT</text>
+  <text x="220" y="200" text-anchor="middle" font-size="10" fill="#1976D2">plane="Front"</text>
+
+  <!-- TOP PLANE — XZ plane, shown as a parallelogram above -->
+  <polygon points="140,98 300,98 380,55 220,55"
+           fill="#E8F5E9" fill-opacity="0.55" stroke="#2E7D32" stroke-width="1.8" stroke-dasharray="5,3"/>
+  <text x="285" y="83" text-anchor="middle" font-size="13" fill="#2E7D32" font-weight="bold">TOP</text>
+  <text x="285" y="97" text-anchor="middle" font-size="10" fill="#388E3C">plane="Top"</text>
+
+  <!-- RIGHT PLANE — YZ plane, shown as a parallelogram on the right -->
+  <polygon points="300,98 380,55 380,215 300,258"
+           fill="#FFF3E0" fill-opacity="0.55" stroke="#E65100" stroke-width="1.8" stroke-dasharray="5,3"/>
+  <text x="345" y="165" text-anchor="middle" font-size="13" fill="#E65100" font-weight="bold">RIGHT</text>
+  <text x="345" y="180" text-anchor="middle" font-size="10" fill="#BF360C">plane="Right"</text>
+
+  <!-- Legend -->
+  <rect x="390" y="95" width="118" height="105" fill="white" stroke="#E0E0E0" rx="5"/>
+  <text x="449" y="112" text-anchor="middle" font-size="11" font-weight="bold" fill="#424242">Plane → Axis</text>
+  <rect x="398" y="120" width="10" height="10" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.5"/>
+  <text x="415" y="130" font-size="11" fill="#212121">Front = XY</text>
+  <rect x="398" y="138" width="10" height="10" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.5"/>
+  <text x="415" y="148" font-size="11" fill="#212121">Top = XZ</text>
+  <rect x="398" y="156" width="10" height="10" fill="#FFF3E0" stroke="#E65100" stroke-width="1.5"/>
+  <text x="415" y="166" font-size="11" fill="#212121">Right = YZ</text>
+  <text x="398" y="188" font-size="10" fill="#757575">Sketch on Front</text>
+  <text x="398" y="200" font-size="10" fill="#757575">for most features</text>
+
+  <!-- Usage note -->
+  <rect x="20" y="308" width="480" height="38" fill="#FFF8E1" stroke="#F9A825" rx="5"/>
+  <text x="30" y="323" font-size="11" fill="#5D4037">⚠  Case-sensitive: "Front" works, "front" / "XY" / "xy-plane" will fail.</text>
+  <text x="30" y="339" font-size="11" fill="#5D4037">   The MCP server maps these names directly to SolidWorks COM IDs.</text>
+</svg>

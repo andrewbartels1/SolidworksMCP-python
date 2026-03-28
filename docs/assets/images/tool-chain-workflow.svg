@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 210" font-family="Arial, sans-serif" font-size="12">
+  <rect width="700" height="210" fill="#FAFAFA" rx="8"/>
+  <rect width="700" height="210" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
+
+  <text x="350" y="26" text-anchor="middle" font-size="14" font-weight="bold" fill="#212121">Standard MCP Tool-Call Sequence</text>
+
+  <!-- Arrow definitions -->
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1565C0"/>
+    </marker>
+  </defs>
+
+  <!-- Step boxes -->
+  <!-- 1: create_part -->
+  <rect x="18" y="45" width="88" height="44" rx="6" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8"/>
+  <text x="62" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#0D47A1">create_part</text>
+  <text x="62" y="79" text-anchor="middle" font-size="10" fill="#1565C0">new document</text>
+
+  <!-- Arrow -->
+  <line x1="106" y1="67" x2="124" y2="67" stroke="#1565C0" stroke-width="1.8" marker-end="url(#a)"/>
+
+  <!-- 2: create_sketch -->
+  <rect x="124" y="45" width="92" height="44" rx="6" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8"/>
+  <text x="170" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#0D47A1">create_sketch</text>
+  <text x="170" y="79" text-anchor="middle" font-size="10" fill="#1565C0">plane="Front"</text>
+
+  <!-- Arrow -->
+  <line x1="216" y1="67" x2="234" y2="67" stroke="#1565C0" stroke-width="1.8" marker-end="url(#a)"/>
+
+  <!-- 3: add geometry -->
+  <rect x="234" y="45" width="96" height="44" rx="6" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.8"/>
+  <text x="282" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#1B5E20">add_geometry</text>
+  <text x="282" y="79" text-anchor="middle" font-size="10" fill="#2E7D32">rect/circle/arc…</text>
+
+  <!-- Arrow -->
+  <line x1="330" y1="67" x2="348" y2="67" stroke="#1565C0" stroke-width="1.8" marker-end="url(#a)"/>
+
+  <!-- 4: exit_sketch -->
+  <rect x="348" y="45" width="88" height="44" rx="6" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.8"/>
+  <text x="392" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#E65100">exit_sketch</text>
+  <text x="392" y="79" text-anchor="middle" font-size="10" fill="#F57F17">close profile</text>
+
+  <!-- Arrow -->
+  <line x1="436" y1="67" x2="454" y2="67" stroke="#1565C0" stroke-width="1.8" marker-end="url(#a)"/>
+
+  <!-- 5: create_extrusion / revolve -->
+  <rect x="454" y="45" width="100" height="44" rx="6" fill="#FCE4EC" stroke="#C62828" stroke-width="1.8"/>
+  <text x="504" y="60" text-anchor="middle" font-size="11" font-weight="bold" fill="#B71C1C">create_extrusion</text>
+  <text x="504" y="74" text-anchor="middle" font-size="10" fill="#C62828">or create_revolve</text>
+  <text x="504" y="86" text-anchor="middle" font-size="9" fill="#E57373">3-D feature</text>
+
+  <!-- Arrow -->
+  <line x1="554" y1="67" x2="572" y2="67" stroke="#1565C0" stroke-width="1.8" marker-end="url(#a)"/>
+
+  <!-- 6: save_as -->
+  <rect x="572" y="45" width="100" height="44" rx="6" fill="#F3E5F5" stroke="#6A1B9A" stroke-width="1.8"/>
+  <text x="622" y="63" text-anchor="middle" font-size="11" font-weight="bold" fill="#4A148C">save_as</text>
+  <text x="622" y="79" text-anchor="middle" font-size="10" fill="#6A1B9A">.sldprt file</text>
+
+  <!-- Step numbers -->
+  <text x="62"  y="100" text-anchor="middle" font-size="10" fill="#757575">① Start</text>
+  <text x="170" y="100" text-anchor="middle" font-size="10" fill="#757575">② Sketch</text>
+  <text x="282" y="100" text-anchor="middle" font-size="10" fill="#757575">③ Geometry</text>
+  <text x="392" y="100" text-anchor="middle" font-size="10" fill="#757575">④ Close</text>
+  <text x="504" y="100" text-anchor="middle" font-size="10" fill="#757575">⑤ Feature</text>
+  <text x="622" y="100" text-anchor="middle" font-size="10" fill="#757575">⑥ Persist</text>
+
+  <!-- Divider -->
+  <line x1="18" y1="115" x2="682" y2="115" stroke="#E0E0E0" stroke-width="1"/>
+
+  <!-- Critical rules section -->
+  <text x="350" y="133" text-anchor="middle" font-size="12" font-weight="bold" fill="#424242">Critical ordering rules</text>
+
+  <circle cx="30" cy="148" r="8" fill="#C62828"/>
+  <text x="30" y="152" text-anchor="middle" font-size="10" fill="white" font-weight="bold">!</text>
+  <text x="44" y="152" font-size="11" fill="#212121">exit_sketch must come BEFORE create_extrusion/revolve</text>
+
+  <circle cx="30" cy="168" r="8" fill="#C62828"/>
+  <text x="30" y="172" text-anchor="middle" font-size="10" fill="white" font-weight="bold">!</text>
+  <text x="44" y="172" font-size="11" fill="#212121">create_sketch must come BEFORE any add_* geometry call</text>
+
+  <circle cx="30" cy="188" r="8" fill="#F57F17"/>
+  <text x="30" y="192" text-anchor="middle" font-size="10" fill="white" font-weight="bold">i</text>
+  <text x="44" y="192" font-size="11" fill="#424242">For assemblies: load_part × N → create_assembly → add mates via VBA</text>
+</svg>

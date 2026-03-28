@@ -37,6 +37,16 @@
 - [x] ✅ Add deterministic regression tests for docs discovery against known COM/VBA symbols
   - **Completed**: 4 tests in tests/test_tools_docs_discovery.py
 
+- [ ] Add Support and tools for browsing and inserting ready made solidworks components (fasteners, screws, etc.) into Solidworks Assemblies and look into assembly tools that could be valuable adds to the mcp server.
+
+- [ ] Generate some sort of UI that will help the user view and rewind changes made by the mcp server and llm
+
+- [ ] Have a database of all the commands and calls for context on close or a new session so things can pick up where they were left off on developing the part, learn what worked and what didn't, and rewind/redo/undo anything or turn great series of commands into a script.
+
+- [ ] add support for sheet metal and bend analysis tools
+
+- [ ] add support for mesh body manipulation tools
+
 ---
 
 ## ✅ Core Tools (6)
@@ -217,7 +227,7 @@
 **Workarounds**:
 
 1. **VBA Macro** (Recommended): Created `CreateExtrusion.swp` macro that works when run directly in SolidWorks
-   - Location: `C:\Users\vinnie\Claude\SWMCP-4\CreateExtrusion.swp`
+   - Location: `C:\Users\bartels\Claude\SWMCP-4\CreateExtrusion.swp`
    - Run via: Tools → Macro → Run
 2. **Manual Completion**: Use SolidWorks UI to complete the extrusion after sketch creation
 3. **Future Fix**: Consider using SolidWorks API SDK directly or PowerShell integration

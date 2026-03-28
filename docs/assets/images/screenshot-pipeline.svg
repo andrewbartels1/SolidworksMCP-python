@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 330" font-family="Arial, sans-serif" font-size="12">
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#424242"/>
+    </marker>
+  </defs>
+
+  <rect width="680" height="330" fill="#FAFAFA" rx="8"/>
+  <rect width="680" height="330" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
+
+  <text x="340" y="26" text-anchor="middle" font-size="14" font-weight="bold" fill="#212121">Screenshot Equivalence Validation Pipeline</text>
+  <text x="340" y="43" text-anchor="middle" font-size="11" fill="#757575">SSIM ≥ 0.95 is the pass criterion for model recreation tasks</text>
+
+  <!-- Box 1: Reference model -->
+  <rect x="18" y="65" width="118" height="68" rx="6" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8"/>
+  <text x="77" y="87" text-anchor="middle" font-size="11" font-weight="bold" fill="#0D47A1">Reference</text>
+  <text x="77" y="102" text-anchor="middle" font-size="10" fill="#1565C0">SolidWorks</text>
+  <text x="77" y="115" text-anchor="middle" font-size="10" fill="#1565C0">sample .sldprt</text>
+
+  <!-- Box 2: export_image reference -->
+  <rect x="162" y="65" width="118" height="68" rx="6" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.8"/>
+  <text x="221" y="87" text-anchor="middle" font-size="11" font-weight="bold" fill="#1B5E20">export_image</text>
+  <text x="221" y="102" text-anchor="middle" font-size="10" fill="#2E7D32">orientation + res</text>
+  <text x="221" y="115" text-anchor="middle" font-size="10" fill="#2E7D32">ref_model.jpg</text>
+
+  <!-- Arrow 1–2 -->
+  <line x1="136" y1="99" x2="162" y2="99" stroke="#424242" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Box 3: LLM generates -->
+  <rect x="18" y="170" width="118" height="68" rx="6" fill="#FFF8E1" stroke="#F57F17" stroke-width="1.8"/>
+  <text x="77" y="192" text-anchor="middle" font-size="11" font-weight="bold" fill="#E65100">LLM generates</text>
+  <text x="77" y="207" text-anchor="middle" font-size="10" fill="#F57F17">MCP tool calls</text>
+  <text x="77" y="222" text-anchor="middle" font-size="10" fill="#F57F17">→ new .sldprt</text>
+
+  <!-- Box 4: export_image generated -->
+  <rect x="162" y="170" width="118" height="68" rx="6" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.8"/>
+  <text x="221" y="192" text-anchor="middle" font-size="11" font-weight="bold" fill="#1B5E20">export_image</text>
+  <text x="221" y="207" text-anchor="middle" font-size="10" fill="#2E7D32">same orientation</text>
+  <text x="221" y="222" text-anchor="middle" font-size="10" fill="#2E7D32">gen_model.jpg</text>
+
+  <!-- Arrow 3–4 -->
+  <line x1="136" y1="204" x2="162" y2="204" stroke="#424242" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Merge arrows into comparator -->
+  <line x1="280" y1="99"  x2="320" y2="99"  stroke="#424242" stroke-width="1.5"/>
+  <line x1="280" y1="204" x2="320" y2="204" stroke="#424242" stroke-width="1.5"/>
+  <line x1="320" y1="99"  x2="320" y2="151" stroke="#424242" stroke-width="1.5"/>
+  <line x1="320" y1="204" x2="320" y2="151" stroke="#424242" stroke-width="1.5"/>
+  <line x1="320" y1="151" x2="340" y2="151" stroke="#424242" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Box 5: screenshot_compare.py -->
+  <rect x="340" y="117" width="148" height="68" rx="6" fill="#F3E5F5" stroke="#6A1B9A" stroke-width="1.8"/>
+  <text x="414" y="137" text-anchor="middle" font-size="11" font-weight="bold" fill="#4A148C">screenshot_compare</text>
+  <text x="414" y="152" text-anchor="middle" font-size="10" fill="#6A1B9A">SSIM + pixel diff</text>
+  <text x="414" y="167" text-anchor="middle" font-size="10" fill="#6A1B9A">scikit-image</text>
+
+  <!-- Arrow 5–6 -->
+  <line x1="488" y1="151" x2="510" y2="151" stroke="#424242" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Box 6a: PASS -->
+  <rect x="510" y="90" width="148" height="50" rx="6" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.8"/>
+  <text x="584" y="111" text-anchor="middle" font-size="12" font-weight="bold" fill="#1B5E20">✓ PASS</text>
+  <text x="584" y="128" text-anchor="middle" font-size="10" fill="#2E7D32">SSIM ≥ 0.95  exit 0</text>
+
+  <!-- Box 6b: FAIL -->
+  <rect x="510" y="165" width="148" height="50" rx="6" fill="#FCE4EC" stroke="#C62828" stroke-width="1.8"/>
+  <text x="584" y="186" text-anchor="middle" font-size="12" font-weight="bold" fill="#B71C1C">✗ FAIL</text>
+  <text x="584" y="203" text-anchor="middle" font-size="10" fill="#C62828">SSIM &lt; 0.95  exit 1</text>
+
+  <!-- Branch arrows 5 → 6a/6b -->
+  <line x1="510" y1="151" x2="510" y2="115" stroke="#2E7D32" stroke-width="1.2"/>
+  <line x1="510" y1="115" x2="510" y2="115" stroke="#2E7D32" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="495" y="112" text-anchor="end" font-size="10" fill="#2E7D32">pass</text>
+  <line x1="510" y1="151" x2="510" y2="190" stroke="#C62828" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="495" y="193" text-anchor="end" font-size="10" fill="#C62828">fail</text>
+
+  <!-- Diff output -->
+  <rect x="510" y="240" width="148" height="40" rx="6" fill="#F5F5F5" stroke="#9E9E9E" stroke-width="1.5"/>
+  <text x="584" y="258" text-anchor="middle" font-size="10" fill="#424242">diff output PNG</text>
+  <text x="584" y="272" text-anchor="middle" font-size="10" fill="#616161">--out diff.png</text>
+  <line x1="584" y1="215" x2="584" y2="240" stroke="#9E9E9E" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- Command line footer -->
+  <rect x="18" y="290" width="640" height="32" rx="5" fill="#212121"/>
+  <text x="30" y="303" font-size="10" fill="#00E676" font-family="monospace">$</text>
+  <text x="42" y="303" font-size="10" fill="#B3E5FC" font-family="monospace">python src\utils\screenshot_compare.py</text>
+  <text x="42" y="316" font-size="10" fill="#FFCC80" font-family="monospace">  --ref ref.jpg --gen gen.jpg --out diff.png --threshold 0.95</text>
+</svg>

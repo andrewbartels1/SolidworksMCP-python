@@ -1,6 +1,6 @@
 # SolidWorks UI + LLM Tutorial
 
-This tutorial is for mechanical engineers who are new to MCP tools and want a repeatable way to drive SolidWorks from an LLM while still using the SolidWorks UI.
+This tutorial is for mechanical engineers who are new to MCP tools and want a repeatable way to drive SolidWorks from an LLM while still using the SolidWorks UI. This is meant to help take the repetition out of a workflow and optimize and engineer's time on the design and things that matter, not dull repetitive tasks.
 
 ## What This Tutorial Covers
 
@@ -21,6 +21,11 @@ This tutorial is for mechanical engineers who are new to MCP tools and want a re
 5. Avoid manual clicks while a multi-step prompt is running.
 
 Why this matters: MCP tools execute deterministically when model context is stable. Most failures come from wrong active document, hidden references, or mixed units.
+
+![SolidWorks reference planes — Front, Top, Right with coordinate axes](../assets/images/sketch-plane-coords.svg)
+
+!!! warning "Plane names are case-sensitive"
+    `"Front"` works. `"front"`, `"XY"`, `"xy-plane"` all fail silently at the COM level.
 
 ## 2. Prompting Pattern That Works
 
@@ -54,6 +59,8 @@ Verification:
 ## 3. Simple End-to-End Workflow
 
 Use this exact sequence in your prompts for predictable behavior:
+
+![Standard MCP tool-call pipeline](../assets/images/tool-chain-workflow.svg)
 
 1. Create a part document.
 2. Create a sketch on Front Plane.

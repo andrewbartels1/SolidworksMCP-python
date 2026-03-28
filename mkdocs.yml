@@ -27,10 +27,34 @@ nav:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
       - Platform and Connectivity: user-guide/platform-connectivity.md
+      - Docs Discovery Tool Design: user-guide/docs-discovery-tool-design.md
       - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md
       - Prompting Best Practices: user-guide/prompting-best-practices.md
+      - Prompting Tutorials: user-guide/prompting-tutorials.md
       - Integration Testing: user-guide/integration-testing.md
       - Real Tool Validation Matrix: user-guide/real-tool-validation-matrix.md
+  - Tool Catalog:
+      - All 105 Tools: user-guide/tool-catalog/index.md
+      - Modeling: user-guide/tool-catalog/modeling.md
+      - Sketching: user-guide/tool-catalog/sketching.md
+      - Drawing: user-guide/tool-catalog/drawing.md
+      - Drawing Analysis: user-guide/tool-catalog/drawing-analysis.md
+      - Analysis: user-guide/tool-catalog/analysis.md
+      - Export: user-guide/tool-catalog/export.md
+      - File Management: user-guide/tool-catalog/file-management.md
+      - Automation: user-guide/tool-catalog/automation.md
+      - VBA Generation: user-guide/tool-catalog/vba-generation.md
+      - Template Management: user-guide/tool-catalog/template-management.md
+      - Macro Recording: user-guide/tool-catalog/macro-recording.md
+      - Docs Discovery: user-guide/tool-catalog/docs-discovery.md
+  - Tutorials:
+      - Sample Models Guide: user-guide/sample-models-guide.md
+      - Screenshot Equivalence: user-guide/screenshot-equivalence.md
+  - Planning:
+      - GUI Visualization Plan: PLAN_GUI_VISUALIZATION.md
+      - Database Workflows Plan: PLAN_DATABASE_WORKFLOWS.md
+      - Pydantic AI Integration Plan: PLAN_PYDANIATIC_AI_INTEGRATION.md
+      - Roadmap 2026-2027: ROADMAP_2026_2027.md
 
 # Theme configuration
 theme:
@@ -142,7 +166,7 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.magiclink:
       repo_url_shorthand: true
-      user: yourusername
+      user: andrewbartels1
       repo: SolidworksMCP-python
   - pymdownx.mark
   - pymdownx.smartsymbols
@@ -157,7 +181,7 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/yourusername/SolidworksMCP-python
+      link: https://github.com/andrewbartels1/SolidworksMCP-python
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/solidworks-mcp/
   generator: false

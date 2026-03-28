@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 340" font-family="Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#424242"/>
+    </marker>
+    <marker id="arr2" markerWidth="7" markerHeight="5" refX="0" refY="2.5" orient="auto">
+      <polygon points="7 0, 0 2.5, 7 5" fill="#424242"/>
+    </marker>
+    <!-- Cylinder gradient -->
+    <linearGradient id="cylSide" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#81D4FA"/>
+      <stop offset="50%"  stop-color="#B3E5FC"/>
+      <stop offset="100%" stop-color="#4FC3F7"/>
+    </linearGradient>
+    <linearGradient id="cylTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#E1F5FE"/>
+      <stop offset="100%" stop-color="#81D4FA"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="480" height="340" fill="#FAFAFA" rx="8"/>
+  <rect width="480" height="340" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
+
+  <text x="240" y="26" text-anchor="middle" font-size="15" font-weight="bold" fill="#212121">Cylinder — Ø50 mm × 80 mm tall</text>
+  <text x="240" y="43" text-anchor="middle" font-size="11" fill="#757575">Recipe 2 · create_revolve · Rectangle + centerline on Front plane</text>
+
+  <!-- Cylinder body (rectangle-ish, perspective) -->
+  <!-- Side faces -->
+  <rect x="155" y="110" width="140" height="160" fill="url(#cylSide)" stroke="#0288D1" stroke-width="2"/>
+
+  <!-- Top ellipse -->
+  <ellipse cx="225" cy="110" rx="70" ry="22" fill="url(#cylTop)" stroke="#0288D1" stroke-width="2"/>
+
+  <!-- Bottom ellipse (partial) -->
+  <ellipse cx="225" cy="270" rx="70" ry="22" fill="#B3E5FC" stroke="#0288D1" stroke-width="2"/>
+
+  <!-- Centerline (dashed) -->
+  <line x1="225" y1="87" x2="225" y2="295" stroke="#D32F2F" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="232" y="84" font-size="10" fill="#C62828">axis</text>
+
+  <!-- Diameter dimension (across top ellipse) -->
+  <line x1="155" y1="96" x2="295" y2="96" stroke="#424242" stroke-width="1.2"/>
+  <line x1="155" y1="89" x2="155" y2="103" stroke="#424242" stroke-width="1.2"/>
+  <line x1="295" y1="89" x2="295" y2="103" stroke="#424242" stroke-width="1.2"/>
+  <line x1="155" y1="96" x2="168" y2="96" stroke="#424242" stroke-width="1.2" marker-end="url(#arr)"/>
+  <line x1="295" y1="96" x2="282" y2="96" stroke="#424242" stroke-width="1.2" marker-end="url(#arr2)"/>
+  <text x="225" y="78" text-anchor="middle" font-size="12" fill="#212121" font-weight="bold">Ø 50 mm</text>
+
+  <!-- Height dimension (right side) -->
+  <line x1="310" y1="110" x2="310" y2="270" stroke="#424242" stroke-width="1.2"/>
+  <line x1="303" y1="110" x2="317" y2="110" stroke="#424242" stroke-width="1.2"/>
+  <line x1="303" y1="270" x2="317" y2="270" stroke="#424242" stroke-width="1.2"/>
+  <line x1="310" y1="110" x2="310" y2="123" stroke="#424242" stroke-width="1.2" marker-end="url(#arr2)"/>
+  <line x1="310" y1="270" x2="310" y2="257" stroke="#424242" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="330" y="196" text-anchor="left" font-size="12" fill="#212121" font-weight="bold">80 mm</text>
+
+  <!-- Sketch note -->
+  <text x="130" y="195" text-anchor="middle" font-size="10" fill="#0D47A1" font-style="italic">Rectangle</text>
+  <text x="130" y="207" text-anchor="middle" font-size="10" fill="#0D47A1" font-style="italic">profile + axis</text>
+  <text x="130" y="219" text-anchor="middle" font-size="10" fill="#0D47A1" font-style="italic">→ revolve 360°</text>
+
+  <!-- Revolve arc indicator -->
+  <path d="M 155,190 A 30,30 0 0,0 295,190" fill="none" stroke="#E65100" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="225" y="230" text-anchor="middle" font-size="10" fill="#BF360C">360° revolve</text>
+
+  <!-- Call sequence box -->
+  <rect x="18" y="298" width="444" height="30" fill="#E1F5FE" stroke="#0288D1" rx="5"/>
+  <text x="28" y="318" font-size="11" fill="#01579B">create_part → create_sketch(Front) → add_centerline → add_rectangle(0,0,80,25) → exit_sketch → create_revolve(360°) → save_as</text>
+</svg>

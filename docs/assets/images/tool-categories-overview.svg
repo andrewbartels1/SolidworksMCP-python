@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 375" font-family="Arial, sans-serif" font-size="12">
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1565C0"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="375" fill="#FAFAFA" rx="8"/>
+  <rect width="700" height="375" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
+
+  <text x="350" y="26" text-anchor="middle" font-size="14" font-weight="bold" fill="#212121">SolidWorks MCP — Tool Categories Overview</text>
+  <text x="350" y="40" text-anchor="middle" font-size="11" fill="#757575">105 tools across 12 functional areas</text>
+
+  <!-- Centre hub -->
+  <ellipse cx="350" cy="185" rx="58" ry="38" fill="#1565C0" stroke="#0D47A1" stroke-width="2"/>
+  <text x="350" y="181" text-anchor="middle" font-size="11" font-weight="bold" fill="white">SolidWorks</text>
+  <text x="350" y="196" text-anchor="middle" font-size="11" font-weight="bold" fill="white">MCP Server</text>
+  <text x="350" y="210" text-anchor="middle" font-size="10" fill="#90CAF9">105 tools</text>
+
+  <!-- Category bubbles around hub, 12 items arranged in a wheel -->
+  <!-- Angles: 0,30,60,90,120,150,180,210,240,270,300,330 degrees -->
+  <!-- rx=230 for outer ring -->
+
+  <!-- 1: Modeling (top, 90°) -->
+  <ellipse cx="350" cy="82" rx="55" ry="28" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8"/>
+  <text x="350" y="78" text-anchor="middle" font-size="10" font-weight="bold" fill="#0D47A1">Modeling</text>
+  <text x="350" y="92" text-anchor="middle" font-size="10" fill="#1565C0">9 tools</text>
+  <line x1="350" y1="110" x2="350" y2="147" stroke="#1565C0" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 2: Sketching (30°) -->
+  <ellipse cx="498" cy="93" rx="55" ry="28" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.8"/>
+  <text x="498" y="89" text-anchor="middle" font-size="10" font-weight="bold" fill="#1B5E20">Sketching</text>
+  <text x="498" y="103" text-anchor="middle" font-size="10" fill="#2E7D32">18 tools</text>
+  <line x1="455" y1="107" x2="400" y2="158" stroke="#2E7D32" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 3: Drawing (0°, right) -->
+  <ellipse cx="598" cy="185" rx="55" ry="28" fill="#FFF3E0" stroke="#E65100" stroke-width="1.8"/>
+  <text x="598" y="181" text-anchor="middle" font-size="10" font-weight="bold" fill="#BF360C">Drawing</text>
+  <text x="598" y="195" text-anchor="middle" font-size="10" fill="#E65100">12 tools</text>
+  <line x1="543" y1="185" x2="408" y2="185" stroke="#E65100" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 4: Drawing Analysis (330°) -->
+  <ellipse cx="498" cy="278" rx="58" ry="28" fill="#FCE4EC" stroke="#C62828" stroke-width="1.8"/>
+  <text x="498" y="274" text-anchor="middle" font-size="10" font-weight="bold" fill="#B71C1C">Drawing Analysis</text>
+  <text x="498" y="288" text-anchor="middle" font-size="10" fill="#C62828">8 tools</text>
+  <line x1="455" y1="264" x2="400" y2="214" stroke="#C62828" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 5: Export (270°, bottom-right) -->
+  <ellipse cx="350" cy="293" rx="55" ry="22" fill="#F3E5F5" stroke="#6A1B9A" stroke-width="1.8"/>
+  <text x="350" y="290" text-anchor="middle" font-size="10" font-weight="bold" fill="#4A148C">Export</text>
+  <text x="350" y="302" text-anchor="middle" font-size="10" fill="#6A1B9A">7 tools</text>
+  <line x1="350" y1="271" x2="350" y2="223" stroke="#6A1B9A" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 6: File Management (210°) -->
+  <ellipse cx="202" cy="278" rx="62" ry="28" fill="#E0F7FA" stroke="#00838F" stroke-width="1.8"/>
+  <text x="202" y="274" text-anchor="middle" font-size="10" font-weight="bold" fill="#004D40">File Management</text>
+  <text x="202" y="288" text-anchor="middle" font-size="10" fill="#00838F">13 tools</text>
+  <line x1="245" y1="264" x2="300" y2="214" stroke="#00838F" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 7: Automation (180°, left) -->
+  <ellipse cx="102" cy="185" rx="55" ry="28" fill="#FFF8E1" stroke="#F9A825" stroke-width="1.8"/>
+  <text x="102" y="181" text-anchor="middle" font-size="10" font-weight="bold" fill="#E65100">Automation</text>
+  <text x="102" y="195" text-anchor="middle" font-size="10" fill="#F9A825">8 tools</text>
+  <line x1="157" y1="185" x2="292" y2="185" stroke="#F9A825" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- 8: VBA Generation (150°) -->
+  <ellipse cx="202" cy="93" rx="58" ry="28" fill="#EFEBE9" stroke="#5D4037" stroke-width="1.8"/>
+  <text x="202" y="89" text-anchor="middle" font-size="10" font-weight="bold" fill="#3E2723">VBA Generation</text>
+  <text x="202" y="103" text-anchor="middle" font-size="10" fill="#5D4037">10 tools</text>
+  <line x1="245" y1="107" x2="300" y2="158" stroke="#5D4037" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
+
+  <!-- Small legend row at bottom -->
+  <!-- Analysis / Template / Macro / Docs bundled in a legend note -->
+  <rect x="18" y="350" width="662" height="16" rx="3" fill="#F5F5F5" stroke="#E0E0E0"/>
+  <text x="340" y="362" text-anchor="middle" font-size="10" fill="#616161">Also: Analysis (5) · Template Management (6) · Macro Recording (7) · Docs Discovery (2)</text>
+</svg>
