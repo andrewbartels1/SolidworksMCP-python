@@ -8,6 +8,7 @@ following the adapter pattern from the original TypeScript implementation.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -173,9 +174,18 @@ class MassProperties(BaseModel):
 class SolidWorksAdapter(ABC):
     """Base adapter interface for SolidWorks integration."""
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: object | None = None):
         """Initialize adapter with configuration."""
-        self.config = config or {}
+        if config is None:
+            normalized_config: dict[str, Any] = {}
+        elif isinstance(config, Mapping):
+            normalized_config = dict(config)
+        elif hasattr(config, "model_dump"):
+            normalized_config = dict(getattr(config, "model_dump")())
+        else:
+            normalized_config = {}
+
+        self.config = normalized_config
         self._metrics = {
             "operations_count": 0,
             "errors_count": 0,
@@ -214,6 +224,13 @@ class SolidWorksAdapter(ABC):
         """Close the current model."""
         pass
 
+    async def save_file(self, file_path: str | None = None) -> AdapterResult[Any]:
+        """Save the active model to the existing path or the provided path."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="save_file is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
         """Get metadata for the active model."""
@@ -232,17 +249,23 @@ class SolidWorksAdapter(ABC):
         pass
 
     @abstractmethod
-    async def create_part(self) -> AdapterResult[SolidWorksModel]:
+    async def create_part(
+        self, name: str | None = None, units: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create a new part document."""
         pass
 
     @abstractmethod
-    async def create_assembly(self) -> AdapterResult[SolidWorksModel]:
+    async def create_assembly(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create a new assembly document."""
         pass
 
     @abstractmethod
-    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create a new drawing document."""
         pass
 
@@ -301,6 +324,147 @@ class SolidWorksAdapter(ABC):
     ) -> AdapterResult[str]:
         """Add a rectangle to the current sketch."""
         pass
+
+    async def add_arc(
+        self,
+        center_x: float,
+        center_y: float,
+        start_x: float,
+        start_y: float,
+        end_x: float,
+        end_y: float,
+    ) -> AdapterResult[str]:
+        """Add an arc to the current sketch."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_arc is not implemented by this adapter",
+        )
+
+    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
+        """Add a spline through the provided points."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_spline is not implemented by this adapter",
+        )
+
+    async def add_centerline(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
+        """Add a centerline to the current sketch."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_centerline is not implemented by this adapter",
+        )
+
+    async def add_polygon(
+        self, center_x: float, center_y: float, radius: float, sides: int
+    ) -> AdapterResult[str]:
+        """Add a regular polygon to the current sketch."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_polygon is not implemented by this adapter",
+        )
+
+    async def add_ellipse(
+        self,
+        center_x: float,
+        center_y: float,
+        major_axis: float,
+        minor_axis: float,
+    ) -> AdapterResult[str]:
+        """Add an ellipse to the current sketch."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_ellipse is not implemented by this adapter",
+        )
+
+    async def add_sketch_constraint(
+        self, entity1: str, entity2: str | None, relation_type: str
+    ) -> AdapterResult[str]:
+        """Apply a geometric constraint between sketch entities."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sketch_constraint is not implemented by this adapter",
+        )
+
+    async def add_sketch_dimension(
+        self,
+        entity1: str,
+        entity2: str | None,
+        dimension_type: str,
+        value: float,
+    ) -> AdapterResult[str]:
+        """Add a sketch dimension."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sketch_dimension is not implemented by this adapter",
+        )
+
+    async def sketch_linear_pattern(
+        self,
+        entities: list[str],
+        direction_x: float,
+        direction_y: float,
+        spacing: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Create a linear pattern of sketch entities."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_linear_pattern is not implemented by this adapter",
+        )
+
+    async def sketch_circular_pattern(
+        self,
+        entities: list[str],
+        center_x: float,
+        center_y: float,
+        angle: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Create a circular pattern of sketch entities."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_circular_pattern is not implemented by this adapter",
+        )
+
+    async def sketch_mirror(
+        self, entities: list[str], mirror_line: str
+    ) -> AdapterResult[str]:
+        """Mirror sketch entities about a mirror line."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_mirror is not implemented by this adapter",
+        )
+
+    async def sketch_offset(
+        self,
+        entities: list[str],
+        offset_distance: float,
+        reverse_direction: bool,
+    ) -> AdapterResult[str]:
+        """Offset sketch entities."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_offset is not implemented by this adapter",
+        )
+
+    async def add_sketch_circle(
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        construction: bool = False,
+    ) -> AdapterResult[str]:
+        """Alias for add_circle used by some tool flows."""
+        return await self.add_circle(center_x, center_y, radius)
+
+    async def create_cut(self, sketch_name: str, depth: float) -> AdapterResult[str]:
+        """Create a cut feature from an existing sketch."""
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_cut is not implemented by this adapter",
+        )
 
     @abstractmethod
     async def exit_sketch(self) -> AdapterResult[None]:

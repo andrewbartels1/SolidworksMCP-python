@@ -62,16 +62,19 @@ class SolidWorksMCPServer:
 
     def _patch_mcp_for_tests(self) -> None:
         """Expose a lightweight legacy tool registry used by tests."""
-        self.mcp._tools = []
-        original_tool = self.mcp.tool
+        mcp_runtime = self.mcp
+        mcp_runtime._tools = []  # type: ignore[attr-defined]
+        original_tool = mcp_runtime.tool
 
-        def compat_tool(*args, **kwargs):
+        def compat_tool(*args: Any, **kwargs: Any) -> Any:
             decorator = original_tool(*args, **kwargs)
 
-            def _wrap(func):
+            def _wrap(func: Any) -> Any:
                 wrapped = decorator(func)
 
-                async def _compat_runner(*runner_args, **runner_kwargs):
+                async def _compat_runner(
+                    *runner_args: Any, **runner_kwargs: Any
+                ) -> Any:
                     payload = runner_kwargs.get("input_data")
                     if payload is None and runner_args:
                         payload = runner_args[0]
@@ -103,7 +106,7 @@ class SolidWorksMCPServer:
                             )
                     return result
 
-                self.mcp._tools.append(
+                mcp_runtime._tools.append(  # type: ignore[attr-defined]
                     SimpleNamespace(
                         name=getattr(func, "__name__", "unknown"),
                         func=_compat_runner,
@@ -114,7 +117,7 @@ class SolidWorksMCPServer:
 
             return _wrap
 
-        self.mcp.tool = compat_tool
+        mcp_runtime.tool = compat_tool  # type: ignore[method-assign]
 
     async def setup(self) -> None:
         """Initialize the server components."""
@@ -157,8 +160,6 @@ class SolidWorksMCPServer:
             logger.warning(
                 "Skipping PydanticAI agent setup because OPENAI_API_KEY is not configured"
             )
-            self.agent = None
-            return
 
         if FastMCPToolset is None:
             logger.warning(
@@ -246,9 +247,11 @@ class SolidWorksMCPServer:
 
     async def _start_http_server(self) -> None:
         """Start HTTP server for remote access."""
-        await self.mcp.run(
+        run_result = self.mcp.run(
             transport="http", host=self.config.host, port=self.config.port
         )
+        if inspect.isawaitable(run_result):
+            await run_result
 
     async def stop(self) -> None:
         """Gracefully stop the server."""

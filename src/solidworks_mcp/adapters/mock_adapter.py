@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import random
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -32,7 +33,7 @@ from .base import (
 class _BoolCallable:
     """Compatibility shim that behaves as both bool and callable."""
 
-    def __init__(self, getter):
+    def __init__(self, getter: Callable[[], bool]) -> None:
         self._getter = getter
 
     def __call__(self) -> bool:
@@ -45,9 +46,14 @@ class _BoolCallable:
 class MockSolidWorksAdapter(SolidWorksAdapter):
     """Mock adapter that simulates SolidWorks operations."""
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: object | None = None) -> None:
         super().__init__(config)
-        cfg = config.model_dump() if hasattr(config, "model_dump") else (config or {})
+        if isinstance(config, dict):
+            cfg: dict[str, Any] = config
+        elif hasattr(config, "model_dump"):
+            cfg = dict(getattr(config, "model_dump")())
+        else:
+            cfg = {}
         self._connected = False
         self._current_model: SolidWorksModel | None = None
         self._models: dict[str, SolidWorksModel] = {}
@@ -67,7 +73,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._is_connected_proxy = _BoolCallable(lambda: self._connected)
         self._simulate_errors = bool(cfg.get("simulate_errors", False))
 
-    def __getattribute__(self, name: str):
+    def __getattribute__(self, name: str) -> Any:
         if name == "is_connected":
             return object.__getattribute__(self, "_is_connected_proxy")
         return object.__getattribute__(self, name)
@@ -99,12 +105,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
     async def health_check(self) -> AdapterHealth:
         """Get mock health status."""
+        error_count = int(self._metrics["errors_count"])
+        success_count = int(
+            self._metrics["operations_count"] - self._metrics["errors_count"]
+        )
         return AdapterHealth(
             healthy=self._connected,
             last_check=datetime.now(),
-            error_count=self._metrics["errors_count"],
-            success_count=self._metrics["operations_count"]
-            - self._metrics["errors_count"],
+            error_count=error_count,
+            success_count=success_count,
             average_response_time=self._metrics["average_response_time"],
             connection_status="connected" if self._connected else "disconnected",
             metrics={
@@ -318,7 +327,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"],
         )
 
-    async def create_assembly(self) -> AdapterResult[SolidWorksModel]:
+    async def create_assembly(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Mock creating a new assembly."""
         if not self._connected:
             return AdapterResult(
@@ -328,7 +339,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["model_operation"])
         self._operation_count += 1
 
-        model_id = f"Assembly{len(self._models) + 1}"
+        model_id = name or f"Assembly{len(self._models) + 1}"
         model = SolidWorksModel(
             path=f"Mock://{model_id}.sldasm",
             name=f"{model_id}",
@@ -347,7 +358,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"],
         )
 
-    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Mock creating a new drawing."""
         if not self._connected:
             return AdapterResult(
@@ -357,7 +370,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["model_operation"])
         self._operation_count += 1
 
-        model_id = f"Drawing{len(self._models) + 1}"
+        model_id = name or f"Drawing{len(self._models) + 1}"
         model = SolidWorksModel(
             path=f"Mock://{model_id}.slddrw",
             name=f"{model_id}",
@@ -411,7 +424,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
 
-        self._features[feature.id] = feature
+        feature_key = feature.id or feature.name
+        self._features[feature_key] = feature
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -446,7 +460,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
 
-        self._features[feature.id] = feature
+        feature_key = feature.id or feature.name
+        self._features[feature_key] = feature
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -479,7 +494,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
 
-        self._features[feature.id] = feature
+        feature_key = feature.id or feature.name
+        self._features[feature_key] = feature
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -513,7 +529,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
 
-        self._features[feature.id] = feature
+        feature_key = feature.id or feature.name
+        self._features[feature_key] = feature
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -521,7 +538,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"],
         )
 
-    async def create_sketch(self, plane: str) -> AdapterResult[dict[str, Any]]:
+    async def create_sketch(self, plane: str) -> AdapterResult[str]:
         """Mock creating a sketch."""
         if not self._current_model:
             # Legacy tests start sketching immediately after connect.
@@ -536,7 +553,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
-            data={"id": sketch_id, "plane": plane},
+            data=sketch_id,
             execution_time=self._delays["sketch_operation"],
         )
 
@@ -567,7 +584,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=result.execution_time,
         )
 
-    async def save_file(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+    async def save_file(
+        self, file_path: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
         """Legacy compatibility save operation for tests."""
         if not self._current_model:
             return AdapterResult(
@@ -576,9 +595,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             )
         await asyncio.sleep(0.02)
         self._operation_count += 1
+        resolved_path = file_path or self._current_model.path
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
-            data={"file_path": file_path, "saved": True},
+            data={"file_path": resolved_path, "saved": True},
             execution_time=0.02,
         )
 

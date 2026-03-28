@@ -4,11 +4,18 @@ Logging configuration for SolidWorks MCP Server.
 
 import sys
 from pathlib import Path
+from typing import Any
 from loguru import logger
 
+from ..config import SolidWorksMCPConfig
 
-def setup_logging(config) -> None:
-    """Setup logging configuration based on config."""
+
+def setup_logging(config: SolidWorksMCPConfig) -> None:
+    """Configure application and audit logging sinks.
+
+    Args:
+        config: Loaded server configuration with logging settings.
+    """
     # Remove default handler
     logger.remove()
 
@@ -58,6 +65,10 @@ def setup_logging(config) -> None:
     logger.info("Logging configured")
 
 
-def get_audit_logger():
-    """Get logger for audit events."""
+def get_audit_logger() -> Any:
+    """Create a logger bound to audit metadata.
+
+    Returns:
+        Any: Loguru logger instance with audit context bound.
+    """
     return logger.bind(audit=True)

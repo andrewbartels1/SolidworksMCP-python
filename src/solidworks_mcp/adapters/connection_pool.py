@@ -7,11 +7,26 @@ when multiple instances are available.
 
 import asyncio
 import time
-from typing import Any
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from datetime import datetime
+from typing import TypeVar, cast, Any
 from loguru import logger
 
-from .base import SolidWorksAdapter, AdapterResult, AdapterHealth
+from .base import (
+    AdapterHealth,
+    AdapterResult,
+    AdapterResultStatus,
+    ExtrusionParameters,
+    LoftParameters,
+    MassProperties,
+    RevolveParameters,
+    SolidWorksAdapter,
+    SolidWorksFeature,
+    SolidWorksModel,
+    SweepParameters,
+)
+
+T = TypeVar("T")
 
 
 class ConnectionPoolAdapter(SolidWorksAdapter):
@@ -22,11 +37,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         adapter_factory: Callable[[], SolidWorksAdapter] | None = None,
         pool_size: int = 3,
         max_retries: int = 3,
-        create_connection: Callable[[], Any] | None = None,
+        create_connection: Callable[[], SolidWorksAdapter] | None = None,
         max_size: int | None = None,
         timeout: float | None = None,
-        config: dict[str, Any] | None = None,
-    ):
+        config: dict[str, object] | None = None,
+    ) -> None:
         if adapter_factory is None and create_connection is not None:
             adapter_factory = create_connection
         if max_size is not None:
@@ -46,28 +61,39 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self._lock = asyncio.Lock()
         self.timeout = timeout if timeout is not None else 30.0
 
-    async def _attempt_async(self, operation, default=None):
+    async def _attempt_async(
+        self, operation: Callable[[], Awaitable[T]], default: T | None = None
+    ) -> T | None:
         """Run an async operation and return default on failure."""
         try:
             return await operation()
         except Exception:
             return default
 
-    async def _attempt_async_with_error(self, operation):
+    async def _attempt_async_with_error(
+        self, operation: Callable[[], Awaitable[T]]
+    ) -> tuple[T | None, Exception | None]:
         """Run an async operation and return (result, error)."""
         try:
             return await operation(), None
         except Exception as exc:
             return None, exc
 
-    def _attempt_sync(self, operation, default=None):
+    def _attempt_sync(
+        self, operation: Callable[[], T], default: T | None = None
+    ) -> T | None:
         """Run a sync operation and return default on failure."""
         try:
             return operation()
         except Exception:
             return default
 
-    async def _invoke_with_optional_args(self, adapter, method_name: str, *args):
+    async def _invoke_with_optional_args(
+        self,
+        adapter: SolidWorksAdapter,
+        method_name: str,
+        *args: object,
+    ) -> object:
         """Invoke adapter method with args, retrying without args on signature mismatch."""
         method = getattr(adapter, method_name)
         try:
@@ -75,7 +101,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         except TypeError:
             return await method()
 
-    async def _replace_failed_adapter(self):
+    async def _replace_failed_adapter(self) -> Exception | None:
         """Create, connect, and return a replacement adapter.
 
         Returns None on success, or the captured exception on failure.
@@ -96,13 +122,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
     def active_connections(self) -> int:
         return max(0, len(self.pool) - self.available_adapters.qsize())
 
-    async def acquire(self):
+    async def acquire(self) -> SolidWorksAdapter:
         return await self._get_adapter(timeout=self.timeout)
 
-    async def release(self, adapter):
+    async def release(self, adapter: SolidWorksAdapter) -> None:
         await self._return_adapter(adapter)
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         await self.disconnect()
 
     async def _initialize_pool(self) -> None:
@@ -145,7 +171,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Return an adapter to the pool."""
         await self.available_adapters.put(adapter)
 
-    async def _execute_with_pool(self, operation_name: str, operation):
+    async def _execute_with_pool(
+        self,
+        operation_name: str,
+        operation: Callable[[SolidWorksAdapter], Awaitable[AdapterResult[T]]],
+    ) -> AdapterResult[T]:
         """Execute operation using an adapter from the pool."""
         retries = 0
         last_error = None
@@ -186,7 +216,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         # All retries exhausted
         return AdapterResult(
-            status="error",
+            status=AdapterResultStatus.ERROR,
             error=f"Operation {operation_name} failed after {self.max_retries} retries: {last_error}",
         )
 
@@ -228,7 +258,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         if not self.pool_initialized:
             return AdapterHealth(
                 healthy=False,
-                last_check=time.time(),
+                last_check=datetime.now(),
                 error_count=0,
                 success_count=0,
                 average_response_time=0,
@@ -255,7 +285,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         return AdapterHealth(
             healthy=healthy_count > 0,
-            last_check=time.time(),
+            last_check=datetime.now(),
             error_count=len(self.pool) - healthy_count,
             success_count=healthy_count,
             average_response_time=avg_response_time,
@@ -269,54 +299,53 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Model operations
 
-    async def open_model(self, file_path: str):
+    async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Open model using pool."""
         return await self._execute_with_pool(
             "open_model", lambda adapter: adapter.open_model(file_path)
         )
 
-    async def close_model(self, save: bool = False):
+    async def close_model(self, save: bool = False) -> AdapterResult[None]:
         """Close model using pool."""
         return await self._execute_with_pool(
             "close_model", lambda adapter: adapter.close_model(save)
         )
 
-    async def save_file(self, file_path: str | None = None):
+    async def save_file(self, file_path: str | None = None) -> AdapterResult[None]:
         """Save model using pool."""
         return await self._execute_with_pool(
             "save_file", lambda adapter: adapter.save_file(file_path)
         )
 
-    async def create_part(self, name: str | None = None, units: str | None = None):
+    async def create_part(
+        self, name: str | None = None, units: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create part using pool."""
 
-        async def _op(adapter):
+        async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
             if name is None and units is None:
                 return await adapter.create_part()
-            return await self._invoke_with_optional_args(
-                adapter,
-                "create_part",
-                name,
-                units,
+            result = await self._invoke_with_optional_args(
+                adapter, "create_part", name, units
             )
+            return cast(AdapterResult[SolidWorksModel], result)
 
         return await self._execute_with_pool("create_part", _op)
 
-    async def create_assembly(self, name: str | None = None):
+    async def create_assembly(self, name: str | None = None) -> AdapterResult[SolidWorksModel]:
         """Create assembly using pool."""
 
-        async def _op(adapter):
+        async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
             if name is None:
                 return await adapter.create_assembly()
-            return await self._invoke_with_optional_args(
-                adapter,
-                "create_assembly",
-                name,
+            result = await self._invoke_with_optional_args(
+                adapter, "create_assembly", name
             )
+            return cast(AdapterResult[SolidWorksModel], result)
 
         return await self._execute_with_pool("create_assembly", _op)
 
-    async def create_drawing(self):
+    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
         """Create drawing using pool."""
         return await self._execute_with_pool(
             "create_drawing", lambda adapter: adapter.create_drawing()
@@ -324,25 +353,29 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Feature operations
 
-    async def create_extrusion(self, params):
+    async def create_extrusion(
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[SolidWorksFeature]:
         """Create extrusion using pool."""
         return await self._execute_with_pool(
             "create_extrusion", lambda adapter: adapter.create_extrusion(params)
         )
 
-    async def create_revolve(self, params):
+    async def create_revolve(
+        self, params: RevolveParameters
+    ) -> AdapterResult[SolidWorksFeature]:
         """Create revolve using pool."""
         return await self._execute_with_pool(
             "create_revolve", lambda adapter: adapter.create_revolve(params)
         )
 
-    async def create_sweep(self, params):
+    async def create_sweep(self, params: SweepParameters) -> AdapterResult[SolidWorksFeature]:
         """Create sweep using pool."""
         return await self._execute_with_pool(
             "create_sweep", lambda adapter: adapter.create_sweep(params)
         )
 
-    async def create_loft(self, params):
+    async def create_loft(self, params: LoftParameters) -> AdapterResult[SolidWorksFeature]:
         """Create loft using pool."""
         return await self._execute_with_pool(
             "create_loft", lambda adapter: adapter.create_loft(params)
@@ -350,38 +383,44 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Sketch operations
 
-    async def create_sketch(self, plane: str):
+    async def create_sketch(self, plane: str) -> AdapterResult[str]:
         """Create sketch using pool."""
         return await self._execute_with_pool(
             "create_sketch", lambda adapter: adapter.create_sketch(plane)
         )
 
-    async def add_line(self, x1: float, y1: float, x2: float, y2: float):
+    async def add_line(self, x1: float, y1: float, x2: float, y2: float) -> AdapterResult[str]:
         """Add line using pool."""
         return await self._execute_with_pool(
             "add_line", lambda adapter: adapter.add_line(x1, y1, x2, y2)
         )
 
-    async def add_centerline(self, x1: float, y1: float, x2: float, y2: float):
+    async def add_centerline(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
         """Add centerline using pool."""
         return await self._execute_with_pool(
             "add_centerline",
             lambda adapter: adapter.add_centerline(x1, y1, x2, y2),
         )
 
-    async def add_circle(self, center_x: float, center_y: float, radius: float):
+    async def add_circle(
+        self, center_x: float, center_y: float, radius: float
+    ) -> AdapterResult[str]:
         """Add circle using pool."""
         return await self._execute_with_pool(
             "add_circle", lambda adapter: adapter.add_circle(center_x, center_y, radius)
         )
 
-    async def add_rectangle(self, x1: float, y1: float, x2: float, y2: float):
+    async def add_rectangle(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
         """Add rectangle using pool."""
         return await self._execute_with_pool(
             "add_rectangle", lambda adapter: adapter.add_rectangle(x1, y1, x2, y2)
         )
 
-    async def exit_sketch(self):
+    async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch using pool."""
         return await self._execute_with_pool(
             "exit_sketch", lambda adapter: adapter.exit_sketch()
@@ -389,26 +428,28 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Analysis operations
 
-    async def get_mass_properties(self):
+    async def get_mass_properties(self) -> AdapterResult[MassProperties]:
         """Get mass properties using pool."""
         return await self._execute_with_pool(
             "get_mass_properties", lambda adapter: adapter.get_mass_properties()
         )
 
-    async def get_model_info(self):
+    async def get_model_info(self) -> AdapterResult[dict[str, object]]:
         """Get active model metadata using pool."""
         return await self._execute_with_pool(
             "get_model_info", lambda adapter: adapter.get_model_info()
         )
 
-    async def list_features(self, include_suppressed: bool = False):
+    async def list_features(
+        self, include_suppressed: bool = False
+    ) -> AdapterResult[list[dict[str, object]]]:
         """List model features using pool."""
         return await self._execute_with_pool(
             "list_features",
             lambda adapter: adapter.list_features(include_suppressed),
         )
 
-    async def list_configurations(self):
+    async def list_configurations(self) -> AdapterResult[list[str]]:
         """List model configurations using pool."""
         return await self._execute_with_pool(
             "list_configurations", lambda adapter: adapter.list_configurations()
@@ -416,7 +457,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Export operations
 
-    async def export_file(self, file_path: str, format_type: str):
+    async def export_file(self, file_path: str, format_type: str) -> AdapterResult[None]:
         """Export file using pool."""
         return await self._execute_with_pool(
             "export_file", lambda adapter: adapter.export_file(file_path, format_type)
@@ -424,13 +465,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Dimension operations
 
-    async def get_dimension(self, name: str):
+    async def get_dimension(self, name: str) -> AdapterResult[float]:
         """Get dimension using pool."""
         return await self._execute_with_pool(
             "get_dimension", lambda adapter: adapter.get_dimension(name)
         )
 
-    async def set_dimension(self, name: str, value: float):
+    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
         """Set dimension using pool."""
         return await self._execute_with_pool(
             "set_dimension", lambda adapter: adapter.set_dimension(name, value)
@@ -440,13 +481,18 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 class ConnectionPool:
     """Legacy alias class expected by tests."""
 
-    def __init__(self, create_connection, max_size: int = 3, timeout: float = 30.0):
+    def __init__(
+        self,
+        create_connection: Callable[[], object | Awaitable[object]],
+        max_size: int = 3,
+        timeout: float = 30.0,
+    ) -> None:
         self._create_connection = create_connection
         self._max_size = max_size
         self._timeout = timeout
-        self._available: list[Any] = []
+        self._available: list[object] = []
         self._in_use: set[int] = set()
-        self._all_connections: list[Any] = []
+        self._all_connections: list[object] = []
 
     @property
     def size(self) -> int:
@@ -456,14 +502,14 @@ class ConnectionPool:
     def active_connections(self) -> int:
         return len(self._in_use)
 
-    async def _new_connection(self):
+    async def _new_connection(self) -> object:
         conn = self._create_connection()
         if asyncio.iscoroutine(conn):
             conn = await conn
         self._all_connections.append(conn)
         return conn
 
-    async def acquire(self):
+    async def acquire(self) -> object:
         if self._available:
             conn = self._available.pop()
             self._in_use.add(id(conn))
@@ -484,7 +530,7 @@ class ConnectionPool:
 
         raise TimeoutError("No connection available within timeout")
 
-    async def release(self, conn) -> None:
+    async def release(self, conn: object) -> None:
         conn_id = id(conn)
         if conn_id in self._in_use:
             self._in_use.remove(conn_id)

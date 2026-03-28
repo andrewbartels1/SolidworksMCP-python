@@ -3,11 +3,21 @@ Authentication and authorization for SolidWorks MCP Server.
 """
 
 from functools import wraps
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
+
+from ..config import SolidWorksMCPConfig
+
+F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
 
 
-def setup_authentication(mcp, config) -> None:
-    """Setup authentication middleware."""
+def setup_authentication(mcp: Any, config: SolidWorksMCPConfig) -> None:
+    """Configure authentication middleware hooks.
+
+    Args:
+        mcp: Active MCP server instance.
+        config: Loaded server configuration.
+    """
     # For FastMCP, authentication would be handled at the HTTP layer
     # This is a placeholder for future implementation
     pass
@@ -22,16 +32,23 @@ def validate_api_key(provided_key: str, expected_key: str) -> bool:
     return provided_key == expected_key
 
 
-def require_auth(config):
-    """Decorator to require authentication."""
+def require_auth(config: SolidWorksMCPConfig) -> Callable[[F], F]:
+    """Decorate a coroutine with authentication checks.
 
-    def decorator(func):
+    Args:
+        config: Loaded server configuration.
+
+    Returns:
+        Callable[[F], F]: Decorator preserving the original coroutine signature.
+    """
+
+    def decorator(func: F) -> F:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Authentication logic would go here
             # For now, just pass through
             return await func(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator

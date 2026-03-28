@@ -6,6 +6,8 @@ from collections import defaultdict
 import time
 from typing import Any
 
+from ..config import SolidWorksMCPConfig
+
 
 class RateLimiter:
     """Simple in-memory rate limiter."""
@@ -37,8 +39,13 @@ class RateLimiter:
 _rate_limiter: RateLimiter | None = None
 
 
-def setup_rate_limiting(mcp, config) -> None:
-    """Setup rate limiting middleware."""
+def setup_rate_limiting(mcp: Any, config: SolidWorksMCPConfig) -> None:
+    """Initialize in-memory rate limiting.
+
+    Args:
+        mcp: Active MCP server instance (reserved for future middleware hooks).
+        config: Loaded server configuration containing rate limit settings.
+    """
     global _rate_limiter
     _rate_limiter = RateLimiter(
         max_requests=config.rate_limit_per_minute,

@@ -9,8 +9,9 @@ import asyncio
 import os
 import platform
 import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
 from .base import (
@@ -35,6 +36,9 @@ try:
     PYWIN32_AVAILABLE = True
 except ImportError:
     PYWIN32_AVAILABLE = False
+
+
+T = TypeVar("T")
 
 
 class PyWin32Adapter(SolidWorksAdapter):
@@ -92,10 +96,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         super().__init__(config)
 
-        self.swApp = None
-        self.currentModel = None
-        self.currentSketch = None
-        self.currentSketchManager = None
+        self.swApp: Any | None = None
+        self.currentModel: Any | None = None
+        self.currentSketch: Any | None = None
+        self.currentSketchManager: Any | None = None
 
         # COM constants (equivalent to SolidWorks API constants)
         self.constants = {
@@ -153,12 +157,17 @@ class PyWin32Adapter(SolidWorksAdapter):
                 # Create new SolidWorks instance
                 self.swApp = win32com.client.Dispatch("SldWorks.Application")
 
+            if self.swApp is None:
+                raise SolidWorksMCPError("SolidWorks COM application instance is None")
+
+            app = self.swApp
+
             # Ensure SolidWorks is visible
-            self.swApp.Visible = True
+            app.Visible = True
 
             # Disable confirmation dialogs for automation
-            self.swApp.SetUserPreferenceToggle(150, False)  # Hide warnings
-            self.swApp.SetUserPreferenceToggle(149, False)  # Hide questions
+            app.SetUserPreferenceToggle(150, False)  # Hide warnings
+            app.SetUserPreferenceToggle(149, False)  # Hide questions
 
         except Exception as e:
             raise SolidWorksMCPError(f"Failed to connect to SolidWorks: {e}")
@@ -255,9 +264,10 @@ class PyWin32Adapter(SolidWorksAdapter):
         return AdapterHealth(
             healthy=healthy,
             last_check=datetime.now(),
-            error_count=self._metrics["errors_count"],
-            success_count=self._metrics["operations_count"]
-            - self._metrics["errors_count"],
+            error_count=int(self._metrics["errors_count"]),
+            success_count=int(
+                self._metrics["operations_count"] - self._metrics["errors_count"]
+            ),
             average_response_time=self._metrics["average_response_time"],
             connection_status="connected" if healthy else "disconnected",
             metrics={
@@ -270,8 +280,8 @@ class PyWin32Adapter(SolidWorksAdapter):
         )
 
     def _handle_com_operation(
-        self, operation_name: str, operation_func
-    ) -> AdapterResult:
+        self, operation_name: str, operation_func: Callable[[], T]
+    ) -> AdapterResult[T]:
         """Helper to handle COM operations with error handling and timing.
 
         Wraps COM operations with comprehensive error handling, performance metrics,
@@ -326,26 +336,52 @@ class PyWin32Adapter(SolidWorksAdapter):
                 execution_time=execution_time,
             )
 
-    def _attempt(self, operation, default=None):
-        """Execute an operation and return default on failure.
+    def _attempt(
+        self, operation: Callable[[], T], default: T | None = None
+    ) -> T | None:
+        """Execute a best-effort operation.
 
         Keep non-critical fallback handling in one place instead of scattering
         broad try/except blocks throughout operation code.
+
+        Args:
+            operation: Zero-argument callable to evaluate.
+            default: Value returned when operation raises.
+
+        Returns:
+            T | None: Operation result, or default on failure.
         """
         try:
             return operation()
         except Exception:
             return default
 
-    def _attempt_with_error(self, operation):
-        """Execute an operation and return a tuple of (result, error)."""
+    def _attempt_with_error(
+        self, operation: Callable[[], T]
+    ) -> tuple[T | None, Exception | None]:
+        """Execute an operation and capture any exception.
+
+        Args:
+            operation: Zero-argument callable to evaluate.
+
+        Returns:
+            tuple[T | None, Exception | None]: Operation result and captured exception.
+        """
         try:
             return operation(), None
         except Exception as exc:
             return None, exc
 
-    def _get_attr_or_call(self, obj: Any, attr_name: str):
-        """Return obj.attr_name(), or obj.attr_name when it is not callable."""
+    def _get_attr_or_call(self, obj: Any, attr_name: str) -> Any:
+        """Read COM attribute exposed as a property or zero-arg method.
+
+        Args:
+            obj: COM object instance.
+            attr_name: Attribute or method name.
+
+        Returns:
+            Any: Resolved value from property access or method invocation.
+        """
         attr = getattr(obj, attr_name, None)
         return attr() if callable(attr) else attr
 
@@ -379,7 +415,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
-        def _open_operation():
+        def _open_operation() -> SolidWorksModel:
             resolved_path = os.path.abspath(file_path)
 
             # Determine document type from extension
@@ -400,7 +436,11 @@ class PyWin32Adapter(SolidWorksAdapter):
             errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
             warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
 
-            model = self.swApp.OpenDoc6(
+            app = self.swApp
+            if app is None:
+                raise Exception("SolidWorks application is not connected")
+
+            model = app.OpenDoc6(
                 resolved_path,
                 doc_type,
                 1,  # swOpenDocOptions_Silent
@@ -470,11 +510,19 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.WARNING, error="No active model to close"
             )
 
-        def _close_operation():
-            if save:
-                self.currentModel.Save()
+        model = self.currentModel
+        app = self.swApp
+        if model is None or app is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="SolidWorks application is not connected",
+            )
 
-            self.swApp.CloseDoc(self.currentModel.GetTitle())
+        def _close_operation() -> None:
+            if save:
+                model.Save()
+
+            app.CloseDoc(model.GetTitle())
             self.currentModel = None
             return None
 
@@ -491,9 +539,13 @@ class PyWin32Adapter(SolidWorksAdapter):
         existing_match: str | None = None
         first_non_empty: str | None = None
 
+        app = self.swApp
+        if app is None:
+            return None
+
         for index in preferred_indices:
             template = self._attempt(
-                lambda idx=index: self.swApp.GetUserPreferenceStringValue(idx)
+                lambda idx=index: app.GetUserPreferenceStringValue(idx)
             )
 
             if not template or not isinstance(template, str):
@@ -522,18 +574,23 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return "Untitled"
 
-    async def create_part(self) -> AdapterResult[SolidWorksModel]:
+    async def create_part(
+        self, name: str | None = None, units: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create a new part document."""
         if not self.is_connected():
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
-        def _create_operation():
+        def _create_operation() -> SolidWorksModel:
             model = None
+            app = self.swApp
+            if app is None:
+                raise Exception("SolidWorks application is not connected")
 
             # Prefer native helper if available on this installation.
-            new_part = getattr(self.swApp, "NewPart", None)
+            new_part = getattr(app, "NewPart", None)
             if callable(new_part):
                 model = self._attempt(new_part)
 
@@ -542,7 +599,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 if not part_template:
                     raise Exception("No part template configured in SolidWorks")
 
-                model = self.swApp.NewDocument(
+                model = app.NewDocument(
                     part_template,
                     0,  # Paper size (not used for parts)
                     0,  # Width (not used for parts)
@@ -566,17 +623,22 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("create_part", _create_operation)
 
-    async def create_assembly(self) -> AdapterResult[SolidWorksModel]:
+    async def create_assembly(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create a new assembly document."""
         if not self.is_connected():
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
-        def _create_operation():
+        def _create_operation() -> SolidWorksModel:
             model = None
+            app = self.swApp
+            if app is None:
+                raise Exception("SolidWorks application is not connected")
 
-            new_assembly = getattr(self.swApp, "NewAssembly", None)
+            new_assembly = getattr(app, "NewAssembly", None)
             if callable(new_assembly):
                 model = self._attempt(new_assembly)
 
@@ -585,7 +647,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 if not asm_template:
                     raise Exception("No assembly template configured in SolidWorks")
 
-                model = self.swApp.NewDocument(asm_template, 0, 0, 0)
+                model = app.NewDocument(asm_template, 0, 0, 0)
 
             if not model:
                 raise Exception("Failed to create new assembly")
@@ -604,24 +666,28 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("create_assembly", _create_operation)
 
-    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create a new drawing document."""
         if not self.is_connected():
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
-        def _create_operation():
+        def _create_operation() -> SolidWorksModel:
+            app = self.swApp
+            if app is None:
+                raise Exception("SolidWorks application is not connected")
+
             # Get drawing template
-            drw_template = self.swApp.GetUserPreferenceStringValue(
-                1
-            )  # Drawing template
+            drw_template = app.GetUserPreferenceStringValue(1)  # Drawing template
             if not drw_template:
-                drw_template = self.swApp.GetUserPreferenceStringValue(0).replace(
+                drw_template = app.GetUserPreferenceStringValue(0).replace(
                     "Part", "Drawing"
                 )
 
-            model = self.swApp.NewDocument(drw_template, 12, 0.2794, 0.2159)  # A4 size
+            model = app.NewDocument(drw_template, 12, 0.2794, 0.2159)  # A4 size
 
             if not model:
                 raise Exception("Failed to create new drawing")
@@ -649,7 +715,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _extrusion_operation():
+        def _extrusion_operation() -> SolidWorksFeature:
             # Get feature manager
             featureManager = self.currentModel.FeatureManager
 
@@ -727,7 +793,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _revolve_operation():
+        def _revolve_operation() -> SolidWorksFeature:
             featureManager = self.currentModel.FeatureManager
 
             # Create revolve feature
@@ -821,7 +887,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _sketch_operation():
+        def _sketch_operation() -> str:
             # Select the plane first
             plane_name_map = {
                 "Top": "Top Plane",
@@ -948,7 +1014,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _line_operation():
+        def _line_operation() -> str:
             # Convert mm to meters
             line = self.currentSketchManager.CreateLine(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
@@ -994,7 +1060,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _circle_operation():
+        def _circle_operation() -> str:
             # Convert mm to meters
             circle = self.currentSketchManager.CreateCircleByRadius(
                 center_x / 1000.0, center_y / 1000.0, 0, radius / 1000.0
@@ -1042,7 +1108,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _rectangle_operation():
+        def _rectangle_operation() -> str:
             # Convert mm to meters
             lines = self.currentSketchManager.CreateCornerRectangle(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
@@ -1099,7 +1165,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _arc_operation():
+        def _arc_operation() -> str:
             # Convert mm to meters
             arc = self.currentSketchManager.CreateArc(
                 center_x / 1000.0,
@@ -1158,7 +1224,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _spline_operation():
+        def _spline_operation() -> str:
             # Convert points to SolidWorks format (mm to meters)
             spline_points = []
             for point in points:
@@ -1186,7 +1252,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _centerline_operation():
+        def _centerline_operation() -> str:
             # Convert mm to meters and create centerline
             centerline = self.currentSketchManager.CreateCenterLine(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
@@ -1208,7 +1274,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _polygon_operation():
+        def _polygon_operation() -> str:
             # Convert mm to meters
             polygon = self.currentSketchManager.CreatePolygon(
                 center_x / 1000.0,
@@ -1235,7 +1301,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _ellipse_operation():
+        def _ellipse_operation() -> str:
             # Convert mm to meters
             ellipse = self.currentSketchManager.CreateEllipse(
                 center_x / 1000.0,
@@ -1265,7 +1331,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _constraint_operation():
+        def _constraint_operation() -> str:
             # Map relation types to SolidWorks constants
             relation_map = {
                 "parallel": self.constants.get("swConstraintType_PARALLEL", 0),
@@ -1305,7 +1371,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _dimension_operation():
+        def _dimension_operation() -> str:
             # For now, return a success without actual dimension - this requires entity selection
             # which is complex in the basic adapter
             dimension_id = (
@@ -1330,7 +1396,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _linear_pattern_operation():
+        def _linear_pattern_operation() -> str:
             # For now, return a success placeholder - linear patterns require entity selection
             pattern_id = (
                 f"LinearPattern_{count}x{spacing}_{int(time.time() * 1000) % 10000}"
@@ -1356,7 +1422,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _circular_pattern_operation():
+        def _circular_pattern_operation() -> str:
             # For now, return a success placeholder - circular patterns require entity selection
             pattern_id = (
                 f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
@@ -1377,7 +1443,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _mirror_operation():
+        def _mirror_operation() -> str:
             # For now, return a success placeholder - mirroring requires entity selection
             mirror_id = f"Mirror_{mirror_line}_{int(time.time() * 1000) % 10000}"
 
@@ -1394,7 +1460,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        def _offset_operation():
+        def _offset_operation() -> str:
             # For now, return a success placeholder - offsetting requires entity selection
             direction = "inward" if reverse_direction else "outward"
             offset_id = f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
@@ -1410,7 +1476,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _mass_props_operation():
+        def _mass_props_operation() -> MassProperties:
             # Get mass properties
             mass_props = self.currentModel.Extension.CreateMassProperty()
 
@@ -1455,7 +1521,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _export_operation():
+        def _export_operation() -> None:
             # Determine export format
             format_map = {
                 "step": 0,  # swSaveAsSTEP
@@ -1499,7 +1565,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _get_dim_operation():
+        def _get_dim_operation() -> float:
             dimension = self.currentModel.Parameter(name)
 
             if not dimension:
@@ -1517,7 +1583,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _set_dim_operation():
+        def _set_dim_operation() -> None:
             dimension = self.currentModel.Parameter(name)
 
             if not dimension:
@@ -1543,7 +1609,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _save_operation():
+        def _save_operation() -> None:
             def _is_success(value: Any) -> bool:
                 # COM save APIs may return bool OR an integer status code
                 # where 0 indicates success.
@@ -1611,7 +1677,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _rebuild_operation():
+        def _rebuild_operation() -> None:
             success = self.currentModel.ForceRebuild3(False)
             if not success:
                 raise Exception("Failed to rebuild model")
@@ -1626,7 +1692,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _info_operation():
+        def _info_operation() -> dict[str, Any]:
             info = {
                 "title": self.currentModel.GetTitle(),
                 "path": self.currentModel.GetPathName(),
@@ -1652,7 +1718,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 error="No active model",
             )
 
-        def _list_operation():
+        def _list_operation() -> list[dict[str, Any]]:
             features: list[dict[str, Any]] = []
             seen: set[tuple[str, str]] = set()
 
@@ -1750,7 +1816,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 error="No active model",
             )
 
-        def _list_operation():
+        def _list_operation() -> list[str]:
             raw_names = getattr(self.currentModel, "GetConfigurationNames", None)
             if callable(raw_names):
                 names = raw_names()
@@ -1785,7 +1851,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _cut_operation():
+        def _cut_operation() -> SolidWorksFeature:
             featureManager = self.currentModel.FeatureManager
 
             # Create cut extrusion (similar to regular extrude but cuts material)
@@ -1837,7 +1903,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _fillet_operation():
+        def _fillet_operation() -> SolidWorksFeature:
             # Select edges first
             for edge_name in edge_names:
                 selected = self.currentModel.Extension.SelectByID2(
@@ -1896,7 +1962,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _chamfer_operation():
+        def _chamfer_operation() -> SolidWorksFeature:
             # Select edges first
             for edge_name in edge_names:
                 selected = self.currentModel.Extension.SelectByID2(
@@ -1939,7 +2005,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 status=AdapterResultStatus.WARNING, error="No active sketch to exit"
             )
 
-        def _exit_operation():
+        def _exit_operation() -> None:
             # Toggle sketch mode off and clear local sketch references.
             self.currentSketchManager.InsertSketch(True)
             self.currentSketch = None

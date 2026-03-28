@@ -5,11 +5,19 @@ Environment validation for SolidWorks MCP Server.
 import platform
 import shutil
 from loguru import logger
+from ..config import SolidWorksMCPConfig
 from ..exceptions import SolidWorksMCPError
 
 
-async def validate_environment(config) -> None:
-    """Validate the environment for SolidWorks MCP Server."""
+async def validate_environment(config: SolidWorksMCPConfig) -> None:
+    """Validate runtime prerequisites for the server.
+
+    Args:
+        config: Loaded server configuration.
+
+    Raises:
+        SolidWorksMCPError: If the active Python runtime is unsupported.
+    """
     logger.info("Validating environment...")
 
     # Check platform
@@ -39,8 +47,12 @@ async def validate_environment(config) -> None:
     logger.info("Environment validation complete")
 
 
-async def _validate_solidworks_installation(config) -> None:
-    """Validate SolidWorks installation on Windows."""
+async def _validate_solidworks_installation(config: SolidWorksMCPConfig) -> None:
+    """Validate SolidWorks availability on Windows hosts.
+
+    Args:
+        config: Loaded server configuration.
+    """
     try:
         # Check if SolidWorks executable exists
         if config.solidworks_path:

@@ -8,10 +8,17 @@ the configured security level.
 from .auth import setup_authentication, validate_api_key
 from .cors import setup_cors
 from .rate_limiting import setup_rate_limiting
+from ..config import SolidWorksMCPConfig
+from typing import Any
 
 
-async def setup_security(mcp, config):
-    """Setup security features based on configuration."""
+async def setup_security(mcp: Any, config: SolidWorksMCPConfig) -> None:
+    """Configure security middleware based on selected security level.
+
+    Args:
+        mcp: Active MCP server instance.
+        config: Loaded server configuration.
+    """
     from ..config import SecurityLevel
 
     if config.security_level == SecurityLevel.MINIMAL:

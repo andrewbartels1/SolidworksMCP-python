@@ -10,10 +10,11 @@ import os
 import platform
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from pydantic import ConfigDict
 from dotenv import dotenv_values
 from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic_core.core_schema import ValidationInfo
 
 
 class DeploymentMode(str, Enum):
@@ -240,25 +241,33 @@ class SolidWorksMCPConfig(BaseModel):
 
     @field_validator("cache_dir")
     @classmethod
-    def set_cache_dir(cls, v, info):
+    def set_cache_dir(cls, v: Path | None, info: ValidationInfo) -> Path:
         """Set default cache directory."""
         if v is None:
-            data_dir = info.data.get("data_dir", Path.home() / ".solidworks_mcp")
+            data_dir = cast(
+                Path,
+                info.data.get("data_dir", Path.home() / ".solidworks_mcp"),
+            )
             return data_dir / "cache"
         return v
 
     @field_validator("log_file")
     @classmethod
-    def set_log_file(cls, v, info):
+    def set_log_file(cls, v: Path | None, info: ValidationInfo) -> Path:
         """Set default log file path."""
         if v is None:
-            data_dir = info.data.get("data_dir", Path.home() / ".solidworks_mcp")
+            data_dir = cast(
+                Path,
+                info.data.get("data_dir", Path.home() / ".solidworks_mcp"),
+            )
             return data_dir / "logs" / "server.log"
         return v
 
     @field_validator("adapter_type")
     @classmethod
-    def validate_adapter_type(cls, v, info):
+    def validate_adapter_type(
+        cls, v: AdapterType, info: ValidationInfo
+    ) -> AdapterType:
         """Validate adapter type based on platform."""
         return v
 

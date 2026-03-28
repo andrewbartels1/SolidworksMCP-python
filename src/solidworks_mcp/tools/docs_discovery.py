@@ -12,7 +12,7 @@ import json
 import platform
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from loguru import logger
 from pydantic import Field
@@ -98,14 +98,11 @@ class SolidWorksDocsDiscovery:
 
         for obj_name, obj_ref in core_objects.items():
             try:
-                if obj_ref is None and obj_name.startswith("I"):
-                    # Skip abstract interfaces without instances
+                if obj_ref is None and obj_name != "ISldWorks":
+                    # Skip abstract interfaces without concrete instances.
                     continue
 
-                if obj_name == "ISldWorks":
-                    obj = self.sw_app
-                else:
-                    continue
+                obj = obj_ref if obj_ref is not None else self.sw_app
 
                 methods = []
                 properties = []
@@ -285,10 +282,13 @@ class SearchApiHelpInput(CompatInput):
     )
 
 
-def _normalize_input(input_data: Any, model_type: type[CompatInput]) -> CompatInput:
+CompatInputT = TypeVar("CompatInputT", bound=CompatInput)
+
+
+def _normalize_input(input_data: Any, model_type: type[CompatInputT]) -> CompatInputT:
     """Normalize dict/model payloads for direct tool invocation paths."""
     if input_data is None:
-        return model_type()  # type: ignore[call-arg]
+        return model_type()
     if isinstance(input_data, model_type):
         return input_data
     if isinstance(input_data, dict):
@@ -386,7 +386,9 @@ def _find_index_file(year: int | None, explicit_index_file: str | None) -> Path 
     return None
 
 
-def _search_index(index: dict[str, Any], query: str, max_results: int) -> list[dict[str, Any]]:
+def _search_index(
+    index: dict[str, Any], query: str, max_results: int
+) -> list[dict[str, Any]]:
     """Search indexed COM objects/members for a query."""
     tokens = [t for t in re.split(r"\s+", query.lower().strip()) if t]
     if not tokens:
@@ -515,7 +517,7 @@ async def register_docs_discovery_tools(
         int: Number of tools registered (1)
     """
 
-    @mcp.tool()
+    @mcp.tool()  # type: ignore[untyped-decorator]
     async def discover_solidworks_docs(
         input_data: DiscoverDocsInput | None = None,
     ) -> dict[str, Any]:
@@ -575,11 +577,7 @@ async def register_docs_discovery_tools(
 
         try:
             normalized = _normalize_input(input_data, DiscoverDocsInput)
-            output_dir = (
-                Path(normalized.output_dir)
-                if normalized.output_dir
-                else None
-            )
+            output_dir = Path(normalized.output_dir) if normalized.output_dir else None
             year = _resolve_solidworks_year(normalized.year, config)
 
             discovery = SolidWorksDocsDiscovery(output_dir=output_dir)
@@ -615,7 +613,7 @@ async def register_docs_discovery_tools(
                 "message": f"Discovery failed: {str(e)}",
             }
 
-    @mcp.tool()
+    @mcp.tool()  # type: ignore[untyped-decorator]
     async def search_solidworks_api_help(
         input_data: SearchApiHelpInput | None = None,
     ) -> dict[str, Any]:
@@ -647,7 +645,9 @@ async def register_docs_discovery_tools(
                     )
                     index_file = discovery.save_index(filename=filename)
 
-            matches = _search_index(index or {}, normalized.query, normalized.max_results)
+            matches = _search_index(
+                index or {}, normalized.query, normalized.max_results
+            )
             fallback = _fallback_help_for_query(normalized.query)
 
             guidance_lines = []
