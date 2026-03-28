@@ -48,6 +48,8 @@ function dev-help {
     Write-Host "dev-install           - Install dependencies and setup environment"
     Write-Host "dev-test              - Run test suite with coverage"
     Write-Host "dev-test-context-budget - Run smoke response-size guard test"
+    Write-Host "dev-generate-tool-catalog - Generate tests/.generated/tool_catalog.json"
+    Write-Host "dev-prepare-harness-reports - Generate harness smoke/compat report artifacts"
     Write-Host "dev-test-full         - Run full suite including real SolidWorks integration tests"
     Write-Host "dev-test-clean        - Remove generated integration test artifacts"
     Write-Host "dev-docs              - Serve documentation locally (http://localhost:8000)"
@@ -136,10 +138,88 @@ function dev-test-context-budget {
     }
 }
 
+function dev-generate-tool-catalog {
+    Write-Host "Generating tool catalog JSON for endpoint harness tests..." -ForegroundColor Cyan
+    Invoke-ProjectPython -Args @("src/utils/generate_tool_catalog.py", "--json-only")
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Tool catalog generated at tests/.generated/tool_catalog.json" -ForegroundColor Green
+    } else {
+        Write-Host "Failed to generate tool catalog JSON" -ForegroundColor Red
+    }
+}
+
+function dev-prepare-harness-reports {
+    Write-Host "Preparing endpoint harness report artifacts..." -ForegroundColor Cyan
+
+    $integrationDir = Join-Path $PSScriptRoot "tests/.generated/solidworks_integration"
+    if (-not (Test-Path $integrationDir)) {
+        New-Item -ItemType Directory -Path $integrationDir -Force | Out-Null
+    }
+
+    $smokeReport = Join-Path $integrationDir "smoke_test_report.json"
+    if (-not (Test-Path $smokeReport)) {
+        "[]" | Set-Content -Path $smokeReport -Encoding UTF8
+    }
+
+    $compatReport = Join-Path $integrationDir "api_compat_report.json"
+    if (-not (Test-Path $compatReport)) {
+        @'
+{
+  "solidworks_version": "unknown",
+  "required_com_interfaces": [],
+  "discovery_status": "not_run",
+  "classification": {}
+}
+'@ | Set-Content -Path $compatReport -Encoding UTF8
+    }
+
+    # Refresh smoke report with live data using the mock-safe Level B writer test.
+    Invoke-ProjectPython -Args @(
+        "-m", "pytest", "tests/test_all_endpoints_harness.py",
+        "-k", "test_smoke_all_tools",
+        "--no-cov",
+        "-q"
+    )
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to generate smoke_test_report.json" -ForegroundColor Red
+        return
+    }
+
+    # Refresh compat report with live data when real integration is available.
+    Invoke-ProjectPython -Args @(
+        "-m", "pytest", "tests/test_all_endpoints_harness.py",
+        "-k", "test_c10_docs_discovery_and_compat",
+        "--no-cov",
+        "-q"
+    )
+
+    if (-not (Test-Path $smokeReport) -or -not (Test-Path $compatReport)) {
+        Write-Host "Harness report artifacts were not created as expected" -ForegroundColor Red
+        $global:LASTEXITCODE = 1
+        return
+    }
+
+    Write-Host "Harness reports ready under tests/.generated/solidworks_integration" -ForegroundColor Green
+    $global:LASTEXITCODE = 0
+}
+
 function dev-test-full {
     Write-Host "Running full test suite (including real SolidWorks integration)..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
+
+    dev-generate-tool-catalog
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Skipping test run because tool catalog generation failed" -ForegroundColor Red
+        return
+    }
+
+    dev-prepare-harness-reports
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Skipping test run because harness reports could not be prepared" -ForegroundColor Red
+        return
+    }
+
     # tests/ includes all suites, including the full endpoint harness tests.
     Invoke-ProjectPython -Args @(
         "-m", "pytest", "tests/",

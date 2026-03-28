@@ -39,14 +39,25 @@
 
 - [ ] Add Support and tools for browsing and inserting ready made solidworks components (fasteners, screws, etc.) into Solidworks Assemblies and look into assembly tools that could be valuable adds to the mcp server.
 
-- [ ] Generate some sort of UI that will help the user view and rewind changes made by the mcp server and llm
+- [ ] Support for pydantic-ai and other workflows for research and automation using LLMs see doc [here](docs\PLAN_PYDANIATIC_AI_INTEGRATION.md).
 
-- [ ] Have a database of all the commands and calls for context on close or a new session so things can pick up where they were left off on developing the part, learn what worked and what didn't, and rewind/redo/undo anything or turn great series of commands into a script.
+- [ ] Have a database of all the commands and calls for context on close or a new session so things can pick up where they were left off on developing the part, learn what worked and what didn't, and rewind/redo/undo anything or turn great series of commands into a script. Planning found [Datab workflow plans doc](docs\PLAN_DATABASE_WORKFLOWS.md)
 
 - [ ] add support for sheet metal and bend analysis tools
 
 - [ ] add support for mesh body manipulation tools
 
+- [ ] tool/support to grab MOTS/COTS from places like [McMaster-Carr](https://www.mcmaster.com/) when assemblies are better supported
+
+- [ ] Demos and workflows for the different toolings (gifs, videos etc.)
+
+- [ ] Generate some sort of UI that will help the user view and rewind changes made by the mcp server and llm (see [GUI Viz Planning](docs\PLAN_GUI_VISUALIZATION.md))
+
+- [ ] Support for Makers and 3d print enthusiasts to parameterize and take into account additive manufacturing when the LLM is designing parts, including but limited to breaking pieces, library of best practices for 3d printing (e.g. joints that work best for 3d printing), and running physical tolerance tests that can be plugged into the LLM when designing assemblies, joints, and splitting parts that are too big to fit into print beds
+
+- [ ] Feature for "style" type inputs for natural generation or design preferences, like generating a stylized design part image and then have a workflow to break it into the parts that would be needed to actually design and print
+
+- [ ] Add a workflow for recommendations for ESP32, Raspberry Pis, and other electronics that might go into sensors and other parts. Like an expert of 3d printing and simple electrical projects and research for this.
 ---
 
 ## ✅ Core Tools (6)
