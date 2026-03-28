@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastmcp import FastMCP
+import typer
 from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -368,8 +369,85 @@ def create_server(config: SolidWorksMCPConfig | None = None) -> SolidWorksMCPSer
     return SolidWorksMCPServer(config)
 
 
+async def _run_server(server: SolidWorksMCPServer) -> None:
+    """Run server lifecycle with graceful shutdown."""
+    try:
+        await server.start()
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        raise
+    finally:
+        await server.stop()
+
+
+async def _run_with_config(config: SolidWorksMCPConfig) -> None:
+    """Run the server from a fully prepared config object."""
+    utils.setup_logging(config)
+
+    logger.info("Starting SolidWorks MCP Server...")
+    logger.info(f"Platform: {platform.system()}")
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Deployment mode: {config.deployment_mode}")
+    logger.info(f"Security level: {config.security_level}")
+
+    server = SolidWorksMCPServer(config)
+    await _run_server(server)
+
+
+def cli(
+    config: str | None = typer.Option(
+        None,
+        "--config",
+        help="Configuration file path",
+    ),
+    mode: str | None = typer.Option(
+        None,
+        "--mode",
+        help="Deployment mode (local/remote/hybrid)",
+    ),
+    host: str = typer.Option(
+        "localhost",
+        "--host",
+        help="Server host for remote mode",
+    ),
+    port: int = typer.Option(
+        8000,
+        "--port",
+        help="Server port for remote mode",
+    ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Enable debug mode",
+    ),
+    mock: bool = typer.Option(
+        False,
+        "--mock",
+        help="Use mock SolidWorks for testing",
+    ),
+) -> None:
+    """Start the SolidWorks MCP Server."""
+    loaded_config = load_config(config)
+
+    if mode:
+        loaded_config.deployment_mode = DeploymentMode(mode)
+    if host:
+        loaded_config.host = host
+    if port:
+        loaded_config.port = port
+    if debug:
+        loaded_config.debug = True
+        loaded_config.log_level = "DEBUG"
+    if mock:
+        loaded_config.mock_solidworks = True
+
+    asyncio.run(_run_with_config(loaded_config))
+
+
 async def main() -> None:
-    """Main entry point for the SolidWorks MCP Server."""
+    """Legacy async entry point retained for tests and internal callers."""
     import argparse
 
     parser = argparse.ArgumentParser(description="SolidWorks MCP Server")
@@ -395,10 +473,8 @@ async def main() -> None:
 
     args = parser.parse_args()
 
-    # Load configuration
     config = load_config(args.config)
 
-    # Override config with command-line arguments
     if args.mode:
         config.deployment_mode = DeploymentMode(args.mode)
     if args.host:
@@ -411,27 +487,12 @@ async def main() -> None:
     if args.mock:
         config.mock_solidworks = True
 
-    # Setup logging
-    utils.setup_logging(config)
+    await _run_with_config(config)
 
-    logger.info("Starting SolidWorks MCP Server...")
-    logger.info(f"Platform: {platform.system()}")
-    logger.info(f"Python version: {sys.version}")
-    logger.info(f"Deployment mode: {config.deployment_mode}")
-    logger.info(f"Security level: {config.security_level}")
 
-    # Create and start server
-    server = SolidWorksMCPServer(config)
-
-    try:
-        await server.start()
-    except KeyboardInterrupt:
-        logger.info("Received interrupt signal")
-    except Exception as e:
-        logger.error(f"Server error: {e}")
-        raise
-    finally:
-        await server.stop()
+def cli_main() -> None:
+    """Console script entry point using Typer CLI."""
+    typer.run(cli)
 
 
 def run_server() -> None:
@@ -446,4 +507,4 @@ def run_server() -> None:
 
 
 if __name__ == "__main__":
-    run_server()
+    cli_main()

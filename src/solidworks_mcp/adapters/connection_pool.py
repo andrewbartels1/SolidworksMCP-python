@@ -320,6 +320,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "add_line", lambda adapter: adapter.add_line(x1, y1, x2, y2)
         )
 
+    async def add_centerline(self, x1: float, y1: float, x2: float, y2: float):
+        """Add centerline using pool."""
+        return await self._execute_with_pool(
+            "add_centerline",
+            lambda adapter: adapter.add_centerline(x1, y1, x2, y2),
+        )
+
     async def add_circle(self, center_x: float, center_y: float, radius: float):
         """Add circle using pool."""
         return await self._execute_with_pool(
@@ -344,6 +351,25 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Get mass properties using pool."""
         return await self._execute_with_pool(
             "get_mass_properties", lambda adapter: adapter.get_mass_properties()
+        )
+
+    async def get_model_info(self):
+        """Get active model metadata using pool."""
+        return await self._execute_with_pool(
+            "get_model_info", lambda adapter: adapter.get_model_info()
+        )
+
+    async def list_features(self, include_suppressed: bool = False):
+        """List model features using pool."""
+        return await self._execute_with_pool(
+            "list_features",
+            lambda adapter: adapter.list_features(include_suppressed),
+        )
+
+    async def list_configurations(self):
+        """List model configurations using pool."""
+        return await self._execute_with_pool(
+            "list_configurations", lambda adapter: adapter.list_configurations()
         )
 
     # Export operations

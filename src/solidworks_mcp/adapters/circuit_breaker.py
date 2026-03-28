@@ -61,7 +61,6 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             return False
         elif self.state == CircuitState.HALF_OPEN:
             return self.half_open_calls < self.half_open_max_calls
-        return False
 
     def _record_success(self) -> None:
         """Record successful operation."""
@@ -264,6 +263,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "add_line", lambda: self.adapter.add_line(x1, y1, x2, y2)
         )
 
+    async def add_centerline(self, x1: float, y1: float, x2: float, y2: float):
+        """Add centerline through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_centerline", lambda: self.adapter.add_centerline(x1, y1, x2, y2)
+        )
+
     async def add_circle(self, center_x: float, center_y: float, radius: float):
         """Add circle through circuit breaker."""
         return await self._execute_with_circuit_breaker(
@@ -288,6 +293,26 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         """Get mass properties through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "get_mass_properties", lambda: self.adapter.get_mass_properties()
+        )
+
+    async def get_model_info(self):
+        """Get active model metadata through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_model_info", lambda: self.adapter.get_model_info()
+        )
+
+    async def list_features(self, include_suppressed: bool = False):
+        """List model features through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_features",
+            lambda: self.adapter.list_features(include_suppressed),
+        )
+
+    async def list_configurations(self):
+        """List model configurations through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_configurations",
+            lambda: self.adapter.list_configurations(),
         )
 
     # Export operations

@@ -5,13 +5,22 @@ Provides tools for creating and editing sketches, including geometric entities
 like lines, circles, rectangles, arcs, and constraints.
 """
 
-from typing import Any
+from typing import Any, TypeVar
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from loguru import logger
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+
+
+TInput = TypeVar("TInput", bound=BaseModel)
+
+
+def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
+    if isinstance(input_data, model_type):
+        return input_data
+    return model_type.model_validate(input_data)
 
 
 # Input schemas using Python 3.14 built-in types
@@ -233,6 +242,7 @@ async def register_sketching_tools(
             - Use exit_sketch() when finished to exit sketch edit mode
         """
         try:
+            input_data = _normalize_input(input_data, CreateSketchInput)
             result = await adapter.create_sketch(input_data.plane)
 
             if result.is_success:
@@ -311,6 +321,7 @@ async def register_sketching_tools(
             - Useful for creating construction lines with zero length
         """
         try:
+            input_data = _normalize_input(input_data, AddLineInput)
             if hasattr(adapter, "add_sketch_line"):
                 result = await adapter.add_sketch_line(
                     input_data.x1,
@@ -363,6 +374,7 @@ async def register_sketching_tools(
     async def add_circle(input_data: AddCircleInput) -> dict[str, Any]:
         """Add a circle to the current sketch."""
         try:
+            input_data = _normalize_input(input_data, AddCircleInput)
             if hasattr(adapter, "add_sketch_circle"):
                 result = await adapter.add_sketch_circle(
                     input_data.center_x,
@@ -455,6 +467,7 @@ async def register_sketching_tools(
             - Useful as base profile for extrusions and cuts
         """
         try:
+            input_data = _normalize_input(input_data, AddRectangleInput)
             if hasattr(adapter, "add_sketch_rectangle"):
                 result = await adapter.add_sketch_rectangle(
                     input_data.x1,
@@ -774,6 +787,8 @@ async def register_sketching_tools(
             - Commonly used as revolution axes for turned parts
         """
         try:
+            input_data = _normalize_input(input_data, AddLineInput)
+
             result = await adapter.add_centerline(
                 input_data.x1, input_data.y1, input_data.x2, input_data.y2
             )

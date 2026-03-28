@@ -107,6 +107,15 @@ class SaveAssemblyInput(CompatInput):
     overwrite: bool = Field(default=True, description="Overwrite existing file")
 
 
+class ListFeaturesInput(CompatInput):
+    """Input schema for feature tree listing."""
+
+    include_suppressed: bool = Field(
+        default=False,
+        description="Include suppressed features in the returned list",
+    )
+
+
 async def register_file_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -123,7 +132,7 @@ async def register_file_management_tools(
         config (dict[str, Any]): Configuration dictionary for file management settings
 
     Returns:
-        int: Number of tools registered (3 file management tools)
+        int: Number of tools registered in this module.
 
     Example:
         ```python
@@ -146,6 +155,23 @@ async def register_file_management_tools(
             if isinstance(payload, model_cls)
             else model_cls.model_validate(payload)
         )
+
+    def _result_value(payload: Any, *keys: str, default: Any = None) -> Any:
+        """Read a value from adapter result payloads that may be dicts or model objects."""
+        if payload is None:
+            return default
+
+        if isinstance(payload, dict):
+            for key in keys:
+                if key in payload and payload[key] is not None:
+                    return payload[key]
+            return default
+
+        for key in keys:
+            value = getattr(payload, key, None)
+            if value is not None:
+                return value
+        return default
 
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
@@ -419,6 +445,111 @@ async def register_file_management_tools(
                 "units": "millimeters",
             },
         }
+
+    @mcp.tool()
+    async def get_model_info() -> dict[str, Any]:
+        """
+        Get metadata for the active SolidWorks document.
+
+        Returns a compact summary of the current model context that is useful
+        for read-before-write LLM flows (document type, active configuration,
+        and feature count).
+        """
+        try:
+            if hasattr(adapter, "get_model_info"):
+                result = await adapter.get_model_info()
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "model_info": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to get model info",
+                }
+
+            return {
+                "status": "error",
+                "message": "Active adapter does not support get_model_info",
+            }
+        except Exception as e:
+            logger.error(f"Error in get_model_info tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def list_features(input_data: ListFeaturesInput) -> dict[str, Any]:
+        """
+        List feature-tree entries for the active SolidWorks document.
+
+        Useful for read-before-write workflows where the agent must inspect
+        existing model structure before adding or editing downstream features.
+        """
+        try:
+            input_data = _coerce_input(ListFeaturesInput, input_data)
+            if hasattr(adapter, "list_features"):
+                result = await adapter.list_features(
+                    include_suppressed=input_data.include_suppressed
+                )
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "features": result.data or [],
+                        "count": len(result.data or []),
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to list features",
+                }
+
+            return {
+                "status": "error",
+                "message": "Active adapter does not support list_features",
+            }
+        except Exception as e:
+            logger.error(f"Error in list_features tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def list_configurations() -> dict[str, Any]:
+        """
+        List configuration names for the active SolidWorks document.
+
+        Returns all available configuration names so callers can select a
+        stable target before invoking feature or export operations.
+        """
+        try:
+            if hasattr(adapter, "list_configurations"):
+                result = await adapter.list_configurations()
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "configurations": result.data or [],
+                        "count": len(result.data or []),
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to list configurations",
+                }
+
+            return {
+                "status": "error",
+                "message": "Active adapter does not support list_configurations",
+            }
+        except Exception as e:
+            logger.error(f"Error in list_configurations tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
 
     @mcp.tool()
     async def manage_file_properties(input_data: FileOperationInput) -> dict[str, Any]:
@@ -724,7 +855,11 @@ async def register_file_management_tools(
                     }
                 # Detect paths that are effectively just the extension (e.g., ".sldprt")
                 cleaned = file_path.strip()
-                if cleaned.count(".") == 1 and cleaned.startswith(".") and cleaned[1:].lower() == "sldprt":
+                if (
+                    cleaned.count(".") == 1
+                    and cleaned.startswith(".")
+                    and cleaned[1:].lower() == "sldprt"
+                ):
                     return {
                         "status": "error",
                         "message": "Invalid file_path: missing base filename before extension.",
@@ -851,5 +986,5 @@ async def register_file_management_tools(
                 "message": f"Unexpected error: {str(e)}",
             }
 
-    tool_count = 10  # Total number of registered tools in this module
+    tool_count = 13  # Total number of registered tools in this module
     return tool_count

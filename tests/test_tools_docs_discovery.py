@@ -10,6 +10,7 @@ import os
 import platform
 import shutil
 import time
+import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -23,6 +24,11 @@ from src.solidworks_mcp.config import (
     SolidWorksMCPConfig,
 )
 from src.solidworks_mcp.server import SolidWorksMCPServer
+from src.solidworks_mcp.tools.docs_discovery import (
+    _extract_year,
+    _resolve_solidworks_year,
+    register_docs_discovery_tools,
+)
 
 
 REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
@@ -183,22 +189,8 @@ async def test_docs_discovery_output_dir_creation() -> None:
     """Test that docs discovery creates output directory if it doesn't exist."""
     from src.solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
 
-    # Create discovery with non-existent directory
-    test_dir = Path("tests/.generated/docs-discovery-test")
-
-    # Clean up with retry logic for Windows file locking
-    if test_dir.exists():
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                shutil.rmtree(test_dir)
-                break
-            except PermissionError:
-                if attempt < max_retries - 1:
-                    time.sleep(0.5)  # Wait before retry
-                else:
-                    # If cleanup fails, skip the test
-                    pytest.skip(f"Could not clean up {test_dir} - file may be locked")
+    # Use a unique directory to avoid flaky pre-cleanup on Windows file locks.
+    test_dir = Path("tests/.generated") / f"docs-discovery-test-{time.time_ns()}"
 
     try:
         SolidWorksDocsDiscovery(output_dir=test_dir)
@@ -206,7 +198,7 @@ async def test_docs_discovery_output_dir_creation() -> None:
         # Verify directory was created
         assert test_dir.exists(), "Output directory should be created"
     finally:
-        # Cleanup after test with retry logic
+        # Best-effort cleanup after test with retry logic.
         if test_dir.exists():
             for attempt in range(3):
                 try:
@@ -215,3 +207,73 @@ async def test_docs_discovery_output_dir_creation() -> None:
                 except PermissionError:
                     if attempt < 2:
                         time.sleep(0.5)
+            if test_dir.exists():
+                shutil.rmtree(test_dir, ignore_errors=True)
+
+
+def test_docs_discovery_year_resolution_from_config() -> None:
+    """Resolve year from explicit config fields when provided."""
+    config = SolidWorksMCPConfig(solidworks_year=2026)
+    resolved = _resolve_solidworks_year(None, config)
+    assert resolved == 2026
+
+
+def test_docs_discovery_extract_year_from_path() -> None:
+    """Extract year from common SolidWorks path/text variants."""
+    assert _extract_year("C:/Program Files/SOLIDWORKS Corp/SOLIDWORKS 2026") == 2026
+    assert _extract_year("SOLIDWORKS 2025") == 2025
+    assert _extract_year("no year here") is None
+
+
+@pytest.mark.asyncio
+async def test_search_solidworks_api_help_with_index(
+    mcp_server,
+    mock_config: SolidWorksMCPConfig,
+    temp_dir: Path,
+) -> None:
+    """Search API help using a synthetic index and verify coherent structured output."""
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+
+    search_tool = None
+    for tool in mcp_server._tools:
+        if tool.name == "search_solidworks_api_help":
+            search_tool = tool.func
+            break
+
+    assert search_tool is not None
+
+    index_path = temp_dir / "solidworks_docs_index_2026.json"
+    index_path.write_text(
+        json.dumps(
+            {
+                "com_objects": {
+                    "ISldWorks": {
+                        "methods": ["OpenDoc6", "CloseDoc"],
+                        "properties": ["RevisionNumber"],
+                    }
+                },
+                "vba_references": {
+                    "SldWorks": {
+                        "description": "SolidWorks API",
+                        "status": "available",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = await search_tool(
+        {
+            "query": "open document",
+            "year": 2026,
+            "index_file": str(index_path),
+            "max_results": 5,
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["year"] == 2026
+    assert result["source_index_file"] == str(index_path)
+    assert isinstance(result["matches"], list)
+    assert result["guidance"]

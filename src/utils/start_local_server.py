@@ -8,6 +8,7 @@ with configurable security, deployment modes, and comprehensive logging.
 
 import argparse
 import asyncio
+import io
 import json
 import logging
 import os
@@ -20,6 +21,19 @@ from typing import Any
 # Add src to path for development
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root / "src"))
+
+# Fix Windows console encoding for Unicode emojis
+# On Windows, sys.stdout uses cp1252 by default which can't encode emojis
+# Reconfigure to use UTF-8 for all print statements
+if sys.platform == "win32":
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", line_buffering=True
+        )
+    if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer, encoding="utf-8", line_buffering=True
+        )
 
 from solidworks_mcp.config import (
     SolidWorksMCPConfig,
@@ -36,6 +50,7 @@ def create_local_config(
     security_level: str = "minimal",
     port: int = 8000,
     log_level: str = "INFO",
+    solidworks_year: int | None = None,
 ) -> SolidWorksMCPConfig:
     """Create configuration for local development/testing."""
 
@@ -47,7 +62,7 @@ def create_local_config(
     }
 
     security_enum = security_map.get(security_level.lower(), SecurityLevel.MINIMAL)
-    adapter_type = AdapterType.MOCK if mock_mode else AdapterType.WINAX_ENHANCED
+    adapter_type = AdapterType.MOCK if mock_mode else AdapterType.PYWIN32
 
     config = SolidWorksMCPConfig(
         deployment_mode=DeploymentMode.LOCAL,
@@ -61,6 +76,7 @@ def create_local_config(
         solidworks_path="mock://solidworks" if mock_mode else "",
         max_retries=3,
         timeout_seconds=30.0,
+        solidworks_year=solidworks_year,
         circuit_breaker_enabled=True,
         connection_pooling=True,
         max_connections=5,
@@ -196,6 +212,8 @@ def print_startup_banner(config: SolidWorksMCPConfig) -> None:
     print(f"🔒 Security Level: {config.security_level.value}")
     print(f"🎭 Adapter Mode: {'Mock' if config.mock_solidworks else 'Real SolidWorks'}")
     print(f"📊 Log Level: {config.log_level}")
+    if getattr(config, "solidworks_year", None):
+        print(f"📅 SolidWorks Year: {config.solidworks_year}")
     print(f"⏰ Started: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -253,6 +271,12 @@ async def main():
         "--port", type=int, default=8000, help="Server port (default: 8000)"
     )
     parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="SolidWorks year hint (e.g., 2026, 2025)",
+    )
+    parser.add_argument(
         "--security",
         choices=["minimal", "standard", "strict"],
         default="minimal",
@@ -282,6 +306,7 @@ async def main():
         security_level=args.security,
         port=args.port,
         log_level=args.log_level,
+        solidworks_year=args.year,
     )
 
     # Setup logging
@@ -349,7 +374,21 @@ async def main():
 
 if __name__ == "__main__":
     if sys.platform == "win32":
-        # Use ProactorEventLoop for Windows compatibility
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        # Use ProactorEventLoop for Windows compatibility (modern approach)
+        # set_event_loop_policy is deprecated in Python 3.14+
+        # Instead, we let asyncio.run() handle the policy automatically,
+        # or we can explicitly create a Runner with the policy (3.11+)
+        try:
+            # Try the modern approach first (Python 3.11+)
+            from asyncio import Runner
 
-    asyncio.run(main())
+            runner = Runner(debug=False)
+            try:
+                runner.run(main())
+            finally:
+                runner.close()
+        except (ImportError, TypeError):
+            # Fallback for older versions
+            asyncio.run(main())
+    else:
+        asyncio.run(main())

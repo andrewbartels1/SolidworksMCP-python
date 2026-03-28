@@ -62,6 +62,11 @@ class SolidWorksMCPConfig(BaseModel):
         default=None, description="Path to SolidWorks executable"
     )
 
+    solidworks_year: int | None = Field(
+        default=None,
+        description="SolidWorks release year hint (e.g., 2025, 2026)",
+    )
+
     adapter_type: AdapterType = Field(
         default=AdapterType.PYWIN32,
         description="SolidWorks adapter implementation to use",

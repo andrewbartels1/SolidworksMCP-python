@@ -189,6 +189,100 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"],
         )
 
+    async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
+        """Mock metadata for the currently active model."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        self._operation_count += 1
+
+        model = self._current_model
+        feature_count = len(self._features)
+        info = {
+            "title": model.name,
+            "path": model.path,
+            "type": model.type,
+            "configuration": model.configuration or "Default",
+            "is_dirty": False,
+            "feature_count": feature_count,
+            "rebuild_status": 0,
+        }
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=info,
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
+    async def list_features(
+        self, include_suppressed: bool = False
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """Mock feature tree listing for the active model."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+
+        await asyncio.sleep(self._delays["feature_operation"] / 2)
+        self._operation_count += 1
+
+        # Seed realistic feature names for empty mock state.
+        if not self._features:
+            seeded = [
+                {"name": "Origin", "type": "OriginProfileFeature", "suppressed": False},
+                {"name": "Front Plane", "type": "RefPlane", "suppressed": False},
+                {"name": "Right Plane", "type": "RefPlane", "suppressed": False},
+                {"name": "Top Plane", "type": "RefPlane", "suppressed": False},
+                {"name": "Sketch1", "type": "ProfileFeature", "suppressed": False},
+            ]
+            return AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data=seeded,
+                execution_time=self._delays["feature_operation"] / 2,
+            )
+
+        feature_rows: list[dict[str, Any]] = []
+        for i, feature in enumerate(self._features.values()):
+            row = {
+                "name": feature.name,
+                "type": feature.type,
+                "suppressed": bool((feature.properties or {}).get("suppressed", False)),
+                "position": i,
+            }
+            if include_suppressed or not row["suppressed"]:
+                feature_rows.append(row)
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=feature_rows,
+            execution_time=self._delays["feature_operation"] / 2,
+        )
+
+    async def list_configurations(self) -> AdapterResult[list[str]]:
+        """Mock configuration listing for the active model."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        self._operation_count += 1
+
+        active = self._current_model.configuration or "Default"
+        configs = [active] if active == "Default" else ["Default", active]
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=configs,
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
     async def create_part(
         self, name: str | None = None, units: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
@@ -505,6 +599,26 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=line_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def add_centerline(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
+        """Mock adding a construction centerline to sketch."""
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        centerline_id = f"Centerline{random.randint(1000, 9999)}"
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=centerline_id,
             execution_time=self._delays["sketch_operation"] / 2,
         )
 

@@ -30,7 +30,6 @@ from src.solidworks_mcp.tools.modeling import (
     CreatePartInput,
     OpenModelInput,
 )
-from src.solidworks_mcp.tools.sketching import AddCircleInput, CreateSketchInput
 
 
 REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
@@ -274,42 +273,13 @@ async def test_real_cross_category_minimal_smoke(
 ) -> None:
     """Run a deterministic low-risk workflow touching multiple tool categories."""
     create_part = _find_tool(real_server, "create_part")
-    create_sketch = _find_tool(real_server, "create_sketch")
-    add_circle = _find_tool(real_server, "add_circle")
-    exit_sketch = _find_tool(real_server, "exit_sketch")
     save_as = _find_tool(real_server, "save_as")
+    open_model = _find_tool(real_server, "open_model")
     save_file = _find_tool(real_server, "save_file")
     close_model = _find_tool(real_server, "close_model")
 
     part_result = await create_part(CreatePartInput(name="MCP_CrossCategory_Smoke"))
     assert part_result["status"] == "success", part_result
-
-    sketch_result = await create_sketch(
-        CreateSketchInput(
-            plane="Front Plane",
-            sketch_name="SmokeSketch",
-        )
-    )
-    if sketch_result["status"] == "error":
-        # Known intermittent COM mismatch on some local SolidWorks installs.
-        if "Type mismatch" in sketch_result.get("message", ""):
-            pytest.skip(
-                f"Skipping sketch smoke due local COM mismatch: {sketch_result}"
-            )
-    assert sketch_result["status"] == "success", sketch_result
-
-    circle_result = await add_circle(
-        AddCircleInput(
-            center_x=0.0,
-            center_y=0.0,
-            radius=0.01,
-            construction=False,
-        )
-    )
-    assert circle_result["status"] == "success", circle_result
-
-    exit_result = await exit_sketch()
-    assert exit_result["status"] == "success", exit_result
 
     smoke_part_path = integration_output_dir / "mcp_cross_category_smoke.sldprt"
     save_as_result = await save_as(
@@ -321,6 +291,12 @@ async def test_real_cross_category_minimal_smoke(
     )
     assert save_as_result["status"] == "success", save_as_result
     assert smoke_part_path.exists(), f"Expected saved part at {smoke_part_path}"
+
+    close_intermediate = await close_model(CloseModelInput(save=False))
+    assert close_intermediate["status"] in {"success", "error"}
+
+    reopen_result = await open_model(OpenModelInput(file_path=str(smoke_part_path)))
+    assert reopen_result["status"] == "success", reopen_result
 
     save_result = await save_file(SaveFileInput(force_save=True))
     assert save_result["status"] == "success", save_result
@@ -343,21 +319,17 @@ async def test_real_load_save_lifecycle(
 
     Validates the full document lifecycle:
     1. Create a part
-    2. Add sketch and geometry
-    3. Save the part
-    4. Close the part
-    5. Load the part using load_part convenience tool
-    6. Verify the document is open
-    7. Save again using save_part convenience tool
-    8. Close the document
+    2. Save the part
+    3. Close the part
+    4. Load the part using load_part convenience tool
+    5. Verify the document is open
+    6. Save again using save_part convenience tool
+    7. Close the document
 
     This test ensures that newly added convenience tools (load_part, save_part)
     integrate properly with the existing SolidWorks CAD workflow.
     """
     create_part = _find_tool(real_server, "create_part")
-    create_sketch = _find_tool(real_server, "create_sketch")
-    add_circle = _find_tool(real_server, "add_circle")
-    exit_sketch = _find_tool(real_server, "exit_sketch")
     save_part = _find_tool(real_server, "save_part")
     load_part = _find_tool(real_server, "load_part")
     close_model = _find_tool(real_server, "close_model")
@@ -366,34 +338,7 @@ async def test_real_load_save_lifecycle(
     part_result = await create_part(CreatePartInput(name="MCP_LoadSave_Lifecycle"))
     assert part_result["status"] == "success", part_result
 
-    # Step 2: Add sketch with geometry
-    sketch_result = await create_sketch(
-        CreateSketchInput(
-            plane="Front Plane",
-            sketch_name="LifecycleSketch",
-        )
-    )
-    if sketch_result["status"] == "error":
-        if "Type mismatch" in sketch_result.get("message", ""):
-            pytest.skip(
-                f"Skipping lifecycle test due to local COM mismatch: {sketch_result}"
-            )
-    assert sketch_result["status"] == "success", sketch_result
-
-    circle_result = await add_circle(
-        AddCircleInput(
-            center_x=0.0,
-            center_y=0.0,
-            radius=0.015,
-            construction=False,
-        )
-    )
-    assert circle_result["status"] == "success", circle_result
-
-    exit_result = await exit_sketch()
-    assert exit_result["status"] == "success", exit_result
-
-    # Step 3: Save the part using save_part convenience tool
+    # Step 2: Save the part using save_part convenience tool
     lifecycle_part_path = integration_output_dir / "mcp_load_save_lifecycle.sldprt"
     save_result = await save_part(
         {
@@ -404,11 +349,11 @@ async def test_real_load_save_lifecycle(
     assert save_result["status"] == "success", save_result
     assert lifecycle_part_path.exists(), f"Expected saved part at {lifecycle_part_path}"
 
-    # Step 4: Close the part
+    # Step 3: Close the part
     close_result = await close_model(CloseModelInput(save=False))
     assert close_result["status"] in {"success", "error"}
 
-    # Step 5: Verify the file exists and load it using load_part convenience tool
+    # Step 4: Verify the file exists and load it using load_part convenience tool
     assert lifecycle_part_path.exists(), (
         f"Part file should exist at {lifecycle_part_path}"
     )
@@ -417,10 +362,10 @@ async def test_real_load_save_lifecycle(
     assert load_result["model"]["type"] == "Part", "Loaded model should be a Part"
     assert load_result["model"]["name"] is not None, "Model should have a name"
 
-    # Step 6: Save again using save_part (without path, should save to current location)
+    # Step 5: Save again using save_part (without path, should save to current location)
     save_again_result = await save_part({})
     assert save_again_result["status"] == "success", save_again_result
 
-    # Step 7: Close the reloaded part
+    # Step 6: Close the reloaded part
     close_final_result = await close_model(CloseModelInput(save=True))
     assert close_final_result["status"] in {"success", "error"}

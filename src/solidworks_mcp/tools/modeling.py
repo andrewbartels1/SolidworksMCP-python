@@ -5,7 +5,7 @@ Provides tools for creating and manipulating SolidWorks models, including
 parts, assemblies, drawings, and features like extrusions, revolves, etc.
 """
 
-from typing import Any
+from typing import Any, TypeVar
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -18,6 +18,9 @@ from ..adapters.base import (
     LoftParameters,
 )
 from .input_compat import CompatInput
+
+
+TInput = TypeVar("TInput", bound=BaseModel)
 
 
 # Input schemas using Python 3.14 built-in types
@@ -36,6 +39,12 @@ def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
             if value is not None:
                 return value
     return default
+
+
+def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
+    if isinstance(input_data, model_type):
+        return input_data
+    return model_type.model_validate(input_data)
 
 
 class OpenModelInput(BaseModel):
@@ -265,6 +274,7 @@ async def register_modeling_tools(
             Model becomes the active document for subsequent operations.
         """
         try:
+            input_data = _normalize_input(input_data, OpenModelInput)
             result = await adapter.open_model(input_data.file_path)
 
             if result.is_success:
@@ -338,6 +348,7 @@ async def register_modeling_tools(
             - Subsequent modeling operations will apply to this part
         """
         try:
+            input_data = _normalize_input(input_data, CreatePartInput)
             result = await adapter.create_part(input_data.name, input_data.units)
 
             if result.is_success:
@@ -408,6 +419,7 @@ async def register_modeling_tools(
         The new assembly will become the active document.
         """
         try:
+            input_data = _normalize_input(input_data, CreateAssemblyInput)
             result = await adapter.create_assembly(input_data.name)
 
             if result.is_success:
@@ -445,6 +457,7 @@ async def register_modeling_tools(
         The new drawing will become the active document.
         """
         try:
+            input_data = _normalize_input(input_data, CreateDrawingInput)
             result = await adapter.create_drawing(input_data.name)
 
             if result.is_success:
@@ -516,6 +529,7 @@ async def register_modeling_tools(
             - Model must be open to close it
         """
         try:
+            input_data = _normalize_input(input_data, CloseModelInput)
             result = await adapter.close_model(input_data.save)
 
             if result.is_success:
@@ -606,6 +620,7 @@ async def register_modeling_tools(
             - Use reverse_direction=True for cut operations
         """
         try:
+            input_data = _normalize_input(input_data, CreateExtrusionInput)
             # Convert input to ExtrusionParameters
             params = ExtrusionParameters(
                 depth=input_data.depth,
@@ -717,6 +732,7 @@ async def register_modeling_tools(
             - Revolution direction follows right-hand rule
         """
         try:
+            input_data = _normalize_input(input_data, CreateRevolveInput)
             # Convert input to RevolveParameters
             params = RevolveParameters(
                 angle=input_data.angle,
@@ -817,6 +833,7 @@ async def register_modeling_tools(
         Common dimension names include D1@Sketch1, D2@Sketch1, D1@Boss-Extrude1, etc.
         """
         try:
+            input_data = _normalize_input(input_data, GetDimensionInput)
             result = await adapter.get_dimension(input_data.name)
 
             if result.is_success:
@@ -855,6 +872,7 @@ async def register_modeling_tools(
         Use this to parametrically modify your model dimensions.
         """
         try:
+            input_data = _normalize_input(input_data, SetDimensionInput)
             result = await adapter.set_dimension(input_data.name, input_data.value)
 
             if result.is_success:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 from pathlib import Path
 from typing import Any
 
@@ -251,6 +252,253 @@ class DiscoverDocsInput(CompatInput):
         default=True,
         description="Include VBA library reference indexing",
     )
+    year: int | None = Field(
+        default=None,
+        description="SolidWorks year override for saved index naming (e.g., 2026)",
+    )
+
+
+class SearchApiHelpInput(CompatInput):
+    """Input schema for SolidWorks API help search."""
+
+    query: str = Field(
+        description="Search phrase for SolidWorks API help (methods, properties, objects)",
+        min_length=2,
+    )
+    year: int | None = Field(
+        default=None,
+        description="SolidWorks year override (e.g., 2025, 2026)",
+    )
+    max_results: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of search results",
+    )
+    index_file: str | None = Field(
+        default=None,
+        description="Optional explicit index file path (JSON) to search",
+    )
+    auto_discover_if_missing: bool = Field(
+        default=False,
+        description="Generate docs index first when no index file is found",
+    )
+
+
+def _normalize_input(input_data: Any, model_type: type[CompatInput]) -> CompatInput:
+    """Normalize dict/model payloads for direct tool invocation paths."""
+    if input_data is None:
+        return model_type()  # type: ignore[call-arg]
+    if isinstance(input_data, model_type):
+        return input_data
+    if isinstance(input_data, dict):
+        return model_type.model_validate(input_data)
+    if hasattr(input_data, "model_dump"):
+        return model_type.model_validate(input_data.model_dump())
+    return model_type.model_validate(input_data)
+
+
+def _extract_year(value: str | None) -> int | None:
+    """Extract a 4-digit year from any string."""
+    if not value:
+        return None
+    match = re.search(r"\b(20\d{2})\b", value)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def _detect_installed_solidworks_year() -> int | None:
+    """Detect the latest installed SolidWorks year from the public samples path."""
+    root = Path(r"C:\Users\Public\Documents\SOLIDWORKS")
+    if not root.exists():
+        return None
+
+    years: list[int] = []
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        year = _extract_year(child.name)
+        if year is not None:
+            years.append(year)
+
+    if not years:
+        return None
+    return max(years)
+
+
+def _resolve_solidworks_year(requested_year: int | None, config: Any) -> int | None:
+    """Resolve SolidWorks year from explicit request, config, then local installation."""
+    if requested_year:
+        return requested_year
+
+    config_year = getattr(config, "solidworks_year", None)
+    if isinstance(config_year, int):
+        return config_year
+
+    config_path_year = _extract_year(getattr(config, "solidworks_path", None))
+    if config_path_year:
+        return config_path_year
+
+    return _detect_installed_solidworks_year()
+
+
+def _load_index_file(index_file: Path) -> dict[str, Any] | None:
+    """Load docs index JSON from disk."""
+    try:
+        if not index_file.exists() or not index_file.is_file():
+            return None
+        with index_file.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if isinstance(data, dict):
+            return data
+        return None
+    except Exception:
+        return None
+
+
+def _find_index_file(year: int | None, explicit_index_file: str | None) -> Path | None:
+    """Find the most appropriate index file for a requested year."""
+    if explicit_index_file:
+        explicit = Path(explicit_index_file)
+        if explicit.exists():
+            return explicit
+
+    names = ["solidworks_docs_index.json"]
+    if year:
+        names.insert(0, f"solidworks_docs_index_{year}.json")
+
+    search_dirs = [
+        Path(".generated/docs-index"),
+        Path("tests/.generated/solidworks_integration/docs-index"),
+        Path("tests/.generated/docs-index"),
+    ]
+
+    for directory in search_dirs:
+        for name in names:
+            candidate = directory / name
+            if candidate.exists():
+                return candidate
+
+    return None
+
+
+def _search_index(index: dict[str, Any], query: str, max_results: int) -> list[dict[str, Any]]:
+    """Search indexed COM objects/members for a query."""
+    tokens = [t for t in re.split(r"\s+", query.lower().strip()) if t]
+    if not tokens:
+        return []
+
+    results: list[dict[str, Any]] = []
+
+    def _score(text: str) -> int:
+        lower = text.lower()
+        score = 0
+        for token in tokens:
+            if token == lower:
+                score += 10
+            elif token in lower:
+                score += 3
+        return score
+
+    for obj_name, obj_data in index.get("com_objects", {}).items():
+        obj_score = _score(obj_name)
+
+        for method in obj_data.get("methods", []):
+            score = obj_score + _score(str(method))
+            if score > 0:
+                results.append(
+                    {
+                        "object": obj_name,
+                        "member": method,
+                        "member_type": "method",
+                        "score": score,
+                    }
+                )
+
+        for prop in obj_data.get("properties", []):
+            score = obj_score + _score(str(prop))
+            if score > 0:
+                results.append(
+                    {
+                        "object": obj_name,
+                        "member": prop,
+                        "member_type": "property",
+                        "score": score,
+                    }
+                )
+
+    for lib_name, lib_data in index.get("vba_references", {}).items():
+        lib_text = f"{lib_name} {lib_data.get('description', '')}"
+        score = _score(lib_text)
+        if score > 0:
+            results.append(
+                {
+                    "object": "VBA Library",
+                    "member": lib_name,
+                    "member_type": "reference",
+                    "status": lib_data.get("status", "unknown"),
+                    "score": score,
+                }
+            )
+
+    results.sort(key=lambda item: item.get("score", 0), reverse=True)
+    return results[:max_results]
+
+
+def _fallback_help_for_query(query: str) -> dict[str, Any]:
+    """Provide coherent fallback help when no docs index is available."""
+    q = query.lower()
+
+    if any(word in q for word in ("revolve", "lathe", "turned")):
+        return {
+            "suggested_tools": [
+                "create_part",
+                "create_sketch",
+                "add_centerline",
+                "add_line",
+                "add_arc",
+                "exit_sketch",
+                "create_revolve",
+            ],
+            "next_steps": [
+                "Create a profile sketch and a centerline in the same sketch.",
+                "Exit sketch mode before create_revolve.",
+                "If real COM returns parameter mismatch, use generate_vba_revolve as fallback guidance.",
+            ],
+        }
+
+    if any(word in q for word in ("extrude", "boss", "cut")):
+        return {
+            "suggested_tools": [
+                "create_part",
+                "create_sketch",
+                "add_rectangle",
+                "add_circle",
+                "exit_sketch",
+                "create_extrusion",
+            ],
+            "next_steps": [
+                "Ensure sketch profile is closed before create_extrusion.",
+                "Use direction='cut' for removal operations.",
+            ],
+        }
+
+    return {
+        "suggested_tools": [
+            "discover_solidworks_docs",
+            "open_model",
+            "get_file_properties",
+            "save_as",
+        ],
+        "next_steps": [
+            "Run discover_solidworks_docs to index the local COM API surface.",
+            "Search again with a narrower API term like a method or interface name.",
+        ],
+    }
 
 
 async def register_docs_discovery_tools(
@@ -326,18 +574,25 @@ async def register_docs_discovery_tools(
             }
 
         try:
+            normalized = _normalize_input(input_data, DiscoverDocsInput)
             output_dir = (
-                Path(input_data.output_dir)
-                if input_data and input_data.output_dir
+                Path(normalized.output_dir)
+                if normalized.output_dir
                 else None
             )
+            year = _resolve_solidworks_year(normalized.year, config)
 
             discovery = SolidWorksDocsDiscovery(output_dir=output_dir)
 
             logger.info("Starting SolidWorks documentation discovery...")
             index = discovery.discover_all()
 
-            output_file = discovery.save_index()
+            filename = (
+                f"solidworks_docs_index_{year}.json"
+                if year
+                else "solidworks_docs_index.json"
+            )
+            output_file = discovery.save_index(filename=filename)
 
             summary = discovery.create_search_summary()
 
@@ -348,6 +603,7 @@ async def register_docs_discovery_tools(
                 f"{summary['total_properties']} properties",
                 "index": index,
                 "summary": summary,
+                "year": year,
                 "output_file": str(output_file) if output_file else None,
                 "execution_time": time.time() - start_time,
             }
@@ -359,5 +615,75 @@ async def register_docs_discovery_tools(
                 "message": f"Discovery failed: {str(e)}",
             }
 
-    tool_count = 1  # discover_solidworks_docs
+    @mcp.tool()
+    async def search_solidworks_api_help(
+        input_data: SearchApiHelpInput | None = None,
+    ) -> dict[str, Any]:
+        """Search SolidWorks API help index and return coherent guidance.
+
+        This tool helps when the LLM gets stuck by mapping user intent to
+        discovered COM members and practical MCP workflow guidance.
+        """
+
+        import time
+
+        start_time = time.time()
+
+        try:
+            normalized = _normalize_input(input_data, SearchApiHelpInput)
+            year = _resolve_solidworks_year(normalized.year, config)
+
+            index_file = _find_index_file(year, normalized.index_file)
+            index = _load_index_file(index_file) if index_file else None
+
+            if index is None and normalized.auto_discover_if_missing:
+                if HAS_WIN32COM and platform.system() == "Windows":
+                    discovery = SolidWorksDocsDiscovery()
+                    index = discovery.discover_all()
+                    filename = (
+                        f"solidworks_docs_index_{year}.json"
+                        if year
+                        else "solidworks_docs_index.json"
+                    )
+                    index_file = discovery.save_index(filename=filename)
+
+            matches = _search_index(index or {}, normalized.query, normalized.max_results)
+            fallback = _fallback_help_for_query(normalized.query)
+
+            guidance_lines = []
+            if matches:
+                guidance_lines.append(
+                    f"Found {len(matches)} API matches for '{normalized.query}'."
+                )
+                guidance_lines.append(
+                    "Start with the highest-score members and verify with the real adapter path."
+                )
+            else:
+                guidance_lines.append(
+                    "No indexed API hits found; using workflow fallback guidance."
+                )
+                guidance_lines.append(
+                    "Consider running discover_solidworks_docs first for this machine/version."
+                )
+
+            return {
+                "status": "success",
+                "message": "SolidWorks API help search completed",
+                "query": normalized.query,
+                "year": year,
+                "source_index_file": str(index_file) if index_file else None,
+                "matches": matches,
+                "fallback_help": fallback,
+                "guidance": " ".join(guidance_lines),
+                "execution_time": time.time() - start_time,
+            }
+
+        except Exception as e:
+            logger.error(f"Error during SolidWorks API help search: {e}")
+            return {
+                "status": "error",
+                "message": f"API help search failed: {str(e)}",
+            }
+
+    tool_count = 2  # discover_solidworks_docs, search_solidworks_api_help
     return tool_count

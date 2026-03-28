@@ -5,13 +5,22 @@ Provides tools for exporting SolidWorks models to various formats including
 STEP, IGES, STL, PDF, DWG, and image formats.
 """
 
-from typing import Any
+from typing import Any, TypeVar
 from fastmcp import FastMCP
-from pydantic import Field
+from pydantic import BaseModel, Field
 from loguru import logger
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+
+
+TInput = TypeVar("TInput", bound=BaseModel)
+
+
+def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
+    if isinstance(input_data, model_type):
+        return input_data
+    return model_type.model_validate(input_data)
 
 
 # Input schemas using Python 3.14 built-in types
@@ -768,6 +777,7 @@ async def register_export_tools(
             - Consider lighting and material settings for best results
         """
         try:
+            input_data = _normalize_input(input_data, ExportImageInput)
             if hasattr(adapter, "export_image"):
                 result = await adapter.export_image(input_data.model_dump())
                 if result.is_success:
@@ -775,6 +785,28 @@ async def register_export_tools(
                         "status": "success",
                         "message": f"Exported image: {input_data.file_path}",
                         "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to export image",
+                }
+
+            if hasattr(adapter, "export_file") and input_data.file_path:
+                result = await adapter.export_file(
+                    input_data.file_path, input_data.format_type
+                )
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Exported image: {input_data.file_path}",
+                        "export": {
+                            "file_path": input_data.file_path,
+                            "format": input_data.format_type.upper(),
+                            "dimensions": f"{input_data.width}x{input_data.height}",
+                            "view": input_data.view_orientation,
+                            "use_case": "Documentation and presentations",
+                        },
                         "execution_time": result.execution_time,
                     }
                 return {

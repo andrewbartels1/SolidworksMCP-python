@@ -215,6 +215,23 @@ class SolidWorksAdapter(ABC):
         pass
 
     @abstractmethod
+    async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
+        """Get metadata for the active model."""
+        pass
+
+    @abstractmethod
+    async def list_features(
+        self, include_suppressed: bool = False
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List model features from the feature tree."""
+        pass
+
+    @abstractmethod
+    async def list_configurations(self) -> AdapterResult[list[str]]:
+        """List configuration names for the active model."""
+        pass
+
+    @abstractmethod
     async def create_part(self) -> AdapterResult[SolidWorksModel]:
         """Create a new part document."""
         pass
