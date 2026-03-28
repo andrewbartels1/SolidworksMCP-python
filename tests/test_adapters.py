@@ -31,7 +31,7 @@ from src.solidworks_mcp.exceptions import (
     SolidWorksConnectionError,
     SolidWorksOperationError,
 )
-from src.solidworks_mcp.adapters.base import AdapterResultStatus
+from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 
 
 class TestAdapterFactory:
@@ -429,6 +429,35 @@ class TestConnectionPoolAdapterExtras:
         assert health["status"] == "healthy"
         assert health["connected"] is True
 
+    @pytest.mark.asyncio
+    async def test_connection_wrappers_forward_add_centerline(self):
+        """Test that wrapper adapters expose add_centerline passthroughs."""
+
+        class _StubAdapter:
+            async def connect(self):
+                return None
+
+            async def disconnect(self):
+                return None
+
+            async def add_centerline(self, x1, y1, x2, y2):
+                return AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data=f"centerline:{x1},{y1}->{x2},{y2}",
+                )
+
+        circuit = CircuitBreakerAdapter(adapter=_StubAdapter())
+        circuit_result = await circuit.add_centerline(0.0, 0.0, 10.0, 0.0)
+        assert circuit_result.is_success
+        assert circuit_result.data == "centerline:0.0,0.0->10.0,0.0"
+
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: _StubAdapter(), max_size=1)
+        await pool.connect()
+        pool_result = await pool.add_centerline(0.0, 0.0, 10.0, 0.0)
+        assert pool_result.is_success
+        assert pool_result.data == "centerline:0.0,0.0->10.0,0.0"
+        await pool.disconnect()
+
 
 class TestPyWin32AdapterBranches:
     """Additional PyWin32Adapter branch coverage with pure mocks."""
@@ -511,11 +540,20 @@ class TestPyWin32AdapterBranches:
         assert (await adapter.save_file()).is_error
         assert (await adapter.save_file("C:/tmp/new.sldprt")).is_error
         assert (await adapter.export_file("C:/tmp/out.bad", "badfmt")).is_error
+
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            lambda p: False,
+        )
         assert (await adapter.export_file("C:/tmp/out.step", "step")).is_error
         assert (await adapter.get_dimension("D1@Sketch1")).is_error
         assert (await adapter.set_dimension("D1@Sketch1", 20.0)).is_error
         assert (await adapter.rebuild_model()).is_error
 
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            lambda p: True,
+        )
         model.Save3 = Mock(return_value=True)
         model.SaveAs3 = Mock(return_value=True)
         model.ForceRebuild3 = Mock(return_value=True)
@@ -563,6 +601,75 @@ class TestPyWin32AdapterBranches:
         exited = await adapter.exit_sketch()
         assert exited.is_success
         assert adapter.currentSketchManager is None
+
+    @pytest.mark.asyncio
+    async def test_list_features_prefers_tree_traversal(self, monkeypatch):
+        """List features should traverse FirstFeature/GetNextFeature when available."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _Feature:
+            def __init__(self, name, feature_type, suppressed=False):
+                self.Name = name
+                self._feature_type = feature_type
+                self._suppressed = suppressed
+                self._next = None
+
+            def GetTypeName2(self):
+                return self._feature_type
+
+            def IsSuppressed(self):
+                return self._suppressed
+
+            def GetNextFeature(self):
+                return self._next
+
+        f1 = _Feature("Front Plane", "RefPlane", False)
+        f2 = _Feature("Boss-Extrude1", "Boss", False)
+        f3 = _Feature("Cut-Extrude1", "Cut", True)
+        f1._next = f2
+        f2._next = f3
+
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: f1,
+            FeatureManager=SimpleNamespace(GetFeatureCount=lambda _all: 0),
+        )
+
+        result = await adapter.list_features(include_suppressed=False)
+
+        assert result.is_success
+        assert [row["name"] for row in result.data] == ["Front Plane", "Boss-Extrude1"]
+
+    @pytest.mark.asyncio
+    async def test_list_features_falls_back_to_reverse_positions(self, monkeypatch):
+        """List features should fall back to model FeatureByPositionReverse when needed."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _Feature:
+            def __init__(self, name, feature_type):
+                self.Name = name
+                self._feature_type = feature_type
+
+            def GetTypeName2(self):
+                return self._feature_type
+
+            def IsSuppressed(self):
+                return False
+
+        by_pos = {
+            1: _Feature("Boss-Extrude1", "Boss"),
+            2: _Feature("Sketch1", "ProfileFeature"),
+        }
+
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: (_ for _ in ()).throw(RuntimeError("not available")),
+            FeatureByPositionReverse=lambda pos: by_pos.get(pos),
+            FeatureManager=SimpleNamespace(GetFeatureCount=lambda _all: 2),
+        )
+
+        result = await adapter.list_features(include_suppressed=False)
+
+        assert result.is_success
+        assert [row["name"] for row in result.data] == ["Boss-Extrude1", "Sketch1"]
 
     @pytest.mark.asyncio
     async def test_connect_disconnect_and_document_creation_paths(self, monkeypatch):
@@ -763,9 +870,15 @@ class TestPyWin32AdapterBranches:
         assert mass.data.surface_area == pytest.approx(5.0)
         assert mass.data.center_of_mass == [10.0, 20.0, 30.0]
 
-        extension.SelectByID2.assert_any_call(
-            "Top Plane", "PLANE", 0, 0, 0, False, 0, None, 0
-        )
+        plane_select_calls = [
+            call.args
+            for call in extension.SelectByID2.call_args_list
+            if len(call.args) >= 9
+            and call.args[0] == "Top Plane"
+            and call.args[1] == "PLANE"
+        ]
+        assert plane_select_calls, "Expected plane selection call for sketch creation"
+        assert any(call_args[7] in ("", None, 0) for call_args in plane_select_calls)
         assert feature_manager.FeatureExtrusion2.called
         assert feature_manager.FeatureExtruThin2.called
         assert feature_manager.FeatureRevolve2.called

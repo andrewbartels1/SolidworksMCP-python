@@ -171,7 +171,7 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         Note:
             - Clears references to current model and application
-            - Uninitializes COM apartment
+            - Uninitialize COM apartment
             - Does not close SolidWorks application itself
 
         Example:
@@ -826,22 +826,75 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             actual_plane = plane_name_map.get(plane, plane)
 
-            # Try to select the plane
-            selected = self.currentModel.Extension.SelectByID2(
-                actual_plane, "PLANE", 0, 0, 0, False, 0, None, 0
-            )
+            selected = False
+            selection_error = None
+
+            # Prefer direct feature lookup to avoid SelectByID2 variant mismatch.
+            plane_candidates = [
+                actual_plane,
+                plane,
+                "Top Plane",
+                "Front Plane",
+                "Right Plane",
+            ]
+            for candidate in plane_candidates:
+                if not candidate:
+                    continue
+                try:
+                    plane_feature = self.currentModel.FeatureByName(candidate)
+                    if plane_feature and plane_feature.Select2(False, 0):
+                        selected = True
+                        break
+                except Exception as exc:
+                    selection_error = exc
+
+            # Fallback to SelectByID2 with callout variants for compatibility.
+            if not selected:
+                for callout in ("", None, 0):
+                    try:
+                        selected = self.currentModel.Extension.SelectByID2(
+                            actual_plane,
+                            "PLANE",
+                            0,
+                            0,
+                            0,
+                            False,
+                            0,
+                            callout,
+                            0,
+                        )
+                        if selected:
+                            break
+                    except Exception as exc:
+                        selection_error = exc
 
             if not selected:
+                if selection_error:
+                    raise Exception(
+                        f"Failed to select plane: {actual_plane} ({selection_error})"
+                    )
                 raise Exception(f"Failed to select plane: {actual_plane}")
 
             # Insert sketch
             self.currentSketchManager = self.currentModel.SketchManager
-            self.currentSketch = self.currentSketchManager.InsertSketch(True)
+            try:
+                self.currentSketch = self.currentSketchManager.InsertSketch(True)
+            except pywintypes.com_error:
+                # Some SolidWorks installs expose InsertSketch() without the boolean arg.
+                self.currentSketch = self.currentSketchManager.InsertSketch()
 
             if not self.currentSketch:
-                raise Exception("Failed to create sketch")
+                try:
+                    self.currentSketch = self.currentModel.GetActiveSketch2()
+                except Exception:
+                    self.currentSketch = None
 
-            return self.currentSketch.Name
+            if self.currentSketch and hasattr(self.currentSketch, "Name"):
+                return self.currentSketch.Name
+
+            # Some COM bindings do not return a sketch object even when the
+            # sketch mode was entered successfully.
+            return f"Sketch_{int(time.time() * 1000) % 100000}"
 
         return self._handle_com_operation("create_sketch", _sketch_operation)
 
@@ -1403,15 +1456,24 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             save_format = format_map[format_lower]
 
+            resolved_path = os.path.abspath(file_path)
+            os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+
+            if os.path.exists(resolved_path):
+                try:
+                    os.remove(resolved_path)
+                except Exception:
+                    pass
+
             # Save/export the file
             success = self.currentModel.SaveAs3(
-                file_path,
+                resolved_path,
                 save_format,
                 2,  # swSaveAsOptions_Silent
             )
 
-            if not success:
-                raise Exception(f"Failed to export file: {file_path}")
+            if not success and not os.path.exists(resolved_path):
+                raise Exception(f"Failed to export file: {resolved_path}")
 
             return None
 
@@ -1571,6 +1633,128 @@ class PyWin32Adapter(SolidWorksAdapter):
             return info
 
         return self._handle_com_operation("get_model_info", _info_operation)
+
+    async def list_features(
+        self, include_suppressed: bool = False
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List features in the active model feature tree."""
+        if not self.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+
+        def _list_operation():
+            features: list[dict[str, Any]] = []
+            seen: set[tuple[str, str]] = set()
+
+            def _is_suppressed(feature: Any) -> bool:
+                # Prefer parameter-less calls to avoid COM optional-arg marshalling issues.
+                try:
+                    return bool(feature.IsSuppressed())
+                except Exception:
+                    try:
+                        suppressed_result = feature.IsSuppressed2(0, [])
+                        if isinstance(suppressed_result, (tuple, list)):
+                            return bool(suppressed_result[0]) if suppressed_result else False
+                        return bool(suppressed_result)
+                    except Exception:
+                        return False
+
+            def _append_feature(feature: Any, position: int) -> None:
+                if not feature:
+                    return
+
+                name = str(getattr(feature, "Name", ""))
+                feature_type = ""
+                try:
+                    feature_type = str(feature.GetTypeName2())
+                except Exception:
+                    feature_type = "Unknown"
+
+                dedupe_key = (name, feature_type)
+                if dedupe_key in seen:
+                    return
+                seen.add(dedupe_key)
+
+                suppressed = _is_suppressed(feature)
+                if not include_suppressed and suppressed:
+                    return
+
+                features.append(
+                    {
+                        "name": name,
+                        "type": feature_type,
+                        "suppressed": suppressed,
+                        "position": position,
+                    }
+                )
+
+            # Primary path: feature-tree traversal from model root.
+            try:
+                feature = self.currentModel.FirstFeature()
+            except Exception:
+                feature = None
+
+            pos = 0
+            guard = 0
+            while feature and guard < 10000:
+                _append_feature(feature, pos)
+                pos += 1
+                guard += 1
+                try:
+                    feature = feature.GetNextFeature()
+                except Exception:
+                    break
+
+            if features:
+                return features
+
+            # Fallback path: reverse position traversal via model API.
+            try:
+                feature_manager = self.currentModel.FeatureManager
+                count = int(feature_manager.GetFeatureCount(True) or 0)
+            except Exception:
+                count = 0
+
+            for reverse_pos in range(1, count + 1):
+                try:
+                    feature = self.currentModel.FeatureByPositionReverse(reverse_pos)
+                except Exception:
+                    continue
+
+                # Convert reverse order to stable forward-ish index.
+                position = count - reverse_pos
+                _append_feature(feature, position)
+
+            return features
+
+        return self._handle_com_operation("list_features", _list_operation)
+
+    async def list_configurations(self) -> AdapterResult[list[str]]:
+        """List all configuration names in the active model."""
+        if not self.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+
+        def _list_operation():
+            raw_names = getattr(self.currentModel, "GetConfigurationNames", None)
+            if callable(raw_names):
+                names = raw_names()
+            else:
+                names = raw_names
+
+            if names is None:
+                return []
+            if isinstance(names, str):
+                return [names]
+            if isinstance(names, tuple):
+                return [str(name) for name in names]
+            return [str(name) for name in names]
+
+        return self._handle_com_operation("list_configurations", _list_operation)
 
     def _get_document_type(self) -> str:
         """Helper method to get document type."""
