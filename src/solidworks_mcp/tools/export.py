@@ -18,6 +18,16 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
+    """Execute normalize input.
+    
+    Args:
+        input_data (Any): Describe input data.
+        model_type (type[TInput]): Describe model type.
+    
+    Returns:
+        TInput: Describe the returned value.
+    
+    """
     if isinstance(input_data, model_type):
         return input_data
     return model_type.model_validate(input_data)
@@ -63,6 +73,15 @@ class ExportImageInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.file_path is None:
             self.file_path = self.output_path
         if self.image_format is not None:
@@ -89,6 +108,15 @@ class ExportSTEPInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.file_path is None:
             self.file_path = self.output_path
 
@@ -109,6 +137,15 @@ class ExportIGESInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.file_path is None:
             self.file_path = self.output_path
 
@@ -132,6 +169,15 @@ class ExportSTLInput(CompatInput):
     units: str = Field(default="mm", description="Units for export")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.file_path is None:
             self.file_path = self.output_path
 
@@ -151,6 +197,15 @@ class ExportPDFInput(CompatInput):
     color_mode: str = Field(default="Color", description="Color mode")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.file_path is None:
             self.file_path = self.output_path
 
@@ -176,6 +231,15 @@ class ExportDWGInput(CompatInput):
     layer_mapping: bool = Field(default=False, description="Enable layer mapping")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.file_path is None:
             self.file_path = self.output_path
         if self.autocad_version is not None:
@@ -204,6 +268,15 @@ class BatchExportInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.format_type is None:
             self.format_type = self.export_format
         if self.file_pattern:

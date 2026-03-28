@@ -49,6 +49,12 @@ class SolidWorksMCPServer:
     """Main SolidWorks MCP Server class."""
 
     def __init__(self, config: SolidWorksMCPConfig):
+        """Initialize this object.
+        
+        Args:
+            config (SolidWorksMCPConfig): Describe config.
+        
+        """
         self.config = config
         self.state = MCPServerState(config=config)
         self.mcp = FastMCP("SolidWorks MCP Server")
@@ -67,14 +73,35 @@ class SolidWorksMCPServer:
         original_tool = mcp_runtime.tool
 
         def compat_tool(*args: Any, **kwargs: Any) -> Any:
+            """Execute compat tool.
+            
+            Returns:
+                Any: Describe the returned value.
+            
+            """
             decorator = original_tool(*args, **kwargs)
 
             def _wrap(func: Any) -> Any:
+                """Execute wrap.
+                
+                Args:
+                    func (Any): Describe func.
+                
+                Returns:
+                    Any: Describe the returned value.
+                
+                """
                 wrapped = decorator(func)
 
                 async def _compat_runner(
                     *runner_args: Any, **runner_kwargs: Any
                 ) -> Any:
+                    """Execute compat runner.
+                    
+                    Returns:
+                        Any: Describe the returned value.
+                    
+                    """
                     payload = runner_kwargs.get("input_data")
                     if payload is None and runner_args:
                         payload = runner_args[0]
@@ -160,6 +187,8 @@ class SolidWorksMCPServer:
             logger.warning(
                 "Skipping PydanticAI agent setup because OPENAI_API_KEY is not configured"
             )
+            self.agent = None
+            return
 
         if FastMCPToolset is None:
             logger.warning(

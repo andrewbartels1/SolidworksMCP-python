@@ -43,8 +43,23 @@ def require_auth(config: SolidWorksMCPConfig) -> Callable[[F], F]:
     """
 
     def decorator(func: F) -> F:
+        """Execute decorator.
+
+        Args:
+            func (F): Describe func.
+
+        Returns:
+            F: Describe the returned value.
+        """
+
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Execute wrapper.
+
+            Returns:
+                Any: Describe the returned value.
+            """
+
             # Authentication logic would go here
             # For now, just pass through
             return await func(*args, **kwargs)

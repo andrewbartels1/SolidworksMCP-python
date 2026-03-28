@@ -18,6 +18,16 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
+    """Execute normalize input.
+    
+    Args:
+        input_data (Any): Describe input data.
+        model_type (type[TInput]): Describe model type.
+    
+    Returns:
+        TInput: Describe the returned value.
+    
+    """
     if isinstance(input_data, model_type):
         return input_data
     return model_type.model_validate(input_data)
@@ -35,6 +45,15 @@ class CreateSketchInput(CompatInput):
     sketch_name: str | None = Field(default=None, description="Sketch name alias")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if not self.plane.strip():
             raise ValueError("plane is required")
 
@@ -53,6 +72,15 @@ class AddLineInput(CompatInput):
     construction: bool = Field(default=False, description="Construction geometry flag")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         self.x1 = self.x1 if self.x1 is not None else self.start_x
         self.y1 = self.y1 if self.y1 is not None else self.start_y
         self.x2 = self.x2 if self.x2 is not None else self.end_x
@@ -68,6 +96,15 @@ class AddCircleInput(CompatInput):
     construction: bool = Field(default=False, description="Construction geometry flag")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.radius <= 0:
             raise ValueError("radius must be positive")
 
@@ -94,6 +131,15 @@ class AddRectangleInput(CompatInput):
     construction: bool = Field(default=False, description="Construction geometry flag")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         self.x1 = self.x1 if self.x1 is not None else self.corner1_x
         self.y1 = self.y1 if self.y1 is not None else self.corner1_y
         self.x2 = self.x2 if self.x2 is not None else self.corner2_x
@@ -162,6 +208,15 @@ class TutorialSimpleHoleInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.diameter <= 0:
             raise ValueError("diameter must be positive")
         if self.depth is not None and self.depth <= 0:

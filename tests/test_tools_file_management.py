@@ -482,7 +482,9 @@ class TestFileManagementTools:
         fallback_server._tools = []
 
         def _tool_decorator():
+            """Test helper for tool decorator."""
             def _register(func):
+                """Test helper for register."""
                 fallback_server._tools.append(Mock(name=func.__name__, handler=func))
                 fallback_server._tools[-1].name = func.__name__
                 return func

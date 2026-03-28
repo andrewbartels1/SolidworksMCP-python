@@ -42,6 +42,18 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         timeout: float | None = None,
         config: dict[str, object] | None = None,
     ) -> None:
+        """Initialize this object.
+        
+        Args:
+            adapter_factory (Callable[[], SolidWorksAdapter] | None): Describe adapter factory.
+            pool_size (int): Describe pool size.
+            max_retries (int): Describe max retries.
+            create_connection (Callable[[], SolidWorksAdapter] | None): Describe create connection.
+            max_size (int | None): Describe max size.
+            timeout (float | None): Describe timeout.
+            config (dict[str, object] | None): Describe config.
+        
+        """
         if adapter_factory is None and create_connection is not None:
             adapter_factory = create_connection
         if max_size is not None:
@@ -116,19 +128,52 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     @property
     def size(self) -> int:
+        """Execute size.
+        
+        Returns:
+            int: Describe the returned value.
+        
+        """
         return len(self.pool)
 
     @property
     def active_connections(self) -> int:
+        """Execute active connections.
+        
+        Returns:
+            int: Describe the returned value.
+        
+        """
         return max(0, len(self.pool) - self.available_adapters.qsize())
 
     async def acquire(self) -> SolidWorksAdapter:
+        """Execute acquire.
+        
+        Returns:
+            SolidWorksAdapter: Describe the returned value.
+        
+        """
         return await self._get_adapter(timeout=self.timeout)
 
     async def release(self, adapter: SolidWorksAdapter) -> None:
+        """Execute release.
+        
+        Args:
+            adapter (SolidWorksAdapter): Describe adapter.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         await self._return_adapter(adapter)
 
     async def cleanup(self) -> None:
+        """Execute cleanup.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         await self.disconnect()
 
     async def _initialize_pool(self) -> None:
@@ -323,6 +368,15 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Create part using pool."""
 
         async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
+            """Execute op.
+            
+            Args:
+                adapter (SolidWorksAdapter): Describe adapter.
+            
+            Returns:
+                AdapterResult[SolidWorksModel]: Describe the returned value.
+            
+            """
             if name is None and units is None:
                 return await adapter.create_part()
             result = await self._invoke_with_optional_args(
@@ -336,6 +390,15 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Create assembly using pool."""
 
         async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
+            """Execute op.
+            
+            Args:
+                adapter (SolidWorksAdapter): Describe adapter.
+            
+            Returns:
+                AdapterResult[SolidWorksModel]: Describe the returned value.
+            
+            """
             if name is None:
                 return await adapter.create_assembly()
             result = await self._invoke_with_optional_args(
@@ -487,6 +550,14 @@ class ConnectionPool:
         max_size: int = 3,
         timeout: float = 30.0,
     ) -> None:
+        """Initialize this object.
+        
+        Args:
+            create_connection (Callable[[], object | Awaitable[object]]): Describe create connection.
+            max_size (int): Describe max size.
+            timeout (float): Describe timeout.
+        
+        """
         self._create_connection = create_connection
         self._max_size = max_size
         self._timeout = timeout
@@ -496,13 +567,31 @@ class ConnectionPool:
 
     @property
     def size(self) -> int:
+        """Execute size.
+        
+        Returns:
+            int: Describe the returned value.
+        
+        """
         return len(self._all_connections)
 
     @property
     def active_connections(self) -> int:
+        """Execute active connections.
+        
+        Returns:
+            int: Describe the returned value.
+        
+        """
         return len(self._in_use)
 
     async def _new_connection(self) -> object:
+        """Execute new connection.
+        
+        Returns:
+            object: Describe the returned value.
+        
+        """
         conn = self._create_connection()
         if asyncio.iscoroutine(conn):
             conn = await conn
@@ -510,6 +599,12 @@ class ConnectionPool:
         return conn
 
     async def acquire(self) -> object:
+        """Execute acquire.
+        
+        Returns:
+            object: Describe the returned value.
+        
+        """
         if self._available:
             conn = self._available.pop()
             self._in_use.add(id(conn))
@@ -531,12 +626,27 @@ class ConnectionPool:
         raise TimeoutError("No connection available within timeout")
 
     async def release(self, conn: object) -> None:
+        """Execute release.
+        
+        Args:
+            conn (object): Describe conn.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         conn_id = id(conn)
         if conn_id in self._in_use:
             self._in_use.remove(conn_id)
             self._available.append(conn)
 
     async def cleanup(self) -> None:
+        """Execute cleanup.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         for conn in self._all_connections:
             close = getattr(conn, "close", None)
             if close is None:

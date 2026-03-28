@@ -36,11 +36,13 @@ REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
 
 
 def _real_solidworks_enabled() -> bool:
+    """Test helper for real solidworks enabled."""
     value = os.getenv(REAL_SW_ENV_FLAG, "").strip().lower()
     return value in {"1", "true", "yes", "on"}
 
 
 def _find_tool(server: SolidWorksMCPServer, tool_name: str):
+    """Test helper for find tool."""
     for tool in server.mcp._tools:
         if tool.name == tool_name:
             return tool.func
@@ -48,11 +50,13 @@ def _find_tool(server: SolidWorksMCPServer, tool_name: str):
 
 
 def _tool_names(server: SolidWorksMCPServer) -> list[str]:
+    """Test helper for tool names."""
     return sorted(tool.name for tool in server.mcp._tools)
 
 
 @pytest_asyncio.fixture
 async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
+    """Test helper for real server."""
     if platform.system() != "Windows":
         pytest.skip("Real SolidWorks integration tests require Windows")
 
@@ -105,6 +109,7 @@ async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
 
 @pytest.fixture
 def integration_output_dir() -> Path:
+    """Test helper for integration output dir."""
     output_dir = Path("tests") / ".generated" / "solidworks_integration"
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir

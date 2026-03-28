@@ -18,18 +18,22 @@ class _FakeServer:
     fail_with: BaseException | None = None
 
     def __init__(self, _config):
+        """Test helper for init."""
         self.config = _config
 
     async def start(self) -> None:
+        """Test helper for start."""
         type(self).start_calls += 1
         if type(self).fail_with is not None:
             raise type(self).fail_with
 
     async def stop(self) -> None:
+        """Test helper for stop."""
         type(self).stop_calls += 1
 
 
 def _make_config() -> SimpleNamespace:
+    """Test helper for make config."""
     return SimpleNamespace(
         deployment_mode=DeploymentMode.LOCAL,
         host="localhost",

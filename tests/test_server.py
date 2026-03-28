@@ -500,10 +500,12 @@ class TestSolidWorksMCPServer:
 
         @server.mcp.tool()
         async def sample_with_input(payload):
+            """Test helper for sample with input."""
             return {"status": "success", "message": "ok", "result": {"x": 1}}
 
         @server.mcp.tool()
         async def sample_no_args():
+            """Test helper for sample no args."""
             return {"status": "success", "message": "ok", "value": 7}
 
         by_name = {tool.name: tool.handler for tool in server.mcp._tools}
@@ -652,6 +654,7 @@ class TestServerCompatRunnerEdgeCases:
         @server.mcp.tool()
         async def multi_one_dict(payload):
             # Returns two non-dict items and one dict item
+            """Test helper for multi one dict."""
             return {
                 "status": "success",
                 "message": "ok",
@@ -670,6 +673,7 @@ class TestServerCompatRunnerEdgeCases:
 
         @server.mcp.tool()
         async def multi_many_dicts(payload):
+            """Test helper for multi many dicts."""
             return {
                 "status": "success",
                 "message": "ok",
@@ -690,6 +694,7 @@ class TestServerCompatRunnerEdgeCases:
 
         @server.mcp.tool()
         async def with_data_key(payload):
+            """Test helper for with data key."""
             return {"status": "success", "message": "ok", "data": {"existing": True}}
 
         by_name = {tool.name: tool.handler for tool in server.mcp._tools}
@@ -703,6 +708,7 @@ class TestServerCompatRunnerEdgeCases:
 
         @server.mcp.tool()
         async def takes_one(payload):
+            """Test helper for takes one."""
             return {
                 "status": "success",
                 "message": "ok",
@@ -733,6 +739,7 @@ class TestServerMainEntrypoint:
 
     @pytest.mark.asyncio
     async def test_main_applies_cli_overrides_and_starts(self):
+        """Test main applies cli overrides and starts."""
         cfg = SolidWorksMCPConfig()
         server_inst = Mock()
         server_inst.start = AsyncMock()
@@ -767,6 +774,7 @@ class TestServerMainEntrypoint:
 
     @pytest.mark.asyncio
     async def test_main_handles_keyboard_interrupt(self):
+        """Test main handles keyboard interrupt."""
         cfg = SolidWorksMCPConfig()
         server_inst = Mock()
         server_inst.start = AsyncMock(side_effect=KeyboardInterrupt())
@@ -794,6 +802,7 @@ class TestServerMainEntrypoint:
 
     @pytest.mark.asyncio
     async def test_main_reraises_non_keyboard_exception(self):
+        """Test main reraises non keyboard exception."""
         cfg = SolidWorksMCPConfig()
         server_inst = Mock()
         server_inst.start = AsyncMock(side_effect=RuntimeError("boom"))

@@ -34,12 +34,30 @@ class _BoolCallable:
     """Compatibility shim that behaves as both bool and callable."""
 
     def __init__(self, getter: Callable[[], bool]) -> None:
+        """Initialize this object.
+        
+        Args:
+            getter (Callable[[], bool]): Describe getter.
+        
+        """
         self._getter = getter
 
     def __call__(self) -> bool:
+        """Execute call.
+        
+        Returns:
+            bool: Describe the returned value.
+        
+        """
         return bool(self._getter())
 
     def __bool__(self) -> bool:
+        """Execute bool.
+        
+        Returns:
+            bool: Describe the returned value.
+        
+        """
         return bool(self._getter())
 
 
@@ -47,13 +65,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     """Mock adapter that simulates SolidWorks operations."""
 
     def __init__(self, config: object | None = None) -> None:
+        """Initialize this object.
+        
+        Args:
+            config (object | None): Describe config.
+        
+        """
         super().__init__(config)
-        if isinstance(config, dict):
-            cfg: dict[str, Any] = config
-        elif hasattr(config, "model_dump"):
-            cfg = dict(getattr(config, "model_dump")())
-        else:
-            cfg = {}
+        cfg: dict[str, Any] = dict(self.config_dict)
         self._connected = False
         self._current_model: SolidWorksModel | None = None
         self._models: dict[str, SolidWorksModel] = {}
@@ -74,6 +93,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._simulate_errors = bool(cfg.get("simulate_errors", False))
 
     def __getattribute__(self, name: str) -> Any:
+        """Execute getattribute.
+        
+        Args:
+            name (str): Describe name.
+        
+        Returns:
+            Any: Describe the returned value.
+        
+        """
         if name == "is_connected":
             return object.__getattribute__(self, "_is_connected_proxy")
         return object.__getattribute__(self, name)
@@ -538,7 +566,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"],
         )
 
-    async def create_sketch(self, plane: str) -> AdapterResult[str]:
+    async def create_sketch(self, plane: str) -> AdapterResult[dict[str, Any]]:
         """Mock creating a sketch."""
         if not self._current_model:
             # Legacy tests start sketching immediately after connect.
@@ -553,7 +581,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
-            data=sketch_id,
+            data={"id": sketch_id, "name": sketch_id, "sketch_name": sketch_id, "plane": plane},
             execution_time=self._delays["sketch_operation"],
         )
 

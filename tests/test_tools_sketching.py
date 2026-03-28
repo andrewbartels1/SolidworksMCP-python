@@ -377,16 +377,19 @@ class TestSketchingToolsBranchCoverage:
     # ── Input model aliases & validation ──────────────────────────────────
 
     def test_add_line_input_alias_resolution(self):
+        """Test add line input alias resolution."""
         inp = AddLineInput(start_x=1.0, start_y=2.0, end_x=3.0, end_y=4.0)
         assert inp.x1 == 1.0 and inp.y1 == 2.0 and inp.x2 == 3.0 and inp.y2 == 4.0
 
     def test_add_rectangle_input_alias_resolution(self):
+        """Test add rectangle input alias resolution."""
         inp = AddRectangleInput(
             corner1_x=0.0, corner1_y=0.0, corner2_x=5.0, corner2_y=6.0
         )
         assert inp.x1 == 0.0 and inp.y1 == 0.0 and inp.x2 == 5.0 and inp.y2 == 6.0
 
     def test_tutorial_hole_input_validation_errors(self):
+        """Test tutorial hole input validation errors."""
         with pytest.raises(ValueError):
             TutorialSimpleHoleInput(
                 plane="Top", center_x=0, center_y=0, diameter=0, depth=5
@@ -546,6 +549,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_sketch_mirror_success_path(self, mcp_server, mock_config):
+        """Test sketch mirror success path."""
         stub = SimpleNamespace()
         stub.sketch_mirror = AsyncMock(
             return_value=Mock(is_success=True, data="Mirror1", execution_time=0.1)
@@ -558,6 +562,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_sketch_offset_outward_and_inward(self, mcp_server, mock_config):
+        """Test sketch offset outward and inward."""
         stub = SimpleNamespace()
         stub.sketch_offset = AsyncMock(
             return_value=Mock(is_success=True, data="Offset1", execution_time=0.1)
@@ -584,6 +589,7 @@ class TestSketchingToolsBranchCoverage:
     async def test_sketch_tutorial_hole_create_sketch_failure(
         self, mcp_server, mock_config
     ):
+        """Test sketch tutorial hole create sketch failure."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(
             return_value=Mock(is_success=False, error="sketch failed")
@@ -599,6 +605,7 @@ class TestSketchingToolsBranchCoverage:
     async def test_sketch_tutorial_hole_add_circle_failure(
         self, mcp_server, mock_config
     ):
+        """Test sketch tutorial hole add circle failure."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(
             return_value=Mock(is_success=True, data="S1", execution_time=0.1)
@@ -617,6 +624,7 @@ class TestSketchingToolsBranchCoverage:
     async def test_sketch_tutorial_hole_exit_sketch_failure(
         self, mcp_server, mock_config
     ):
+        """Test sketch tutorial hole exit sketch failure."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(
             return_value=Mock(is_success=True, data="S1", execution_time=0.1)
@@ -636,6 +644,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_sketch_tutorial_hole_exception(self, mcp_server, mock_config):
+        """Test sketch tutorial hole exception."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(side_effect=RuntimeError("boom"))
         await register_sketching_tools(mcp_server, stub, mock_config)
@@ -649,6 +658,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_tutorial_hole_circle_failure(self, mcp_server, mock_config):
+        """Test tutorial hole circle failure."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(
             return_value=Mock(is_success=True, data="S1", execution_time=0.1)
@@ -669,6 +679,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_tutorial_hole_exit_failure(self, mcp_server, mock_config):
+        """Test tutorial hole exit failure."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(
             return_value=Mock(is_success=True, data="S1", execution_time=0.1)
@@ -692,6 +703,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_tutorial_hole_cut_failure(self, mcp_server, mock_config):
+        """Test tutorial hole cut failure."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(
             return_value=Mock(is_success=True, data="S1", execution_time=0.1)
@@ -751,6 +763,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_tutorial_hole_exception_path(self, mcp_server, mock_config):
+        """Test tutorial hole exception path."""
         stub = SimpleNamespace()
         stub.create_sketch = AsyncMock(side_effect=RuntimeError("boom"))
         await register_sketching_tools(mcp_server, stub, mock_config)

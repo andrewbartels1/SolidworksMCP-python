@@ -188,6 +188,7 @@ class TestCircuitBreaker:
         cb = CircuitBreakerAdapter(failure_threshold=3, recovery_timeout=10.0)
 
         async def success_operation():
+            """Test helper for success operation."""
             return "success"
 
         # Successful operations should pass through
@@ -202,6 +203,7 @@ class TestCircuitBreaker:
         cb = CircuitBreakerAdapter(failure_threshold=2, recovery_timeout=10.0)
 
         async def failing_operation():
+            """Test helper for failing operation."""
             raise Exception("Operation failed")
 
         # First failure
@@ -226,6 +228,7 @@ class TestCircuitBreaker:
         cb = CircuitBreakerAdapter(failure_threshold=1, recovery_timeout=0.1)
 
         async def failing_then_success():
+            """Test helper for failing then success."""
             if cb.failure_count == 0:
                 raise Exception("First call fails")
             return "success"
@@ -255,6 +258,7 @@ class TestConnectionPool:
         """Test connection pool creation and basic functionality."""
 
         async def create_connection():
+            """Test helper for create connection."""
             mock_conn = Mock()
             mock_conn.is_connected = True
             mock_conn.close = AsyncMock()
@@ -272,6 +276,7 @@ class TestConnectionPool:
         """Test acquiring and releasing connections."""
 
         async def create_connection():
+            """Test helper for create connection."""
             mock_conn = Mock()
             mock_conn.is_connected = True
             mock_conn.close = AsyncMock()
@@ -304,6 +309,7 @@ class TestConnectionPool:
         connection_count = 0
 
         async def create_connection():
+            """Test helper for create connection."""
             nonlocal connection_count
             connection_count += 1
             mock_conn = Mock()
@@ -332,6 +338,7 @@ class TestConnectionPool:
         created_connections = []
 
         async def create_connection():
+            """Test helper for create connection."""
             mock_conn = Mock()
             mock_conn.is_connected = True
             mock_conn.close = AsyncMock()
@@ -360,6 +367,7 @@ class TestConnectionPool:
         """Test legacy ConnectionPool timeout when max size is exhausted."""
 
         async def create_connection():
+            """Test helper for create connection."""
             mock_conn = Mock()
             mock_conn.close = AsyncMock()
             return mock_conn
@@ -379,6 +387,7 @@ class TestConnectionPool:
         """Test release no-op branch for connection not tracked in in-use set."""
 
         async def create_connection():
+            """Test helper for create connection."""
             mock_conn = Mock()
             mock_conn.close = AsyncMock()
             return mock_conn
@@ -434,13 +443,17 @@ class TestConnectionPoolAdapterExtras:
         """Test that wrapper adapters expose add_centerline passthroughs."""
 
         class _StubAdapter:
+            """Test suite for StubAdapter."""
             async def connect(self):
+                """Test helper for connect."""
                 return None
 
             async def disconnect(self):
+                """Test helper for disconnect."""
                 return None
 
             async def add_centerline(self, x1, y1, x2, y2):
+                """Test helper for add centerline."""
                 return AdapterResult(
                     status=AdapterResultStatus.SUCCESS,
                     data=f"centerline:{x1},{y1}->{x2},{y2}",
@@ -464,6 +477,7 @@ class TestPyWin32AdapterBranches:
 
     @staticmethod
     def _build_adapter(monkeypatch) -> PyWin32Adapter:
+        """Test helper for build adapter."""
         monkeypatch.setattr(
             "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
@@ -608,19 +622,24 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         class _Feature:
+            """Test suite for Feature."""
             def __init__(self, name, feature_type, suppressed=False):
+                """Test helper for init."""
                 self.Name = name
                 self._feature_type = feature_type
                 self._suppressed = suppressed
                 self._next = None
 
             def GetTypeName2(self):
+                """Test helper for GetTypeName2."""
                 return self._feature_type
 
             def IsSuppressed(self):
+                """Test helper for IsSuppressed."""
                 return self._suppressed
 
             def GetNextFeature(self):
+                """Test helper for GetNextFeature."""
                 return self._next
 
         f1 = _Feature("Front Plane", "RefPlane", False)
@@ -645,14 +664,18 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         class _Feature:
+            """Test suite for Feature."""
             def __init__(self, name, feature_type):
+                """Test helper for init."""
                 self.Name = name
                 self._feature_type = feature_type
 
             def GetTypeName2(self):
+                """Test helper for GetTypeName2."""
                 return self._feature_type
 
             def IsSuppressed(self):
+                """Test helper for IsSuppressed."""
                 return False
 
         by_pos = {
@@ -679,18 +702,23 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         class _Feature:
+            """Test suite for Feature."""
             Name = "SuppressedCut"
 
             def GetTypeName2(self):
+                """Test helper for GetTypeName2."""
                 return "Cut"
 
             def IsSuppressed(self):
+                """Test helper for IsSuppressed."""
                 raise RuntimeError("IsSuppressed unavailable")
 
             def IsSuppressed2(self, *_args):
+                """Test helper for IsSuppressed2."""
                 return (True,)
 
             def GetNextFeature(self):
+                """Test helper for GetNextFeature."""
                 return None
 
         adapter.currentModel = SimpleNamespace(
@@ -1000,6 +1028,7 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         class _FakeComError(Exception):
+            """Test suite for FakeComError."""
             pass
 
         monkeypatch.setattr(
@@ -1009,12 +1038,15 @@ class TestPyWin32AdapterBranches:
         )
 
         class _PlaneFeature:
+            """Test suite for PlaneFeature."""
             def Select2(self, *_args):
+                """Test helper for Select2."""
                 return True
 
         feature_calls = {"count": 0}
 
         def _feature_by_name(_name):
+            """Test helper for feature by name."""
             feature_calls["count"] += 1
             if feature_calls["count"] == 1:
                 raise RuntimeError("feature lookup failed")
@@ -1102,20 +1134,26 @@ class TestPyWin32AdapterBranches:
         assert (await adapter.rebuild_model()).is_error
 
         class _Feature:
+            """Test suite for Feature."""
             def __init__(self, name, next_feature=None):
+                """Test helper for init."""
                 self.Name = name
                 self._next = next_feature
 
             def IsSuppressed(self):
+                """Test helper for IsSuppressed."""
                 raise RuntimeError("fallback")
 
             def IsSuppressed2(self, *_args):
+                """Test helper for IsSuppressed2."""
                 return 1
 
             def GetTypeName2(self):
+                """Test helper for GetTypeName2."""
                 raise RuntimeError("unknown type")
 
             def GetNextFeature(self):
+                """Test helper for GetNextFeature."""
                 raise RuntimeError("walk break")
 
         dup = _Feature("Dup")
@@ -1181,11 +1219,14 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         class _ModelWithTitleProperty:
+            """Test suite for ModelWithTitleProperty."""
             GetTitle = 123
             Title = "FromTitleProperty"
 
         class _ModelUntitled:
+            """Test suite for ModelUntitled."""
             def GetTitle(self):
+                """Test helper for GetTitle."""
                 raise RuntimeError("title fail")
 
             Title = None
@@ -1253,20 +1294,26 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         class _Feature:
+            """Test suite for Feature."""
             def __init__(self, name: str, next_feature=None):
+                """Test helper for init."""
                 self.Name = name
                 self._next = next_feature
 
             def IsSuppressed(self):
+                """Test helper for IsSuppressed."""
                 raise RuntimeError("primary suppression unavailable")
 
             def IsSuppressed2(self, *_args):
+                """Test helper for IsSuppressed2."""
                 raise RuntimeError("secondary suppression unavailable")
 
             def GetTypeName2(self):
+                """Test helper for GetTypeName2."""
                 return "Boss"
 
             def GetNextFeature(self):
+                """Test helper for GetNextFeature."""
                 return self._next
 
         duplicate_1 = _Feature("Dup")
@@ -1301,6 +1348,7 @@ class TestMockAdapterAdditionalCoverage:
 
     @pytest.mark.asyncio
     async def test_uncovered_mock_adapter_branches(self):
+        """Test uncovered mock adapter branches."""
         adapter = MockSolidWorksAdapter({})
 
         # Cover bool/callable compatibility shim and direct method path.
@@ -1334,6 +1382,7 @@ class TestPyWin32AdapterAdditionalCoverage:
 
     @staticmethod
     def _build_adapter(monkeypatch) -> PyWin32Adapter:
+        """Test helper for build adapter."""
         monkeypatch.setattr(
             "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
@@ -1349,6 +1398,7 @@ class TestPyWin32AdapterAdditionalCoverage:
         return PyWin32Adapter({})
 
     def test_platform_guard_raises_on_non_windows(self, monkeypatch):
+        """Test platform guard raises on non windows."""
         monkeypatch.setattr(
             "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
@@ -1361,6 +1411,7 @@ class TestPyWin32AdapterAdditionalCoverage:
 
     @pytest.mark.asyncio
     async def test_connect_failure_and_com_error_branch(self, monkeypatch):
+        """Test connect failure and com error branch."""
         adapter = self._build_adapter(monkeypatch)
 
         monkeypatch.setattr(
@@ -1384,6 +1435,7 @@ class TestPyWin32AdapterAdditionalCoverage:
 
     @pytest.mark.asyncio
     async def test_open_create_and_feature_failure_paths(self, monkeypatch):
+        """Test open create and feature failure paths."""
         adapter = self._build_adapter(monkeypatch)
 
         fake_app = SimpleNamespace(
@@ -1464,6 +1516,7 @@ class TestAdapterCompatibilityFixes:
     async def test_pywin32_health_check_with_property_revision_number(
         self, monkeypatch
     ):
+        """Test pywin32 health check with property revision number."""
         monkeypatch.setattr(
             "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
@@ -1486,6 +1539,7 @@ class TestAdapterCompatibilityFixes:
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_create_part_accepts_optional_args(self):
+        """Test circuit breaker create part accepts optional args."""
         base = MockSolidWorksAdapter({})
         await base.connect()
         cb = CircuitBreakerAdapter(base)
@@ -1497,8 +1551,11 @@ class TestAdapterCompatibilityFixes:
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_create_assembly_name_fallback(self):
+        """Test circuit breaker create assembly name fallback."""
         class NoArgAssemblyAdapter(MockSolidWorksAdapter):
+            """Test suite for NoArgAssemblyAdapter."""
             async def create_assembly(self):  # type: ignore[override]
+                """Test helper for create assembly."""
                 return await super().create_assembly()
 
         base = NoArgAssemblyAdapter({})
@@ -1511,6 +1568,7 @@ class TestAdapterCompatibilityFixes:
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_exposes_save_file_passthrough(self):
+        """Test circuit breaker exposes save file passthrough."""
         base = MockSolidWorksAdapter({})
         await base.connect()
         await base.create_part("SaveCompat", "mm")

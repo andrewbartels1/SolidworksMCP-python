@@ -50,6 +50,7 @@ nav:
   - Tutorials:
       - Sample Models Guide: user-guide/sample-models-guide.md
       - Screenshot Equivalence: user-guide/screenshot-equivalence.md
+  - API Reference: api/
   - Planning:
       - GUI Visualization Plan: PLAN_GUI_VISUALIZATION.md
       - Database Workflows Plan: PLAN_DATABASE_WORKFLOWS.md
@@ -116,13 +117,21 @@ plugins:
   - search:
       separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - awesome-pages
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
   - mkdocstrings:
       enabled: true
       default_handler: python
       handlers:
         python:
+          paths: [src]
           options:
-            show_source: false
+            docstring_style: google
+            show_source: true
             show_root_heading: true
             show_category_heading: true
             merge_init_into_class: true

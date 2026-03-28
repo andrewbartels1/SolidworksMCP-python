@@ -27,6 +27,15 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    """Execute getattr.
+    
+    Args:
+        name (str): Describe name.
+    
+    Returns:
+        Any: Describe the returned value.
+    
+    """
     if name in {"create_server", "main"}:
         from .server import create_server, main
 
@@ -40,4 +49,10 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
+    """Execute dir.
+    
+    Returns:
+        list[str]: Describe the returned value.
+    
+    """
     return sorted(set(globals()) | set(__all__))

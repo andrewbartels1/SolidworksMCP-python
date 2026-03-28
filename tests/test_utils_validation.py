@@ -14,16 +14,20 @@ from src.solidworks_mcp.exceptions import SolidWorksMCPError
 
 
 class _VersionInfo:
+    """Test suite for VersionInfo."""
     def __init__(self, major: int, minor: int):
+        """Test helper for init."""
         self.major = major
         self.minor = minor
 
     def __lt__(self, other):
+        """Test helper for lt."""
         return (self.major, self.minor) < other
 
 
 @pytest.mark.asyncio
 async def test_validate_environment_platform_warning_branches(monkeypatch):
+    """Test validate environment platform warning branches."""
     warning = Mock()
     monkeypatch.setattr(validation_mod.logger, "warning", warning)
     monkeypatch.setattr(validation_mod.platform, "system", lambda: "Linux")
@@ -42,6 +46,7 @@ async def test_validate_environment_platform_warning_branches(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validate_environment_windows_and_version_guard(monkeypatch):
+    """Test validate environment windows and version guard."""
     warning = Mock()
     monkeypatch.setattr(validation_mod.logger, "warning", warning)
     monkeypatch.setattr(validation_mod.platform, "system", lambda: "Windows")
@@ -63,6 +68,7 @@ async def test_validate_environment_windows_and_version_guard(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validate_environment_windows_validation_invoked(monkeypatch):
+    """Test validate environment windows validation invoked."""
     monkeypatch.setattr(validation_mod.platform, "system", lambda: "Windows")
     validator = AsyncMock()
     monkeypatch.setattr(validation_mod, "_validate_solidworks_installation", validator)
@@ -80,6 +86,7 @@ async def test_validate_environment_windows_validation_invoked(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validate_solidworks_installation_paths(monkeypatch):
+    """Test validate solidworks installation paths."""
     warning = Mock()
     info = Mock()
     monkeypatch.setattr(validation_mod.logger, "warning", warning)
@@ -108,12 +115,14 @@ async def test_validate_solidworks_installation_paths(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validate_solidworks_installation_import_error(monkeypatch):
+    """Test validate solidworks installation import error."""
     warning = Mock()
     monkeypatch.setattr(validation_mod.logger, "warning", warning)
 
     real_import = builtins.__import__
 
     def _import(name, globals=None, locals=None, fromlist=(), level=0):
+        """Test helper for import."""
         if name == "win32com.client":
             raise ImportError("missing win32com")
         return real_import(name, globals, locals, fromlist, level)

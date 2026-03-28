@@ -28,6 +28,15 @@ class MassPropertiesInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         valid_units = {"metric", "kg", "g", "lb"}
         if self.units not in valid_units:
             raise ValueError(f"units must be one of {sorted(valid_units)}")

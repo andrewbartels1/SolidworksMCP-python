@@ -352,16 +352,20 @@ def test_discover_com_objects_and_summary_with_fake_app() -> None:
     """discover_com_objects should index methods/properties and create summary."""
 
     class _FakeApp:
+        """Test suite for FakeApp."""
         revision = "33.2"
 
         def RevisionNumber(self):
+            """Test helper for RevisionNumber."""
             return self.revision
 
         def OpenDoc6(self):
+            """Test helper for OpenDoc6."""
             return None
 
         @property
         def Visible(self):
+            """Test helper for Visible."""
             return True
 
     discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-com"))
@@ -383,6 +387,7 @@ def test_discover_vba_references_handles_available_and_error(
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     def _get_object(_unused: str, name: str):
+        """Test helper for get object."""
         if name in {"VBA", "SldWorks"}:
             return object()
         if name == "Office":
@@ -522,10 +527,13 @@ async def test_discover_solidworks_docs_tool_success_path(
     assert discover_tool is not None
 
     class _FakeDiscovery:
+        """Test suite for FakeDiscovery."""
         def __init__(self, output_dir=None):
+            """Test helper for init."""
             self.output_dir = output_dir
 
         def discover_all(self):
+            """Test helper for discover all."""
             return {
                 "com_objects": {
                     "ISldWorks": {"methods": ["OpenDoc6"], "properties": ["Visible"]}
@@ -537,11 +545,13 @@ async def test_discover_solidworks_docs_tool_success_path(
             }
 
         def save_index(self, filename="solidworks_docs_index.json"):
+            """Test helper for save index."""
             path = temp_dir / filename
             path.write_text("{}", encoding="utf-8")
             return path
 
         def create_search_summary(self):
+            """Test helper for create search summary."""
             return {
                 "total_com_objects": 1,
                 "total_methods": 1,
@@ -565,6 +575,7 @@ def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) ->
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _FakeComError(Exception):
+        """Test suite for FakeComError."""
         pass
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
@@ -592,7 +603,9 @@ def test_discover_com_objects_handles_attribute_and_catalog_errors() -> None:
     """discover_com_objects should tolerate both extraction and catalog-level failures."""
 
     class _BrokenApp:
+        """Test suite for BrokenApp."""
         def RevisionNumber(self):
+            """Test helper for RevisionNumber."""
             raise RuntimeError("no revision")
 
     discovery = SolidWorksDocsDiscovery(
@@ -649,7 +662,9 @@ def test_normalize_input_helper_branches() -> None:
     assert dict_normalized.output_dir == "y"
 
     class _ModelDumpCarrier:
+        """Test suite for ModelDumpCarrier."""
         def model_dump(self):
+            """Test helper for model dump."""
             return {"output_dir": "z", "include_vba": True}
 
     dump_normalized = _normalize_input(_ModelDumpCarrier(), DiscoverDocsInput)
@@ -661,7 +676,9 @@ def test_extract_year_handles_value_error(monkeypatch: pytest.MonkeyPatch) -> No
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _BadMatch:
+        """Test suite for BadMatch."""
         def group(self, _idx: int) -> str:
+            """Test helper for group."""
             return "20xx"
 
     monkeypatch.setattr(docs_mod.re, "search", lambda *_args, **_kwargs: _BadMatch())
@@ -675,7 +692,9 @@ def test_detect_installed_year_no_root_and_no_year_dirs(
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _MissingRoot:
+        """Test suite for MissingRoot."""
         def exists(self):
+            """Test helper for exists."""
             return False
 
     monkeypatch.setattr(docs_mod, "Path", lambda *_args, **_kwargs: _MissingRoot())
@@ -711,6 +730,7 @@ def test_find_index_file_search_dir_and_search_index_edge_cases(temp_dir: Path) 
     idx.write_text("{}", encoding="utf-8")
 
     def _path_redirect(value):
+        """Test helper for path redirect."""
         if str(value) == ".generated/docs-index":
             return base
         return original_path(value)
@@ -746,18 +766,24 @@ def test_detect_year_iteration_and_config_path_resolution(monkeypatch: pytest.Mo
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _Child:
+        """Test suite for Child."""
         def __init__(self, name: str, is_dir: bool):
+            """Test helper for init."""
             self.name = name
             self._is_dir = is_dir
 
         def is_dir(self):
+            """Test helper for is dir."""
             return self._is_dir
 
     class _Root:
+        """Test suite for Root."""
         def exists(self):
+            """Test helper for exists."""
             return True
 
         def iterdir(self):
+            """Test helper for iterdir."""
             return [
                 _Child("readme.txt", False),
                 _Child("RandomFolder", True),
@@ -795,6 +821,7 @@ def test_normalize_input_non_dict_non_model_dump_path() -> None:
     from src.solidworks_mcp.tools.docs_discovery import _normalize_input
 
     class _PlainInput:
+        """Test suite for PlainInput."""
         output_dir = "plain"
         include_vba = True
         year = None
@@ -849,10 +876,13 @@ async def test_search_api_help_auto_discovers_when_index_missing(
     assert search_tool is not None
 
     class _AutoDiscovery:
+        """Test suite for AutoDiscovery."""
         def __init__(self, output_dir=None):
+            """Test helper for init."""
             self.output_dir = output_dir
 
         def discover_all(self):
+            """Test helper for discover all."""
             return {
                 "com_objects": {
                     "ISldWorks": {
@@ -864,6 +894,7 @@ async def test_search_api_help_auto_discovers_when_index_missing(
             }
 
         def save_index(self, filename="solidworks_docs_index.json"):
+            """Test helper for save index."""
             path = temp_dir / filename
             path.write_text("{}", encoding="utf-8")
             return path

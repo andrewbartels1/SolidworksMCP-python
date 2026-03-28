@@ -39,6 +39,15 @@ class GenerateVBAInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.operation_description is None:
             self.operation_description = self.operation_type or "SolidWorks Operation"
 
@@ -63,6 +72,15 @@ class RecordMacroInput(CompatInput):
     auto_start: bool = Field(default=True, description="Automatically start recording")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.macro_name is None:
             self.macro_name = self.recording_name or "Recorded Macro"
 
@@ -94,6 +112,15 @@ class BatchProcessInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.operation_type is None:
             self.operation_type = self.batch_operation or self.operation or "export"
 
@@ -123,6 +150,15 @@ class DesignTableInput(CompatInput):
     configurations: list[str] = Field(default=[], description="Configuration names")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.table_type is None:
             self.table_type = self.operation or "create"
         if self.create_configurations:

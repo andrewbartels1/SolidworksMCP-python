@@ -65,6 +65,7 @@ from src.solidworks_mcp.tools.vba_generation import (
 
 
 def _ok(data):
+    """Test helper for ok."""
     return SimpleNamespace(
         is_success=True,
         data=data,
@@ -74,6 +75,7 @@ def _ok(data):
 
 
 def _tool(mcp_server, name: str):
+    """Test helper for tool."""
     for registered in mcp_server._tools:
         if registered.name == name:
             return registered.handler
@@ -81,17 +83,22 @@ def _tool(mcp_server, name: str):
 
 
 class _PoolAdapterStub:
+    """Test suite for PoolAdapterStub."""
     def __init__(self, fail: bool = False):
+        """Test helper for init."""
         self.fail = fail
         self.disconnected = False
 
     async def connect(self):
+        """Test helper for connect."""
         return None
 
     async def disconnect(self):
+        """Test helper for disconnect."""
         self.disconnected = True
 
     async def health_check(self):
+        """Test helper for health check."""
         return AdapterHealth(
             healthy=not self.fail,
             last_check=datetime.now(),
@@ -105,9 +112,11 @@ class _PoolAdapterStub:
 
 @pytest.mark.asyncio
 async def test_connection_pool_adapter_retry_and_error_result():
+    """Test connection pool adapter retry and error result."""
     created: list[_PoolAdapterStub] = []
 
     def factory():
+        """Test helper for factory."""
         adapter = _PoolAdapterStub()
         created.append(adapter)
         return adapter
@@ -115,6 +124,7 @@ async def test_connection_pool_adapter_retry_and_error_result():
     pool = ConnectionPoolAdapter(adapter_factory=factory, pool_size=1, max_retries=1)
 
     async def always_fail(_adapter):
+        """Test helper for always fail."""
         raise RuntimeError("boom")
 
     result = await pool._execute_with_pool("unit_test", always_fail)
@@ -126,6 +136,7 @@ async def test_connection_pool_adapter_retry_and_error_result():
 
 @pytest.mark.asyncio
 async def test_connection_pool_adapter_health_and_timeout_paths():
+    """Test connection pool adapter health and timeout paths."""
     pool = ConnectionPoolAdapter(
         adapter_factory=lambda: _PoolAdapterStub(), pool_size=1
     )
@@ -146,6 +157,7 @@ async def test_connection_pool_adapter_health_and_timeout_paths():
 
 @pytest.mark.asyncio
 async def test_mock_adapter_error_and_edge_paths(mock_config):
+    """Test mock adapter error and edge paths."""
     adapter = MockSolidWorksAdapter(mock_config)
 
     unsupported = await adapter.open_model("not_supported.txt")
@@ -171,8 +183,11 @@ async def test_mock_adapter_error_and_edge_paths(mock_config):
 
 
 def test_pywin32_adapter_guard_and_helpers(monkeypatch):
+    """Test pywin32 adapter guard and helpers."""
     class _ConcretePyWin32Adapter(PyWin32Adapter):
+        """Test suite for ConcretePyWin32Adapter."""
         async def exit_sketch(self):
+            """Test helper for exit sketch."""
             return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     monkeypatch.setattr(pywin32_mod, "PYWIN32_AVAILABLE", False)
@@ -205,6 +220,7 @@ def test_pywin32_adapter_guard_and_helpers(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
+    """Test drawing tools simulation branches."""
     await register_drawing_tools(mcp_server, object(), mock_config)
 
     assert (
@@ -284,7 +300,9 @@ async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
 
 
 class _ExportFallbackAdapter:
+    """Test suite for ExportFallbackAdapter."""
     async def export_file(self, file_path: str, format_type: str):
+        """Test helper for export file."""
         if not file_path:
             return SimpleNamespace(
                 is_success=False, error="missing path", execution_time=0.01
@@ -299,6 +317,7 @@ class _ExportFallbackAdapter:
 
 @pytest.mark.asyncio
 async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
+    """Test export tools fallback and aliases."""
     await register_export_tools(mcp_server, _ExportFallbackAdapter(), mock_config)
 
     assert (
@@ -352,6 +371,7 @@ async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
 
 @pytest.mark.asyncio
 async def test_drawing_analysis_simulation_paths(mcp_server, mock_config):
+    """Test drawing analysis simulation paths."""
     await register_drawing_analysis_tools(mcp_server, object(), mock_config)
 
     assert (
@@ -388,6 +408,7 @@ async def test_drawing_analysis_simulation_paths(mcp_server, mock_config):
 
 @pytest.mark.asyncio
 async def test_vba_generation_uncovered_branches(mcp_server, mock_config):
+    """Test vba generation uncovered branches."""
     await register_vba_generation_tools(mcp_server, object(), mock_config)
 
     assert (
@@ -458,69 +479,91 @@ async def test_vba_generation_uncovered_branches(mcp_server, mock_config):
 
 
 class _SketchAdapterStub:
+    """Test suite for SketchAdapterStub."""
     async def create_sketch(self, _plane):
+        """Test helper for create sketch."""
         return _ok({"sketch_name": "Sketch1"})
 
     async def add_sketch_line(self, *_args):
+        """Test helper for add sketch line."""
         return _ok({"entity_id": "Line1"})
 
     async def add_line(self, *_args):
+        """Test helper for add line."""
         return _ok("Line2")
 
     async def add_sketch_circle(self, *_args):
+        """Test helper for add sketch circle."""
         return _ok({"entity_id": "Circle1"})
 
     async def add_circle(self, *_args):
+        """Test helper for add circle."""
         return _ok("Circle2")
 
     async def add_sketch_rectangle(self, *_args):
+        """Test helper for add sketch rectangle."""
         return _ok({"entity_id": "Rect1"})
 
     async def add_rectangle(self, *_args):
+        """Test helper for add rectangle."""
         return _ok("Rect2")
 
     async def exit_sketch(self):
+        """Test helper for exit sketch."""
         return _ok(None)
 
     async def add_arc(self, *_args):
+        """Test helper for add arc."""
         return _ok("Arc1")
 
     async def add_spline(self, *_args):
+        """Test helper for add spline."""
         return _ok("Spline1")
 
     async def add_centerline(self, *_args):
+        """Test helper for add centerline."""
         return _ok("CL1")
 
     async def add_polygon(self, *_args):
+        """Test helper for add polygon."""
         return _ok("Poly1")
 
     async def add_ellipse(self, *_args):
+        """Test helper for add ellipse."""
         return _ok("Ellipse1")
 
     async def add_sketch_constraint(self, *_args):
+        """Test helper for add sketch constraint."""
         return _ok("Constraint1")
 
     async def add_sketch_dimension(self, *_args):
+        """Test helper for add sketch dimension."""
         return _ok("Dim1")
 
     async def sketch_linear_pattern(self, *_args):
+        """Test helper for sketch linear pattern."""
         return _ok("LP1")
 
     async def sketch_circular_pattern(self, *_args):
+        """Test helper for sketch circular pattern."""
         return _ok("CP1")
 
     async def sketch_mirror(self, *_args):
+        """Test helper for sketch mirror."""
         return _ok("Mirror1")
 
     async def sketch_offset(self, *_args):
+        """Test helper for sketch offset."""
         return _ok("Offset1")
 
     async def create_cut(self, *_args):
+        """Test helper for create cut."""
         return _ok("Cut1")
 
 
 @pytest.mark.asyncio
 async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
+    """Test sketching tools uncovered paths."""
     await register_sketching_tools(mcp_server, _SketchAdapterStub(), mock_config)
 
     assert (
@@ -621,6 +664,7 @@ async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
 
 @pytest.mark.asyncio
 async def test_sketching_error_branches_with_exceptions(mcp_server, mock_config):
+    """Test sketching error branches with exceptions."""
     adapter = _SketchAdapterStub()
     adapter.add_arc = AsyncMock(side_effect=RuntimeError("arc failed"))
     await register_sketching_tools(mcp_server, adapter, mock_config)
@@ -635,11 +679,13 @@ async def test_sketching_error_branches_with_exceptions(mcp_server, mock_config)
 
 @pytest.mark.asyncio
 async def test_connection_pool_passthrough_methods_are_wired(monkeypatch):
+    """Test connection pool passthrough methods are wired."""
     pool = ConnectionPoolAdapter(
         adapter_factory=lambda: _PoolAdapterStub(), pool_size=1
     )
 
     async def _fake_execute(name, operation):
+        """Test helper for fake execute."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"op": name})
 
     monkeypatch.setattr(pool, "_execute_with_pool", _fake_execute)
@@ -666,6 +712,7 @@ async def test_connection_pool_passthrough_methods_are_wired(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mock_adapter_additional_feature_and_dimension_paths(mock_config):
+    """Test mock adapter additional feature and dimension paths."""
     adapter = MockSolidWorksAdapter(mock_config)
 
     # Not connected path
@@ -752,34 +799,45 @@ async def test_mock_adapter_additional_feature_and_dimension_paths(mock_config):
 
 
 class _DrawingAndAnalysisAdapterStub:
+    """Test suite for DrawingAndAnalysisAdapterStub."""
     async def create_technical_drawing(self, *_args, **_kwargs):
+        """Test helper for create technical drawing."""
         return _ok({"drawing_path": "d.slddrw"})
 
     async def add_drawing_view(self, *_args, **_kwargs):
+        """Test helper for add drawing view."""
         return _ok({"view_name": "Front"})
 
     async def add_annotation(self, *_args, **_kwargs):
+        """Test helper for add annotation."""
         return _ok({"annotation": "ok"})
 
     async def update_title_block(self, *_args, **_kwargs):
+        """Test helper for update title block."""
         return _ok({"title": "T"})
 
     async def analyze_drawing_comprehensive(self, *_args, **_kwargs):
+        """Test helper for analyze drawing comprehensive."""
         return _ok({"score": 90})
 
     async def analyze_drawing_dimensions(self, *_args, **_kwargs):
+        """Test helper for analyze drawing dimensions."""
         return _ok({"dims": 10})
 
     async def analyze_drawing_annotations(self, *_args, **_kwargs):
+        """Test helper for analyze drawing annotations."""
         return _ok({"notes": 3})
 
     async def check_drawing_compliance(self, *_args, **_kwargs):
+        """Test helper for check drawing compliance."""
         return _ok({"compliant": True})
 
     async def analyze_drawing_views(self, *_args, **_kwargs):
+        """Test helper for analyze drawing views."""
         return _ok({"views": 4})
 
     async def generate_drawing_report(self, *_args, **_kwargs):
+        """Test helper for generate drawing report."""
         return _ok({"report": "ok"})
 
 
@@ -787,6 +845,7 @@ class _DrawingAndAnalysisAdapterStub:
 async def test_drawing_and_analysis_adapter_passthrough_success(
     mcp_server, mock_config
 ):
+    """Test drawing and analysis adapter passthrough success."""
     adapter = _DrawingAndAnalysisAdapterStub()
     await register_drawing_tools(mcp_server, adapter, mock_config)
     await register_drawing_analysis_tools(mcp_server, adapter, mock_config)
@@ -843,30 +902,39 @@ async def test_drawing_and_analysis_adapter_passthrough_success(
 
 
 class _ExportNativeAdapter:
+    """Test suite for ExportNativeAdapter."""
     async def export_step(self, *_args, **_kwargs):
+        """Test helper for export step."""
         return _ok({"fmt": "step"})
 
     async def export_iges(self, *_args, **_kwargs):
+        """Test helper for export iges."""
         return _ok({"fmt": "iges"})
 
     async def export_stl(self, *_args, **_kwargs):
+        """Test helper for export stl."""
         return _ok({"fmt": "stl"})
 
     async def export_pdf(self, *_args, **_kwargs):
+        """Test helper for export pdf."""
         return _ok({"fmt": "pdf"})
 
     async def export_dwg(self, *_args, **_kwargs):
+        """Test helper for export dwg."""
         return _ok({"fmt": "dwg"})
 
     async def export_image(self, *_args, **_kwargs):
+        """Test helper for export image."""
         return _ok({"fmt": "image"})
 
     async def batch_export(self, *_args, **_kwargs):
+        """Test helper for batch export."""
         return _ok({"count": 2})
 
 
 @pytest.mark.asyncio
 async def test_export_tools_native_adapter_methods(mcp_server, mock_config):
+    """Test export tools native adapter methods."""
     await register_export_tools(mcp_server, _ExportNativeAdapter(), mock_config)
 
     assert (
@@ -910,6 +978,7 @@ async def test_export_tools_native_adapter_methods(mcp_server, mock_config):
 
 @pytest.mark.asyncio
 async def test_sketching_tool_error_return_branches(mcp_server, mock_config):
+    """Test sketching tool error return branches."""
     adapter = _SketchAdapterStub()
     adapter.add_polygon = AsyncMock(
         return_value=SimpleNamespace(
@@ -955,6 +1024,7 @@ async def test_sketching_tool_error_return_branches(mcp_server, mock_config):
 
 @pytest.mark.asyncio
 async def test_vba_generation_unsupported_branches(mcp_server, mock_config):
+    """Test vba generation unsupported branches."""
     await register_vba_generation_tools(mcp_server, object(), mock_config)
 
     bad_part = await _tool(mcp_server, "generate_vba_part_modeling")(
@@ -970,8 +1040,11 @@ async def test_vba_generation_unsupported_branches(mcp_server, mock_config):
 
 @pytest.mark.asyncio
 async def test_pywin32_adapter_many_guard_paths(monkeypatch):
+    """Test pywin32 adapter many guard paths."""
     class _ConcretePyWin32Adapter(PyWin32Adapter):
+        """Test suite for ConcretePyWin32Adapter."""
         async def exit_sketch(self):
+            """Test helper for exit sketch."""
             return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     monkeypatch.setattr(pywin32_mod, "PYWIN32_AVAILABLE", True)

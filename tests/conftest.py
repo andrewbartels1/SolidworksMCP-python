@@ -124,12 +124,15 @@ async def mcp_server(mock_config: SolidWorksMCPConfig) -> AsyncGenerator[FastMCP
     original_tool = mcp.tool
 
     def compat_tool(*args, **kwargs):
+        """Test helper for compat tool."""
         decorator = original_tool(*args, **kwargs)
 
         def _wrap(func):
+            """Test helper for wrap."""
             wrapped = decorator(func)
 
             async def _compat_runner(*runner_args, **runner_kwargs):
+                """Test helper for compat runner."""
                 payload = runner_kwargs.get("input_data")
                 if payload is None and runner_args:
                     payload = runner_args[0]
@@ -210,6 +213,7 @@ class MockSolidWorksApp:
     """Mock SolidWorks application for testing."""
 
     def __init__(self):
+        """Test helper for init."""
         self.active_doc = None
         self.documents = []
         self.is_connected = True
@@ -361,6 +365,7 @@ class PerformanceMonitor:
     """Monitor performance during tests."""
 
     def __init__(self):
+        """Test helper for init."""
         self.start_time = None
         self.end_time = None
 

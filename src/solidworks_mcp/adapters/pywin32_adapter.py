@@ -416,6 +416,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _open_operation() -> SolidWorksModel:
+            """Execute open operation.
+            
+            Returns:
+                SolidWorksModel: Describe the returned value.
+            
+            """
             resolved_path = os.path.abspath(file_path)
 
             # Determine document type from extension
@@ -519,6 +525,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _close_operation() -> None:
+            """Execute close operation.
+            
+            Returns:
+                None: Describe the returned value.
+            
+            """
             if save:
                 model.Save()
 
@@ -584,6 +596,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _create_operation() -> SolidWorksModel:
+            """Execute create operation.
+            
+            Returns:
+                SolidWorksModel: Describe the returned value.
+            
+            """
             model = None
             app = self.swApp
             if app is None:
@@ -633,6 +651,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _create_operation() -> SolidWorksModel:
+            """Execute create operation.
+            
+            Returns:
+                SolidWorksModel: Describe the returned value.
+            
+            """
             model = None
             app = self.swApp
             if app is None:
@@ -676,6 +700,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _create_operation() -> SolidWorksModel:
+            """Execute create operation.
+            
+            Returns:
+                SolidWorksModel: Describe the returned value.
+            
+            """
             app = self.swApp
             if app is None:
                 raise Exception("SolidWorks application is not connected")
@@ -717,6 +747,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _extrusion_operation() -> SolidWorksFeature:
             # Get feature manager
+            """Execute extrusion operation.
+            
+            Returns:
+                SolidWorksFeature: Describe the returned value.
+            
+            """
             featureManager = self.currentModel.FeatureManager
 
             # Create extrusion - use simplified approach first
@@ -794,6 +830,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _revolve_operation() -> SolidWorksFeature:
+            """Execute revolve operation.
+            
+            Returns:
+                SolidWorksFeature: Describe the returned value.
+            
+            """
             featureManager = self.currentModel.FeatureManager
 
             # Create revolve feature
@@ -889,6 +931,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _sketch_operation() -> str:
             # Select the plane first
+            """Execute sketch operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             plane_name_map = {
                 "Top": "Top Plane",
                 "Front": "Front Plane",
@@ -1016,6 +1064,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _line_operation() -> str:
             # Convert mm to meters
+            """Execute line operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             line = self.currentSketchManager.CreateLine(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
             )
@@ -1062,6 +1116,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _circle_operation() -> str:
             # Convert mm to meters
+            """Execute circle operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             circle = self.currentSketchManager.CreateCircleByRadius(
                 center_x / 1000.0, center_y / 1000.0, 0, radius / 1000.0
             )
@@ -1110,6 +1170,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _rectangle_operation() -> str:
             # Convert mm to meters
+            """Execute rectangle operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             lines = self.currentSketchManager.CreateCornerRectangle(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
             )
@@ -1167,6 +1233,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _arc_operation() -> str:
             # Convert mm to meters
+            """Execute arc operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             arc = self.currentSketchManager.CreateArc(
                 center_x / 1000.0,
                 center_y / 1000.0,
@@ -1226,6 +1298,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _spline_operation() -> str:
             # Convert points to SolidWorks format (mm to meters)
+            """Execute spline operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             spline_points = []
             for point in points:
                 spline_points.extend([point["x"] / 1000.0, point["y"] / 1000.0, 0])
@@ -1254,6 +1332,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _centerline_operation() -> str:
             # Convert mm to meters and create centerline
+            """Execute centerline operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             centerline = self.currentSketchManager.CreateCenterLine(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
             )
@@ -1276,6 +1360,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _polygon_operation() -> str:
             # Convert mm to meters
+            """Execute polygon operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             polygon = self.currentSketchManager.CreatePolygon(
                 center_x / 1000.0,
                 center_y / 1000.0,
@@ -1303,6 +1393,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _ellipse_operation() -> str:
             # Convert mm to meters
+            """Execute ellipse operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             ellipse = self.currentSketchManager.CreateEllipse(
                 center_x / 1000.0,
                 center_y / 1000.0,
@@ -1333,6 +1429,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _constraint_operation() -> str:
             # Map relation types to SolidWorks constants
+            """Execute constraint operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             relation_map = {
                 "parallel": self.constants.get("swConstraintType_PARALLEL", 0),
                 "perpendicular": self.constants.get(
@@ -1374,6 +1476,12 @@ class PyWin32Adapter(SolidWorksAdapter):
         def _dimension_operation() -> str:
             # For now, return a success without actual dimension - this requires entity selection
             # which is complex in the basic adapter
+            """Execute dimension operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             dimension_id = (
                 f"Dimension_{dimension_type}_{value}_{int(time.time() * 1000) % 10000}"
             )
@@ -1398,6 +1506,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _linear_pattern_operation() -> str:
             # For now, return a success placeholder - linear patterns require entity selection
+            """Execute linear pattern operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             pattern_id = (
                 f"LinearPattern_{count}x{spacing}_{int(time.time() * 1000) % 10000}"
             )
@@ -1424,6 +1538,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _circular_pattern_operation() -> str:
             # For now, return a success placeholder - circular patterns require entity selection
+            """Execute circular pattern operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             pattern_id = (
                 f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
             )
@@ -1445,6 +1565,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _mirror_operation() -> str:
             # For now, return a success placeholder - mirroring requires entity selection
+            """Execute mirror operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             mirror_id = f"Mirror_{mirror_line}_{int(time.time() * 1000) % 10000}"
 
             return mirror_id
@@ -1462,6 +1588,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _offset_operation() -> str:
             # For now, return a success placeholder - offsetting requires entity selection
+            """Execute offset operation.
+            
+            Returns:
+                str: Describe the returned value.
+            
+            """
             direction = "inward" if reverse_direction else "outward"
             offset_id = f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
 
@@ -1478,6 +1610,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _mass_props_operation() -> MassProperties:
             # Get mass properties
+            """Execute mass props operation.
+            
+            Returns:
+                MassProperties: Describe the returned value.
+            
+            """
             mass_props = self.currentModel.Extension.CreateMassProperty()
 
             if not mass_props:
@@ -1523,6 +1661,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _export_operation() -> None:
             # Determine export format
+            """Execute export operation.
+            
+            Returns:
+                None: Describe the returned value.
+            
+            """
             format_map = {
                 "step": 0,  # swSaveAsSTEP
                 "iges": 1,  # swSaveAsIGS
@@ -1566,6 +1710,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _get_dim_operation() -> float:
+            """Execute get dim operation.
+            
+            Returns:
+                float: Describe the returned value.
+            
+            """
             dimension = self.currentModel.Parameter(name)
 
             if not dimension:
@@ -1584,6 +1734,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _set_dim_operation() -> None:
+            """Execute set dim operation.
+            
+            Returns:
+                None: Describe the returned value.
+            
+            """
             dimension = self.currentModel.Parameter(name)
 
             if not dimension:
@@ -1610,9 +1766,24 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _save_operation() -> None:
+            """Execute save operation.
+            
+            Returns:
+                None: Describe the returned value.
+            
+            """
             def _is_success(value: Any) -> bool:
                 # COM save APIs may return bool OR an integer status code
                 # where 0 indicates success.
+                """Execute is success.
+                
+                Args:
+                    value (Any): Describe value.
+                
+                Returns:
+                    bool: Describe the returned value.
+                
+                """
                 if isinstance(value, bool):
                     return value
                 if isinstance(value, (int, float)):
@@ -1678,6 +1849,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _rebuild_operation() -> None:
+            """Execute rebuild operation.
+            
+            Returns:
+                None: Describe the returned value.
+            
+            """
             success = self.currentModel.ForceRebuild3(False)
             if not success:
                 raise Exception("Failed to rebuild model")
@@ -1693,6 +1870,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _info_operation() -> dict[str, Any]:
+            """Execute info operation.
+            
+            Returns:
+                dict[str, Any]: Describe the returned value.
+            
+            """
             info = {
                 "title": self.currentModel.GetTitle(),
                 "path": self.currentModel.GetPathName(),
@@ -1719,11 +1902,26 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _list_operation() -> list[dict[str, Any]]:
+            """Execute list operation.
+            
+            Returns:
+                list[dict[str, Any]]: Describe the returned value.
+            
+            """
             features: list[dict[str, Any]] = []
             seen: set[tuple[str, str]] = set()
 
             def _is_suppressed(feature: Any) -> bool:
                 # Prefer parameter-less calls to avoid COM optional-arg marshalling issues.
+                """Execute is suppressed.
+                
+                Args:
+                    feature (Any): Describe feature.
+                
+                Returns:
+                    bool: Describe the returned value.
+                
+                """
                 suppressed_direct = self._attempt(
                     lambda: feature.IsSuppressed(), default=None
                 )
@@ -1740,6 +1938,16 @@ class PyWin32Adapter(SolidWorksAdapter):
                 )
 
             def _append_feature(feature: Any, position: int) -> None:
+                """Execute append feature.
+                
+                Args:
+                    feature (Any): Describe feature.
+                    position (int): Describe position.
+                
+                Returns:
+                    None: Describe the returned value.
+                
+                """
                 if not feature:
                     return
 
@@ -1817,6 +2025,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _list_operation() -> list[str]:
+            """Execute list operation.
+            
+            Returns:
+                list[str]: Describe the returned value.
+            
+            """
             raw_names = getattr(self.currentModel, "GetConfigurationNames", None)
             if callable(raw_names):
                 names = raw_names()
@@ -1852,6 +2066,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _cut_operation() -> SolidWorksFeature:
+            """Execute cut operation.
+            
+            Returns:
+                SolidWorksFeature: Describe the returned value.
+            
+            """
             featureManager = self.currentModel.FeatureManager
 
             # Create cut extrusion (similar to regular extrude but cuts material)
@@ -1905,6 +2125,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _fillet_operation() -> SolidWorksFeature:
             # Select edges first
+            """Execute fillet operation.
+            
+            Returns:
+                SolidWorksFeature: Describe the returned value.
+            
+            """
             for edge_name in edge_names:
                 selected = self.currentModel.Extension.SelectByID2(
                     edge_name,
@@ -1964,6 +2190,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _chamfer_operation() -> SolidWorksFeature:
             # Select edges first
+            """Execute chamfer operation.
+            
+            Returns:
+                SolidWorksFeature: Describe the returned value.
+            
+            """
             for edge_name in edge_names:
                 selected = self.currentModel.Extension.SelectByID2(
                     edge_name, "EDGE", 0, 0, 0, True, 0, None, 0
@@ -2007,6 +2239,12 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _exit_operation() -> None:
             # Toggle sketch mode off and clear local sketch references.
+            """Execute exit operation.
+            
+            Returns:
+                None: Describe the returned value.
+            
+            """
             self.currentSketchManager.InsertSketch(True)
             self.currentSketch = None
             self.currentSketchManager = None

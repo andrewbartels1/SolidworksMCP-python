@@ -112,6 +112,7 @@ def _cleanup_children_best_effort(path: Path) -> list[str]:
 
 
 def main() -> int:
+    """Test helper for main."""
     generated_dir = Path("tests") / ".generated" / "solidworks_integration"
 
     if not generated_dir.exists():

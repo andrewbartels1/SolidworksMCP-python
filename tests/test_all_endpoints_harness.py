@@ -70,10 +70,12 @@ REQUIRED_COM_METHODS: list[str] = [
 
 
 def _real_sw_enabled() -> bool:
+    """Test helper for real sw enabled."""
     return os.getenv(REAL_SW_FLAG, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _is_windows() -> bool:
+    """Test helper for is windows."""
     return platform.system() == "Windows"
 
 
@@ -117,11 +119,13 @@ async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
 
 @pytest_asyncio.fixture
 async def output_dir() -> Path:
+    """Test helper for output dir."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR
 
 
 def _load_catalog() -> list[dict[str, Any]]:
+    """Test helper for load catalog."""
     if not CATALOG_PATH.exists():
         return []
     with open(CATALOG_PATH, encoding="utf-8") as fh:
@@ -129,6 +133,7 @@ def _load_catalog() -> list[dict[str, Any]]:
 
 
 def _find_tool(server: SolidWorksMCPServer, tool_name: str):
+    """Test helper for find tool."""
     for tool in server.mcp._tools:
         if tool.name == tool_name:
             return tool.func
@@ -177,6 +182,7 @@ def _resolve_sample_parts_dir() -> Path:
 
 
 def _find_sample_part() -> Path:
+    """Test helper for find sample part."""
     sample_parts_dir = _resolve_sample_parts_dir()
     preferred = [
         sample_parts_dir / "Baseball Bat.SLDPRT",

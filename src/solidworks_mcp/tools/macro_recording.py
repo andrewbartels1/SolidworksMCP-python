@@ -46,6 +46,15 @@ class MacroRecordingInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.macro_name is None:
             self.macro_name = self.recording_name or "Recorded Macro"
 

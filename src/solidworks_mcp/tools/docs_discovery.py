@@ -397,6 +397,15 @@ def _search_index(
     results: list[dict[str, Any]] = []
 
     def _score(text: str) -> int:
+        """Execute score.
+        
+        Args:
+            text (str): Describe text.
+        
+        Returns:
+            int: Describe the returned value.
+        
+        """
         lower = text.lower()
         score = 0
         for token in tokens:

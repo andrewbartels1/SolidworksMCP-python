@@ -191,6 +191,7 @@ class TestCompleteWorkflows:
         call_count = 0
 
         def failing_create_part(*args, **kwargs):
+            """Test helper for failing create part."""
             nonlocal call_count
             call_count += 1
             if call_count == 1:

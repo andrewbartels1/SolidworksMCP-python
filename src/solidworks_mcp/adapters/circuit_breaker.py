@@ -48,6 +48,16 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         half_open_max_calls: int = 3,
         config: dict[str, object] | None = None,
     ) -> None:
+        """Initialize this object.
+        
+        Args:
+            adapter (SolidWorksAdapter | None): Describe adapter.
+            failure_threshold (int): Describe failure threshold.
+            recovery_timeout (int): Describe recovery timeout.
+            half_open_max_calls (int): Describe half open max calls.
+            config (dict[str, object] | None): Describe config.
+        
+        """
         if adapter is None:
             from .mock_adapter import MockSolidWorksAdapter
 
@@ -215,6 +225,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         """Create part through circuit breaker."""
 
         async def _op() -> AdapterResult[SolidWorksModel]:
+            """Execute op.
+            
+            Returns:
+                AdapterResult[SolidWorksModel]: Describe the returned value.
+            
+            """
             if name is None and units is None:
                 return await self.adapter.create_part()
             return await self._invoke_with_optional_args(
@@ -243,6 +259,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         """Create assembly through circuit breaker."""
 
         async def _op() -> AdapterResult[SolidWorksModel]:
+            """Execute op.
+            
+            Returns:
+                AdapterResult[SolidWorksModel]: Describe the returned value.
+            
+            """
             if name is None:
                 return await self.adapter.create_assembly()
             return await self._invoke_with_optional_args(
@@ -394,6 +416,14 @@ class CircuitBreaker:
         recovery_timeout: float = 60.0,
         expected_exception: type[Exception] = Exception,
     ) -> None:
+        """Initialize this object.
+        
+        Args:
+            failure_threshold (int): Describe failure threshold.
+            recovery_timeout (float): Describe recovery timeout.
+            expected_exception (type[Exception]): Describe expected exception.
+        
+        """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.expected_exception = expected_exception
@@ -402,6 +432,15 @@ class CircuitBreaker:
         self.last_failure_time = 0
 
     async def call(self, operation: Callable[[], object | Awaitable[object]]) -> object:
+        """Execute call.
+        
+        Args:
+            operation (Callable[[], object | Awaitable[object]]): Describe operation.
+        
+        Returns:
+            object: Describe the returned value.
+        
+        """
         if self.state == CircuitState.OPEN:
             if time.time() - self.last_failure_time < self.recovery_timeout:
                 raise Exception("Circuit breaker is open")

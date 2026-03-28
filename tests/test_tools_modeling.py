@@ -361,6 +361,7 @@ class TestModelingTools:
         assert _result_value({"name": None}, "name", default="fallback") == "fallback"
 
         class _Obj:
+            """Test suite for Obj."""
             name = None
             title = "ObjTitle"
 

@@ -274,6 +274,15 @@ class SolidWorksMCPConfig(BaseModel):
     @field_validator("port")
     @classmethod
     def validate_port(cls, v: int) -> int:
+        """Execute validate port.
+        
+        Args:
+            v (int): Describe v.
+        
+        Returns:
+            int: Describe the returned value.
+        
+        """
         if v < 1 or v > 65535:
             raise ValueError("Port must be between 1 and 65535")
         return v
@@ -281,6 +290,15 @@ class SolidWorksMCPConfig(BaseModel):
     @field_validator("timeout_seconds")
     @classmethod
     def validate_timeout(cls, v: float) -> float:
+        """Execute validate timeout.
+        
+        Args:
+            v (float): Describe v.
+        
+        Returns:
+            float: Describe the returned value.
+        
+        """
         if v <= 0:
             raise ValueError("timeout_seconds must be > 0")
         return v
@@ -296,6 +314,16 @@ class SolidWorksMCPConfig(BaseModel):
         list_like_fields = {"cors_origins", "allowed_hosts", "api_keys"}
 
         def _coerce_env_value(key: str, value: Any) -> Any:
+            """Execute coerce env value.
+            
+            Args:
+                key (str): Describe key.
+                value (Any): Describe value.
+            
+            Returns:
+                Any: Describe the returned value.
+            
+            """
             if not isinstance(value, str):
                 return value
             if key in list_like_fields:

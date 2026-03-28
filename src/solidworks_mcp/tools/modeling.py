@@ -27,6 +27,16 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 
 def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
+    """Execute result value.
+    
+    Args:
+        data (Any): Describe data.
+        default (Any): Describe default.
+    
+    Returns:
+        Any: Describe the returned value.
+    
+    """
     if isinstance(data, dict):
         for key in keys:
             if key in data and data[key] is not None:
@@ -42,6 +52,16 @@ def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
 
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
+    """Execute normalize input.
+    
+    Args:
+        input_data (Any): Describe input data.
+        model_type (type[TInput]): Describe model type.
+    
+    Returns:
+        TInput: Describe the returned value.
+    
+    """
     if isinstance(input_data, model_type):
         return input_data
     return model_type.model_validate(input_data)
@@ -66,6 +86,15 @@ class CreatePartInput(CompatInput):
     material: str | None = Field(default=None, description="Material name")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if not self.name.strip():
             raise ValueError("name is required")
 
@@ -92,6 +121,15 @@ class CreateExtrusionInput(CompatInput):
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.depth <= 0:
             raise ValueError("depth must be positive")
         if not self.sketch_name.strip():
@@ -120,6 +158,15 @@ class CreateRevolveInput(CompatInput):
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.angle <= 0:
             raise ValueError("angle must be positive")
 
@@ -157,6 +204,15 @@ class GetDimensionInput(CompatInput):
     dimension_name: str | None = Field(default=None, description="Dimension name alias")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.name is None:
             self.name = self.dimension_name
         if not self.name:
@@ -175,6 +231,15 @@ class SetDimensionInput(CompatInput):
     units: str | None = Field(default=None, description="Units alias")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.name is None:
             self.name = self.dimension_name
         if not self.name:

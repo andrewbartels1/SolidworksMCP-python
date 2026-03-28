@@ -80,6 +80,15 @@ class VBARevolveInput(CompatInput):
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
 
     def model_post_init(self, __context: Any) -> None:
+        """Execute model post init.
+        
+        Args:
+            __context (Any): Describe context.
+        
+        Returns:
+            None: Describe the returned value.
+        
+        """
         if self.angle is None:
             self.angle = self.angle_degrees if self.angle_degrees is not None else 360.0
 

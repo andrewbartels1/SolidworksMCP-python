@@ -32,16 +32,21 @@ from src.solidworks_mcp.utils.validation import validate_environment
 
 
 class _DummyAdapter(SolidWorksAdapter):
+    """Test suite for DummyAdapter."""
     async def connect(self):
+        """Test helper for connect."""
         return None
 
     async def disconnect(self):
+        """Test helper for disconnect."""
         return None
 
     def is_connected(self) -> bool:
+        """Test helper for is connected."""
         return True
 
     async def health_check(self) -> AdapterHealth:
+        """Test helper for health check."""
         return AdapterHealth(
             healthy=True,
             last_check=datetime.now(),
@@ -53,15 +58,18 @@ class _DummyAdapter(SolidWorksAdapter):
         )
 
     async def open_model(self, file_path: str):
+        """Test helper for open model."""
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=SolidWorksModel(path=file_path, name="m", type="Part", is_active=True),
         )
 
     async def close_model(self, save: bool = False):
+        """Test helper for close model."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def get_model_info(self):
+        """Test helper for get model info."""
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={
@@ -73,6 +81,7 @@ class _DummyAdapter(SolidWorksAdapter):
         )
 
     async def list_features(self, include_suppressed: bool = False):
+        """Test helper for list features."""
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=[
@@ -85,63 +94,82 @@ class _DummyAdapter(SolidWorksAdapter):
         )
 
     async def list_configurations(self):
+        """Test helper for list configurations."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=["Default"])
 
     async def create_part(self):
+        """Test helper for create part."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_assembly(self):
+        """Test helper for create assembly."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_drawing(self):
+        """Test helper for create drawing."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_extrusion(self, params):
+        """Test helper for create extrusion."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_revolve(self, params):
+        """Test helper for create revolve."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_sweep(self, params):
+        """Test helper for create sweep."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_loft(self, params):
+        """Test helper for create loft."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def create_sketch(self, plane: str):
+        """Test helper for create sketch."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="Sketch1")
 
     async def add_line(self, x1: float, y1: float, x2: float, y2: float):
+        """Test helper for add line."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="L1")
 
     async def add_circle(self, center_x: float, center_y: float, radius: float):
+        """Test helper for add circle."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="C1")
 
     async def add_rectangle(self, x1: float, y1: float, x2: float, y2: float):
+        """Test helper for add rectangle."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="R1")
 
     async def exit_sketch(self):
+        """Test helper for exit sketch."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def get_mass_properties(self):
+        """Test helper for get mass properties."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def export_file(self, file_path: str, format_type: str):
+        """Test helper for export file."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     async def get_dimension(self, name: str):
+        """Test helper for get dimension."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=1.0)
 
     async def set_dimension(self, name: str, value: float):
+        """Test helper for set dimension."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
 
 @pytest.mark.asyncio
 async def test_security_setup_branches_and_auth_helpers(monkeypatch):
     # Minimal security: early return
+    """Test security setup branches and auth helpers."""
     minimal_cfg = SimpleNamespace(security_level="minimal")
 
     class _Level:
+        """Test suite for Level."""
         MINIMAL = "minimal"
         STANDARD = "standard"
         STRICT = "strict"
@@ -185,12 +213,14 @@ async def test_security_setup_branches_and_auth_helpers(monkeypatch):
 
     @auth_mod.require_auth(object())
     async def _inner(v):
+        """Test helper for inner."""
         return v + 1
 
     assert await _inner(1) == 2
 
 
 def test_rate_limiter_window_and_global_setup(monkeypatch):
+    """Test rate limiter window and global setup."""
     rl = rl_mod.RateLimiter(max_requests=2, time_window=5)
 
     # Fill limit
@@ -214,6 +244,7 @@ def test_rate_limiter_window_and_global_setup(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validate_environment_branches(monkeypatch):
+    """Test validate environment branches."""
     cfg = SimpleNamespace(
         can_use_solidworks=False,
         mock_solidworks=False,
@@ -257,6 +288,7 @@ async def test_validate_environment_branches(monkeypatch):
 def test_setup_logging_file_and_audit(tmp_path: Path):
     # Newer loguru versions may reject "gzip" shorthand in tests; mock add()
     # so we still execute setup branches deterministically.
+    """Test setup logging file and audit."""
     from src.solidworks_mcp.utils import logging as logging_mod
 
     logging_mod.logger.add = lambda *args, **kwargs: 1
@@ -274,6 +306,7 @@ def test_setup_logging_file_and_audit(tmp_path: Path):
 
 
 def test_adapter_base_legacy_getitem_and_contains():
+    """Test adapter base legacy getitem and contains."""
     health = AdapterHealth(
         healthy=True,
         last_check=datetime.now(),
@@ -299,6 +332,7 @@ def test_adapter_base_legacy_getitem_and_contains():
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_adapter_core_paths(monkeypatch):
+    """Test circuit breaker adapter core paths."""
     adapter = _DummyAdapter({})
     cb = CircuitBreakerAdapter(
         adapter=adapter,
@@ -315,6 +349,7 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
 
     # success in half-open closes breaker
     async def _ok():
+        """Test helper for ok."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
     result = await cb._execute_with_circuit_breaker("ok", _ok)
@@ -323,6 +358,7 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
 
     # error result increments failures and opens
     async def _bad_result():
+        """Test helper for bad result."""
         return AdapterResult(status=AdapterResultStatus.ERROR, error="bad")
 
     cb.failure_threshold = 1
@@ -332,6 +368,7 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
 
     # exception path
     async def _boom():
+        """Test helper for boom."""
         raise RuntimeError("boom")
 
     cb.state = CircuitState.CLOSED
@@ -345,9 +382,11 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_adapter_passthrough_methods(monkeypatch):
+    """Test circuit breaker adapter passthrough methods."""
     cb = CircuitBreakerAdapter(adapter=_DummyAdapter({}), config={})
 
     async def _fake_exec(name, operation):
+        """Test helper for fake exec."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"name": name})
 
     monkeypatch.setattr(cb, "_execute_with_circuit_breaker", _fake_exec)
@@ -379,11 +418,13 @@ async def test_circuit_breaker_adapter_passthrough_methods(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_legacy_circuit_breaker_paths():
+    """Test legacy circuit breaker paths."""
     c = CircuitBreaker(
         failure_threshold=1, recovery_timeout=0.01, expected_exception=ValueError
     )
 
     async def _raise_once():
+        """Test helper for raise once."""
         raise ValueError("x")
 
     with pytest.raises(ValueError):

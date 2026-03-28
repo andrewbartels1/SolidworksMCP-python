@@ -278,6 +278,7 @@ class TestAnalysisTools:
         class _BadGeometryInput:
             @property
             def analysis_type(self):
+                """Test helper for analysis type."""
                 raise RuntimeError("bad analysis type")
 
             parameters = None

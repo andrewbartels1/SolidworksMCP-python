@@ -30,6 +30,15 @@ class AdapterHealth(BaseModel):
     metrics: dict[str, Any] | None = None
 
     def __getitem__(self, key: str) -> Any:
+        """Execute getitem.
+        
+        Args:
+            key (str): Describe key.
+        
+        Returns:
+            Any: Describe the returned value.
+        
+        """
         if key == "status":
             return "healthy" if self.healthy else "unhealthy"
         if key == "connected":
@@ -43,6 +52,15 @@ class AdapterHealth(BaseModel):
         return self.model_dump().get(key)
 
     def __contains__(self, key: str) -> bool:
+        """Execute contains.
+        
+        Args:
+            key (str): Describe key.
+        
+        Returns:
+            bool: Describe the returned value.
+        
+        """
         legacy_keys = {"status", "connected", "adapter_type", "version", "uptime"}
         if key in legacy_keys:
             return True
@@ -91,6 +109,15 @@ class SolidWorksModel(BaseModel):
     properties: dict[str, Any] | None = None
 
     def __getitem__(self, key: str) -> Any:
+        """Execute getitem.
+        
+        Args:
+            key (str): Describe key.
+        
+        Returns:
+            Any: Describe the returned value.
+        
+        """
         if key == "title":
             return self.name
         if key == "units":
@@ -109,6 +136,15 @@ class SolidWorksFeature(BaseModel):
     parameters: dict[str, Any] | None = None
 
     def __getitem__(self, key: str) -> Any:
+        """Execute getitem.
+        
+        Args:
+            key (str): Describe key.
+        
+        Returns:
+            Any: Describe the returned value.
+        
+        """
         if self.parameters and key in self.parameters:
             return self.parameters.get(key)
         return self.model_dump().get(key)
@@ -185,7 +221,11 @@ class SolidWorksAdapter(ABC):
         else:
             normalized_config = {}
 
-        self.config = normalized_config
+        # Preserve original config object for compatibility with tests and
+        # call sites that compare object identity/equality.
+        self.config = config
+        # Keep a normalized mapping for adapter internals.
+        self.config_dict = normalized_config
         self._metrics = {
             "operations_count": 0,
             "errors_count": 0,
