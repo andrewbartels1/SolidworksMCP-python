@@ -71,3 +71,9 @@ coverage.xml
 
 # Generated test artifacts
 tests/.generated/
+
+
+# random mypy artifacts
+mypy_*
+
+.mypy_cache/
