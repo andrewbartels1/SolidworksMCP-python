@@ -12,8 +12,34 @@ Write-Host ""
 
 # Helper function to check if environment exists
 function Test-MicromambaEnv {
-    $result = micromamba info --json | ConvertFrom-Json
-    return $result.envs -contains "$($result.root_prefix)\envs\solidworks_mcp"
+    try {
+        $result = micromamba info --json | ConvertFrom-Json
+        $expectedPrefix = Join-Path $result.root_prefix "envs\solidworks_mcp"
+        return $result.envs -contains $expectedPrefix
+    } catch {
+        return $false
+    }
+}
+
+function Invoke-ProjectPython {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Args
+    )
+
+    $micromambaCmd = Get-Command micromamba -ErrorAction SilentlyContinue
+    if ($micromambaCmd -and (Test-MicromambaEnv)) {
+        micromamba run -n solidworks_mcp python @Args
+        return
+    }
+
+    $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+    if (Test-Path $venvPython) {
+        & $venvPython @Args
+        return
+    }
+
+    throw "No Python runtime found. Install micromamba or create .venv first."
 }
 
 function dev-help {
@@ -21,9 +47,12 @@ function dev-help {
     Write-Host ""
     Write-Host "dev-install           - Install dependencies and setup environment"
     Write-Host "dev-test              - Run test suite with coverage"
+    Write-Host "dev-test-context-budget - Run smoke response-size guard test"
     Write-Host "dev-test-full         - Run full suite including real SolidWorks integration tests"
     Write-Host "dev-test-clean        - Remove generated integration test artifacts"
     Write-Host "dev-docs              - Serve documentation locally (http://localhost:8000)"
+    Write-Host "dev-make-docs-build   - Build docs locally (supports -Quiet when sourced)"
+    Write-Host "dev-make-docs-serve   - Build-check docs then serve locally (http://localhost:8000)"
     Write-Host "dev-docs-discovery    - Index SolidWorks COM/VBA documentation (Windows-only)"
     Write-Host "dev-build             - Build package for distribution"
     Write-Host "dev-run               - Start the MCP server"
@@ -31,6 +60,27 @@ function dev-help {
     Write-Host "dev-lint              - Run code linting (ruff)"
     Write-Host "dev-format            - Format code (ruff)"
     Write-Host ""
+}
+
+function Invoke-ProjectModule {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Args
+    )
+
+    $micromambaCmd = Get-Command micromamba -ErrorAction SilentlyContinue
+    if ($micromambaCmd -and (Test-MicromambaEnv)) {
+        micromamba run -n solidworks_mcp @Args
+        return
+    }
+
+    $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+    if (Test-Path $venvPython) {
+        & $venvPython @Args
+        return
+    }
+
+    throw "No Python runtime found. Install micromamba or create .venv first."
 }
 
 function dev-install {
@@ -52,14 +102,16 @@ function dev-install {
 function dev-test {
     Write-Host "Running tests with coverage..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
-    micromamba run -n solidworks_mcp python -m pytest tests/ `
-        -m "not solidworks_only" `
-        --cov=src/solidworks_mcp `
-        --cov-report=term-missing `
-        --cov-report=html:htmlcov `
-        --cov-report=xml:coverage.xml `
-        --durations=10 `
-        -v
+    Invoke-ProjectPython -Args @(
+        "-m", "pytest", "tests/",
+        "-m", "not solidworks_only",
+        "--cov=src/solidworks_mcp",
+        "--cov-report=term-missing",
+        "--cov-report=html:htmlcov",
+        "--cov-report=xml:coverage.xml",
+        "--durations=10",
+        "-v"
+    )
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Tests passed!" -ForegroundColor Green
         Write-Host "Coverage report: htmlcov/index.html" -ForegroundColor Yellow
@@ -68,17 +120,36 @@ function dev-test {
     }
 }
 
+function dev-test-context-budget {
+    Write-Host "Running smoke response-size guard test..." -ForegroundColor Cyan
+    $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
+    Invoke-ProjectPython -Args @(
+        "-m", "pytest", "tests/test_all_endpoints_harness.py",
+        "-k", "test_smoke_responses_within_context_budget",
+        "--no-cov",
+        "-q"
+    )
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Response-size guard passed!" -ForegroundColor Green
+    } else {
+        Write-Host "Response-size guard failed" -ForegroundColor Red
+    }
+}
+
 function dev-test-full {
     Write-Host "Running full test suite (including real SolidWorks integration)..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
-    micromamba run -n solidworks_mcp python -m pytest tests/ `
-        --cov=src/solidworks_mcp `
-        --cov-report=term-missing `
-        --cov-report=html:htmlcov `
-        --cov-report=xml:coverage.xml `
-        --durations=10 `
-        -v
+    # tests/ includes all suites, including the full endpoint harness tests.
+    Invoke-ProjectPython -Args @(
+        "-m", "pytest", "tests/",
+        "--cov=src/solidworks_mcp",
+        "--cov-report=term-missing",
+        "--cov-report=html:htmlcov",
+        "--cov-report=xml:coverage.xml",
+        "--durations=10",
+        "-v"
+    )
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Full tests passed!" -ForegroundColor Green
         dev-test-clean
@@ -93,7 +164,7 @@ function dev-test-clean {
     # Allow SolidWorks/file-system handles to settle before delete attempts.
     Start-Sleep -Seconds 2
 
-    micromamba run -n solidworks_mcp python tests/scripts/cleanup_generated_integration_artifacts.py
+    Invoke-ProjectPython -Args @("tests/scripts/cleanup_generated_integration_artifacts.py")
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Cleanup complete!" -ForegroundColor Green
         return
@@ -101,7 +172,7 @@ function dev-test-clean {
 
     Write-Host "First cleanup attempt failed; retrying after pause..." -ForegroundColor Yellow
     Start-Sleep -Seconds 3
-    micromamba run -n solidworks_mcp python tests/scripts/cleanup_generated_integration_artifacts.py
+    Invoke-ProjectPython -Args @("tests/scripts/cleanup_generated_integration_artifacts.py")
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Cleanup complete on retry!" -ForegroundColor Green
@@ -115,7 +186,53 @@ function dev-docs {
     Write-Host "Available at: http://localhost:8000" -ForegroundColor Yellow
     Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow
     Write-Host ""
-    micromamba run -n solidworks_mcp mkdocs serve --dev-addr=localhost:8000
+    dev-make-docs-serve
+}
+
+function dev-make-docs-build {
+    param(
+        [switch]$Quiet
+    )
+
+    Write-Host "Validating docs build..." -ForegroundColor Cyan
+
+    $args = @("-m", "mkdocs", "build", "--clean")
+    if ($Quiet) {
+        $args += "--quiet"
+    }
+
+    Invoke-ProjectModule -Args $args
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Docs build passed." -ForegroundColor Green
+    } else {
+        Write-Host "Docs build failed." -ForegroundColor Red
+    }
+}
+
+function dev-make-docs-serve {
+    param(
+        [switch]$Quiet
+    )
+
+    dev-make-docs-build -Quiet:$Quiet
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Docs build failed; fix errors before serving." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "Starting documentation server..." -ForegroundColor Cyan
+    Write-Host "Available at: http://localhost:8000" -ForegroundColor Yellow
+    Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow
+    Write-Host ""
+
+    $serveArgs = @("-m", "mkdocs", "serve", "--dev-addr=localhost:8000")
+    if ($Quiet) {
+        $serveArgs += "--quiet"
+    }
+
+    Invoke-ProjectModule -Args $serveArgs
 }
 
 function dev-docs-discovery {
@@ -138,7 +255,7 @@ function dev-docs-discovery {
         
         # Run the docs discovery Python script
         $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
-        micromamba run -n solidworks_mcp python -c @"
+        Invoke-ProjectPython -Args @("-c", @"
 import asyncio
 import sys
 from pathlib import Path
@@ -167,7 +284,7 @@ try:
 except Exception as e:
     print(f"Error during discovery: {e}", file=sys.stderr)
     sys.exit(1)
-"@
+"@)
         
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Documentation indexing complete!" -ForegroundColor Green
@@ -183,7 +300,7 @@ except Exception as e:
 
 function dev-build {
     Write-Host "Building package for distribution..." -ForegroundColor Cyan
-    micromamba run -n solidworks_mcp python -m build
+    Invoke-ProjectPython -Args @("-m", "build")
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Build complete! Package ready in dist/" -ForegroundColor Green
     } else {
@@ -193,7 +310,7 @@ function dev-build {
 
 function dev-run {
     Write-Host "Starting MCP server..." -ForegroundColor Cyan
-    micromamba run -n solidworks_mcp python -m solidworks_mcp.server
+    Invoke-ProjectPython -Args @("-m", "solidworks_mcp.server")
 }
 
 function dev-clean {
@@ -215,7 +332,7 @@ function dev-clean {
 
 function dev-lint {
     Write-Host "Running linting (ruff check)..." -ForegroundColor Cyan
-    micromamba run -n solidworks_mcp ruff check src/ tests/
+    Invoke-ProjectPython -Args @("-m", "ruff", "check", "src/", "tests/")
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Linting passed!" -ForegroundColor Green
     } else {
@@ -225,7 +342,7 @@ function dev-lint {
 
 function dev-format {
     Write-Host "Formatting code (ruff format)..." -ForegroundColor Cyan
-    micromamba run -n solidworks_mcp ruff format src/ tests/
+    Invoke-ProjectPython -Args @("-m", "ruff", "format", "src/", "tests/")
     Write-Host "Formatting complete!" -ForegroundColor Green
 }
 

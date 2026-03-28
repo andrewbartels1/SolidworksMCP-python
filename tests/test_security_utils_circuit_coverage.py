@@ -61,6 +61,32 @@ class _DummyAdapter(SolidWorksAdapter):
     async def close_model(self, save: bool = False):
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
+    async def get_model_info(self):
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": "m",
+                "path": "p",
+                "type": "Part",
+                "configuration": "Default",
+            },
+        )
+
+    async def list_features(self, include_suppressed: bool = False):
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=[
+                {
+                    "name": "Sketch1",
+                    "type": "ProfileFeature",
+                    "suppressed": False,
+                }
+            ],
+        )
+
+    async def list_configurations(self):
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=["Default"])
+
     async def create_part(self):
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 

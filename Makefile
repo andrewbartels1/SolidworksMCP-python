@@ -1,6 +1,6 @@
 # SolidWorks MCP Server - Simplified Makefile
 
-.PHONY: help install test test-full test-clean docs build run clean lint format
+.PHONY: help install test test-context-budget test-full test-clean docs build run clean lint format
 
 # Default target
 .DEFAULT_GOAL := help
@@ -22,6 +22,7 @@ help: ## Show available commands
 	@echo "$(GREEN)Core Commands:$(NC)"
 	@echo "  $(YELLOW)install$(NC)     Install dependencies and setup environment"
 	@echo "  $(YELLOW)test$(NC)        Run test suite with coverage"
+	@echo "  $(YELLOW)test-context-budget$(NC)  Run smoke response-size guard test"
 	@echo "  $(YELLOW)test-full$(NC)   Run full suite including real SolidWorks integration tests"
 	@echo "  $(YELLOW)test-clean$(NC)  Remove generated integration test artifacts"
 	@echo "  $(YELLOW)docs$(NC)        Serve documentation locally"
@@ -54,6 +55,17 @@ test: ## Run test suite with coverage
 		--cov-report=xml:coverage.xml \
 		--durations=10 \
 		-v
+
+test-context-budget: ## Run smoke response-size guard test (CI-friendly)
+	@echo "$(BLUE)Running smoke response-size guard test...$(NC)"
+	@if [ -z "$(CONDA_CMD)" ]; then \
+		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \
+		exit 1; \
+	fi
+	PY_KEY_VALUE_DISABLE_BEARTYPE=true $(CONDA_CMD) run -n solidworks_mcp python -m pytest tests/test_all_endpoints_harness.py \
+		-k "test_smoke_responses_within_context_budget" \
+		--no-cov \
+		-q
 
 test-full: ## Run full suite including real SolidWorks integration tests (Windows + SolidWorks)
 	@echo "$(BLUE)Running full test suite (including real SolidWorks integration)...$(NC)"

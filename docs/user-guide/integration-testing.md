@@ -67,6 +67,40 @@ The suite writes a snapshot report to:
 
 This makes tool registration regressions easy to detect during upgrades.
 
+## Generated Compatibility Artifacts
+
+The integration harness writes machine-readable artifacts to:
+
+- tests/.generated/solidworks_integration/
+
+Key files:
+
+1. api_compat_report.json
+ - Output from docs-discovery compatibility checks.
+ - Compares discovered COM interface coverage against required surface.
+2. smoke_test_report.json
+ - Per-tool smoke execution status, elapsed time, and payload keys.
+ - Useful for spotting unstable tools by category.
+3. smoke_response_size_report.json
+ - Per-tool response payload sizes and aggregate total bytes.
+ - Enforces context-window guardrails for LLM-facing workflows.
+4. tool_catalog_snapshot.json
+ - Snapshot of registered tool names used for regression detection.
+
+### Example: Response-Size Guardrail
+
+Use one of the following to run only the payload-size budget test:
+
+```bash
+make test-context-budget
+```
+
+```powershell
+.\dev-commands.ps1 dev-test-context-budget
+```
+
+This command is suitable as a CI gate to prevent response-size regressions that can overwhelm chat context windows.
+
 ## Marker Strategy
 
 Real tests are intentionally gated by markers and environment:
