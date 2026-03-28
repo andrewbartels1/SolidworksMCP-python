@@ -52,6 +52,7 @@ coverage/
 *.tmp
 *.temp
 .cache/
+.tmp_diag_*.py
 
 # npm pack output
 *.tgz
@@ -67,3 +68,6 @@ EOF < /dev/null
 site/
 coverage.xml
 .coverage
+
+# Generated test artifacts
+tests/.generated/

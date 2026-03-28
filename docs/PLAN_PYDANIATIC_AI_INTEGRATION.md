@@ -606,7 +606,6 @@ result = await agent.run_async(
 - [ ] Multi-agent collaboration works
 - [ ] LangChain integration complete
 - [ ] Advanced features (batch, collaborative) work
-- [ ] User satisfaction score > 4/5
 
 ## Risks & Mitigation
 
@@ -634,6 +633,7 @@ Frontend:
 LLM:
 - Claude 3.5 Sonnet (default)
 - Fallback to local LLama via Ollama (optional)
+- Locally hosted smaller models with context
 ```
 
 ## Timeline

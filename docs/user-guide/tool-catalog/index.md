@@ -50,7 +50,7 @@ sequenceDiagram
     MCP->>MCP: Pydantic input validation
     MCP->>COM: COM API call (pywin32)
     COM->>SW: Windows COM dispatch
-    SW-->>COM: return value / hresult
+    SW-->>COM: return value / results
     COM-->>MCP: Python object
     MCP-->>LLM: {"status":"success","data":{...}}
 ```
