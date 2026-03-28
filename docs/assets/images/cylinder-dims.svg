@@ -55,15 +55,19 @@
   <text x="330" y="196" text-anchor="left" font-size="12" fill="#212121" font-weight="bold">80 mm</text>
 
   <!-- Sketch note -->
-  <text x="130" y="195" text-anchor="middle" font-size="10" fill="#0D47A1" font-style="italic">Rectangle</text>
-  <text x="130" y="207" text-anchor="middle" font-size="10" fill="#0D47A1" font-style="italic">profile + axis</text>
-  <text x="130" y="219" text-anchor="middle" font-size="10" fill="#0D47A1" font-style="italic">→ revolve 360°</text>
+  <rect x="84" y="183" width="92" height="42" fill="#FFFFFF" fill-opacity="0.82" stroke="#90CAF9" stroke-width="0.8" rx="4"/>
+  <text x="130" y="196" text-anchor="middle" font-size="11" fill="#0A2E6E" font-weight="600">Rectangle</text>
+  <text x="130" y="208" text-anchor="middle" font-size="11" fill="#0A2E6E" font-weight="600">profile + axis</text>
+  <text x="130" y="220" text-anchor="middle" font-size="10.5" fill="#0A2E6E" font-weight="600">→ revolve 360°</text>
 
   <!-- Revolve arc indicator -->
-  <path d="M 155,190 A 30,30 0 0,0 295,190" fill="none" stroke="#E65100" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <path d="M 155,190 A 80,24 0 0,0 295,190" fill="none" stroke="#E65100" stroke-width="1.5" stroke-dasharray="4,3"/>
   <text x="225" y="230" text-anchor="middle" font-size="10" fill="#BF360C">360° revolve</text>
 
   <!-- Call sequence box -->
-  <rect x="18" y="298" width="444" height="30" fill="#E1F5FE" stroke="#0288D1" rx="5"/>
-  <text x="28" y="318" font-size="11" fill="#01579B">create_part → create_sketch(Front) → add_centerline → add_rectangle(0,0,80,25) → exit_sketch → create_revolve(360°) → save_as</text>
+  <rect x="18" y="290" width="444" height="42" fill="#E1F5FE" stroke="#0288D1" rx="5"/>
+  <text x="28" y="307" font-size="10.5" fill="#01579B">
+    <tspan x="28" dy="0">create_part → create_sketch(Front) → add_centerline → add_rectangle(0,0,80,25)</tspan>
+    <tspan x="28" dy="14">→ exit_sketch → create_revolve(360°) → save_as</tspan>
+  </text>
 </svg>
