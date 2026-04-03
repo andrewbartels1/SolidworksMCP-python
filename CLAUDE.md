@@ -1,42 +1,103 @@
-# SolidWorks MCP Server
+# SolidWorks MCP Server (Python)
 
-## Build & Test
+This file is the quick orientation guide for contributors and coding agents.
 
-```bash
-npm run build        # TypeScript compile (tsc)
-npm run dev          # Hot-reload dev server (tsx watch)
-npm test             # Run unit tests (vitest)
-npm run test:watch   # Watch mode tests
-npm run lint         # ESLint check
-npm run typecheck    # Type check without emit
+## Platform and Runtime
+
+- Primary runtime is Python 3.11+.
+- Real COM automation requires Windows + SolidWorks installed.
+- Cross-platform development is possible in mock/test mode.
+
+## Build and Development Commands
+
+Use either micromamba environment commands or local virtualenv commands.
+
+### Preferred PowerShell workflow
+
+```powershell
+# Show command help
+.\dev-commands.ps1
+
+# Full install in micromamba env
+.\dev-commands.ps1 dev-install
+
+# Fast test pass (no SolidWorks-required tests)
+.\dev-commands.ps1 dev-test
+
+# Full test run including real SolidWorks integration
+.\dev-commands.ps1 dev-test-full
+
+# Lint and format
+.\dev-commands.ps1 dev-lint
+.\dev-commands.ps1 dev-format
+
+# Docs build/serve
+.\dev-commands.ps1 dev-make-docs-build
+.\dev-commands.ps1 dev-docs
 ```
 
-**Important**: This project requires Windows + SolidWorks to run. The `winax` native module only compiles on Windows. Tests use `USE_MOCK_SOLIDWORKS=true` by default for cross-platform CI.
+### Virtualenv direct workflow
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
+
+# Run server
+.\.venv\Scripts\python.exe -m solidworks_mcp.server
+
+# Lint/tests/docs
+.\.venv\Scripts\python.exe -m ruff check src tests
+.\.venv\Scripts\python.exe -m pytest tests -m "not solidworks_only"
+.\.venv\Scripts\python.exe -m mkdocs build --clean
+```
 
 ## Architecture
 
-- **MCP Server** (`src/index.ts`) - Entry point, registers 88+ tools via stdio transport
-- **Adapters** (`src/adapters/`) - COM bridge layer with intelligent routing:
-  - `winax-adapter.ts` - Direct COM via winax
-  - `winax-adapter-enhanced.ts` - Enhanced adapter with complexity analysis
-  - `feature-complexity-analyzer.ts` - Routes operations between direct COM and VBA macro fallback
-  - `macro-generator.ts` - Generates VBA code for complex operations
-- **Tools** (`src/tools/`) - MCP tool implementations (modeling, sketch, drawing, export, analysis, VBA)
-- **Core API** (`src/solidworks/api.ts`) - Low-level SolidWorks COM interface
+- Server entrypoint: `src/solidworks_mcp/server.py`
+- CLI entrypoint: `src/solidworks_mcp/server_cli_fixed.py`
+- Adapters: `src/solidworks_mcp/adapters/`
+  - `pywin32_adapter.py`: real SolidWorks COM adapter (Windows)
+  - `mock_adapter.py`: mock adapter for tests and CI-like runs
+  - `factory.py`: adapter selection/routing logic
+- Tools: `src/solidworks_mcp/tools/` (modeling, sketching, drawing, export, analysis, automation, templates, VBA, docs discovery)
+- Agent harness: `src/solidworks_mcp/agents/` (prompt schemas, smoke test CLI, run/error persistence)
 
 ## Key Patterns
 
-### COM Interop
-- **Never pass `null` to COM optional parameters** - use `undefined` instead. COM interprets `null` as VT_NULL which causes type mismatch errors. This is the root cause of SelectByID2 failures.
-- **Prefer feature tree traversal** over `SelectByID2` for sketch selection. Use `FeatureByPositionReverse()` + `GetTypeName2()` to find sketches reliably.
-- Operations with >12 parameters automatically fall back to VBA macro execution.
+### COM and Adapter Safety
 
-### Code Style
-- ESM modules (`"type": "module"` in package.json)
-- Zod schemas for all tool input validation
-- Winston logging (never use `console.*` - it breaks JSON-RPC stdio transport)
-- `@ts-ignore` on winax imports is intentional (no type definitions exist)
+- Prefer adapter abstraction, not direct COM calls from tool modules.
+- Keep Windows/COM behavior behind adapter boundaries.
+- Use mock adapter for tests unless a test explicitly requires real SolidWorks.
 
-## Testing
-- Mock adapter (`src/adapters/mock-solidworks-adapter.ts`) simulates SolidWorks for CI
-- Set `USE_MOCK_SOLIDWORKS=false` for integration tests on Windows with SolidWorks running
+### Logging and Output
+
+- Use project logging utilities (`loguru`/configured helpers).
+- Avoid ad-hoc print statements in runtime server paths.
+
+### Validation and Tool Contracts
+
+- Keep tool input schemas strict and explicit.
+- Maintain stable response payload shapes (`status`, `message`, `execution_time`, plus data payload).
+
+## Testing Guidance
+
+- Default local path: run non-`solidworks_only` tests first.
+- Real integration path: run `dev-test-full` on Windows with SolidWorks available.
+- Harness and generated report artifacts may write under `tests/.generated/` and `.solidworks_mcp/`.
+
+## Documentation Guidance
+
+- Build docs before commit when touching docs pages:
+  - `.\dev-commands.ps1 dev-make-docs-build`
+- For local preview:
+  - `.\dev-commands.ps1 dev-docs`
+
+## Agent and Model Notes
+
+- VS Code Copilot subscription is suitable for chat-based workflows.
+- Local Python smoke tests require explicit provider credentials:
+  - GitHub Models: `GH_TOKEN` or `GITHUB_API_KEY`
+  - OpenAI: `OPENAI_API_KEY`
+  - Anthropic: `ANTHROPIC_API_KEY`
