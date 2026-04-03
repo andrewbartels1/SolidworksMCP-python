@@ -1,5 +1,24 @@
 # Pydantic-AI Agent Integration Plan
 
+## Current Baseline (April 2026)
+
+The repository now includes a starter harness in `src/solidworks_mcp/agents/`:
+
+- `harness.py` for model invocation + typed output validation
+- `schemas.py` for reusable response schemas
+- `history_db.py` for local SQLite run/error memory
+- `smoke_test.py` for command-line prompt tests
+
+This baseline supports fast iteration on custom `.agent.md` files while validating structured outputs and preserving error history.
+
+## Immediate Usage Pattern
+
+1. Select a workspace agent file from `.github/agents/`
+2. Choose schema (`manufacturability` or `docs`)
+3. Run `python -m solidworks_mcp.agents.smoke_test ...`
+4. Review structured JSON output
+5. Inspect `.solidworks_mcp/agent_memory.sqlite3` for failures and remediation guidance
+
 **Objective**: Build an intelligent, context-aware SolidWorks agent using PydanticAI that understands design intent, coordinates multi-step operations, and learns from user patterns.
 
 ## Problem Statement

@@ -1,5 +1,17 @@
 # Database & Workflow Catalog Planning
 
+## Current MVP Baseline (April 2026)
+
+An initial local SQLite implementation is now available via `src/solidworks_mcp/agents/history_db.py`.
+
+Implemented tables:
+
+- `agent_runs`
+- `tool_events`
+- `error_catalog`
+
+This provides immediate value for provenance and troubleshooting by capturing where failures originated and recommended remediation, before adding full template/replay orchestration.
+
 **Objective**: Create a stateful workflow system that catalogs all SolidWorks MCP operations, enables workflow reuse, supports undo/redo, and provides crash recovery. This is a TODO and just planning.
 
 ## Problem Statement

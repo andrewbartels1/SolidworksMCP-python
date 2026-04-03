@@ -1,5 +1,18 @@
 # GUI Visualization Integration Plan
 
+## Update (April 2026): Decision-Card Interaction Direction
+
+In addition to the existing dashboard goals, the preferred interaction pattern is now explicit "pre-baked choice" cards so users can quickly branch design decisions without writing long prompts.
+
+Priority card types:
+
+1. Hinge selector card (ball-bearing, concealed, piano, living hinge)
+2. Sourcing card (McMaster-Carr vs commodity online alternatives)
+3. Printability card (orientation face, support burden, weak-axis risk)
+4. Build-volume card (fits vs split strategy)
+
+Each card should emit typed JSON that can be logged to SQLite and reused in follow-up prompts.
+
 **Objective**: Create a unified interface that allows users to interact with LLM-driven SolidWorks automation without constant context-switching between the text prompt and SolidWorks CAD environment.
 
 ## Problem Statement

@@ -21,11 +21,14 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
+      - Agents and Prompt Testing: getting-started/agents-and-testing.md
       - VS Code MCP Setup: getting-started/vscode-mcp-setup.md
       - Claude Code MCP Setup: getting-started/claude-code-setup.md
   - User Guide:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
+      - Agent UI Workflows: user-guide/agent-ui-workflows.md
+      - Agent Memory and Recovery: user-guide/agent-memory-and-recovery.md
       - Platform and Connectivity: user-guide/platform-connectivity.md
       - Docs Discovery Tool Design: user-guide/docs-discovery-tool-design.md
       - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md

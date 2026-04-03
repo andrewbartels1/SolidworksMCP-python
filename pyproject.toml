@@ -33,6 +33,8 @@ dependencies = [
     "fastmcp>=0.4.0",
     "pydantic>=2.5.0",
     "pydantic-ai>=0.0.13",
+    "sqlmodel>=0.0.22",
+    "chardet<6",
     "pywin32>=306; platform_system=='Windows'",
     "pywin32-ctypes>=0.2.0; platform_system=='Windows'",
     "loguru>=0.7.0",

@@ -273,6 +273,23 @@ flowchart LR
     end
 ```
 
+## Agent Orchestration Add-On
+
+The project now includes a lightweight agent orchestration/testing layer for custom workspace agents:
+
+- Runtime package: `src/solidworks_mcp/agents/`
+- Prompt validation harness: `harness.py`
+- Typed output schemas: `schemas.py`
+- Local error-memory SQLite: `history_db.py`
+
+This layer is intentionally separate from the core MCP server runtime so teams can test prompt quality, response structure, and failure-recovery guidance without changing tool implementations.
+
+See:
+
+- [Agents and Prompt Testing](../getting-started/agents-and-testing.md)
+- [Agent UI Workflows](agent-ui-workflows.md)
+- [Agent Memory and Recovery](agent-memory-and-recovery.md)
+
 ## Deployment Patterns
 
 ### Local Development
