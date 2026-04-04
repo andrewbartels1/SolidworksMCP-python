@@ -48,7 +48,7 @@ test: ## Run test suite with coverage
 		exit 1; \
 	fi
 	PY_KEY_VALUE_DISABLE_BEARTYPE=true $(CONDA_CMD) run -n solidworks_mcp python -m pytest tests/ \
-		-m "not solidworks_only" \
+		-m "not solidworks_only and not smoke" \
 		--cov=src/solidworks_mcp \
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \

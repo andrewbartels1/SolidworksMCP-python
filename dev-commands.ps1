@@ -106,7 +106,7 @@ function dev-test {
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
     Invoke-ProjectPython -Args @(
         "-m", "pytest", "tests/",
-        "-m", "not solidworks_only",
+        "-m", "not solidworks_only and not smoke",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
@@ -218,6 +218,17 @@ function dev-test-full {
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Skipping test run because harness reports could not be prepared" -ForegroundColor Red
         return
+    }
+
+    # Resolve GitHub token for smoke tests (gh auth token fallback).
+    if (-not $env:GITHUB_API_KEY -and -not $env:GH_TOKEN) {
+        try {
+            $ghToken = (gh auth token 2>$null).Trim()
+            if ($ghToken) {
+                $env:GITHUB_API_KEY = $ghToken
+                Write-Host "GitHub token resolved via 'gh auth token'." -ForegroundColor Green
+            }
+        } catch { }
     }
 
     # tests/ includes all suites, including the full endpoint harness tests.

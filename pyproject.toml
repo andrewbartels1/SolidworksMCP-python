@@ -162,6 +162,7 @@ markers = [
     "slow: Tests that take longer to run",
     "windows_only: Tests that require Windows OS",
     "solidworks_only: Tests that require SolidWorks installation",
+    "smoke: Tests that make live LLM API calls (require GH_TOKEN or ANTHROPIC_API_KEY — excluded from CI)",
 ]
 filterwarnings = [
     "error",
