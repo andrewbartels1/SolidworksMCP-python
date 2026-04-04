@@ -1,56 +1,168 @@
 # Agents and Prompt Testing
 
-This guide is for users who already know SolidWorks workflows but are newer to LLM agents.
+This guide is written for people who know SolidWorks well but are new to LLM agents and AI-assisted workflows.
 
-## What You Now Have
+## What Are Agents? (Plain-Language Overview)
 
-Workspace agents in `.github/agents/`:
+If you know SolidWorks, think of agents like this:
 
-1. `solidworks-print-architect.agent.md`
+| SolidWorks concept | Agent equivalent |
+|----|-----|
+| Design Intent | Your prompt — what you're trying to build |
+| Custom toolbars / macros | Agents — specialists trained for specific tasks |
+| Feature Manager checklist | Schema — structured output that validates the result |
+| Macro recorder | Skill — a reusable SOP the agent follows |
+| Feature history | SQLite log — every prompt and result saved locally |
 
-- Design-for-print guidance (tolerances, clearances, orientation, material tradeoffs)
-- Build-volume checks and mitigation strategies
+You write a prompt describing what you want (material, printer, geometry constraints). The agent responds with structured, validated output — not just a chat reply — that can feed directly into your SolidWorks MCP workflow.
 
-1. `solidworks-mcp-skill-docs.agent.md`
+---
 
-- Skill/service design for better MCP tool routing
-- Docs and demo workflow authoring
+## What Agents Are Available
 
-1. `solidworks-research-validator.agent.md`
+Three specialist agents live in `.github/agents/`:
 
-- Fast read-only fact validation (materials, printer specs, sourcing)
+### `solidworks-print-architect`
+**Use when:** Designing parts for 3D printing — tolerances, snap fits, overhangs, print orientation, build volume checks.
 
-## How to Call the Agents in VS Code
+Example output includes:
+- Material tradeoffs (PLA vs PETG vs ABS)
+- Snap-fit clearance ranges with risk level
+- Which face to put on the print bed and why
+- Build volume check against your specific printer
 
-1. Open Copilot Chat.
-2. Choose the target custom agent in the chat agent picker.
+### `solidworks-mcp-skill-docs`
+**Use when:** Building SolidWorks MCP workflows, creating tutorials, planning tool sequences from sketch to feature.
+
+Example output includes:
+- Step-by-step MCP tool call sequence
+- Decision table for tool selection
+- Troubleshooting fallbacks
+- Demo walkthrough using sample parts from your SolidWorks install
+
+### `solidworks-research-validator`
+**Use when:** Fact-checking material specs, looking up printer build volumes, comparing sourcing options before committing to geometry changes.
+
+Example output includes:
+- Short answer first
+- Evidence table with source and confidence
+- Recommended decision with risk level
+- Open questions to resolve before CAD work
+
+---
+
+## How to Call the Agents
+
+### Claude Code (This Tool)
+
+The agents in `.github/agents/` are automatically available in Claude Code when you open this repo. Just describe what you need — Claude routes to the right specialist automatically.
+
+### VS Code Copilot Chat
+
+1. Open Copilot Chat (`Ctrl+Alt+I`).
+2. Click the agent picker and select one of the three agents.
 3. Submit your prompt.
 
-Advanced delegation:
+### Command-Line Smoke Test (`smoke_test.py`)
 
-- Use your main agent and ask it to hand off to one of the specialized agents by name when appropriate.
+For repeatable, logged tests — results are saved to `.solidworks_mcp/agent_memory.sqlite3`.
 
-## Installation and Model Setup
+---
 
-Use this section when setting up agent testing for the first time.
+## First-Time Setup
 
-### Pick Your Runtime Path
+### Step 1 — Install the Python environment
 
-1. VS Code Copilot Chat path
+If you haven't already:
 
-- Uses your Copilot subscription directly in VS Code.
-- Best for interactive day-to-day usage.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,test]"
+```
 
-1. Local `pydantic-ai` smoke test path
+### Step 2 — Authenticate with GitHub
 
-- Runs as a normal Python process.
-- Requires credentials for the model provider you choose.
+The smoke test uses GitHub Models, which is free with your GitHub Copilot subscription. You authenticate using the GitHub CLI (`gh`).
 
-### Provider Setup (Tabbed)
+Install `gh` if you don't have it:
+
+```powershell
+winget install --id GitHub.cli -e --accept-package-agreements --accept-source-agreements
+```
+
+Log in (opens browser):
+
+```powershell
+gh auth login
+```
+
+That's it. The smoke test automatically picks up your `gh` credentials — no environment variables needed.
+
+!!! tip "Already logged in?"
+    Run `gh auth status` to confirm. If it shows your account, you're ready to run tests immediately.
+
+### Step 3 — Run your first test
+
+```powershell
+.\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test `
+  --agent-file solidworks-print-architect.agent.md `
+  --github-models `
+  --schema manufacturability `
+  --prompt "Design a PLA snap-fit battery cover for a 220x220x250 bed"
+```
+
+You should see structured JSON output like this:
+
+```json
+{
+  "summary": "Snap-fit battery cover for PLA ...",
+  "assumptions": [...],
+  "recommendations": [
+    { "title": "Use conservative snap thickness", "risk": "medium", ... },
+    ...
+  ],
+  "orientation_guidance": "Print face-down with exterior cover surface on bed ...",
+  "tolerance_clearance_notes": ["0.3-0.5 mm clearance for snap fits ..."],
+  "build_volume_check": "Part fits within 220x220x250 mm envelope ..."
+}
+```
+
+---
+
+## Provider Setup Options
+
+=== "GitHub Models (Recommended — free with Copilot)"
+
+    Uses your existing GitHub Copilot subscription. No separate API key or billing.
+
+    **Automatic (via `gh` CLI — recommended):**
+
+    The smoke test falls back to `gh auth token` automatically if no environment variable is set. Just run `gh auth login` once.
+
+    **Manual (if you prefer explicit env vars):**
+
+    ```powershell
+    # Save permanently
+    $token = gh auth token
+    [System.Environment]::SetEnvironmentVariable("GH_TOKEN", $token, "User")
+
+    # Load into current session
+    $env:GH_TOKEN = [System.Environment]::GetEnvironmentVariable("GH_TOKEN", "User")
+    ```
+
+    Run smoke test:
+
+    ```powershell
+    .\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test `
+      --agent-file solidworks-print-architect.agent.md `
+      --github-models `
+      --schema manufacturability `
+      --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
+    ```
 
 === "GitHub Copilot Subscription (VS Code + Copilot CLI)"
 
-    Use this if you want subscription-backed usage in VS Code and terminal Copilot CLI workflows.
+    Use this for interactive day-to-day usage in VS Code chat.
 
     Install GitHub CLI on Windows:
 
@@ -74,48 +186,6 @@ Use this section when setting up agent testing for the first time.
     }
     ```
 
-    Install/verify Copilot CLI:
-
-    ```powershell
-    gh copilot -- --help
-    copilot --help
-    ```
-
-    If `copilot` is still not found, add its install directory to PATH:
-
-    ```powershell
-    $copilotDir = "$env:APPDATA\Code\User\globalStorage\github.copilot-chat\copilotCli"
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($userPath -notlike "*$copilotDir*") {
-      [Environment]::SetEnvironmentVariable("Path", ($userPath.TrimEnd(';') + ';' + $copilotDir).Trim(';'), "User")
-    }
-    ```
-
-    Model selection notes:
-
-    - Copilot CLI uses the default configured model when `--model` is omitted.
-    - This is the practical equivalent of "auto" behavior in CLI usage.
-    - Pin a model only when needed, for example: `copilot --model gpt-5.3-codex`.
-
-=== "GitHub Models (Recommended for local smoke tests)"
-
-    Use this if you want local `smoke_test.py` runs without OpenAI/Anthropic direct billing.
-
-    1. Create a GitHub PAT with `models:read` scope.
-    2. Export token to environment:
-
-    ```powershell
-    $env:GH_TOKEN = "<your_github_pat_with_models_read>"
-    # or
-    $env:GITHUB_API_KEY = "<your_github_pat_with_models_read>"
-    ```
-
-    3. Run smoke test:
-
-    ```powershell
-    .\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test --agent-file solidworks-print-architect.agent.md --github-models --github-model openai/gpt-4.1 --schema manufacturability --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
-    ```
-
 === "OpenAI API (BYOK)"
 
     1. Create an OpenAI API key.
@@ -128,118 +198,172 @@ Use this section when setting up agent testing for the first time.
     3. Run smoke test with OpenAI provider model:
 
     ```powershell
-    .\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test --agent-file solidworks-print-architect.agent.md --model openai:gpt-4.1 --schema manufacturability --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
+    .\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test `
+      --agent-file solidworks-print-architect.agent.md `
+      --model openai:gpt-4.1 `
+      --schema manufacturability `
+      --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
     ```
 
 === "Anthropic API (BYOK)"
 
-    1. Create an Anthropic API key.
-    2. Export key:
+    Requires an Anthropic account with active billing credits (separate from Claude Code subscription).
+    Get your key at: https://console.anthropic.com/settings/keys
 
     ```powershell
-    $env:ANTHROPIC_API_KEY = "<your_anthropic_api_key>"
+    [System.Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-...", "User")
+    $env:ANTHROPIC_API_KEY = [System.Environment]::GetEnvironmentVariable("ANTHROPIC_API_KEY", "User")
     ```
 
-    3. Run smoke test with Anthropic provider model:
+    Run smoke test:
 
     ```powershell
-    .\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test --agent-file solidworks-print-architect.agent.md --model anthropic:claude-3-5-sonnet-latest --schema manufacturability --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
+    .\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test `
+      --agent-file solidworks-print-architect.agent.md `
+      --anthropic `
+      --schema manufacturability `
+      --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
     ```
 
 Credential rules summary:
 
-- `--github-models` requires `GH_TOKEN` or `GITHUB_API_KEY`.
+- `--github-models` auto-uses `gh auth token` if `GH_TOKEN`/`GITHUB_API_KEY` are not set.
 - `--model openai:*` requires `OPENAI_API_KEY`.
-- `--model anthropic:*` requires `ANTHROPIC_API_KEY`.
-- Copilot subscription entitlements are not reused as OpenAI/Anthropic API keys for local Python runs.
+- `--anthropic` requires `ANTHROPIC_API_KEY` with active billing.
+- Copilot subscription entitlements are not reused as OpenAI/Anthropic API keys.
 
-## Prompts, Skills, and Agents (Engineer-Friendly)
+---
 
-If you know SolidWorks and engineering workflows but are new to LLM systems, use this mental model:
+## What Each Schema Validates
 
-- Prompt: your job ticket.
-- Agent: your specialist engineer profile.
-- Skill: your reusable SOP/checklist.
-- Schema: your acceptance criteria.
+Every smoke test produces one of two structured output types:
 
-How each piece maps in this repository:
+### `--schema manufacturability`
+Used with `solidworks-print-architect` and `solidworks-research-validator`.
 
-1. Prompts
+| Field | What it tells you |
+|---|---|
+| `summary` | One-paragraph design verdict |
+| `assumptions` | What the agent assumed about your printer, material, geometry |
+| `recommendations` | Specific changes with title, rationale, and risk level |
+| `orientation_guidance` | Which face goes on the bed and why |
+| `tolerance_clearance_notes` | Exact mm ranges to use in your SolidWorks sketch |
+| `build_volume_check` | PASS/FAIL against your printer envelope |
 
-- Prompts are the direct requests you send (for example manufacturability checks, orientation guidance, or tolerance recommendations).
-- Good prompts include geometry intent, constraints, material, printer limits, and required output format.
+### `--schema docs`
+Used with `solidworks-mcp-skill-docs` and any agent when planning a tutorial.
 
-1. Agents (`.github/agents/*.agent.md`)
+| Field | What it tells you |
+|---|---|
+| `audience` | Who the doc is for |
+| `objective` | What the reader will be able to do |
+| `sections` | Doc outline |
+| `decisions` | Tool selection decisions with fallback strategies |
+| `demo_steps` | Copy-paste walkthrough sequence |
 
-- Agents define behavior and boundaries for a domain specialist persona.
-- Example: `solidworks-print-architect.agent.md` focuses on printability decisions and risk-aware recommendations.
+---
 
-1. Skills (`.github/skills/**/SKILL.md`)
+## Verified Smoke Test Results
 
-- Skills are reusable instructions invoked for focused tasks (for example tolerancing guidance).
-- Think of a skill as a validated playbook that reduces prompt drift and improves consistency.
+All six combinations below pass with `--github-models` using a GitHub Copilot subscription:
 
-1. Schemas (`src/solidworks_mcp/agents/schemas.py`)
+| Agent | Schema | Sample prompt |
+|---|---|---|
+| `solidworks-print-architect` | `manufacturability` | PLA snap-fit battery cover, 220×220×250 bed |
+| `solidworks-print-architect` | `manufacturability` | ABS enclosure for RPi4, Bambu X1C, 0.4 mm nozzle |
+| `solidworks-print-architect` | `docs` | Tutorial: 3D printed hinge with correct tolerances |
+| `solidworks-mcp-skill-docs` | `docs` | Tutorial: bracket creation with MCP tools |
+| `solidworks-mcp-skill-docs` | `manufacturability` | Bracket sketch-to-extrusion printability review |
+| `solidworks-research-validator` | `manufacturability` | PETG outdoor enclosure material validation |
+| `solidworks-research-validator` | `docs` | FDM printer build volume comparison page |
 
-- Schemas force structured outputs so results can be validated and stored.
-- This is how the harness turns natural-language responses into reliable, machine-checkable artifacts.
+---
 
-1. Harness (`src/solidworks_mcp/agents/smoke_test.py` + `harness.py`)
+## Example Prompts for SolidWorks Users
 
-- The harness runs prompts against an agent and validates output against a selected schema.
-- Recoverable failures are captured with remediation steps so you can retry with a narrower scope.
+### You know the part, you need print guidance
 
-Recommended learning sequence:
-
-1. Start in VS Code Copilot Chat with one specialized agent.
-2. Use short, constraint-rich prompts (material, bed size, tolerance target, orientation requirement).
-3. Move to `smoke_test.py` when you need repeatable validation and logged outputs.
-4. Review `.solidworks_mcp/agent_memory.sqlite3` when results fail or need iteration history.
-
-## Example Prompts
-
-### SolidWorks Print Architect
-
-- "Design a clip-on cover in PETG for outdoor use and give tolerance/clearance ranges plus orientation guidance."
-- "I need this entire assembly to fit a 256x256x256 mm print bed. Suggest split points and joint strategy."
-- "Given a 0.4 mm nozzle and 0.2 mm layer height, propose conservative snap-fit dimensions and risks."
-
-### SolidWorks MCP Skill and Docs Engineer
-
-- "Create a tool-routing skill for sketch-to-feature workflows with fallback when sketches are invalid."
-- "Generate a docs demo for a bracket workflow using the SOLIDWORKS sample learn folder."
-- "Draft a decision table for when to use drawing-analysis tools vs modeling tools."
-
-### SolidWorks Research Validator
-
-- "Compare McMaster-Carr shoulder screw options vs commodity listings for a printable hinge pin design."
-- "Verify real-world build volume for Bambu X1C and whether this part at 280 mm length fits."
-- "Fact-check PETG and ASA thermal behavior assumptions for this enclosure concept."
-
-## PydanticAI Prompt Validation Harness
-
-A starter harness is available in `src/solidworks_mcp/agents/`.
-
-Key modules:
-
-- `harness.py`: runs a prompt against a selected `.agent.md` file, validates typed output, and persists success/recoverable-failure/error states.
-- `schemas.py`: reusable validation schemas for manufacturability and docs planning outputs.
-- `history_db.py`: SQLModel-based local SQLite logging of runs, tool events, and normalized errors.
-- `smoke_test.py`: CLI runner for quick prompt validation.
-
-For provider-specific setup and baseline smoke-test commands, use **Installation and Model Setup** above.
-
-Enable extra retry attempts on model-directed recoverable failures:
-
-```powershell
-.\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test --agent-file solidworks-print-architect.agent.md --model openai:gpt-4.1 --schema manufacturability --max-retries-on-recoverable 2 --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed and include orientation guidance"
+```
+solidworks-print-architect, manufacturability:
+"Design a PETG clip-on cable cover for outdoor use.
+ Printer: Bambu X1C (256x256x256 bed), 0.4mm nozzle, 0.2mm layer height.
+ Give tolerance/clearance ranges and orientation guidance."
 ```
 
-Run a docs-focused validation:
+### You know the assembly, you need a workflow
+
+```
+solidworks-mcp-skill-docs, docs:
+"Plan a step-by-step MCP workflow for creating the U-Joint assembly
+ from the SolidWorks 2026 sample learn folder.
+ Include tool names, fallback strategies, and troubleshooting."
+```
+
+### You need to verify a material spec before starting
+
+```
+solidworks-research-validator, manufacturability:
+"Verify ABS vs PETG heat resistance for an enclosure mounted near a
+ car engine bay. Ambient max ~80°C. What wall thickness is safe?"
+```
+
+### You want to check if a part fits the printer
+
+```
+solidworks-print-architect, manufacturability:
+"I have an L-bracket: 180mm long, 80mm tall, 3mm thick.
+ Does it fit a Prusa MK4 (250x210x220 bed)?
+ Which face should be on the bed?"
+```
+
+---
+
+## Prompts, Skills, and Agents (Mental Model for SolidWorks Engineers)
+
+| Concept | SolidWorks equivalent | What it does in this project |
+|---|---|---|
+| Prompt | Your design brief / RFQ | Tells the agent exactly what to evaluate |
+| Agent | A specialist engineer | Holds domain expertise and behavior rules |
+| Skill | A validated SOP or checklist | Reusable instructions for focused tasks |
+| Schema | Acceptance criteria / GD&T callout | Forces structured, machine-checkable output |
+| Harness | Test fixture | Runs prompts, validates output, logs results |
+
+### Agents (`.github/agents/*.agent.md`)
+
+Agents define the persona, scope, constraints, and output style for a specialist. They are plain Markdown files — you can read and edit them directly.
+
+### Skills (`.github/skills/**/SKILL.md`)
+
+Skills are invoked for a specific focused task. Example: `printer-profile-tolerancing` takes a printer model + material and outputs exact tolerance ranges for every joint type.
+
+### Schemas (`src/solidworks_mcp/agents/schemas.py`)
+
+Schemas turn free-form AI responses into validated data structures. If the model returns something that doesn't match the schema, the harness catches it and retries automatically.
+
+---
+
+## Harness and Retry Behavior
 
 ```powershell
-.\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test  --agent-file solidworks-mcp-skill-docs.agent.md  --model openai:gpt-4.1  --schema docs  --prompt "Plan a tutorial page that demonstrates routing from sketch to extrusion with fallback troubleshooting"
+# Run with 2 automatic retries on recoverable failures
+.\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test `
+  --agent-file solidworks-print-architect.agent.md `
+  --github-models `
+  --schema manufacturability `
+  --max-retries-on-recoverable 2 `
+  --prompt "Design a PLA snap-fit battery cover for 220x220x250 bed"
 ```
+
+```powershell
+# Run a docs-focused validation
+.\.venv\Scripts\python.exe -m solidworks_mcp.agents.smoke_test `
+  --agent-file solidworks-mcp-skill-docs.agent.md `
+  --github-models `
+  --schema docs `
+  --prompt "Plan a tutorial page that demonstrates routing from sketch to extrusion with fallback troubleshooting"
+```
+
+---
 
 ## Local SQLite Memory for Error-Driven Recovery
 
@@ -254,6 +378,24 @@ Tables (managed through SQLModel):
 - `error_catalog`: normalized root cause + remediation entries
 
 Use this data to prevent repeated failures from a broken state, and to drive rollback-first troubleshooting prompts.
+
+Query recent failures in PowerShell:
+
+```powershell
+# Requires sqlite3 on PATH, or use DB Browser for SQLite (free GUI)
+sqlite3 .solidworks_mcp\agent_memory.sqlite3 "SELECT agent_name, status, prompt FROM agent_runs ORDER BY created_at DESC LIMIT 10;"
+```
+
+---
+
+## Suggested Workflow
+
+1. **Before geometry work** — run `solidworks-research-validator` to confirm material properties and printer specs.
+2. **During design** — use `solidworks-print-architect` to check tolerances, orientation, and build volume fit.
+3. **When building workflows** — use `solidworks-mcp-skill-docs` to plan the MCP tool sequence and generate tutorial docs.
+4. **When something fails** — check `.solidworks_mcp/agent_memory.sqlite3` error catalog before retrying.
+
+---
 
 ## Environment Warning: RequestsDependencyWarning
 
@@ -274,16 +416,3 @@ Then verify:
 ```powershell
 .\.venv\Scripts\python.exe -W default -c "import requests; print(requests.__version__)"
 ```
-
-## Continuing Customizations
-
-1. Added read-only research validator agent (`solidworks-research-validator.agent.md`).
-2. Added printer-profile tolerancing skill (`.github/skills/printer-profile-tolerancing/SKILL.md`).
-3. Added reusable docs demo prompt (`.github/prompts/docs-demo-template.prompt.md`).
-
-## Suggested Workflow
-
-1. Start with `solidworks-research-validator` for uncertain material/printer assumptions.
-2. Move to `solidworks-print-architect` for geometry/tolerance/orientation decisions.
-3. Use `solidworks-mcp-skill-docs` to encode repeatable tool routing and publish docs demos.
-4. Run smoke tests and inspect SQLite error catalog before rolling into larger workflows.

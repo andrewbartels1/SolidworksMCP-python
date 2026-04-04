@@ -57,7 +57,8 @@ nav:
   - Planning:
       - GUI Visualization Plan: PLAN_GUI_VISUALIZATION.md
       - Database Workflows Plan: PLAN_DATABASE_WORKFLOWS.md
-      - Pydantic AI Integration Plan: PLAN_PYDANIATIC_AI_INTEGRATION.md
+      - Pydantic AI Integration Plan: PLAN_PYDANTIC_AI_INTEGRATION.md
+      - Tree Read Tools Plan: PLAN_TREE_READ_TOOLS.md
       - Roadmap 2026-2027: ROADMAP_2026_2027.md
 
 # Theme configuration
