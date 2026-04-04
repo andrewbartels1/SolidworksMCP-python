@@ -52,6 +52,7 @@ async def run_validated_prompt(
     user_prompt: str,
     result_type: type[TModel],
     max_retries_on_recoverable: int = 1,
+    db_path: Path | None = None,
 ) -> TModel | RecoverableFailure:
     """Run one prompt through PydanticAI and validate the output schema."""
     if Agent is None:  # pragma: no cover
@@ -94,6 +95,7 @@ async def run_validated_prompt(
                     status="recoverable_failure",
                     output_json=payload.model_dump_json(indent=2),
                     model_name=model_name,
+                    db_path=db_path,
                 )
                 insert_error(
                     ErrorRecord(
@@ -107,6 +109,7 @@ async def run_validated_prompt(
                         else "Follow retry_focus guidance and retry with narrower scope.",
                     ),
                     run_id=run_id,
+                    db_path=db_path,
                 )
                 if payload.should_retry and attempt <= max_retries_on_recoverable:
                     retry_hint = (
@@ -138,6 +141,7 @@ async def run_validated_prompt(
                 status="success",
                 output_json=validated.model_dump_json(indent=2),
                 model_name=model_name,
+                db_path=db_path,
             )
             return validated
         except Exception as exc:
@@ -148,6 +152,7 @@ async def run_validated_prompt(
                 status="error",
                 output_json=None,
                 model_name=model_name,
+                db_path=db_path,
             )
             insert_error(
                 ErrorRecord(
@@ -161,6 +166,7 @@ async def run_validated_prompt(
                     ),
                 ),
                 run_id=run_id,
+                db_path=db_path,
             )
             raise
 

@@ -54,6 +54,45 @@ class DocsPlan(BaseModel):
     demo_steps: list[str] = Field(default_factory=list)
 
 
+class FeatureStep(BaseModel):
+    """One step in a part reconstruction plan."""
+
+    step_number: int = Field(ge=1)
+    tool_name: str = Field(min_length=2, description="MCP tool or action, e.g. create_extrusion")
+    description: str = Field(min_length=5)
+    mcp_call: str = Field(
+        min_length=5,
+        description="Python-style call string, e.g. create_extrusion(sketch_name='Sketch1', depth=10.0)",
+    )
+
+
+class ReconstructionPlan(BaseModel):
+    """Structured plan for recreating a SolidWorks part from scratch using MCP tools."""
+
+    part_name: str = Field(min_length=2)
+    complexity_tier: Literal[1, 2, 3, 4] = Field(
+        description="1=Simple revolve/extrude, 2=Multi-sketch, 3=VBA/loft, 4=Assembly"
+    )
+    analysis_summary: str = Field(
+        min_length=10,
+        description="Brief summary of the part's key geometry and design intent.",
+    )
+    feature_sequence: list[FeatureStep] = Field(
+        min_length=1, description="Ordered list of MCP tool calls to recreate the part."
+    )
+    vba_required: bool = Field(
+        description="True if any feature requires generate_vba_part_modeling + execute_macro."
+    )
+    assembly_mates: list[str] = Field(
+        default_factory=list,
+        description="Mate descriptions for assembly parts, e.g. 'coincident: shaft_axis to yoke_bore'.",
+    )
+    validation_strategy: str = Field(
+        min_length=5,
+        description="How to confirm the reconstruction matches the original (e.g. pixel diff, mass properties).",
+    )
+
+
 class RecoverableFailure(BaseModel):
     """Typed failure output used when agent needs user-guided retry."""
 

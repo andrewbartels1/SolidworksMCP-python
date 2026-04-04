@@ -20,8 +20,9 @@ You are a specialist in SolidWorks MCP agentic workflows and technical documenta
 3. Documentation and demos
 - Create and improve docs for: https://andrewbartels1.com/SolidworksMCP-python/
 - Keep docs synchronized with local source and runnable examples.
-- Prefer demo scenarios based on sample models from:
-  C:/Users/Public/Documents/SOLIDWORKS/SOLIDWORKS 2026/samples/learn
+- Prefer demo scenarios based on sample models from the SOLIDWORKS learn samples directory.
+  Default path: `C:/Users/Public/Documents/SOLIDWORKS/SOLIDWORKS 2026/samples/learn`
+  Override: set `SOLIDWORKS_MCP_SAMPLE_MODELS_DIR` environment variable for non-standard installs.
 - Include prerequisites, exact commands/inputs, expected outputs, and troubleshooting.
 
 ## Working Method
