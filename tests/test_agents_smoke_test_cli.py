@@ -7,6 +7,7 @@ Live LLM smoke tests are in tests/test_smoke_agents_live.py (marked `smoke`).
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,6 +24,11 @@ import src.solidworks_mcp.agents.smoke_test as smoke_module
 
 
 runner = CliRunner()
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text (so assertions are CI-safe)."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +223,7 @@ class TestCLIApp:
     def test_help_output(self):
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "agent-file" in result.output
+        assert "agent-file" in _strip_ansi(result.output)
 
     def test_missing_required_args(self):
         result = runner.invoke(app, [])
@@ -237,14 +243,20 @@ class TestCLIApp:
             build_volume_check="Fits envelope.",
         )
 
-        with patch("src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=AsyncMock(return_value=review)):
+        with patch(
+            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt",
+            new=AsyncMock(return_value=review),
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--agent-file", "test-agent.agent.md",
+                    "--agent-file",
+                    "test-agent.agent.md",
                     "--github-models",
-                    "--schema", "manufacturability",
-                    "--prompt", "Design a snap-fit cover.",
+                    "--schema",
+                    "manufacturability",
+                    "--prompt",
+                    "Design a snap-fit cover.",
                 ],
             )
 
@@ -263,14 +275,20 @@ class TestCLIApp:
             objective="Document bracket workflow.",
         )
 
-        with patch("src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=AsyncMock(return_value=plan)):
+        with patch(
+            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt",
+            new=AsyncMock(return_value=plan),
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--agent-file", "test-agent.agent.md",
+                    "--agent-file",
+                    "test-agent.agent.md",
                     "--github-models",
-                    "--schema", "docs",
-                    "--prompt", "Plan a tutorial.",
+                    "--schema",
+                    "docs",
+                    "--prompt",
+                    "Plan a tutorial.",
                 ],
             )
 
@@ -287,14 +305,20 @@ class TestCLIApp:
             should_retry=False,
         )
 
-        with patch("src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=AsyncMock(return_value=failure)):
+        with patch(
+            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt",
+            new=AsyncMock(return_value=failure),
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--agent-file", "test-agent.agent.md",
+                    "--agent-file",
+                    "test-agent.agent.md",
                     "--github-models",
-                    "--schema", "manufacturability",
-                    "--prompt", "Prompt that fails.",
+                    "--schema",
+                    "manufacturability",
+                    "--prompt",
+                    "Prompt that fails.",
                 ],
             )
 
@@ -319,15 +343,21 @@ class TestCLIApp:
             captured_model.append(kwargs.get("model_name"))
             return review
 
-        with patch("src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=_mock_run):
+        with patch(
+            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=_mock_run
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--agent-file", "test-agent.agent.md",
+                    "--agent-file",
+                    "test-agent.agent.md",
                     "--anthropic",
-                    "--claude-model", "claude-sonnet-4-6",
-                    "--schema", "manufacturability",
-                    "--prompt", "Test.",
+                    "--claude-model",
+                    "claude-sonnet-4-6",
+                    "--schema",
+                    "manufacturability",
+                    "--prompt",
+                    "Test.",
                 ],
             )
 
@@ -353,15 +383,21 @@ class TestCLIApp:
             captured_retries.append(kwargs.get("max_retries_on_recoverable"))
             return review
 
-        with patch("src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=_mock_run):
+        with patch(
+            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=_mock_run
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--agent-file", "test-agent.agent.md",
+                    "--agent-file",
+                    "test-agent.agent.md",
                     "--github-models",
-                    "--schema", "manufacturability",
-                    "--max-retries-on-recoverable", "3",
-                    "--prompt", "Test.",
+                    "--schema",
+                    "manufacturability",
+                    "--max-retries-on-recoverable",
+                    "3",
+                    "--prompt",
+                    "Test.",
                 ],
             )
 

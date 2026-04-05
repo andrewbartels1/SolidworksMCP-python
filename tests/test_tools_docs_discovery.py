@@ -328,7 +328,7 @@ def test_discovery_connect_uses_dispatch_when_getobject_none(
         "win32com",
         SimpleNamespace(
             client=SimpleNamespace(
-                GetObject=lambda *_args: None,
+                GetObject=lambda *_args, **_kwargs: None,
                 Dispatch=lambda _prog_id: fake_sw,
             )
         ),
@@ -353,6 +353,7 @@ def test_discover_com_objects_and_summary_with_fake_app() -> None:
 
     class _FakeApp:
         """Test suite for FakeApp."""
+
         revision = "33.2"
 
         def RevisionNumber(self):
@@ -386,8 +387,11 @@ def test_discover_vba_references_handles_available_and_error(
     """discover_vba_references should classify available/missing/error libraries."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
-    def _get_object(_unused: str, name: str):
+    def _get_object(*_args, **kwargs):
         """Test helper for get object."""
+        name = kwargs.get("Class")
+        if name is None and _args:
+            name = _args[-1]
         if name in {"VBA", "SldWorks"}:
             return object()
         if name == "Office":
@@ -409,7 +413,8 @@ def test_discover_vba_references_handles_available_and_error(
 
     assert refs["VBA"]["status"] == "available"
     assert refs["SldWorks"]["status"] == "available"
-    assert refs["Office"]["status"] == "error"
+    assert refs["Office"]["status"] == "not_available"
+    assert "lookup failed" in refs["Office"]["note"]
 
 
 def test_discover_all_returns_index_when_connect_fails(
@@ -528,6 +533,7 @@ async def test_discover_solidworks_docs_tool_success_path(
 
     class _FakeDiscovery:
         """Test suite for FakeDiscovery."""
+
         def __init__(self, output_dir=None):
             """Test helper for init."""
             self.output_dir = output_dir
@@ -576,6 +582,7 @@ def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) ->
 
     class _FakeComError(Exception):
         """Test suite for FakeComError."""
+
         pass
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
@@ -586,7 +593,9 @@ def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) ->
         "win32com",
         SimpleNamespace(
             client=SimpleNamespace(
-                GetObject=lambda *_args: (_ for _ in ()).throw(_FakeComError("boom")),
+                GetObject=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    _FakeComError("boom")
+                ),
                 Dispatch=lambda *_args: (_ for _ in ()).throw(_FakeComError("boom")),
             )
         ),
@@ -604,6 +613,7 @@ def test_discover_com_objects_handles_attribute_and_catalog_errors() -> None:
 
     class _BrokenApp:
         """Test suite for BrokenApp."""
+
         def RevisionNumber(self):
             """Test helper for RevisionNumber."""
             raise RuntimeError("no revision")
@@ -663,6 +673,7 @@ def test_normalize_input_helper_branches() -> None:
 
     class _ModelDumpCarrier:
         """Test suite for ModelDumpCarrier."""
+
         def model_dump(self):
             """Test helper for model dump."""
             return {"output_dir": "z", "include_vba": True}
@@ -677,6 +688,7 @@ def test_extract_year_handles_value_error(monkeypatch: pytest.MonkeyPatch) -> No
 
     class _BadMatch:
         """Test suite for BadMatch."""
+
         def group(self, _idx: int) -> str:
             """Test helper for group."""
             return "20xx"
@@ -693,6 +705,7 @@ def test_detect_installed_year_no_root_and_no_year_dirs(
 
     class _MissingRoot:
         """Test suite for MissingRoot."""
+
         def exists(self):
             """Test helper for exists."""
             return False
@@ -761,12 +774,15 @@ def test_find_index_file_search_dir_and_search_index_edge_cases(temp_dir: Path) 
     assert any(item["member_type"] == "reference" for item in refs)
 
 
-def test_detect_year_iteration_and_config_path_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detect_year_iteration_and_config_path_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Cover non-dir iteration continue, no-year return, and config-path year resolution."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _Child:
         """Test suite for Child."""
+
         def __init__(self, name: str, is_dir: bool):
             """Test helper for init."""
             self.name = name
@@ -778,6 +794,7 @@ def test_detect_year_iteration_and_config_path_resolution(monkeypatch: pytest.Mo
 
     class _Root:
         """Test suite for Root."""
+
         def exists(self):
             """Test helper for exists."""
             return True
@@ -822,6 +839,7 @@ def test_normalize_input_non_dict_non_model_dump_path() -> None:
 
     class _PlainInput:
         """Test suite for PlainInput."""
+
         output_dir = "plain"
         include_vba = True
         year = None
@@ -877,6 +895,7 @@ async def test_search_api_help_auto_discovers_when_index_missing(
 
     class _AutoDiscovery:
         """Test suite for AutoDiscovery."""
+
         def __init__(self, output_dir=None):
             """Test helper for init."""
             self.output_dir = output_dir

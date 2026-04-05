@@ -23,27 +23,33 @@ You write a prompt describing what you want (material, printer, geometry constra
 Three specialist agents live in `.github/agents/`:
 
 ### `solidworks-print-architect`
+
 **Use when:** Designing parts for 3D printing — tolerances, snap fits, overhangs, print orientation, build volume checks.
 
 Example output includes:
+
 - Material tradeoffs (PLA vs PETG vs ABS)
 - Snap-fit clearance ranges with risk level
 - Which face to put on the print bed and why
 - Build volume check against your specific printer
 
 ### `solidworks-mcp-skill-docs`
+
 **Use when:** Building SolidWorks MCP workflows, creating tutorials, planning tool sequences from sketch to feature.
 
 Example output includes:
+
 - Step-by-step MCP tool call sequence
 - Decision table for tool selection
 - Troubleshooting fallbacks
 - Demo walkthrough using sample parts from your SolidWorks install
 
 ### `solidworks-research-validator`
+
 **Use when:** Fact-checking material specs, looking up printer build volumes, comparing sourcing options before committing to geometry changes.
 
 Example output includes:
+
 - Short answer first
 - Evidence table with source and confidence
 - Recommended decision with risk level
@@ -98,6 +104,25 @@ gh auth login
 
 That's it. The smoke test automatically picks up your `gh` credentials — no environment variables needed.
 
+!!! warning "If `gh auth login` says `GH_TOKEN` is being used"
+  GitHub CLI gives environment variables precedence over stored credentials. If you see:
+
+  `The value of the GH_TOKEN environment variable is being used for authentication.`
+
+  clear the token from the current shell and your saved user environment first, then log in again:
+
+  ```powershell
+  Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:GITHUB_API_KEY -ErrorAction SilentlyContinue
+  [System.Environment]::SetEnvironmentVariable("GH_TOKEN", $null, "User")
+  [System.Environment]::SetEnvironmentVariable("GITHUB_API_KEY", $null, "User")
+  gh auth logout -h github.com
+  gh auth login
+  gh auth status
+  ```
+
+  After that, open a new terminal before rerunning smoke tests.
+
 !!! tip "Already logged in?"
     Run `gh auth status` to confirm. If it shows your account, you're ready to run tests immediately.
 
@@ -138,6 +163,18 @@ You should see structured JSON output like this:
     **Automatic (via `gh` CLI — recommended):**
 
     The smoke test falls back to `gh auth token` automatically if no environment variable is set. Just run `gh auth login` once.
+
+    If `gh auth login` refuses to store credentials because `GH_TOKEN` is already set, clear both `GH_TOKEN` and `GITHUB_API_KEY`, then authenticate again:
+
+    ```powershell
+    Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
+    Remove-Item Env:GITHUB_API_KEY -ErrorAction SilentlyContinue
+    [System.Environment]::SetEnvironmentVariable("GH_TOKEN", $null, "User")
+    [System.Environment]::SetEnvironmentVariable("GITHUB_API_KEY", $null, "User")
+    gh auth logout -h github.com
+    gh auth login
+    gh auth status
+    ```
 
     **Manual (if you prefer explicit env vars):**
 
@@ -239,6 +276,7 @@ Credential rules summary:
 Every smoke test produces one of two structured output types:
 
 ### `--schema manufacturability`
+
 Used with `solidworks-print-architect` and `solidworks-research-validator`.
 
 | Field | What it tells you |
@@ -251,6 +289,7 @@ Used with `solidworks-print-architect` and `solidworks-research-validator`.
 | `build_volume_check` | PASS/FAIL against your printer envelope |
 
 ### `--schema docs`
+
 Used with `solidworks-mcp-skill-docs` and any agent when planning a tutorial.
 
 | Field | What it tells you |

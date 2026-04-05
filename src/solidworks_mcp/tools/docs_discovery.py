@@ -28,6 +28,20 @@ except ImportError:
     HAS_WIN32COM = False
 
 
+_KNOWN_COM_MEMBER_CANDIDATES: dict[str, dict[str, list[str]]] = {
+    "ISldWorks": {
+        "methods": [
+            "RevisionNumber",
+            "OpenDoc6",
+            "CloseDoc",
+            "ActivateDoc3",
+            "GetProcessID",
+        ],
+        "properties": ["Visible", "ActiveDoc"],
+    }
+}
+
+
 class SolidWorksDocsDiscovery:
     """Discover and index SolidWorks COM and VBA documentation."""
 
@@ -64,7 +78,8 @@ class SolidWorksDocsDiscovery:
             return False
 
         try:
-            self.sw_app = win32com.client.GetObject("", "SldWorks.Application")
+            # pywin32 requires exactly one of Pathname or Class.
+            self.sw_app = win32com.client.GetObject(Class="SldWorks.Application")
             if self.sw_app is None:
                 logger.warning(
                     "SolidWorks not running; attempting to create new instance"
@@ -107,18 +122,41 @@ class SolidWorksDocsDiscovery:
                 methods = []
                 properties = []
 
-                # Extract methods and properties from COM object
+                # Extract methods and properties from COM object.
+                # Use the instance (not its type) so COM dispatch attributes are
+                # visible. win32com's __getattr__ returns a bound-method wrapper
+                # for COM methods (callable) and the property value for properties
+                # (typically not callable), letting callable() distinguish them.
                 try:
-                    obj_type = type(obj)
                     for attr_name in dir(obj):
                         if not attr_name.startswith("_"):
-                            attr = getattr(obj_type, attr_name, None)
+                            try:
+                                attr = getattr(obj, attr_name, None)
+                            except Exception:
+                                attr = None
                             if callable(attr):
                                 methods.append(attr_name)
                             else:
                                 properties.append(attr_name)
                 except Exception as e:
                     logger.debug(f"Error extracting attributes from {obj_name}: {e}")
+
+                if not methods and not properties:
+                    fallback = _KNOWN_COM_MEMBER_CANDIDATES.get(obj_name, {})
+                    for attr_name in fallback.get("methods", []):
+                        try:
+                            attr = getattr(obj, attr_name, None)
+                        except Exception:
+                            continue
+                        if callable(attr):
+                            methods.append(attr_name)
+                    for attr_name in fallback.get("properties", []):
+                        try:
+                            attr = getattr(obj, attr_name, None)
+                        except Exception:
+                            continue
+                        if not callable(attr):
+                            properties.append(attr_name)
 
                 com_index[obj_name] = {
                     "methods": methods,

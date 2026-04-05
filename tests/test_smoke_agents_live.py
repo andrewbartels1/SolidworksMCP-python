@@ -26,6 +26,26 @@ from src.solidworks_mcp.agents.schemas import (
 )
 
 
+async def _run_or_skip(**kwargs):
+    """Wrap run_validated_prompt and skip the test on 401 auth errors.
+
+    The gh-cli may return an expired or insufficiently-scoped token that passes
+    the module-level credential check but is rejected by the GitHub Models API.
+    Converting auth errors to pytest.skip keeps dev-test-full green while
+    still exercising the harness when valid credentials are present.
+    """
+    from pydantic_ai.exceptions import ModelHTTPError
+
+    try:
+        return await run_validated_prompt(**kwargs)
+    except ModelHTTPError as exc:
+        if exc.status_code == 401:
+            pytest.skip(
+                f"LLM credentials rejected with 401 — refresh GH_TOKEN or provide ANTHROPIC_API_KEY"
+            )
+        raise
+
+
 # ---------------------------------------------------------------------------
 # Skip guard — skip entire module if no credentials are available
 # ---------------------------------------------------------------------------
@@ -76,7 +96,7 @@ async def test_print_architect_manufacturability(tmp_path):
     model = _set_github_env()
     db = tmp_path / "live_test.sqlite3"
 
-    result = await run_validated_prompt(
+    result = await _run_or_skip(
         agent_file_name="solidworks-print-architect.agent.md",
         model_name=model,
         user_prompt=(
@@ -105,7 +125,7 @@ async def test_mcp_skill_docs_schema(tmp_path):
     model = _set_github_env()
     db = tmp_path / "live_test_docs.sqlite3"
 
-    result = await run_validated_prompt(
+    result = await _run_or_skip(
         agent_file_name="solidworks-mcp-skill-docs.agent.md",
         model_name=model,
         user_prompt=(
@@ -133,12 +153,14 @@ async def test_research_validator_manufacturability(tmp_path):
     model = _set_github_env()
     db = tmp_path / "live_test_validator.sqlite3"
 
-    result = await run_validated_prompt(
+    result = await _run_or_skip(
         agent_file_name="solidworks-research-validator.agent.md",
         model_name=model,
         user_prompt=(
-            "Verify PETG material properties for an outdoor enclosure: "
-            "heat resistance, UV stability, and recommended wall thickness."
+            "Verify UV-stabilized PETG guidance for an outdoor FDM/FFF enclosure "
+            "that sees up to 55 C service temperature and about 8 hours of direct "
+            "sun per day. Provide heat resistance, UV stability, and recommended "
+            "wall thickness guidance."
         ),
         result_type=ManufacturabilityReview,
         max_retries_on_recoverable=1,
@@ -159,7 +181,7 @@ async def test_print_architect_docs_schema(tmp_path):
     model = _set_github_env()
     db = tmp_path / "live_test_docs2.sqlite3"
 
-    result = await run_validated_prompt(
+    result = await _run_or_skip(
         agent_file_name="solidworks-print-architect.agent.md",
         model_name=model,
         user_prompt=(
@@ -185,7 +207,7 @@ async def test_results_persisted_to_sqlite(tmp_path):
     model = _set_github_env()
     db = tmp_path / "persist_test.sqlite3"
 
-    await run_validated_prompt(
+    await _run_or_skip(
         agent_file_name="solidworks-print-architect.agent.md",
         model_name=model,
         user_prompt="Design a simple ABS bracket for a 250x210 bed.",

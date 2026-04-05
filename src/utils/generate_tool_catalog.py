@@ -627,16 +627,16 @@ def main(argv: list[str] | None = None) -> None:
     project_root = Path(__file__).resolve().parents[2]
     tools_dir = project_root / "src" / "solidworks_mcp" / "tools"
 
-    print(f"🔍 Parsing tool source files in: {tools_dir}")
+    print(f"Parsing tool source files in: {tools_dir}")
     catalog = build_catalog(tools_dir)
-    print(f"✅ Found {len(catalog)} tools\n")
+    print(f"Found {len(catalog)} tools\n")
 
     # Always write JSON
     json_out_path = project_root / json_path
     json_out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(json_out_path, "w", encoding="utf-8") as fh:
         json.dump(catalog, fh, indent=2)
-    print(f"📄 JSON catalog → {json_out_path}")
+    print(f"JSON catalog -> {json_out_path}")
 
     if json_only:
         return
@@ -653,7 +653,7 @@ def main(argv: list[str] | None = None) -> None:
     # Index page
     index_md = generate_index_page(catalog)
     (abs_output / "index.md").write_text(index_md, encoding="utf-8")
-    print(f"  📝 index.md ({len(catalog)} tools)")
+    print(f"  wrote index.md ({len(catalog)} tools)")
 
     # Per-category pages
     for category, tools in sorted(cat_tools.items()):
@@ -670,9 +670,9 @@ def main(argv: list[str] | None = None) -> None:
         page_md = generate_category_page(category, tools, meta)
         out_file = abs_output / f"{slug}.md"
         out_file.write_text(page_md, encoding="utf-8")
-        print(f"  📝 {slug}.md ({len(tools)} tools)")
+        print(f"  wrote {slug}.md ({len(tools)} tools)")
 
-    print(f"\n✅ Catalog written to: {abs_output}")
+    print(f"\nCatalog written to: {abs_output}")
     print("   Add 'tool-catalog/index.md' to mkdocs.yml nav to publish.")
 
 
