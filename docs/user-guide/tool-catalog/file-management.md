@@ -101,6 +101,31 @@ List feature-tree entries for the active SolidWorks document.
 
 ---
 
+### `classify_feature_tree`
+
+Classify the active model into a likely feature family using `get_model_info` and `list_features`.
+
+Useful for routing between direct MCP modeling, VBA-backed workflows, assembly planning,
+and low-confidence “inspect more” cases before any write operations.
+
+**Prerequisite:** Active document, unless you pass `model_info` and `features` explicitly
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `include_suppressed` | `bool` | — | `True` | Include suppressed features when reading the active model tree |
+| `model_info` | `Dict[str, Any]?` | — | `None` | Optional pre-fetched model-info payload |
+| `features` | `List[Dict[str, Any]]?` | — | `None` | Optional pre-fetched feature-tree payload |
+
+**Sample call:**
+
+```json
+{}
+```
+
+---
+
 ### `list_configurations`
 
 List configuration names for the active SolidWorks document.

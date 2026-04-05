@@ -169,7 +169,16 @@ Name it "Cylinder".
 ### User prompt
 
 ```
-Recreate a baseball bat. It should be approximately 830 mm long with:
+Open the original Baseball Bat sample first and classify it before planning the rebuild.
+
+Run:
+- get_model_info()
+- list_features(include_suppressed=True)
+- get_mass_properties()
+- classify_feature_tree(include_suppressed=True)
+
+If the classifier recommends a direct revolve workflow, continue with a rebuild.
+Then recreate a baseball bat approximately 830 mm long with:
 - A 34 mm diameter knob at one end
 - A 22 mm diameter handle for the first 180 mm
 - A gentle taper out to a 70 mm barrel for the remaining length
@@ -182,6 +191,10 @@ Name it "Baseball Bat Recreation".
 
 ```json
 [
+  {"tool": "get_model_info",   "args": {}},
+  {"tool": "list_features",    "args": {"include_suppressed": true}},
+  {"tool": "get_mass_properties","args": {}},
+  {"tool": "classify_feature_tree","args": {"include_suppressed": true}},
   {"tool": "create_part",    "args": {"name": "Baseball Bat Recreation"}},
   {"tool": "create_sketch",  "args": {"plane": "Right"}},
   {"tool": "add_centerline", "args": {"x1": 0.0, "y1": 0.0, "x2": 830.0, "y2": 0.0}},
@@ -194,6 +207,9 @@ Name it "Baseball Bat Recreation".
   {"tool": "save_as",        "args": {"file_path": "C:\\Temp\\Baseball Bat Recreation.sldprt"}}
 ]
 ```
+
+!!! note "Why the classifier step is first"
+  This is the lightweight proof that inspect-classify-delegate works on a simpler family. A baseball bat should route cleanly to `direct-mcp-revolve`, unlike the Paper Airplane sheet metal case.
 
 ---
 

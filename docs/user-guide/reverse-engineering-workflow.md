@@ -20,7 +20,7 @@ Prompt 1 — Describe          →  Prompt 2 — Plan             →  Prompt 3 
                                  tool sequence."                 the reference image."
 ```
 
-The image goes into Prompt 1. Everything after that is text. You never need to open the original SolidWorks file to read the feature tree — the eye (and a vision LLM) is enough to get started.
+The image goes into Prompt 1. Everything after that is text, but for any sample part where the original file is available you should treat the image description as provisional. Before finalizing a reconstruction plan, open the original part and read the feature tree.
 
 ---
 
@@ -71,16 +71,10 @@ Be precise enough that someone could recreate it using only your description.
 ### Example output for Paper Airplane
 
 ```
-Shape: Flat, wing-shaped part — looks like a top-view of a paper airplane.
-Primary sketch plane: Top
-Profile: Closed polygon — three lines forming a symmetric delta wing shape:
-  - Nose tip at the right: approximately (80, 0)
-  - Left wing tip: approximately (0, 60)
-  - Right wing tip: approximately (0, -60)
-  - All three meet at the nose and fuselage origin (0, 0)
-Main 3D feature: Thin extrusion perpendicular to the Top plane
-Depth: ~0.5 mm (paper-thin)
-Secondary features: None visible
+Shape: Flat wing-like part that resembles a paper airplane in isometric view.
+Primary sketch plane: uncertain from image alone.
+Likely feature family from silhouette: thin sheet-like body, but this is not reliable enough to plan the build.
+Required next step: open the original file, inspect `list_features(include_suppressed=True)`, and classify whether the model is a simple solid, sheet metal, or another feature family.
 ```
 
 ---
@@ -109,15 +103,12 @@ Output the plan as a numbered list of copy-pasteable function calls.
 ### Example output for Paper Airplane
 
 ```
-1.  create_part(part_name="Paper Airplane")
-2.  create_sketch(plane_name="Top")
-3.  add_line(start_x=0, start_y=0, end_x=80, end_y=0)        # fuselage spine
-4.  add_line(start_x=0, start_y=0, end_x=0, end_y=60)        # left wing root
-5.  add_line(start_x=0, start_y=60, end_x=80, end_y=0)       # left wing edge
-6.  add_line(start_x=0, start_y=0, end_x=0, end_y=-60)       # right wing root
-7.  add_line(start_x=0, start_y=-60, end_x=80, end_y=0)      # right wing edge
-8.  exit_sketch()
-9.  create_extrusion(sketch_name="Sketch1", depth=0.5)
+1.  open_model(file_path=r"C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\Paper Airplane.SLDPRT")
+2.  get_model_info()
+3.  list_features(include_suppressed=True)
+4.  get_mass_properties()
+5.  classify the part family from the feature tree
+6.  if sheet metal or unfold/fold features are present, delegate planning to `SolidWorks Part Reconstructor` and emit a VBA-aware reconstruction plan instead of a direct extrusion
 ```
 
 ---
@@ -173,10 +164,12 @@ with approximate dimensions in millimetres.
 ### Prompt 2 (plan)
 
 ```
-Part: flat delta-wing profile on the Top plane, extruded 0.5 mm.
-Nose at (80, 0), left wing tip at (0, 60), right wing tip at (0, -60), origin at (0, 0).
+Part: the Paper Airplane sample from the SolidWorks learn directory.
+Before planning any build, inspect the real feature tree and classify the part family.
+If the model uses sheet metal, base flange, edge flange, sketched bends, or unfold/fold operations,
+do not reduce it to a silhouette-based extrusion.
 
-Write the MCP tool call sequence to recreate this.
+Write the reconstruction strategy and clearly state whether direct MCP tools are sufficient or a VBA-backed plan is required.
 ```
 
 ### Prompt 3 (build and test)
@@ -184,15 +177,12 @@ Write the MCP tool call sequence to recreate this.
 ```
 Using the SolidWorks MCP server, execute:
 
-1. create_part(part_name="Paper Airplane")
-2. create_sketch(plane_name="Top")
-3. add_line(start_x=0, start_y=0, end_x=80, end_y=0)
-4. add_line(start_x=0, start_y=0, end_x=0, end_y=60)
-5. add_line(start_x=0, start_y=60, end_x=80, end_y=0)
-6. add_line(start_x=0, start_y=0, end_x=0, end_y=-60)
-7. add_line(start_x=0, start_y=-60, end_x=80, end_y=0)
-8. exit_sketch()
-9. create_extrusion(sketch_name="Sketch1", depth=0.5)
+1. open_model(file_path=r"C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\Paper Airplane.SLDPRT")
+2. get_model_info()
+3. list_features(include_suppressed=True)
+4. get_mass_properties()
+5. delegate the reconstruction plan to the part reconstructor
+6. execute only after the plan preserves the observed feature-family ordering
 
 Then export_image(file_path="paper_airplane_gen.jpg", format_type="jpg")
 and compare to the reference.
@@ -298,7 +288,7 @@ If the wing outline looks wrong, adjust the coordinates and regenerate — it's 
 
 ### Use the reconstructor agent for complex parts
 
-For Tier 3+ parts (shells, lofts, mouse housings), paste the image description into the `solidworks-part-reconstructor` agent in Claude Code and ask for a `ReconstructionPlan` — it will flag VBA boundaries automatically and generate the right `generate_vba_part_modeling` call structure.
+For parts whose feature tree shows sheet metal, lofts, sweeps, shells, multi-body dependencies, or assembly structure, paste the read-pass output into the `solidworks-part-reconstructor` agent and ask for a `ReconstructionPlan` — it will flag VBA boundaries automatically and generate the right `generate_vba_part_modeling` call structure.
 
 ```
 solidworks-part-reconstructor, reconstruction:
@@ -316,7 +306,7 @@ Generate a ReconstructionPlan JSON.
   --github-models `
   --schema reconstruction `
   --max-retries-on-recoverable 2 `
-  --prompt "Paper Airplane: delta-wing profile on Top plane, extruded 0.5mm. Plan reconstruction."
+  --prompt "Paper Airplane: use the provided feature tree and mass properties to classify the part family, preserve parent-child dependencies, and plan a faithful reconstruction."
 ```
 
 All runs are logged to `.solidworks_mcp/agent_memory.sqlite3` — check the error catalog when a step fails.

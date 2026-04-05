@@ -1,9 +1,9 @@
-# Tool Catalog — All 105 Tools
+# Tool Catalog — All 106 Tools
 
-This reference documents all **105 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **106 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
-![Tool categories overview — 105 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
+![Tool categories overview — 106 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
 
 ## Quick Navigation
 
@@ -15,7 +15,7 @@ Each section covers one functional category with parameter tables and copy-paste
 | [Drawing Analysis Tools](drawing-analysis.md) | 8 | Quality-gate your drawings by analyzing dimensions, annotations, view coverage, standards compliance, and completeness. |
 | [Analysis Tools](analysis.md) | 5 | Extract engineering properties from models, including mass, volume, center of mass, inertia, and material metadata. |
 | [Export Tools](export.md) | 7 | Convert SolidWorks models to industry-standard interchange and manufacturing formats such as STEP, IGES, STL, DWG, PDF, and images. |
-| [File Management Tools](file-management.md) | 13 | Open, save, and manage SolidWorks documents; load parts and assemblies, save variants, and inspect model metadata. |
+| [File Management Tools](file-management.md) | 14 | Open, save, and manage SolidWorks documents; load parts and assemblies, save variants, inspect model metadata, and classify model families. |
 | [Automation Tools](automation.md) | 8 | Orchestrate multi-step workflows, run batch file processing, manage design tables, and tune performance settings. |
 | [VBA Generation Tools](vba-generation.md) | 10 | Generate and execute VBA macro code for operations that exceed direct COM call complexity or require procedural automation. |
 | [Template Management Tools](template-management.md) | 6 | Create, extract, apply, compare, and manage SolidWorks document templates in a reusable library workflow. |

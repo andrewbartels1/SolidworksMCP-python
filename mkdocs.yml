@@ -37,7 +37,7 @@ nav:
       - Integration Testing: user-guide/integration-testing.md
       - Real Tool Validation Matrix: user-guide/real-tool-validation-matrix.md
   - Tool Catalog:
-      - All 105 Tools: user-guide/tool-catalog/index.md
+      - All 106 Tools: user-guide/tool-catalog/index.md
       - Modeling: user-guide/tool-catalog/modeling.md
       - Sketching: user-guide/tool-catalog/sketching.md
       - Drawing: user-guide/tool-catalog/drawing.md
@@ -51,12 +51,17 @@ nav:
       - Macro Recording: user-guide/tool-catalog/macro-recording.md
       - Docs Discovery: user-guide/tool-catalog/docs-discovery.md
   - Tutorials:
+      - AI-Assisted Design Workflow: user-guide/ai-assisted-design-workflow.md
+      - Worked Examples (Paper Airplane, Bat, Pin): user-guide/worked-examples.md
+      - Prompt-Driven Design: user-guide/prompt-driven-design.md
       - Sample Models Guide: user-guide/sample-models-guide.md
       - Screenshot Equivalence: user-guide/screenshot-equivalence.md
+      - Reverse-Engineering Workflow: user-guide/reverse-engineering-workflow.md
   - API Reference: api/
   - Planning:
       - GUI Visualization Plan: PLAN_GUI_VISUALIZATION.md
       - Database Workflows Plan: PLAN_DATABASE_WORKFLOWS.md
+      - Interactive Design Foundation Plan: PLAN_INTERACTIVE_DESIGN_FOUNDATION.md
       - Pydantic AI Integration Plan: PLAN_PYDANTIC_AI_INTEGRATION.md
       - Tree Read Tools Plan: PLAN_TREE_READ_TOOLS.md
       - Roadmap 2026-2027: ROADMAP_2026_2027.md

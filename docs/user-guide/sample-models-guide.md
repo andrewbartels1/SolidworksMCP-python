@@ -64,6 +64,7 @@ flowchart LR
 
 ### Feature sequence
 
+0. `get_model_info` + `list_features` + `classify_feature_tree` — confirm it is a revolve family
 1. `create_sketch` on Right plane
 2. `add_centerline` along Y-axis (revolution axis)
 3. `add_line` / `add_arc` — half-profile (handle, taper, barrel, knob)
@@ -74,6 +75,7 @@ flowchart LR
 
 ```
 Create a baseball bat model:
+0. inspect the original sample and confirm `classify_feature_tree` recommends `direct-mcp-revolve`
 1. create_part with name "Baseball Bat"
 2. create_sketch on the "Right" plane
 3. add_centerline from (0,0) to (830,0) — the revolution axis
@@ -91,29 +93,24 @@ Create a baseball bat model:
 
 ---
 
-## Paper Airplane — Tier 1 (Extrude)
+## Paper Airplane — Tier 3 (Sheet Metal)
 
 **File**: `Paper Airplane.SLDPRT`  
-**Core feature**: Thin extruded flat body with surface folds
+**Core feature**: Sheet metal base flange with downstream flanges and bends
 
 ### Feature sequence
 
-1. `create_sketch` on Top plane — airplane outline as closed polyline
-2. `exit_sketch`
-3. `create_extrusion` depth = 0.1 (paper thickness)
+1. Read the real feature tree and confirm the sheet metal root feature.
+2. Identify the base flange sketch and the downstream bend/flange operations.
+3. Route reconstruction through a VBA-aware plan if direct sheet metal tools are unavailable.
 
 ### Key LLM prompt
 
 ```
-Create a paper airplane:
-1. create_part "Paper Airplane"
-2. create_sketch on "Top" plane
-3. add_line to draw the top-view silhouette (nose, wings, tail):
-   - Nose: (0,0) → (80,0)
-   - Right wing: (0,0) → (0,60) → (80,0)
-   - Left wing: (0,0) → (0,-60) → (80,0)
-4. exit_sketch
-5. create_extrusion sketch_name="Sketch1", depth=0.5
+Open the original `Paper Airplane.SLDPRT` and inspect `list_features(include_suppressed=True)`.
+If the tree shows `Sheet-Metal`, `Base-Flange`, `Edge-Flange`, `Sketched Bend`,
+`Unfold`, or `Fold`, generate a reconstruction plan that preserves that sequence.
+Do not teach this model as a single-sketch extrusion example.
 ```
 
 ---

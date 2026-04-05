@@ -133,7 +133,7 @@ list_features()
 close_model(save=False)
 ```
 
-Compare the feature names and types to what your reconstruction produced. If the original has `Boss-Extrude1` on `Sketch1` and yours does too, you're on track.
+Compare the feature families and order, not just one matching name. If the original tree shows sheet metal, flanges, bends, or unfold/fold operations, a single matching sketch or extrusion is not enough.
 
 ---
 
@@ -163,47 +163,37 @@ and identify which lines are missing to close the profile.
 
 ---
 
-## Tutorial 1 — Paper Airplane
+## Tutorial 1 — Paper Airplane Audit
 
 **Sample file:** `Paper Airplane.SLDPRT`
-**SolidWorks feature:** Single sketch + extrude
-**What you'll learn:** The basic describe → plan → execute → check loop
+**SolidWorks feature:** Sheet metal workflow with a base flange and downstream bends
+**What you'll learn:** Why the feature tree must drive delegation before you attempt a rebuild
 
 ### Your starting prompt
 
 ```text
-I want to build a paper airplane part in SolidWorks.
+Open the original Paper Airplane sample and inspect it before planning a rebuild.
 
-Shape: delta-wing silhouette viewed from above (Top plane)
-Profile: three lines forming a closed triangle
-  - Origin at (0, 0) — the back of the fuselage
-  - Nose tip at (80, 0)
-  - Left wing tip at (0, 60)
-  - Right wing tip at (0, -60)
-Thickness: 0.5 mm extrusion (paper thin)
-Part name: "Paper Airplane"
+Run `open_model`, `get_model_info`, `list_features(include_suppressed=True)`,
+and `get_mass_properties()`. Then answer:
 
-Write the MCP tool call sequence. Do not execute yet.
+1. What is the first real modeling feature after the reference planes?
+2. Does the tree indicate sheet metal, bends, or unfold/fold states?
+3. Which downstream features depend on that first feature?
+4. Should this be executed with direct MCP modeling tools, a VBA plan, or both?
 ```
 
-### Expected plan
+### Expected conclusion
 
 ```python
-1.  create_part(part_name="Paper Airplane")
-2.  create_sketch(plane_name="Top")
-3.  add_line(start_x=0, start_y=0, end_x=80, end_y=0)        # spine
-4.  add_line(start_x=80, start_y=0, end_x=0, end_y=60)       # left wing edge
-5.  add_line(start_x=0, start_y=60, end_x=0, end_y=0)        # left root
-6.  add_line(start_x=0, start_y=0, end_x=80, end_y=0)        # NOTE: LLM may suggest
-                                                              # a different closed loop
-7.  exit_sketch()
-8.  create_extrusion(sketch_name="Sketch1", depth=0.5)
+The Paper Airplane sample is not a good first "single sketch + extrude" lesson.
+Its tree must be treated as a sheet metal sequence rooted in a base flange.
+Delegate reconstruction planning to the part reconstructor and preserve the
+feature-family ordering instead of approximating the silhouette.
 ```
 
-!!! tip "Review the closed loop"
-    The sketch must be a **closed** polygon or the extrusion will fail. Check that the
-    line endpoints connect back to the origin with no gaps. If the LLM leaves a gap,
-    point it out: `"The profile isn't closed — add the missing line from (0, 60) back to (0, -60)."`
+!!! tip "Use a different warm-up part"
+    For the first direct-MCP tutorial, use a simple bracket or the Baseball Bat revolve. Come back to the Paper Airplane only after you have a feature-tree-first workflow in place.
 
 ### Execute and check
 
@@ -220,7 +210,7 @@ list_features()
 close_model(save=False)
 ```
 
-Both should show a single `Boss-Extrude1` on a `Sketch1` on the Top plane.
+The useful check here is whether your audit identified the correct feature family and dependency chain. Do not validate this sample by looking for a single `Boss-Extrude1`.
 
 ---
 
