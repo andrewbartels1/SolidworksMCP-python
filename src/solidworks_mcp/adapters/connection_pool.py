@@ -43,7 +43,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         config: dict[str, object] | None = None,
     ) -> None:
         """Initialize this object.
-        
+
         Args:
             adapter_factory (Callable[[], SolidWorksAdapter] | None): Describe adapter factory.
             pool_size (int): Describe pool size.
@@ -52,7 +52,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             max_size (int | None): Describe max size.
             timeout (float | None): Describe timeout.
             config (dict[str, object] | None): Describe config.
-        
+
         """
         if adapter_factory is None and create_connection is not None:
             adapter_factory = create_connection
@@ -129,50 +129,50 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
     @property
     def size(self) -> int:
         """Execute size.
-        
+
         Returns:
             int: Describe the returned value.
-        
+
         """
         return len(self.pool)
 
     @property
     def active_connections(self) -> int:
         """Execute active connections.
-        
+
         Returns:
             int: Describe the returned value.
-        
+
         """
         return max(0, len(self.pool) - self.available_adapters.qsize())
 
     async def acquire(self) -> SolidWorksAdapter:
         """Execute acquire.
-        
+
         Returns:
             SolidWorksAdapter: Describe the returned value.
-        
+
         """
         return await self._get_adapter(timeout=self.timeout)
 
     async def release(self, adapter: SolidWorksAdapter) -> None:
         """Execute release.
-        
+
         Args:
             adapter (SolidWorksAdapter): Describe adapter.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         await self._return_adapter(adapter)
 
     async def cleanup(self) -> None:
         """Execute cleanup.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         await self.disconnect()
 
@@ -369,13 +369,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
             """Execute op.
-            
+
             Args:
                 adapter (SolidWorksAdapter): Describe adapter.
-            
+
             Returns:
                 AdapterResult[SolidWorksModel]: Describe the returned value.
-            
+
             """
             if name is None and units is None:
                 return await adapter.create_part()
@@ -386,18 +386,20 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         return await self._execute_with_pool("create_part", _op)
 
-    async def create_assembly(self, name: str | None = None) -> AdapterResult[SolidWorksModel]:
+    async def create_assembly(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create assembly using pool."""
 
         async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
             """Execute op.
-            
+
             Args:
                 adapter (SolidWorksAdapter): Describe adapter.
-            
+
             Returns:
                 AdapterResult[SolidWorksModel]: Describe the returned value.
-            
+
             """
             if name is None:
                 return await adapter.create_assembly()
@@ -432,13 +434,17 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "create_revolve", lambda adapter: adapter.create_revolve(params)
         )
 
-    async def create_sweep(self, params: SweepParameters) -> AdapterResult[SolidWorksFeature]:
+    async def create_sweep(
+        self, params: SweepParameters
+    ) -> AdapterResult[SolidWorksFeature]:
         """Create sweep using pool."""
         return await self._execute_with_pool(
             "create_sweep", lambda adapter: adapter.create_sweep(params)
         )
 
-    async def create_loft(self, params: LoftParameters) -> AdapterResult[SolidWorksFeature]:
+    async def create_loft(
+        self, params: LoftParameters
+    ) -> AdapterResult[SolidWorksFeature]:
         """Create loft using pool."""
         return await self._execute_with_pool(
             "create_loft", lambda adapter: adapter.create_loft(params)
@@ -452,7 +458,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "create_sketch", lambda adapter: adapter.create_sketch(plane)
         )
 
-    async def add_line(self, x1: float, y1: float, x2: float, y2: float) -> AdapterResult[str]:
+    async def add_line(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
         """Add line using pool."""
         return await self._execute_with_pool(
             "add_line", lambda adapter: adapter.add_line(x1, y1, x2, y2)
@@ -518,9 +526,19 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "list_configurations", lambda adapter: adapter.list_configurations()
         )
 
+    async def execute_macro(
+        self, params: dict[str, Any]
+    ) -> AdapterResult[dict[str, Any]]:
+        """Execute a macro using pool."""
+        return await self._execute_with_pool(
+            "execute_macro", lambda adapter: adapter.execute_macro(params)
+        )
+
     # Export operations
 
-    async def export_file(self, file_path: str, format_type: str) -> AdapterResult[None]:
+    async def export_file(
+        self, file_path: str, format_type: str
+    ) -> AdapterResult[None]:
         """Export file using pool."""
         return await self._execute_with_pool(
             "export_file", lambda adapter: adapter.export_file(file_path, format_type)
@@ -551,12 +569,12 @@ class ConnectionPool:
         timeout: float = 30.0,
     ) -> None:
         """Initialize this object.
-        
+
         Args:
             create_connection (Callable[[], object | Awaitable[object]]): Describe create connection.
             max_size (int): Describe max size.
             timeout (float): Describe timeout.
-        
+
         """
         self._create_connection = create_connection
         self._max_size = max_size
@@ -568,29 +586,29 @@ class ConnectionPool:
     @property
     def size(self) -> int:
         """Execute size.
-        
+
         Returns:
             int: Describe the returned value.
-        
+
         """
         return len(self._all_connections)
 
     @property
     def active_connections(self) -> int:
         """Execute active connections.
-        
+
         Returns:
             int: Describe the returned value.
-        
+
         """
         return len(self._in_use)
 
     async def _new_connection(self) -> object:
         """Execute new connection.
-        
+
         Returns:
             object: Describe the returned value.
-        
+
         """
         conn = self._create_connection()
         if asyncio.iscoroutine(conn):
@@ -600,10 +618,10 @@ class ConnectionPool:
 
     async def acquire(self) -> object:
         """Execute acquire.
-        
+
         Returns:
             object: Describe the returned value.
-        
+
         """
         if self._available:
             conn = self._available.pop()
@@ -627,13 +645,13 @@ class ConnectionPool:
 
     async def release(self, conn: object) -> None:
         """Execute release.
-        
+
         Args:
             conn (object): Describe conn.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         conn_id = id(conn)
         if conn_id in self._in_use:
@@ -642,10 +660,10 @@ class ConnectionPool:
 
     async def cleanup(self) -> None:
         """Execute cleanup.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         for conn in self._all_connections:
             close = getattr(conn, "close", None)

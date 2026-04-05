@@ -161,7 +161,11 @@ class SolidWorksDocsDiscovery:
 
         for lib_name, lib_desc in common_libs.items():
             try:
-                lib = win32com.client.GetObject("", lib_name) if HAS_WIN32COM else None
+                # Use Class= keyword only; passing pathname="" alongside Class raises
+                # "must specify Pathname or Class, but not both" in win32com.
+                lib = (
+                    win32com.client.GetObject(Class=lib_name) if HAS_WIN32COM else None
+                )
                 if lib:
                     vba_refs[lib_name] = {
                         "description": lib_desc,
@@ -175,8 +179,8 @@ class SolidWorksDocsDiscovery:
             except Exception as e:
                 vba_refs[lib_name] = {
                     "description": lib_desc,
-                    "status": "error",
-                    "error": str(e),
+                    "status": "not_available",
+                    "note": str(e),
                 }
 
         return vba_refs
@@ -398,13 +402,13 @@ def _search_index(
 
     def _score(text: str) -> int:
         """Execute score.
-        
+
         Args:
             text (str): Describe text.
-        
+
         Returns:
             int: Describe the returned value.
-        
+
         """
         lower = text.lower()
         score = 0

@@ -9,7 +9,7 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import TypeVar
+from typing import Any, TypeVar
 from loguru import logger
 
 from .base import (
@@ -49,14 +49,14 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         config: dict[str, object] | None = None,
     ) -> None:
         """Initialize this object.
-        
+
         Args:
             adapter (SolidWorksAdapter | None): Describe adapter.
             failure_threshold (int): Describe failure threshold.
             recovery_timeout (int): Describe recovery timeout.
             half_open_max_calls (int): Describe half open max calls.
             config (dict[str, object] | None): Describe config.
-        
+
         """
         if adapter is None:
             from .mock_adapter import MockSolidWorksAdapter
@@ -219,6 +219,14 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "save_file", lambda: self.adapter.save_file(file_path)
         )
 
+    async def execute_macro(
+        self, params: dict[str, Any]
+    ) -> AdapterResult[dict[str, Any]]:
+        """Execute a macro through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "execute_macro", lambda: self.adapter.execute_macro(params)
+        )
+
     async def create_part(
         self, name: str | None = None, units: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
@@ -226,10 +234,10 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
         async def _op() -> AdapterResult[SolidWorksModel]:
             """Execute op.
-            
+
             Returns:
                 AdapterResult[SolidWorksModel]: Describe the returned value.
-            
+
             """
             if name is None and units is None:
                 return await self.adapter.create_part()
@@ -255,15 +263,17 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             self._record_failure()
             raise
 
-    async def create_assembly(self, name: str | None = None) -> AdapterResult[SolidWorksModel]:
+    async def create_assembly(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create assembly through circuit breaker."""
 
         async def _op() -> AdapterResult[SolidWorksModel]:
             """Execute op.
-            
+
             Returns:
                 AdapterResult[SolidWorksModel]: Describe the returned value.
-            
+
             """
             if name is None:
                 return await self.adapter.create_assembly()
@@ -298,13 +308,17 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "create_revolve", lambda: self.adapter.create_revolve(params)
         )
 
-    async def create_sweep(self, params: SweepParameters) -> AdapterResult[SolidWorksFeature]:
+    async def create_sweep(
+        self, params: SweepParameters
+    ) -> AdapterResult[SolidWorksFeature]:
         """Create sweep through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "create_sweep", lambda: self.adapter.create_sweep(params)
         )
 
-    async def create_loft(self, params: LoftParameters) -> AdapterResult[SolidWorksFeature]:
+    async def create_loft(
+        self, params: LoftParameters
+    ) -> AdapterResult[SolidWorksFeature]:
         """Create loft through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "create_loft", lambda: self.adapter.create_loft(params)
@@ -318,7 +332,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "create_sketch", lambda: self.adapter.create_sketch(plane)
         )
 
-    async def add_line(self, x1: float, y1: float, x2: float, y2: float) -> AdapterResult[str]:
+    async def add_line(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
         """Add line through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_line", lambda: self.adapter.add_line(x1, y1, x2, y2)
@@ -386,7 +402,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
     # Export operations
 
-    async def export_file(self, file_path: str, format_type: str) -> AdapterResult[None]:
+    async def export_file(
+        self, file_path: str, format_type: str
+    ) -> AdapterResult[None]:
         """Export file through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "export_file", lambda: self.adapter.export_file(file_path, format_type)
@@ -417,12 +435,12 @@ class CircuitBreaker:
         expected_exception: type[Exception] = Exception,
     ) -> None:
         """Initialize this object.
-        
+
         Args:
             failure_threshold (int): Describe failure threshold.
             recovery_timeout (float): Describe recovery timeout.
             expected_exception (type[Exception]): Describe expected exception.
-        
+
         """
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -433,13 +451,13 @@ class CircuitBreaker:
 
     async def call(self, operation: Callable[[], object | Awaitable[object]]) -> object:
         """Execute call.
-        
+
         Args:
             operation (Callable[[], object | Awaitable[object]]): Describe operation.
-        
+
         Returns:
             object: Describe the returned value.
-        
+
         """
         if self.state == CircuitState.OPEN:
             if time.time() - self.last_failure_time < self.recovery_timeout:
