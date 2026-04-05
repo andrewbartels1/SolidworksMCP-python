@@ -444,6 +444,7 @@ class TestConnectionPoolAdapterExtras:
 
         class _StubAdapter:
             """Test suite for StubAdapter."""
+
             async def connect(self):
                 """Test helper for connect."""
                 return None
@@ -623,6 +624,7 @@ class TestPyWin32AdapterBranches:
 
         class _Feature:
             """Test suite for Feature."""
+
             def __init__(self, name, feature_type, suppressed=False):
                 """Test helper for init."""
                 self.Name = name
@@ -665,6 +667,7 @@ class TestPyWin32AdapterBranches:
 
         class _Feature:
             """Test suite for Feature."""
+
             def __init__(self, name, feature_type):
                 """Test helper for init."""
                 self.Name = name
@@ -703,6 +706,7 @@ class TestPyWin32AdapterBranches:
 
         class _Feature:
             """Test suite for Feature."""
+
             Name = "SuppressedCut"
 
             def GetTypeName2(self):
@@ -859,6 +863,7 @@ class TestPyWin32AdapterBranches:
             CreateEllipse=Mock(return_value=object()),
         )
         feature_manager = SimpleNamespace(
+            FeatureExtrusion3=Mock(return_value=feature_obj),
             FeatureExtrusion2=Mock(return_value=feature_obj),
             FeatureExtruThin2=Mock(return_value=feature_obj),
             FeatureRevolve2=Mock(return_value=feature_obj),
@@ -907,6 +912,7 @@ class TestPyWin32AdapterBranches:
                 reverse_direction=False,
                 thin_feature=False,
                 thin_thickness=None,
+                merge_result=True,
             )
         )
         extrude_thin = await adapter.create_extrusion(
@@ -916,6 +922,7 @@ class TestPyWin32AdapterBranches:
                 reverse_direction=True,
                 thin_feature=True,
                 thin_thickness=1.0,
+                merge_result=True,
             )
         )
         revolve = await adapter.create_revolve(
@@ -925,6 +932,7 @@ class TestPyWin32AdapterBranches:
                 both_directions=True,
                 thin_feature=False,
                 thin_thickness=None,
+                merge_result=True,
             )
         )
         cut = await adapter.create_cut_extrude(
@@ -954,10 +962,77 @@ class TestPyWin32AdapterBranches:
         ]
         assert plane_select_calls, "Expected plane selection call for sketch creation"
         assert any(call_args[7] in ("", None, 0) for call_args in plane_select_calls)
-        assert feature_manager.FeatureExtrusion2.called
+        assert feature_manager.FeatureExtrusion3.called
         assert feature_manager.FeatureExtruThin2.called
         assert feature_manager.FeatureRevolve2.called
         assert feature_manager.FeatureCut3.called
+
+    @pytest.mark.asyncio
+    async def test_feature_id_and_mass_properties_tuple_fallback(self, monkeypatch):
+        """Feature IDs and mass properties should support common COM compatibility variants."""
+        adapter = self._build_adapter(monkeypatch)
+
+        feature_obj = SimpleNamespace(Name="FeatInt", GetID=lambda: 123)
+        feature_manager = SimpleNamespace(
+            FeatureExtrusion3=Mock(return_value=feature_obj),
+            FeatureExtrusion2=Mock(return_value=feature_obj),
+            FeatureExtruThin2=Mock(return_value=feature_obj),
+            FeatureRevolve2=Mock(return_value=feature_obj),
+            FeatureCut3=Mock(return_value=feature_obj),
+            FeatureFillet3=Mock(return_value=feature_obj),
+            FeatureChamfer=Mock(return_value=feature_obj),
+        )
+        sketch_manager = SimpleNamespace(
+            InsertSketch=Mock(return_value=SimpleNamespace(Name="SketchA")),
+            CreateCenterLine=Mock(return_value=object()),
+            CreateLine=Mock(return_value=object()),
+        )
+        extension = SimpleNamespace(
+            SelectByID2=Mock(return_value=True),
+            CreateMassProperty=Mock(side_effect=RuntimeError("member not found")),
+        )
+        adapter.currentModel = SimpleNamespace(
+            Extension=extension,
+            SketchManager=sketch_manager,
+            FeatureManager=feature_manager,
+            GetMassProperties=(
+                0.001,
+                0.002,
+                0.003,
+                4.0e-9,
+                7.0e-6,
+                0.5,
+                11.0,
+                22.0,
+                33.0,
+                44.0,
+                55.0,
+                66.0,
+            ),
+        )
+
+        extrude = await adapter.create_extrusion(
+            SimpleNamespace(
+                depth=10.0,
+                draft_angle=0.0,
+                reverse_direction=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+        mass = await adapter.get_mass_properties()
+
+        assert extrude.is_success
+        assert extrude.data.id == "123"
+        assert mass.is_success
+        assert mass.data.volume == pytest.approx(4.0)
+        assert mass.data.surface_area == pytest.approx(7.0)
+        assert mass.data.mass == pytest.approx(0.5)
+        assert mass.data.center_of_mass == [1.0, 2.0, 3.0]
+        assert mass.data.moments_of_inertia["Ixx"] == pytest.approx(11.0)
+        assert mass.data.moments_of_inertia["Iyy"] == pytest.approx(22.0)
+        assert mass.data.moments_of_inertia["Izz"] == pytest.approx(33.0)
 
     @pytest.mark.asyncio
     async def test_sketch_methods_guard_and_failure_paths(self, monkeypatch):
@@ -1029,6 +1104,7 @@ class TestPyWin32AdapterBranches:
 
         class _FakeComError(Exception):
             """Test suite for FakeComError."""
+
             pass
 
         monkeypatch.setattr(
@@ -1039,6 +1115,7 @@ class TestPyWin32AdapterBranches:
 
         class _PlaneFeature:
             """Test suite for PlaneFeature."""
+
             def Select2(self, *_args):
                 """Test helper for Select2."""
                 return True
@@ -1135,6 +1212,7 @@ class TestPyWin32AdapterBranches:
 
         class _Feature:
             """Test suite for Feature."""
+
             def __init__(self, name, next_feature=None):
                 """Test helper for init."""
                 self.Name = name
@@ -1220,18 +1298,22 @@ class TestPyWin32AdapterBranches:
 
         class _ModelWithTitleProperty:
             """Test suite for ModelWithTitleProperty."""
+
             GetTitle = 123
             Title = "FromTitleProperty"
 
         class _ModelUntitled:
             """Test suite for ModelUntitled."""
+
             def GetTitle(self):
                 """Test helper for GetTitle."""
                 raise RuntimeError("title fail")
 
             Title = None
 
-        assert adapter._read_model_title(_ModelWithTitleProperty()) == "FromTitleProperty"
+        assert (
+            adapter._read_model_title(_ModelWithTitleProperty()) == "FromTitleProperty"
+        )
         assert adapter._read_model_title(_ModelUntitled()) == "Untitled"
 
         adapter.swApp = SimpleNamespace(
@@ -1242,7 +1324,10 @@ class TestPyWin32AdapterBranches:
                 }.get(idx, "")
             )
         )
-        monkeypatch.setattr("src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists", lambda p: str(p).endswith("Part.prtdot"))
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            lambda p: str(p).endswith("Part.prtdot"),
+        )
         resolved = adapter._resolve_template_path([8, 0], ".prtdot")
         assert resolved and resolved.endswith("Part.prtdot")
 
@@ -1269,7 +1354,9 @@ class TestPyWin32AdapterBranches:
         assert "No assembly template configured" in (asm_result.error or "")
 
     @pytest.mark.asyncio
-    async def test_save_guard_non_numeric_success_and_rebuild_failure(self, monkeypatch):
+    async def test_save_guard_non_numeric_success_and_rebuild_failure(
+        self, monkeypatch
+    ):
         """Cover save guard path, non-numeric Save3 success, and rebuild operation failure branch."""
         adapter = self._build_adapter(monkeypatch)
 
@@ -1295,6 +1382,7 @@ class TestPyWin32AdapterBranches:
 
         class _Feature:
             """Test suite for Feature."""
+
             def __init__(self, name: str, next_feature=None):
                 """Test helper for init."""
                 self.Name = name
@@ -1323,7 +1411,9 @@ class TestPyWin32AdapterBranches:
 
         adapter.currentModel = SimpleNamespace(
             FirstFeature=lambda: duplicate_1,
-            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(side_effect=RuntimeError("count unavailable"))),
+            FeatureManager=SimpleNamespace(
+                GetFeatureCount=Mock(side_effect=RuntimeError("count unavailable"))
+            ),
             FeatureByPositionReverse=Mock(side_effect=RuntimeError("reverse fail")),
         )
 
@@ -1552,8 +1642,10 @@ class TestAdapterCompatibilityFixes:
     @pytest.mark.asyncio
     async def test_circuit_breaker_create_assembly_name_fallback(self):
         """Test circuit breaker create assembly name fallback."""
+
         class NoArgAssemblyAdapter(MockSolidWorksAdapter):
             """Test suite for NoArgAssemblyAdapter."""
+
             async def create_assembly(self):  # type: ignore[override]
                 """Test helper for create assembly."""
                 return await super().create_assembly()
