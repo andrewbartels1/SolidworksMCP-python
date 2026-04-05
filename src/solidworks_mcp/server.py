@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 import platform
 import sys
+import uuid
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -25,6 +28,7 @@ from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 from . import adapters, security, tools, utils
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
 from .exceptions import SolidWorksMCPError
+from .agents.history_db import insert_tool_event
 
 AGENT_SYSTEM_PROMPT = (
     "You are a SolidWorks automation expert. You have access to comprehensive "
@@ -50,10 +54,10 @@ class SolidWorksMCPServer:
 
     def __init__(self, config: SolidWorksMCPConfig):
         """Initialize this object.
-        
+
         Args:
             config (SolidWorksMCPConfig): Describe config.
-        
+
         """
         self.config = config
         self.state = MCPServerState(config=config)
@@ -61,10 +65,51 @@ class SolidWorksMCPServer:
         self._patch_mcp_for_tests()
         self.server = None
         self._setup_complete = False
+        self._db_logging_enabled = self._env_truthy(
+            os.getenv("SOLIDWORKS_MCP_DB_LOGGING", "0")
+        )
+        self._db_run_id = os.getenv("SOLIDWORKS_MCP_CONVERSATION_ID") or str(
+            uuid.uuid4()
+        )
+        self._db_path = (
+            os.getenv("SOLIDWORKS_MCP_DB_PATH")
+            if os.getenv("SOLIDWORKS_MCP_DB_PATH")
+            else None
+        )
 
         # Runtime objects (not serializable)
         self.adapter: Any | None = None
         self.agent: Any | None = None
+
+    @staticmethod
+    def _env_truthy(value: str | None) -> bool:
+        return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _log_tool_event(
+        self,
+        *,
+        tool_name: str,
+        phase: str,
+        payload: dict[str, Any] | None,
+    ) -> None:
+        if not self._db_logging_enabled:
+            return
+        try:
+            insert_tool_event(
+                run_id=self._db_run_id,
+                tool_name=tool_name,
+                phase=phase,
+                payload_json=json.dumps(payload, ensure_ascii=True)
+                if payload is not None
+                else None,
+                db_path=(
+                    Path(os.path.abspath(self._db_path))
+                    if isinstance(self._db_path, str)
+                    else None
+                ),
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.debug("Tool event logging skipped due to error: {}", exc)
 
     def _patch_mcp_for_tests(self) -> None:
         """Expose a lightweight legacy tool registry used by tests."""
@@ -74,22 +119,22 @@ class SolidWorksMCPServer:
 
         def compat_tool(*args: Any, **kwargs: Any) -> Any:
             """Execute compat tool.
-            
+
             Returns:
                 Any: Describe the returned value.
-            
+
             """
             decorator = original_tool(*args, **kwargs)
 
             def _wrap(func: Any) -> Any:
                 """Execute wrap.
-                
+
                 Args:
                     func (Any): Describe func.
-                
+
                 Returns:
                     Any: Describe the returned value.
-                
+
                 """
                 wrapped = decorator(func)
 
@@ -97,22 +142,64 @@ class SolidWorksMCPServer:
                     *runner_args: Any, **runner_kwargs: Any
                 ) -> Any:
                     """Execute compat runner.
-                    
+
                     Returns:
                         Any: Describe the returned value.
-                    
+
                     """
+                    tool_name = getattr(func, "__name__", "unknown")
                     payload = runner_kwargs.get("input_data")
                     if payload is None and runner_args:
                         payload = runner_args[0]
 
+                    logger.debug(
+                        "[Tool] {} called | input={}",
+                        tool_name,
+                        str(payload)[:200] if payload is not None else "(none)",
+                    )
+                    self._log_tool_event(
+                        tool_name=tool_name,
+                        phase="pre",
+                        payload={
+                            "input": payload,
+                        },
+                    )
+
                     params = list(inspect.signature(func).parameters.values())
-                    if len(params) == 0:
-                        result = await func()
-                    elif len(params) == 1 and payload is not None:
-                        result = await func(payload)
-                    else:
-                        result = await func(*runner_args, **runner_kwargs)
+                    try:
+                        if len(params) == 0:
+                            result = await func()
+                        elif len(params) == 1 and payload is not None:
+                            result = await func(payload)
+                        else:
+                            result = await func(*runner_args, **runner_kwargs)
+                    except Exception as exc:
+                        self._log_tool_event(
+                            tool_name=tool_name,
+                            phase="error",
+                            payload={"error": str(exc), "error_type": exc.__class__.__name__},
+                        )
+                        raise
+
+                    logger.debug(
+                        "[Tool] {} → status={}",
+                        tool_name,
+                        result.get("status", "?")
+                        if isinstance(result, dict)
+                        else type(result).__name__,
+                    )
+                    self._log_tool_event(
+                        tool_name=tool_name,
+                        phase="post",
+                        payload={
+                            "status": result.get("status", "?")
+                            if isinstance(result, dict)
+                            else type(result).__name__,
+                            "message": result.get("message")
+                            if isinstance(result, dict)
+                            else None,
+                        },
+                    )
 
                     if isinstance(result, dict) and "data" not in result:
                         payload_items = {
