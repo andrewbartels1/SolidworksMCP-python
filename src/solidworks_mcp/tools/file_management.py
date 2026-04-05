@@ -12,6 +12,7 @@ from loguru import logger
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from ..utils.feature_tree_classifier import classify_feature_tree_snapshot
 
 
 # Input schemas using Python 3.14 built-in types
@@ -113,6 +114,23 @@ class ListFeaturesInput(CompatInput):
     include_suppressed: bool = Field(
         default=False,
         description="Include suppressed features in the returned list",
+    )
+
+
+class ClassifyFeatureTreeInput(CompatInput):
+    """Input schema for feature-family classification."""
+
+    include_suppressed: bool = Field(
+        default=True,
+        description="Include suppressed features when reading the active model tree",
+    )
+    model_info: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional pre-fetched model info payload to classify without re-reading the active model",
+    )
+    features: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Optional feature-tree payload to classify without re-reading the active model",
     )
 
 
@@ -512,6 +530,68 @@ async def register_file_management_tools(
             }
         except Exception as e:
             logger.error(f"Error in list_features tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def classify_feature_tree(
+        input_data: ClassifyFeatureTreeInput,
+    ) -> dict[str, Any]:
+        """
+        Classify the active model into a feature family from model-info and tree data.
+
+        This is a read-before-write helper for delegation. It summarizes whether the
+        current document looks like a direct-MCP solid, sheet metal workflow,
+        advanced VBA-backed part, assembly, drawing, or an insufficient-evidence case.
+        """
+        try:
+            input_data = _coerce_input(ClassifyFeatureTreeInput, input_data)
+            model_info = input_data.model_info
+            features = input_data.features
+            execution_time = 0.0
+
+            if model_info is None and hasattr(adapter, "get_model_info"):
+                model_result = await adapter.get_model_info()
+                if model_result.is_success:
+                    model_info = model_result.data
+                    execution_time = max(
+                        execution_time, model_result.execution_time or 0.0
+                    )
+
+            if features is None:
+                if hasattr(adapter, "list_features"):
+                    feature_result = await adapter.list_features(
+                        include_suppressed=input_data.include_suppressed
+                    )
+                    if feature_result.is_success:
+                        features = feature_result.data or []
+                        execution_time = max(
+                            execution_time, feature_result.execution_time or 0.0
+                        )
+                    else:
+                        return {
+                            "status": "error",
+                            "message": feature_result.error
+                            or "Failed to list features for classification",
+                        }
+                else:
+                    return {
+                        "status": "error",
+                        "message": "Active adapter does not support list_features",
+                    }
+
+            classification = classify_feature_tree_snapshot(model_info, features or [])
+            return {
+                "status": "success",
+                "classification": classification,
+                "model_info": model_info or {},
+                "features": features or [],
+                "execution_time": execution_time,
+            }
+        except Exception as e:
+            logger.error(f"Error in classify_feature_tree tool: {e}")
             return {
                 "status": "error",
                 "message": f"Unexpected error: {str(e)}",
@@ -986,5 +1066,5 @@ async def register_file_management_tools(
                 "message": f"Unexpected error: {str(e)}",
             }
 
-    tool_count = 13  # Total number of registered tools in this module
+    tool_count = 14  # Total number of registered tools in this module
     return tool_count

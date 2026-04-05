@@ -15,6 +15,9 @@ from src.solidworks_mcp.tools.file_management import (
     SaveAsInput,
     register_file_management_tools,
 )
+from src.solidworks_mcp.utils.feature_tree_classifier import (
+    classify_feature_tree_snapshot,
+)
 
 
 class TestFileManagementTools:
@@ -745,6 +748,93 @@ class TestFileManagementTools:
         configs_exception = await list_configs_tool()
         assert configs_exception["status"] == "error"
 
+    def test_classify_feature_tree_snapshot_paths(self):
+        """Classify common feature families and low-confidence sketch-only snapshots."""
+        revolve = classify_feature_tree_snapshot(
+            {"type": "Part"},
+            [{"name": "Boss-Revolve1", "type": "BossRevolve", "suppressed": False}],
+        )
+        assert revolve["family"] == "revolve"
+        assert revolve["recommended_workflow"] == "direct-mcp-revolve"
+        assert revolve["confidence"] == "high"
+
+        sheet_metal = classify_feature_tree_snapshot(
+            {"type": "Part"},
+            [
+                {"name": "Base-Flange1", "type": "Sheet-Metal", "suppressed": False},
+                {"name": "Fold1", "type": "Fold", "suppressed": False},
+            ],
+        )
+        assert sheet_metal["family"] == "sheet_metal"
+        assert sheet_metal["needs_vba"] is True
+
+        sketch_only = classify_feature_tree_snapshot(
+            {"type": "Part"},
+            [
+                {"name": "Top Plane", "type": "RefPlane", "suppressed": False},
+                {"name": "Sketch1", "type": "ProfileFeature", "suppressed": False},
+            ],
+        )
+        assert sketch_only["family"] == "sketch_only"
+        assert sketch_only["confidence"] == "low"
+        assert sketch_only["warnings"]
+
+    @pytest.mark.asyncio
+    async def test_classify_feature_tree_tool_paths(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover success, inline-payload, and error paths for classify_feature_tree."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        classify_tool = None
+        for tool in mcp_server._tools:
+            if tool.name == "classify_feature_tree":
+                classify_tool = tool.handler
+
+        assert classify_tool is not None
+
+        mock_adapter.get_model_info = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"title": "Bat", "type": "Part", "feature_count": 2},
+                execution_time=0.01,
+            )
+        )
+        mock_adapter.list_features = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data=[
+                    {"name": "Boss-Revolve1", "type": "BossRevolve", "suppressed": False}
+                ],
+                execution_time=0.01,
+            )
+        )
+
+        success = await classify_tool(input_data={"include_suppressed": True})
+        assert success["status"] == "success"
+        assert success["classification"]["family"] == "revolve"
+
+        inline = await classify_tool(
+            input_data={
+                "model_info": {"type": "Part"},
+                "features": [
+                    {"name": "Base-Flange1", "type": "Sheet-Metal", "suppressed": False}
+                ],
+            }
+        )
+        assert inline["status"] == "success"
+        assert inline["classification"]["family"] == "sheet_metal"
+
+        mock_adapter.list_features = AsyncMock(
+            return_value=Mock(is_success=False, error="feature tree unavailable")
+        )
+        error_result = await classify_tool(input_data={})
+        assert error_result["status"] == "error"
+
+        mock_adapter.list_features = AsyncMock(side_effect=RuntimeError("explode"))
+        exception_result = await classify_tool(input_data={})
+        assert exception_result["status"] == "error"
+
     @pytest.mark.asyncio
     async def test_load_part_and_load_assembly_paths(
         self, mcp_server, mock_adapter, mock_config
@@ -890,12 +980,13 @@ class TestFileManagementTools:
     async def test_read_tools_fallback_when_adapter_methods_missing(
         self, mcp_server, mock_config
     ):
-        """Cover get_model_info/list_features/list_configurations adapter-missing branches."""
+        """Cover read-helper adapter-missing branches."""
         await register_file_management_tools(mcp_server, object(), mock_config)
 
         get_model_info_tool = None
         list_features_tool = None
         list_configs_tool = None
+        classify_tool = None
         for tool in mcp_server._tools:
             if tool.name == "get_model_info":
                 get_model_info_tool = tool.handler
@@ -903,14 +994,20 @@ class TestFileManagementTools:
                 list_features_tool = tool.handler
             if tool.name == "list_configurations":
                 list_configs_tool = tool.handler
+            if tool.name == "classify_feature_tree":
+                classify_tool = tool.handler
 
         assert get_model_info_tool is not None
         assert list_features_tool is not None
         assert list_configs_tool is not None
+        assert classify_tool is not None
 
         model_info_result = await get_model_info_tool()
-        features_result = await list_features_tool(input_data={"include_suppressed": False})
+        features_result = await list_features_tool(
+            input_data={"include_suppressed": False}
+        )
         configs_result = await list_configs_tool()
+        classify_result = await classify_tool(input_data={"include_suppressed": False})
 
         assert model_info_result["status"] == "error"
         assert "does not support get_model_info" in model_info_result["message"]
@@ -918,6 +1015,8 @@ class TestFileManagementTools:
         assert "does not support list_features" in features_result["message"]
         assert configs_result["status"] == "error"
         assert "does not support list_configurations" in configs_result["message"]
+        assert classify_result["status"] == "error"
+        assert "does not support list_features" in classify_result["message"]
 
     @pytest.mark.asyncio
     async def test_load_tools_result_value_defaults_with_sparse_payloads(
