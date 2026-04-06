@@ -69,7 +69,7 @@ close_model(save=False)
 
 ### 2. Create the recreation
 
-Run your LLM prompt from [Recipe 3 — Baseball Bat](prompting-tutorials.md#recipe-3-baseball-bat).
+Run your LLM prompt from [Recipe 3 — Baseball Bat](../agents/prompting-tutorials.md#recipe-3-baseball-bat).
 
 ### 3. Capture generation image
 

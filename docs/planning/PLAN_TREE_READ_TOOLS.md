@@ -180,7 +180,7 @@ When implemented, each tool must:
 
 ## Related Documents
 
-- [Tool Catalog Overview](user-guide/tools-overview.md)
-- [Integration Testing](user-guide/integration-testing.md)
-- [Real-Tool Validation Matrix](user-guide/real-tool-validation-matrix.md)
-- [Architecture](user-guide/architecture.md)
+- [Tool Catalog Overview](../user-guide/tools-overview.md)
+- [Integration Testing](../user-guide/integration-testing.md)
+- [Real-Tool Validation Matrix](../user-guide/real-tool-validation-matrix.md)
+- [Architecture](../user-guide/architecture.md)

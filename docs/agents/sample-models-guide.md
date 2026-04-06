@@ -279,7 +279,7 @@ After recreating any part with MCP tools:
    export_image file_path="gen_image.jpg" format_type="jpg"
    ```
 
-3. **Compare** using the `src/utils/screenshot_compare.py` utility (see [Screenshot Equivalence](screenshot-equivalence.md)).
+3. **Compare** using the `src/utils/screenshot_compare.py` utility (see [Screenshot Equivalence](../user-guide/screenshot-equivalence.md)).
 
 The **done criterion** for each model is a pixel-difference score below **5%** at 1920×1080 isometric view.
 

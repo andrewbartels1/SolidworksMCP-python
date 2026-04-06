@@ -529,6 +529,6 @@ for attempt in range(5):
 
 ## See Also
 
-- [Agents and Testing](../getting-started/agents-and-testing.md) — Agent CLI and schema reference
+- [Agents and Testing](agents-and-testing.md) — Agent CLI and schema reference
 - [Worked Examples](./worked-examples.md) — Inspect-classify-delegate examples with logging context
-- [Prompting Best Practices](./prompting-best-practices.md) — How to structure prompts so logging captures good decisions
+- [Prompting Best Practices](../user-guide/prompting-best-practices.md) — How to structure prompts so logging captures good decisions

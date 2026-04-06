@@ -286,9 +286,9 @@ This layer is intentionally separate from the core MCP server runtime so teams c
 
 See:
 
-- [Agents and Prompt Testing](../getting-started/agents-and-testing.md)
-- [Agent UI Workflows](agent-ui-workflows.md)
-- [Agent Memory and Recovery](agent-memory-and-recovery.md)
+- [Agents and Prompt Testing](../agents/agents-and-testing.md)
+- [Agent UI Workflows](../agents/agent-ui-workflows.md)
+- [Agent Memory and Recovery](../agents/agent-memory-and-recovery.md)
 
 ## Deployment Patterns
 

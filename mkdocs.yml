@@ -21,19 +21,15 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
-      - Agents and Prompt Testing: getting-started/agents-and-testing.md
       - VS Code MCP Setup: getting-started/vscode-mcp-setup.md
       - Claude Code MCP Setup: getting-started/claude-code-setup.md
-  - User Guide:
+  - MCP Server Guide:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
-      - Agent UI Workflows: user-guide/agent-ui-workflows.md
-      - Agent Memory and Recovery: user-guide/agent-memory-and-recovery.md
       - Platform and Connectivity: user-guide/platform-connectivity.md
       - Docs Discovery Tool Design: user-guide/docs-discovery-tool-design.md
       - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md
       - Prompting Best Practices: user-guide/prompting-best-practices.md
-      - Prompting Tutorials: user-guide/prompting-tutorials.md
       - Integration Testing: user-guide/integration-testing.md
       - Real Tool Validation Matrix: user-guide/real-tool-validation-matrix.md
   - Tool Catalog:
@@ -50,21 +46,29 @@ nav:
       - Template Management: user-guide/tool-catalog/template-management.md
       - Macro Recording: user-guide/tool-catalog/macro-recording.md
       - Docs Discovery: user-guide/tool-catalog/docs-discovery.md
-  - Tutorials:
-      - AI-Assisted Design Workflow: user-guide/ai-assisted-design-workflow.md
-      - Worked Examples (Paper Airplane, Bat, Pin): user-guide/worked-examples.md
-      - Prompt-Driven Design: user-guide/prompt-driven-design.md
-      - Sample Models Guide: user-guide/sample-models-guide.md
-      - Screenshot Equivalence: user-guide/screenshot-equivalence.md
-      - Reverse-Engineering Workflow: user-guide/reverse-engineering-workflow.md
+      - Agents and Skills:
+          - Agents and Prompt Testing: agents/agents-and-testing.md
+          - PydanticAI and Schemas: agents/pydantic-ai-and-schemas.md
+          - Agent UI Workflows: agents/agent-ui-workflows.md
+          - Agent Memory and Recovery: agents/agent-memory-and-recovery.md
+          - Logging and Agent Invocation: agents/logging-and-agent-invocation.md
+          - Agent Invocation Reference: agents/agent-invocation-reference.md
+          - AI-Assisted Design Workflow: agents/ai-assisted-design-workflow.md
+          - Prompt-Driven Design: agents/prompt-driven-design.md
+          - Prompting Tutorials: agents/prompting-tutorials.md
+          - Reverse-Engineering Workflow: agents/reverse-engineering-workflow.md
+          - Sample Models Guide: agents/sample-models-guide.md
+          - Worked Examples: agents/worked-examples.md
+      - Tutorials:
+          - Screenshot Equivalence: user-guide/screenshot-equivalence.md
   - API Reference: api/
   - Planning:
-      - GUI Visualization Plan: PLAN_GUI_VISUALIZATION.md
-      - Database Workflows Plan: PLAN_DATABASE_WORKFLOWS.md
-      - Interactive Design Foundation Plan: PLAN_INTERACTIVE_DESIGN_FOUNDATION.md
-      - Pydantic AI Integration Plan: PLAN_PYDANTIC_AI_INTEGRATION.md
-      - Tree Read Tools Plan: PLAN_TREE_READ_TOOLS.md
-      - Roadmap 2026-2027: ROADMAP_2026_2027.md
+      - GUI Visualization Plan: planning/PLAN_GUI_VISUALIZATION.md
+      - Database Workflows Plan: planning/PLAN_DATABASE_WORKFLOWS.md
+      - Interactive Design Foundation Plan: planning/PLAN_INTERACTIVE_DESIGN_FOUNDATION.md
+      - Pydantic AI Integration Plan: planning/PLAN_PYDANTIC_AI_INTEGRATION.md
+      - Tree Read Tools Plan: planning/PLAN_TREE_READ_TOOLS.md
+      - Roadmap 2026-2027: planning/ROADMAP_2026_2027.md
 
 # Theme configuration
 theme:

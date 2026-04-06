@@ -439,4 +439,4 @@ else:
 
 - [Logging Configuration Guide](./logging-and-agent-invocation.md) — Full reference for all env vars and query patterns
 - [Worked Examples](./worked-examples.md) — End-to-end examples with logging context
-- [Prompting Best Practices](./prompting-best-practices.md) — How to write clear, audit-friendly prompts
+- [Prompting Best Practices](../user-guide/prompting-best-practices.md) — How to write clear, audit-friendly prompts

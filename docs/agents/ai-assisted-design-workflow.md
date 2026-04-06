@@ -424,10 +424,10 @@ Rules:
 
 - **[Sample Models Guide](sample-models-guide.md)** — pre-written prompt sequences for every sample part, tiered by complexity
 - **[Prompt-Driven Design](prompt-driven-design.md)** — detailed description-to-plan tutorial with all three sample tiers
-- **[Prompting Best Practices](prompting-best-practices.md)** — the four-section prompt format and rules for consistent results
-- **[Screenshot Equivalence](screenshot-equivalence.md)** — automated pixel-diff validation between reference and generated parts
-- **[Agent CLI Reference](../getting-started/agents-and-testing.md)** — logged, schema-validated runs for repeatable design sessions
+- **[Prompting Best Practices](../user-guide/prompting-best-practices.md)** — the four-section prompt format and rules for consistent results
+- **[Screenshot Equivalence](../user-guide/screenshot-equivalence.md)** — automated pixel-diff validation between reference and generated parts
+- **[Agent CLI Reference](agents-and-testing.md)** — logged, schema-validated runs for repeatable design sessions
 
 ### Planned: Automated Reverse-Engineering Loop
 
-A future workflow will close the loop completely: open an existing part programmatically, read its full feature tree and mass properties, feed that structured data to the `solidworks-part-reconstructor` agent to generate a typed `ReconstructionPlan`, execute the plan on a fresh document, and compare results via pixel diff and mass property matching. This is tracked in the [Roadmap](../ROADMAP_2026_2027.md).
+A future workflow will close the loop completely: open an existing part programmatically, read its full feature tree and mass properties, feed that structured data to the `solidworks-part-reconstructor` agent to generate a typed `ReconstructionPlan`, execute the plan on a fresh document, and compare results via pixel diff and mass property matching. This is tracked in the [Roadmap](../planning/ROADMAP_2026_2027.md).

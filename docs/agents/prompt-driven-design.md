@@ -368,10 +368,10 @@ This returns a validated `ReconstructionPlan` JSON — a structured, typed plan 
 ## What's Next
 
 - **[Sample Models Guide](sample-models-guide.md)** — pre-written feature sequences for every learn sample part
-- **[Prompting Best Practices](prompting-best-practices.md)** — detailed prompt engineering for MCP tools
-- **[Agents and Testing](../getting-started/agents-and-testing.md)** — full agent CLI reference
-- **[Tools Overview](tools-overview.md)** — complete MCP tool catalogue
+- **[Prompting Best Practices](../user-guide/prompting-best-practices.md)** — detailed prompt engineering for MCP tools
+- **[Agents and Testing](agents-and-testing.md)** — full agent CLI reference
+- **[Tools Overview](../user-guide/tools-overview.md)** — complete MCP tool catalogue
 
 ### Planned: Full Reverse-Engineering Workflow
 
-A future guide will document the automated reverse-engineering loop: open an existing part programmatically, read its feature tree and mass properties, feed that data to the `solidworks-part-reconstructor` agent to generate a `ReconstructionPlan`, execute it, and compare outputs via pixel diff and mass property matching. This is tracked in `docs/ROADMAP_2026_2027.md`.
+A future guide will document the automated reverse-engineering loop: open an existing part programmatically, read its feature tree and mass properties, feed that data to the `solidworks-part-reconstructor` agent to generate a `ReconstructionPlan`, execute it, and compare outputs via pixel diff and mass property matching. This is tracked in `docs/planning/ROADMAP_2026_2027.md`.

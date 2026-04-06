@@ -348,6 +348,6 @@ To test just the agent CLI smoke tests:
 ## Related Pages
 
 - [Sample Models Guide](sample-models-guide.md) — per-model feature sequences and reference prompts
-- [Prompting Best Practices](prompting-best-practices.md) — general MCP prompting principles
-- [Agents and Testing](../getting-started/agents-and-testing.md) — smoke test harness reference
-- [Screenshot Equivalence](screenshot-equivalence.md) — pixel-diff comparison methodology
+- [Prompting Best Practices](../user-guide/prompting-best-practices.md) — general MCP prompting principles
+- [Agents and Testing](agents-and-testing.md) — smoke test harness reference
+- [Screenshot Equivalence](../user-guide/screenshot-equivalence.md) — pixel-diff comparison methodology
