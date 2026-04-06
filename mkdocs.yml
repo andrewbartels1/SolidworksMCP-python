@@ -67,6 +67,7 @@ nav:
       - Database Workflows Plan: planning/PLAN_DATABASE_WORKFLOWS.md
       - Interactive Design Foundation Plan: planning/PLAN_INTERACTIVE_DESIGN_FOUNDATION.md
       - Pydantic AI Integration Plan: planning/PLAN_PYDANTIC_AI_INTEGRATION.md
+      - Runtime Operations and Observability Plan: planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md
       - Tree Read Tools Plan: planning/PLAN_TREE_READ_TOOLS.md
       - Roadmap 2026-2027: planning/ROADMAP_2026_2027.md
 

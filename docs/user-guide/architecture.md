@@ -172,14 +172,16 @@ flowchart TB
 
 ### 5. Connection Management
 
-Enterprise-grade connection handling:
+Current runtime connection handling:
 
 #### Connection Pool
 
-- **Instance Reuse**: Maintains pool of SolidWorks instances
-- **Load Distribution**: Balances requests across instances  
-- **Health Monitoring**: Tracks instance health and performance
-- **Auto-scaling**: Adds/removes instances based on demand
+- **Instance Reuse**: Maintains a fixed-size pool of adapters
+- **Queue-Based Dispatch**: Uses an `asyncio.Queue` to hand out available adapters
+- **Health Monitoring**: Exposes adapter and pool health checks
+- **Failure Replacement**: Disconnects failed adapters and attempts to create replacements
+
+This is not currently an autoscaling or distributed scheduling system.
 
 #### Circuit Breaker Pattern
 
@@ -198,91 +200,83 @@ stateDiagram-v2
 
 ## Performance Optimizations
 
-### Caching Strategy
+### Current Runtime Behavior
 
-#### Multi-Level Caching
+#### Async Tool Execution
 
-1. **Result Cache**: Stores operation results for reuse
-2. **Feature Cache**: Caches SolidWorks feature trees
-3. **Property Cache**: Stores frequently accessed properties
-4. **Query Cache**: Caches complex queries and analyses
+- MCP tools are implemented as async handlers
+- Connection-pool operations use async acquisition and release
+- Batch-oriented tools exist for export, file management, template application, macro execution, and automation
 
-#### Cache Invalidation
+#### What Is Not Implemented Yet
 
-- **Time-based**: TTL expiration for dynamic data
-- **Event-based**: Invalidation on model changes
-- **Manual**: Explicit cache clearing commands
+- Multi-level runtime caches for results, feature trees, properties, or queries
+- TTL or event-driven cache invalidation
+- Generic progress streaming across long operations
+- Explicit cancellation for in-progress MCP operations
+- Queue-backed background workers or autoscaling execution
 
-### Asynchronous Operations
-
-#### Non-blocking Design
-
-- **Async Tools**: All tools support asynchronous execution
-- **Background Processing**: Long operations run in background
-- **Progress Tracking**: Real-time progress for lengthy operations
-- **Cancellation**: Ability to cancel in-progress operations
-
-#### Batch Processing
-
-- **Queue Management**: Smart queueing of batch operations
-- **Resource Allocation**: Optimal resource utilization
-- **Error Recovery**: Robust handling of batch failures
-- **Progress Reporting**: Detailed batch progress tracking
+Planned runtime improvements are tracked in [Runtime Operations and Observability Plan](../planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md).
 
 ## Error Handling
 
-### Comprehensive Error Strategy
+### Current Error-Handling Mechanisms
 
-#### Error Classification
+#### Runtime and Adapter Layer
 
-1. **Transient Errors**: Network, temporary SolidWorks issues
-2. **Configuration Errors**: Invalid parameters, missing files
-3. **System Errors**: SolidWorks crashes, COM failures
-4. **Security Errors**: Access denied, authentication failures
+- **Circuit Breaker**: Repeated failures can open the circuit and short-circuit new requests
+- **Retry with Backoff**: The connection-pool wrapper retries failed pooled operations with incremental delay
+- **Adapter Health Checks**: Adapters and the pool expose health metadata
+- **Standardized Results**: Many operations return structured success/error payloads instead of raw exceptions
 
-#### Recovery Mechanisms
+#### Agent/Prompt Testing Layer
 
-- **Automatic Retry**: Configurable retry with exponential backoff
-- **Graceful Degradation**: Fallback to simpler operations
-- **Health Checks**: Proactive system health monitoring
-- **Alerting**: Configurable error notification system
+- **RecoverableFailure**: Agent runs can return structured remediation guidance and retry focus
+- **SQLite Error Memory**: Prompt-test runs can persist errors and tool events for later review
+
+#### What Is Not Implemented Yet
+
+- A formal, global error taxonomy enforced across the full runtime
+- Runtime alerting/notification hooks
+- Centralized incident routing or external observability integration
+- Rich cancellation-aware recovery for long-running jobs
+
+Planned runtime error/observability work is tracked in [Runtime Operations and Observability Plan](../planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md).
 
 ## Monitoring and Observability
 
-### Comprehensive Logging
+### Implemented Today
 
-- **Structured Logging**: JSON-formatted logs for analysis
-- **Performance Metrics**: Operation timing and resource usage
-- **Security Audit**: Complete audit trail of all operations
-- **Health Metrics**: System health and performance indicators
+- Structured application logging
+- Adapter and pool health metadata
+- Agent-side SQLite logging for runs, tool events, and failure history
 
-### Metrics Collection
+### Planned, Not Yet Generalized
 
-```mermaid
-flowchart LR
-    App["Application"] --> Metrics["Metrics Collector"]
-    Metrics --> Store["Metrics Store"]
-    Store --> Dash["Dashboard"]
-    Store --> Alert["Alerting"]
-    
-    subgraph "Key Metrics"
-        Perf["Performance"]
-        Error["Error Rates"]  
-        Usage["Tool Usage"]
-        Health["Health Status"]
-    end
-```
+- Alerting
+- Dashboard-oriented metrics sinks
+- Distributed metrics aggregation
+
+These roadmap ideas live in [Runtime Operations and Observability Plan](../planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md).
 
 ## Agent Orchestration Add-On
 
-The project now includes a lightweight agent orchestration/testing layer for custom workspace agents:
+The project includes a lightweight agent orchestration and prompt-testing layer for custom workspace agents:
 
 - Runtime package: `src/solidworks_mcp/agents/`
 - Prompt validation harness: `harness.py`
 - Typed output schemas: `schemas.py`
 - Local error-memory SQLite: `history_db.py`
 
-This layer is intentionally separate from the core MCP server runtime so teams can test prompt quality, response structure, and failure-recovery guidance without changing tool implementations.
+This layer is intentionally separate from the core MCP server runtime.
+
+It is useful for:
+
+- prompt validation against typed schemas
+- testing specialist workspace agents without changing server tools
+- storing run history, tool events, and recoverable failures locally
+
+It is not the same thing as the MCP tool runtime itself, and teams can use the server without adopting this layer.
 
 See:
 
