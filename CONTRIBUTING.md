@@ -1,85 +1,84 @@
 # Contributing to SolidWorks MCP Server
 
-We love your input! We want to make contributing to this project as easy and transparent as possible.
+Thanks for contributing.
+
+This repository is Python-first and centered on SolidWorks MCP tooling plus optional agent/prompt-testing workflows.
 
 ## Development Process
 
-We use GitHub to host code, to track issues and feature requests, as well as accept pull requests.
+1. Fork the repo and create a branch from `main`.
+2. Make focused changes with tests/docs updates where relevant.
+3. Run lint/tests/docs build locally.
+4. Open a pull request with a concise summary.
 
-1. Fork the repo and create your branch from `main`
-2. If you've added code that should be tested, add tests
-3. If you've changed APIs, update the documentation
-4. Ensure the test suite passes
-5. Make sure your code lints
-6. Issue that pull request!
+## Local Setup
 
-## Pull Request Process
+```powershell
+git clone https://github.com/<your-username>/SolidworksMCP-python.git
+cd SolidworksMCP-python
 
-1. Update the README.md with details of changes to the interface
-2. Update the CHANGELOG.md with a note describing your changes
-3. The PR will be merged once you have the sign-off of at least one maintainer
-
-## Any contributions you make will be under the MIT Software License
-
-When you submit code changes, your submissions are understood to be under the same [MIT License](LICENSE) that covers the project.
-
-## Report bugs using GitHub's [issues](https://github.com/yourusername/mcp-server-solidworks/issues)
-
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/yourusername/mcp-server-solidworks/issues/new).
-
-## Write bug reports with detail, background, and sample code
-
-**Great Bug Reports** tend to have:
-
-- A quick summary and/or background
-- Steps to reproduce
-  - Be specific!
-  - Give sample code if you can
-- What you expected would happen
-- What actually happens
-- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
-
-## Development Setup
-
-```bash
-# Clone your fork
-git clone https://github.com/your-username/mcp-server-solidworks.git
-cd mcp-server-solidworks-ts
-
-# Install dependencies
-npm install
-
-# Run tests
-npm test
-
-# Run in development mode
-npm run dev
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
 ```
 
-## Testing
+## Recommended Commands
 
-- Write tests for any new functionality
-- Ensure all tests pass before submitting PR
-- Test with actual SolidWorks installation when possible
+Use the helper script:
 
-## Code Style
+```powershell
+.\dev-commands.ps1
+```
 
-- Use TypeScript for all new code
-- Follow the existing code style (enforced by ESLint/Prettier)
-- Run `npm run lint` before committing
-- Use meaningful variable and function names
-- Add comments for complex logic
+Typical workflow:
 
-## Adding New Tools
+- `.\dev-commands.ps1 dev-test` (standard suite)
+- `.\dev-commands.ps1 dev-lint`
+- `.\dev-commands.ps1 dev-format`
+- `.\dev-commands.ps1 dev-make-docs-build`
 
-To add a new tool:
+When needed (credentials/SolidWorks environment available):
 
-1. Create the tool in the appropriate file in `src/tools/`
-2. Follow the existing pattern with Zod schemas
-3. Add comprehensive error handling
-4. Update the README with the new tool documentation
-5. Add tests for the new functionality
+- `.\dev-commands.ps1 dev-test-full`
+
+## Testing Expectations
+
+- Add or update tests for behavior changes.
+- Keep new behavior covered in the appropriate test module under `tests/`.
+- Prefer deterministic tests for CI; keep live/smoke behavior clearly marked.
+
+## Documentation Expectations
+
+- Update docs for user-visible behavior changes.
+- Keep architecture docs implementation-accurate.
+- Put roadmap/aspirational content in `docs/planning/`, not runtime architecture pages.
+
+Current docs structure:
+
+- `docs/user-guide/` for MCP runtime docs
+- `docs/agents/` for agent/skills orchestration and prompt workflows
+- `docs/planning/` for future work and roadmap
+
+## Pull Request Guidelines
+
+- Use concise commit messages that describe intent.
+- Keep unrelated generated/local artifacts out of commits.
+- Include validation notes (tests/docs build) in the PR description.
+- Link related issues when applicable.
+
+## Bug Reports
+
+Open issues at:
+
+- <https://github.com/andrewbartels1/SolidworksMCP-python/issues>
+
+Helpful bug reports include:
+
+- environment details (OS, Python, SolidWorks version)
+- reproduction steps
+- expected vs actual behavior
+- logs/error output
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under its MIT License.
+By contributing, you agree your contributions are licensed under the [MIT License](LICENSE).
