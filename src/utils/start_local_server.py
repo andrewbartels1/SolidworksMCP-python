@@ -16,7 +16,15 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Any
+
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
+from solidworks_mcp.server import SolidWorksMCPServer
+from solidworks_mcp.utils.logging import setup_logging
 
 # Add src to path for development
 project_root = Path(__file__).resolve().parents[2]
@@ -34,15 +42,6 @@ if sys.platform == "win32":
         sys.stderr = io.TextIOWrapper(
             sys.stderr.buffer, encoding="utf-8", line_buffering=True
         )
-
-from solidworks_mcp.config import (
-    SolidWorksMCPConfig,
-    DeploymentMode,
-    SecurityLevel,
-    AdapterType,
-)
-from solidworks_mcp.server import SolidWorksMCPServer
-from solidworks_mcp.utils.logging import setup_logging
 
 
 def create_local_config(

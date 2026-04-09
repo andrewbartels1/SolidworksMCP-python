@@ -8,6 +8,7 @@ with configurable deployment (local/remote) and security options.
 from __future__ import annotations
 
 import asyncio
+from functools import wraps
 import inspect
 import json
 import os
@@ -26,6 +27,11 @@ from pydantic_ai import Agent
 from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 
 from . import adapters, security, tools, utils
+from .adapters.base import AdapterResult
+from .adapters.complexity_analyzer import ComplexityAnalyzer
+from .adapters.intelligent_router import IntelligentRouter
+from .adapters.vba_adapter import VbaGeneratorAdapter
+from .cache.response_cache import CachePolicy, ResponseCache
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
 from .exceptions import SolidWorksMCPError
 from .agents.history_db import insert_tool_event
@@ -80,6 +86,8 @@ class SolidWorksMCPServer:
         # Runtime objects (not serializable)
         self.adapter: Any | None = None
         self.agent: Any | None = None
+        self._router: IntelligentRouter | None = None
+        self._vba_adapter: VbaGeneratorAdapter | None = None
 
     @staticmethod
     def _env_truthy(value: str | None) -> bool:
@@ -136,7 +144,20 @@ class SolidWorksMCPServer:
                     Any: Describe the returned value.
 
                 """
-                wrapped = decorator(func)
+                @wraps(func)
+                async def _guarded_runner(*runner_args: Any, **runner_kwargs: Any) -> Any:
+                    """Run tool with runtime security and invocation normalization."""
+                    tool_name = getattr(func, "__name__", "unknown")
+                    payload = self._extract_payload(runner_args, runner_kwargs)
+                    self._enforce_tool_security(tool_name=tool_name, payload=payload)
+                    return await self._invoke_tool_callable(
+                        func=func,
+                        payload=payload,
+                        runner_args=runner_args,
+                        runner_kwargs=runner_kwargs,
+                    )
+
+                wrapped = decorator(_guarded_runner)
 
                 async def _compat_runner(
                     *runner_args: Any, **runner_kwargs: Any
@@ -148,9 +169,7 @@ class SolidWorksMCPServer:
 
                     """
                     tool_name = getattr(func, "__name__", "unknown")
-                    payload = runner_kwargs.get("input_data")
-                    if payload is None and runner_args:
-                        payload = runner_args[0]
+                    payload = self._extract_payload(runner_args, runner_kwargs)
 
                     logger.debug(
                         "[Tool] {} called | input={}",
@@ -165,14 +184,14 @@ class SolidWorksMCPServer:
                         },
                     )
 
-                    params = list(inspect.signature(func).parameters.values())
                     try:
-                        if len(params) == 0:
-                            result = await func()
-                        elif len(params) == 1 and payload is not None:
-                            result = await func(payload)
-                        else:
-                            result = await func(*runner_args, **runner_kwargs)
+                        self._enforce_tool_security(tool_name=tool_name, payload=payload)
+                        result = await self._invoke_tool_callable(
+                            func=func,
+                            payload=payload,
+                            runner_args=runner_args,
+                            runner_kwargs=runner_kwargs,
+                        )
                     except Exception as exc:
                         self._log_tool_event(
                             tool_name=tool_name,
@@ -233,6 +252,189 @@ class SolidWorksMCPServer:
 
         mcp_runtime.tool = compat_tool  # type: ignore[method-assign]
 
+    def _extract_payload(
+        self,
+        runner_args: tuple[Any, ...],
+        runner_kwargs: dict[str, Any],
+    ) -> Any | None:
+        """Extract normalized tool payload from invocation arguments.
+
+        Args:
+            runner_args: Positional arguments passed to tool call.
+            runner_kwargs: Keyword arguments passed to tool call.
+
+        Returns:
+            Primary payload object or ``None``.
+        """
+        payload = runner_kwargs.get("input_data")
+        if payload is None and runner_args:
+            payload = runner_args[0]
+        return payload
+
+    async def _invoke_tool_callable(
+        self,
+        func: Any,
+        payload: Any | None,
+        runner_args: tuple[Any, ...],
+        runner_kwargs: dict[str, Any],
+    ) -> Any:
+        """Invoke a registered tool while preserving legacy invocation behavior.
+
+        Args:
+            func: Tool callable.
+            payload: Normalized payload object.
+            runner_args: Positional tool arguments.
+            runner_kwargs: Keyword tool arguments.
+
+        Returns:
+            Tool execution result.
+        """
+        params = list(inspect.signature(func).parameters.values())
+        if len(params) == 0:
+            return await func()
+        if len(params) == 1 and payload is not None:
+            return await func(payload)
+        return await func(*runner_args, **runner_kwargs)
+
+    def _enforce_tool_security(self, tool_name: str, payload: Any | None) -> None:
+        """Enforce runtime security policies before tool execution.
+
+        Args:
+            tool_name: Registered tool name.
+            payload: Tool payload.
+
+        Raises:
+            SecurityError: If security policy blocks the invocation.
+        """
+        enforcer = security.get_security_enforcer()
+        if enforcer is None:
+            return
+        enforcer.enforce(tool_name=tool_name, payload=payload)
+
+    def _configure_runtime_services(self) -> None:
+        """Initialize router and cache services and instrument adapter methods."""
+        if self.adapter is None:
+            return
+
+        analyzer = ComplexityAnalyzer(
+            parameter_threshold=self.config.complexity_parameter_threshold,
+            score_threshold=self.config.complexity_score_threshold,
+        )
+        cache = ResponseCache(
+            CachePolicy(
+                enabled=self.config.enable_response_cache,
+                default_ttl_seconds=self.config.response_cache_ttl_seconds,
+                max_entries=self.config.response_cache_max_entries,
+            )
+        )
+        self._router = IntelligentRouter(analyzer=analyzer, cache=cache)
+        self._vba_adapter = VbaGeneratorAdapter(backing_adapter=self.adapter)
+
+        if self.config.enable_intelligent_routing:
+            self._instrument_adapter_methods()
+
+    def _instrument_adapter_methods(self) -> None:
+        """Route selected adapter methods through intelligent router."""
+        if self.adapter is None or self._router is None:
+            return
+
+        routed_operations = {
+            "create_extrusion",
+            "create_revolve",
+            "create_sweep",
+            "create_loft",
+            "get_model_info",
+            "list_features",
+            "list_configurations",
+            "get_mass_properties",
+            # Additional analysis operations
+            "calculate_mass_properties",
+            "get_material_properties",
+            "analyze_geometry",
+            "check_interference",
+            # Drawing analysis operations
+            "analyze_drawing_comprehensive",
+            "analyze_drawing_dimensions",
+            "analyze_drawing_views",
+            "analyze_drawing_annotations",
+            "check_drawing_compliance",
+            "check_drawing_standards",
+            "compare_drawing_versions",
+            # Modeling operations that benefit from routing
+            "create_assembly",
+            "create_part",
+            "create_drawing",
+            "insert_component",
+            "add_mate",
+            # Sketching operations
+            "create_sketch",
+            "add_circle",
+            "add_rectangle",
+            "add_line",
+            "add_arc",
+            "add_spline",
+            "add_polygon",
+            "add_sketch_constraint",
+            "add_sketch_dimension",
+            # Drawing operations
+            "create_drawing_view",
+            "add_drawing_annotation",
+            "add_dimension",
+            # File and metadata operations
+            "get_file_properties",
+            "get_dimension",
+            "classify_feature_tree",
+            "discover_solidworks_docs",
+        }
+
+        for operation_name in routed_operations:
+            original_operation = getattr(self.adapter, operation_name, None)
+            if original_operation is None or not callable(original_operation):
+                continue
+
+            vba_operation = None
+            if self._vba_adapter is not None:
+                candidate = getattr(self._vba_adapter, operation_name, None)
+                if callable(candidate):
+                    vba_operation = candidate
+
+            async def _routed_call(
+                *call_args: Any,
+                _operation_name: str = operation_name,
+                _com_callable: Any = original_operation,
+                _vba_callable: Any = vba_operation,
+                **call_kwargs: Any,
+            ) -> AdapterResult[Any]:
+                """Execute one instrumented operation through intelligent router."""
+                payload: Any
+                if call_kwargs:
+                    payload = {
+                        "args": call_args,
+                        "kwargs": call_kwargs,
+                    }
+                elif len(call_args) == 1:
+                    payload = call_args[0]
+                elif call_args:
+                    payload = {"args": call_args}
+                else:
+                    payload = None
+
+                if self._router is None:
+                    return await _com_callable(*call_args, **call_kwargs)
+
+                result, _ = await self._router.execute(
+                    operation=_operation_name,
+                    payload=payload,
+                    call_args=call_args,
+                    call_kwargs=call_kwargs,
+                    com_operation=_com_callable,
+                    vba_operation=_vba_callable,
+                    cache_ttl_seconds=self.config.response_cache_ttl_seconds,
+                )
+                return result
+
+            setattr(self.adapter, operation_name, _routed_call)
+
     async def setup(self) -> None:
         """Initialize the server components."""
         if self._setup_complete:
@@ -248,6 +450,7 @@ class SolidWorksMCPServer:
 
         # Create SolidWorks adapter
         self.adapter = await adapters.create_adapter(self.config)
+        self._configure_runtime_services()
         self.state.adapter = self.adapter
 
         # Register tools
