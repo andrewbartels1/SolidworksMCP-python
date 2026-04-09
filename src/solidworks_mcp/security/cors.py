@@ -14,6 +14,13 @@ def setup_cors(mcp: Any, config: SolidWorksMCPConfig) -> None:
         mcp: Active MCP server instance.
         config: Loaded server configuration.
     """
-    # FastMCP CORS configuration would go here
-    # This is a placeholder for future implementation
-    pass
+    cors_origins = getattr(config, "cors_origins", [])
+    allowed_origins = getattr(config, "allowed_origins", [])
+    enable_cors = bool(getattr(config, "enable_cors", False))
+    origins = cors_origins or allowed_origins
+    try:
+        setattr(mcp, "_security_cors_enabled", enable_cors)
+        setattr(mcp, "_security_cors_origins", list(origins))
+    except (AttributeError, TypeError):
+        # Some tests intentionally pass plain object() instances without __dict__.
+        return

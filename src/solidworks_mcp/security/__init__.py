@@ -8,8 +8,17 @@ the configured security level.
 from .auth import setup_authentication, validate_api_key
 from .cors import setup_cors
 from .rate_limiting import setup_rate_limiting
+from .runtime import SecurityEnforcer
 from ..config import SolidWorksMCPConfig
 from typing import Any
+
+
+_security_enforcer: SecurityEnforcer | None = None
+
+
+def get_security_enforcer() -> SecurityEnforcer | None:
+    """Return the active runtime security enforcer, if configured."""
+    return _security_enforcer
 
 
 async def setup_security(mcp: Any, config: SolidWorksMCPConfig) -> None:
@@ -23,6 +32,8 @@ async def setup_security(mcp: Any, config: SolidWorksMCPConfig) -> None:
 
     if config.security_level == SecurityLevel.MINIMAL:
         # Local only, minimal security
+        global _security_enforcer
+        _security_enforcer = SecurityEnforcer(config)
         return
 
     if config.security_level in [SecurityLevel.STANDARD, SecurityLevel.STRICT]:
@@ -38,6 +49,8 @@ async def setup_security(mcp: Any, config: SolidWorksMCPConfig) -> None:
         if config.enable_rate_limiting:
             setup_rate_limiting(mcp, config)
 
+    _security_enforcer = SecurityEnforcer(config)
+
 
 __all__ = [
     "setup_security",
@@ -45,4 +58,5 @@ __all__ = [
     "validate_api_key",
     "setup_cors",
     "setup_rate_limiting",
+    "get_security_enforcer",
 ]
