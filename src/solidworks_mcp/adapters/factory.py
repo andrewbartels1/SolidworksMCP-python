@@ -14,6 +14,7 @@ from typing import Any, Type, Union
 from ..config import AdapterType, SolidWorksMCPConfig
 from .base import SolidWorksAdapter
 from .mock_adapter import MockSolidWorksAdapter
+from .vba_adapter import VbaGeneratorAdapter
 
 
 class AdapterFactory:
@@ -142,7 +143,18 @@ class AdapterFactory:
         adapter_class = self._adapter_registry[adapter_type]
 
         # Create base adapter
-        if adapter_type == AdapterType.MOCK:
+        if adapter_type == AdapterType.VBA:
+            backing_type = self._determine_vba_backing_type(config)
+            if backing_type not in self._adapter_registry:
+                raise ValueError(f"Backing adapter type {backing_type} not registered")
+
+            backing_class = self._adapter_registry[backing_type]
+            if backing_type == AdapterType.MOCK:
+                backing_adapter = backing_class(config)
+            else:
+                backing_adapter = backing_class(self._build_adapter_config(config))
+            base_adapter = VbaGeneratorAdapter(backing_adapter=backing_adapter)
+        elif adapter_type == AdapterType.MOCK:
             base_adapter = adapter_class(config)
         else:
             adapter_config = self._build_adapter_config(config)
@@ -195,6 +207,21 @@ class AdapterFactory:
 
         # Use configured adaptertype
         return config.adapter_type
+
+    def _determine_vba_backing_type(self, config: SolidWorksMCPConfig) -> AdapterType:
+        """Determine which adapter should back the VBA wrapper.
+
+        Args:
+            config: Active server configuration.
+
+        Returns:
+            Concrete non-VBA adapter type used to execute operations.
+        """
+        if config.testing or config.mock_solidworks:
+            return AdapterType.MOCK
+        if platform.system() != "Windows":
+            return AdapterType.MOCK
+        return AdapterType.PYWIN32
 
     def _build_adapter_config(self, config: SolidWorksMCPConfig) -> dict[str, Any]:
         """Extract and transform config for adapter instantiation.
@@ -301,6 +328,7 @@ def _register_default_adapters() -> None:
     """Register default adapter implementations."""
     # Always register mock adapter
     AdapterFactory.register_adapter(AdapterType.MOCK, MockSolidWorksAdapter)
+    AdapterFactory.register_adapter(AdapterType.VBA, VbaGeneratorAdapter)
 
     # Register pywin32 adapter if on Windows
     if platform.system() == "Windows":

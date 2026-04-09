@@ -11,6 +11,14 @@ from .pywin32_adapter import PyWin32Adapter
 from .mock_adapter import MockSolidWorksAdapter
 from .circuit_breaker import CircuitBreakerAdapter
 from .connection_pool import ConnectionPoolAdapter
+from .complexity_analyzer import ComplexityAnalyzer, RoutingDecision
+from .intelligent_router import IntelligentRouter
+from .vba_adapter import VbaGeneratorAdapter
+from .vba_macro_executor import (
+    VbaMacroExecutor,
+    MacroExecutionRequest,
+    MacroExecutionResult,
+)
 
 __all__ = [
     "SolidWorksAdapter",
@@ -23,4 +31,11 @@ __all__ = [
     "MockSolidWorksAdapter",
     "CircuitBreakerAdapter",
     "ConnectionPoolAdapter",
+    "ComplexityAnalyzer",
+    "RoutingDecision",
+    "IntelligentRouter",
+    "VbaGeneratorAdapter",
+    "VbaMacroExecutor",
+    "MacroExecutionRequest",
+    "MacroExecutionResult",
 ]
