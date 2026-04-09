@@ -30,7 +30,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastmcp>=3.2.0",
+    "fastmcp>=3.2.2",
     "pydantic>=2.5.0",
     "pydantic-ai>=0.0.13",
     "sqlmodel>=0.0.22",
