@@ -2142,12 +2142,27 @@ class PyWin32Adapter(SolidWorksAdapter):
                 names = raw_names
 
             if names is None:
-                return []
+                names = []
             if isinstance(names, str):
                 return [names]
             if isinstance(names, tuple):
-                return [str(name) for name in names]
-            return [str(name) for name in names]
+                normalized_names = [str(name) for name in names]
+            else:
+                normalized_names = [str(name) for name in names]
+
+            if normalized_names:
+                return normalized_names
+
+            active_config = self._attempt(
+                lambda: self.currentModel.GetActiveConfiguration(), default=None
+            )
+            active_name = self._attempt(
+                lambda: active_config.GetName(), default=None
+            )
+            if active_name:
+                return [str(active_name)]
+
+            return []
 
         return self._handle_com_operation("list_configurations", _list_operation)
 

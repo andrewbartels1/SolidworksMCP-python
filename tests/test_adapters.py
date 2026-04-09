@@ -751,6 +751,25 @@ class TestPyWin32AdapterBranches:
         assert result.data == ["Default", "Alt"]
 
     @pytest.mark.asyncio
+    async def test_list_configurations_falls_back_to_active_configuration(
+        self, monkeypatch
+    ):
+        """list_configurations should fall back to the active configuration name."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = SimpleNamespace(
+            GetConfigurationNames=Mock(return_value=None),
+            GetActiveConfiguration=Mock(
+                return_value=SimpleNamespace(GetName=Mock(return_value="Default"))
+            ),
+        )
+
+        result = await adapter.list_configurations()
+
+        assert result.is_success
+        assert result.data == ["Default"]
+
+    @pytest.mark.asyncio
     async def test_connect_disconnect_and_document_creation_paths(self, monkeypatch):
         """Test COM connect lifecycle plus model creation/open branches with mocks."""
         adapter = self._build_adapter(monkeypatch)
