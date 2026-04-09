@@ -42,6 +42,21 @@ function Invoke-ProjectPython {
     throw "No Python runtime found. Install micromamba or create .venv first."
 }
 
+function Invoke-ProjectPytest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Args
+    )
+
+    $pytestArgs = @(
+        "-m", "pytest",
+        "-p", "pytest_asyncio.plugin",
+        "-p", "pytest_cov"
+    ) + $Args
+
+    Invoke-ProjectPython -Args $pytestArgs
+}
+
 function dev-help {
     Write-Host "Available Commands:" -ForegroundColor Green
     Write-Host ""
@@ -104,8 +119,8 @@ function dev-install {
 function dev-test {
     Write-Host "Running tests with coverage..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
-    Invoke-ProjectPython -Args @(
-        "-m", "pytest", "tests/",
+    Invoke-ProjectPytest -Args @(
+        "tests/",
         "-m", "not solidworks_only and not smoke",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
@@ -125,8 +140,8 @@ function dev-test {
 function dev-test-context-budget {
     Write-Host "Running smoke response-size guard test..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
-    Invoke-ProjectPython -Args @(
-        "-m", "pytest", "tests/test_all_endpoints_harness.py",
+    Invoke-ProjectPytest -Args @(
+        "tests/test_all_endpoints_harness.py",
         "-k", "test_smoke_responses_within_context_budget",
         "--no-cov",
         "-q"
@@ -174,8 +189,8 @@ function dev-prepare-harness-reports {
     }
 
     # Refresh smoke report with live data using the mock-safe Level B writer test.
-    Invoke-ProjectPython -Args @(
-        "-m", "pytest", "tests/test_all_endpoints_harness.py",
+    Invoke-ProjectPytest -Args @(
+        "tests/test_all_endpoints_harness.py",
         "-k", "test_smoke_all_tools",
         "--no-cov",
         "-q"
@@ -186,8 +201,8 @@ function dev-prepare-harness-reports {
     }
 
     # Refresh compat report with live data when real integration is available.
-    Invoke-ProjectPython -Args @(
-        "-m", "pytest", "tests/test_all_endpoints_harness.py",
+    Invoke-ProjectPytest -Args @(
+        "tests/test_all_endpoints_harness.py",
         "-k", "test_c10_docs_discovery_and_compat",
         "--no-cov",
         "-q"
@@ -232,8 +247,8 @@ function dev-test-full {
     }
 
     # tests/ includes all suites, including the full endpoint harness tests.
-    Invoke-ProjectPython -Args @(
-        "-m", "pytest", "tests/",
+    Invoke-ProjectPytest -Args @(
+        "tests/",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",

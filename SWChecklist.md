@@ -58,6 +58,15 @@
 - [ ] Feature for "style" type inputs for natural generation or design preferences, like generating a stylized design part image and then have a workflow to break it into the parts that would be needed to actually design and print
 
 - [ ] Add a workflow for recommendations for ESP32, Raspberry Pis, and other electronics that might go into sensors and other parts. Like an expert of 3d printing and simple electrical projects and research for this.
+
+- [ ] Evaluate Pydantic/PydanticAI-backed caching strategy for `response_cache` and `intelligent_router` (append-only backlog item)
+  - **Research notes (2026-04-06):**
+    - `pydantic` does not provide a first-party response cache abstraction for application-level tool outputs; it mainly offers validation and internal parsing/schema caching.
+    - `pydantic_ai` has caching for MCP metadata (`cache_tools`, `cache_resources`) and internal tool definition caching, but not a generic response cache for arbitrary tool results.
+  - **Backlog scope:**
+    - Introduce Pydantic models for cache entries/policies/keys to strengthen type safety and validation.
+    - Keep runtime storage backend custom (in-memory/redis/sqlite) unless a dedicated external cache library is adopted.
+    - Assess whether `pydantic_ai` MCP metadata cache settings can be leveraged or mirrored in router-level invalidation rules.
 ---
 
 ## ✅ Core Tools (6)

@@ -72,6 +72,12 @@ coverage.xml
 # Generated test artifacts
 tests/.generated/
 
+# Runtime-generated agent / cache artifacts
+.generated/
+.solidworks_mcp/
+
+# Claude local settings
+.claude/
 
 # random mypy artifacts
 mypy_*
