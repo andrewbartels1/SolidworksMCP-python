@@ -69,6 +69,8 @@ nav:
       - Pydantic AI Integration Plan: planning/PLAN_PYDANTIC_AI_INTEGRATION.md
       - Runtime Operations and Observability Plan: planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md
       - Tree Read Tools Plan: planning/PLAN_TREE_READ_TOOLS.md
+      - Architecture Analysis (Snapshot): planning/ARCHITECTURE_ANALYSIS.md
+      - Architecture Alignment Report (Snapshot): planning/ARCHITECTURE_ALIGNMENT_REPORT.md
       - Roadmap 2026-2027: planning/ROADMAP_2026_2027.md
 
 # Theme configuration

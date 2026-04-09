@@ -59,6 +59,23 @@ flowchart TB
     VBA --> Macros
 ```
 
+## Implementation Status (April 2026)
+
+| Capability | Status | Notes |
+|---|---|---|
+| Complexity Analyzer | In progress | Implemented initial analyzer with parameter count, operation profile scoring, and outcome history bias. |
+| Intelligent Router | In progress | Implemented runtime COM/VBA routing for selected operations with fallback behavior. |
+| Response Cache | In progress | Implemented in-memory TTL cache for selected read-heavy adapter operations. |
+| VBA Adapter | In progress | Added VBA route wrapper adapter and factory registration. Current execution still delegates to backing adapter while attaching VBA metadata. |
+| Security Runtime Enforcement | In progress | Added runtime API key and rate-limit enforcement in tool invocation path. |
+| Distributed Load Balancing | Future state | Current implementation uses local queue-based pooling, not distributed scheduling. |
+| OAuth2/JWT Transport Enforcement | Future state | Planned for transport-layer integration in remote deployments. |
+
+For a dated implementation snapshot that may evolve quickly, see the planning docs:
+
+- [Architecture Analysis (Snapshot)](../planning/ARCHITECTURE_ANALYSIS.md)
+- [Architecture Alignment Report (Snapshot)](../planning/ARCHITECTURE_ALIGNMENT_REPORT.md)
+
 ## Core Components
 
 ### 1. Intelligent Router
