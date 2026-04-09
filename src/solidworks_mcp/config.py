@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 from pydantic import ConfigDict
 from dotenv import dotenv_values
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_core.core_schema import ValidationInfo
 
 
@@ -37,6 +37,7 @@ class AdapterType(str, Enum):
     """SolidWorks adapter implementation options."""
 
     PYWIN32 = "pywin32"  # Direct COM via pywin32
+    VBA = "vba"  # VBA-oriented adapter wrapper
     MOCK = "mock"  # Mock for testing
     EDGE_DOTNET = "edge_dotnet"  # Edge.js bridge to .NET (future)
     POWERSHELL = "powershell"  # PowerShell bridge (future)
@@ -171,6 +172,36 @@ class SolidWorksMCPConfig(BaseModel):
         default=False, description="Enable SolidWorks connection pooling"
     )
 
+    enable_intelligent_routing: bool = Field(
+        default=True,
+        description="Enable complexity-based COM/VBA routing for eligible operations",
+    )
+
+    complexity_parameter_threshold: int = Field(
+        default=12,
+        description="Parameter-count threshold used by the complexity analyzer",
+    )
+
+    complexity_score_threshold: float = Field(
+        default=0.6,
+        description="Complexity score threshold used to prefer VBA routing",
+    )
+
+    enable_response_cache: bool = Field(
+        default=True,
+        description="Enable in-memory caching for read-heavy adapter operations",
+    )
+
+    response_cache_ttl_seconds: int = Field(
+        default=60,
+        description="Default TTL for cached responses in seconds",
+    )
+
+    response_cache_max_entries: int = Field(
+        default=512,
+        description="Maximum number of entries retained in response cache",
+    )
+
     connection_pool_size: int = Field(
         default=3, description="Maximum connections in pool"
     )
@@ -239,6 +270,25 @@ class SolidWorksMCPConfig(BaseModel):
         extra="allow"  # Allow extra fields for test configurations
     )
 
+    @model_validator(mode="after")
+    def sync_legacy_alias_fields(self) -> "SolidWorksMCPConfig":
+        """Sync test/developer alias fields into canonical runtime fields.
+
+        Several fixtures and scripts still populate compatibility fields such as
+        ``rate_limit_enabled`` and ``connection_pooling``. Runtime code reads the
+        canonical fields, so normalize them here after validation.
+
+        Returns:
+            The normalized config instance.
+        """
+        self.enable_circuit_breaker = self.circuit_breaker_enabled
+        self.enable_connection_pooling = self.connection_pooling
+        self.connection_pool_size = self.max_connections
+        self.enable_rate_limiting = self.rate_limit_enabled
+        if self.allowed_origins and not self.cors_origins:
+            self.cors_origins = list(self.allowed_origins)
+        return self
+
     @field_validator("cache_dir")
     @classmethod
     def set_cache_dir(cls, v: Path | None, info: ValidationInfo) -> Path:
@@ -265,9 +315,7 @@ class SolidWorksMCPConfig(BaseModel):
 
     @field_validator("adapter_type")
     @classmethod
-    def validate_adapter_type(
-        cls, v: AdapterType, info: ValidationInfo
-    ) -> AdapterType:
+    def validate_adapter_type(cls, v: AdapterType, info: ValidationInfo) -> AdapterType:
         """Validate adapter type based on platform."""
         return v
 
@@ -275,13 +323,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_port(cls, v: int) -> int:
         """Execute validate port.
-        
+
         Args:
             v (int): Describe v.
-        
+
         Returns:
             int: Describe the returned value.
-        
+
         """
         if v < 1 or v > 65535:
             raise ValueError("Port must be between 1 and 65535")
@@ -291,16 +339,76 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_timeout(cls, v: float) -> float:
         """Execute validate timeout.
-        
+
         Args:
             v (float): Describe v.
-        
+
         Returns:
             float: Describe the returned value.
-        
+
         """
         if v <= 0:
             raise ValueError("timeout_seconds must be > 0")
+        return v
+
+    @field_validator("complexity_parameter_threshold")
+    @classmethod
+    def validate_complexity_parameter_threshold(cls, v: int) -> int:
+        """Validate the complexity parameter threshold.
+
+        Args:
+            v: Proposed threshold value.
+
+        Returns:
+            Validated threshold.
+        """
+        if v < 1:
+            raise ValueError("complexity_parameter_threshold must be >= 1")
+        return v
+
+    @field_validator("complexity_score_threshold")
+    @classmethod
+    def validate_complexity_score_threshold(cls, v: float) -> float:
+        """Validate the complexity score threshold.
+
+        Args:
+            v: Proposed score threshold.
+
+        Returns:
+            Validated threshold.
+        """
+        if v <= 0 or v > 1:
+            raise ValueError("complexity_score_threshold must be in (0, 1]")
+        return v
+
+    @field_validator("response_cache_ttl_seconds")
+    @classmethod
+    def validate_response_cache_ttl_seconds(cls, v: int) -> int:
+        """Validate default response cache TTL.
+
+        Args:
+            v: Proposed TTL value in seconds.
+
+        Returns:
+            Validated TTL.
+        """
+        if v < 1:
+            raise ValueError("response_cache_ttl_seconds must be >= 1")
+        return v
+
+    @field_validator("response_cache_max_entries")
+    @classmethod
+    def validate_response_cache_max_entries(cls, v: int) -> int:
+        """Validate response cache size.
+
+        Args:
+            v: Proposed cache capacity.
+
+        Returns:
+            Validated cache size.
+        """
+        if v < 1:
+            raise ValueError("response_cache_max_entries must be >= 1")
         return v
 
     @classmethod
@@ -315,14 +423,14 @@ class SolidWorksMCPConfig(BaseModel):
 
         def _coerce_env_value(key: str, value: Any) -> Any:
             """Execute coerce env value.
-            
+
             Args:
                 key (str): Describe key.
                 value (Any): Describe value.
-            
+
             Returns:
                 Any: Describe the returned value.
-            
+
             """
             if not isinstance(value, str):
                 return value
