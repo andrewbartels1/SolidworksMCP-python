@@ -18,11 +18,24 @@ from src.solidworks_mcp.agents.history_db import (
     find_conversation_events,
     find_recent_errors,
     find_run_timeline,
+    get_design_session,
     init_db,
+    insert_evidence_link,
+    insert_model_state_snapshot,
+    insert_plan_checkpoint,
+    insert_sketch_graph_snapshot,
+    insert_tool_call_record,
     insert_conversation_event,
     insert_error,
     insert_run,
     insert_tool_event,
+    list_evidence_links,
+    list_model_state_snapshots,
+    list_plan_checkpoints,
+    list_sketch_graph_snapshots,
+    list_tool_call_records,
+    update_plan_checkpoint,
+    upsert_design_session,
 )
 
 
@@ -82,6 +95,12 @@ class TestBuildEngineAndInitDb:
         assert "agentrun" in table_names
         assert "toolevent" in table_names
         assert "errorcatalog" in table_names
+        assert "designsession" in table_names
+        assert "plancheckpoint" in table_names
+        assert "toolcallrecord" in table_names
+        assert "evidencelink" in table_names
+        assert "modelstatesnapshot" in table_names
+        assert "sketchgraphsnapshot" in table_names
         engine.dispose()
 
     def test_init_db_uses_default_path_when_none(self, monkeypatch, tmp_path: Path):
@@ -275,14 +294,26 @@ class TestFindRecentErrors:
         db = _db(tmp_path)
         insert_error(
             ErrorRecord(
-                source="s", tool_name="t", error_type="E",
-                error_message="msg", root_cause="rc", remediation="fix"
+                source="s",
+                tool_name="t",
+                error_type="E",
+                error_message="msg",
+                root_cause="rc",
+                remediation="fix",
             ),
             db_path=db,
         )
         row = find_recent_errors(db_path=db)[0]
-        for key in ("run_id", "source", "tool_name", "error_type",
-                    "error_message", "root_cause", "remediation", "created_at"):
+        for key in (
+            "run_id",
+            "source",
+            "tool_name",
+            "error_type",
+            "error_message",
+            "root_cause",
+            "remediation",
+            "created_at",
+        ):
             assert key in row
 
     def test_respects_limit(self, tmp_path: Path):
@@ -290,8 +321,12 @@ class TestFindRecentErrors:
         for i in range(10):
             insert_error(
                 ErrorRecord(
-                    source="s", tool_name="t", error_type=f"E{i}",
-                    error_message="m", root_cause="r", remediation="fix"
+                    source="s",
+                    tool_name="t",
+                    error_type=f"E{i}",
+                    error_message="m",
+                    root_cause="r",
+                    remediation="fix",
                 ),
                 db_path=db,
             )
@@ -303,8 +338,12 @@ class TestFindRecentErrors:
         for i in range(5):
             insert_error(
                 ErrorRecord(
-                    source="s", tool_name="t", error_type=f"E{i}",
-                    error_message="m", root_cause="r", remediation="fix"
+                    source="s",
+                    tool_name="t",
+                    error_type=f"E{i}",
+                    error_message="m",
+                    root_cause="r",
+                    remediation="fix",
                 ),
                 db_path=db,
             )
@@ -318,8 +357,12 @@ class TestFindRecentErrors:
         for i in range(25):
             insert_error(
                 ErrorRecord(
-                    source="s", tool_name="t", error_type=f"E{i}",
-                    error_message="m", root_cause="r", remediation="fix"
+                    source="s",
+                    tool_name="t",
+                    error_type=f"E{i}",
+                    error_message="m",
+                    root_cause="r",
+                    remediation="fix",
                 ),
                 db_path=db,
             )
@@ -354,3 +397,119 @@ def _query_all(db: Path, model_cls):
         rows = session.exec(select(model_cls)).all()
     engine.dispose()
     return rows
+
+
+class TestInteractiveDesignSessionStore:
+    def test_upsert_and_get_design_session(self, tmp_path: Path):
+        db = _db(tmp_path)
+        upsert_design_session(
+            session_id="sess-001",
+            user_goal="Build printable U-bracket",
+            source_mode="model",
+            accepted_family="assembly",
+            status="active",
+            current_checkpoint_index=1,
+            metadata_json='{"printer":"P1"}',
+            db_path=db,
+        )
+
+        row = get_design_session("sess-001", db_path=db)
+        assert row is not None
+        assert row["accepted_family"] == "assembly"
+        assert row["current_checkpoint_index"] == 1
+
+        upsert_design_session(
+            session_id="sess-001",
+            user_goal="Build printable U-bracket v2",
+            source_mode="model",
+            accepted_family="assembly",
+            status="paused",
+            current_checkpoint_index=2,
+            metadata_json='{"printer":"P1"}',
+            db_path=db,
+        )
+        updated = get_design_session("sess-001", db_path=db)
+        assert updated is not None
+        assert updated["status"] == "paused"
+        assert updated["current_checkpoint_index"] == 2
+
+    def test_checkpoint_tool_call_evidence_and_snapshots(self, tmp_path: Path):
+        db = _db(tmp_path)
+        upsert_design_session(
+            session_id="sess-002",
+            user_goal="Part reconstruction",
+            db_path=db,
+        )
+
+        checkpoint_id = insert_plan_checkpoint(
+            session_id="sess-002",
+            checkpoint_index=1,
+            title="Create base profile",
+            planned_action_json='{"tool":"create_sketch"}',
+            approved_by_user=True,
+            db_path=db,
+        )
+        assert checkpoint_id > 0
+
+        update_plan_checkpoint(
+            checkpoint_id,
+            executed=True,
+            result_json='{"status":"ok"}',
+            db_path=db,
+        )
+        checkpoints = list_plan_checkpoints("sess-002", db_path=db)
+        assert len(checkpoints) == 1
+        assert checkpoints[0]["executed"] is True
+
+        insert_tool_call_record(
+            session_id="sess-002",
+            checkpoint_id=checkpoint_id,
+            tool_name="create_sketch",
+            input_json='{"plane":"Front"}',
+            output_json='{"status":"success"}',
+            success=True,
+            latency_ms=45.0,
+            db_path=db,
+        )
+        tool_rows = list_tool_call_records("sess-002", db_path=db)
+        assert len(tool_rows) == 1
+        assert tool_rows[0]["tool_name"] == "create_sketch"
+
+        insert_evidence_link(
+            session_id="sess-002",
+            checkpoint_id=checkpoint_id,
+            source_type="tool_doc",
+            source_id="docs/user-guide/tool-catalog/sketching.md",
+            relevance_score=0.89,
+            rationale="Exact API match",
+            db_path=db,
+        )
+        evidence_rows = list_evidence_links("sess-002", db_path=db)
+        assert len(evidence_rows) == 1
+        assert evidence_rows[0]["source_type"] == "tool_doc"
+
+        snapshot_id = insert_model_state_snapshot(
+            session_id="sess-002",
+            checkpoint_id=checkpoint_id,
+            model_path="C:/tmp/part.sldprt",
+            feature_tree_json='[{"name":"Boss-Extrude1"}]',
+            mass_properties_json='{"mass":0.12}',
+            state_fingerprint="fp-123",
+            db_path=db,
+        )
+        assert snapshot_id > 0
+        snapshots = list_model_state_snapshots("sess-002", db_path=db)
+        assert len(snapshots) == 1
+        assert snapshots[0]["state_fingerprint"] == "fp-123"
+
+        insert_sketch_graph_snapshot(
+            session_id="sess-002",
+            model_path="C:/tmp/part.sldprt",
+            nodes_json='[{"id":"n1","kind":"line"}]',
+            edges_json='[{"from":"n1","to":"n2","kind":"parallel"}]',
+            metadata_json='{"source":"SketchGraphs-style"}',
+            db_path=db,
+        )
+        graphs = list_sketch_graph_snapshots("sess-002", db_path=db)
+        assert len(graphs) == 1
+        assert "line" in graphs[0]["nodes_json"]

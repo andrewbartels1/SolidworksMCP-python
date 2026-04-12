@@ -23,6 +23,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
       - VS Code MCP Setup: getting-started/vscode-mcp-setup.md
       - Claude Code MCP Setup: getting-started/claude-code-setup.md
+      - Prefab UI Dashboard: getting-started/prefab-ui-dashboard.md
   - MCP Server Guide:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
@@ -48,6 +49,7 @@ nav:
       - Docs Discovery: user-guide/tool-catalog/docs-discovery.md
       - Agents and Skills:
           - Agents and Prompt Testing: agents/agents-and-testing.md
+          - Family-Gated Tool Routing: agents/family-gated-tool-routing.md
           - PydanticAI and Schemas: agents/pydantic-ai-and-schemas.md
           - Agent UI Workflows: agents/agent-ui-workflows.md
           - Agent Memory and Recovery: agents/agent-memory-and-recovery.md

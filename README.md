@@ -90,6 +90,61 @@ Common commands:
 - `dev-format` - format code
 - `dev-make-docs-build` - build docs site
 
+## Prefab UI Dashboard
+
+Interactive CAD assistant with GitHub Copilot integration and real-time 3D viewport sync.
+
+**Quick Start** (2 terminals required):
+
+1. Terminal 1 - Backend API server:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[ui]"  # one time
+.\.venv\Scripts\python.exe -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port 8766 --reload
+```
+
+The backend is a FastAPI app, so local API docs are available at <http://127.0.0.1:8766/docs>.
+
+1. Terminal 2 - Prefab frontend:
+
+```powershell
+.\.venv\Scripts\prefab.exe serve src/solidworks_mcp/ui/prefab_dashboard.py
+```
+
+1. Open <http://127.0.0.1:5175> in your browser.
+
+**Layout:**
+
+- **Left pane** (wider): Design intent input + family classification gate
+- **Middle pane**: Checkpoint queue + context window + evidence table + manual sync
+- **Right pane** (larger): 3D model view with orientation buttons (Isometric/Front/Top/Current)
+
+**Key features:**
+
+- ✅ GitHub Copilot integration for goal clarification and family classification
+- ✅ Checkpoint workflow with SQLite session persistence
+- ✅ Execute Next Checkpoint runs supported adapter tools and logs per-tool results
+- ✅ Real-time PNG preview sync from SolidWorks using `export_image(view_orientation=...)`
+- ✅ Manual edit detection via snapshot comparison
+- 🔧 **MOCKED**: `check_interference` from checkpoint runner (until tool-layer wiring exists)
+- 🔧 **MOCKED**: live 3D viewport streaming and STL embedding in the UI (PNG sync is live)
+- 📋 **Future**: richer model-state diffing (feature-level and mass-property deltas)
+
+**LLM Requirements:**
+
+- `GH_TOKEN` or `GITHUB_API_KEY` environment variable (models:read scope)
+- OR: authenticated `gh auth login` session
+
+**Preview Pane:**
+
+- Exports from active SolidWorks viewport every 3 minutes or on manual refresh
+- Supports: Isometric, Front, Top, Current orientations
+- Requires: SolidWorks running + COM adapter available
+
+**Full Documentation:**
+
+See [Prefab UI Dashboard Guide](docs/getting-started/prefab-ui-dashboard.md) for button reference, architecture notes, and troubleshooting.
+
 ## VS Code MCP Configuration (Windows)
 
 Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
@@ -153,6 +208,7 @@ Direct links:
 
 - [Installation](docs/getting-started/installation.md)
 - [Quick Start](docs/getting-started/quickstart.md)
+- [Prefab UI Dashboard](docs/getting-started/prefab-ui-dashboard.md)
 - [VS Code MCP Setup](docs/getting-started/vscode-mcp-setup.md)
 - [Architecture](docs/user-guide/architecture.md)
 - [Agents and Prompt Testing](docs/agents/agents-and-testing.md)

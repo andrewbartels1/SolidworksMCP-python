@@ -1,0 +1,301 @@
+"""Shared Pydantic schemas for the interactive UI dashboard.
+
+These models keep dashboard payloads explicit, validated, and documented so
+both backend endpoints and Prefab UI state use the same contract.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class DashboardCheckpoint(BaseModel):
+    """One checkpoint row shown in the planning/status area."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: str = Field(
+        default="1",
+        description="Human-readable checkpoint number as a string for stable rendering.",
+        min_length=1,
+    )
+    goal: str = Field(
+        default="Define first step",
+        description="Checkpoint objective users review before execution.",
+        min_length=1,
+    )
+    tools: str = Field(
+        default="create_sketch",
+        description="Allowed tool summary for this checkpoint.",
+        min_length=1,
+    )
+    status: str = Field(
+        default="queued",
+        description="Execution status label (queued/approved/executed/failed).",
+        min_length=1,
+    )
+
+
+class DashboardEvidenceRow(BaseModel):
+    """One evidence row shown in retrieval context."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(
+        default="session",
+        description="Evidence source type (docs/session/tool-history/etc.).",
+        min_length=1,
+    )
+    detail: str = Field(
+        default="No evidence detail",
+        description="Short evidence explanation users can audit.",
+        min_length=1,
+    )
+    score: str = Field(
+        default="-",
+        description="Display score string for ranking confidence.",
+        min_length=1,
+    )
+
+
+class DashboardUIState(BaseModel):
+    """Top-level dashboard state shared between backend and Prefab UI.
+
+    Field descriptions are user-facing semantics and validation intent.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ctx_tick: int = Field(
+        default=0,
+        ge=0,
+        description="UI heartbeat counter used for context animation updates.",
+    )
+    session_id: str = Field(
+        default="prefab-dashboard",
+        min_length=1,
+        description="Persistent session identifier used by backend state APIs.",
+    )
+    workflow_mode: str = Field(
+        default="unselected",
+        description="Selected onboarding workflow: unselected, edit_existing, or new_design.",
+    )
+    workflow_label: str = Field(
+        default="Choose a workflow",
+        description="Human-readable label for the currently selected workflow branch.",
+    )
+    workflow_guidance_text: str = Field(
+        default="Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch.",
+        min_length=5,
+        description="Short onboarding guidance shown near the workflow selector.",
+    )
+    user_goal: str = Field(
+        default="Design a printable U-bracket assembly for cable routing with M4 hardware.",
+        min_length=5,
+        description="Primary user intent prompt for the design workflow.",
+    )
+    flow_header_text: str = Field(
+        default="Goal -> Assumptions -> Clarify -> Plan -> Execute",
+        min_length=5,
+        description="Linear workflow breadcrumb shown at the top of the dashboard.",
+    )
+    assumptions_text: str = Field(
+        default="Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.",
+        min_length=5,
+        description="Editable assumptions reviewed by user before planning/execution.",
+    )
+    active_model_path: str = Field(
+        default="",
+        description="Absolute path to the SolidWorks model the dashboard should inspect and modify.",
+    )
+    active_model_status: str = Field(
+        default="No active model connected yet.",
+        description="Status line describing the currently attached target model.",
+    )
+    active_model_type: str = Field(
+        default="",
+        description="Detected document type for the connected target model.",
+    )
+    active_model_configuration: str = Field(
+        default="",
+        description="Active configuration name for the connected target model.",
+    )
+    feature_target_text: str = Field(
+        default="",
+        description="Feature-tree target references such as @Boss-Extrude1 or @Sketch2.",
+    )
+    feature_target_status: str = Field(
+        default="No grounded feature target selected.",
+        description="Validation status for the current feature-target references.",
+    )
+    normalized_brief: str = Field(
+        default="Design a printable U-bracket assembly for cable routing with M4 hardware.",
+        min_length=5,
+        description="LLM-normalized brief used as canonical planning input.",
+    )
+    clarifying_questions_text: str = Field(
+        default="No outstanding clarification questions.",
+        description="Rendered clarifying questions generated by LLM analysis.",
+    )
+    proposed_family: str = Field(
+        default="unclassified",
+        description="Current proposed modeling family/classification.",
+    )
+    family_confidence: str = Field(
+        default="pending",
+        description="Confidence label for family classification.",
+    )
+    family_evidence_text: str = Field(
+        default="No family evidence yet.",
+        description="Human-readable evidence summary behind family suggestion.",
+    )
+    family_warning_text: str = Field(
+        default="No blocking warnings.",
+        description="Warnings/ambiguities surfaced before execution.",
+    )
+    accepted_family: str = Field(
+        default="",
+        description="Family accepted by user for execution routing.",
+    )
+    checkpoints: list[DashboardCheckpoint] = Field(
+        default_factory=list,
+        description="Structured checkpoint list for planning/execution workflow.",
+    )
+    checkpoints_text: str = Field(
+        default="No checkpoints available yet.",
+        description="Fallback checkpoint summary for simplified rendering modes.",
+    )
+    evidence_rows: list[DashboardEvidenceRow] = Field(
+        default_factory=list,
+        description="Structured evidence rows tied to planning decisions.",
+    )
+    evidence_rows_text: str = Field(
+        default="No evidence links captured yet.",
+        description="Fallback evidence summary for simplified rendering modes.",
+    )
+    structured_rendering_enabled: bool = Field(
+        default=False,
+        description="True when checkpoint/evidence arrays are safe to render in structured table components.",
+    )
+    manual_sync_ready: bool = Field(
+        default=False,
+        description="User signal that manual SolidWorks edits are ready to reconcile.",
+    )
+    preview_url: str = Field(
+        default="",
+        description="Rendered preview image URL (if available).",
+    )
+    preview_status: str = Field(
+        default="No preview captured yet.",
+        description="Status line for preview pipeline health and recency.",
+    )
+    preview_orientation: str = Field(
+        default="current",
+        description="Requested camera orientation for preview refresh operations.",
+    )
+    latest_message: str = Field(
+        default="Ready.",
+        description="Latest backend status message for current session actions.",
+    )
+    latest_tool: str = Field(
+        default="waiting",
+        description="Most recent tool/action name for execution trace visibility.",
+    )
+    mocked_tools_text: str = Field(
+        default="",
+        description="Notice listing mocked tools when adapter bindings are missing.",
+    )
+    latest_error_text: str = Field(
+        default="",
+        description="Inline error text for card-level visibility without relying only on toasts.",
+    )
+    remediation_hint: str = Field(
+        default="",
+        description="Suggested remediation shown next to the latest inline error.",
+    )
+    model_provider: str = Field(
+        default="github",
+        description="Current LLM provider selection for clarify/plan actions.",
+    )
+    model_name: str = Field(
+        default="github:openai/gpt-4.1",
+        min_length=3,
+        description="Fully-qualified model identifier used for pydantic-ai calls.",
+    )
+    model_profile: str = Field(
+        default="balanced",
+        description="Local-model sizing profile (small/balanced/large).",
+    )
+    local_endpoint: str = Field(
+        default="http://127.0.0.1:11434/v1",
+        min_length=5,
+        description="OpenAI-compatible local endpoint for local model routing.",
+    )
+    rag_source_path: str = Field(
+        default="",
+        description="Local path or http/https URL for BYO retrieval ingestion, such as a PDF, HTML article, or markdown guide.",
+    )
+    rag_namespace: str = Field(
+        default="engineering-reference",
+        min_length=1,
+        description="Namespace used when storing chunks for a user-provided retrieval corpus.",
+    )
+    rag_status: str = Field(
+        default="No retrieval source ingested yet.",
+        description="Status message for the latest BYO retrieval ingestion run.",
+    )
+    rag_index_path: str = Field(
+        default="",
+        description="Filesystem path of the generated retrieval index for user-provided content.",
+    )
+    rag_chunk_count: int = Field(
+        default=0,
+        ge=0,
+        description="Number of chunks produced for the current BYO retrieval corpus.",
+    )
+    rag_provenance_text: str = Field(
+        default="No retrieval provenance available yet.",
+        description="Condensed provenance summary for the latest ingested retrieval corpus.",
+    )
+    readiness_provider_configured: bool = Field(
+        default=False,
+        description="Whether credentials/config exist for selected model provider.",
+    )
+    readiness_adapter_mode: str = Field(
+        default="unknown",
+        description="Detected SolidWorks adapter mode (pywin32/mock/vba).",
+    )
+    readiness_preview_ready: bool = Field(
+        default=False,
+        description="Whether preview export directory is writable and available.",
+    )
+    readiness_db_ready: bool = Field(
+        default=True,
+        description="Whether dashboard session persistence is reachable.",
+    )
+    readiness_summary: str = Field(
+        default="Readiness not computed yet.",
+        description="Condensed readiness status line for UX troubleshooting.",
+    )
+    context_used_pct: int = Field(
+        default=38,
+        ge=0,
+        le=100,
+        description="Approximate context budget utilization percentage.",
+    )
+    context_text: str = Field(
+        default="76k / 200k tokens",
+        description="Human-readable context budget string for the UI meter.",
+    )
+    preview_viewer_url: str = Field(
+        default="",
+        description="URL for the embedded Three.js 3D viewer iframe (changes with each refresh to force reload).",
+    )
+    user_clarification_answer: str = Field(
+        default="",
+        description="User-typed answers or clarifications in response to LLM-generated questions.",
+    )
+    api_origin: str = Field(
+        default="http://127.0.0.1:8766",
+        description="Backend origin that Prefab UI is expected to call.",
+    )

@@ -73,6 +73,7 @@ function dev-help {
     Write-Host "dev-docs-discovery    - Index SolidWorks COM/VBA documentation (Windows-only)"
     Write-Host "dev-build             - Build package for distribution"
     Write-Host "dev-run               - Start the MCP server"
+    Write-Host "dev-ui                - Start FastAPI backend + Prefab dashboard launcher"
     Write-Host "dev-clean             - Clean build artifacts"
     Write-Host "dev-lint              - Run code linting (ruff)"
     Write-Host "dev-format            - Format code (ruff)"
@@ -302,12 +303,12 @@ function dev-make-docs-build {
 
     Write-Host "Validating docs build..." -ForegroundColor Cyan
 
-    $args = @("-m", "mkdocs", "build", "--clean")
+    $buildArgs = @("-m", "mkdocs", "build", "--clean")
     if ($Quiet) {
-        $args += "--quiet"
+        $buildArgs += "--quiet"
     }
 
-    Invoke-ProjectModule -Args $args
+    Invoke-ProjectModule -Args $buildArgs
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Docs build passed." -ForegroundColor Green
@@ -417,6 +418,17 @@ function dev-build {
 function dev-run {
     Write-Host "Starting MCP server..." -ForegroundColor Cyan
     Invoke-ProjectPython -Args @("-m", "solidworks_mcp.server")
+}
+
+function dev-ui {
+    Write-Host "Starting UI launcher (FastAPI + Prefab)..." -ForegroundColor Cyan
+    $uiLauncher = Join-Path $PSScriptRoot "run-ui.ps1"
+    if (-not (Test-Path $uiLauncher)) {
+        Write-Host "UI launcher script not found: $uiLauncher" -ForegroundColor Red
+        return
+    }
+
+    & $uiLauncher
 }
 
 function dev-clean {
