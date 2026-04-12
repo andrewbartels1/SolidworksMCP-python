@@ -214,9 +214,31 @@ with PrefabApp(
                             )
                         with CardContent():
                             with Column(gap=2):
-                                Badge(STATE.workflow_label, variant="default")
-                                Badge(STATE.flow_header_text, variant="secondary")
-                                Muted(STATE.workflow_guidance_text)
+                                with If(
+                                    "workflow_label and '{{' not in workflow_label and '$result' not in workflow_label"
+                                ):
+                                    Badge(STATE.workflow_label, variant="default")
+                                with Else():
+                                    Badge("Choose a Workflow", variant="default")
+
+                                with If(
+                                    "flow_header_text and '{{' not in flow_header_text and '$result' not in flow_header_text"
+                                ):
+                                    Badge(STATE.flow_header_text, variant="secondary")
+                                with Else():
+                                    Badge(
+                                        "Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute",
+                                        variant="secondary",
+                                    )
+
+                                with If(
+                                    "workflow_guidance_text and '{{' not in workflow_guidance_text and '$result' not in workflow_guidance_text"
+                                ):
+                                    Muted(STATE.workflow_guidance_text)
+                                with Else():
+                                    Muted(
+                                        "Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch."
+                                    )
                         with CardFooter():
                             with Row(gap=2):
                                 Button(
@@ -783,7 +805,9 @@ with PrefabApp(
                             )
                         with CardContent():
                             with Column(gap=3):
-                                with If("preview_viewer_url"):
+                                with If(
+                                    "preview_viewer_url and '/api/ui/viewer/' in preview_viewer_url and '{{' not in preview_viewer_url and '$result' not in preview_viewer_url"
+                                ):
                                     Embed(
                                         url=STATE.preview_viewer_url,
                                         width="100%",

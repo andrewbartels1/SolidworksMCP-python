@@ -1749,7 +1749,11 @@ async def refresh_preview(
     )
     session_row = get_design_session(session_id, db_path=db_path) or {}
     metadata = _parse_json_blob(session_row.get("metadata_json"))
-    preview_viewer_url: str = metadata.get("preview_viewer_url") or ""
+    preview_viewer_url = _sanitize_preview_viewer_url(
+        metadata.get("preview_viewer_url"),
+        session_id=session_id,
+        api_origin=api_origin,
+    )
     resolved_preview_dir = ensure_preview_dir(preview_dir)
     preview_path = resolved_preview_dir / f"{session_id}.png"
 
@@ -1845,6 +1849,7 @@ async def refresh_preview(
                 "export_image(view_orientation='current') rather than an embedded viewport API."
             ),
             preview_orientation=orientation,
+            preview_viewer_url="",
             latest_error_text=str(exc),
             remediation_hint="Open a model in SolidWorks and retry preview refresh.",
         )
@@ -1940,7 +1945,11 @@ def build_dashboard_state(
             )
 
     # 3D viewer URL: read from metadata (set when model connects or preview refreshes)
-    preview_viewer_url: str = metadata.get("preview_viewer_url") or ""
+    preview_viewer_url = _sanitize_preview_viewer_url(
+        metadata.get("preview_viewer_url"),
+        session_id=session_id,
+        api_origin=api_origin,
+    )
     # If model is attached but viewer URL not yet set, provide the static viewer page
     if not preview_viewer_url and metadata.get("active_model_path"):
         preview_viewer_url = (
