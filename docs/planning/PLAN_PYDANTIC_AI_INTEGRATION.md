@@ -440,6 +440,24 @@ result = await agent.run_async(
 **Deliverable**:
 - User can chat directly with Copilot about designs
 - Agent executes within MCP server
+
+## Backlog Additions
+
+### Local Gemma 4 via PydanticAI + Ollama
+
+- Add a local-model integration path that uses Ollama as the inference runtime and PydanticAI's OpenAI-compatible model adapter.
+- Target model families:
+    - `gemma4:4b` for laptop-class development and smoke tests
+    - `gemma4:12b` as the default balanced local planning model
+    - `gemma4:26b` or `gemma4:31b` for workstation-class evaluation
+- Implement a typed model factory path for local inference that routes through `http://127.0.0.1:11434/v1` with an ignored placeholder API key such as `ollama`.
+- Validate the setup against the repository's existing PydanticAI harness so structured outputs, tool calls, and recoverable failures still use the same typed schemas.
+- Add a smoke-test target that exercises at least one local Gemma 4 model end-to-end using the current harness and records failures in the local SQLite memory.
+- Document hardware guidance for local runs:
+    - `gemma4:4b`: constrained-memory laptops
+    - `gemma4:12b`: default recommendation for 16GB+ unified memory or roughly 12GB+ VRAM
+    - `gemma4:26b` / `gemma4:31b`: high-end workstation evaluation only
+- Add a configuration profile for local Gemma planning so the UI and agent harness can select it without manual endpoint/model string edits.
 - Results flow back to Copilot
 
 ### Phase 5: Advanced Features (Weeks 10-12)

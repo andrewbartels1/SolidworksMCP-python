@@ -34,5 +34,5 @@ with PrefabApp(
                     DataTableColumn(key="status", header="Status"),
                 ],
                 rows=Rx("rows"),
-                paginated=False,
+                paginated=True,
             )

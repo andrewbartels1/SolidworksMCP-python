@@ -1,6 +1,4 @@
-# SolidWorks MCP Server
-
-Python MCP server for SolidWorks automation with 106 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+# SolidWorks CAD Assistant & MCP Server
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,7 +6,12 @@ Python MCP server for SolidWorks automation with 106 tools, plus an optional age
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2025-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
+
+Python MCP server for SolidWorks automation with 106 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+
 ## Overview
+
+> ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python and UI implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
 
 This project focuses on practical SolidWorks automation with an AI-friendly loop:
 

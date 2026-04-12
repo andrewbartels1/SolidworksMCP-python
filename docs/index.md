@@ -1,6 +1,6 @@
 # SolidWorks MCP Server
 
-> ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
+> ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python and UI implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?logo=anthropic)](https://modelcontextprotocol.io)
@@ -17,7 +17,7 @@
 
 ## Overview
 
-An attempt to practical MCP server for SolidWorks focused on faster iteration with AI: describe intent, generate a plan, execute tools, inspect results, and iterate.
+An attempt to practical MCP server for SolidWorks focused on faster iteration with AI: describe intent, generate a plan, execute tools, inspect results, and iterate. This is a differentiating tool from some other really great projects since I still want to use Solidworks, and don't want to change to another 3D modeling engine. This leads to the following project that can work with Solidworks to update/design/create parts in a somewhat interactive manner, and helps add tooling etc. to LLMs to help making designing faster and easier, with the intent of removing the boring and repetitive parts of the 3D modeling process while enhancing designs with canonical  
 
 It supports both experienced CAD users and newer makers who want a tutor-like assistant for 3D-printable design workflows.
 

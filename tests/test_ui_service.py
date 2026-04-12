@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from src.solidworks_mcp.agents.history_db import (
+    get_design_session,
     insert_model_state_snapshot,
     list_tool_call_records,
+    upsert_design_session,
 )
 from src.solidworks_mcp.ui.service import (
     DEFAULT_SESSION_ID,
@@ -150,6 +153,57 @@ def test_select_workflow_mode_persists_opening_branch(tmp_path: Path) -> None:
     assert state["workflow_mode"] == "edit_existing"
     assert state["workflow_label"] == "Editing Existing Part or Assembly"
     assert "Attach Model" in state["flow_header_text"]
+
+
+def test_build_dashboard_state_sanitizes_corrupted_ui_metadata(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "ui.sqlite3"
+    ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
+    session_row = get_design_session(DEFAULT_SESSION_ID, db_path=db_path)
+    assert session_row is not None
+
+    corrupted_metadata = {
+        "workflow_mode": "edit_existing",
+        "active_model_path": str(tmp_path / "part_1.sldprt"),
+        "workflow_label": "{{ $result.workflow_label }}",
+        "flow_header_text": "{{ $result.flow_header_text }}",
+        "workflow_guidance_text": "{{ $result.workflow_guidance_text }}",
+        "model_name": "{{ $result.model_name }}",
+        "local_endpoint": "{{ $result.local_endpoint }}",
+        "assumptions_text": "{{ $result.assumptions_text }}",
+        "preview_viewer_url": "http://127.0.0.1:5175/",
+    }
+
+    upsert_design_session(
+        session_id=DEFAULT_SESSION_ID,
+        user_goal=session_row["user_goal"],
+        source_mode=session_row["source_mode"],
+        accepted_family=session_row["accepted_family"],
+        status=session_row["status"],
+        current_checkpoint_index=session_row["current_checkpoint_index"],
+        metadata_json=json.dumps(corrupted_metadata, ensure_ascii=True),
+        db_path=db_path,
+    )
+
+    state = build_dashboard_state(
+        DEFAULT_SESSION_ID,
+        db_path=db_path,
+        api_origin="http://127.0.0.1:8766",
+    )
+
+    assert state["workflow_label"] == "Editing Existing Part or Assembly"
+    assert "Attach Model" in state["flow_header_text"]
+    assert "existing SolidWorks file" in state["workflow_guidance_text"]
+    assert "$result" not in state["model_name"]
+    assert state["model_name"]
+    assert "$result" not in state["local_endpoint"]
+    assert state["local_endpoint"] == "http://127.0.0.1:11434/v1"
+    assert "$result" not in state["assumptions_text"]
+    assert state["preview_viewer_url"] == (
+        "http://127.0.0.1:8766/api/ui/viewer/prefab-dashboard"
+        "?session_id=prefab-dashboard&t=0"
+    )
 
 
 @pytest.mark.asyncio

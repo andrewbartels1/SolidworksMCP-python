@@ -45,8 +45,9 @@ ctx_variant = (ctx_pct > 70).then(
 )
 
 
-def _result_state(key: str) -> object:
-    return getattr(RESULT, key)
+def _result_state(key: str, fallback: object | None = None) -> object:
+    value = getattr(RESULT, key)
+    return value.default(fallback) if fallback is not None else value
 
 
 def _error_toast() -> ShowToast:
@@ -54,6 +55,20 @@ def _error_toast() -> ShowToast:
 
 
 def _hydrate_from_result() -> list[object]:
+    defaults = {
+        "workflow_mode": "unselected",
+        "workflow_label": "Choose a Workflow",
+        "workflow_guidance_text": "Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch.",
+        "flow_header_text": "Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute",
+        "assumptions_text": "Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.",
+        "preview_url": "",
+        "preview_viewer_url": "",
+        "preview_status": "No preview captured yet.",
+        "model_provider": "github",
+        "model_profile": "balanced",
+        "model_name": "gpt-4o",
+        "local_endpoint": "http://127.0.0.1:11434/v1",
+    }
     state_keys = [
         "workflow_mode",
         "workflow_label",
@@ -105,7 +120,9 @@ def _hydrate_from_result() -> list[object]:
         "manual_sync_ready",
         "context_text",
     ]
-    return [SetState(key, _result_state(key)) for key in state_keys]
+    return [
+        SetState(key, _result_state(key, defaults.get(key))) for key in state_keys
+    ]
 
 
 with PrefabApp(
@@ -214,31 +231,19 @@ with PrefabApp(
                             )
                         with CardContent():
                             with Column(gap=2):
-                                with If(
-                                    "workflow_label and '{{' not in workflow_label and '$result' not in workflow_label"
-                                ):
-                                    Badge(STATE.workflow_label, variant="default")
-                                with Else():
-                                    Badge("Choose a Workflow", variant="default")
+                                Badge(
+                                    "{{ workflow_label || 'Choose a Workflow' }}",
+                                    variant="default",
+                                )
 
-                                with If(
-                                    "flow_header_text and '{{' not in flow_header_text and '$result' not in flow_header_text"
-                                ):
-                                    Badge(STATE.flow_header_text, variant="secondary")
-                                with Else():
-                                    Badge(
-                                        "Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute",
-                                        variant="secondary",
-                                    )
+                                Badge(
+                                    "{{ flow_header_text || 'Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute' }}",
+                                    variant="secondary",
+                                )
 
-                                with If(
-                                    "workflow_guidance_text and '{{' not in workflow_guidance_text and '$result' not in workflow_guidance_text"
-                                ):
-                                    Muted(STATE.workflow_guidance_text)
-                                with Else():
-                                    Muted(
-                                        "Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch."
-                                    )
+                                Muted(
+                                    "{{ workflow_guidance_text || 'Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch.' }}"
+                                )
                         with CardFooter():
                             with Row(gap=2):
                                 Button(
@@ -354,7 +359,7 @@ with PrefabApp(
                                 )
                                 Textarea(
                                     name="assumptions_text",
-                                    value=STATE.assumptions_text,
+                                    value="{{ assumptions_text | 'Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.' }}",
                                     rows=4,
                                 )
                         with CardFooter():
@@ -387,7 +392,7 @@ with PrefabApp(
                                 )
                                 Textarea(
                                     name="assumptions_text",
-                                    value=STATE.assumptions_text,
+                                    value="{{ assumptions_text | 'Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.' }}",
                                     rows=4,
                                 )
                                 Text("Model")
@@ -427,11 +432,13 @@ with PrefabApp(
                                         on_click=SetState("model_profile", "large"),
                                     )
                                 Textarea(
-                                    name="model_name", value=STATE.model_name, rows=2
+                                    name="model_name",
+                                    value="{{ model_name | 'gpt-4o' }}",
+                                    rows=2,
                                 )
                                 Textarea(
                                     name="local_endpoint",
-                                    value=STATE.local_endpoint,
+                                    value="{{ local_endpoint | 'http://127.0.0.1:11434/v1' }}",
                                     rows=2,
                                 )
                                 Button(
@@ -805,9 +812,7 @@ with PrefabApp(
                             )
                         with CardContent():
                             with Column(gap=3):
-                                with If(
-                                    "preview_viewer_url and '/api/ui/viewer/' in preview_viewer_url and '{{' not in preview_viewer_url and '$result' not in preview_viewer_url"
-                                ):
+                                with If("preview_viewer_url"):
                                     Embed(
                                         url=STATE.preview_viewer_url,
                                         width="100%",
@@ -827,7 +832,7 @@ with PrefabApp(
                                             "No preview captured yet. Attach a local model path, make sure SolidWorks can open it, then refresh the viewer."
                                         )
                                 Muted(
-                                    f"View: {STATE.preview_orientation} | Status: {STATE.preview_status}"
+                                    "View: {{ preview_orientation || 'current' }} | Status: {{ preview_status || 'No preview' }}"
                                 )
                         with CardFooter():
                             with Row(gap=2):

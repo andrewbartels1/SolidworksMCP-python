@@ -38,6 +38,9 @@ def _base_config(**overrides):
 def test_create_adapter_raises_for_unregistered_adapter_type(monkeypatch) -> None:
     factory = AdapterFactory()
     monkeypatch.setattr(factory, "_adapter_registry", {AdapterType.MOCK: _DummyAdapter})
+    monkeypatch.setattr(
+        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
+    )
 
     with pytest.raises(ValueError, match="Adaptertype"):
         factory._create_adapter_impl(_base_config(adapter_type=AdapterType.PYWIN32))
