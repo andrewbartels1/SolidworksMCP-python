@@ -26,7 +26,7 @@ jobs:
 
       - name: Install package
         shell: bash -el {0}
-        run: conda run -n solidworks_mcp pip install -e ".[dev,docs]"
+        run: conda run -n solidworks_mcp pip install -e ".[dev,docs,ui]"
 
       - name: Run tests
         shell: bash -el {0}
