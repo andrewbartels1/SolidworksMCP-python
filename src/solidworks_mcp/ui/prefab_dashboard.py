@@ -37,6 +37,7 @@ from prefab_ui.rx import ERROR, EVENT, RESULT, STATE, Rx
 from solidworks_mcp.ui.schemas import DashboardUIState
 
 API_ORIGIN = os.getenv("SOLIDWORKS_UI_API_ORIGIN", "http://127.0.0.1:8766")
+SESSION_ID_EXPR = "{{ session_id || 'prefab-dashboard' }}"
 
 ctx_tick = Rx("ctx_tick")
 ctx_pct = (ctx_tick % 24) * 3 + 18
@@ -132,7 +133,7 @@ with PrefabApp(
     on_mount=[
         Fetch.get(
             f"{API_ORIGIN}/api/ui/state",
-            params={"session_id": STATE.session_id},
+            params={"session_id": SESSION_ID_EXPR},
             on_success=_hydrate_from_result(),
             on_error=_error_toast(),
         ),
@@ -142,7 +143,7 @@ with PrefabApp(
             on_tick=Fetch.post(
                 f"{API_ORIGIN}/api/ui/preview/refresh",
                 body={
-                    "session_id": STATE.session_id,
+                    "session_id": SESSION_ID_EXPR,
                     "orientation": STATE.preview_orientation,
                 },
                 on_success=_hydrate_from_result(),

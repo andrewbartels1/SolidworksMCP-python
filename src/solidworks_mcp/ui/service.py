@@ -157,6 +157,13 @@ def _sanitize_ui_text(value: Any, fallback: str = "") -> str:
     return text
 
 
+def _sanitize_model_path_text(value: Any) -> str:
+    text = _sanitize_ui_text(value, "")
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
+        text = text[1:-1].strip()
+    return text
+
+
 def _sanitize_preview_viewer_url(
     value: Any,
     *,
@@ -176,6 +183,38 @@ def _sanitize_preview_viewer_url(
         if expected.netloc and parsed.netloc and parsed.netloc != expected.netloc:
             return ""
     return text
+
+
+def _trace_json_default(value: Any) -> str:
+    if isinstance(value, Path):
+        return str(value)
+    return str(value)
+
+
+def _trace_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=True, indent=2, default=_trace_json_default)
+
+
+def _trace_session_row(session_row: dict[str, Any] | None) -> dict[str, Any]:
+    if not session_row:
+        return {}
+    return {key: value for key, value in session_row.items() if key != "metadata_json"}
+
+
+def _trace_tool_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    traced: list[dict[str, Any]] = []
+    for record in records[-10:]:
+        traced.append(
+            {
+                "id": record.get("id"),
+                "tool_name": record.get("tool_name"),
+                "success": record.get("success"),
+                "input_json": record.get("input_json"),
+                "output_json": record.get("output_json"),
+                "created_at": record.get("created_at"),
+            }
+        )
+    return traced
 
 
 def _merge_metadata(
@@ -301,7 +340,7 @@ def _workflow_copy(
     if workflow_mode == "edit_existing":
         return (
             "Editing Existing Part or Assembly",
-            "Attach a saved .sldprt or .sldasm file, inspect the feature tree, then describe the feature edits you want.",
+            "Attach an existing SolidWorks file, inspect the feature tree, then describe the feature edits you want.",
             "Choose Workflow -> Attach Model -> Inspect -> Plan -> Execute",
         )
     if workflow_mode == "new_design":
@@ -1037,7 +1076,21 @@ async def connect_target_model(
                 session_id, db_path=db_path, api_origin=api_origin
             )
     elif model_path:
-        resolved_path = Path(model_path).expanduser()
+        normalized_model_path = _sanitize_model_path_text(model_path)
+        if not normalized_model_path:
+            _merge_metadata(
+                session_id,
+                db_path=db_path,
+                latest_message="No target model was provided.",
+                latest_error_text="Missing model path or uploaded model file.",
+                remediation_hint="Choose a local SolidWorks file or provide an absolute model path.",
+                feature_target_text=feature_target_text or "",
+                workflow_mode="edit_existing",
+            )
+            return build_dashboard_state(
+                session_id, db_path=db_path, api_origin=api_origin
+            )
+        resolved_path = Path(normalized_model_path).expanduser()
     else:
         _merge_metadata(
             session_id,
@@ -1069,6 +1122,8 @@ async def connect_target_model(
     model_info: dict[str, Any] = {}
     features: list[dict[str, Any]] = []
     preview_status_message = ""
+    preview_png_ready = False
+    preview_stl_ready = False
     tool_input = {
         "model_path": str(resolved_path.resolve()),
         "uploaded_file_name": uploaded_files[0].get("name") if uploaded_files else None,
@@ -1149,7 +1204,7 @@ async def connect_target_model(
                 }
             )
             if export_result.is_success:
-                preview_status_message = "Attached model and refreshed preview."
+                preview_png_ready = True
                 logger.info(
                     "[ui.connect_target_model] preview export succeeded path={}",
                     str(preview_path.resolve()),
@@ -1169,6 +1224,7 @@ async def connect_target_model(
             try:
                 stl_result = await adapter.export_file(str(stl_path.resolve()), "stl")
                 if stl_result.is_success and stl_path.exists():
+                    preview_stl_ready = True
                     viewer_ts = int(stl_path.stat().st_mtime)
                     logger.info(
                         "[ui.connect_target_model] STL export succeeded path={}",
@@ -1178,7 +1234,21 @@ async def connect_target_model(
                 logger.debug(
                     "[ui.connect_target_model] STL export skipped (adapter error)"
                 )
-        preview_viewer_url = f"{api_origin}/api/ui/viewer/{session_id}?session_id={session_id}&t={viewer_ts}"
+        if preview_stl_ready:
+            preview_status_message = "Interactive 3D preview ready."
+            preview_viewer_url = (
+                f"{api_origin}/api/ui/viewer/{session_id}?session_id={session_id}&t={viewer_ts}"
+            )
+        elif preview_png_ready:
+            preview_status_message = (
+                "Static preview image ready (interactive STL unavailable)."
+            )
+            preview_viewer_url = ""
+        else:
+            preview_status_message = (
+                "Model attached, but preview generation did not produce image/STL."
+            )
+            preview_viewer_url = ""
 
         metadata = _merge_metadata(
             session_id,
@@ -1200,10 +1270,10 @@ async def connect_target_model(
             family_confidence=classification.get("confidence") or "low",
             family_evidence=classification.get("evidence") or [],
             family_warnings=classification.get("warnings") or [],
-            latest_message=(
-                preview_status_message
-                or f"Attached target model {resolved_path.name} for planning and feature edits."
-            ),
+            latest_message=f"Attached target model {resolved_path.name} for planning and feature edits.",
+            preview_status=preview_status_message,
+            preview_stl_ready=preview_stl_ready,
+            preview_png_ready=preview_png_ready,
             preview_viewer_url=preview_viewer_url,
             latest_error_text="",
             remediation_hint="",
@@ -1231,6 +1301,7 @@ async def connect_target_model(
             active_model_path=str(resolved_path.resolve()),
             feature_target_text=feature_target_text or "",
             latest_message="Failed to attach target model.",
+            preview_status="Preview generation failed while attaching model.",
             latest_error_text=str(exc),
             remediation_hint="Open SolidWorks, verify COM access, and retry with a valid .sldprt/.sldasm path.",
         )
@@ -1950,11 +2021,20 @@ def build_dashboard_state(
         session_id=session_id,
         api_origin=api_origin,
     )
-    # If model is attached but viewer URL not yet set, provide the static viewer page
-    if not preview_viewer_url and metadata.get("active_model_path"):
+    # Only expose interactive viewer URL when STL generation has succeeded.
+    if (
+        not preview_viewer_url
+        and bool(metadata.get("preview_stl_ready"))
+        and metadata.get("active_model_path")
+    ):
         preview_viewer_url = (
             f"{api_origin}/api/ui/viewer/{session_id}?session_id={session_id}&t=0"
         )
+
+    preview_status = _sanitize_ui_text(
+        metadata.get("preview_status"),
+        preview_status,
+    )
 
     family = (
         session_row.get("accepted_family")
@@ -1984,9 +2064,18 @@ def build_dashboard_state(
     )
     model_profile = str(metadata.get("model_profile") or "balanced")
     workflow_mode = _normalize_workflow_mode(metadata.get("workflow_mode"))
+    active_model_path = _sanitize_model_path_text(metadata.get("active_model_path"))
+    active_model_status = _sanitize_ui_text(metadata.get("active_model_status"), "")
+    if active_model_path and not active_model_status:
+        active_model_status = (
+            f"Model path set: {Path(active_model_path).name} (connect pending)."
+        )
+    if not active_model_path and not active_model_status:
+        active_model_status = "No active model connected yet."
+
     workflow_label, workflow_guidance_text, flow_header_text = _workflow_copy(
         workflow_mode,
-        str(metadata.get("active_model_path") or ""),
+        active_model_path,
     )
     local_endpoint = _sanitize_ui_text(
         metadata.get("local_endpoint"),
@@ -1994,7 +2083,7 @@ def build_dashboard_state(
     )
     readiness = _compute_readiness(metadata, db_ready=db_ready)
 
-    return DashboardUIState(
+    state = DashboardUIState(
         session_id=session_id,
         workflow_mode=workflow_mode,
         workflow_label=workflow_label,
@@ -2005,10 +2094,8 @@ def build_dashboard_state(
             metadata.get("assumptions_text"),
             "Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.",
         ),
-        active_model_path=str(metadata.get("active_model_path") or ""),
-        active_model_status=str(
-            metadata.get("active_model_status") or "No active model connected yet."
-        ),
+        active_model_path=active_model_path,
+        active_model_status=active_model_status,
         active_model_type=str(metadata.get("active_model_type") or ""),
         active_model_configuration=str(
             metadata.get("active_model_configuration") or ""
@@ -2075,3 +2162,58 @@ def build_dashboard_state(
             else ""
         ),
     ).model_dump()
+    logger.info(
+        "[ui.trace.state] session_id={} payload={}",
+        session_id,
+        _trace_json(
+            {
+                "session_row": _trace_session_row(session_row),
+                "metadata": metadata,
+                "state": state,
+            }
+        ),
+    )
+    return state
+
+
+def build_dashboard_trace_payload(
+    session_id: str = DEFAULT_SESSION_ID,
+    *,
+    db_path: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    ensure_dashboard_session(session_id, db_path=db_path)
+    session_row = get_design_session(session_id, db_path=db_path) or {}
+    metadata = _parse_json_blob(session_row.get("metadata_json"))
+    state = build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+    tool_records = _trace_tool_records(
+        list_tool_call_records(session_id, db_path=db_path)
+    )
+    session_row_payload = _trace_session_row(session_row)
+
+    payload = {
+        "session_id": session_id,
+        "workflow_mode": state.get("workflow_mode", "unselected"),
+        "latest_message": state.get("latest_message", "Ready."),
+        "latest_error_text": state.get("latest_error_text", ""),
+        "debug_summary": (
+            f"workflow={state.get('workflow_mode', 'unselected')}"
+            f" | model_path={state.get('active_model_path', '') or '<none>'}"
+            f" | latest_tool={state.get('latest_tool', 'waiting')}"
+            f" | tool_records={len(tool_records)}"
+        ),
+        "session_row": session_row_payload,
+        "session_row_text": _trace_json(session_row_payload),
+        "metadata": metadata,
+        "metadata_text": _trace_json(metadata),
+        "state": state,
+        "state_text": _trace_json(state),
+        "tool_records": tool_records,
+        "tool_records_text": _trace_json(tool_records),
+    }
+    logger.info(
+        "[ui.trace.snapshot] session_id={} payload={}",
+        session_id,
+        _trace_json(payload),
+    )
+    return payload

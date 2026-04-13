@@ -21,13 +21,17 @@ LLM Integration:
 
 from __future__ import annotations
 
+import json
+import time
+from pathlib import Path as FilePath
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Path, Query
+from fastapi import FastAPI, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 from pydantic import BaseModel
 
 from .service import (
@@ -37,6 +41,7 @@ from .service import (
     accept_family_choice,
     approve_design_brief,
     build_dashboard_state,
+    build_dashboard_trace_payload,
     connect_target_model,
     ensure_preview_dir,
     execute_next_checkpoint,
@@ -48,6 +53,61 @@ from .service import (
     select_workflow_mode,
     update_ui_preferences,
 )
+
+UI_LOG_DIR = FilePath(".solidworks_mcp") / "ui_logs"
+UI_HTTP_LOG_FILE = UI_LOG_DIR / "ui_http.log"
+_UI_FILE_SINK_ID: int | None = None
+
+
+def _configure_ui_file_logging() -> None:
+    global _UI_FILE_SINK_ID
+    if _UI_FILE_SINK_ID is not None:
+        return
+
+    UI_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _UI_FILE_SINK_ID = logger.add(
+        str(UI_HTTP_LOG_FILE),
+        level="INFO",
+        rotation="10 MB",
+        retention="14 days",
+        encoding="utf-8",
+        enqueue=True,
+        filter=lambda record: "[ui." in record["message"],
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | {message}",
+    )
+    logger.info(
+        "[ui.logging] file sink enabled path={}", str(UI_HTTP_LOG_FILE.resolve())
+    )
+
+
+def _should_log_request(path: str) -> bool:
+    return path == "/api/health" or path.startswith("/api/ui/")
+
+
+def _sanitize_log_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            if key == "data" and isinstance(item, str):
+                sanitized[key] = f"<omitted base64 payload len={len(item)}>"
+            elif key == "uploaded_files" and isinstance(item, list):
+                sanitized[key] = [_sanitize_log_payload(entry) for entry in item]
+            else:
+                sanitized[key] = _sanitize_log_payload(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_log_payload(item) for item in value]
+    return value
+
+
+def _decode_request_body(body: bytes) -> Any:
+    if not body:
+        return None
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        return body.decode("utf-8", errors="replace")
+    return _sanitize_log_payload(parsed)
 
 
 class SessionRequest(BaseModel):
@@ -61,11 +121,11 @@ class GoalRequest(SessionRequest):
 
     user_goal: str = DEFAULT_USER_GOAL
 
+
 class ClarifyWithAnswerRequest(GoalRequest):
     """Request payload for clarify that includes the user's typed answers."""
 
     user_answer: str = ""
-
 
 
 class FamilyAcceptRequest(SessionRequest):
@@ -128,17 +188,63 @@ app = FastAPI(
     summary="FastAPI backend for the interactive SolidWorks Prefab dashboard.",
 )
 
+_configure_ui_file_logging()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5175",
-        "http://localhost:5175",
-        "http://127.0.0.1:4173",
-        "http://localhost:4173",
-    ],
+    allow_origin_regex=r"https?://(127\.0\.0\.1|localhost):\d+$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_ui_requests(request: Request, call_next):
+    if not _should_log_request(request.url.path):
+        return await call_next(request)
+
+    started_at = time.perf_counter()
+    raw_body = await request.body()
+    payload = {
+        "method": request.method,
+        "path": request.url.path,
+        "query": dict(request.query_params),
+        "body": _decode_request_body(raw_body),
+    }
+
+    logger.info(
+        "[ui.http.request] payload={}",
+        json.dumps(payload, ensure_ascii=True, default=str),
+    )
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": raw_body, "more_body": False}
+
+    request = Request(request.scope, receive)
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        logger.exception(
+            "[ui.http.error] method={} path={} duration_ms={} error={}",
+            request.method,
+            request.url.path,
+            duration_ms,
+            exc,
+        )
+        raise
+
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    logger.info(
+        "[ui.http.response] method={} path={} status_code={} duration_ms={}",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
+
 
 app.mount(
     "/previews",
@@ -157,6 +263,17 @@ async def health() -> dict[str, str]:
 async def get_state(session_id: str = Query(DEFAULT_SESSION_ID)) -> dict[str, Any]:
     """Hydrate UI state from active session database."""
     return build_dashboard_state(session_id, api_origin=DEFAULT_API_ORIGIN)
+
+
+@app.get("/api/ui/debug/session")
+async def get_debug_session(
+    session_id: str = Query(DEFAULT_SESSION_ID),
+) -> dict[str, Any]:
+    """Return a verbose debug snapshot for the active UI session."""
+    return build_dashboard_trace_payload(
+        session_id,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
 
 
 @app.post("/api/ui/brief/approve")
@@ -390,10 +507,10 @@ window.addEventListener('resize', () => {
 
 @app.get("/api/ui/viewer/{session_id}", response_class=HTMLResponse)
 async def get_viewer(
-        session_id: str = Path(description="Session identifier for STL file routing"),
+    session_id: str = Path(description="Session identifier for STL file routing"),
 ) -> HTMLResponse:
-        """Serve the embedded Three.js 3D model viewer page."""
-        return HTMLResponse(content=_VIEWER_HTML, media_type="text/html")
+    """Serve the embedded Three.js 3D model viewer page."""
+    return HTMLResponse(content=_VIEWER_HTML, media_type="text/html")
 
 
 def main() -> None:

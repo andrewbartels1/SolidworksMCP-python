@@ -17,6 +17,7 @@ from src.solidworks_mcp.agents.history_db import (
 )
 from src.solidworks_mcp.ui.service import (
     DEFAULT_SESSION_ID,
+    build_dashboard_trace_payload,
     build_dashboard_state,
     connect_target_model,
     ensure_dashboard_session,
@@ -206,6 +207,27 @@ def test_build_dashboard_state_sanitizes_corrupted_ui_metadata(
     )
 
 
+def test_build_dashboard_trace_payload_includes_state_and_metadata(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "ui.sqlite3"
+    ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
+
+    trace = build_dashboard_trace_payload(
+        DEFAULT_SESSION_ID,
+        db_path=db_path,
+        api_origin="http://127.0.0.1:8766",
+    )
+
+    assert trace["session_id"] == DEFAULT_SESSION_ID
+    assert trace["workflow_mode"] == "unselected"
+    assert "session_id" in trace["state_text"]
+    assert "workflow_mode" in trace["state_text"]
+    assert trace["metadata_text"].startswith("{")
+    assert trace["tool_records_text"].startswith("[")
+
+
+
 @pytest.mark.asyncio
 async def test_connect_target_model_persists_active_model_context(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -236,6 +258,8 @@ async def test_connect_target_model_persists_active_model_context(
     assert state["active_model_path"] == str(part_path)
     assert state["workflow_mode"] == "edit_existing"
     assert "Attached model" in state["active_model_status"]
+    assert state["preview_status"] == "Static preview image ready (interactive STL unavailable)."
+    assert state["preview_viewer_url"] == ""
     assert state["proposed_family"] == "extrude"
     assert "@Boss-Extrude1" in state["feature_target_status"]
 

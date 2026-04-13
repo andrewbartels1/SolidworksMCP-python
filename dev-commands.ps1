@@ -48,11 +48,17 @@ function Invoke-ProjectPytest {
         [string[]]$Args
     )
 
-    $pytestArgs = @(
-        "-m", "pytest",
-        "-p", "pytest_asyncio.plugin",
-        "-p", "pytest_cov"
-    ) + $Args
+    $pytestArgs = @("-m", "pytest")
+
+    $pluginAutoloadDisabled = ($env:PYTEST_DISABLE_PLUGIN_AUTOLOAD ?? "").Trim().ToLowerInvariant()
+    if ($pluginAutoloadDisabled -in @("1", "true", "yes", "on")) {
+        $pytestArgs += @(
+            "-p", "pytest_asyncio.plugin",
+            "-p", "pytest_cov"
+        )
+    }
+
+    $pytestArgs += $Args
 
     Invoke-ProjectPython -Args $pytestArgs
 }
@@ -74,6 +80,7 @@ function dev-help {
     Write-Host "dev-build             - Build package for distribution"
     Write-Host "dev-run               - Start the MCP server"
     Write-Host "dev-ui                - Start FastAPI backend + Prefab dashboard launcher"
+    Write-Host "dev-ui-probe          - Start FastAPI backend + minimal Prefab probe app"
     Write-Host "dev-clean             - Clean build artifacts"
     Write-Host "dev-lint              - Run code linting (ruff)"
     Write-Host "dev-format            - Format code (ruff)"
@@ -429,6 +436,17 @@ function dev-ui {
     }
 
     & $uiLauncher
+}
+
+function dev-ui-probe {
+    Write-Host "Starting UI probe launcher (FastAPI + minimal Prefab probe)..." -ForegroundColor Cyan
+    $uiLauncher = Join-Path $PSScriptRoot "run-ui.ps1"
+    if (-not (Test-Path $uiLauncher)) {
+        Write-Host "UI launcher script not found: $uiLauncher" -ForegroundColor Red
+        return
+    }
+
+    & $uiLauncher -FrontendTarget "src/solidworks_mcp/ui/prefab_trace_probe.py"
 }
 
 function dev-clean {
