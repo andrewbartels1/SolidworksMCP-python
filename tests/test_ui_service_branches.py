@@ -451,6 +451,7 @@ def test_ui_service_reconcile_and_state_variants(tmp_path: Path) -> None:
     assert row is not None
     metadata = json.loads(row["metadata_json"])
     metadata["active_model_path"] = "C:/tmp/part.sldprt"
+    metadata["preview_stl_ready"] = True
     service.upsert_design_session(
         session_id="s-rec",
         user_goal=row["user_goal"],

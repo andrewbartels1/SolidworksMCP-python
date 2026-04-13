@@ -167,6 +167,7 @@ def test_build_dashboard_state_sanitizes_corrupted_ui_metadata(
     corrupted_metadata = {
         "workflow_mode": "edit_existing",
         "active_model_path": str(tmp_path / "part_1.sldprt"),
+        "preview_stl_ready": True,
         "workflow_label": "{{ $result.workflow_label }}",
         "flow_header_text": "{{ $result.flow_header_text }}",
         "workflow_guidance_text": "{{ $result.workflow_guidance_text }}",
@@ -227,7 +228,6 @@ def test_build_dashboard_trace_payload_includes_state_and_metadata(
     assert trace["tool_records_text"].startswith("[")
 
 
-
 @pytest.mark.asyncio
 async def test_connect_target_model_persists_active_model_context(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -258,7 +258,10 @@ async def test_connect_target_model_persists_active_model_context(
     assert state["active_model_path"] == str(part_path)
     assert state["workflow_mode"] == "edit_existing"
     assert "Attached model" in state["active_model_status"]
-    assert state["preview_status"] == "Static preview image ready (interactive STL unavailable)."
+    assert (
+        state["preview_status"]
+        == "Static preview image ready (interactive STL unavailable)."
+    )
     assert state["preview_viewer_url"] == ""
     assert state["proposed_family"] == "extrude"
     assert "@Boss-Extrude1" in state["feature_target_status"]

@@ -11,9 +11,14 @@ from prefab_ui.components import (
     Button,
     Card,
     CardContent,
+    CardDescription,
+    CardFooter,
     CardHeader,
     CardTitle,
     Column,
+    Else,
+    Embed,
+    If,
     Muted,
     Row,
     Text,
@@ -395,7 +400,42 @@ with PrefabApp(
 
         with Card():
             with CardHeader():
-                CardTitle("Session Row")
+                CardTitle("3D Model View")
+                CardDescription(
+                    "Interactive viewer appears only when STL export succeeds. Otherwise status explains what preview artifact was produced."
+                )
+            with CardContent():
+                with Column(gap=2):
+                    with If("trace_payload.state.preview_viewer_url"):
+                        Embed(
+                            url="{{ trace_payload.state.preview_viewer_url }}",
+                            width="100%",
+                            height="480px",
+                        )
+                    with Else():
+                        Muted(
+                            "Interactive STL viewer is not ready yet. Attach model and refresh trace; if only PNG export succeeded, status will say static preview image ready."
+                        )
+                    Muted(
+                        "Viewer URL: {{ trace_payload.state.preview_viewer_url || '<none>' }}"
+                    )
+                    Muted(
+                        "Status: {{ trace_payload.state.preview_status || 'No preview captured yet.' }}"
+                    )
+            with CardFooter():
+                with Row(gap=2):
+                    Button(
+                        "Refresh Trace + Viewer",
+                        variant="outline",
+                        on_click=[
+                            SetState("last_action", "refresh-trace-viewer"),
+                            _refresh_trace(),
+                        ],
+                    )
+
+        with Card():
+            with CardHeader():
+                CardTitle("Advanced Debug: Session Row")
             with CardContent():
                 Textarea(
                     name="session_row_text_view",
@@ -405,7 +445,7 @@ with PrefabApp(
 
         with Card():
             with CardHeader():
-                CardTitle("Metadata")
+                CardTitle("Advanced Debug: Metadata")
             with CardContent():
                 Textarea(
                     name="metadata_text_view",
@@ -415,7 +455,7 @@ with PrefabApp(
 
         with Card():
             with CardHeader():
-                CardTitle("Resolved UI State")
+                CardTitle("Advanced Debug: Resolved UI State")
             with CardContent():
                 Textarea(
                     name="state_text_view",
@@ -425,7 +465,7 @@ with PrefabApp(
 
         with Card():
             with CardHeader():
-                CardTitle("Recent Tool Records")
+                CardTitle("Advanced Debug: Recent Tool Records")
             with CardContent():
                 Textarea(
                     name="tool_records_text_view",
