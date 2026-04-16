@@ -33,7 +33,15 @@ Write-Host "Repository ready at $(Get-Location)" -ForegroundColor Green
 
 Step "[3/6] Creating virtual environment..."
 if (Test-Path ".venv") {
-    Write-Host "Using existing .venv" -ForegroundColor Yellow
+    # Validate the existing venv has a pyvenv.cfg (it may be corrupted)
+    if (-not (Test-Path ".venv\pyvenv.cfg")) {
+        Write-Host "Existing .venv is missing pyvenv.cfg (corrupted). Recreating..." -ForegroundColor Yellow
+        try { Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue } catch {}
+        python -m venv .venv
+        Write-Host "Recreated .venv" -ForegroundColor Green
+    } else {
+        Write-Host "Using existing .venv" -ForegroundColor Yellow
+    }
 } else {
     python -m venv .venv
     Write-Host "Created .venv" -ForegroundColor Green
@@ -46,9 +54,29 @@ if (-not (Test-Path $venvPython)) {
     exit 1
 }
 
+# Bootstrap pip if missing (can happen when venv is created from conda/micromamba Python)
+$pipCheck = & $venvPython -m pip --version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "pip not found in venv - bootstrapping with ensurepip..." -ForegroundColor Yellow
+    & $venvPython -m ensurepip --upgrade
+}
+
 & $venvPython -m pip install --upgrade pip setuptools wheel
-& $venvPython -m pip install -e ".[dev,test,docs]"
-Write-Host "Dependencies installed." -ForegroundColor Green
+& $venvPython -m pip install -e ".[dev,test,docs,ui]"
+
+# Verify prefab.exe was installed (pip occasionally skips console scripts on first install)
+$venvPrefab = Join-Path (Get-Location) ".venv\Scripts\prefab.exe"
+if (-not (Test-Path $venvPrefab)) {
+    Write-Host "prefab.exe not found after install — force-reinstalling prefab-ui..." -ForegroundColor Yellow
+    & $venvPython -m pip install --force-reinstall "prefab-ui>=0.19.0"
+}
+if (Test-Path $venvPrefab) {
+    Write-Host "prefab.exe verified at $venvPrefab" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: prefab.exe still missing. Run '.\run-ui.ps1' — it will fall back automatically." -ForegroundColor Yellow
+}
+
+Write-Host "Dependencies installed (including UI extras)." -ForegroundColor Green
 
 Step "[5/6] Configuring VS Code MCP settings..."
 $mcpJsonPath = Join-Path $env:APPDATA "Code\\User\\mcp.json"
@@ -102,5 +130,9 @@ Write-Host "1. Start SolidWorks on this Windows machine."
 Write-Host "2. Restart VS Code so MCP config reloads."
 Write-Host "3. In VS Code, start server solidworks-mcp-server."
 Write-Host ""
-Write-Host "Manual start command:" -ForegroundColor Cyan
+Write-Host "To start the SolidWorks UI dashboard:" -ForegroundColor Cyan
+Write-Host "  .\dev-commands.ps1 dev-ui-probe   # Debug probe"
+Write-Host "  .\run-ui.ps1                       # Full dashboard"
+Write-Host ""
+Write-Host "Manual MCP start command:" -ForegroundColor Cyan
 Write-Host ".\\.venv\\Scripts\\python.exe -m solidworks_mcp.server"

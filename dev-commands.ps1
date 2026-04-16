@@ -13,9 +13,8 @@ Write-Host ""
 # Helper function to check if environment exists
 function Test-MicromambaEnv {
     try {
-        $result = micromamba info --json | ConvertFrom-Json
-        $expectedPrefix = Join-Path $result.root_prefix "envs\solidworks_mcp"
-        return $result.envs -contains $expectedPrefix
+        $envList = micromamba env list --json | ConvertFrom-Json
+        return ($envList.envs | Where-Object { $_ -match "[/\\]solidworks_mcp$" }).Count -gt 0
     } catch {
         return $false
     }
@@ -35,7 +34,28 @@ function Invoke-ProjectPython {
 
     $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
     if (Test-Path $venvPython) {
-        & $venvPython @Args
+        # Validate the venv is functional and meets the minimum Python version (>=3.11).
+        $venvMinor = & $venvPython -c "import sys; print(sys.version_info.minor if sys.version_info.major==3 else 0)" 2>$null
+        $venvMajor = & $venvPython -c "import sys; print(sys.version_info.major)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and [int]$venvMajor -eq 3 -and [int]$venvMinor -ge 11) {
+            & $venvPython @Args
+            return
+        }
+        Write-Host ""
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: .venv Python is broken (its base interpreter is missing)." -ForegroundColor Red
+            Write-Host "The Python version used to create .venv was uninstalled from this machine." -ForegroundColor Yellow
+        } else {
+            Write-Host "ERROR: .venv Python is 3.$venvMinor but this project requires Python >=3.11." -ForegroundColor Red
+            Write-Host "The .venv was created with an incompatible Python version." -ForegroundColor Yellow
+        }
+        Write-Host "Recreate the venv with Python 3.11+:" -ForegroundColor Yellow
+        Write-Host "  Remove-Item -Recurse -Force .venv" -ForegroundColor Cyan
+        Write-Host "  py -3.11 -m venv .venv   # or: python3.11 -m venv .venv" -ForegroundColor Cyan
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel" -ForegroundColor Cyan
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install -e `".[dev,test,docs]`"" -ForegroundColor Cyan
+        Write-Host ""
+        $global:LASTEXITCODE = 1
         return
     }
 
@@ -50,7 +70,7 @@ function Invoke-ProjectPytest {
 
     $pytestArgs = @("-m", "pytest")
 
-    $pluginAutoloadDisabled = ($env:PYTEST_DISABLE_PLUGIN_AUTOLOAD ?? "").Trim().ToLowerInvariant()
+    $pluginAutoloadDisabled = if ($env:PYTEST_DISABLE_PLUGIN_AUTOLOAD) { $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD.Trim().ToLowerInvariant() } else { "" }
     if ($pluginAutoloadDisabled -in @("1", "true", "yes", "on")) {
         $pytestArgs += @(
             "-p", "pytest_asyncio.plugin",
@@ -67,6 +87,7 @@ function dev-help {
     Write-Host "Available Commands:" -ForegroundColor Green
     Write-Host ""
     Write-Host "dev-install           - Install dependencies and setup environment"
+    Write-Host "dev-install-ui        - Install/repair UI extras (prefab-ui, fastapi) in .venv"
     Write-Host "dev-test              - Run test suite with coverage"
     Write-Host "dev-test-context-budget - Run smoke response-size guard test"
     Write-Host "dev-generate-tool-catalog - Generate tests/.generated/tool_catalog.json"
@@ -101,7 +122,28 @@ function Invoke-ProjectModule {
 
     $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
     if (Test-Path $venvPython) {
-        & $venvPython @Args
+        # Validate the venv is functional and meets the minimum Python version (>=3.11).
+        $venvMinor = & $venvPython -c "import sys; print(sys.version_info.minor if sys.version_info.major==3 else 0)" 2>$null
+        $venvMajor = & $venvPython -c "import sys; print(sys.version_info.major)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and [int]$venvMajor -eq 3 -and [int]$venvMinor -ge 11) {
+            & $venvPython @Args
+            return
+        }
+        Write-Host ""
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: .venv Python is broken (its base interpreter is missing)." -ForegroundColor Red
+            Write-Host "The Python version used to create .venv was uninstalled from this machine." -ForegroundColor Yellow
+        } else {
+            Write-Host "ERROR: .venv Python is 3.$venvMinor but this project requires Python >=3.11." -ForegroundColor Red
+            Write-Host "The .venv was created with an incompatible Python version." -ForegroundColor Yellow
+        }
+        Write-Host "Recreate the venv with Python 3.11+:" -ForegroundColor Yellow
+        Write-Host "  Remove-Item -Recurse -Force .venv" -ForegroundColor Cyan
+        Write-Host "  py -3.11 -m venv .venv   # or: python3.11 -m venv .venv" -ForegroundColor Cyan
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel" -ForegroundColor Cyan
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install -e `".[dev,test,docs]`"" -ForegroundColor Cyan
+        Write-Host ""
+        $global:LASTEXITCODE = 1
         return
     }
 
@@ -110,17 +152,78 @@ function Invoke-ProjectModule {
 
 function dev-install {
     Write-Host "Installing SolidWorks MCP Server..." -ForegroundColor Cyan
+
+    if (-not (Get-Command micromamba -ErrorAction SilentlyContinue)) {
+        Write-Host ""
+        Write-Host "ERROR: 'micromamba' is not installed or not on PATH." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Install micromamba for Windows PowerShell by running:" -ForegroundColor Yellow
+        Write-Host "  Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -UseBasicParsing).Content)" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "After installation, open a new PowerShell window and retry:" -ForegroundColor Yellow
+        Write-Host "  .\dev-commands.ps1 dev-install" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Alternatively, use the virtualenv path (no micromamba required):" -ForegroundColor Yellow
+        Write-Host "  python -m venv .venv" -ForegroundColor Cyan
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel" -ForegroundColor Cyan
+        Write-Host "  .\.venv\Scripts\python.exe -m pip install -e `".[dev,test,docs,ui]`"" -ForegroundColor Cyan
+        Write-Host ""
+        return
+    }
+
     micromamba env create -f solidworks_mcp.yml --yes
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "Installing Python package in development mode..." -ForegroundColor Cyan
-        micromamba run -n solidworks_mcp pip install -e ".[dev,test,docs]"
+        Write-Host "Installing Python package in development mode (all extras incl. ui)..." -ForegroundColor Cyan
+        micromamba run -n solidworks_mcp pip install -e ".[dev,test,docs,ui]"
         if ($LASTEXITCODE -eq 0) {
+            Write-Host "Syncing .venv from micromamba Python for run-ui.ps1 compatibility..." -ForegroundColor Cyan
+            $mmPython = micromamba run -n solidworks_mcp python -c "import sys; print(sys.executable)" 2>&1
+            if (Test-Path ".venv") {
+                if (-not (Test-Path ".venv\pyvenv.cfg")) {
+                    Write-Host "Recreating broken .venv..." -ForegroundColor Yellow
+                    try { Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue } catch {}
+                }
+            }
+            if (-not (Test-Path ".venv")) {
+                & $mmPython -m venv .venv
+            }
+            if (Test-Path ".venv\pyvenv.cfg") {
+                $venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+                $pipCheck = & $venvPy -m pip --version 2>&1
+                if ($LASTEXITCODE -ne 0) { & $venvPy -m ensurepip --upgrade }
+                & $venvPy -m pip install "prefab-ui>=0.19.0" "fastapi>=0.115.0" "uvicorn>=0.24.0" -q
+                Write-Host ".venv synced with UI extras." -ForegroundColor Green
+            }
             Write-Host "Installation complete!" -ForegroundColor Green
         } else {
             Write-Host "Failed to install Python package" -ForegroundColor Red
         }
     } else {
         Write-Host "Failed to create conda environment" -ForegroundColor Red
+    }
+}
+
+function dev-install-ui {
+    Write-Host "Installing/repairing UI extras (prefab-ui, fastapi) in .venv..." -ForegroundColor Cyan
+    $venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPy)) {
+        Write-Host "ERROR: .venv not found. Run 'dev-install' first." -ForegroundColor Red
+        return
+    }
+    if (-not (Test-Path (Join-Path $PSScriptRoot ".venv\pyvenv.cfg"))) {
+        Write-Host "ERROR: .venv is corrupted (no pyvenv.cfg). Run 'dev-install' first." -ForegroundColor Red
+        return
+    }
+    $pipCheck = & $venvPy -m pip --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Bootstrapping pip in .venv..." -ForegroundColor Yellow
+        & $venvPy -m ensurepip --upgrade
+    }
+    & $venvPy -m pip install "prefab-ui>=0.19.0" "fastapi>=0.115.0" "uvicorn>=0.24.0" -q
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "UI extras installed. Test with: .\dev-commands.ps1 dev-ui-probe" -ForegroundColor Green
+    } else {
+        Write-Host "Failed to install UI extras." -ForegroundColor Red
     }
 }
 

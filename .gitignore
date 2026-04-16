@@ -83,3 +83,6 @@ tests/.generated/
 mypy_*
 
 .mypy_cache/
+
+.venv
+.venv/

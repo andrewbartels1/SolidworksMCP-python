@@ -24,6 +24,7 @@ nav:
       - VS Code MCP Setup: getting-started/vscode-mcp-setup.md
       - Claude Code MCP Setup: getting-started/claude-code-setup.md
       - Prefab UI Dashboard: getting-started/prefab-ui-dashboard.md
+      - Local LLM (Ollama / Gemma): getting-started/local-llm.md
   - MCP Server Guide:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md

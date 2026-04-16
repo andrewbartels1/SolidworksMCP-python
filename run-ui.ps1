@@ -46,15 +46,29 @@ if (-not (Test-Path $venvPython)) {
     exit 1
 }
 
+# If prefab.exe is missing, try to install prefab-ui then re-check.
+# This handles fresh installs where pip may not have written the console script.
 if (-not (Test-Path $venvPrefab)) {
-    Write-Error "Prefab executable not found: $venvPrefab"
-    exit 1
+    Write-Host "prefab.exe not found - installing/repairing prefab-ui..." -ForegroundColor Yellow
+    & $venvPython -m pip install --quiet --force-reinstall "prefab-ui>=0.19.0"
+    if (-not (Test-Path $venvPrefab)) {
+        # Final fallback: invoke via python -m prefab_ui.cli (no .exe needed)
+        Write-Host "prefab.exe still missing; falling back to 'python -m prefab_ui.cli'." -ForegroundColor Yellow
+        $venvPrefab = $null  # signal to use module path
+    }
 }
 
+# Build command strings for the two processes
 $backendCmd = "`"$venvPython`" -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload"
-$frontendCmd = "`"$venvPrefab`" serve $FrontendTarget --port $FrontendPort --reload"
-$backendShellCommand = "& { Set-Location -LiteralPath '$scriptDir'; `$env:PYTHONPATH='$srcPath'; & '$venvPython' -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload }"
-$frontendShellCommand = "& { Set-Location -LiteralPath '$scriptDir'; `$env:SOLIDWORKS_UI_API_ORIGIN='http://127.0.0.1:$BackendPort'; `$env:PYTHONUTF8='1'; & '$venvPrefab' serve $FrontendTarget --port $FrontendPort --reload }"
+$backendShellCommand = "Set-Location -LiteralPath '$scriptDir'; `$env:PYTHONPATH='$srcPath'; & '$venvPython' -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload"
+
+if ($venvPrefab) {
+    $frontendCmd = "`"$venvPrefab`" serve $FrontendTarget --port $FrontendPort --reload"
+    $frontendShellCommand = "Set-Location -LiteralPath '$scriptDir'; `$env:SOLIDWORKS_UI_API_ORIGIN='http://127.0.0.1:$BackendPort'; `$env:PYTHONUTF8='1'; & '$venvPrefab' serve $FrontendTarget --port $FrontendPort --reload"
+} else {
+    $frontendCmd = "`"$venvPython`" -m prefab_ui.cli serve $FrontendTarget --port $FrontendPort --reload"
+    $frontendShellCommand = "Set-Location -LiteralPath '$scriptDir'; `$env:SOLIDWORKS_UI_API_ORIGIN='http://127.0.0.1:$BackendPort'; `$env:PYTHONUTF8='1'; & '$venvPython' -m prefab_ui.cli serve $FrontendTarget --port $FrontendPort --reload"
+}
 
 $backendArgs = @(
     "-m",
@@ -67,13 +81,28 @@ $backendArgs = @(
     "--reload"
 )
 
-$frontendArgs = @(
-    "serve",
-    $FrontendTarget,
-    "--port",
-    "$FrontendPort",
-    "--reload"
-)
+# Build frontend args depending on whether prefab.exe exists
+if ($venvPrefab) {
+    $frontendExe = $venvPrefab
+    $frontendArgs = @(
+        "serve",
+        $FrontendTarget,
+        "--port",
+        "$FrontendPort",
+        "--reload"
+    )
+} else {
+    $frontendExe = $venvPython
+    $frontendArgs = @(
+        "-m",
+        "prefab_ui.cli",
+        "serve",
+        $FrontendTarget,
+        "--port",
+        "$FrontendPort",
+        "--reload"
+    )
+}
 
 Write-Host "Starting SolidWorks UI stack" -ForegroundColor Cyan
 Write-Host "- Backend : http://127.0.0.1:$BackendPort" -ForegroundColor Yellow
@@ -105,7 +134,7 @@ if ($NoNewWindows) {
         $env:SOLIDWORKS_UI_API_ORIGIN = $apiOrigin
         $env:PYTHONUTF8 = "1"
         & $prefabExe @argsArray
-    } -ArgumentList $scriptDir, $venvPrefab, $frontendArgs, "http://127.0.0.1:$BackendPort" | Out-Null
+    } -ArgumentList $scriptDir, $frontendExe, $frontendArgs, "http://127.0.0.1:$BackendPort" | Out-Null
 
     Write-Host "Started jobs: solidworks-ui-backend, solidworks-ui-frontend" -ForegroundColor Green
     Write-Host "Use Get-Job / Receive-Job / Stop-Job to monitor and stop." -ForegroundColor Yellow
