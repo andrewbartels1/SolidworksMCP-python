@@ -58,7 +58,9 @@ class FeatureStep(BaseModel):
     """One step in a part reconstruction plan."""
 
     step_number: int = Field(ge=1)
-    tool_name: str = Field(min_length=2, description="MCP tool or action, e.g. create_extrusion")
+    tool_name: str = Field(
+        min_length=2, description="MCP tool or action, e.g. create_extrusion"
+    )
     description: str = Field(min_length=5)
     mcp_call: str = Field(
         min_length=5,

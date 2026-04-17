@@ -10,7 +10,12 @@ from typing import Annotated
 import typer
 
 from .harness import pretty_json, run_validated_prompt
-from .schemas import DocsPlan, ManufacturabilityReview, RecoverableFailure, ReconstructionPlan
+from .schemas import (
+    DocsPlan,
+    ManufacturabilityReview,
+    ReconstructionPlan,
+    RecoverableFailure,
+)
 
 app = typer.Typer(
     name="smoke-test",
@@ -57,6 +62,7 @@ def _ensure_provider_credentials(model: str) -> None:
             # Fall back to `gh auth token` if the gh CLI is available and authenticated.
             try:
                 import subprocess
+
                 result = subprocess.run(
                     ["gh", "auth", "token"], capture_output=True, text=True, timeout=5
                 )
@@ -125,7 +131,9 @@ async def _run(
 def run(
     agent_file: Annotated[
         str,
-        typer.Option("--agent-file", help="Agent filename in .github/agents/", show_default=False),
+        typer.Option(
+            "--agent-file", help="Agent filename in .github/agents/", show_default=False
+        ),
     ],
     prompt: Annotated[
         str,
@@ -140,7 +148,10 @@ def run(
     ] = False,
     github_model: Annotated[
         str,
-        typer.Option("--github-model", help="GitHub Models catalog id, e.g. openai/gpt-4.1 or mistral-ai/mistral-large."),
+        typer.Option(
+            "--github-model",
+            help="GitHub Models catalog id, e.g. openai/gpt-4.1 or mistral-ai/mistral-large.",
+        ),
     ] = "openai/gpt-4.1",
     anthropic: Annotated[
         bool,
@@ -165,7 +176,9 @@ def run(
     ] = None,
     schema: Annotated[
         SchemaChoice,
-        typer.Option("--schema", help="Validation schema expected from the model output."),
+        typer.Option(
+            "--schema", help="Validation schema expected from the model output."
+        ),
     ] = SchemaChoice.manufacturability,
     max_retries_on_recoverable: Annotated[
         int,
@@ -176,9 +189,15 @@ def run(
     ] = 1,
 ) -> None:
     """Run a validated custom-agent prompt test and print structured JSON output."""
-    model_name = _resolve_model(anthropic, claude_model, github_models, github_model, model)
+    model_name = _resolve_model(
+        anthropic, claude_model, github_models, github_model, model
+    )
     _ensure_provider_credentials(model_name)
-    raise SystemExit(asyncio.run(_run(agent_file, model_name, prompt, schema, max_retries_on_recoverable)))
+    raise SystemExit(
+        asyncio.run(
+            _run(agent_file, model_name, prompt, schema, max_retries_on_recoverable)
+        )
+    )
 
 
 def main() -> None:
