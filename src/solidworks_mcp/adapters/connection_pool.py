@@ -9,7 +9,8 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import TypeVar, cast, Any
+from typing import Any, TypeVar, cast
+
 from loguru import logger
 
 from .base import (
@@ -61,7 +62,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         if adapter_factory is None:
             from .mock_adapter import MockSolidWorksAdapter
 
-            adapter_factory = lambda: MockSolidWorksAdapter(config or {})
+            def adapter_factory():
+                return MockSolidWorksAdapter(config or {})
         super().__init__(config)
         self.adapter_factory = adapter_factory
         self.pool_size = pool_size
@@ -209,8 +211,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
                 self.available_adapters.get(), timeout=timeout
             )
             return adapter
-        except asyncio.TimeoutError:
-            raise Exception(f"No adapter available within {timeout} seconds")
+        except TimeoutError as err:
+            raise Exception(f"No adapter available within {timeout} seconds") from err
 
     async def _return_adapter(self, adapter: SolidWorksAdapter) -> None:
         """Return an adapter to the pool."""
@@ -246,7 +248,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
                 if adapter:
                     # Don't return failed adapter to pool, create a new one
-                    await self._attempt_async(lambda: adapter.disconnect())
+                    await self._attempt_async(lambda a=adapter: a.disconnect())
 
                     replacement_error = await self._attempt_async(
                         self._replace_failed_adapter
@@ -535,6 +537,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     # Export operations
+
+    async def export_image(self, payload: dict) -> AdapterResult[dict]:
+        """Export viewport image using pool."""
+        return await self._execute_with_pool(
+            "export_image", lambda adapter: adapter.export_image(payload)
+        )
 
     async def export_file(
         self, file_path: str, format_type: str

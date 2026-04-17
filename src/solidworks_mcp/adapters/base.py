@@ -11,8 +11,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Generic, TypeVar
+
 from pydantic import BaseModel
 
 T = TypeVar("T")
@@ -31,13 +32,13 @@ class AdapterHealth(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """Execute getitem.
-        
+
         Args:
             key (str): Describe key.
-        
+
         Returns:
             Any: Describe the returned value.
-        
+
         """
         if key == "status":
             return "healthy" if self.healthy else "unhealthy"
@@ -53,13 +54,13 @@ class AdapterHealth(BaseModel):
 
     def __contains__(self, key: str) -> bool:
         """Execute contains.
-        
+
         Args:
             key (str): Describe key.
-        
+
         Returns:
             bool: Describe the returned value.
-        
+
         """
         legacy_keys = {"status", "connected", "adapter_type", "version", "uptime"}
         if key in legacy_keys:
@@ -67,7 +68,7 @@ class AdapterHealth(BaseModel):
         return key in self.model_dump()
 
 
-class AdapterResultStatus(str, Enum):
+class AdapterResultStatus(StrEnum):
     """Result status for adapter operations."""
 
     SUCCESS = "success"
@@ -110,13 +111,13 @@ class SolidWorksModel(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """Execute getitem.
-        
+
         Args:
             key (str): Describe key.
-        
+
         Returns:
             Any: Describe the returned value.
-        
+
         """
         if key == "title":
             return self.name
@@ -137,13 +138,13 @@ class SolidWorksFeature(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """Execute getitem.
-        
+
         Args:
             key (str): Describe key.
-        
+
         Returns:
             Any: Describe the returned value.
-        
+
         """
         if self.parameters and key in self.parameters:
             return self.parameters.get(key)
@@ -217,7 +218,7 @@ class SolidWorksAdapter(ABC):
         elif isinstance(config, Mapping):
             normalized_config = dict(config)
         elif hasattr(config, "model_dump"):
-            normalized_config = dict(getattr(config, "model_dump")())
+            normalized_config = dict(config.model_dump())
         else:
             normalized_config = {}
 
@@ -518,6 +519,19 @@ class SolidWorksAdapter(ABC):
         pass
 
     # Export Operations
+    @abstractmethod
+    async def export_image(self, payload: dict) -> AdapterResult[dict]:
+        """Export a viewport screenshot (PNG/JPG) of the current model.
+
+        Payload keys:
+            file_path (str): Absolute output path.
+            width (int): Image width in pixels.
+            height (int): Image height in pixels.
+            view_orientation (str): One of "isometric", "front", "top",
+                "right", "back", "bottom", "current".
+        """
+        pass
+
     @abstractmethod
     async def export_file(
         self, file_path: str, format_type: str

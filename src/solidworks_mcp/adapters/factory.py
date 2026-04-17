@@ -8,8 +8,7 @@ and automatic fallback strategies.
 from __future__ import annotations
 
 import platform
-from enum import Enum
-from typing import Any, Type, Union
+from typing import Any
 
 from ..config import AdapterType, SolidWorksMCPConfig
 from .base import SolidWorksAdapter
@@ -19,16 +18,16 @@ from .vba_adapter import VbaGeneratorAdapter
 
 class AdapterFactory:
     """Factory-pattern adapter creator with singleton and fallback strategies.
-    
+
     Manages adapter registration and creation with configuration-based selection.
     Automatically wraps adapters with decorators (circuit breaker, connection pool)
     based on configuration. Implements singleton pattern for consistency.
-    
+
     Attributes:
         _adapter_registry (dict[AdapterType, type[SolidWorksAdapter]]): Registry
             mapping adapter types to implementation classes.
         _instance (AdapterFactory | None): Singleton instance.
-    
+
     Examples:
         >>> factory = AdapterFactory()
         >>> config = SolidWorksMCPConfig(adapter_type=AdapterType.PYWIN32)
@@ -38,17 +37,17 @@ class AdapterFactory:
 
     _adapter_registry: dict[AdapterType, type[SolidWorksAdapter]] = {}
     _adapters: dict[AdapterType, type[SolidWorksAdapter]] = _adapter_registry
-    _instance: Union[AdapterFactory, None] = None
+    _instance: AdapterFactory | None = None
 
-    def __new__(cls) -> "AdapterFactory":
+    def __new__(cls) -> AdapterFactory:
         """Initialize or return singleton AdapterFactory instance.
-        
+
         Enforces singleton pattern to ensure single adapter registry and
         consistent factory behavior across application lifetime.
-        
+
         Returns:
             AdapterFactory: The singleton factory instance.
-        
+
         Examples:
             >>> factory1 = AdapterFactory()
             >>> factory2 = AdapterFactory()
@@ -64,19 +63,19 @@ class AdapterFactory:
         cls, adapter_type: AdapterType, adapter_class: type[SolidWorksAdapter]
     ) -> None:
         """Register an adapter class for a given adapter type.
-        
+
         Updates the adapter registry to map a specific AdapterType enum value
         to a SolidWorksAdapter implementation class. Called during initialization
         to register built-in adapters (PyWin32, Mock, etc.).
-        
+
         Args:
             adapter_type (AdapterType): The adapter type enum value.
             adapter_class (type[SolidWorksAdapter]): The adapter implementation
                 class to instantiate when this type is requested.
-        
+
         Returns:
             None
-        
+
         Examples:
             >>> from adapters.pywin32_adapter import PyWin32Adapter
             >>> AdapterFactory.register_adapter(
@@ -88,25 +87,25 @@ class AdapterFactory:
     @classmethod
     def create_adapter(cls, config: SolidWorksMCPConfig) -> SolidWorksAdapter:
         """Create and configure a SolidWorks adapter instance.
-        
+
         Determines the best adapter type based on configuration and environment.
         Selects implementation, applies wrappers (circuit breaker, connection pool),
         and returns a fully-initialized adapter ready for connection.
-        
+
         The adapter is automatically downgraded to Mock on non-Windows platforms
         or when testing is enabled, with fallback to configured type otherwise.
-        
+
         Args:
             config (SolidWorksMCPConfig): Server configuration specifying adapter
                 type, features, and deployment mode.
-        
+
         Returns:
             SolidWorksAdapter: Initialized adapter instance, possibly wrapped.
-        
+
         Raises:
             ValueError: If the determined adapter type is not registered.
             SolidWorksMCPError: If adapter initialization fails.
-        
+
         Examples:
             >>> config = SolidWorksMCPConfig(mock_solidworks=True)
             >>> adapter = AdapterFactory.create_adapter(config)
@@ -118,18 +117,18 @@ class AdapterFactory:
 
     def _create_adapter_impl(self, config: SolidWorksMCPConfig) -> SolidWorksAdapter:
         """Internal implementation for adapter creation and wrapping.
-        
+
         Handles the core logic of creating base adapter, applying optional
         wrappers (circuit breaker, connection pooling), and returning final
         adapter configured for use.
-        
+
         Args:
             config (SolidWorksMCPConfig): Configuration with adapter selection
                 and wrapper preferences.
-        
+
         Returns:
             SolidWorksAdapter: Base or wrapped adapter ready for use.
-        
+
         Raises:
             ValueError: If adapter type not registered in registry.
         """
@@ -174,18 +173,18 @@ class AdapterFactory:
 
     def _determine_adapter_type(self, config: SolidWorksMCPConfig) -> AdapterType:
         """Determine optimal adapter type based on environment and config.
-        
+
         Applies decision logic to select best adapter implementation:
         1. Force Mock if testing or mock_solidworks flag set
         2. Fall back to Mock if PyWin32 requested but not on Windows
         3. Use configured adapter_type otherwise
-        
+
         Args:
             config (SolidWorksMCPConfig): Configuration with adapter preferences.
-        
+
         Returns:
             AdapterType: The adapter type to instantiate.
-        
+
         Examples:
             >>> config = SolidWorksMCPConfig(adapter_type=AdapterType.PYWIN32)
             >>> factory = AdapterFactory()
@@ -225,16 +224,16 @@ class AdapterFactory:
 
     def _build_adapter_config(self, config: SolidWorksMCPConfig) -> dict[str, Any]:
         """Extract and transform config for adapter instantiation.
-        
+
         Creates adapter-specific configuration dict from main config object.
         Includes SolidWorks paths, validation settings, and timeouts/retries.
-        
+
         Args:
             config (SolidWorksMCPConfig): Main server configuration.
-        
+
         Returns:
             dict[str, Any]: Adapter-specific config with defaults applied.
-        
+
         Examples:
             >>> main_config = SolidWorksMCPConfig(solidworks_path='/sw/sw.exe')
             >>> factory = AdapterFactory()
@@ -255,18 +254,18 @@ class AdapterFactory:
         self, adapter: SolidWorksAdapter, config: SolidWorksMCPConfig
     ) -> SolidWorksAdapter:
         """Wrap adapter with circuit breaker for fault tolerance.
-        
+
         Applies circuit breaker decorator to handle COM failures, timeouts,
         and transient errors. Automatically opens circuit after threshold
         failures and enters half-open recovery state.
-        
+
         Args:
             adapter (SolidWorksAdapter): Base adapter to wrap.
             config (SolidWorksMCPConfig): Config with circuit breaker settings.
-        
+
         Returns:
             SolidWorksAdapter: The same adapter wrapped with CircuitBreakerAdapter.
-        
+
         Examples:
             >>> from adapters.mock_adapter import MockSolidWorksAdapter
             >>> base = MockSolidWorksAdapter()
@@ -286,18 +285,18 @@ class AdapterFactory:
         self, adapter: SolidWorksAdapter, config: SolidWorksMCPConfig
     ) -> SolidWorksAdapter:
         """Wrap adapter with connection pooling for performance.
-        
+
         Applies connection pool decorator to reuse SolidWorks COM connections,
         reducing connection overhead for repeated operations. Pool size and
         timeout configured via config object.
-        
+
         Args:
             adapter (SolidWorksAdapter): Base adapter to wrap.
             config (SolidWorksMCPConfig): Config with pool settings.
-        
+
         Returns:
             SolidWorksAdapter: The same adapter wrapped with ConnectionPoolAdapter.
-        
+
         Examples:
             >>> from adapters.mock_adapter import MockSolidWorksAdapter
             >>> base = MockSolidWorksAdapter()

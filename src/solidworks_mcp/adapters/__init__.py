@@ -5,19 +5,19 @@ This module provides the adapter pattern infrastructure for different
 SolidWorks integration approaches (pywin32, mock, future edge.js, etc.)
 """
 
-from .base import SolidWorksAdapter, AdapterResult, AdapterHealth
-from .factory import create_adapter, AdapterType, AdapterFactory
-from .pywin32_adapter import PyWin32Adapter
-from .mock_adapter import MockSolidWorksAdapter
+from .base import AdapterHealth, AdapterResult, SolidWorksAdapter
 from .circuit_breaker import CircuitBreakerAdapter
-from .connection_pool import ConnectionPoolAdapter
 from .complexity_analyzer import ComplexityAnalyzer, RoutingDecision
+from .connection_pool import ConnectionPoolAdapter
+from .factory import AdapterFactory, AdapterType, create_adapter
 from .intelligent_router import IntelligentRouter
+from .mock_adapter import MockSolidWorksAdapter
+from .pywin32_adapter import PyWin32Adapter
 from .vba_adapter import VbaGeneratorAdapter
 from .vba_macro_executor import (
-    VbaMacroExecutor,
     MacroExecutionRequest,
     MacroExecutionResult,
+    VbaMacroExecutor,
 )
 
 __all__ = [

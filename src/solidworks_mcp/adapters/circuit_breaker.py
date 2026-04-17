@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any, TypeVar
+
 from loguru import logger
 
 from .base import (
@@ -168,7 +169,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         try:
             await self.adapter.connect()
             self._record_success()
-        except Exception as e:
+        except Exception:
             self._record_failure()
             raise
 
@@ -401,6 +402,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     # Export operations
+
+    async def export_image(self, payload: dict) -> AdapterResult[dict]:
+        """Export viewport image through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "export_image", lambda: self.adapter.export_image(payload)
+        )
 
     async def export_file(
         self, file_path: str, format_type: str

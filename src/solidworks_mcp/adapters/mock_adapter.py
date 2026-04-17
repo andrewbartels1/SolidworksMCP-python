@@ -14,19 +14,19 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from ..exceptions import SolidWorksMCPError, SolidWorksOperationError
+from ..exceptions import SolidWorksOperationError
 from .base import (
-    SolidWorksAdapter,
-    AdapterResult,
     AdapterHealth,
+    AdapterResult,
     AdapterResultStatus,
-    SolidWorksModel,
-    SolidWorksFeature,
     ExtrusionParameters,
-    RevolveParameters,
-    SweepParameters,
     LoftParameters,
     MassProperties,
+    RevolveParameters,
+    SolidWorksAdapter,
+    SolidWorksFeature,
+    SolidWorksModel,
+    SweepParameters,
 )
 
 
@@ -35,28 +35,28 @@ class _BoolCallable:
 
     def __init__(self, getter: Callable[[], bool]) -> None:
         """Initialize this object.
-        
+
         Args:
             getter (Callable[[], bool]): Describe getter.
-        
+
         """
         self._getter = getter
 
     def __call__(self) -> bool:
         """Execute call.
-        
+
         Returns:
             bool: Describe the returned value.
-        
+
         """
         return bool(self._getter())
 
     def __bool__(self) -> bool:
         """Execute bool.
-        
+
         Returns:
             bool: Describe the returned value.
-        
+
         """
         return bool(self._getter())
 
@@ -66,10 +66,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
     def __init__(self, config: object | None = None) -> None:
         """Initialize this object.
-        
+
         Args:
             config (object | None): Describe config.
-        
+
         """
         super().__init__(config)
         cfg: dict[str, Any] = dict(self.config_dict)
@@ -94,13 +94,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
     def __getattribute__(self, name: str) -> Any:
         """Execute getattribute.
-        
+
         Args:
             name (str): Describe name.
-        
+
         Returns:
             Any: Describe the returned value.
-        
+
         """
         if name == "is_connected":
             return object.__getattribute__(self, "_is_connected_proxy")
@@ -581,7 +581,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
-            data={"id": sketch_id, "name": sketch_id, "sketch_name": sketch_id, "plane": plane},
+            data={
+                "id": sketch_id,
+                "name": sketch_id,
+                "sketch_name": sketch_id,
+                "plane": plane,
+            },
             execution_time=self._delays["sketch_operation"],
         )
 
@@ -762,6 +767,49 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"],
         )
 
+    async def export_image(self, payload: dict) -> AdapterResult[dict]:
+        """Mock export of a PNG/JPG viewport screenshot."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        import pathlib
+
+        file_path = payload.get("file_path", "")
+        width = int(payload.get("width", 1280))
+        height = int(payload.get("height", 720))
+        orientation = str(payload.get("view_orientation", "current"))
+
+        await asyncio.sleep(0.3)
+        self._operation_count += 1
+
+        out = pathlib.Path(file_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write a valid 1×1 white PNG binary so UI image tags don't break
+        _PNG_1X1_WHITE = (
+            b"\x89PNG\r\n\x1a\n"  # PNG signature
+            b"\x00\x00\x00\rIHDR"  # IHDR chunk length+type
+            b"\x00\x00\x00\x01\x00\x00\x00\x01"  # 1x1
+            b"\x08\x02\x00\x00\x00\x90wS\xde"  # 8-bit RGB + CRC
+            b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff\xff\x00\x05\xfe\x02\xfe\xdc\xcaY\xe7"  # IDAT
+            b"\x00\x00\x00\x00IEND\xaeB`\x82"  # IEND
+        )
+        out.write_bytes(_PNG_1X1_WHITE)
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "file_path": file_path,
+                "format": "PNG",
+                "dimensions": f"{width}x{height}",
+                "view": orientation,
+            },
+            execution_time=0.3,
+            metadata={"mock": True, "orientation": orientation},
+        )
+
     async def export_file(
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:
@@ -778,6 +826,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             "stl": 1.0,
             "pdf": 0.5,
             "jpg": 0.3,
+            "glb": 1.2,
+            "gltf": 1.2,
         }
 
         format_lower = format_type.lower()
@@ -785,6 +835,33 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         await asyncio.sleep(delay)
         self._operation_count += 1
+
+        # Write a minimal placeholder file so callers that check existence get a valid result
+        if format_lower == "stl":
+            import pathlib
+
+            out = pathlib.Path(file_path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            # Minimal ASCII STL — a single unit triangle (mock geometry placeholder)
+            out.write_text(
+                "solid mock\n"
+                "  facet normal 0 0 1\n"
+                "    outer loop\n"
+                "      vertex 0 0 0\n"
+                "      vertex 10 0 0\n"
+                "      vertex 5 10 0\n"
+                "    endloop\n"
+                "  endfacet\n"
+                "  facet normal 0 0 1\n"
+                "    outer loop\n"
+                "      vertex 0 0 0\n"
+                "      vertex 10 0 0\n"
+                "      vertex 5 0 10\n"
+                "    endloop\n"
+                "  endfacet\n"
+                "endsolid mock\n",
+                encoding="utf-8",
+            )
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,

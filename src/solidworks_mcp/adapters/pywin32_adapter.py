@@ -5,7 +5,6 @@ This adapter uses pywin32 to communicate with SolidWorks via COM,
 providing real SolidWorks automation capabilities on Windows platforms.
 """
 
-import asyncio
 import os
 import platform
 import time
@@ -15,28 +14,30 @@ from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
 from .base import (
-    SolidWorksAdapter,
-    AdapterResult,
     AdapterHealth,
+    AdapterResult,
     AdapterResultStatus,
-    SolidWorksModel,
-    SolidWorksFeature,
     ExtrusionParameters,
-    RevolveParameters,
-    SweepParameters,
     LoftParameters,
     MassProperties,
+    RevolveParameters,
+    SolidWorksAdapter,
+    SolidWorksFeature,
+    SolidWorksModel,
+    SweepParameters,
 )
 
 try:
-    import win32com.client
     import pythoncom
     import pywintypes
+    import win32com.client
 
     PYWIN32_AVAILABLE = True
 except ImportError:
     PYWIN32_AVAILABLE = False
 
+
+from loguru import logger  # noqa: E402
 
 T = TypeVar("T")
 
@@ -190,7 +191,7 @@ class PyWin32Adapter(SolidWorksAdapter):
             app.SetUserPreferenceToggle(149, False)  # Hide questions
 
         except Exception as e:
-            raise SolidWorksMCPError(f"Failed to connect to SolidWorks: {e}")
+            raise SolidWorksMCPError(f"Failed to connect to SolidWorks: {e}") from e
 
     async def disconnect(self) -> None:
         """Disconnect from SolidWorks application.
@@ -1525,7 +1526,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                 "collinear": self.constants.get("swConstraintType_COLLINEAR", 9),
             }
 
-            constraint_type = relation_map.get(relation_type.lower(), 0)
+            relation_map.get(relation_type.lower(), 0)
 
             # For now, return a success without actual constraint - this requires entity selection
             # which is complex in the basic adapter
@@ -1753,6 +1754,159 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("get_mass_properties", _mass_props_operation)
 
+    async def export_image(self, payload: dict) -> AdapterResult[dict]:
+        """
+        Export a screenshot of the current model to a PNG/JPG file.
+
+        Payload keys (matching ExportImageInput):
+            file_path (str): Output path including extension.
+            format_type (str): "png" or "jpg". Default "png".
+            width (int): Pixel width. Default 1280.
+            height (int): Pixel height. Default 720.
+            view_orientation (str): "front" | "top" | "right" | "isometric" | "current".
+        """
+        if not self.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        if not self.swApp:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="SolidWorks not connected"
+            )
+
+        orientation = str(payload.get("view_orientation", "current")).lower()
+        file_path = payload.get("file_path", "")
+        width = int(payload.get("width", 1280))
+        height = int(payload.get("height", 720))
+
+        # Map orientation names to SolidWorks swStandardViews_e constants
+        _VIEW_CONSTANTS = {
+            "front": 1,  # swFrontView
+            "back": 2,  # swBackView
+            "left": 3,  # swLeftView
+            "right": 4,  # swRightView
+            "top": 5,  # swTopView
+            "bottom": 6,  # swBottomView
+            "isometric": 7,  # swIsometricView
+            "dimetric": 8,  # swDimetricView
+            "trimetric": 9,  # swTriMetricView
+        }
+
+        def _screenshot_operation() -> dict:
+            import os as _os
+
+            resolved = _os.path.abspath(file_path)
+            _os.makedirs(_os.path.dirname(resolved), exist_ok=True)
+
+            # Prefer swApp.ActiveDoc for screenshot — more reliably typed than
+            # the IDispatch reference stored in self.currentModel after OpenDoc6.
+            target_doc = (
+                self.swApp.ActiveDoc if self.swApp else None
+            ) or self.currentModel
+            if not target_doc:
+                raise RuntimeError("No active SolidWorks document for screenshot")
+
+            # Ensure SolidWorks window is focused so the viewport is rendered.
+            # Required for both view changes and bitmap capture.
+            try:
+                self.swApp.Frame.SetFocus()
+            except Exception:
+                pass
+
+            # Set view orientation if requested
+            if orientation != "current" and orientation in _VIEW_CONSTANTS:
+                view_const = _VIEW_CONSTANTS[orientation]
+                # ShowNamedView2("", swStandardViews_e) applies a standard view.
+                # Wrapped in try/except — assemblies can raise COM errors here
+                # (e.g. Lightweight components) but the screenshot can still succeed.
+                try:
+                    target_doc.ShowNamedView2("", view_const)
+                except Exception as _vnv_exc:
+                    logger.warning(
+                        "[pywin32.export_image] ShowNamedView2 failed ({}), "
+                        "continuing with current view",
+                        _vnv_exc,
+                    )
+
+            # Zoom to fit so the model fills the viewport before capture.
+            # IModelDoc2.ViewZoomToFit2() is the primary method; fall back to
+            # IModelView.ZoomToFit() on the active view object if that raises.
+            try:
+                target_doc.ViewZoomToFit2()
+            except Exception:
+                try:
+                    _active_view = target_doc.ActiveView
+                    if _active_view is not None:
+                        _active_view.ZoomToFit()
+                except Exception as _ztf_exc:
+                    logger.warning(
+                        "[pywin32.export_image] ZoomToFit failed ({}), "
+                        "screenshot may be zoomed out",
+                        _ztf_exc,
+                    )
+
+            # Preferred path: IModelView2.SaveBitmapWithVariableSize
+            # The active view object is more reliably typed than IModelDoc2 when
+            # accessed via late-bound IDispatch (OpenDoc6 returns a generic pointer).
+            saved = False
+            model_view = None
+            try:
+                model_view = target_doc.ActiveView
+            except Exception:
+                pass
+
+            if model_view is not None:
+                try:
+                    success = model_view.SaveBitmapWithVariableSize(
+                        resolved, width, height
+                    )
+                    saved = bool(success) and _os.path.exists(resolved)
+                except Exception as _mv_exc:
+                    logger.warning(
+                        "[pywin32.export_image] IModelView.SaveBitmapWithVariableSize failed ({}), "
+                        "trying IModelDoc2 path",
+                        _mv_exc,
+                    )
+
+            # Fallback: IModelDoc2.SaveBitmapWithVariableSize
+            if not saved:
+                try:
+                    success = target_doc.SaveBitmapWithVariableSize(
+                        resolved, width, height
+                    )
+                    saved = bool(success) and _os.path.exists(resolved)
+                except Exception as _doc_exc:
+                    logger.warning(
+                        "[pywin32.export_image] IModelDoc2.SaveBitmapWithVariableSize "
+                        "failed ({}), trying SaveAs3 image export",
+                        str(_doc_exc),
+                    )
+
+            # Final fallback: SaveAs3 with image extension.  SolidWorks determines
+            # export format from the file extension (.png, .jpg, .bmp, etc.).
+            # This path works on all SW versions without needing vtable access.
+            if not saved:
+                try:
+                    target_doc.SaveAs3(resolved, 0, 2)
+                    saved = _os.path.exists(resolved)
+                except Exception as _sa3_exc:
+                    raise RuntimeError(
+                        f"All screenshot methods failed for {resolved}: {_sa3_exc}"
+                    ) from _sa3_exc
+
+            if not saved:
+                raise RuntimeError(
+                    f"All screenshot methods produced no output for {resolved}"
+                )
+            return {
+                "file_path": resolved,
+                "format": _os.path.splitext(resolved)[1].lstrip(".").upper() or "PNG",
+                "dimensions": f"{width}x{height}",
+                "view": orientation,
+            }
+
+        return self._handle_com_operation("export_image", _screenshot_operation)
+
     async def export_file(
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:
@@ -1763,27 +1917,21 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _export_operation() -> None:
-            # Determine export format
-            """Execute export operation.
-
-            Returns:
-                None: Describe the returned value.
-
-            """
+            """Execute export operation."""
             format_map = {
                 "step": 0,  # swSaveAsSTEP
                 "iges": 1,  # swSaveAsIGS
-                "stl": 2,  # swSaveAsSTL
-                "pdf": 3,  # swSaveAsPDF
-                "dwg": 4,  # swSaveAsDWG
-                "jpg": 5,  # swSaveAsJPEG
+                "stl": 2,   # swSaveAsSTL
+                "pdf": 3,   # swSaveAsPDF
+                "dwg": 4,   # swSaveAsDWG
+                "jpg": 5,   # swSaveAsJPEG
+                "glb": 41,  # swSaveAsGLTF (binary GLTF, SW 2023+)
+                "gltf": 41, # same enum value, text GLTF
             }
 
             format_lower = format_type.lower()
             if format_lower not in format_map:
                 raise Exception(f"Unsupported export format: {format_type}")
-
-            save_format = format_map[format_lower]
 
             resolved_path = os.path.abspath(file_path)
             os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
@@ -1791,8 +1939,90 @@ class PyWin32Adapter(SolidWorksAdapter):
             if os.path.exists(resolved_path):
                 self._attempt(lambda: os.remove(resolved_path))
 
-            # Save/export the file
-            success = self.currentModel.SaveAs3(
+            # Prefer swApp.ActiveDoc — more reliably typed than the late-bound
+            # IDispatch reference stored in self.currentModel after OpenDoc6.
+            target_doc = (
+                self.swApp.ActiveDoc if self.swApp else None
+            ) or self.currentModel
+            if not target_doc:
+                raise RuntimeError("No active SolidWorks document for export")
+
+            # ----------------------------------------------------------------
+            # STL export: use Extension.SaveAs2 + ISTLExportData
+            # for both parts AND assemblies.  SaveAs3 with format=2 works for
+            # parts but is unreliable for assemblies (only exports first body).
+            # ----------------------------------------------------------------
+            if format_lower == "stl":
+                # For assemblies, resolve lightweight components first so all
+                # geometry is available for the mesh export.
+                try:
+                    target_doc.ResolveAllLightweightComponents(True)
+                except Exception:
+                    pass  # Not an assembly doc or already resolved — safe to ignore
+
+                ext = getattr(target_doc, "Extension", None)
+                stl_data = None
+                if ext is not None and self.swApp is not None:
+                    try:
+                        # swExportDataFileType_e.swExportSTL = 2
+                        stl_data = self.swApp.GetExportFileData(2)
+                        if stl_data is not None:
+                            # Merge all bodies/components into a single STL
+                            try:
+                                stl_data.Merge = True
+                            except Exception:
+                                pass
+                            # swExportBodiesAs = 0 → swExportAsOneFile
+                            try:
+                                stl_data.ExportBodiesAs = 0
+                            except Exception:
+                                pass
+                    except Exception:
+                        stl_data = None
+
+                # swSaveAsVersion_e.swSaveAsCurrentVersion = 0
+                # swSaveAsOptions_e.swSaveAsOptions_Silent = 2
+                if ext is not None:
+                    try:
+                        # Extension.SaveAs2 is a void COM method — check file
+                        # existence rather than trusting the return value.
+                        # Try with stl_data first (enables Merge for assemblies);
+                        # fall back to None if type mismatch (late-bound IDispatch
+                        # can't marshal ISTLExportData* via IDispatch::Invoke).
+                        try:
+                            ext.SaveAs2(resolved_path, 0, 2, stl_data, None, "")
+                        except Exception:
+                            ext.SaveAs2(resolved_path, 0, 2, None, None, "")
+                    except Exception as _sa2_exc:
+                        logger.warning(
+                            "[pywin32.export_file] Extension.SaveAs2 failed: {}",
+                            str(_sa2_exc),
+                        )
+
+                # Fall back to classic SaveAs3 only if file wasn't created above.
+                if not os.path.exists(resolved_path):
+                    logger.warning(
+                        "[pywin32.export_file] SaveAs2 did not produce {}, "
+                        "falling back to SaveAs3",
+                        resolved_path,
+                    )
+                    target_doc.SaveAs3(
+                        resolved_path,
+                        0,  # swSaveAsCurrentVersion
+                        2,  # swSaveAsOptions_Silent
+                    )
+                    if not os.path.exists(resolved_path):
+                        raise Exception(
+                            f"STL export failed for {resolved_path} "
+                            "(tried Extension.SaveAs2 and SaveAs3)"
+                        )
+                return None
+
+            # ----------------------------------------------------------------
+            # All other formats — classic SaveAs3 path
+            # ----------------------------------------------------------------
+            save_format = format_map[format_lower]
+            success = target_doc.SaveAs3(
                 resolved_path,
                 save_format,
                 2,  # swSaveAsOptions_Silent
@@ -2156,9 +2386,7 @@ class PyWin32Adapter(SolidWorksAdapter):
             active_config = self._attempt(
                 lambda: self.currentModel.GetActiveConfiguration(), default=None
             )
-            active_name = self._attempt(
-                lambda: active_config.GetName(), default=None
-            )
+            active_name = self._attempt(lambda: active_config.GetName(), default=None)
             if active_name:
                 return [str(active_name)]
 
