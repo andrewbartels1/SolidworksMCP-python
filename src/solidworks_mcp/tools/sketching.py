@@ -6,27 +6,27 @@ like lines, circles, rectangles, arcs, and constraints.
 """
 
 from typing import Any, TypeVar
+
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 TInput = TypeVar("TInput", bound=BaseModel)
 
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
     """Execute normalize input.
-    
+
     Args:
         input_data (Any): Describe input data.
         model_type (type[TInput]): Describe model type.
-    
+
     Returns:
         TInput: Describe the returned value.
-    
+
     """
     if isinstance(input_data, model_type):
         return input_data
@@ -46,13 +46,13 @@ class CreateSketchInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if not self.plane.strip():
             raise ValueError("plane is required")
@@ -73,13 +73,13 @@ class AddLineInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         self.x1 = self.x1 if self.x1 is not None else self.start_x
         self.y1 = self.y1 if self.y1 is not None else self.start_y
@@ -97,13 +97,13 @@ class AddCircleInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.radius <= 0:
             raise ValueError("radius must be positive")
@@ -132,13 +132,13 @@ class AddRectangleInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         self.x1 = self.x1 if self.x1 is not None else self.corner1_x
         self.y1 = self.y1 if self.y1 is not None else self.corner1_y
@@ -209,13 +209,13 @@ class TutorialSimpleHoleInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.diameter <= 0:
             raise ValueError("diameter must be positive")

@@ -6,13 +6,13 @@ interference checking, geometry analysis, and material properties.
 """
 
 from typing import Any
+
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 # Input schemas using Python 3.14 built-in types
 
@@ -29,13 +29,13 @@ class MassPropertiesInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         valid_units = {"metric", "kg", "g", "lb"}
         if self.units not in valid_units:

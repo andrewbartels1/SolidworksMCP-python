@@ -7,13 +7,13 @@ for automation and workflow optimization.
 
 import time
 from typing import Any
+
 from fastmcp import FastMCP
-from pydantic import Field
 from loguru import logger
+from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 # Input schemas for macro operations
 
@@ -47,13 +47,13 @@ class MacroRecordingInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.macro_name is None:
             self.macro_name = self.recording_name or "Recorded Macro"
@@ -247,7 +247,7 @@ async def register_macro_recording_tools(
 
             session_id = input_data.get("session_id", "")
             save_path = input_data.get("save_path", "")
-            clean_code = input_data.get("clean_code", True)
+            input_data.get("clean_code", True)
 
             # Simulate recording completion
             recorded_macro = {
@@ -265,17 +265,17 @@ async def register_macro_recording_tools(
     Dim swApp As SldWorks.SldWorks
     Dim swModel As SldWorks.ModelDoc2
     Dim swFeatMgr As SldWorks.FeatureManager
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swFeatMgr = swModel.FeatureManager
-    
+
     ' Recorded actions start here
     swModel.SelectByID2 "Top Plane", "PLANE", 0, 0, 0, False, 0, Nothing, 0
     swModel.SketchManager.InsertSketch True
     swModel.SketchManager.CreateLine 0, 0, 0, 0.05, 0, 0
     ' ... additional recorded actions ...
-    
+
 End Sub"""
 
             return {

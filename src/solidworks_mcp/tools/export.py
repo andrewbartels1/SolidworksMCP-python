@@ -6,27 +6,27 @@ STEP, IGES, STL, PDF, DWG, and image formats.
 """
 
 from typing import Any, TypeVar
+
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 TInput = TypeVar("TInput", bound=BaseModel)
 
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
     """Execute normalize input.
-    
+
     Args:
         input_data (Any): Describe input data.
         model_type (type[TInput]): Describe model type.
-    
+
     Returns:
         TInput: Describe the returned value.
-    
+
     """
     if isinstance(input_data, model_type):
         return input_data
@@ -74,13 +74,13 @@ class ExportImageInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.file_path is None:
             self.file_path = self.output_path
@@ -109,13 +109,13 @@ class ExportSTEPInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.file_path is None:
             self.file_path = self.output_path
@@ -138,13 +138,13 @@ class ExportIGESInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.file_path is None:
             self.file_path = self.output_path
@@ -170,13 +170,13 @@ class ExportSTLInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.file_path is None:
             self.file_path = self.output_path
@@ -198,13 +198,13 @@ class ExportPDFInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.file_path is None:
             self.file_path = self.output_path
@@ -232,13 +232,13 @@ class ExportDWGInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.file_path is None:
             self.file_path = self.output_path
@@ -269,13 +269,13 @@ class BatchExportInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.format_type is None:
             self.format_type = self.export_format

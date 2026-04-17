@@ -6,19 +6,17 @@ parts, assemblies, drawings, and features like extrusions, revolves, etc.
 """
 
 from typing import Any, TypeVar
+
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from ..adapters.base import (
-    SolidWorksAdapter,
     ExtrusionParameters,
     RevolveParameters,
-    SweepParameters,
-    LoftParameters,
+    SolidWorksAdapter,
 )
 from .input_compat import CompatInput
-
 
 TInput = TypeVar("TInput", bound=BaseModel)
 
@@ -28,14 +26,14 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
     """Execute result value.
-    
+
     Args:
         data (Any): Describe data.
         default (Any): Describe default.
-    
+
     Returns:
         Any: Describe the returned value.
-    
+
     """
     if isinstance(data, dict):
         for key in keys:
@@ -53,14 +51,14 @@ def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
     """Execute normalize input.
-    
+
     Args:
         input_data (Any): Describe input data.
         model_type (type[TInput]): Describe model type.
-    
+
     Returns:
         TInput: Describe the returned value.
-    
+
     """
     if isinstance(input_data, model_type):
         return input_data
@@ -87,13 +85,13 @@ class CreatePartInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if not self.name.strip():
             raise ValueError("name is required")
@@ -122,13 +120,13 @@ class CreateExtrusionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.depth <= 0:
             raise ValueError("depth must be positive")
@@ -159,13 +157,13 @@ class CreateRevolveInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.angle <= 0:
             raise ValueError("angle must be positive")
@@ -205,13 +203,13 @@ class GetDimensionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.name is None:
             self.name = self.dimension_name
@@ -232,13 +230,13 @@ class SetDimensionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.name is None:
             self.name = self.dimension_name

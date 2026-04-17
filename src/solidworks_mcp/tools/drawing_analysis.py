@@ -5,15 +5,14 @@ Provides advanced analysis capabilities for drawing documents including
 dimension analysis, view analysis, annotation checking, and compliance verification.
 """
 
-import time
 from typing import Any
+
 from fastmcp import FastMCP
-from pydantic import Field
 from loguru import logger
+from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 # Input schemas for drawing analysis
 
@@ -397,7 +396,7 @@ async def register_drawing_analysis_tools(
         """
         """
         Analyze annotations in a SolidWorks drawing for consistency and standards compliance.
-        
+
         This tool examines notes, symbols, and text formatting for quality and compliance.
         """
         try:
@@ -533,7 +532,7 @@ async def register_drawing_analysis_tools(
         """
         """
         Check drawing compliance against specified drafting standards.
-        
+
         This tool verifies compliance with ISO, ANSI, DIN, or other drafting standards.
         """
         try:
@@ -722,7 +721,7 @@ async def register_drawing_analysis_tools(
         """
         """
         Analyze drawing views for clarity, completeness, and optimal presentation.
-        
+
         This tool examines view selection, placement, and clarity.
         """
         try:
@@ -740,7 +739,7 @@ async def register_drawing_analysis_tools(
                     "message": result.error or "Failed to analyze drawing views",
                 }
 
-            drawing_path = input_data.get("drawing_path", "")
+            input_data.get("drawing_path", "")
 
             view_analysis = {
                 "view_inventory": {
@@ -886,7 +885,7 @@ async def register_drawing_analysis_tools(
         """
         """
         Generate a comprehensive quality report for a drawing.
-        
+
         This tool creates a detailed report combining all analysis results.
         """
         try:
@@ -1027,7 +1026,7 @@ async def register_drawing_analysis_tools(
         """
         """
         Compare two versions of a drawing to identify changes.
-        
+
         This tool analyzes differences between drawing revisions.
         """
         try:
@@ -1168,12 +1167,12 @@ async def register_drawing_analysis_tools(
         """
         """
         Validate that a drawing contains all necessary information for manufacturing.
-        
+
         This tool checks for completeness from a manufacturing perspective.
         """
         try:
-            drawing_path = input_data.get("drawing_path", "")
-            manufacturing_type = input_data.get(
+            input_data.get("drawing_path", "")
+            input_data.get(
                 "manufacturing_type", "machining"
             )  # machining, casting, forming
 

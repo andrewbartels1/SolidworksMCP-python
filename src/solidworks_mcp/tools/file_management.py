@@ -6,14 +6,14 @@ file properties, and reference management.
 """
 
 from typing import Any
+
 from fastmcp import FastMCP
-from pydantic import Field
 from loguru import logger
+from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
-from .input_compat import CompatInput
 from ..utils.feature_tree_classifier import classify_feature_tree_snapshot
-
+from .input_compat import CompatInput
 
 # Input schemas using Python 3.14 built-in types
 

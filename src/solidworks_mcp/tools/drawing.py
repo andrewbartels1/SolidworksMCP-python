@@ -156,13 +156,13 @@ class DimensionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.entities:
             if self.entity1 is None and len(self.entities) >= 1:
@@ -204,13 +204,13 @@ class AnnotationInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.position is not None and len(self.position) >= 2:
             if self.position_x is None:

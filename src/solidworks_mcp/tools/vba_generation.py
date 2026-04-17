@@ -6,13 +6,13 @@ especially useful for operations with 13+ parameters that exceed COM limits.
 """
 
 from typing import Any
+
 from fastmcp import FastMCP
-from pydantic import Field
 from loguru import logger
+from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 # Input schemas for VBA generation
 
@@ -81,13 +81,13 @@ class VBARevolveInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Execute model post init.
-        
+
         Args:
             __context (Any): Describe context.
-        
+
         Returns:
             None: Describe the returned value.
-        
+
         """
         if self.angle is None:
             self.angle = self.angle_degrees if self.angle_degrees is not None else 360.0
@@ -203,21 +203,21 @@ async def register_vba_generation_tools(
     Dim swFeatMgr As SldWorks.FeatureManager
     Dim swFeat As SldWorks.Feature
     Dim myFeature As Object
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
-    
+
     If swModel Is Nothing Then
         MsgBox "No active document"
         Exit Sub
     End If
-    
+
     Set swFeatMgr = swModel.FeatureManager
-    
+
     ' Advanced extrusion with full parameter control
     myFeature = swFeatMgr.FeatureExtruThin2( _
         {input_data.depth / 1000.0}, _  ' Depth (meters)
-        {input_data.depth2 / 1000.0}, _ ' Depth2 (meters)  
+        {input_data.depth2 / 1000.0}, _ ' Depth2 (meters)
         {str(input_data.both_directions).lower()}, _ ' BothDirections
         {input_data.draft_angle * 3.14159 / 180.0}, _ ' DraftAngle (radians)
         {0}, _ ' DraftAngle2
@@ -234,13 +234,13 @@ async def register_vba_generation_tools(
         0, _ ' EndCondition
         0 _ ' EndCondition2
     )
-    
+
     If myFeature Is Nothing Then
         MsgBox "Failed to create extrusion"
     Else
         MsgBox "Advanced extrusion created successfully"
     End If
-    
+
 End Sub"""
 
             return {
@@ -304,14 +304,14 @@ End Sub"""
 
             vba_code = f"""Sub CreateAdvancedRevolve()
     Dim swApp As SldWorks.SldWorks
-    Dim swModel As SldWorks.ModelDoc2 
+    Dim swModel As SldWorks.ModelDoc2
     Dim swFeatMgr As SldWorks.FeatureManager
     Dim myFeature As Object
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swFeatMgr = swModel.FeatureManager
-    
+
     ' Advanced revolve with thin-wall options
     myFeature = swFeatMgr.FeatureRevolve2( _
         True, _ ' SingleDir
@@ -321,7 +321,7 @@ End Sub"""
         3, _ ' Type (swEndCondBlind)
         3, _ ' Type2
         {input_data.angle * 3.14159 / 180.0}, _ ' Angle (radians)
-        {input_data.angle2 * 3.14159 / 180.0}, _ ' Angle2  
+        {input_data.angle2 * 3.14159 / 180.0}, _ ' Angle2
         {str(input_data.merge_result).lower()}, _ ' MergeResult
         False, _ ' FeatureScope
         False, _ ' Auto
@@ -332,13 +332,13 @@ End Sub"""
         False, _ ' CurveToOrderUse
         False _ ' UseMachinedSurface
     )
-    
+
     If myFeature Is Nothing Then
         MsgBox "Failed to create revolve"
     Else
         MsgBox "Advanced revolve created successfully"
     End If
-    
+
 End Sub"""
 
             return {
@@ -373,13 +373,13 @@ End Sub"""
     ) -> dict[str, Any]:
         (
             """Generate VBA code for assembly component insertion.
-        
+
         Args:
             input_data: Assembly insertion parameters
-            
+
         Returns:
             Generated VBA code for component operations
-            
+
         Example:
             >>> result = await generate_vba_assembly_insert(assembly_input)
         """
@@ -411,11 +411,11 @@ End Sub"""
     Dim swModel As SldWorks.ModelDoc2
     Dim swAssy As SldWorks.AssemblyDoc
     Dim swComp As SldWorks.Component2
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swAssy = swModel
-    
+
     ' Insert component at specified location
     Set swComp = swAssy.AddComponent5( _
         "{input_data.component_path}", _
@@ -424,16 +424,16 @@ End Sub"""
         False, _ ' LoadModel
         "", _ ' ReferenceName
         {input_data.insertion_point[0] / 1000.0}, _ ' X position (meters)
-        {input_data.insertion_point[1] / 1000.0}, _ ' Y position (meters)  
+        {input_data.insertion_point[1] / 1000.0}, _ ' Y position (meters)
         {input_data.insertion_point[2] / 1000.0} _ ' Z position (meters)
     )
-    
+
     If swComp Is Nothing Then
         MsgBox "Failed to insert component"
     Else
         MsgBox "Component inserted successfully: " & swComp.Name2
     End If
-    
+
 End Sub'''
 
             return {
@@ -501,41 +501,41 @@ End Sub'''
     Dim swDraw As SldWorks.DrawingDoc
     Dim swView As SldWorks.View
     Dim swSheet As SldWorks.Sheet
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swDraw = swModel
-    
+
     If swDraw Is Nothing Then
         MsgBox "No active drawing document"
         Exit Sub
     End If
-    
+
     Set swSheet = swDraw.GetCurrentSheet
-    
+
     ' Create standard 3 view drawing
     ' Front view
     Set swView = swDraw.CreateDrawViewFromModelView3( _
         "{input_data.model_path}", _
         "*Front", _
-        0.1, _ ' X position 
+        0.1, _ ' X position
         0.15, _ ' Y position
         0 _ ' Z position
     )
-    
+
     swView.ScaleRatio = Array({input_data.scale}, 1)
-    
-    ' Top view  
+
+    ' Top view
     Set swView = swDraw.CreateDrawViewFromModelView3( _
         "{input_data.model_path}", _
         "*Top", _
         0.1, _
-        0.25, _ 
+        0.25, _
         0 _
     )
-    
+
     swView.ScaleRatio = Array({input_data.scale}, 1)
-    
+
     ' Right view
     Set swView = swDraw.CreateDrawViewFromModelView3( _
         "{input_data.model_path}", _
@@ -544,11 +544,11 @@ End Sub'''
         0.15, _
         0 _
     )
-    
+
     swView.ScaleRatio = Array({input_data.scale}, 1)
-    
+
     MsgBox "Drawing views created successfully"
-    
+
 End Sub'''
 
             return {
@@ -619,39 +619,39 @@ End Sub'''
     Dim filePath As String
     Dim exportPath As String
     Dim processedCount As Integer
-    
+
     Set swApp = Application.SldWorks
     Set fso = New FileSystemObject
     Set folder = fso.GetFolder("{input_data.source_folder}")
-    
+
     processedCount = 0
-    
+
     ' Process all files matching pattern
     For Each file In folder.Files
-        If LCase(file.Name) Like LCase("{input_data.file_pattern}") Then 
+        If LCase(file.Name) Like LCase("{input_data.file_pattern}") Then
             filePath = file.Path
-            
+
             ' Open the file
             Set swModel = swApp.OpenDoc6(filePath, 1, 1, "", 0, 0)
-            
+
             If Not swModel Is Nothing Then
                 ' Generate export path
                 exportPath = "{input_data.target_folder}" & "\\" & _
                     fso.GetBaseName(file.Name) & ".step"
-                
+
                 ' Export as STEP
                 swModel.SaveAs2 exportPath, 0, True, False
-                
+
                 ' Close the model
                 swApp.CloseDoc swModel.GetTitle
-                
+
                 processedCount = processedCount + 1
             End If
         End If
     Next file
-    
+
     MsgBox "Batch export completed. Processed " & processedCount & " files."
-    
+
 End Sub'''
 
             return {
@@ -708,27 +708,27 @@ End Sub'''
     Dim swModel As SldWorks.ModelDoc2
     Dim swFeatMgr As SldWorks.FeatureManager
     Dim swFeat As SldWorks.Feature
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swFeatMgr = swModel.FeatureManager
-    
+
     ' Create shell feature
     Set swFeat = swFeatMgr.FeatureShell2( _
         {thickness / 1000.0}, _ ' Thickness (meters)
         False, _ ' OutwardThickness
-        False, _ ' MultiThickness  
+        False, _ ' MultiThickness
         False, _ ' ShowPreview
         False, _ ' MultipleFaceDef
         False _ ' MultipleThicknessDef
     )
-    
+
     If swFeat Is Nothing Then
         MsgBox "Failed to create shell"
     Else
         MsgBox "Shell created successfully with thickness: {thickness}mm"
     End If
-    
+
 End Sub"""
             elif operation == "fillet":
                 radius = input_data.get("radius", 5.0)
@@ -736,17 +736,17 @@ End Sub"""
     Dim swApp As SldWorks.SldWorks
     Dim swModel As SldWorks.ModelDoc2
     Dim swFeatMgr As SldWorks.FeatureManager
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swFeatMgr = swModel.FeatureManager
-    
-    ' Create fillet feature  
+
+    ' Create fillet feature
     swFeatMgr.FeatureFillet4( _
         {radius / 1000.0}, _ ' Radius (meters)
         0, _ ' SecondRadius
         0, _ ' RollOnOff
-        0, _ ' RollFirstRadius  
+        0, _ ' RollFirstRadius
         0, _ ' RollSecondRadius
         0, _ ' RollSmoothTransition
         0, _ ' ConicRho
@@ -758,10 +758,10 @@ End Sub"""
         False, _ ' EnableSolidPreview
         0 _ ' CornerType
     )
-    
+
     swModel.ClearSelection2 True
     MsgBox "Fillet created with radius: {radius}mm"
-    
+
 End Sub"""
             else:
                 return {
@@ -828,17 +828,17 @@ End Sub"""
     Dim swAssy As SldWorks.AssemblyDoc
     Dim swMateFeats As Variant
     Dim swMate As SldWorks.Feature
-    
-    Set swApp = Application.SldWorks  
+
+    Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swAssy = swModel
-    
+
     ' Clear existing selections
     swModel.ClearSelection2 True
-    
+
     ' Note: Entity selection needs to be done before running this macro
     ' Select appropriate faces/edges on {component1} and {component2}
-    
+
     ' Create {mate_type} mate
     swMateFeats = swAssy.AddMate5( _
         {sw_mate_type}, _ ' Mate type
@@ -853,14 +853,14 @@ End Sub"""
         0, _ ' For Positioning Only
         0 _ ' LockToSketch
     )
-    
+
     If IsEmpty(swMateFeats) Then
         MsgBox "Failed to create mate. Check entity selection."
-    Else 
+    Else
         Set swMate = swMateFeats(0)
         MsgBox "Mate created: " & swMate.Name
     End If
-    
+
 End Sub"""
 
             return {
@@ -903,43 +903,43 @@ End Sub"""
 
             vba_code = f'''Sub CreateDrawingDimensions()
     Dim swApp As SldWorks.SldWorks
-    Dim swModel As SldWorks.ModelDoc2  
+    Dim swModel As SldWorks.ModelDoc2
     Dim swDraw As SldWorks.DrawingDoc
     Dim swView As SldWorks.View
     Dim swDisp As SldWorks.DisplayDimension
     Dim swDim As SldWorks.Dimension
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
     Set swDraw = swModel
-    
+
     ' Get active drawing view
     Set swView = swDraw.GetFirstView ' Sheet
     Set swView = swView.GetNextView ' First drawing view
-    
+
     If swView Is Nothing Then
         MsgBox "No drawing view found"
         Exit Sub
     End If
-    
+
     swModel.ClearSelection2 True
-    
+
     ' Note: Select appropriate entities before running
     ' For linear dimensions: select two edges or points
     ' For radial: select arc or circle
     ' For angular: select two lines
-    
+
     Select Case "{dimension_type}"
         Case "linear"
             Set swDisp = swModel.AddDimension2(0.05, 0.05, 0)
-        Case "radial"  
+        Case "radial"
             Set swDisp = swModel.AddDimension2(0.05, 0.05, 0)
         Case "angular"
             Set swDisp = swModel.AddDimension2(0.05, 0.05, 0)
         Case "diameter"
             Set swDisp = swModel.AddDimension2(0.05, 0.05, 0)
     End Select
-    
+
     If Not swDisp Is Nothing Then
         Set swDim = swDisp.GetDimension2(0)
         ' Set precision
@@ -948,7 +948,7 @@ End Sub"""
     Else
         MsgBox "Failed to create dimension. Check entity selection."
     End If
-    
+
 End Sub'''
 
             return {
@@ -1004,28 +1004,28 @@ End Sub'''
     Dim swCustPropMgr As SldWorks.CustomPropertyManager
     Dim configNames As Variant
     Dim i As Integer
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
-    
+
     ' Get configuration names
     configNames = swModel.GetConfigurationNames
-    
+
     ' Set property for all configurations
     For i = 0 To UBound(configNames)
         Set swCustPropMgr = swModel.Extension.CustomPropertyManager(configNames(i))
-        
+
         swCustPropMgr.Add3 "{property_name}", swCustomInfoText, _
             "{property_value}", swCustomPropertyAddOption_ReplaceValue
     Next i
-    
+
     ' Also set at file level
     Set swCustPropMgr = swModel.Extension.CustomPropertyManager("")
     swCustPropMgr.Add3 "{property_name}", swCustomInfoText, _
         "{property_value}", swCustomPropertyAddOption_ReplaceValue
-    
+
     MsgBox "Custom property '{property_name}' set to '{property_value}'"
-    
+
 End Sub'''
 
             elif operation == "pack_and_go":
@@ -1037,30 +1037,30 @@ End Sub'''
     Dim swPackAndGo As SldWorks.PackAndGo
     Dim pgStatus As Long
     Dim pgWarnings As Long
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
-    
+
     Set swPackAndGo = swApp.GetPackAndGo
-    
+
     ' Set Pack and Go settings
     swPackAndGo.IncludeDrawings = True
     swPackAndGo.IncludeSimulationResults = False
     swPackAndGo.IncludeToolboxComponents = False
     swPackAndGo.FlattenToSingleFolder = True
-    
+
     ' Set destination folder
     swPackAndGo.SetSaveToName swModel.GetTitle, "{target_folder}"
-    
+
     ' Execute Pack and Go
     swPackAndGo.PackAndGo2 pgStatus, pgWarnings
-    
+
     If pgStatus = 0 Then
         MsgBox "Pack and Go completed successfully"
     Else
         MsgBox "Pack and Go failed with status: " & pgStatus
     End If
-    
+
 End Sub'''
             else:
                 return {
@@ -1114,28 +1114,28 @@ End Sub'''
                 vba_code = """Sub StartMacroRecording()
     Dim swApp As SldWorks.SldWorks
     Set swApp = Application.SldWorks
-    
+
     ' Enable macro recording
     swApp.UnloadAddIn "SldWorks.Addin.Utilities.MacroRecorder"
     swApp.LoadAddIn "SldWorks.Addin.Utilities.MacroRecorder"
-    
+
     ' Note: Use Tools > Macro > Record in SolidWorks interface
     ' This code prepares the environment for recording
-    
+
     MsgBox "Macro recording environment prepared. Use Tools > Macro > Record to start."
-    
+
 End Sub"""
 
             elif operation == "stop_recording":
                 vba_code = """Sub StopMacroRecording()
     Dim swApp As SldWorks.SldWorks
     Set swApp = Application.SldWorks
-    
+
     ' Note: Use Tools > Macro > Stop Record in SolidWorks interface
     ' This code helps manage the recording session
-    
+
     MsgBox "Stop recording using Tools > Macro > Stop Record"
-    
+
 End Sub"""
 
             elif operation == "create_template":
@@ -1144,23 +1144,23 @@ End Sub"""
     Dim swApp As SldWorks.SldWorks
     Dim swModel As SldWorks.ModelDoc2
     ' Add more variables as needed
-    
+
     Set swApp = Application.SldWorks
     Set swModel = swApp.ActiveDoc
-    
+
     ' TODO: Add your custom automation code here
     ' This template provides the basic SolidWorks API structure
-    
+
     ' Error handling
     If swModel Is Nothing Then
         MsgBox "No active document"
         Exit Sub
     End If
-    
+
     ' Your automation logic goes here...
-    
+
     MsgBox "Custom macro template ready for customization"
-    
+
 End Sub"""
             else:
                 return {

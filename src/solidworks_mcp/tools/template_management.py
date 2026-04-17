@@ -5,14 +5,15 @@ Provides tools for managing SolidWorks templates including extraction,
 application, comparison, and library management.
 """
 
-from typing import Any
-from fastmcp import FastMCP
-from pydantic import BaseModel, Field
-from loguru import logger
 import time
+from typing import Any
+
+from fastmcp import FastMCP
+from loguru import logger
+from pydantic import BaseModel, Field
+
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-
 
 # Input schemas for template management
 

@@ -28,18 +28,332 @@ except ImportError:
     HAS_WIN32COM = False
 
 
-_KNOWN_COM_MEMBER_CANDIDATES: dict[str, dict[str, list[str]]] = {
+# ---------------------------------------------------------------------------
+# Known SolidWorks COM interface catalogue (fallback when typelib unavailable)
+# ---------------------------------------------------------------------------
+_KNOWN_SW_INTERFACES: dict[str, dict[str, list[str]]] = {
     "ISldWorks": {
         "methods": [
-            "RevisionNumber",
             "OpenDoc6",
             "CloseDoc",
             "ActivateDoc3",
+            "GetActiveObject",
+            "GetFirstDocument",
+            "GetDocumentCount",
+            "NewDocument",
+            "SendMsgToUser2",
             "GetProcessID",
+            "ExitApp",
+            "RevisionNumber",
+            "GetUserTypeLibraryFile",
+            "CreateNewDocument",
         ],
-        "properties": ["Visible", "ActiveDoc"],
-    }
+        "properties": ["Visible", "ActiveDoc", "FrameState"],
+    },
+    "IModelDoc2": {
+        "methods": [
+            "ShowNamedView2",
+            "ViewZoomToFit2",
+            "SaveBitmapWithVariableSize",
+            "SaveAs3",
+            "GetTitle",
+            "GetPathName",
+            "GetType",
+            "GetFeatureCount",
+            "GetActiveConfiguration",
+            "Extension",
+            "SketchManager",
+            "FeatureManager",
+            "SelectionManager",
+            "GetMassProperties",
+            "Close",
+            "SetSaveAsFileName",
+            "ResolveAllLightweightComponents",
+            "InsertSketch2",
+            "SketchAddConstraints",
+            "ClearSelection2",
+        ],
+        "properties": ["ActiveView", "ActiveLayer"],
+    },
+    "IPartDoc": {
+        "methods": [
+            "CreateFeatureFromSketch2",
+            "AddMateReference",
+            "GetBodies2",
+            "GetEntityByName",
+            "InsertSmartComponents",
+            "Material",
+        ],
+        "properties": [],
+    },
+    "IAssemblyDoc": {
+        "methods": [
+            "AddComponent4",
+            "AddComponent5",
+            "InsertNewPart3",
+            "LayoutToAssembly",
+            "ResolveAllLightweightComponents",
+            "AddMate5",
+            "GetComponents",
+            "GetComponentCount",
+        ],
+        "properties": [],
+    },
+    "IDrawingDoc": {
+        "methods": [
+            "CreateDrawViewFromModelView3",
+            "InsertModelAnnotations3",
+            "GenerateViewPalette",
+            "Get3DDrawingView",
+        ],
+        "properties": [],
+    },
+    "IFeatureManager": {
+        "methods": [
+            "FeatureExtrusion3",
+            "FeatureCut3",
+            "FeatureRevolve2",
+            "InsertProtrusionBlend4",
+            "InsertShell",
+            "InsertFillet3",
+            "InsertChamfer",
+            "InsertDraftXpert3",
+            "FeatureMirror3",
+            "FeatureCircularPattern2",
+            "FeatureLinearPattern3",
+            "InsertBoss",
+            "FeatureSweep5",
+            "FeatureLoft3",
+        ],
+        "properties": [],
+    },
+    "ISketchManager": {
+        "methods": [
+            "InsertSketch",
+            "CreateLine",
+            "CreateArc",
+            "CreateCircle",
+            "CreateRectangle",
+            "CreateEllipse",
+            "CreateSpline",
+            "CreateCenterLine",
+            "SketchMirror",
+            "SketchOffset",
+            "AddToDB",
+            "InsertSketch2",
+        ],
+        "properties": ["ActiveSketch"],
+    },
+    "IModelView": {
+        "methods": [
+            "SaveBitmapWithVariableSize",
+            "ZoomToFit",
+            "ZoomToSheet",
+            "OrientView",
+            "SetCameraParameters",
+        ],
+        "properties": ["Orientation3", "Translation3"],
+    },
+    "IExtensionManager": {
+        "methods": ["SaveAs2", "SelectByID2", "MultiSelect2"],
+        "properties": [],
+    },
+    "IFeature": {
+        "methods": [
+            "GetNextFeature",
+            "GetName",
+            "GetTypeName2",
+            "SetSuppression2",
+            "IsSuppressed2",
+            "GetDefinition",
+        ],
+        "properties": ["Name"],
+    },
+    "IBody2": {
+        "methods": [
+            "GetFaceCount",
+            "GetEdgeCount",
+            "GetVertexCount",
+            "GetMassProperties",
+            "GetType",
+        ],
+        "properties": [],
+    },
+    "ISketchSegment": {
+        "methods": ["GetStartPoint2", "GetEndPoint2", "GetType", "SetEndPoint"],
+        "properties": [],
+    },
 }
+
+
+def _enumerate_typeinfo_members(typeinfo: Any) -> tuple[list[str], list[str]]:
+    """Enumerate methods and properties from a COM ITypeInfo object.
+
+    Uses raw ITypeInfo via pythoncom to walk the function table, which works
+    reliably for both early-bound and late-bound COM objects.
+
+    Returns (methods, properties) as sorted de-duped lists.
+    """
+    methods: list[str] = []
+    properties: list[str] = []
+    seen: set[str] = set()
+
+    try:
+        typeattr = typeinfo.GetTypeAttr()
+        for i in range(typeattr.cFuncs):
+            try:
+                funcdesc = typeinfo.GetFuncDesc(i)
+                names = typeinfo.GetNames(funcdesc.memid)
+                name = names[0] if names else None
+                if not name or name.startswith("_"):
+                    continue
+                if name in seen:
+                    continue
+                seen.add(name)
+                # invkind: 1=FUNC, 2=PROPERTYGET, 4=PROPERTYPUT, 8=PROPERTYPUTREF
+                if funcdesc.invkind == 1:
+                    methods.append(name)
+                else:
+                    properties.append(name)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return sorted(methods), sorted(properties)
+
+
+def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
+    """Enumerate ISldWorks methods/properties via ITypeInfo.
+
+    Returns a COM index dict keyed by interface name, with the same shape as
+    the rest of the index (``methods``, ``properties``, ``method_count``,
+    ``property_count``).
+    """
+    if not HAS_WIN32COM:
+        return {}
+
+    com_index: dict[str, Any] = {}
+    total_methods = 0
+    total_properties = 0
+
+    try:
+        # GetTypeInfo returns ITypeInfo for the IDispatch interface of the object.
+        typeinfo = sw_app._oleobj_.GetTypeInfo()
+        methods, properties = _enumerate_typeinfo_members(typeinfo)
+
+        # Walk implemented interfaces to catch inherited members.
+        try:
+            typeattr = typeinfo.GetTypeAttr()
+            for impl_idx in range(typeattr.cImplTypes):
+                try:
+                    ref_type = typeinfo.GetRefTypeOfImplType(impl_idx)
+                    ref_typeinfo = typeinfo.GetRefTypeInfo(ref_type)
+                    extra_m, extra_p = _enumerate_typeinfo_members(ref_typeinfo)
+                    for m in extra_m:
+                        if m not in methods:
+                            methods.append(m)
+                    for p in extra_p:
+                        if p not in properties:
+                            properties.append(p)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        methods = sorted(set(methods))
+        properties = sorted(set(properties))
+
+        if methods or properties:
+            com_index["ISldWorks"] = {
+                "methods": methods,
+                "properties": properties,
+                "method_count": len(methods),
+                "property_count": len(properties),
+            }
+            total_methods += len(methods)
+            total_properties += len(properties)
+
+    except Exception as exc:
+        logger.debug("[docs_discovery] ITypeInfo enumeration failed: {}", exc)
+
+    return com_index, total_methods, total_properties
+
+
+def _discover_vba_references_via_registry() -> dict[str, Any]:
+    """Enumerate VBA/TypeLib references via the Windows Registry.
+
+    Scans HKEY_CLASSES_ROOT\\TypeLib for entries whose name or GUID matches
+    SolidWorks or common Office/VBA libraries.
+    """
+    vba_refs: dict[str, Any] = {}
+
+    # Keywords to look for in type lib names
+    interesting_keywords = [
+        "solidworks",
+        "sldworks",
+        "vba",
+        "visual basic",
+        "stdole",
+        "office",
+        "microsoft office",
+    ]
+
+    if platform.system() != "Windows":
+        return vba_refs
+
+    try:
+        import winreg
+
+        typelib_key = winreg.OpenKey(
+            winreg.HKEY_CLASSES_ROOT, "TypeLib", access=winreg.KEY_READ
+        )
+        idx = 0
+        while True:
+            try:
+                guid = winreg.EnumKey(typelib_key, idx)
+                idx += 1
+            except OSError:
+                break
+            try:
+                guid_key = winreg.OpenKey(typelib_key, guid, access=winreg.KEY_READ)
+                ver_idx = 0
+                while True:
+                    try:
+                        version = winreg.EnumKey(guid_key, ver_idx)
+                        ver_idx += 1
+                    except OSError:
+                        break
+                    try:
+                        ver_key = winreg.OpenKey(
+                            guid_key, version, access=winreg.KEY_READ
+                        )
+                        try:
+                            name, _ = winreg.QueryValueEx(ver_key, "")
+                        except OSError:
+                            name = ""
+                        winreg.CloseKey(ver_key)
+                        if name and any(
+                            kw in name.lower() for kw in interesting_keywords
+                        ):
+                            key = f"{name} ({guid} v{version})"
+                            if key not in vba_refs:
+                                vba_refs[key] = {
+                                    "description": name,
+                                    "guid": guid,
+                                    "version": version,
+                                    "status": "available",
+                                }
+                    except Exception:
+                        continue
+                winreg.CloseKey(guid_key)
+            except Exception:
+                continue
+        winreg.CloseKey(typelib_key)
+    except Exception as exc:
+        logger.debug("[docs_discovery] Registry TypeLib scan failed: {}", exc)
+
+    return vba_refs
 
 
 class SolidWorksDocsDiscovery:
@@ -78,13 +392,18 @@ class SolidWorksDocsDiscovery:
             return False
 
         try:
-            # pywin32 requires exactly one of Pathname or Class.
-            self.sw_app = win32com.client.GetObject(Class="SldWorks.Application")
-            if self.sw_app is None:
+            # Prefer GetActiveObject so we attach to a running SolidWorks session.
+            # EnsureDispatch is used (instead of Dispatch) so that the type library
+            # is loaded and pythoncom ITypeInfo enumeration works correctly.
+            try:
+                self.sw_app = win32com.client.GetActiveObject("SldWorks.Application")
+            except com_error:
                 logger.warning(
                     "SolidWorks not running; attempting to create new instance"
                 )
-                self.sw_app = win32com.client.Dispatch("SldWorks.Application")
+                self.sw_app = win32com.client.gencache.EnsureDispatch(
+                    "SldWorks.Application"
+                )
             return True
         except com_error as e:
             logger.error(f"Failed to connect to SolidWorks: {e}")
@@ -93,6 +412,10 @@ class SolidWorksDocsDiscovery:
     def discover_com_objects(self) -> dict[str, Any]:
         """Discover all COM objects and their methods/properties.
 
+        Uses ITypeInfo enumeration via pythoncom for ISldWorks, then supplements
+        with the active document's interface if a model is open. Falls back to
+        the known-interface catalogue when typelib introspection is unavailable.
+
         Returns:
             dict: Indexed COM object information
         """
@@ -100,128 +423,100 @@ class SolidWorksDocsDiscovery:
             logger.error("Not connected to SolidWorks")
             return {}
 
-        com_index = {}
+        com_index: dict[str, Any] = {}
+        total_m = 0
+        total_p = 0
 
-        # Core SolidWorks objects to catalog
-        core_objects = {
-            "ISldWorks": self.sw_app,
-            "IModelDoc2": None,  # Active document
-            "IPartDoc": None,  # Part document
-            "IAssemblyDoc": None,  # Assembly document
-            "IDrawingDoc": None,  # Drawing document
-        }
-
-        for obj_name, obj_ref in core_objects.items():
+        # ------------------------------------------------------------------ #
+        # Primary: ITypeInfo enumeration for ISldWorks
+        # ------------------------------------------------------------------ #
+        if HAS_WIN32COM:
             try:
-                if obj_ref is None and obj_name != "ISldWorks":
-                    # Skip abstract interfaces without concrete instances.
-                    continue
+                result = _discover_com_via_typeinfo(self.sw_app)
+                # _discover_com_via_typeinfo returns (dict, total_m, total_p)
+                partial_index, t_m, t_p = result
+                com_index.update(partial_index)
+                total_m += t_m
+                total_p += t_p
+                if partial_index:
+                    logger.info(
+                        "[docs_discovery] ITypeInfo: {} ISldWorks methods, {} properties",
+                        t_m,
+                        t_p,
+                    )
+            except Exception as exc:
+                logger.debug("[docs_discovery] ITypeInfo path failed: {}", exc)
 
-                obj = obj_ref if obj_ref is not None else self.sw_app
+        # ------------------------------------------------------------------ #
+        # Supplement: active document (IModelDoc2) if a model is open
+        # ------------------------------------------------------------------ #
+        try:
+            active_doc = self.sw_app.ActiveDoc
+            if active_doc is not None and HAS_WIN32COM:
+                doc_typeinfo = active_doc._oleobj_.GetTypeInfo()
+                doc_methods, doc_props = _enumerate_typeinfo_members(doc_typeinfo)
+                if doc_methods or doc_props:
+                    com_index["IModelDoc2_active"] = {
+                        "methods": doc_methods,
+                        "properties": doc_props,
+                        "method_count": len(doc_methods),
+                        "property_count": len(doc_props),
+                    }
+                    total_m += len(doc_methods)
+                    total_p += len(doc_props)
+                    logger.info(
+                        "[docs_discovery] Active doc typeinfo: {} methods, {} properties",
+                        len(doc_methods),
+                        len(doc_props),
+                    )
+        except Exception:
+            pass
 
-                methods = []
-                properties = []
+        # ------------------------------------------------------------------ #
+        # Fallback: merge known-interface catalogue for any gaps
+        # ------------------------------------------------------------------ #
+        for iface_name, members in _KNOWN_SW_INTERFACES.items():
+            if iface_name in com_index:
+                continue  # already populated via typeinfo
+            com_index[iface_name] = {
+                "methods": members["methods"],
+                "properties": members["properties"],
+                "method_count": len(members["methods"]),
+                "property_count": len(members["properties"]),
+            }
+            total_m += len(members["methods"])
+            total_p += len(members["properties"])
 
-                # Extract methods and properties from COM object.
-                # Use the instance (not its type) so COM dispatch attributes are
-                # visible. win32com's __getattr__ returns a bound-method wrapper
-                # for COM methods (callable) and the property value for properties
-                # (typically not callable), letting callable() distinguish them.
-                try:
-                    for attr_name in dir(obj):
-                        if not attr_name.startswith("_"):
-                            try:
-                                attr = getattr(obj, attr_name, None)
-                            except Exception:
-                                attr = None
-                            if callable(attr):
-                                methods.append(attr_name)
-                            else:
-                                properties.append(attr_name)
-                except Exception as e:
-                    logger.debug(f"Error extracting attributes from {obj_name}: {e}")
-
-                if not methods and not properties:
-                    fallback = _KNOWN_COM_MEMBER_CANDIDATES.get(obj_name, {})
-                    for attr_name in fallback.get("methods", []):
-                        try:
-                            attr = getattr(obj, attr_name, None)
-                        except Exception:
-                            continue
-                        if callable(attr):
-                            methods.append(attr_name)
-                    for attr_name in fallback.get("properties", []):
-                        try:
-                            attr = getattr(obj, attr_name, None)
-                        except Exception:
-                            continue
-                        if not callable(attr):
-                            properties.append(attr_name)
-
-                com_index[obj_name] = {
-                    "methods": methods,
-                    "properties": properties,
-                    "method_count": len(methods),
-                    "property_count": len(properties),
-                }
-
-                self.index["total_methods"] += len(methods)
-                self.index["total_properties"] += len(properties)
-
-            except Exception as e:
-                logger.debug(f"Error cataloging {obj_name}: {e}")
+        self.index["total_methods"] += total_m
+        self.index["total_properties"] += total_p
 
         # Get SolidWorks version
         try:
             self.index["solidworks_version"] = self.sw_app.RevisionNumber()
-        except Exception as e:
-            logger.debug(f"Could not retrieve SolidWorks version: {e}")
+        except Exception:
+            pass
 
         return com_index
 
     def discover_vba_references(self) -> dict[str, Any]:
-        """Discover VBA library references available to SolidWorks.
+        """Discover VBA/TypeLib references via the Windows Registry.
+
+        Scans HKEY_CLASSES_ROOT\\TypeLib for SolidWorks and common
+        Office/VBA type libraries.
 
         Returns:
             dict: Indexed VBA library information
         """
-        vba_refs = {}
-
-        # Standard VBA/COM libraries typically available
-        common_libs = {
-            "VBA": "Visual Basic for Applications",
-            "stdole": "OLE Automation",
-            "Office": "Microsoft Office",
-            "VBIDE": "Visual Basic IDE",
-            "SldWorks": "SolidWorks API",
-            "SolidWorks.Interop.sldworks": "SolidWorks COM Interop",
-        }
-
-        for lib_name, lib_desc in common_libs.items():
-            try:
-                # Use Class= keyword only; passing pathname="" alongside Class raises
-                # "must specify Pathname or Class, but not both" in win32com.
-                lib = (
-                    win32com.client.GetObject(Class=lib_name) if HAS_WIN32COM else None
-                )
-                if lib:
-                    vba_refs[lib_name] = {
-                        "description": lib_desc,
-                        "status": "available",
-                    }
-                else:
-                    vba_refs[lib_name] = {
-                        "description": lib_desc,
-                        "status": "not_available",
-                    }
-            except Exception as e:
-                vba_refs[lib_name] = {
-                    "description": lib_desc,
-                    "status": "not_available",
-                    "note": str(e),
-                }
-
-        return vba_refs
+        refs = _discover_vba_references_via_registry()
+        if refs:
+            logger.info(
+                "[docs_discovery] Registry TypeLib scan found {} entries", len(refs)
+            )
+        else:
+            logger.debug(
+                "[docs_discovery] Registry TypeLib scan found no matching entries"
+            )
+        return refs
 
     def discover_all(self) -> dict[str, Any]:
         """Run full discovery of COM and VBA documentation.
@@ -643,6 +938,26 @@ async def register_docs_discovery_tools(
             )
             output_file = discovery.save_index(filename=filename)
 
+            # Rebuild the FAISS RAG namespace so Gemma can query the API surface.
+            rag_indexed = False
+            if output_file is not None:
+                try:
+                    from solidworks_mcp.agents.vector_rag import (
+                        build_solidworks_api_docs_index,
+                    )
+
+                    rag_idx = build_solidworks_api_docs_index(output_file)
+                    rag_idx.save()
+                    rag_indexed = True
+                    logger.info(
+                        "FAISS 'solidworks-api-docs' namespace rebuilt: %d chunks",
+                        rag_idx.chunk_count,
+                    )
+                except ImportError:
+                    logger.debug("faiss-cpu not installed; skipping RAG index rebuild")
+                except Exception as _rag_exc:
+                    logger.warning("RAG rebuild failed: {}", _rag_exc)
+
             summary = discovery.create_search_summary()
 
             return {
@@ -654,6 +969,7 @@ async def register_docs_discovery_tools(
                 "summary": summary,
                 "year": year,
                 "output_file": str(output_file) if output_file else None,
+                "rag_indexed": rag_indexed,
                 "execution_time": time.time() - start_time,
             }
 
