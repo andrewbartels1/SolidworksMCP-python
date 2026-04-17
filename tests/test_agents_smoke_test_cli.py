@@ -20,8 +20,6 @@ from src.solidworks_mcp.agents.smoke_test import (
     _resolve_model,
     app,
 )
-import src.solidworks_mcp.agents.smoke_test as smoke_module
-
 
 runner = CliRunner()
 

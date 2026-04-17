@@ -33,6 +33,7 @@ from src.solidworks_mcp.utils.validation import validate_environment
 
 class _DummyAdapter(SolidWorksAdapter):
     """Test suite for DummyAdapter."""
+
     async def connect(self):
         """Test helper for connect."""
         return None
@@ -170,6 +171,7 @@ async def test_security_setup_branches_and_auth_helpers(monkeypatch):
 
     class _Level:
         """Test suite for Level."""
+
         MINIMAL = "minimal"
         STANDARD = "standard"
         STRICT = "strict"

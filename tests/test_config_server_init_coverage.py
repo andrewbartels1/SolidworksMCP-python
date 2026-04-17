@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.config import SolidWorksMCPConfig, load_config, AdapterType
-
+from src.solidworks_mcp.config import AdapterType, SolidWorksMCPConfig, load_config
 
 # ---------------------------------------------------------------------------
 # config.py — validators and load_config
@@ -33,12 +30,14 @@ class TestConfigValidatorCoverage:
     def test_validate_port_too_low_raises(self):
         """Lines 336-338 — port < 1 raises ValidationError."""
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             SolidWorksMCPConfig(mock_solidworks=True, port=0)
 
     def test_validate_port_too_high_raises(self):
         """Lines 336-338 — port > 65535 raises ValidationError."""
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             SolidWorksMCPConfig(mock_solidworks=True, port=70000)
 
@@ -57,6 +56,7 @@ class TestConfigValidatorCoverage:
     def test_load_config_json_file(self, tmp_path):
         """Line 414 — load_config from JSON file."""
         import json
+
         cfg_file = tmp_path / "config.json"
         cfg_file.write_text(json.dumps({"mock_solidworks": True, "port": 9000}))
         cfg = load_config(str(cfg_file))
@@ -77,10 +77,12 @@ class TestServerCoverage:
     @pytest.mark.asyncio
     async def test_run_local_stdio_skips_when_mock_and_stdin_unavailable(self):
         """Lines 224-225 — mock mode + unreadable stdin → returns without error."""
+        from src.solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
         from src.solidworks_mcp.server import SolidWorksMCPServer
-        from src.solidworks_mcp.config import SolidWorksMCPConfig, DeploymentMode
 
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL
+        )
         server = SolidWorksMCPServer(cfg)
         await server.setup()
 
@@ -97,10 +99,12 @@ class TestServerCoverage:
     @pytest.mark.asyncio
     async def test_run_local_stdio_stdin_exception_treated_as_unreadable(self):
         """Lines 217-225 — stdin.readable() raises → stdin_is_readable=False."""
+        from src.solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
         from src.solidworks_mcp.server import SolidWorksMCPServer
-        from src.solidworks_mcp.config import SolidWorksMCPConfig, DeploymentMode
 
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL
+        )
         server = SolidWorksMCPServer(cfg)
         await server.setup()
 
@@ -114,10 +118,12 @@ class TestServerCoverage:
     @pytest.mark.asyncio
     async def test_run_local_stdio_uses_run_stdio_async_when_no_run_stdio(self):
         """Lines 240-242 — falls back to run_stdio_async when run_stdio absent."""
+        from src.solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
         from src.solidworks_mcp.server import SolidWorksMCPServer
-        from src.solidworks_mcp.config import SolidWorksMCPConfig, DeploymentMode
 
-        cfg = SolidWorksMCPConfig(mock_solidworks=False, deployment_mode=DeploymentMode.LOCAL)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=False, deployment_mode=DeploymentMode.LOCAL
+        )
         server = SolidWorksMCPServer(cfg)
         await server.setup()
 
@@ -130,10 +136,12 @@ class TestServerCoverage:
     @pytest.mark.asyncio
     async def test_start_http_server_awaits_coroutine(self):
         """Lines 279-283 — _start_http_server awaits the coroutine run result."""
+        from src.solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
         from src.solidworks_mcp.server import SolidWorksMCPServer
-        from src.solidworks_mcp.config import SolidWorksMCPConfig, DeploymentMode
 
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, deployment_mode=DeploymentMode.REMOTE)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.REMOTE
+        )
         server = SolidWorksMCPServer(cfg)
         await server.setup()
 
@@ -149,10 +157,12 @@ class TestServerCoverage:
     @pytest.mark.asyncio
     async def test_start_logs_connection_error_in_mock_mode(self):
         """Lines 254-259 — adapter.connect raises; mock mode continues."""
+        from src.solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
         from src.solidworks_mcp.server import SolidWorksMCPServer
-        from src.solidworks_mcp.config import SolidWorksMCPConfig, DeploymentMode
 
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL
+        )
         server = SolidWorksMCPServer(cfg)
         await server.setup()
 
@@ -179,24 +189,28 @@ class TestInitCoverage:
     def test_lazy_load_create_server(self):
         """Lines 40-46 — __getattr__ loads create_server on demand."""
         import src.solidworks_mcp as sw
+
         fn = sw.create_server
         assert callable(fn)
 
     def test_lazy_load_main(self):
         """Lines 40-46 — __getattr__ loads main on demand."""
         import src.solidworks_mcp as sw
+
         fn = sw.main
         assert callable(fn)
 
     def test_getattr_invalid_raises_attribute_error(self):
         """Line 48 — unknown attribute raises AttributeError."""
         import src.solidworks_mcp as sw
+
         with pytest.raises(AttributeError):
             _ = sw.totally_nonexistent_symbol_xyz
 
     def test_dir_includes_public_api(self):
         """Line 58 — __dir__ returns sorted public names."""
         import src.solidworks_mcp as sw
+
         d = dir(sw)
         assert "create_server" in d
         assert "main" in d
@@ -220,12 +234,13 @@ class TestValidationImportErrorCoverage:
 
         try:
             with patch.dict(sys.modules, {"win32com": None, "win32com.client": None}):
-                from src.solidworks_mcp.utils.validation import validate_environment
                 from src.solidworks_mcp.config import SolidWorksMCPConfig
+                from src.solidworks_mcp.utils.validation import validate_environment
+
                 cfg = SolidWorksMCPConfig(mock_solidworks=True)
                 # Should not raise even on non-Windows without win32com
                 try:
-                    result = validate_environment(cfg)
+                    validate_environment(cfg)
                 except Exception:
                     pass  # Platform-specific; the import error path is what we want
         finally:

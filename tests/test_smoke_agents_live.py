@@ -41,7 +41,7 @@ async def _run_or_skip(**kwargs):
     except ModelHTTPError as exc:
         if exc.status_code == 401:
             pytest.skip(
-                f"LLM credentials rejected with 401 — refresh GH_TOKEN or provide ANTHROPIC_API_KEY"
+                "LLM credentials rejected with 401 — refresh GH_TOKEN or provide ANTHROPIC_API_KEY"
             )
         raise
 
@@ -217,6 +217,7 @@ async def test_results_persisted_to_sqlite(tmp_path):
     )
 
     from sqlmodel import Session, create_engine, select
+
     from src.solidworks_mcp.agents.history_db import AgentRun, init_db
 
     init_db(db)

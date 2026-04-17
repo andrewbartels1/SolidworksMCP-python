@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import src.solidworks_mcp.adapters.pywin32_adapter as pywin32_mod
 from src.solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
@@ -14,18 +15,19 @@ from src.solidworks_mcp.adapters.base import (
 from src.solidworks_mcp.adapters.connection_pool import ConnectionPoolAdapter
 from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-import src.solidworks_mcp.adapters.pywin32_adapter as pywin32_mod
 from src.solidworks_mcp.exceptions import SolidWorksMCPError
 from src.solidworks_mcp.tools.drawing import (
     AddDimensionInput as DrawingAddDimensionInput,
+)
+from src.solidworks_mcp.tools.drawing import (
     AddNoteInput,
     AnnotationInput,
     CreateDetailViewInput,
     CreateDrawingViewInput,
     CreateSectionViewInput,
+    DimensionInput,
     DrawingCreationInput,
     DrawingViewInput,
-    DimensionInput,
     UpdateSheetFormatInput,
     register_drawing_tools,
 )
@@ -45,7 +47,6 @@ from src.solidworks_mcp.tools.export import (
 from src.solidworks_mcp.tools.sketching import (
     AddArcInput,
     AddCircleInput,
-    AddDimensionInput as SketchAddDimensionInput,
     AddLineInput,
     AddRectangleInput,
     AddRelationInput,
@@ -53,6 +54,9 @@ from src.solidworks_mcp.tools.sketching import (
     CreateSketchInput,
     TutorialSimpleHoleInput,
     register_sketching_tools,
+)
+from src.solidworks_mcp.tools.sketching import (
+    AddDimensionInput as SketchAddDimensionInput,
 )
 from src.solidworks_mcp.tools.vba_generation import (
     VBAAssemblyInput,
@@ -84,6 +88,7 @@ def _tool(mcp_server, name: str):
 
 class _PoolAdapterStub:
     """Test suite for PoolAdapterStub."""
+
     def __init__(self, fail: bool = False):
         """Test helper for init."""
         self.fail = fail
@@ -184,8 +189,10 @@ async def test_mock_adapter_error_and_edge_paths(mock_config):
 
 def test_pywin32_adapter_guard_and_helpers(monkeypatch):
     """Test pywin32 adapter guard and helpers."""
+
     class _ConcretePyWin32Adapter(PyWin32Adapter):
         """Test suite for ConcretePyWin32Adapter."""
+
         async def exit_sketch(self):
             """Test helper for exit sketch."""
             return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
@@ -301,6 +308,7 @@ async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
 
 class _ExportFallbackAdapter:
     """Test suite for ExportFallbackAdapter."""
+
     async def export_file(self, file_path: str, format_type: str):
         """Test helper for export file."""
         if not file_path:
@@ -480,6 +488,7 @@ async def test_vba_generation_uncovered_branches(mcp_server, mock_config):
 
 class _SketchAdapterStub:
     """Test suite for SketchAdapterStub."""
+
     async def create_sketch(self, _plane):
         """Test helper for create sketch."""
         return _ok({"sketch_name": "Sketch1"})
@@ -800,6 +809,7 @@ async def test_mock_adapter_additional_feature_and_dimension_paths(mock_config):
 
 class _DrawingAndAnalysisAdapterStub:
     """Test suite for DrawingAndAnalysisAdapterStub."""
+
     async def create_technical_drawing(self, *_args, **_kwargs):
         """Test helper for create technical drawing."""
         return _ok({"drawing_path": "d.slddrw"})
@@ -903,6 +913,7 @@ async def test_drawing_and_analysis_adapter_passthrough_success(
 
 class _ExportNativeAdapter:
     """Test suite for ExportNativeAdapter."""
+
     async def export_step(self, *_args, **_kwargs):
         """Test helper for export step."""
         return _ok({"fmt": "step"})
@@ -1041,8 +1052,10 @@ async def test_vba_generation_unsupported_branches(mcp_server, mock_config):
 @pytest.mark.asyncio
 async def test_pywin32_adapter_many_guard_paths(monkeypatch):
     """Test pywin32 adapter many guard paths."""
+
     class _ConcretePyWin32Adapter(PyWin32Adapter):
         """Test suite for ConcretePyWin32Adapter."""
+
         async def exit_sketch(self):
             """Test helper for exit sketch."""
             return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)

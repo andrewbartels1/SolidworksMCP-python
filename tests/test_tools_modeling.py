@@ -5,23 +5,24 @@ Comprehensive test suite covering all modeling operations including
 part creation, extrusions, revolves, and dimensional modifications.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from src.solidworks_mcp.tools.modeling import (
-    register_modeling_tools,
-    _result_value,
-    OpenModelInput,
-    CreatePartInput,
+    CloseModelInput,
     CreateAssemblyInput,
     CreateDrawingInput,
-    CloseModelInput,
     CreateExtrusionInput,
+    CreateLoftInput,
+    CreatePartInput,
     CreateRevolveInput,
     CreateSweepInput,
-    CreateLoftInput,
     GetDimensionInput,
+    OpenModelInput,
     SetDimensionInput,
+    _result_value,
+    register_modeling_tools,
 )
 
 
@@ -362,6 +363,7 @@ class TestModelingTools:
 
         class _Obj:
             """Test suite for Obj."""
+
             name = None
             title = "ObjTitle"
 

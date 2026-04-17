@@ -5,17 +5,16 @@ Comprehensive test suite covering adapter factory, pywin32 adapter,
 mock adapter, circuit breaker, and connection pooling functionality.
 """
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from src.solidworks_mcp.adapters import (
-    create_adapter,
     AdapterFactory,
-    SolidWorksAdapter,
+    create_adapter,
 )
-from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from src.solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerAdapter,
@@ -25,13 +24,13 @@ from src.solidworks_mcp.adapters.connection_pool import (
     ConnectionPool,
     ConnectionPoolAdapter,
 )
-from src.solidworks_mcp.config import AdapterType, SolidWorksMCPConfig
+from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+from src.solidworks_mcp.config import AdapterType
 from src.solidworks_mcp.exceptions import (
     SolidWorksMCPError,
-    SolidWorksConnectionError,
     SolidWorksOperationError,
 )
-from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 
 
 class TestAdapterFactory:
@@ -53,7 +52,7 @@ class TestAdapterFactory:
 
         with patch("platform.system", return_value="Windows"):
             with patch("src.solidworks_mcp.adapters.pywin32_adapter.PyWin32Adapter"):
-                adapter = await create_adapter(mock_config)
+                await create_adapter(mock_config)
                 # Would be PyWin32Adapter on actual Windows system
 
     @pytest.mark.asyncio
@@ -207,13 +206,13 @@ class TestCircuitBreaker:
             raise Exception("Operation failed")
 
         # First failure
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             await cb.call(failing_operation)
         assert cb.state == CircuitState.CLOSED
         assert cb.failure_count == 1
 
         # Second failure - should open circuit
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             await cb.call(failing_operation)
         assert cb.state == CircuitState.OPEN
         assert cb.failure_count == 2
@@ -234,7 +233,7 @@ class TestCircuitBreaker:
             return "success"
 
         # Trigger circuit open
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError):
             await cb.call(failing_then_success)
         assert cb.state == CircuitState.OPEN
 
@@ -322,7 +321,7 @@ class TestConnectionPool:
 
         # Acquire up to max size
         conn1 = await pool.acquire()
-        conn2 = await pool.acquire()
+        await pool.acquire()
 
         # Pool should reuse connections when at max capacity
         await pool.release(conn1)
@@ -420,6 +419,7 @@ class TestConnectionPoolAdapterExtras:
     def test_adapter_health_legacy_key_membership(self):
         """Test AdapterHealth __contains__ and __getitem__ legacy compatibility keys."""
         from datetime import datetime
+
         from src.solidworks_mcp.adapters.base import AdapterHealth
 
         health = AdapterHealth(
@@ -1727,7 +1727,7 @@ class TestAdapterIntegration:
         with patch.object(
             mock_adapter, "open_model", side_effect=Exception("Test error")
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(RuntimeError):
                 await mock_adapter.open_model("test.sldprt")
 
         # Adapter should still be connected after error

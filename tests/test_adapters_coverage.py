@@ -20,9 +20,14 @@ from src.solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreakerAdapter,
     CircuitState,
 )
-from src.solidworks_mcp.adapters.connection_pool import ConnectionPool, ConnectionPoolAdapter
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter, _BoolCallable
-
+from src.solidworks_mcp.adapters.connection_pool import (
+    ConnectionPool,
+    ConnectionPoolAdapter,
+)
+from src.solidworks_mcp.adapters.mock_adapter import (
+    MockSolidWorksAdapter,
+    _BoolCallable,
+)
 
 # ---------------------------------------------------------------------------
 # AdapterHealth / base.py
@@ -46,32 +51,48 @@ class TestAdapterHealthCoverage:
 
     def test_getitem_fallback_missing_key_returns_none(self):
         health = AdapterHealth(
-            healthy=True, last_check=datetime.now(), error_count=0, success_count=0,
-            average_response_time=0.0, connection_status="connected",
+            healthy=True,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="connected",
         )
         assert health["nonexistent_field"] is None
 
     def test_contains_nonlegacy_key(self):
         """Line 67 — non-legacy key checked via model_dump()."""
         health = AdapterHealth(
-            healthy=True, last_check=datetime.now(), error_count=0, success_count=0,
-            average_response_time=0.0, connection_status="connected",
+            healthy=True,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="connected",
         )
-        assert "healthy" in health          # real field, not in legacy_keys
+        assert "healthy" in health  # real field, not in legacy_keys
         assert "nonexistent" not in health  # not in model_dump either
 
     def test_contains_legacy_keys_always_true(self):
         health = AdapterHealth(
-            healthy=False, last_check=datetime.now(), error_count=0, success_count=0,
-            average_response_time=0.0, connection_status="disconnected",
+            healthy=False,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="disconnected",
         )
         for key in ("status", "connected", "adapter_type", "version", "uptime"):
             assert key in health
 
     def test_getitem_status_unhealthy(self):
         health = AdapterHealth(
-            healthy=False, last_check=datetime.now(), error_count=0, success_count=0,
-            average_response_time=0.0, connection_status="disconnected",
+            healthy=False,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="disconnected",
         )
         assert health["status"] == "unhealthy"
 
@@ -80,7 +101,9 @@ class TestSolidWorksFeatureCoverage:
     def test_getitem_returns_parameter_value(self):
         """Line 148-150 — feature["key"] checks parameters first."""
         feature = SolidWorksFeature(
-            id="f1", name="Boss-Extrude1", type="Extrusion",
+            id="f1",
+            name="Boss-Extrude1",
+            type="Extrusion",
             parameters={"depth": 10.0},
         )
         assert feature["depth"] == 10.0
@@ -109,6 +132,7 @@ class TestAdapterBaseInitCoverage:
         adapter = MockSolidWorksAdapter({})
         # MockSolidWorksAdapter overrides save_file, so call the base directly
         from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
         result = await SolidWorksAdapter.save_file(adapter)
         assert result.status == AdapterResultStatus.ERROR
         assert "not implemented" in result.error
@@ -117,6 +141,7 @@ class TestAdapterBaseInitCoverage:
     async def test_add_arc_not_implemented(self):
         """Line 378 — base add_arc returns error."""
         from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
         result = await SolidWorksAdapter.add_arc(None, 0, 0, 1, 0, 0, 1)
         assert result.status == AdapterResultStatus.ERROR
 
@@ -124,6 +149,7 @@ class TestAdapterBaseInitCoverage:
     async def test_add_spline_not_implemented(self):
         """Line 385 — base add_spline returns error."""
         from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
         result = await SolidWorksAdapter.add_spline(None, [])
         assert result.status == AdapterResultStatus.ERROR
 
@@ -131,6 +157,7 @@ class TestAdapterBaseInitCoverage:
     async def test_add_centerline_not_implemented(self):
         """Line 394 — base add_centerline returns error."""
         from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
         result = await SolidWorksAdapter.add_centerline(None, 0, 0, 1, 1)
         assert result.status == AdapterResultStatus.ERROR
 
@@ -138,6 +165,7 @@ class TestAdapterBaseInitCoverage:
     async def test_create_cut_not_implemented(self):
         """Line 504 — base create_cut returns error."""
         from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
         result = await SolidWorksAdapter.create_cut(None, "Sketch1", 5.0)
         assert result.status == AdapterResultStatus.ERROR
 
@@ -227,7 +255,7 @@ class TestMockAdapterSuccessPaths:
         adapter = MockSolidWorksAdapter({})
         await adapter.connect()
         # Create a model with a non-default config name
-        model = await adapter.create_part()
+        await adapter.create_part()
         # Directly set configuration to a custom name
         adapter._current_model.configuration = "HighTolerance"
 
@@ -422,7 +450,9 @@ class TestConnectionPoolAdapterCoverage:
         pool = ConnectionPoolAdapter(
             adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
         )
-        result = await pool._invoke_with_optional_args(adapter, "strict_method", "extra_arg")
+        result = await pool._invoke_with_optional_args(
+            adapter, "strict_method", "extra_arg"
+        )
         assert result == "ok"
 
     @pytest.mark.asyncio
@@ -431,9 +461,7 @@ class TestConnectionPoolAdapterCoverage:
         fail_adapter = MockSolidWorksAdapter({})
         fail_adapter.connect = AsyncMock(side_effect=RuntimeError("no connection"))
 
-        pool = ConnectionPoolAdapter(
-            adapter_factory=lambda: fail_adapter, pool_size=1
-        )
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: fail_adapter, pool_size=1)
         result = await pool._replace_failed_adapter()
         assert isinstance(result, RuntimeError)
 

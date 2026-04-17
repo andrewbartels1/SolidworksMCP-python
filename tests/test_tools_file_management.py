@@ -486,6 +486,7 @@ class TestFileManagementTools:
 
         def _tool_decorator():
             """Test helper for tool decorator."""
+
             def _register(func):
                 """Test helper for register."""
                 fallback_server._tools.append(Mock(name=func.__name__, handler=func))
@@ -804,7 +805,11 @@ class TestFileManagementTools:
             return_value=Mock(
                 is_success=True,
                 data=[
-                    {"name": "Boss-Revolve1", "type": "BossRevolve", "suppressed": False}
+                    {
+                        "name": "Boss-Revolve1",
+                        "type": "BossRevolve",
+                        "suppressed": False,
+                    }
                 ],
                 execution_time=0.01,
             )
@@ -1040,7 +1045,9 @@ class TestFileManagementTools:
         mock_adapter.open_model = AsyncMock(
             return_value=Mock(is_success=True, data=None, execution_time=0.02)
         )
-        part_none_data = await load_part_tool(input_data={"file_path": "C:/tmp/a.sldprt"})
+        part_none_data = await load_part_tool(
+            input_data={"file_path": "C:/tmp/a.sldprt"}
+        )
         assert part_none_data["status"] == "success"
         assert part_none_data["model"]["name"] == "C:/tmp/a.sldprt"
         assert part_none_data["model"]["path"] == "C:/tmp/a.sldprt"
@@ -1057,7 +1064,9 @@ class TestFileManagementTools:
             return_value=Mock(is_success=True, data=sparse_model, execution_time=0.02)
         )
 
-        asm_sparse = await load_assembly_tool(input_data={"file_path": "C:/tmp/a.sldasm"})
+        asm_sparse = await load_assembly_tool(
+            input_data={"file_path": "C:/tmp/a.sldasm"}
+        )
         assert asm_sparse["status"] == "success"
         assert asm_sparse["model"]["name"] == "C:/tmp/a.sldasm"
         assert asm_sparse["model"]["path"] == "C:/tmp/a.sldasm"
@@ -1071,7 +1080,9 @@ class TestFileManagementTools:
                 execution_time=0.02,
             )
         )
-        part_dict_none = await load_part_tool(input_data={"file_path": "C:/tmp/b.sldprt"})
+        part_dict_none = await load_part_tool(
+            input_data={"file_path": "C:/tmp/b.sldprt"}
+        )
         assert part_dict_none["status"] == "success"
         assert part_dict_none["model"]["name"] == "C:/tmp/b.sldprt"
 
@@ -1085,6 +1096,8 @@ class TestFileManagementTools:
         mock_adapter.open_model = AsyncMock(
             return_value=Mock(is_success=True, data=obj_model, execution_time=0.02)
         )
-        asm_obj_value = await load_assembly_tool(input_data={"file_path": "C:/tmp/c.sldasm"})
+        asm_obj_value = await load_assembly_tool(
+            input_data={"file_path": "C:/tmp/c.sldasm"}
+        )
         assert asm_obj_value["status"] == "success"
         assert asm_obj_value["model"]["path"] == "C:/tmp/object-model.sldasm"

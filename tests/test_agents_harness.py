@@ -20,7 +20,6 @@ from src.solidworks_mcp.agents.schemas import (
     RecoverableFailure,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -89,7 +88,9 @@ class TestLoadAgentPrompt:
         assert "---" not in prompt
         assert "name: Test Agent" not in prompt
 
-    def test_returns_raw_when_no_frontmatter(self, agent_file_no_frontmatter: Path, monkeypatch):
+    def test_returns_raw_when_no_frontmatter(
+        self, agent_file_no_frontmatter: Path, monkeypatch
+    ):
         monkeypatch.chdir(agent_file_no_frontmatter.parent.parent.parent)
         prompt = _load_agent_prompt("raw-agent.agent.md")
         assert prompt == "You are a raw agent."
@@ -145,7 +146,9 @@ class TestPrettyJson:
         output = pretty_json(valid_review)
         assert "\n" in output  # indented JSON has newlines
 
-    def test_works_for_recoverable_failure(self, recoverable_failure: RecoverableFailure):
+    def test_works_for_recoverable_failure(
+        self, recoverable_failure: RecoverableFailure
+    ):
         output = pretty_json(recoverable_failure)
         parsed = json.loads(output)
         assert "explanation" in parsed
@@ -159,7 +162,11 @@ class TestPrettyJson:
 class TestRunValidatedPromptSuccess:
     @pytest.mark.asyncio
     async def test_returns_validated_model(
-        self, agent_file: Path, db_path: Path, valid_review: ManufacturabilityReview, monkeypatch
+        self,
+        agent_file: Path,
+        db_path: Path,
+        valid_review: ManufacturabilityReview,
+        monkeypatch,
     ):
         monkeypatch.chdir(agent_file.parent.parent.parent)
 
@@ -182,7 +189,11 @@ class TestRunValidatedPromptSuccess:
 
     @pytest.mark.asyncio
     async def test_persists_success_run(
-        self, agent_file: Path, db_path: Path, valid_review: ManufacturabilityReview, monkeypatch
+        self,
+        agent_file: Path,
+        db_path: Path,
+        valid_review: ManufacturabilityReview,
+        monkeypatch,
     ):
         monkeypatch.chdir(agent_file.parent.parent.parent)
 
@@ -190,7 +201,10 @@ class TestRunValidatedPromptSuccess:
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=mock_result)
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -199,9 +213,12 @@ class TestRunValidatedPromptSuccess:
                 db_path=db_path,
             )
 
-        from src.solidworks_mcp.agents.history_db import find_recent_errors, init_db
         from sqlmodel import Session, create_engine, select
-        from src.solidworks_mcp.agents.history_db import AgentRun
+
+        from src.solidworks_mcp.agents.history_db import (
+            AgentRun,
+            init_db,
+        )
 
         init_db(db_path)
         engine = create_engine(f"sqlite:///{db_path}")
@@ -213,7 +230,11 @@ class TestRunValidatedPromptSuccess:
 
     @pytest.mark.asyncio
     async def test_uses_output_attribute_fallback(
-        self, agent_file: Path, db_path: Path, valid_review: ManufacturabilityReview, monkeypatch
+        self,
+        agent_file: Path,
+        db_path: Path,
+        valid_review: ManufacturabilityReview,
+        monkeypatch,
     ):
         """Covers the _extract_data output-attribute branch in run_validated_prompt."""
         monkeypatch.chdir(agent_file.parent.parent.parent)
@@ -222,7 +243,10 @@ class TestRunValidatedPromptSuccess:
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=mock_result)
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -250,7 +274,10 @@ class TestRunValidatedPromptSuccess:
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=mock_result)
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -270,7 +297,11 @@ class TestRunValidatedPromptSuccess:
 class TestRunValidatedPromptRecoverable:
     @pytest.mark.asyncio
     async def test_returns_recoverable_failure_when_no_retry(
-        self, agent_file: Path, db_path: Path, recoverable_failure: RecoverableFailure, monkeypatch
+        self,
+        agent_file: Path,
+        db_path: Path,
+        recoverable_failure: RecoverableFailure,
+        monkeypatch,
     ):
         monkeypatch.chdir(agent_file.parent.parent.parent)
         recoverable_failure.should_retry = False
@@ -279,7 +310,10 @@ class TestRunValidatedPromptRecoverable:
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=mock_result)
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -293,7 +327,11 @@ class TestRunValidatedPromptRecoverable:
 
     @pytest.mark.asyncio
     async def test_retries_on_recoverable_failure(
-        self, agent_file: Path, db_path: Path, valid_review: ManufacturabilityReview, monkeypatch
+        self,
+        agent_file: Path,
+        db_path: Path,
+        valid_review: ManufacturabilityReview,
+        monkeypatch,
     ):
         """First attempt returns RecoverableFailure; second succeeds."""
         monkeypatch.chdir(agent_file.parent.parent.parent)
@@ -313,7 +351,10 @@ class TestRunValidatedPromptRecoverable:
             ]
         )
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -341,7 +382,10 @@ class TestRunValidatedPromptRecoverable:
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=SimpleNamespace(data=failure))
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -365,14 +409,17 @@ class TestRunValidatedPromptRecoverable:
         failure = RecoverableFailure(
             explanation="Failure with no steps.",
             remediation_steps=[],  # empty list
-            retry_focus=None,       # no retry focus
+            retry_focus=None,  # no retry focus
             should_retry=False,
         )
 
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(return_value=SimpleNamespace(data=failure))
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -399,7 +446,10 @@ class TestRunValidatedPromptException:
         mock_agent = MagicMock()
         mock_agent.run = AsyncMock(side_effect=RuntimeError("Model API unreachable"))
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", MagicMock(return_value=mock_agent)):
+        with patch(
+            "src.solidworks_mcp.agents.harness.Agent",
+            MagicMock(return_value=mock_agent),
+        ):
             with pytest.raises(RuntimeError, match="Model API unreachable"):
                 await run_validated_prompt(
                     agent_file_name="test-agent.agent.md",
@@ -410,6 +460,7 @@ class TestRunValidatedPromptException:
                 )
 
         from sqlmodel import Session, create_engine, select
+
         from src.solidworks_mcp.agents.history_db import AgentRun, init_db
 
         init_db(db_path)

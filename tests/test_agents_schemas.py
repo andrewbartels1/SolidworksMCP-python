@@ -9,11 +9,10 @@ from src.solidworks_mcp.agents.schemas import (
     Assumption,
     DocsPlan,
     ManufacturabilityReview,
-    RecoverableFailure,
     Recommendation,
+    RecoverableFailure,
     ToolRoutingDecision,
 )
-
 
 # ---------------------------------------------------------------------------
 # Assumption
@@ -45,11 +44,15 @@ class TestRecommendation:
         assert r.risk == "low"
 
     def test_valid_medium_risk(self):
-        r = Recommendation(title="Check wall", rationale="Walls may be thin", risk="medium")
+        r = Recommendation(
+            title="Check wall", rationale="Walls may be thin", risk="medium"
+        )
         assert r.risk == "medium"
 
     def test_valid_high_risk(self):
-        r = Recommendation(title="Redesign snap", rationale="Will fracture on PLA", risk="high")
+        r = Recommendation(
+            title="Redesign snap", rationale="Will fracture on PLA", risk="high"
+        )
         assert r.risk == "high"
 
     def test_invalid_risk_value(self):
@@ -65,7 +68,9 @@ class TestRecommendation:
             Recommendation(title="Valid title", rationale="No", risk="low")
 
     def test_serialization(self):
-        r = Recommendation(title="Add fillet", rationale="Stress concentrations", risk="high")
+        r = Recommendation(
+            title="Add fillet", rationale="Stress concentrations", risk="high"
+        )
         d = r.model_dump()
         assert d["risk"] == "high"
         assert d["title"] == "Add fillet"
@@ -78,11 +83,11 @@ class TestRecommendation:
 
 class TestManufacturabilityReview:
     def _valid_review(self, **overrides):
-        defaults = dict(
-            summary="A ten-character summary.",
-            orientation_guidance="Print flat side down.",
-            build_volume_check="Fits in 220x220x250 envelope.",
-        )
+        defaults = {
+            "summary": "A ten-character summary.",
+            "orientation_guidance": "Print flat side down.",
+            "build_volume_check": "Fits in 220x220x250 envelope.",
+        }
         defaults.update(overrides)
         return ManufacturabilityReview(**defaults)
 
@@ -96,7 +101,9 @@ class TestManufacturabilityReview:
         r = self._valid_review(
             assumptions=[Assumption(statement="PLA material assumed.")],
             recommendations=[
-                Recommendation(title="Thicken walls", rationale="Below 1.2 mm", risk="medium")
+                Recommendation(
+                    title="Thicken walls", rationale="Below 1.2 mm", risk="medium"
+                )
             ],
             tolerance_clearance_notes=["0.3-0.5 mm snap clearance"],
         )
@@ -130,7 +137,9 @@ class TestManufacturabilityReview:
                 summary="A valid summary here.",
                 orientation_guidance="Print flat.",
                 build_volume_check="Fits envelope.",
-                recommendations=[{"title": "Fix", "rationale": "Because reasons", "risk": "extreme"}],
+                recommendations=[
+                    {"title": "Fix", "rationale": "Because reasons", "risk": "extreme"}
+                ],
             )
 
 
@@ -167,11 +176,15 @@ class TestToolRoutingDecision:
 
     def test_selected_tool_group_too_short(self):
         with pytest.raises(ValidationError):
-            ToolRoutingDecision(intent="Intent here", selected_tool_group="ab", why="Ten+ char why.")
+            ToolRoutingDecision(
+                intent="Intent here", selected_tool_group="ab", why="Ten+ char why."
+            )
 
     def test_why_too_short(self):
         with pytest.raises(ValidationError):
-            ToolRoutingDecision(intent="Intent", selected_tool_group="tools", why="Short")
+            ToolRoutingDecision(
+                intent="Intent", selected_tool_group="tools", why="Short"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -26,22 +26,26 @@ Covers:
 """
 
 import asyncio
-import pytest
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
-from src.solidworks_mcp.adapters.connection_pool import ConnectionPool, ConnectionPoolAdapter
+import pytest
+
 from src.solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
 )
-from datetime import datetime
-
+from src.solidworks_mcp.adapters.connection_pool import (
+    ConnectionPool,
+    ConnectionPoolAdapter,
+)
+from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_pool(pool_size: int = 1, **kwargs) -> ConnectionPoolAdapter:
     """Return a ConnectionPoolAdapter backed by MockSolidWorksAdapter."""
@@ -188,7 +192,9 @@ class TestConnectionPoolAdapterCoverage:
 
         # First call (with args) raises TypeError; second call (no args) succeeds.
         async def method_no_args():
-            return AdapterResult(status=AdapterResultStatus.SUCCESS, data="no-args-result")
+            return AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data="no-args-result"
+            )
 
         async def method_with_args(*args):
             raise TypeError("unexpected keyword argument")
@@ -199,7 +205,9 @@ class TestConnectionPoolAdapterCoverage:
 
         # Patch the no-arg call after the TypeError path
         # Use a real async callable that the retry will use
-        no_arg_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data="fallback")
+        no_arg_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data="fallback"
+        )
 
         call_count = 0
 
@@ -212,7 +220,9 @@ class TestConnectionPoolAdapterCoverage:
 
         mock_adapter.create_part = smart_method
 
-        result = await pool._invoke_with_optional_args(mock_adapter, "create_part", "MyPart", "mm")
+        result = await pool._invoke_with_optional_args(
+            mock_adapter, "create_part", "MyPart", "mm"
+        )
         assert result is no_arg_result
         assert call_count == 2  # first with args, then without
 
@@ -228,7 +238,9 @@ class TestConnectionPoolAdapterCoverage:
 
         mock_adapter.create_assembly = method
 
-        result = await pool._invoke_with_optional_args(mock_adapter, "create_assembly", "Asm1")
+        result = await pool._invoke_with_optional_args(
+            mock_adapter, "create_assembly", "Asm1"
+        )
         assert result is expected
 
     # ------------------------------------------------------------------
@@ -390,7 +402,9 @@ class TestConnectionPoolAdapterCoverage:
         pool.pool_initialized = True
 
         bad_adapter = MagicMock()
-        bad_adapter.disconnect = AsyncMock(side_effect=RuntimeError("disconnect failed"))
+        bad_adapter.disconnect = AsyncMock(
+            side_effect=RuntimeError("disconnect failed")
+        )
         pool.pool.append(bad_adapter)
         await pool.available_adapters.put(bad_adapter)
 
@@ -411,7 +425,6 @@ class TestConnectionPoolAdapterCoverage:
         pool.pool_initialized = True
 
         # Patch get_nowait to raise QueueEmpty on first call
-        original_empty = pool.available_adapters.empty
 
         call_count = 0
 
@@ -423,7 +436,6 @@ class TestConnectionPoolAdapterCoverage:
 
         pool.available_adapters.empty = patched_empty
 
-        original_get_nowait = pool.available_adapters.get_nowait
 
         def raising_get_nowait():
             raise asyncio.QueueEmpty()
@@ -465,7 +477,9 @@ class TestConnectionPoolAdapterCoverage:
         healthy_adapter.health_check = AsyncMock(return_value=_make_healthy_health(0.2))
 
         unhealthy_adapter = MagicMock()
-        unhealthy_adapter.health_check = AsyncMock(return_value=_make_unhealthy_health())
+        unhealthy_adapter.health_check = AsyncMock(
+            return_value=_make_unhealthy_health()
+        )
 
         pool.pool.extend([healthy_adapter, unhealthy_adapter])
         await pool.available_adapters.put(healthy_adapter)
@@ -610,7 +624,9 @@ class TestConnectionPoolLegacyCoverage:
         def create_connection():
             return conn_obj
 
-        pool = ConnectionPool(create_connection=create_connection, max_size=1, timeout=2.0)
+        pool = ConnectionPool(
+            create_connection=create_connection, max_size=1, timeout=2.0
+        )
 
         # Acquire the only connection so the pool is saturated
         first = await pool.acquire()
@@ -639,7 +655,9 @@ class TestConnectionPoolLegacyCoverage:
         def create_connection():
             return MagicMock()
 
-        pool = ConnectionPool(create_connection=create_connection, max_size=1, timeout=0.05)
+        pool = ConnectionPool(
+            create_connection=create_connection, max_size=1, timeout=0.05
+        )
         _conn = await pool.acquire()
 
         with pytest.raises(TimeoutError):

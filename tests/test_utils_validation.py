@@ -15,6 +15,7 @@ from src.solidworks_mcp.exceptions import SolidWorksMCPError
 
 class _VersionInfo:
     """Test suite for VersionInfo."""
+
     def __init__(self, major: int, minor: int):
         """Test helper for init."""
         self.major = major

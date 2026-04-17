@@ -4,30 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.solidworks_mcp.agents.history_db import (
     DEFAULT_DB_PATH,
     AgentRun,
-    ConversationEvent,
     ErrorCatalog,
     ErrorRecord,
     ToolEvent,
     _build_engine,
     _utc_now_iso,
-    find_conversation_events,
     find_recent_errors,
-    find_run_timeline,
     get_design_session,
     init_db,
+    insert_error,
     insert_evidence_link,
     insert_model_state_snapshot,
     insert_plan_checkpoint,
+    insert_run,
     insert_sketch_graph_snapshot,
     insert_tool_call_record,
-    insert_conversation_event,
-    insert_error,
-    insert_run,
     insert_tool_event,
     list_evidence_links,
     list_model_state_snapshots,
@@ -37,7 +31,6 @@ from src.solidworks_mcp.agents.history_db import (
     update_plan_checkpoint,
     upsert_design_session,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,7 +80,8 @@ class TestBuildEngineAndInitDb:
     def test_init_db_creates_tables(self, tmp_path: Path):
         db = _db(tmp_path)
         init_db(db)
-        from sqlmodel import create_engine, inspect as sqlinspect
+        from sqlmodel import create_engine
+        from sqlmodel import inspect as sqlinspect
 
         engine = create_engine(f"sqlite:///{db}")
         inspector = sqlinspect(engine)
@@ -227,14 +221,14 @@ class TestInsertToolEvent:
 
 class TestInsertError:
     def _record(self, **overrides) -> ErrorRecord:
-        defaults = dict(
-            source="pydantic_ai",
-            tool_name="run_validated_prompt",
-            error_type="RecoverableFailure",
-            error_message="Could not parse output.",
-            root_cause="Schema mismatch.",
-            remediation="Narrow prompt scope.",
-        )
+        defaults = {
+            "source": "pydantic_ai",
+            "tool_name": "run_validated_prompt",
+            "error_type": "RecoverableFailure",
+            "error_message": "Could not parse output.",
+            "root_cause": "Schema mismatch.",
+            "remediation": "Narrow prompt scope.",
+        }
         defaults.update(overrides)
         return ErrorRecord(**defaults)
 
@@ -252,7 +246,7 @@ class TestInsertError:
         assert rows[0].run_id == "run-err-001"
 
     def test_without_run_id(self, tmp_path: Path):
-        db = _db(tmp_path)
+        _db(tmp_path)
         insert_error(self._record())  # uses default DB path — monkeypatched below
         # Just verify no exception is raised (uses default path in real run)
 

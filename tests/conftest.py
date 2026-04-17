@@ -9,25 +9,25 @@ import asyncio
 import inspect
 import os
 import tempfile
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import Any, AsyncGenerator, Generator
-from unittest.mock import AsyncMock, Mock
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import Mock
 
 import pytest
 import pytest_asyncio
 from fastmcp import FastMCP
-from types import SimpleNamespace
 
-from src.solidworks_mcp.config import (
-    SolidWorksMCPConfig,
-    DeploymentMode,
-    SecurityLevel,
-    AdapterType,
-)
 from src.solidworks_mcp.adapters import create_adapter
 from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from src.solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
 from src.solidworks_mcp.server import SolidWorksMCPServer
-
 
 # Test configuration
 os.environ["USE_MOCK_SOLIDWORKS"] = "true"

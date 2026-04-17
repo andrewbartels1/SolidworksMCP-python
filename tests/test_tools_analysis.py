@@ -5,14 +5,15 @@ Comprehensive test suite covering mass properties, interference checking,
 and structural analysis operations.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from src.solidworks_mcp.tools.analysis import (
-    register_analysis_tools,
-    MassPropertiesInput,
     InterferenceCheckInput,
+    MassPropertiesInput,
+    register_analysis_tools,
 )
 
 
@@ -167,7 +168,7 @@ class TestAnalysisTools:
         assert valid_input.units == "kg"
 
         # Invalid units should be handled by Pydantic validation
-        with pytest.raises(Exception):  # Catching general validation error
+        with pytest.raises(ValueError):  # Pydantic validation error
             MassPropertiesInput(model_path="test.sldprt", units="invalid_unit")
 
     @pytest.mark.unit

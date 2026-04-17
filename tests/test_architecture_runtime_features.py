@@ -15,13 +15,13 @@ from src.solidworks_mcp.adapters.base import (
 from src.solidworks_mcp.adapters.complexity_analyzer import ComplexityAnalyzer
 from src.solidworks_mcp.adapters.intelligent_router import IntelligentRouter
 from src.solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
-from src.solidworks_mcp.cache.response_cache import CachePolicy, ResponseCache
-from src.solidworks_mcp.config import SecurityLevel, SolidWorksMCPConfig
-from src.solidworks_mcp.security.runtime import SecurityEnforcer, SecurityError
 from src.solidworks_mcp.adapters.vba_macro_executor import (
     MacroExecutionRequest,
     VbaMacroExecutor,
 )
+from src.solidworks_mcp.cache.response_cache import CachePolicy, ResponseCache
+from src.solidworks_mcp.config import SecurityLevel, SolidWorksMCPConfig
+from src.solidworks_mcp.security.runtime import SecurityEnforcer, SecurityError
 from src.solidworks_mcp.server import SolidWorksMCPServer
 
 

@@ -5,19 +5,20 @@ Comprehensive test suite covering VBA generation, macro recording,
 batch processing, and workflow orchestration.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from src.solidworks_mcp.tools.automation import (
-    register_automation_tools,
-    GenerateVBAInput,
-    VBAGenerationInput,
-    RecordMacroInput,
     BatchProcessInput,
     DesignTableInput,
-    WorkflowInput,
-    TemplateInput,
+    GenerateVBAInput,
     PerformanceOptimizationInput,
+    RecordMacroInput,
+    TemplateInput,
+    VBAGenerationInput,
+    WorkflowInput,
+    register_automation_tools,
 )
 
 

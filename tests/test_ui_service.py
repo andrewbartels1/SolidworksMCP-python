@@ -17,8 +17,8 @@ from src.solidworks_mcp.agents.history_db import (
 )
 from src.solidworks_mcp.ui.service import (
     DEFAULT_SESSION_ID,
-    build_dashboard_trace_payload,
     build_dashboard_state,
+    build_dashboard_trace_payload,
     connect_target_model,
     ensure_dashboard_session,
     execute_next_checkpoint,

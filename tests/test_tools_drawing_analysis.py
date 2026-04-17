@@ -5,15 +5,16 @@ Comprehensive test suite covering drawing analysis, dimension checking,
 annotation validation, compliance verification, and reporting.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+
 from src.solidworks_mcp.tools.drawing_analysis import (
-    register_drawing_analysis_tools,
-    DrawingAnalysisInput,
-    DimensionAnalysisInput,
     AnnotationAnalysisInput,
     ComplianceCheckInput,
+    DimensionAnalysisInput,
+    DrawingAnalysisInput,
+    register_drawing_analysis_tools,
 )
 
 

@@ -10,28 +10,28 @@ class _Expr:
     def __init__(self, value: Any = None) -> None:
         self.value = value
 
-    def __getattr__(self, name: str) -> "_Expr":
+    def __getattr__(self, name: str) -> _Expr:
         return _Expr(name)
 
-    def __call__(self, *args: Any, **kwargs: Any) -> "_Expr":
+    def __call__(self, *args: Any, **kwargs: Any) -> _Expr:
         return _Expr((args, kwargs))
 
-    def __mod__(self, other: Any) -> "_Expr":
+    def __mod__(self, other: Any) -> _Expr:
         return _Expr(("%", other))
 
-    def __mul__(self, other: Any) -> "_Expr":
+    def __mul__(self, other: Any) -> _Expr:
         return _Expr(("*", other))
 
-    def __add__(self, other: Any) -> "_Expr":
+    def __add__(self, other: Any) -> _Expr:
         return _Expr(("+", other))
 
-    def __gt__(self, other: Any) -> "_Expr":
+    def __gt__(self, other: Any) -> _Expr:
         return _Expr((">", other))
 
-    def __le__(self, other: Any) -> "_Expr":
+    def __le__(self, other: Any) -> _Expr:
         return _Expr(("<=", other))
 
-    def then(self, *_args: Any) -> "_Expr":
+    def then(self, *_args: Any) -> _Expr:
         return _Expr("then")
 
     def default(self, fallback: Any) -> Any:
@@ -43,7 +43,7 @@ class _Ctx:
         self.args = args
         self.kwargs = kwargs
 
-    def __enter__(self) -> "_Ctx":
+    def __enter__(self) -> _Ctx:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:

@@ -5,13 +5,14 @@ Comprehensive end-to-end tests covering complete workflows from server startup
 through tool execution and shutdown.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
-from src.solidworks_mcp.server import SolidWorksMCPServer
+import pytest
+
 from src.solidworks_mcp.config import DeploymentMode, SecurityLevel
-from src.solidworks_mcp.tools.modeling import CreatePartInput, CreateExtrusionInput
-from src.solidworks_mcp.tools.sketching import CreateSketchInput, AddCircleInput
+from src.solidworks_mcp.server import SolidWorksMCPServer
+from src.solidworks_mcp.tools.modeling import CreateExtrusionInput, CreatePartInput
+from src.solidworks_mcp.tools.sketching import AddCircleInput, CreateSketchInput
 
 
 class TestCompleteWorkflows:
@@ -168,7 +169,7 @@ class TestCompleteWorkflows:
             ),
         ]
 
-        for i, config in enumerate(configs):
+        for _i, config in enumerate(configs):
             server = SolidWorksMCPServer(config)
             await server.setup()
 
@@ -342,7 +343,7 @@ class TestCompleteWorkflows:
 
         tested_tools = []
 
-        for category, tool_names in tool_categories.items():
+        for _category, tool_names in tool_categories.items():
             for tool_name in tool_names:
                 # Find tool
                 tool_func = None
@@ -389,7 +390,7 @@ class TestCompleteWorkflows:
     @pytest.mark.integration
     async def test_server_lifecycle_multiple_cycles(self, mock_config):
         """Test multiple server startup/shutdown cycles."""
-        for cycle in range(3):
+        for _cycle in range(3):
             server = SolidWorksMCPServer(mock_config)
 
             # Startup

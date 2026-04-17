@@ -6,14 +6,14 @@ COM/VBA indexing produces consistent, expected results.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shutil
 import time
-import json
-from types import SimpleNamespace
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -27,16 +27,15 @@ from src.solidworks_mcp.config import (
 from src.solidworks_mcp.server import SolidWorksMCPServer
 from src.solidworks_mcp.tools.docs_discovery import (
     DiscoverDocsInput,
+    SolidWorksDocsDiscovery,
     _extract_year,
     _fallback_help_for_query,
     _find_index_file,
     _load_index_file,
     _resolve_solidworks_year,
     _search_index,
-    SolidWorksDocsDiscovery,
     register_docs_discovery_tools,
 )
-
 
 REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
 
@@ -844,7 +843,7 @@ def test_normalize_input_non_dict_non_model_dump_path() -> None:
         include_vba = True
         year = None
 
-    with pytest.raises(Exception):
+    with pytest.raises((TypeError, ValueError)):
         _normalize_input(_PlainInput(), DiscoverDocsInput)
 
 

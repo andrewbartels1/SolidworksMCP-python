@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.solidworks_mcp.agents.history_db import (
     ConversationEvent,
     find_conversation_events,
     find_run_timeline,
-    init_db,
     insert_conversation_event,
     insert_run,
     insert_tool_event,

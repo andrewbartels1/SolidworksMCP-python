@@ -10,8 +10,8 @@ import json
 import os
 import platform
 from collections import Counter
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -30,7 +30,6 @@ from src.solidworks_mcp.tools.modeling import (
     CreatePartInput,
     OpenModelInput,
 )
-
 
 REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
 

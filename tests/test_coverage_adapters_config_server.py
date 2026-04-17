@@ -12,13 +12,12 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from pathlib import Path
-from pydantic import BaseModel
 
 import pytest
+from pydantic import BaseModel
 
 from src.solidworks_mcp.adapters.base import (
     AdapterHealth,
-    AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
     SolidWorksFeature,
@@ -27,15 +26,20 @@ from src.solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreakerAdapter,
     CircuitState,
 )
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter, _BoolCallable
+from src.solidworks_mcp.adapters.mock_adapter import (
+    MockSolidWorksAdapter,
+    _BoolCallable,
+)
 from src.solidworks_mcp.config import AdapterType, SolidWorksMCPConfig, load_config
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_health(healthy: bool = True, connection_status: str = "connected") -> AdapterHealth:
+
+def _make_health(
+    healthy: bool = True, connection_status: str = "connected"
+) -> AdapterHealth:
     return AdapterHealth(
         healthy=healthy,
         last_check=datetime.now(),
@@ -49,6 +53,7 @@ def _make_health(healthy: bool = True, connection_status: str = "connected") -> 
 # ---------------------------------------------------------------------------
 # 1. base.py
 # ---------------------------------------------------------------------------
+
 
 class TestAdapterHealthGetitem:
     """Covers AdapterHealth.__getitem__ and __contains__ uncovered branches."""
@@ -231,12 +236,17 @@ class TestAdapterBaseDefaultMethods:
 # 2. circuit_breaker.py
 # ---------------------------------------------------------------------------
 
+
 class TestCircuitBreakerAdapterTransitions:
     """Covers uncovered circuit breaker state transition branches."""
 
     def _make_cb(self, threshold: int = 3) -> CircuitBreakerAdapter:
-        inner = MockSolidWorksAdapter({"mock_connect_delay": 0.0, "mock_model_delay": 0.0})
-        return CircuitBreakerAdapter(adapter=inner, failure_threshold=threshold, recovery_timeout=9999)
+        inner = MockSolidWorksAdapter(
+            {"mock_connect_delay": 0.0, "mock_model_delay": 0.0}
+        )
+        return CircuitBreakerAdapter(
+            adapter=inner, failure_threshold=threshold, recovery_timeout=9999
+        )
 
     def _force_open(self, cb: CircuitBreakerAdapter) -> None:
         """Drive the circuit from CLOSED to OPEN by injecting failures."""
@@ -284,7 +294,9 @@ class TestCircuitBreakerAdapterTransitions:
 
         inner = MockSolidWorksAdapter({})
         inner.connect = AsyncMock(side_effect=RuntimeError("boom"))
-        cb = CircuitBreakerAdapter(adapter=inner, failure_threshold=5, recovery_timeout=9999)
+        cb = CircuitBreakerAdapter(
+            adapter=inner, failure_threshold=5, recovery_timeout=9999
+        )
         with pytest.raises(RuntimeError, match="boom"):
             await cb.connect()
         assert cb.failure_count == 1
@@ -349,6 +361,7 @@ class TestCircuitBreakerAdapterTransitions:
 # 3. mock_adapter.py
 # ---------------------------------------------------------------------------
 
+
 class TestBoolCallable:
     """Covers _BoolCallable.__call__ (line 52)."""
 
@@ -373,7 +386,9 @@ class TestMockAdapterModelInfo:
     @pytest.mark.asyncio
     async def test_get_model_info_with_active_model(self):
         """Lines 237-252: get_model_info returns info when model is active."""
-        adapter = MockSolidWorksAdapter({"mock_connect_delay": 0.0, "mock_model_delay": 0.0})
+        adapter = MockSolidWorksAdapter(
+            {"mock_connect_delay": 0.0, "mock_model_delay": 0.0}
+        )
         await adapter.connect()
         await adapter.create_part("TestPart")
         result = await adapter.get_model_info()
@@ -397,7 +412,11 @@ class TestMockAdapterListFeatures:
     async def test_list_features_with_real_features(self):
         """Lines 286-295: features dict populated -> iterates and returns rows."""
         adapter = MockSolidWorksAdapter(
-            {"mock_connect_delay": 0.0, "mock_model_delay": 0.0, "mock_feature_delay": 0.0}
+            {
+                "mock_connect_delay": 0.0,
+                "mock_model_delay": 0.0,
+                "mock_feature_delay": 0.0,
+            }
         )
         await adapter.connect()
         await adapter.create_part()
@@ -412,7 +431,11 @@ class TestMockAdapterListFeatures:
     async def test_list_features_include_suppressed_false_filters(self):
         """Lines 293-295: suppressed features excluded when include_suppressed=False."""
         adapter = MockSolidWorksAdapter(
-            {"mock_connect_delay": 0.0, "mock_model_delay": 0.0, "mock_feature_delay": 0.0}
+            {
+                "mock_connect_delay": 0.0,
+                "mock_model_delay": 0.0,
+                "mock_feature_delay": 0.0,
+            }
         )
         await adapter.connect()
         await adapter.create_part()
@@ -441,7 +464,9 @@ class TestMockAdapterListConfigurations:
     @pytest.mark.asyncio
     async def test_list_configurations_default_config(self):
         """Active config == 'Default' -> returns ['Default']."""
-        adapter = MockSolidWorksAdapter({"mock_connect_delay": 0.0, "mock_model_delay": 0.0})
+        adapter = MockSolidWorksAdapter(
+            {"mock_connect_delay": 0.0, "mock_model_delay": 0.0}
+        )
         await adapter.connect()
         await adapter.create_part()
         result = await adapter.list_configurations()
@@ -451,7 +476,9 @@ class TestMockAdapterListConfigurations:
     @pytest.mark.asyncio
     async def test_list_configurations_non_default_config(self):
         """Lines 315: non-Default config -> ['Default', active_config]."""
-        adapter = MockSolidWorksAdapter({"mock_connect_delay": 0.0, "mock_model_delay": 0.0})
+        adapter = MockSolidWorksAdapter(
+            {"mock_connect_delay": 0.0, "mock_model_delay": 0.0}
+        )
         await adapter.connect()
         await adapter.create_part()
         # Override current model's configuration to a non-default value
@@ -491,29 +518,38 @@ class TestMockAdapterAddCenterline:
 # 4. config.py
 # ---------------------------------------------------------------------------
 
+
 class TestSolidWorksMCPConfigValidators:
     """Covers set_cache_dir, set_log_file, validate_adapter_type, validate_port."""
 
     def test_set_cache_dir_none_defaults_to_data_dir_cache(self, tmp_path: Path):
         """Lines 246-251: cache_dir=None -> data_dir/cache."""
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, data_dir=tmp_path, cache_dir=None)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, data_dir=tmp_path, cache_dir=None
+        )
         assert cfg.cache_dir == tmp_path / "cache"
 
     def test_set_cache_dir_explicit_value_kept(self, tmp_path: Path):
         """Lines 252: explicit cache_dir is passed through unchanged."""
         explicit = tmp_path / "my_cache"
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, data_dir=tmp_path, cache_dir=explicit)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, data_dir=tmp_path, cache_dir=explicit
+        )
         assert cfg.cache_dir == explicit
 
     def test_set_log_file_none_defaults_to_data_dir_logs(self, tmp_path: Path):
         """Lines 258-263: log_file=None -> data_dir/logs/server.log."""
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, data_dir=tmp_path, log_file=None)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, data_dir=tmp_path, log_file=None
+        )
         assert cfg.log_file == tmp_path / "logs" / "server.log"
 
     def test_set_log_file_explicit_value_kept(self, tmp_path: Path):
         """Lines 264: explicit log_file is passed through unchanged."""
         explicit = tmp_path / "custom.log"
-        cfg = SolidWorksMCPConfig(mock_solidworks=True, data_dir=tmp_path, log_file=explicit)
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, data_dir=tmp_path, log_file=explicit
+        )
         assert cfg.log_file == explicit
 
     def test_validate_adapter_type_passthrough(self, tmp_path: Path):
@@ -530,12 +566,12 @@ class TestSolidWorksMCPConfigValidators:
 
     def test_validate_port_too_low_raises(self, tmp_path: Path):
         """Lines 336-337: port < 1 raises ValueError."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             SolidWorksMCPConfig(mock_solidworks=True, data_dir=tmp_path, port=0)
 
     def test_validate_port_too_high_raises(self, tmp_path: Path):
         """Lines 336-338: port > 65535 raises ValueError."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             SolidWorksMCPConfig(mock_solidworks=True, data_dir=tmp_path, port=65536)
 
 
@@ -555,7 +591,9 @@ class TestLoadConfig:
 
         config_file = tmp_path / "config.json"
         config_file.write_text(
-            json.dumps({"mock_solidworks": True, "port": 9123, "data_dir": str(tmp_path)}),
+            json.dumps(
+                {"mock_solidworks": True, "port": 9123, "data_dir": str(tmp_path)}
+            ),
             encoding="utf-8",
         )
         cfg = load_config(str(config_file))
@@ -565,6 +603,7 @@ class TestLoadConfig:
 # ---------------------------------------------------------------------------
 # 5. __init__.py
 # ---------------------------------------------------------------------------
+
 
 class TestPackageInit:
     """Covers __getattr__ lazy loader (lines 40-46) and __dir__ (line 58)."""

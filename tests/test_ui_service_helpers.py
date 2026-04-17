@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -73,7 +72,7 @@ class _Response:
     def read(self) -> bytes:
         return self._body
 
-    def __enter__(self) -> "_Response":
+    def __enter__(self) -> _Response:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:

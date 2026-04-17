@@ -6,8 +6,7 @@ uncovered, verifying the tool returns a proper error dict instead of crashing.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastmcp import FastMCP
@@ -20,7 +19,6 @@ from src.solidworks_mcp.config import (
     SecurityLevel,
     SolidWorksMCPConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -111,7 +109,10 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_line_adapter_error_result(self):
         """Lines 416-419 — add_sketch_line returns error result → error dict."""
-        from src.solidworks_mcp.tools.sketching import AddLineInput, register_sketching_tools
+        from src.solidworks_mcp.tools.sketching import (
+            AddLineInput,
+            register_sketching_tools,
+        )
 
         mcp = _make_mcp()
         adapter = _error_result_adapter("add_sketch_line", "line failed")
@@ -125,7 +126,10 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_line_exception_handler(self):
         """Lines 421-426 — add_line exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import AddLineInput, register_sketching_tools
+        from src.solidworks_mcp.tools.sketching import (
+            AddLineInput,
+            register_sketching_tools,
+        )
 
         mcp = _make_mcp()
         adapter = _error_adapter("add_sketch_line")
@@ -138,7 +142,10 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_circle_exception_handler(self):
         """Line 463 — add_circle exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import AddCircleInput, register_sketching_tools
+        from src.solidworks_mcp.tools.sketching import (
+            AddCircleInput,
+            register_sketching_tools,
+        )
 
         mcp = _make_mcp()
         adapter = _error_adapter("add_sketch_circle")
@@ -151,7 +158,10 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_rectangle_adapter_error_result(self):
         """Lines 563-566 — add_sketch_rectangle returns error → error dict."""
-        from src.solidworks_mcp.tools.sketching import AddRectangleInput, register_sketching_tools
+        from src.solidworks_mcp.tools.sketching import (
+            AddRectangleInput,
+            register_sketching_tools,
+        )
 
         mcp = _make_mcp()
         adapter = _error_result_adapter("add_sketch_rectangle", "rect failed")
@@ -164,7 +174,10 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_rectangle_exception_handler(self):
         """Lines 568-570 — add_rectangle exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import AddRectangleInput, register_sketching_tools
+        from src.solidworks_mcp.tools.sketching import (
+            AddRectangleInput,
+            register_sketching_tools,
+        )
 
         mcp = _make_mcp()
         adapter = _error_adapter("add_sketch_rectangle")
@@ -210,12 +223,17 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_start_macro_recording_adapter_error(self):
         """Line 341 — adapter has method but returns error."""
-        from src.solidworks_mcp.tools.automation import RecordMacroInput, register_automation_tools
+        from src.solidworks_mcp.tools.automation import (
+            RecordMacroInput,
+            register_automation_tools,
+        )
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
         adapter.start_macro_recording = AsyncMock(
-            return_value=AdapterResult(status=AdapterResultStatus.ERROR, error="rec error")
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="rec error"
+            )
         )
         await register_automation_tools(mcp, adapter, _make_config())
 
@@ -226,7 +244,10 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_start_macro_recording_exception(self):
         """Lines 387-389 — exception in start_macro_recording."""
-        from src.solidworks_mcp.tools.automation import RecordMacroInput, register_automation_tools
+        from src.solidworks_mcp.tools.automation import (
+            RecordMacroInput,
+            register_automation_tools,
+        )
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
@@ -246,20 +267,20 @@ class TestAutomationExceptionPaths:
         adapter = MockSolidWorksAdapter({})
 
         # Patch the inner dict-return path to raise
-        with patch(
-            "src.solidworks_mcp.tools.automation.logger"
-        ) as mock_logger:
+        with patch("src.solidworks_mcp.tools.automation.logger"):
             await register_automation_tools(mcp, adapter, _make_config())
             fn = _get_tool(mcp, "stop_macro_recording")
 
             # Trigger exception by patching after registration
-            original_fn = fn
 
             async def _raiser(input_data):
                 raise RuntimeError("stop error")
 
             with patch.object(
-                fn, "__wrapped__", create=True, new=AsyncMock(side_effect=RuntimeError("stop"))
+                fn,
+                "__wrapped__",
+                create=True,
+                new=AsyncMock(side_effect=RuntimeError("stop")),
             ):
                 # Just verify stop_macro_recording returns a success dict normally
                 result = await fn({})
@@ -268,7 +289,10 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_batch_process_files_exception(self):
         """Line 462 — exception in batch_process_files."""
-        from src.solidworks_mcp.tools.automation import BatchProcessInput, register_automation_tools
+        from src.solidworks_mcp.tools.automation import (
+            BatchProcessInput,
+            register_automation_tools,
+        )
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
@@ -276,15 +300,18 @@ class TestAutomationExceptionPaths:
         await register_automation_tools(mcp, adapter, _make_config())
 
         fn = _get_tool(mcp, "batch_process_files")
-        result = await fn(BatchProcessInput(
-            source_directory="/tmp", operation_type="rebuild"
-        ))
+        result = await fn(
+            BatchProcessInput(source_directory="/tmp", operation_type="rebuild")
+        )
         assert result["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_manage_design_table_exception(self):
         """Line 506 — exception in manage_design_table."""
-        from src.solidworks_mcp.tools.automation import DesignTableInput, register_automation_tools
+        from src.solidworks_mcp.tools.automation import (
+            DesignTableInput,
+            register_automation_tools,
+        )
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
@@ -313,7 +340,9 @@ class TestDrawingAnalysisExceptionPaths:
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
         adapter.analyze_drawing_dimensions = AsyncMock(
-            return_value=AdapterResult(status=AdapterResultStatus.ERROR, error="dim error")
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="dim error"
+            )
         )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
@@ -331,7 +360,9 @@ class TestDrawingAnalysisExceptionPaths:
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
-        adapter.analyze_drawing_dimensions = AsyncMock(side_effect=RuntimeError("dim boom"))
+        adapter.analyze_drawing_dimensions = AsyncMock(
+            side_effect=RuntimeError("dim boom")
+        )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
         fn = _get_tool(mcp, "analyze_drawing_dimensions")
@@ -348,7 +379,9 @@ class TestDrawingAnalysisExceptionPaths:
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
-        adapter.analyze_drawing_annotations = AsyncMock(side_effect=RuntimeError("ann boom"))
+        adapter.analyze_drawing_annotations = AsyncMock(
+            side_effect=RuntimeError("ann boom")
+        )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
         fn = _get_tool(mcp, "analyze_drawing_annotations")
@@ -365,11 +398,15 @@ class TestDrawingAnalysisExceptionPaths:
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
-        adapter.check_drawing_compliance = AsyncMock(side_effect=RuntimeError("comp boom"))
+        adapter.check_drawing_compliance = AsyncMock(
+            side_effect=RuntimeError("comp boom")
+        )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
         fn = _get_tool(mcp, "check_drawing_compliance")
-        result = await fn(ComplianceCheckInput(drawing_path="test.slddrw", standard="ASME"))
+        result = await fn(
+            ComplianceCheckInput(drawing_path="test.slddrw", standard="ASME")
+        )
         assert result["status"] == "error"
 
 
@@ -382,12 +419,16 @@ class TestMacroRecordingExceptionPaths:
     @pytest.mark.asyncio
     async def test_stop_macro_recording_adapter_error(self):
         """Line 243 — adapter returns error on stop_macro_recording."""
-        from src.solidworks_mcp.tools.macro_recording import register_macro_recording_tools
+        from src.solidworks_mcp.tools.macro_recording import (
+            register_macro_recording_tools,
+        )
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
         adapter.stop_macro_recording = AsyncMock(
-            return_value=AdapterResult(status=AdapterResultStatus.ERROR, error="stop err")
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="stop err"
+            )
         )
         await register_macro_recording_tools(mcp, adapter, _make_config())
 
@@ -432,7 +473,9 @@ class TestMacroRecordingExceptionPaths:
     @pytest.mark.asyncio
     async def test_create_macro_library_exception(self):
         """Lines 914-916 — exception in create_macro_library."""
-        from src.solidworks_mcp.tools.macro_recording import register_macro_recording_tools
+        from src.solidworks_mcp.tools.macro_recording import (
+            register_macro_recording_tools,
+        )
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})

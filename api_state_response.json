@@ -1,0 +1,113 @@
+{
+  "ctx_tick": 0,
+  "session_id": "prefab-dashboard",
+  "workflow_mode": "unselected",
+  "workflow_label": "Choose a Workflow",
+  "workflow_guidance_text": "Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch.",
+  "user_goal": "Design a printable U-bracket assembly for cable routing with M4 hardware.",
+  "flow_header_text": "Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute",
+  "assumptions_text": "Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.",
+  "active_model_path": "",
+  "active_model_status": "No active model connected yet.",
+  "active_model_type": "",
+  "active_model_configuration": "",
+  "feature_target_text": "",
+  "feature_target_status": "No grounded feature target selected.",
+  "normalized_brief": "Design a U-bracket assembly suitable for 3D printing, intended for cable routing applications. Bracket features should accommodate M4 hardware for mounting and fastening. Design for ease of assembly and installation.",
+  "clarifying_questions_text": "- What are the target dimensions (width, height, cable clearance) for the U-bracket?\n- Should the bracket include mounting holes on one or both flanges, and what is the preferred hole spacing?\n- Are there specific load or environmental requirements (e.g., UV resistance, impact) for the bracket material?",
+  "proposed_family": "unclassified",
+  "family_confidence": "high",
+  "family_evidence_text": "The request is for a 'snap-fit' lid, a classic feature in plastic product design for enclosures. | Dimensions and shell thickness (10mm x 15mm box, 1mm wall) are typical for small plastic part design, reinforcing the use of snap fits.",
+  "family_warning_text": "Snap-fit design for a 1mm shell can be delicate; stress concentration and plastic selection are critical. | Test snap action virtually, but physical prototyping is recommended before finalizing for production.",
+  "accepted_family": "unclassified",
+  "checkpoints": [
+    {
+      "step": "1",
+      "goal": "Create the base sketch profile",
+      "tools": "create_sketch, add_line",
+      "status": "failed"
+    },
+    {
+      "step": "2",
+      "goal": "Create the main bracket body",
+      "tools": "create_extrusion",
+      "status": "queued"
+    },
+    {
+      "step": "3",
+      "goal": "Add fastener holes and cable clearance",
+      "tools": "create_sketch, create_cut",
+      "status": "queued"
+    },
+    {
+      "step": "4",
+      "goal": "Check fit and interference",
+      "tools": "check_interference",
+      "status": "queued"
+    }
+  ],
+  "checkpoints_text": "1. Create the base sketch profile [failed] via create_sketch, add_line | 2. Create the main bracket body [queued] via create_extrusion | 3. Add fastener holes and cable clearance [queued] via create_sketch, create_cut | 4. Check fit and interference [queued] via check_interference",
+  "evidence_rows": [
+    {
+      "source": "llm",
+      "detail": "Snap-fit features are widely used in plastic part design for enclosures and fastening lids.",
+      "score": "0.85"
+    },
+    {
+      "source": "llm",
+      "detail": "SolidWorks provides features for shelling and snap fit tab creation in plastic part workflows.",
+      "score": "0.85"
+    },
+    {
+      "source": "llm",
+      "detail": "LLM family classification and checkpoint suggestions from GitHub Copilot.",
+      "score": "0.93"
+    },
+    {
+      "source": "llm",
+      "detail": "The request is for a 'snap-fit' lid, a classic feature in plastic product design for enclosures.",
+      "score": "0.85"
+    },
+    {
+      "source": "llm",
+      "detail": "Dimensions and shell thickness (10mm x 15mm box, 1mm wall) are typical for small plastic part design, reinforcing the use of snap fits.",
+      "score": "0.85"
+    },
+    {
+      "source": "llm",
+      "detail": "LLM family classification and checkpoint suggestions from GitHub Copilot.",
+      "score": "0.93"
+    }
+  ],
+  "evidence_rows_text": "llm: Snap-fit features are widely used in plastic part design for enclosures and fastening lids. (score 0.85) | llm: SolidWorks provides features for shelling and snap fit tab creation in plastic part workflows. (score 0.85) | llm: LLM family classification and checkpoint suggestions from GitHub Copilot. (score 0.93) | llm: The request is for a 'snap-fit' lid, a classic feature in plastic product design for enclosures. (score 0.85) | llm: Dimensions and shell thickness (10mm x 15mm box, 1mm wall) are typical for small plastic part design, reinforcing the use of snap fits. (score 0.85) | llm: LLM family classification and checkpoint suggestions from GitHub Copilot. (score 0.93)",
+  "structured_rendering_enabled": true,
+  "manual_sync_ready": false,
+  "preview_url": "",
+  "preview_status": "No preview captured yet.",
+  "preview_orientation": "current",
+  "latest_message": "Preview refresh failed. Ensure SolidWorks is open with an active model; the dashboard uses export_image(view_orientation='current') rather than an embedded viewport API.",
+  "latest_tool": "export_image",
+  "mocked_tools_text": "",
+  "latest_error_text": "",
+  "remediation_hint": "",
+  "model_provider": "github",
+  "model_name": "github:openai/gpt-4.1",
+  "model_profile": "balanced",
+  "local_endpoint": "http://127.0.0.1:11434/v1",
+  "rag_source_path": "",
+  "rag_namespace": "engineering-reference",
+  "rag_status": "No retrieval source ingested yet.",
+  "rag_index_path": "",
+  "rag_chunk_count": 0,
+  "rag_provenance_text": "No retrieval provenance available yet.",
+  "readiness_provider_configured": false,
+  "readiness_adapter_mode": "pywin32",
+  "readiness_preview_ready": true,
+  "readiness_db_ready": true,
+  "readiness_summary": "Readiness 3/4 | provider=False | adapter=pywin32 | preview=True | db=True",
+  "context_used_pct": 38,
+  "context_text": "76k / 200k tokens",
+  "preview_viewer_url": "",
+  "user_clarification_answer": "",
+  "api_origin": "http://127.0.0.1:8766"
+}
