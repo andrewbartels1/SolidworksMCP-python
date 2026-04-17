@@ -1189,56 +1189,62 @@ async def connect_target_model(
             )
 
         preview_path = ensure_preview_dir() / f"{session_id}.png"
-        if hasattr(adapter, "export_image"):
+        logger.info(
+            "[ui.connect_target_model] exporting preview to {}",
+            str(preview_path.resolve()),
+        )
+        export_result = await adapter.export_image(
+            {
+                "file_path": str(preview_path.resolve()),
+                "format_type": "png",
+                "width": 1280,
+                "height": 720,
+                "view_orientation": DEFAULT_PREVIEW_ORIENTATION,
+            }
+        )
+        if export_result.is_success:
+            preview_png_ready = True
             logger.info(
-                "[ui.connect_target_model] exporting preview to {}",
+                "[ui.connect_target_model] preview export succeeded path={}",
                 str(preview_path.resolve()),
             )
-            export_result = await adapter.export_image(
-                {
-                    "file_path": str(preview_path.resolve()),
-                    "format_type": "png",
-                    "width": 1280,
-                    "height": 720,
-                    "view_orientation": DEFAULT_PREVIEW_ORIENTATION,
-                }
+            insert_model_state_snapshot(
+                session_id=session_id,
+                model_path=str(resolved_path.resolve()),
+                screenshot_path=str(preview_path.resolve()),
+                state_fingerprint=f"preview::{preview_path.stat().st_mtime_ns}",
+                db_path=db_path,
             )
-            if export_result.is_success:
-                preview_png_ready = True
-                logger.info(
-                    "[ui.connect_target_model] preview export succeeded path={}",
-                    str(preview_path.resolve()),
-                )
-                insert_model_state_snapshot(
-                    session_id=session_id,
-                    model_path=str(resolved_path.resolve()),
-                    screenshot_path=str(preview_path.resolve()),
-                    state_fingerprint=f"preview::{preview_path.stat().st_mtime_ns}",
-                    db_path=db_path,
-                )
+        else:
+            logger.warning(
+                "[ui.connect_target_model] PNG export failed: {}",
+                export_result.error or "<no error detail>",
+            )
 
         # Export STL for interactive 3D viewer
         stl_path = ensure_preview_dir() / f"{session_id}.stl"
         viewer_ts = int(time.time())
-        if hasattr(adapter, "export_file"):
-            try:
-                stl_result = await adapter.export_file(str(stl_path.resolve()), "stl")
-                if stl_result.is_success and stl_path.exists():
-                    preview_stl_ready = True
-                    viewer_ts = int(stl_path.stat().st_mtime)
-                    logger.info(
-                        "[ui.connect_target_model] STL export succeeded path={}",
-                        str(stl_path.resolve()),
-                    )
-            except Exception:
-                logger.debug(
-                    "[ui.connect_target_model] STL export skipped (adapter error)"
+        try:
+            stl_result = await adapter.export_file(str(stl_path.resolve()), "stl")
+            if stl_result.is_success and stl_path.exists():
+                preview_stl_ready = True
+                viewer_ts = int(stl_path.stat().st_mtime)
+                logger.info(
+                    "[ui.connect_target_model] STL export succeeded path={}",
+                    str(stl_path.resolve()),
                 )
+            else:
+                logger.warning(
+                    "[ui.connect_target_model] STL export failed: {}",
+                    stl_result.error or "<no error detail>",
+                )
+        except Exception as _stl_exc:
+            logger.warning(
+                "[ui.connect_target_model] STL export exception: {}", _stl_exc
+            )
         if preview_stl_ready:
             preview_status_message = "Interactive 3D preview ready."
-            preview_viewer_url = (
-                f"{api_origin}/api/ui/viewer/{session_id}?session_id={session_id}&t={viewer_ts}"
-            )
+            preview_viewer_url = f"{api_origin}/api/ui/viewer/{session_id}?session_id={session_id}&t={viewer_ts}"
         elif preview_png_ready:
             preview_status_message = (
                 "Static preview image ready (interactive STL unavailable)."
@@ -1380,6 +1386,37 @@ def ingest_reference_source(
         output_path.write_text(
             json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8"
         )
+
+        # --- FAISS vector index (best-effort; skipped if faiss/sentence-transformers
+        # are not installed) ---------------------------------------------------
+        try:
+            from ..agents.vector_rag import VectorRAGIndex  # noqa: PLC0415
+
+            idx = VectorRAGIndex.load(
+                namespace=resolved_namespace, rag_dir=DEFAULT_RAG_DIR
+            )
+            for chunk in payload["chunks"]:
+                idx.ingest_text(
+                    chunk["text"],
+                    source=source_identifier,
+                    tags=[resolved_namespace],
+                )
+            idx.save()
+            logger.info(
+                "[ui.ingest_reference_source] FAISS index updated namespace={} chunks={}",
+                resolved_namespace,
+                len(chunks),
+            )
+        except ImportError:
+            logger.debug(
+                "[ui.ingest_reference_source] FAISS not available; skipping vector index"
+            )
+        except Exception as faiss_exc:
+            logger.warning(
+                "[ui.ingest_reference_source] FAISS indexing failed (non-fatal): {}",
+                faiss_exc,
+            )
+        # -----------------------------------------------------------------------
         insert_evidence_link(
             session_id=session_id,
             source_type="rag_ingest",
@@ -1841,32 +1878,33 @@ async def refresh_preview(
                     str(candidate_path.resolve()),
                 )
                 await adapter.open_model(str(candidate_path.resolve()))
-        payload = {
-            "file_path": str(preview_path.resolve()),
-            "format_type": "png",
-            "width": 1280,
-            "height": 720,
-            "view_orientation": orientation,
-        }
-        if not hasattr(adapter, "export_image"):
-            # MOCKED: Graceful fallback if adapter doesn't support export_image
-            raise RuntimeError("Active adapter does not support export_image.")
-
-        result = await adapter.export_image(payload)
-        if not result.is_success:
-            raise RuntimeError(result.error or "Failed to export current view.")
-        logger.info(
-            "[ui.refresh_preview] PNG export succeeded file_path={}",
-            str(preview_path.resolve()),
-        )
-
-        # Export STL for the interactive 3D viewer
+        # ------------------------------------------------------------------ #
+        # Step 1: Export 3D model for the interactive Three.js viewer.
+        # Try GLB first (preserves assembly colors + named mesh hierarchy);
+        # fall back to merged STL if GLB is unsupported or fails.
+        # ------------------------------------------------------------------ #
+        glb_path = resolved_preview_dir / f"{session_id}.glb"
         stl_path = resolved_preview_dir / f"{session_id}.stl"
         viewer_ts = int(time.time())
-        if hasattr(adapter, "export_file"):
+        viewer_format = "none"  # "glb" | "stl" | "none"
+        try:
+            glb_result = await adapter.export_file(str(glb_path.resolve()), "glb")
+            if glb_result.is_success and glb_path.exists() and glb_path.stat().st_size > 0:
+                viewer_format = "glb"
+                viewer_ts = int(glb_path.stat().st_mtime)
+                logger.info(
+                    "[ui.refresh_preview] GLB export succeeded path={}",
+                    str(glb_path.resolve()),
+                )
+        except Exception:
+            logger.debug("[ui.refresh_preview] GLB export skipped (adapter error)")
+
+        if viewer_format == "none":
+            # GLB unavailable — try STL (merged single mesh)
             try:
                 stl_result = await adapter.export_file(str(stl_path.resolve()), "stl")
-                if stl_result.is_success and stl_path.exists():
+                if stl_result.is_success and stl_path.exists() and stl_path.stat().st_size > 0:
+                    viewer_format = "stl"
                     viewer_ts = int(stl_path.stat().st_mtime)
                     logger.info(
                         "[ui.refresh_preview] STL export succeeded path={}",
@@ -1874,36 +1912,133 @@ async def refresh_preview(
                     )
             except Exception:
                 logger.debug("[ui.refresh_preview] STL export skipped (adapter error)")
-        preview_viewer_url = f"{api_origin}/api/ui/viewer/{session_id}?t={viewer_ts}"
+
+        # The viewer URL always points to the iframe; cache-bust with timestamp so
+        # the browser re-fetches the model when it changes.  Pass the format so
+        # the viewer JS knows which Three.js loader to instantiate.
+        preview_viewer_url = (
+            f"{api_origin}/api/ui/viewer/{session_id}"
+            f"?t={viewer_ts}&fmt={viewer_format}"
+        )
+
+        # ------------------------------------------------------------------ #
+        # Step 2: Export PNG screenshot (optional — best-effort)
+        # ------------------------------------------------------------------ #
+        png_payload = {
+            "file_path": str(preview_path.resolve()),
+            "format_type": "png",
+            "width": 1280,
+            "height": 720,
+            "view_orientation": orientation,
+        }
+        png_ok = False
+        png_error: str = ""
+        snapshot_id: str | None = None
+        try:
+            result = await adapter.export_image(png_payload)
+            if result.is_success and preview_path.exists():
+                png_ok = True
+                logger.info(
+                    "[ui.refresh_preview] PNG export succeeded file_path={}",
+                    str(preview_path.resolve()),
+                )
+                snapshot_id = insert_model_state_snapshot(
+                    session_id=session_id,
+                    screenshot_path=str(preview_path.resolve()),
+                    state_fingerprint=f"preview-{preview_path.stat().st_mtime_ns}",
+                    db_path=db_path,
+                )
+                insert_tool_call_record(
+                    session_id=session_id,
+                    tool_name="export_image",
+                    input_json=json.dumps(png_payload, ensure_ascii=True),
+                    output_json=json.dumps(result.data or {}, ensure_ascii=True),
+                    success=True,
+                    db_path=db_path,
+                )
+            else:
+                png_error = result.error or "export_image returned failure"
+                logger.warning("[ui.refresh_preview] PNG export failed: {}", png_error)
+        except Exception as png_exc:
+            png_error = str(png_exc)
+            logger.warning("[ui.refresh_preview] PNG export exception: {}", png_exc)
 
         await adapter.disconnect()
 
-        snapshot_id = insert_model_state_snapshot(
-            session_id=session_id,
-            screenshot_path=str(preview_path.resolve()),
-            state_fingerprint=f"preview-{preview_path.stat().st_mtime_ns}",
-            db_path=db_path,
-        )
-        insert_tool_call_record(
-            session_id=session_id,
-            tool_name="export_image",
-            input_json=json.dumps(payload, ensure_ascii=True),
-            output_json=json.dumps(result.data or {}, ensure_ascii=True),
-            success=True,
-            db_path=db_path,
-        )
+        # ------------------------------------------------------------------ #
+        # Step 3: Export per-orientation PNG thumbnails for the multi-pane view
+        # ------------------------------------------------------------------ #
+        VIEW_ORIENTATIONS = ["isometric", "front", "top", "right"]
+        preview_view_urls: dict[str, str] = {}
+        try:
+            config2 = load_config()
+            adapter2 = await create_adapter(config2)
+            await adapter2.connect()
+            active_model_path = metadata.get("active_model_path")
+            if active_model_path and hasattr(adapter2, "open_model"):
+                candidate_path = Path(str(active_model_path))
+                if candidate_path.exists():
+                    await adapter2.open_model(str(candidate_path.resolve()))
+            for view_name in VIEW_ORIENTATIONS:
+                view_path = resolved_preview_dir / f"{session_id}-{view_name}.png"
+                try:
+                    view_result = await adapter2.export_image(
+                        {
+                            "file_path": str(view_path.resolve()),
+                            "format_type": "png",
+                            "width": 640,
+                            "height": 480,
+                            "view_orientation": view_name,
+                        }
+                    )
+                    if view_result.is_success and view_path.exists():
+                        ts = int(view_path.stat().st_mtime)
+                        preview_view_urls[view_name] = (
+                            f"{api_origin}/previews/{view_path.name}?ts={ts}"
+                        )
+                        logger.info(
+                            "[ui.refresh_preview] view PNG {} exported",
+                            view_name,
+                        )
+                    else:
+                        logger.warning(
+                            "[ui.refresh_preview] view PNG {} failed: {}",
+                            view_name,
+                            view_result.error or "no detail",
+                        )
+                except Exception as _ve:
+                    logger.warning(
+                        "[ui.refresh_preview] view PNG {} exception: {}",
+                        view_name,
+                        str(_ve),
+                    )
+            await adapter2.disconnect()
+        except Exception as _views_exc:
+            logger.warning(
+                "[ui.refresh_preview] multi-view export failed: {}", str(_views_exc)
+            )
+
+        # Compose status message
+        viewer_label = f"3D viewer ({viewer_format.upper()})" if viewer_format != "none" else "3D viewer (no model)"
+        png_label = "PNG" if png_ok else f"no PNG ({png_error})"
+        status_msg = f"Preview refreshed ({viewer_label}, {png_label})."
+
         _merge_metadata(
             session_id,
             db_path=db_path,
             preview_orientation=orientation,
-            latest_message="Preview refreshed. 3D view updated.",
+            latest_message=status_msg,
             latest_snapshot_id=snapshot_id,
             preview_viewer_url=preview_viewer_url,
+            preview_stl_ready=(viewer_format != "none"),
+            preview_png_ready=png_ok,
+            preview_view_urls=preview_view_urls,
             latest_error_text="",
             remediation_hint="",
         )
     except Exception as exc:
         logger.exception("[ui.refresh_preview] failed: {}", exc)
+        # Preserve whatever viewer URL was already set so the 3D view doesn't vanish
         insert_tool_call_record(
             session_id=session_id,
             tool_name="export_image",
@@ -1915,12 +2050,8 @@ async def refresh_preview(
         _merge_metadata(
             session_id,
             db_path=db_path,
-            latest_message=(
-                "Preview refresh failed. Ensure SolidWorks is open with an active model; the dashboard uses "
-                "export_image(view_orientation='current') rather than an embedded viewport API."
-            ),
+            latest_message=f"Preview refresh failed: {exc}",
             preview_orientation=orientation,
-            preview_viewer_url="",
             latest_error_text=str(exc),
             remediation_hint="Open a model in SolidWorks and retry preview refresh.",
         )
@@ -2155,6 +2286,7 @@ def build_dashboard_state(
         context_text="76k / 200k tokens",
         api_origin=api_origin,
         preview_viewer_url=preview_viewer_url,
+        preview_view_urls=metadata.get("preview_view_urls") or {},
         user_clarification_answer=str(metadata.get("user_clarification_answer") or ""),
         mocked_tools_text=(
             "MOCKED tools: " + ", ".join(metadata.get("mocked_tools", []))
@@ -2162,7 +2294,7 @@ def build_dashboard_state(
             else ""
         ),
     ).model_dump()
-    logger.info(
+    logger.debug(
         "[ui.trace.state] session_id={} payload={}",
         session_id,
         _trace_json(
@@ -2211,7 +2343,7 @@ def build_dashboard_trace_payload(
         "tool_records": tool_records,
         "tool_records_text": _trace_json(tool_records),
     }
-    logger.info(
+    logger.debug(
         "[ui.trace.snapshot] session_id={} payload={}",
         session_id,
         _trace_json(payload),

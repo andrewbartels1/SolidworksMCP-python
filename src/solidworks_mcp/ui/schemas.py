@@ -291,6 +291,10 @@ class DashboardUIState(BaseModel):
         default="",
         description="URL for the embedded Three.js 3D viewer iframe (changes with each refresh to force reload).",
     )
+    preview_view_urls: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-orientation PNG URLs keyed by orientation name (isometric, front, top, right).",
+    )
     user_clarification_answer: str = Field(
         default="",
         description="User-typed answers or clarifications in response to LLM-generated questions.",

@@ -32,8 +32,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
+from .local_llm import (
+    LocalAgentResult,
+    LocalModelProbeResult,
+    LocalModelPullRequest,
+    LocalModelPullResult,
+    LocalModelQueryRequest,
+)
 from .service import (
     DEFAULT_API_ORIGIN,
     DEFAULT_SESSION_ID,
@@ -172,6 +179,14 @@ class ConnectTargetModelRequest(SessionRequest):
     uploaded_files: list[UploadedFilePayload] | None = None
     feature_target_text: str | None = None
 
+    @field_validator("uploaded_files", mode="before")
+    @classmethod
+    def _coerce_empty_uploaded_files(cls, v: object) -> object:
+        """Coerce empty string or empty list to None so Pydantic accepts it."""
+        if v == "" or v == []:
+            return None
+        return v
+
 
 class RagIngestRequest(SessionRequest):
     """Request payload for BYO retrieval ingestion from a local path or URL."""
@@ -196,6 +211,53 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# TODO: Tasks pending completion -@andre at 4/15/2026, 7:57:32 PM
+# Need to update on_event to the correct fastapi lifecycle event hook
+@app.on_event("startup")
+async def _startup_ingest_design_knowledge() -> None:
+    """Auto-ingest bundled design knowledge markdown files into FAISS on first startup."""
+    import logging as _logging
+
+    _log = _logging.getLogger(__name__)
+    knowledge_dir = FilePath(__file__).parent.parent / "agents" / "design_knowledge"
+    if not knowledge_dir.is_dir():
+        return
+    md_files = sorted(knowledge_dir.glob("*.md"))
+    if not md_files:
+        return
+    try:
+        from ..agents.vector_rag import VectorRAGIndex  # noqa: PLC0415
+
+        namespace = "solidworks-design-knowledge"
+        rag_dir = FilePath(".solidworks_mcp") / "rag"
+        idx = VectorRAGIndex.load(namespace=namespace, rag_dir=rag_dir)
+        # Only re-ingest if the index is empty (fresh install) or stale
+        if idx.chunk_count == 0:
+            for md_file in md_files:
+                text = md_file.read_text(encoding="utf-8")
+                idx.ingest_text(
+                    text, source=md_file.name, tags=[namespace, md_file.stem]
+                )
+            idx.save()
+            _log.info(
+                "Auto-ingested %d design knowledge files into FAISS namespace '%s'",
+                len(md_files),
+                namespace,
+            )
+        else:
+            _log.debug(
+                "FAISS namespace '%s' already loaded (%d chunks) — skipping auto-ingest",
+                namespace,
+                idx.chunk_count,
+            )
+    except ImportError:
+        _log.debug(
+            "faiss/sentence-transformers not installed — skipping design knowledge auto-ingest"
+        )
+    except Exception as exc:
+        _log.warning("Design knowledge auto-ingest failed (non-fatal): %s", exc)
 
 
 @app.middleware("http")
@@ -399,6 +461,71 @@ async def reconcile_edits(payload: SessionRequest) -> dict[str, Any]:
     return reconcile_manual_edits(payload.session_id)
 
 
+@app.get("/api/ui/local-model/probe")
+async def probe_local_model_endpoint() -> LocalModelProbeResult:
+    """
+    Probe for a running Ollama server and recommend the best Gemma model tier.
+
+    Returns a typed ``LocalModelProbeResult`` with hardware detection results,
+    availability, pull status, and the ``service_model`` string suitable for
+    passing as ``model_name`` to clarify/inspect actions.
+    """
+    from .local_llm import probe_local_model  # noqa: PLC0415
+
+    return await probe_local_model()
+
+
+@app.post("/api/ui/local-model/pull")
+async def pull_local_model_endpoint(payload: LocalModelPullRequest) -> LocalModelPullResult:
+    """
+    Trigger an Ollama pull for the specified model name (e.g. ``gemma3:12b``).
+
+    The pull runs synchronously via Ollama's ``/api/pull`` endpoint.
+    Large models (27B) may take several minutes to download.
+    """
+    from .local_llm import pull_ollama_model  # noqa: PLC0415
+
+    return await pull_ollama_model(model=payload.model, endpoint=payload.endpoint)
+
+
+@app.post("/api/ui/local-model/query")
+async def query_local_model_endpoint(payload: LocalModelQueryRequest) -> LocalAgentResult:
+    """
+    Run a free-form prompt against the local Ollama model.
+
+    The request body carries a ``prompt`` and optional ``system_prompt``.
+    The LLM response is validated by pydantic-ai and returned as a typed
+    ``LocalAgentResult`` with ``success``, ``data`` (plain string), and
+    ``config`` echoing the connection settings used.
+    """
+    from pydantic import BaseModel as _BaseModel
+
+    from .local_llm import LocalLLMConfig, run_local_agent  # noqa: PLC0415
+
+    class _FreeFormResponse(_BaseModel):
+        text: str
+
+    config = LocalLLMConfig.from_env()
+    if payload.endpoint:
+        config = config.model_copy(
+            update={"endpoint": payload.endpoint, "openai_endpoint": f"{payload.endpoint}/v1"}
+        )
+    if payload.model:
+        service_model = (
+            payload.model
+            if payload.model.startswith("local:")
+            else f"local:{payload.model}"
+        )
+        config = config.model_copy(update={"service_model": service_model})
+
+    return await run_local_agent(
+        system_prompt=payload.system_prompt,
+        user_prompt=payload.prompt,
+        result_type=_FreeFormResponse,
+        config=config,
+    )
+
+
 _VIEWER_HTML = """\
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -412,6 +539,8 @@ body { background: #0f172a; color: #94a3b8; font-family: system-ui, sans-serif; 
 #status { font-size: 13px; text-align: center; max-width: 300px; line-height: 1.6; }
 #hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
     font-size: 11px; opacity: 0.35; user-select: none; }
+#fmt-badge { position: fixed; top: 8px; right: 10px; font-size: 10px;
+    opacity: 0.4; letter-spacing: 0.05em; user-select: none; }
 </style></head><body>
 <div id="wrap"></div>
 <div id="overlay">
@@ -419,6 +548,7 @@ body { background: #0f172a; color: #94a3b8; font-family: system-ui, sans-serif; 
     <div id="status">Loading 3D model&#8230;</div>
 </div>
 <div id="hint">Drag to rotate &middot; Scroll to zoom &middot; Right-drag to pan</div>
+<div id="fmt-badge"></div>
 <script type="importmap">{"imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
@@ -426,6 +556,7 @@ body { background: #0f172a; color: #94a3b8; font-family: system-ui, sans-serif; 
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 
 const params = new URLSearchParams(location.search);
@@ -433,10 +564,11 @@ const pathParts = location.pathname.split('/').filter(Boolean);
 const pathSessionId = pathParts[pathParts.length - 1] || 'prefab-dashboard';
 const sessionId = params.get('session_id') || pathSessionId;
 const ts = params.get('t') || '0';
-const stlUrl = location.origin + '/previews/' + sessionId + '.stl?_t=' + ts;
+const fmt = params.get('fmt') || 'stl';   // 'glb' | 'stl' | 'none'
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.getElementById('wrap').appendChild(renderer.domElement);
 
@@ -450,7 +582,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
 dirLight.position.set(1, 2, 1.5);
 scene.add(dirLight);
@@ -458,37 +590,79 @@ const fillLight = new THREE.DirectionalLight(0x8ab4f8, 0.4);
 fillLight.position.set(-1, -1, -1);
 scene.add(fillLight);
 
-const material = new THREE.MeshPhongMaterial({
+// Fallback material used only for STL (no material data in file)
+const stlMaterial = new THREE.MeshPhongMaterial({
     color: 0x3b82f6, specular: 0x1e3a5f, shininess: 60, side: THREE.DoubleSide
 });
 
-new STLLoader().load(
-    stlUrl,
-    (geometry) => {
-        document.getElementById('overlay').style.display = 'none';
-        geometry.computeBoundingBox();
-        geometry.center();
-        geometry.computeVertexNormals();
-        const mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-        const size = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z) || 100;
-        camera.position.set(0, maxDim * 0.6, maxDim * 2);
-        camera.near = maxDim * 0.001;
-        camera.far = maxDim * 200;
-        camera.updateProjectionMatrix();
-        controls.update();
-    },
-    (progress) => {
-        const pct = progress.total ? Math.round(progress.loaded / progress.total * 100) : 0;
-        document.getElementById('status').textContent = 'Loading... ' + pct + '%';
-    },
-    () => {
-        document.getElementById('icon').textContent = '( )';
-        document.getElementById('status').textContent =
-            'No 3D model file yet. Attach a SolidWorks model, then click Refresh 3D View.';
-    }
-);
+function fitCamera(object) {
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z) || 100;
+    camera.position.set(center.x, center.y + maxDim * 0.6, center.z + maxDim * 2);
+    camera.near = maxDim * 0.001;
+    camera.far = maxDim * 200;
+    camera.updateProjectionMatrix();
+    controls.target.copy(center);
+    controls.update();
+}
+
+function hideOverlay() {
+    document.getElementById('overlay').style.display = 'none';
+}
+
+function showError(msg) {
+    document.getElementById('icon').textContent = '( )';
+    document.getElementById('status').textContent = msg;
+}
+
+function onProgress(p) {
+    const pct = p.total ? Math.round(p.loaded / p.total * 100) : 0;
+    document.getElementById('status').textContent = 'Loading\\u2026 ' + pct + '%';
+}
+
+if (fmt === 'glb') {
+    document.getElementById('fmt-badge').textContent = 'GLB';
+    const glbUrl = location.origin + '/previews/' + sessionId + '.glb?_t=' + ts;
+    new GLTFLoader().load(
+        glbUrl,
+        (gltf) => {
+            hideOverlay();
+            const model = gltf.scene;
+            // Ensure all meshes render double-sided so thin faces don't disappear
+            model.traverse((node) => {
+                if (node.isMesh && node.material) {
+                    const mats = Array.isArray(node.material) ? node.material : [node.material];
+                    mats.forEach((m) => { m.side = THREE.DoubleSide; });
+                }
+            });
+            scene.add(model);
+            fitCamera(model);
+        },
+        onProgress,
+        () => showError('No 3D model file yet. Attach a SolidWorks model, then click Refresh 3D View.')
+    );
+} else if (fmt === 'stl') {
+    document.getElementById('fmt-badge').textContent = 'STL';
+    const stlUrl = location.origin + '/previews/' + sessionId + '.stl?_t=' + ts;
+    new STLLoader().load(
+        stlUrl,
+        (geometry) => {
+            hideOverlay();
+            geometry.computeBoundingBox();
+            geometry.center();
+            geometry.computeVertexNormals();
+            const mesh = new THREE.Mesh(geometry, stlMaterial);
+            scene.add(mesh);
+            fitCamera(mesh);
+        },
+        onProgress,
+        () => showError('No 3D model file yet. Attach a SolidWorks model, then click Refresh 3D View.')
+    );
+} else {
+    showError('No 3D model file yet. Attach a SolidWorks model, then click Refresh 3D View.');
+}
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
