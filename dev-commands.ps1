@@ -191,8 +191,9 @@ function dev-install {
                 $venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
                 $pipCheck = & $venvPy -m pip --version 2>&1
                 if ($LASTEXITCODE -ne 0) { & $venvPy -m ensurepip --upgrade }
-                & $venvPy -m pip install "prefab-ui>=0.19.0" "fastapi>=0.115.0" "uvicorn>=0.24.0" -q
-                Write-Host ".venv synced with UI extras." -ForegroundColor Green
+                Write-Host "Installing full package into .venv for run-ui.ps1 compatibility..." -ForegroundColor Cyan
+                & $venvPy -m pip install -e ".[dev,test,docs,ui]" -q
+                Write-Host ".venv synced with all extras." -ForegroundColor Green
             }
             Write-Host "Installation complete!" -ForegroundColor Green
         } else {

@@ -11,7 +11,6 @@ import asyncio
 import io
 import json
 import logging
-import os
 import signal
 import sys
 import time
@@ -246,7 +245,7 @@ def print_connection_info(config: SolidWorksMCPConfig) -> None:
         "Linux": "~/.config/Claude/claude_desktop_config.json",
     }
 
-    print(f"\nConfig file locations:")
+    print("\nConfig file locations:")
     for os_name, path in config_locations.items():
         print(f"  {os_name}: {path}")
 
@@ -324,18 +323,18 @@ async def main():
         server = SolidWorksMCPServer(config)
         setup_signal_handlers(server)
 
-        print(f"\n🔧 Initializing server...")
+        print("\n🔧 Initializing server...")
         await server.setup()
 
         print(f"🚀 Starting server on port {config.port}...")
         await server.start()
 
         # Wait for server to be ready
-        print(f"🔍 Checking server health...")
+        print("🔍 Checking server health...")
         health_ok = await test_server_health(config.port)
 
         if health_ok:
-            print(f"✅ Server is healthy and ready!")
+            print("✅ Server is healthy and ready!")
 
             # Show available tools
             await demonstrate_tools(server)
@@ -347,16 +346,16 @@ async def main():
             print(f"\n📡 Server running at http://{config.host}:{config.port}")
             print(f"📊 Health check: http://{config.host}:{config.port}/health")
             print(f"📖 API docs: http://{config.host}:{config.port}/docs")
-            print(f"\n💡 Press Ctrl+C to stop the server")
+            print("\n💡 Press Ctrl+C to stop the server")
 
             # Keep server running
             try:
                 while True:
                     await asyncio.sleep(1)
             except KeyboardInterrupt:
-                print(f"\n🛑 Shutting down server...")
+                print("\n🛑 Shutting down server...")
         else:
-            print(f"❌ Server health check failed")
+            print("❌ Server health check failed")
 
     except Exception as e:
         logger.error(f"Server startup failed: {e}")
@@ -366,7 +365,7 @@ async def main():
     finally:
         try:
             await server.stop()
-            print(f"✅ Server stopped gracefully")
+            print("✅ Server stopped gracefully")
         except Exception as e:
             print(f"⚠️ Error during shutdown: {e}")
 

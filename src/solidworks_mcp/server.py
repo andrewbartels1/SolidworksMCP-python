@@ -8,19 +8,19 @@ with configurable deployment (local/remote) and security options.
 from __future__ import annotations
 
 import asyncio
-from functools import wraps
 import inspect
 import json
 import os
 import platform
 import sys
 import uuid
+from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from fastmcp import FastMCP
 import typer
+from fastmcp import FastMCP
 from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -31,10 +31,10 @@ from .adapters.base import AdapterResult
 from .adapters.complexity_analyzer import ComplexityAnalyzer
 from .adapters.intelligent_router import IntelligentRouter
 from .adapters.vba_adapter import VbaGeneratorAdapter
+from .agents.history_db import insert_tool_event
 from .cache.response_cache import CachePolicy, ResponseCache
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
 from .exceptions import SolidWorksMCPError
-from .agents.history_db import insert_tool_event
 
 AGENT_SYSTEM_PROMPT = (
     "You are a SolidWorks automation expert. You have access to comprehensive "
@@ -144,8 +144,11 @@ class SolidWorksMCPServer:
                     Any: Describe the returned value.
 
                 """
+
                 @wraps(func)
-                async def _guarded_runner(*runner_args: Any, **runner_kwargs: Any) -> Any:
+                async def _guarded_runner(
+                    *runner_args: Any, **runner_kwargs: Any
+                ) -> Any:
                     """Run tool with runtime security and invocation normalization."""
                     tool_name = getattr(func, "__name__", "unknown")
                     payload = self._extract_payload(runner_args, runner_kwargs)
@@ -185,7 +188,9 @@ class SolidWorksMCPServer:
                     )
 
                     try:
-                        self._enforce_tool_security(tool_name=tool_name, payload=payload)
+                        self._enforce_tool_security(
+                            tool_name=tool_name, payload=payload
+                        )
                         result = await self._invoke_tool_callable(
                             func=func,
                             payload=payload,
@@ -196,7 +201,10 @@ class SolidWorksMCPServer:
                         self._log_tool_event(
                             tool_name=tool_name,
                             phase="error",
-                            payload={"error": str(exc), "error_type": exc.__class__.__name__},
+                            payload={
+                                "error": str(exc),
+                                "error_type": exc.__class__.__name__,
+                            },
                         )
                         raise
 

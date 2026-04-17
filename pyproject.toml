@@ -114,6 +114,11 @@ vision = [
     "scikit-image>=0.23.0",
     "numpy>=1.26.0",
 ]
+rag = [
+    "faiss-cpu>=1.7.0",
+    "sentence-transformers>=2.7.0",
+    "numpy>=1.26.0",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/yourusername/solidworks-mcp-python"

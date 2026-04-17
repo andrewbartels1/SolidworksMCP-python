@@ -3,8 +3,8 @@ Authentication and authorization for SolidWorks MCP Server.
 """
 
 import secrets
-from functools import wraps
 from collections.abc import Awaitable, Callable
+from functools import wraps
 from typing import Any, TypeVar, cast
 
 from ..config import SolidWorksMCPConfig
@@ -24,8 +24,8 @@ def setup_authentication(mcp: Any, config: SolidWorksMCPConfig) -> None:
     api_key_required = bool(getattr(config, "api_key_required", False))
     auth_mode = "api_key" if (api_key or api_keys or api_key_required) else "none"
     try:
-        setattr(mcp, "_security_auth_enabled", True)
-        setattr(mcp, "_security_auth_mode", auth_mode)
+        mcp._security_auth_enabled = True
+        mcp._security_auth_mode = auth_mode
     except (AttributeError, TypeError):
         # Some tests intentionally pass plain object() instances without __dict__.
         return

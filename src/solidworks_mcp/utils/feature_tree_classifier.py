@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-
 _SHEET_METAL_TOKENS = (
     "sheet-metal",
     "sheet metal",

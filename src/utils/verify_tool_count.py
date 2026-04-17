@@ -1,12 +1,10 @@
 """Verify tool count and documentation completeness."""
 
 import ast
-import os
 from pathlib import Path
-from typing import Dict, List, Set
 
 
-def find_tools_in_file(file_path: Path) -> List[str]:
+def find_tools_in_file(file_path: Path) -> list[str]:
     """Find all @mcp.tool() decorated functions in a file.
 
     Args:
@@ -16,7 +14,7 @@ def find_tools_in_file(file_path: Path) -> List[str]:
         List of tool function names found in the file
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         tree = ast.parse(content)
@@ -63,7 +61,7 @@ def check_function_docstring(file_path: Path, function_name: str) -> bool:
         True if function has a proper docstring, False otherwise
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         tree = ast.parse(content)
@@ -135,7 +133,7 @@ def main():
             if has_docstring:
                 documented_tools += 1
 
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"  Files processed: {files_processed}")
     print(f"  Total tools: {total_tools}")
     print(f"  Documented tools: {documented_tools}")
@@ -166,8 +164,8 @@ def verify_tool_count():
 if __name__ == "__main__":
     exit_code, total_tools, documented_tools = main()
 
-    print(f"\n🎯 Tool Count Analysis:")
-    print(f"Target: 88+ tools")
+    print("\n🎯 Tool Count Analysis:")
+    print("Target: 88+ tools")
     print(f"Found: {total_tools} tools")
     print(f"Status: {'✓ TARGET ACHIEVED' if total_tools >= 88 else '✗ TARGET NOT MET'}")
 

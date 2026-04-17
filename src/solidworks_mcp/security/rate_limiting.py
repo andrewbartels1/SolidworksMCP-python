@@ -2,8 +2,8 @@
 Rate limiting for API endpoints.
 """
 
-from collections import defaultdict
 import time
+from collections import defaultdict
 from typing import Any
 
 from ..config import SolidWorksMCPConfig
@@ -14,11 +14,11 @@ class RateLimiter:
 
     def __init__(self, max_requests: int, time_window: int = 60):
         """Initialize this object.
-        
+
         Args:
             max_requests (int): Describe max requests.
             time_window (int): Describe time window.
-        
+
         """
         self.max_requests = max_requests
         self.time_window = time_window

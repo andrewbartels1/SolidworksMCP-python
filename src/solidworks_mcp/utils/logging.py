@@ -5,6 +5,7 @@ Logging configuration for SolidWorks MCP Server.
 import sys
 from pathlib import Path
 from typing import Any
+
 from loguru import logger
 
 from ..config import SolidWorksMCPConfig

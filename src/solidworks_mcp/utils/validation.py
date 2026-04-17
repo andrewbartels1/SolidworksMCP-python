@@ -4,7 +4,9 @@ Environment validation for SolidWorks MCP Server.
 
 import platform
 import shutil
+
 from loguru import logger
+
 from ..config import SolidWorksMCPConfig
 from ..exceptions import SolidWorksMCPError
 

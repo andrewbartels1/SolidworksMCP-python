@@ -1,9 +1,11 @@
 # Typer CLI setup
-import typer
 import asyncio
+
+import typer
 from loguru import logger
-from .config import DeploymentMode, load_config
+
 from . import utils
+from .config import DeploymentMode, load_config
 
 app = typer.Typer(
     name="solidworks-mcp",

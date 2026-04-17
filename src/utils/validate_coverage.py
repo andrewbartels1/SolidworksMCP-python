@@ -6,16 +6,13 @@ This script runs all tests, validates coverage, and generates reports
 to ensure 100% test coverage across the SolidWorks MCP server.
 """
 
-import asyncio
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-import pytest
 import coverage
 
 
@@ -251,7 +248,7 @@ def generate_coverage_summary(coverage_data: dict[str, Any]) -> None:
     ]
 
     if low_coverage_files:
-        print(f"\n🔍 Files needing more tests (< 90% coverage):")
+        print("\n🔍 Files needing more tests (< 90% coverage):")
         print("-" * 60)
         for file_path, data in sorted(
             low_coverage_files, key=lambda x: x[1]["percent"]

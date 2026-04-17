@@ -32,7 +32,7 @@ from pathlib import Path
 
 try:
     import numpy as np
-    from PIL import Image, ImageChops, ImageFilter
+    from PIL import Image, ImageFilter
     from skimage.metrics import structural_similarity as ssim
 except ImportError as exc:
     print(

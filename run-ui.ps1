@@ -59,8 +59,8 @@ if (-not (Test-Path $venvPrefab)) {
 }
 
 # Build command strings for the two processes
-$backendCmd = "`"$venvPython`" -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload"
-$backendShellCommand = "Set-Location -LiteralPath '$scriptDir'; `$env:PYTHONPATH='$srcPath'; & '$venvPython' -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload"
+$backendCmd = "`"$venvPython`" -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload --reload-dir src"
+$backendShellCommand = "Set-Location -LiteralPath '$scriptDir'; `$env:PYTHONPATH='$srcPath'; & '$venvPython' -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port $BackendPort --reload --reload-dir src"
 
 if ($venvPrefab) {
     $frontendCmd = "`"$venvPrefab`" serve $FrontendTarget --port $FrontendPort --reload"
@@ -78,7 +78,9 @@ $backendArgs = @(
     "127.0.0.1",
     "--port",
     "$BackendPort",
-    "--reload"
+    "--reload",
+    "--reload-dir",
+    "src"
 )
 
 # Build frontend args depending on whether prefab.exe exists

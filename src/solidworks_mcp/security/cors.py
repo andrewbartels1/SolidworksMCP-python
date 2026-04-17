@@ -19,8 +19,8 @@ def setup_cors(mcp: Any, config: SolidWorksMCPConfig) -> None:
     enable_cors = bool(getattr(config, "enable_cors", False))
     origins = cors_origins or allowed_origins
     try:
-        setattr(mcp, "_security_cors_enabled", enable_cors)
-        setattr(mcp, "_security_cors_origins", list(origins))
+        mcp._security_cors_enabled = enable_cors
+        mcp._security_cors_origins = list(origins)
     except (AttributeError, TypeError):
         # Some tests intentionally pass plain object() instances without __dict__.
         return

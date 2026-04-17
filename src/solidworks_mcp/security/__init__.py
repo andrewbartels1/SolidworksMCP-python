@@ -5,13 +5,13 @@ Provides authentication, authorization, and security features based on
 the configured security level.
 """
 
+from typing import Any
+
+from ..config import SolidWorksMCPConfig
 from .auth import setup_authentication, validate_api_key
 from .cors import setup_cors
 from .rate_limiting import setup_rate_limiting
 from .runtime import SecurityEnforcer
-from ..config import SolidWorksMCPConfig
-from typing import Any
-
 
 _security_enforcer: SecurityEnforcer | None = None
 

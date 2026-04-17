@@ -8,16 +8,23 @@ from __future__ import annotations
 
 import os
 import platform
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
-from pydantic import ConfigDict
+
 from dotenv import dotenv_values
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_core.core_schema import ValidationInfo
 
 
-class DeploymentMode(str, Enum):
+class DeploymentMode(StrEnum):
     """Deployment mode options."""
 
     LOCAL = "local"
@@ -25,7 +32,7 @@ class DeploymentMode(str, Enum):
     HYBRID = "hybrid"
 
 
-class SecurityLevel(str, Enum):
+class SecurityLevel(StrEnum):
     """Security level options."""
 
     MINIMAL = "minimal"  # Local only, no authentication
@@ -33,7 +40,7 @@ class SecurityLevel(str, Enum):
     STRICT = "strict"  # Full authentication, encryption, audit logs
 
 
-class AdapterType(str, Enum):
+class AdapterType(StrEnum):
     """SolidWorks adapter implementation options."""
 
     PYWIN32 = "pywin32"  # Direct COM via pywin32
@@ -271,7 +278,7 @@ class SolidWorksMCPConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def sync_legacy_alias_fields(self) -> "SolidWorksMCPConfig":
+    def sync_legacy_alias_fields(self) -> SolidWorksMCPConfig:
         """Sync test/developer alias fields into canonical runtime fields.
 
         Several fixtures and scripts still populate compatibility fields such as
@@ -412,7 +419,7 @@ class SolidWorksMCPConfig(BaseModel):
         return v
 
     @classmethod
-    def from_env(cls, env_file: str | None = None) -> "SolidWorksMCPConfig":
+    def from_env(cls, env_file: str | None = None) -> SolidWorksMCPConfig:
         """Build configuration from environment variables."""
         import json
 
