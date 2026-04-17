@@ -18,7 +18,10 @@ from prefab_ui.components import (
     Column,
     Else,
     Embed,
+    Grid,
+    GridItem,
     If,
+    Image,
     Muted,
     Row,
     Text,
@@ -45,6 +48,21 @@ def _trace_error(step: str) -> list[object]:
 def _hydrate_trace() -> list[object]:
     return [
         SetState("trace_payload", RESULT),
+        SetState("last_error", ""),
+    ]
+
+
+def _hydrate_preview_from_result() -> list[object]:
+    """Update preview-relevant trace_payload fields directly from preview/refresh POST result.
+
+    Avoids nested Fetch-in-on_success which is unreliable in prefab_ui 0.19.x.
+    The POST to /api/ui/preview/refresh returns build_dashboard_state() whose
+    top-level keys map 1:1 to trace_payload.state fields.
+    """
+    return [
+        SetState("trace_payload.state", RESULT),
+        SetState("trace_payload.latest_message", RESULT.latest_message),
+        SetState("trace_payload.latest_error_text", RESULT.latest_error_text),
         SetState("last_error", ""),
     ]
 
@@ -298,7 +316,7 @@ with PrefabApp(
                                     f"{API_ORIGIN}/api/ui/model/connect",
                                     body={
                                         "session_id": SESSION_ID_EXPR,
-                                        "uploaded_files": EVENT,
+                                        "uploaded_files": STATE.last_picker_event,
                                         "feature_target_text": STATE.feature_target_text,
                                     },
                                     on_success=[
@@ -400,30 +418,53 @@ with PrefabApp(
 
         with Card():
             with CardHeader():
-                CardTitle("3D Model View")
+                CardTitle("3D Model + View Grid")
                 CardDescription(
-                    "Interactive viewer appears only when STL export succeeds. Otherwise status explains what preview artifact was produced."
+                    "Left: interactive STL viewer. Right: orientation screenshots. Use the view buttons to refresh."
                 )
             with CardContent():
-                with Column(gap=2):
-                    with If("trace_payload.state.preview_viewer_url"):
-                        Embed(
-                            url="{{ trace_payload.state.preview_viewer_url }}",
-                            width="100%",
-                            height="480px",
-                        )
-                    with Else():
+                with Row(gap=3):
+                    # ── Left: interactive Three.js STL viewer ──────────────
+                    with Column(gap=2):
+                        with If("trace_payload.state.preview_viewer_url"):
+                            Embed(
+                                url="{{ trace_payload.state.preview_viewer_url }}",
+                                width="100%",
+                                height="480px",
+                            )
+                        with Else():
+                            Muted(
+                                "Interactive STL viewer is not ready yet. Attach model and refresh trace; if only PNG export succeeded, status will say static preview image ready."
+                            )
                         Muted(
-                            "Interactive STL viewer is not ready yet. Attach model and refresh trace; if only PNG export succeeded, status will say static preview image ready."
+                            "Viewer URL: {{ trace_payload.state.preview_viewer_url || '<none>' }}"
                         )
-                    Muted(
-                        "Viewer URL: {{ trace_payload.state.preview_viewer_url || '<none>' }}"
-                    )
-                    Muted(
-                        "Status: {{ trace_payload.state.preview_status || 'No preview captured yet.' }}"
-                    )
+                        Muted(
+                            "Status: {{ trace_payload.state.preview_status || 'No preview captured yet.' }}"
+                        )
+                    # ── Right: 2×2 orientation screenshot grid ─────────────
+                    with Column(gap=2):
+                        with Grid(columns=2, gap=2):
+                            for _view_name, _view_label in [
+                                ("isometric", "Isometric"),
+                                ("front", "Front"),
+                                ("top", "Top"),
+                                ("right", "Right"),
+                            ]:
+                                with GridItem():
+                                    Muted(_view_label)
+                                    with If(
+                                        f"trace_payload.state.preview_view_urls.{_view_name}"
+                                    ):
+                                        Image(
+                                            src=f"{{{{ trace_payload.state.preview_view_urls.{_view_name} }}}}",
+                                            alt=f"{_view_label} view",
+                                            width="100%",
+                                        )
+                                    with Else():
+                                        Muted("No screenshot yet.")
             with CardFooter():
-                with Row(gap=2):
+                with Row(gap=2, wrap=True):
                     Button(
                         "Refresh Trace + Viewer",
                         variant="outline",
@@ -431,6 +472,78 @@ with PrefabApp(
                             SetState("last_action", "refresh-trace-viewer"),
                             _refresh_trace(),
                         ],
+                    )
+                    Button(
+                        "Isometric",
+                        variant="outline",
+                        size="sm",
+                        on_click=Fetch.post(
+                            f"{API_ORIGIN}/api/ui/preview/refresh",
+                            body={
+                                "session_id": SESSION_ID_EXPR,
+                                "orientation": "isometric",
+                            },
+                            on_success=[
+                                SetState("last_action", "view-isometric"),
+                                *_hydrate_preview_from_result(),
+                                ShowToast("Isometric view"),
+                            ],
+                            on_error=_trace_error("isometric view"),
+                        ),
+                    )
+                    Button(
+                        "Front",
+                        variant="outline",
+                        size="sm",
+                        on_click=Fetch.post(
+                            f"{API_ORIGIN}/api/ui/preview/refresh",
+                            body={
+                                "session_id": SESSION_ID_EXPR,
+                                "orientation": "front",
+                            },
+                            on_success=[
+                                SetState("last_action", "view-front"),
+                                *_hydrate_preview_from_result(),
+                                ShowToast("Front view"),
+                            ],
+                            on_error=_trace_error("front view"),
+                        ),
+                    )
+                    Button(
+                        "Top",
+                        variant="outline",
+                        size="sm",
+                        on_click=Fetch.post(
+                            f"{API_ORIGIN}/api/ui/preview/refresh",
+                            body={
+                                "session_id": SESSION_ID_EXPR,
+                                "orientation": "top",
+                            },
+                            on_success=[
+                                SetState("last_action", "view-top"),
+                                *_hydrate_preview_from_result(),
+                                ShowToast("Top view"),
+                            ],
+                            on_error=_trace_error("top view"),
+                        ),
+                    )
+                    Button(
+                        "Current",
+                        variant="outline",
+                        size="sm",
+                        on_click=Fetch.post(
+                            f"{API_ORIGIN}/api/ui/preview/refresh",
+                            body={
+                                "session_id": SESSION_ID_EXPR,
+                                "orientation": "current",
+                            },
+                            on_success=[
+                                SetState("last_action", "view-current"),
+                                *_hydrate_preview_from_result(),
+                                ShowToast("Current view captured"),
+                            ],
+                            on_error=_trace_error("current view"),
+                        ),
                     )
 
         with Card():

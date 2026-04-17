@@ -121,9 +121,7 @@ def _hydrate_from_result() -> list[object]:
         "manual_sync_ready",
         "context_text",
     ]
-    return [
-        SetState(key, _result_state(key, defaults.get(key))) for key in state_keys
-    ]
+    return [SetState(key, _result_state(key, defaults.get(key))) for key in state_keys]
 
 
 with PrefabApp(
@@ -412,6 +410,28 @@ with PrefabApp(
                                         variant="outline",
                                         size="sm",
                                         on_click=SetState("model_provider", "local"),
+                                    )
+                                with Row(gap=2):
+                                    Button(
+                                        "Auto-Detect Local Model",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=Fetch.get(
+                                            f"{API_ORIGIN}/api/ui/local-model/probe",
+                                            on_success=[
+                                                SetState("model_provider", "local"),
+                                                SetState(
+                                                    "model_name",
+                                                    RESULT["service_model"],
+                                                ),
+                                                SetState(
+                                                    "local_endpoint",
+                                                    RESULT["openai_endpoint"],
+                                                ),
+                                                ShowToast(RESULT["status_message"]),
+                                            ],
+                                            on_error=_error_toast(),
+                                        ),
                                     )
                                 with Row(gap=2):
                                     Button(
@@ -856,25 +876,67 @@ with PrefabApp(
                                     "Isometric",
                                     variant="outline",
                                     size="sm",
-                                    on_click=SetState(
-                                        "preview_orientation", "isometric"
+                                    on_click=Fetch.post(
+                                        f"{API_ORIGIN}/api/ui/preview/refresh",
+                                        body={
+                                            "session_id": STATE.session_id,
+                                            "orientation": "isometric",
+                                        },
+                                        on_success=[
+                                            *_hydrate_from_result(),
+                                            ShowToast("Isometric view"),
+                                        ],
+                                        on_error=_error_toast(),
                                     ),
                                 )
                                 Button(
                                     "Front",
                                     variant="outline",
                                     size="sm",
-                                    on_click=SetState("preview_orientation", "front"),
+                                    on_click=Fetch.post(
+                                        f"{API_ORIGIN}/api/ui/preview/refresh",
+                                        body={
+                                            "session_id": STATE.session_id,
+                                            "orientation": "front",
+                                        },
+                                        on_success=[
+                                            *_hydrate_from_result(),
+                                            ShowToast("Front view"),
+                                        ],
+                                        on_error=_error_toast(),
+                                    ),
                                 )
                                 Button(
                                     "Top",
                                     variant="outline",
                                     size="sm",
-                                    on_click=SetState("preview_orientation", "top"),
+                                    on_click=Fetch.post(
+                                        f"{API_ORIGIN}/api/ui/preview/refresh",
+                                        body={
+                                            "session_id": STATE.session_id,
+                                            "orientation": "top",
+                                        },
+                                        on_success=[
+                                            *_hydrate_from_result(),
+                                            ShowToast("Top view"),
+                                        ],
+                                        on_error=_error_toast(),
+                                    ),
                                 )
                                 Button(
                                     "Current",
                                     variant="outline",
                                     size="sm",
-                                    on_click=SetState("preview_orientation", "current"),
+                                    on_click=Fetch.post(
+                                        f"{API_ORIGIN}/api/ui/preview/refresh",
+                                        body={
+                                            "session_id": STATE.session_id,
+                                            "orientation": "current",
+                                        },
+                                        on_success=[
+                                            *_hydrate_from_result(),
+                                            ShowToast("Current view captured"),
+                                        ],
+                                        on_error=_error_toast(),
+                                    ),
                                 )
