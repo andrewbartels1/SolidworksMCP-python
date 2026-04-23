@@ -300,6 +300,25 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"] / 2,
         )
 
+    async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock feature selection/highlight — succeeds without COM side-effects."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+        await asyncio.sleep(self._delays["feature_operation"] / 4)
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "selected": True,
+                "feature_name": feature_name,
+                "entity_type": "mock",
+            },
+            execution_time=self._delays["feature_operation"] / 4,
+        )
+
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """Mock configuration listing for the active model."""
         if not self._current_model:

@@ -1862,7 +1862,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                     )
                     saved = bool(success) and _os.path.exists(resolved)
                 except Exception as _mv_exc:
-                    logger.warning(
+                    logger.debug(
                         "[pywin32.export_image] IModelView.SaveBitmapWithVariableSize failed ({}), "
                         "trying IModelDoc2 path",
                         _mv_exc,
@@ -1876,7 +1876,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                     )
                     saved = bool(success) and _os.path.exists(resolved)
                 except Exception as _doc_exc:
-                    logger.warning(
+                    logger.debug(
                         "[pywin32.export_image] IModelDoc2.SaveBitmapWithVariableSize "
                         "failed ({}), trying SaveAs3 image export",
                         str(_doc_exc),
@@ -1921,12 +1921,12 @@ class PyWin32Adapter(SolidWorksAdapter):
             format_map = {
                 "step": 0,  # swSaveAsSTEP
                 "iges": 1,  # swSaveAsIGS
-                "stl": 2,   # swSaveAsSTL
-                "pdf": 3,   # swSaveAsPDF
-                "dwg": 4,   # swSaveAsDWG
-                "jpg": 5,   # swSaveAsJPEG
+                "stl": 2,  # swSaveAsSTL
+                "pdf": 3,  # swSaveAsPDF
+                "dwg": 4,  # swSaveAsDWG
+                "jpg": 5,  # swSaveAsJPEG
                 "glb": 41,  # swSaveAsGLTF (binary GLTF, SW 2023+)
-                "gltf": 41, # same enum value, text GLTF
+                "gltf": 41,  # same enum value, text GLTF
             }
 
             format_lower = format_type.lower()
@@ -1941,8 +1941,9 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             # Prefer swApp.ActiveDoc — more reliably typed than the late-bound
             # IDispatch reference stored in self.currentModel after OpenDoc6.
+            # Use getattr so tests can pass a SimpleNamespace without ActiveDoc.
             target_doc = (
-                self.swApp.ActiveDoc if self.swApp else None
+                getattr(self.swApp, "ActiveDoc", None) if self.swApp else None
             ) or self.currentModel
             if not target_doc:
                 raise RuntimeError("No active SolidWorks document for export")
@@ -2019,17 +2020,27 @@ class PyWin32Adapter(SolidWorksAdapter):
                 return None
 
             # ----------------------------------------------------------------
-            # All other formats — classic SaveAs3 path
+            # All other formats — classic SaveAs3 path.
+            # SaveAs3 signature: SaveAs3(FileName, Version, Options)
+            # Version = 0 means "current version" (swSaveAsCurrentVersion).
+            # SolidWorks infers the export format from the file extension, so
+            # we must NOT pass the format-enum value as the Version argument.
             # ----------------------------------------------------------------
-            save_format = format_map[format_lower]
+            _ = format_map[format_lower]  # validate format is known; value unused
+            logger.debug(
+                "[pywin32.export_file] SaveAs3 {} (version=0, options=Silent)",
+                resolved_path,
+            )
             success = target_doc.SaveAs3(
                 resolved_path,
-                save_format,
+                0,  # swSaveAsCurrentVersion — format inferred from file extension
                 2,  # swSaveAsOptions_Silent
             )
 
             if not success and not os.path.exists(resolved_path):
-                raise Exception(f"Failed to export file: {resolved_path}")
+                raise Exception(
+                    f"SaveAs3 returned False and no file produced: {resolved_path}"
+                )
 
             return None
 
@@ -2349,6 +2360,155 @@ class PyWin32Adapter(SolidWorksAdapter):
             return features
 
         return self._handle_com_operation("list_features", _list_operation)
+
+    async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
+        """Highlight a named feature in SolidWorks by selecting it via SelectByID2.
+
+        Tries common entity type strings in priority order and falls back to an
+        empty type string which lets SolidWorks auto-resolve the entity class.
+        """
+        if not self.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        def _select_operation() -> dict[str, Any]:
+            target_doc = self.currentModel
+            doc_title = ""
+            doc_stem = ""
+
+            def _normalize_name(raw_name: str | None) -> str:
+                return str(raw_name or "").strip().strip('"').casefold()
+
+            try:
+                raw_title = str(target_doc.GetTitle() or "").strip()
+                if raw_title:
+                    doc_title = raw_title
+                    doc_stem = raw_title.rsplit(".", 1)[0]
+            except Exception:
+                pass
+
+            candidate_names = [feature_name]
+            if doc_stem:
+                candidate_names.append(f"{feature_name}@{doc_stem}")
+            if doc_title and doc_title != doc_stem:
+                candidate_names.append(f"{feature_name}@{doc_title}")
+
+            normalized_candidates = {
+                _normalize_name(candidate)
+                for candidate in candidate_names
+                if _normalize_name(candidate)
+            }
+            normalized_bases = {
+                candidate.split("@", 1)[0]
+                for candidate in normalized_candidates
+                if candidate
+            }
+
+            entity_types = [
+                "BODYFEATURE",
+                "COMPONENT",
+                "SKETCH",
+                "PLANE",
+                "MATE",
+                "",  # auto-resolve
+            ]
+            for candidate in candidate_names:
+                for entity_type in entity_types:
+                    try:
+                        selected = target_doc.Extension.SelectByID2(
+                            candidate,
+                            entity_type,
+                            0,
+                            0,
+                            0,
+                            False,
+                            0,
+                            None,
+                            0,
+                        )
+                        if selected:
+                            return {
+                                "selected": True,
+                                "feature_name": feature_name,
+                                "selected_name": candidate,
+                                "entity_type": entity_type or "auto",
+                            }
+                    except Exception:
+                        continue
+
+            get_component_by_name = getattr(target_doc, "GetComponentByName", None)
+            if callable(get_component_by_name):
+                for candidate in candidate_names:
+                    component_name = candidate.split("@", 1)[0]
+                    component = self._attempt(
+                        lambda c=component_name: get_component_by_name(c),
+                        default=None,
+                    )
+                    if component is None:
+                        continue
+
+                    for method_name, args in [
+                        ("Select4", (False, None, False)),
+                        ("Select", (False,)),
+                        ("Select2", (False, 0)),
+                    ]:
+                        selector = getattr(component, method_name, None)
+                        if not callable(selector):
+                            continue
+                        try:
+                            if bool(selector(*args)):
+                                return {
+                                    "selected": True,
+                                    "feature_name": feature_name,
+                                    "selected_name": component_name,
+                                    "entity_type": f"component:{method_name}",
+                                }
+                        except Exception:
+                            continue
+
+            def _matches_tree_name(raw_name: str | None) -> bool:
+                normalized_name = _normalize_name(raw_name)
+                if not normalized_name:
+                    return False
+                if normalized_name in normalized_candidates:
+                    return True
+                return normalized_name.split("@", 1)[0] in normalized_bases
+
+            feature = self._attempt(lambda: target_doc.FirstFeature())
+            guard = 0
+            while feature and guard < 10000:
+                guard += 1
+                tree_name = self._attempt(
+                    lambda current_feature=feature: str(current_feature.Name or ""),
+                    default="",
+                )
+                if _matches_tree_name(tree_name):
+                    try:
+                        if feature.Select2(False, 0):
+                            return {
+                                "selected": True,
+                                "feature_name": feature_name,
+                                "selected_name": tree_name or feature_name,
+                                "entity_type": "feature-tree",
+                            }
+                    except Exception:
+                        pass
+
+                next_feature = self._attempt(
+                    lambda current_feature=feature: current_feature.GetNextFeature()
+                )
+                if next_feature is None:
+                    break
+                feature = next_feature
+
+            return {
+                "selected": False,
+                "feature_name": feature_name,
+                "selected_name": feature_name,
+            }
+
+        return self._handle_com_operation("select_feature", _select_operation)
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """List all configuration names in the active model."""

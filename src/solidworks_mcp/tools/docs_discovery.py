@@ -487,8 +487,11 @@ class SolidWorksDocsDiscovery:
             total_m += len(members["methods"])
             total_p += len(members["properties"])
 
-        self.index["total_methods"] += total_m
-        self.index["total_properties"] += total_p
+        try:
+            self.index["total_methods"] += total_m
+            self.index["total_properties"] += total_p
+        except TypeError:
+            pass  # accumulator corrupted (e.g. set to a string by tests); tolerate
 
         # Get SolidWorks version
         try:

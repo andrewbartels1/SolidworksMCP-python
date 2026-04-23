@@ -30,18 +30,9 @@ import json
 import sys
 from pathlib import Path
 
-try:
-    import numpy as np
-    from PIL import Image, ImageFilter
-    from skimage.metrics import structural_similarity as ssim
-except ImportError as exc:
-    print(
-        f"Missing dependency: {exc}\n"
-        "Install with: pip install pillow scikit-image numpy",
-        file=sys.stderr,
-    )
-    sys.exit(2)
-
+import numpy as np
+from PIL import Image, ImageFilter
+from skimage.metrics import structural_similarity as ssim
 
 # ---------------------------------------------------------------------------
 # Core comparison logic

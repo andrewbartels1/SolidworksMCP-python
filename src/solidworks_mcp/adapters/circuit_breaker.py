@@ -260,9 +260,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 result = await result
             self._record_success()
             return result
-        except Exception:
+        except Exception as exc:
             self._record_failure()
-            raise
+            raise RuntimeError(str(exc)) from exc
 
     async def create_assembly(
         self, name: str | None = None
