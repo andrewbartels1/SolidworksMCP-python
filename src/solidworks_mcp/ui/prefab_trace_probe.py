@@ -16,6 +16,8 @@ from prefab_ui.components import (
     CardHeader,
     CardTitle,
     Column,
+    DataTable,
+    DataTableColumn,
     Else,
     Embed,
     Grid,
@@ -65,6 +67,28 @@ def _hydrate_preview_from_result() -> list[object]:
         SetState("trace_payload.latest_error_text", RESULT.latest_error_text),
         SetState("last_error", ""),
     ]
+
+
+def _refresh_preview() -> Fetch:
+    """Single preview refresh that chains _refresh_trace() on completion.
+
+    Chaining ensures the trace payload (which contains preview_view_urls)
+    is re-fetched *after* all 4 orientation PNGs have been written, not in
+    parallel with the preview export.  We intentionally skip the intermediate
+    _hydrate_preview_from_result() call here: the deep-path SetState it
+    performs replaces trace_payload.state with the preview/refresh result
+    which may have stale or empty preview_view_urls if called before the
+    orientation PNGs are stored in metadata.  _refresh_trace() (GET
+    /api/ui/debug/session) is the single source of truth — it runs after the
+    export completes and returns the full trace payload including the correct
+    preview_view_urls.
+    """
+    return Fetch.post(
+        f"{API_ORIGIN}/api/ui/preview/refresh",
+        body={"session_id": SESSION_ID_EXPR, "orientation": "isometric"},
+        on_success=_refresh_trace(),
+        on_error=_trace_error("preview refresh"),
+    )
 
 
 def _refresh_trace() -> Fetch:
@@ -205,6 +229,109 @@ with PrefabApp(
                     Muted(
                         "Use this probe to verify mount, workflow selection, and model attach separately before merging changes back into the main dashboard."
                     )
+                    with If("trace_payload.workflow_mode == 'unselected'"):
+                        with Grid(columns={"default": 1, "lg": 2}, gap=3):
+                            with Card():
+                                with CardHeader():
+                                    CardTitle("Edit Existing Part or Assembly")
+                                    CardDescription(
+                                        "Attach an existing local SolidWorks file and continue with trace-first UI behaviors."
+                                    )
+                                with CardFooter():
+                                    with Row(gap=2):
+                                        Button(
+                                            "Choose Existing Workflow",
+                                            variant="success",
+                                            on_click=Fetch.post(
+                                                f"{API_ORIGIN}/api/ui/workflow/select",
+                                                body={
+                                                    "session_id": SESSION_ID_EXPR,
+                                                    "workflow_mode": "edit_existing",
+                                                },
+                                                on_success=[
+                                                    SetState(
+                                                        "last_action", "select-existing"
+                                                    ),
+                                                    _refresh_trace(),
+                                                    ShowToast(
+                                                        "Existing-model workflow selected"
+                                                    ),
+                                                ],
+                                                on_error=_trace_error(
+                                                    "select existing workflow"
+                                                ),
+                                            ),
+                                        )
+                                        Button(
+                                            "Attach Local Model",
+                                            variant="outline",
+                                            on_click=OpenFilePicker(
+                                                accept=".sldprt,.sldasm,.slddrw",
+                                                max_size=500 * 1024 * 1024,
+                                                on_success=[
+                                                    SetState(
+                                                        "last_picker_event", EVENT
+                                                    ),
+                                                    Fetch.post(
+                                                        f"{API_ORIGIN}/api/ui/model/connect",
+                                                        body={
+                                                            "session_id": SESSION_ID_EXPR,
+                                                            "uploaded_files": STATE.last_picker_event,
+                                                            "feature_target_text": STATE.feature_target_text,
+                                                        },
+                                                        on_success=[
+                                                            SetState(
+                                                                "last_action",
+                                                                "attach-local-model",
+                                                            ),
+                                                            _refresh_trace(),
+                                                            ShowToast(
+                                                                "Target model attached"
+                                                            ),
+                                                        ],
+                                                        on_error=_trace_error(
+                                                            "attach local model"
+                                                        ),
+                                                    ),
+                                                ],
+                                                on_error=[
+                                                    SetState(
+                                                        "checklist_result",
+                                                        "File picker failed before upload. Check size/type and browser permissions.",
+                                                    ),
+                                                    *_trace_error("open file picker"),
+                                                ],
+                                            ),
+                                        )
+
+                            with Card():
+                                with CardHeader():
+                                    CardTitle("Start New Design")
+                                    CardDescription(
+                                        "Begin from requirements with no source model, then classify and plan checkpoints."
+                                    )
+                                with CardFooter():
+                                    Button(
+                                        "Choose New Workflow",
+                                        variant="success",
+                                        on_click=Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/workflow/select",
+                                            body={
+                                                "session_id": SESSION_ID_EXPR,
+                                                "workflow_mode": "new_design",
+                                            },
+                                            on_success=[
+                                                SetState("last_action", "select-new"),
+                                                _refresh_trace(),
+                                                ShowToast(
+                                                    "New-design workflow selected"
+                                                ),
+                                            ],
+                                            on_error=_trace_error(
+                                                "select new workflow"
+                                            ),
+                                        ),
+                                    )
                     Text("Latest message")
                     Muted("{{ trace_payload.latest_message || 'Ready.' }}")
                     Muted(
@@ -544,6 +671,48 @@ with PrefabApp(
                             ],
                             on_error=_trace_error("current view"),
                         ),
+                    )
+
+        with Card():
+            with CardHeader():
+                CardTitle("Feature Tree")
+                CardDescription(
+                    "Features from the active model. Click a row to highlight it in SolidWorks."
+                )
+            with CardContent():
+                with If(
+                    "trace_payload.state.feature_tree_items && trace_payload.state.feature_tree_items.length"
+                ):
+                    DataTable(
+                        columns=[
+                            DataTableColumn(key="_selected", header=""),
+                            DataTableColumn(key="name", header="Name"),
+                            DataTableColumn(key="type", header="Type"),
+                            DataTableColumn(key="suppressed", header="Suppressed"),
+                        ],
+                        rows="{{ trace_payload.state.feature_tree_items }}",
+                        paginated=True,
+                        on_row_click=[
+                            Fetch.post(
+                                f"{API_ORIGIN}/api/ui/feature/select",
+                                body={
+                                    "session_id": SESSION_ID_EXPR,
+                                    "feature_name": "{{ $event.name }}",
+                                },
+                                on_success=[
+                                    _refresh_preview(),
+                                    ShowToast("Feature highlighted in SolidWorks"),
+                                ],
+                                on_error=_trace_error("feature select"),
+                            )
+                        ],
+                    )
+                    Muted(
+                        "Selected: {{ trace_payload.state.selected_feature_name || 'none' }}"
+                    )
+                with Else():
+                    Muted(
+                        "No feature tree data yet. Attach a model to populate this panel."
                     )
 
         with Card():
