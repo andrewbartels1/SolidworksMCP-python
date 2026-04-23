@@ -13,7 +13,7 @@ For a complete control-by-control mapping (every button/input to endpoint/servic
 - **3D Model View** (larger right pane): Real-time PNG preview synced every ~3 min or manual refresh with orientation buttons (Isometric/Front/Top/Current)
 - **Manual Sync Detection**: Capture before/after snapshots and detect manual edits
 - **Evidence Retrieval**: Track LLM sources and design decisions
-- **Context Window Monitor**: Track token usage (cosmetic currently)
+- **Context Window Monitor**: Approximate prompt-budget usage for goal, assumptions, model context, docs context, and notes (advisory currently)
 
 ## Layout
 
@@ -74,10 +74,20 @@ This card controls how planning prompts are formed and which model provider hand
   - `Small` / `Balanced` / `Large` tune the default model recommendation and latency/quality tradeoff.
 - Model name textbox:
   - Use provider-qualified names when possible.
-  - Examples: `github:openai/gpt-4.1`, `local:google/gemma-3-12b-it`.
+  - Examples: `github:openai/gpt-4.1`, `local:gemma4:e4b`.
 - Local endpoint textbox:
   - Only used when provider is local.
   - Typical value: `http://127.0.0.1:11434/v1`.
+- Local model controls:
+  - `Auto-Detect Local Model` probes Ollama, picks a supported local tier, updates the endpoint, and writes a provider-qualified local model name into the form.
+  - `Pull Recommended Model` triggers the Ollama pull for the recommended tier and shows in-UI status while the download is running.
+  - These controls are the intended fix path when Clarify/Inspect fail with errors like `model 'llama3.1' not found`.
+
+### What the context window monitor means
+
+- The context window meter is an operator hint, not a hard tokenizer-backed quota.
+- It summarizes how much prompt budget is being consumed by the current goal, assumptions, attached model context, docs context, and engineering notes.
+- Today it is useful for understanding why the second column may get noisy or overloaded, but it does not yet enforce truncation or exact token accounting.
 
 Setup references:
 
@@ -163,9 +173,10 @@ $env:SOLIDWORKS_UI_MODEL = "github:openai/gpt-4.1"
 1. Save assumptions/model settings in the UI with:
    - provider = `local`
    - profile = `small` / `balanced` / `large`
-   - model name = for example `local:google/gemma-3-12b-it`
+   - model name = for example `local:gemma4:e4b`
    - local endpoint = for example `http://127.0.0.1:11434/v1`
 2. Clarify/Inspect actions will route through `OpenAIProvider(base_url=...)` against the configured local endpoint.
+3. If the current model field contains an unsupported local name, click `Auto-Detect Local Model` in the UI before retrying Clarify/Inspect.
 
 ## Preview pane requirements
 
@@ -180,6 +191,8 @@ The dashboard now attempts to reopen the attached target model before preview ex
 1. Attach the target model path in the UI.
 2. Confirm SolidWorks opened it successfully.
 3. Click `Refresh 3D View`.
+
+If the attached model context reports `features 0`, the dashboard now shows an inline warning under `Feature targets` explaining that grounded refs cannot resolve until the adapter can read the active feature tree.
 
 ## Working on a saved model
 
@@ -288,6 +301,14 @@ The pane auto-refreshes every 3 minutes (SetInterval 180000ms) or on manual clic
 
 - Use the exact feature-tree name, for example `@Boss-Extrude1`
 - Re-attach the model after changing feature targets so the UI can revalidate them against the active tree
+- If you see the inline grounding warning and the local model context summary says `features 0`, the attach succeeded but the feature tree was not readable for that model context yet.
+
+**Local model routing failed with `model not found`**:
+
+- Open `Design Spec and Model Settings`
+- Click `Auto-Detect Local Model`
+- If Ollama is reachable but the recommended tier is not downloaded yet, click `Pull Recommended Model`
+- Re-run `Auto-Detect Local Model`, then retry `Refresh Clarifications` or `Inspect More`
 
 **PDF ingestion failed**:
 

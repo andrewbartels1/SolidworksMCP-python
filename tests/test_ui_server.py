@@ -184,7 +184,7 @@ def test_local_model_probe_endpoint(monkeypatch) -> None:
         ram_gb=8.0,
         pulled_models=[],
         tier_already_pulled=False,
-        pull_command="ollama pull gemma3:4b",
+        pull_command="ollama pull gemma4:e2b",
         status_message="Ollama is not running.",
         all_tiers={k: v.label for k, v in GEMMA_TIERS.items()},
     )
@@ -216,7 +216,7 @@ def test_local_model_pull_endpoint_success(monkeypatch) -> None:
     monkeypatch.setattr(llm_mod, "pull_ollama_model", _fake_pull)
 
     client = TestClient(server.app)
-    resp = client.post("/api/ui/local-model/pull", json={"model": "gemma3:4b"})
+    resp = client.post("/api/ui/local-model/pull", json={"model": "gemma4:e2b"})
     assert resp.status_code == 200
     assert resp.json()["queued"] is True
 
@@ -277,7 +277,7 @@ def test_local_model_query_endpoint_with_overrides(monkeypatch) -> None:
         json={
             "prompt": "Test query",
             "endpoint": "http://myhost:11434",
-            "model": "gemma3:27b",
+            "model": "gemma4:26b",
         },
     )
     assert resp.status_code == 200

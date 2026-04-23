@@ -138,7 +138,7 @@ def test_update_preferences_persists_model_and_assumptions(tmp_path: Path) -> No
     assert state["assumptions_text"].startswith("Assume 0.25mm clearance")
     assert state["model_provider"] == "local"
     assert state["model_profile"] == "small"
-    assert state["model_name"] == "local:google/gemma-3-4b-it"
+    assert state["model_name"] == "local:gemma4:e2b"
     assert "Readiness" in state["readiness_summary"]
 
 

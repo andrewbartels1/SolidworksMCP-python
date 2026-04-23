@@ -44,7 +44,7 @@ def test_local_llm_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_local_llm_config_from_env_custom(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOLIDWORKS_UI_OLLAMA_ENDPOINT", "http://myhost:11434")
-    monkeypatch.setenv("SOLIDWORKS_UI_MODEL", "local:google/gemma-3-12b-it")
+    monkeypatch.setenv("SOLIDWORKS_UI_MODEL", "local:gemma4:e4b")
     monkeypatch.setenv("LOCAL_OPENAI_API_KEY", "mykey")
     cfg = LocalLLMConfig.from_env()
     assert cfg.endpoint == "http://myhost:11434"
@@ -77,9 +77,9 @@ def test_local_model_probe_result_to_config() -> None:
         label=spec.label,
         vram_gb=8.0,
         ram_gb=16.0,
-        pulled_models=["gemma3:12b"],
+        pulled_models=["gemma4:e4b"],
         tier_already_pulled=True,
-        pull_command="ollama pull gemma3:12b",
+        pull_command="ollama pull gemma4:e4b",
         status_message="Ready",
         all_tiers={k: v.label for k, v in GEMMA_TIERS.items()},
     )
@@ -196,7 +196,7 @@ async def test_ollama_health_unavailable(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 async def test_ollama_list_models_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    data = json.dumps({"models": [{"name": "gemma3:4b"}, {"name": "llama3"}]}).encode()
+    data = json.dumps({"models": [{"name": "gemma4:e2b"}, {"name": "llama3"}]}).encode()
 
     class _FakeResp:
         def read(self) -> bytes:
@@ -210,7 +210,7 @@ async def test_ollama_list_models_success(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
     result = await _ollama_list_models()
-    assert "gemma3:4b" in result
+    assert "gemma4:e2b" in result
     assert "llama3" in result
 
 
@@ -238,7 +238,7 @@ async def test_probe_local_model_available_with_model_pulled(
         return True
 
     async def _list_models(*a: object, **k: object) -> list[str]:
-        return ["gemma3:12b", "llama3:8b"]
+        return ["gemma4:e4b", "llama3:8b"]
 
     monkeypatch.setattr(local_llm_mod, "_ollama_health", _health)
     monkeypatch.setattr(local_llm_mod, "_ollama_list_models", _list_models)
@@ -326,9 +326,9 @@ async def test_pull_ollama_model_success(monkeypatch: pytest.MonkeyPatch) -> Non
             pass
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
-    result = await pull_ollama_model(model="gemma3:4b")
+    result = await pull_ollama_model(model="gemma4:e2b")
     assert result.queued is True
-    assert result.model == "gemma3:4b"
+    assert result.model == "gemma4:e2b"
     assert result.error is None
 
 
@@ -339,7 +339,7 @@ async def test_pull_ollama_model_connection_failure(
         raise ConnectionRefusedError("Ollama not running")
 
     monkeypatch.setattr(urllib.request, "urlopen", _raise)
-    result = await pull_ollama_model(model="gemma3:4b")
+    result = await pull_ollama_model(model="gemma4:e2b")
     assert result.queued is False
     assert result.error is not None
 
@@ -360,7 +360,7 @@ async def test_pull_ollama_model_custom_endpoint(
             pass
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
-    result = await pull_ollama_model(model="gemma3:27b", endpoint="http://myhost:11434")
+    result = await pull_ollama_model(model="gemma4:e4b", endpoint="http://myhost:11434")
     assert result.queued is True
 
 
