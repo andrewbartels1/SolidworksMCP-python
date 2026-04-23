@@ -314,7 +314,8 @@ async def test_ui_service_request_clarifications_and_inspect_family_branches(
         )
 
     monkeypatch.setattr(service, "_run_structured_agent", _clarify_ok)
-    state_ok = await service.request_clarifications("s-llm", "goal", db_path=db_path)
+    goal_text = "design goal"
+    state_ok = await service.request_clarifications("s-llm", goal_text, db_path=db_path)
     assert "Generated clarifying questions" in state_ok["latest_message"]
 
     async def _clarify_fail(*_a: Any, **_k: Any) -> Any:
@@ -326,7 +327,9 @@ async def test_ui_service_request_clarifications_and_inspect_family_branches(
         )
 
     monkeypatch.setattr(service, "_run_structured_agent", _clarify_fail)
-    state_fail = await service.request_clarifications("s-llm", "goal", db_path=db_path)
+    state_fail = await service.request_clarifications(
+        "s-llm", goal_text, db_path=db_path
+    )
     assert state_fail["latest_error_text"] == "clarify failed"
 
     async def _inspect_ok(*_a: Any, **_k: Any) -> Any:
@@ -343,7 +346,7 @@ async def test_ui_service_request_clarifications_and_inspect_family_branches(
         )
 
     monkeypatch.setattr(service, "_run_structured_agent", _inspect_ok)
-    inspect_ok = await service.inspect_family("s-llm", "goal", db_path=db_path)
+    inspect_ok = await service.inspect_family("s-llm", goal_text, db_path=db_path)
     assert inspect_ok["proposed_family"] == "bracket"
 
     async def _inspect_fail(*_a: Any, **_k: Any) -> Any:
@@ -355,7 +358,7 @@ async def test_ui_service_request_clarifications_and_inspect_family_branches(
         )
 
     monkeypatch.setattr(service, "_run_structured_agent", _inspect_fail)
-    inspect_fail = await service.inspect_family("s-llm", "goal", db_path=db_path)
+    inspect_fail = await service.inspect_family("s-llm", goal_text, db_path=db_path)
     assert inspect_fail["latest_error_text"] == "inspect failed"
 
 
@@ -408,7 +411,9 @@ async def test_ui_service_refresh_preview_success_and_failure(
 
     class _NoExportAdapter:
         async def connect(self) -> None:
-            return None
+            # Simulate a completely broken adapter so the outer exception
+            # handler fires and sets "Preview refresh failed".
+            raise RuntimeError("Adapter not available")
 
         async def disconnect(self) -> None:
             return None

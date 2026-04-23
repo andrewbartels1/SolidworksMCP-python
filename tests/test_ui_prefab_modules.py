@@ -13,6 +13,9 @@ class _Expr:
     def __getattr__(self, name: str) -> _Expr:
         return _Expr(name)
 
+    def __getitem__(self, key: Any) -> _Expr:
+        return _Expr(key)
+
     def __call__(self, *args: Any, **kwargs: Any) -> _Expr:
         return _Expr((args, kwargs))
 

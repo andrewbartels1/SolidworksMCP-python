@@ -154,6 +154,10 @@ class _DummyAdapter(SolidWorksAdapter):
         """Test helper for export file."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
+    async def export_image(self, payload: dict):
+        """Test helper for export image."""
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
+
     async def get_dimension(self, name: str):
         """Test helper for get dimension."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=1.0)

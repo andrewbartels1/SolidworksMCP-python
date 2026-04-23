@@ -1723,11 +1723,12 @@ class TestAdapterIntegration:
         """Test comprehensive adapter error handling."""
         await mock_adapter.connect()
 
-        # Test operation error
+        # Test operation error — mock_adapter has no RuntimeError wrapping, so
+        # the original exception propagates as-is.
         with patch.object(
             mock_adapter, "open_model", side_effect=Exception("Test error")
         ):
-            with pytest.raises(RuntimeError):
+            with pytest.raises(Exception, match="Test error"):
                 await mock_adapter.open_model("test.sldprt")
 
         # Adapter should still be connected after error

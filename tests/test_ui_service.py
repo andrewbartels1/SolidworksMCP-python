@@ -11,6 +11,7 @@ import pytest
 
 from src.solidworks_mcp.agents.history_db import (
     get_design_session,
+    insert_evidence_link,
     insert_model_state_snapshot,
     list_tool_call_records,
     upsert_design_session,
@@ -228,6 +229,35 @@ def test_build_dashboard_trace_payload_includes_state_and_metadata(
     assert trace["tool_records_text"].startswith("[")
 
 
+def test_build_dashboard_state_keeps_latest_feature_target_evidence_only(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "ui.sqlite3"
+    ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
+
+    for rationale in [
+        "No matching feature targets found for: @OldA",
+        "No matching feature targets found for: @OldB",
+        "No matching feature targets found for: @Newest",
+    ]:
+        insert_evidence_link(
+            session_id=DEFAULT_SESSION_ID,
+            source_type="feature_target",
+            source_id="C:/tmp/model.sldasm",
+            relevance_score=0.4,
+            rationale=rationale,
+            db_path=db_path,
+        )
+
+    state = build_dashboard_state(DEFAULT_SESSION_ID, db_path=db_path)
+    feature_rows = [
+        row for row in state["evidence_rows"] if row.get("source") == "feature_target"
+    ]
+
+    assert len(feature_rows) == 1
+    assert "@Newest" in feature_rows[0]["detail"]
+
+
 @pytest.mark.asyncio
 async def test_connect_target_model_persists_active_model_context(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -258,11 +288,9 @@ async def test_connect_target_model_persists_active_model_context(
     assert state["active_model_path"] == str(part_path)
     assert state["workflow_mode"] == "edit_existing"
     assert "Attached model" in state["active_model_status"]
-    assert (
-        state["preview_status"]
-        == "Static preview image ready (interactive STL unavailable)."
-    )
-    assert state["preview_viewer_url"] == ""
+    assert state["preview_status"] == "Preview refreshed (3D viewer (no model), PNG)."
+    assert "/api/ui/viewer/prefab-dashboard" in state["preview_viewer_url"]
+    assert "fmt=none" in state["preview_viewer_url"]
     assert state["proposed_family"] == "extrude"
     assert "@Boss-Extrude1" in state["feature_target_status"]
 

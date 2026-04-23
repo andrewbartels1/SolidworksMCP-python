@@ -315,20 +315,26 @@ def test_discovery_connect_fails_on_non_windows(
 def test_discovery_connect_uses_dispatch_when_getobject_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """connect_to_solidworks should fallback to Dispatch when GetObject returns None."""
+    """connect_to_solidworks should fall back to gencache.EnsureDispatch when GetActiveObject raises com_error."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     fake_sw = object()
 
+    class _FakeComError(Exception):
+        pass
+
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(docs_mod, "com_error", _FakeComError, raising=False)
     monkeypatch.setattr(
         docs_mod,
         "win32com",
         SimpleNamespace(
             client=SimpleNamespace(
-                GetObject=lambda *_args, **_kwargs: None,
-                Dispatch=lambda _prog_id: fake_sw,
+                GetActiveObject=lambda _: (_ for _ in ()).throw(
+                    _FakeComError("not running")
+                ),
+                gencache=SimpleNamespace(EnsureDispatch=lambda _: fake_sw),
             )
         ),
         raising=False,
@@ -383,26 +389,26 @@ def test_discover_com_objects_and_summary_with_fake_app() -> None:
 def test_discover_vba_references_handles_available_and_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """discover_vba_references should classify available/missing/error libraries."""
+    """discover_vba_references should return whatever _discover_vba_references_via_registry finds."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
-    def _get_object(*_args, **kwargs):
-        """Test helper for get object."""
-        name = kwargs.get("Class")
-        if name is None and _args:
-            name = _args[-1]
-        if name in {"VBA", "SldWorks"}:
-            return object()
-        if name == "Office":
-            raise RuntimeError("lookup failed")
-        return None
+    fake_refs = {
+        "SldWorks Type Library ({A4B97BA4-941C-45F8-B4E5-3AB637EA0306} v1.0)": {
+            "description": "SldWorks Type Library",
+            "guid": "{A4B97BA4-941C-45F8-B4E5-3AB637EA0306}",
+            "version": "1.0",
+            "status": "available",
+        },
+        "VBA ({000204EF-0000-0000-C000-000000000046} v4.1)": {
+            "description": "VBA",
+            "guid": "{000204EF-0000-0000-C000-000000000046}",
+            "version": "4.1",
+            "status": "available",
+        },
+    }
 
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     monkeypatch.setattr(
-        docs_mod,
-        "win32com",
-        SimpleNamespace(client=SimpleNamespace(GetObject=_get_object)),
-        raising=False,
+        docs_mod, "_discover_vba_references_via_registry", lambda: fake_refs
     )
 
     discovery = docs_mod.SolidWorksDocsDiscovery(
@@ -410,10 +416,10 @@ def test_discover_vba_references_handles_available_and_error(
     )
     refs = discovery.discover_vba_references()
 
-    assert refs["VBA"]["status"] == "available"
-    assert refs["SldWorks"]["status"] == "available"
-    assert refs["Office"]["status"] == "not_available"
-    assert "lookup failed" in refs["Office"]["note"]
+    assert refs is fake_refs
+    assert all(v["status"] == "available" for v in refs.values())
+    assert any("VBA" in v["description"] for v in refs.values())
+    assert any("SldWorks" in v["description"] for v in refs.values())
 
 
 def test_discover_all_returns_index_when_connect_fails(
@@ -576,7 +582,7 @@ async def test_discover_solidworks_docs_tool_success_path(
 
 
 def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """connect_to_solidworks should return False when COM binding raises com_error."""
+    """connect_to_solidworks should return False when both GetActiveObject and EnsureDispatch raise com_error."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _FakeComError(Exception):
@@ -592,10 +598,12 @@ def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) ->
         "win32com",
         SimpleNamespace(
             client=SimpleNamespace(
-                GetObject=lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                    _FakeComError("boom")
+                GetActiveObject=lambda _: (_ for _ in ()).throw(_FakeComError("boom")),
+                gencache=SimpleNamespace(
+                    EnsureDispatch=lambda _: (_ for _ in ()).throw(
+                        _FakeComError("boom")
+                    )
                 ),
-                Dispatch=lambda *_args: (_ for _ in ()).throw(_FakeComError("boom")),
             )
         ),
         raising=False,
