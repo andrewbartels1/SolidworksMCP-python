@@ -1112,6 +1112,19 @@ class PyWin32Adapter(SolidWorksAdapter):
                 "YZ": "Right Plane",
             }
 
+            # Spanish-UI SolidWorks names default planes "Alzado"/"Planta"/
+            # "Vista lateral". Map each semantic name to its locale variants
+            # so the feature lookup below finds the right plane regardless
+            # of install language.
+            semantic_plane_aliases = {
+                "Top": ["Top Plane", "Planta"],
+                "Front": ["Front Plane", "Alzado"],
+                "Right": ["Right Plane", "Vista lateral"],
+                "XY": ["Top Plane", "Planta"],
+                "XZ": ["Front Plane", "Alzado"],
+                "YZ": ["Right Plane", "Vista lateral"],
+            }
+
             actual_plane = plane_name_map.get(plane, plane)
 
             selected = False
@@ -1119,11 +1132,15 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             # Prefer direct feature lookup to avoid SelectByID2 variant mismatch.
             plane_candidates = [
+                *semantic_plane_aliases.get(plane, []),
                 actual_plane,
                 plane,
                 "Top Plane",
                 "Front Plane",
                 "Right Plane",
+                "Planta",
+                "Alzado",
+                "Vista lateral",
             ]
             for candidate in plane_candidates:
                 if not candidate:
