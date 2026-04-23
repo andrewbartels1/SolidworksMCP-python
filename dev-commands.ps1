@@ -100,8 +100,8 @@ function dev-help {
     Write-Host "dev-docs-discovery    - Index SolidWorks COM/VBA documentation (Windows-only)"
     Write-Host "dev-build             - Build package for distribution"
     Write-Host "dev-run               - Start the MCP server"
-    Write-Host "dev-ui                - Start FastAPI backend + Prefab dashboard launcher"
-    Write-Host "dev-ui-probe          - Start FastAPI backend + minimal Prefab probe app"
+    Write-Host "dev-ui                - Start FastAPI backend + main Prefab dashboard"
+    Write-Host "dev-ui-probe          - Start FastAPI backend + explicit Prefab probe target"
     Write-Host "dev-clean             - Clean build artifacts"
     Write-Host "dev-lint              - Run code linting (ruff)"
     Write-Host "dev-format            - Format code (ruff)"
@@ -532,14 +532,14 @@ function dev-run {
 }
 
 function dev-ui {
-    Write-Host "Starting UI launcher (FastAPI + Prefab)..." -ForegroundColor Cyan
+    Write-Host "Starting UI launcher (FastAPI + main Prefab dashboard)..." -ForegroundColor Cyan
     $uiLauncher = Join-Path $PSScriptRoot "run-ui.ps1"
     if (-not (Test-Path $uiLauncher)) {
         Write-Host "UI launcher script not found: $uiLauncher" -ForegroundColor Red
         return
     }
 
-    & $uiLauncher
+    & $uiLauncher -FrontendTarget "src/solidworks_mcp/ui/prefab_dashboard.py"
 }
 
 function dev-ui-probe {

@@ -2,12 +2,13 @@
 
 An interactive CAD design assistant with real-time SolidWorks integration. Click buttons to call GitHub Copilot for design planning, execute checkpoints, and sync the 3D viewport.
 
+For a complete control-by-control mapping (every button/input to endpoint/service), see `docs/getting-started/prefab-ui-controls-reference.md`.
+
 ## Features
 
 - **Design Intent Pane** (wider left side): Edit goals, ask clarifying questions, classify the design family
 - **Target Model Pane**: Attach a concrete `.sldprt`/`.sldasm` path and grounded feature targets such as `@Boss-Extrude1`
 - **Assumptions + Model Controls**: Persist provider/profile/local endpoint choices for `pydantic-ai`
-- **Bring Your Own References**: Ingest a local PDF/markdown/text source into a simple retrieval namespace
 - **Checkpoint Queue** (middle): Reviewable workflow steps with one-click execution (adapter-backed for supported tools)
 - **3D Model View** (larger right pane): Real-time PNG preview synced every ~3 min or manual refresh with orientation buttons (Isometric/Front/Top/Current)
 - **Manual Sync Detection**: Capture before/after snapshots and detect manual edits
@@ -44,6 +45,45 @@ Use one of these workflows depending on how much UI you want:
 - Use the UI to ground intent, attach the active model, and inspect evidence.
 - Use MCP/chat for specialized operations or direct tool invocation.
 - Return to the UI for preview refresh, manual sync, and checkpoint review.
+
+## Control reference
+
+Use `docs/getting-started/prefab-ui-controls-reference.md` as the authoritative map for:
+
+- every textbox/button/row click action in the dashboard
+- expected visual feedback after each action
+- backend endpoints and service functions hit by each control
+- controls that are implemented in backend but not currently surfaced in the dashboard
+
+## Design Spec and Model Settings: what to enter
+
+This card controls how planning prompts are formed and which model provider handles Clarify/Inspect/Go actions.
+
+- Design goal textbox:
+  - Enter the target outcome in one concise paragraph.
+  - Include what should be created or changed, critical dimensions, and what "done" means.
+  - Example: "Design a vented electronics bracket with two M4 mounting ears and >=2.5 mm wall thickness."
+- Assumptions textbox:
+  - Enter manufacturing assumptions and constraints.
+  - Include material, layer height, nozzle size, clearance/tolerance targets, print orientation, and any keep-out constraints.
+  - Example: "PETG, 0.2 mm layers, 0.4 mm nozzle, 0.30 mm mating clearance, avoid >45 degree unsupported overhangs."
+- Provider buttons:
+  - `Provider: GitHub` routes structured planning calls to GitHub Models.
+  - `Provider: Local` routes structured planning calls to your local OpenAI-compatible endpoint (for example Ollama).
+- Profile buttons:
+  - `Small` / `Balanced` / `Large` tune the default model recommendation and latency/quality tradeoff.
+- Model name textbox:
+  - Use provider-qualified names when possible.
+  - Examples: `github:openai/gpt-4.1`, `local:google/gemma-3-12b-it`.
+- Local endpoint textbox:
+  - Only used when provider is local.
+  - Typical value: `http://127.0.0.1:11434/v1`.
+
+Setup references:
+
+- SolidWorks MCP setup in VS Code: [getting-started/vscode-mcp-setup.md](vscode-mcp-setup.md)
+- Local Ollama/Gemma setup: [getting-started/local-llm.md](local-llm.md)
+- Backend API/OpenAPI docs when running locally: <http://127.0.0.1:8766/docs>
 
 ## What the preview pane does and doesn't do
 
@@ -187,16 +227,23 @@ The pane auto-refreshes every 3 minutes (SetInterval 180000ms) or on manual clic
 - **Execute Next Checkpoint**: Runs supported adapter tools (`create_sketch`, `add_line`, `create_extrusion`, `create_cut`/`create_cut_extrude`) and logs each tool result
 - **Refresh 3D View**: Calls `export_image()` → PNG → preview pane; supports Isometric/Front/Top/Current
 - **Run Diff + Reconcile**: Compares snapshots → reports manual changes
++.3+-*- **Approve Brief**: Explicitly accepts the current design goal into the session brief
 
 ### 🔧 MOCKED (Clearly Marked In App + Code)
 
 - **`check_interference` checkpoint tool**: Marked as `MOCKED` in checkpoint tool results until tool-layer wiring is added
 - **Live 3D viewport streaming / STL embedding in UI**: Marked as `MOCKED` in the 3D pane; current implementation uses PNG export refresh
   
-### 📋 Currently Not Wired
+### 📋 Implemented In Backend, Not Currently Surfaced In This Dashboard
+
+- `POST /api/ui/rag/ingest` (BYO ingestion route exists but no dedicated dashboard button at present)
+- `GET /api/ui/debug/session` (debug endpoint)
+- `POST /api/ui/local-model/pull` and `POST /api/ui/local-model/query` (local model ops)
+
+### 📋 Planned or Partial
 
 - Tool-layer `check_interference` execution from checkpoint runner
-- Enrich model state capture (currently just snapshot fingerprint; future: features + mass properties)
+- Enrich model state capture (currently snapshot-first)
 - Real-time viewport streaming (would need viewport API exposure)
 
 ## Architecture notes
@@ -257,6 +304,181 @@ The pane auto-refreshes every 3 minutes (SetInterval 180000ms) or on manual clic
 7. **Accept Family** once you're happy with the classification
 8. **Refresh 3D View** to see the current SolidWorks viewport
 9. **Use orientation buttons** to switch between Isometric/Front/Top/Current views
+
+## Demo: run an example part flow
+
+Use this as a repeatable demo scenario:
+
+1. Start backend and Prefab UI as described above.
+2. In lane 1, paste a model path such as:
+
+```text
+C:\Users\andre\OneDrive\Documents\GitHub\SolidworksMCP-python\.generated\part_1.sldprt
+```
+
+1. Enter feature targets (optional), for example `@Boss-Extrude1`.
+2. Click **Attach Local Path**.
+3. Click **Refresh 3D** and then **Isometric** / **Front** / **Top**.
+4. Click **Plan Next Steps**, then **Accept Approach**.
+5. Click **Execute Next Checkpoint** and review checkpoint status changes.
+6. In the feature table, click one row and confirm viewer/selection update.
+7. Save context with name `prefab-dashboard`, then load it back to confirm round-trip persistence.
+
+If `.generated\part_1.sldprt` is not present in your local workspace, use any existing `.sldprt`/`.sldasm` path you already open in SolidWorks (cupcake).
+
+## Walkthroughs With Screenshot Callouts
+
+Use these two guided walkthroughs when documenting demos or onboarding users.
+For each step:
+
+1. Capture a screenshot.
+2. Add numbered callout boxes around the referenced controls.
+3. Validate the expected state update below the screenshot.
+
+### Walkthrough A: Update an Existing Part/Assembly
+
+#### Step A1: Attach an existing model
+
+- Action:
+  1. Paste a valid local `.sldprt` or `.sldasm` path in Model path.
+  2. Optionally add feature targets such as `@Boss-Extrude1`.
+  3. Click Attach Local Path.
+- Screenshot callouts:
+  - callout 1: Model path textbox
+  - callout 2: Feature targets textbox
+  - callout 3: Attach Local Path button
+
+![Walkthrough A1 - Attach Existing](../assets/prefab-ui/walkthrough-a1-attach-existing.png)
+
+> **Callout legend:** ① Model path textbox — paste the full `.sldprt`/`.sldasm` path here. ② Feature targets textbox — optional grounded target such as `@Boss-Extrude1`. ③ Attach Local Path button — opens the model in the adapter and seeds family evidence.
+
+- Expected state after action:
+  - workflow mode = `edit_existing`
+  - active model path = resolved file path
+  - active model status shows attached model name/type
+  - feature tree table populated after model connect/preview succeeds
+
+#### Step A2: Generate planning context
+
+- Action:
+  1. Click Refresh Clarifications.
+  2. Click Inspect More.
+  3. Click Plan Next Steps.
+- Screenshot callouts:
+  - callout 1: Refresh Clarifications
+  - callout 2: Inspect More
+  - callout 3: Plan Next Steps
+
+![Walkthrough A2 - Plan Existing](../assets/prefab-ui/walkthrough-a2-plan-existing.png)
+
+> **Callout legend:** ① Refresh Clarifications — calls the planning agent to normalize the brief and surface follow-up questions. ② Inspect More — runs Feature-Tree-Reconstruction classification and generates checkpoints. ③ Plan Next Steps — refreshes the checkpoint queue with the latest model context.
+
+- Expected state after action:
+  - clarifying questions text updated, or `latest_error_text` explains why clarification failed
+  - proposed family/confidence/evidence updated, or family fields show fallback values (`unknown` / `low`) with an explicit error
+  - checkpoint plan rows updated (or refreshed)
+
+#### Step A3: Execute and verify output
+
+- Action:
+  1. Click Execute Next Checkpoint.
+  2. Click Refresh 3D and one orientation button (for example Isometric).
+  3. Click a feature row in the feature table.
+  4. In Manual Sync, click Mark Manual Edits Complete, then Run Diff and Reconcile.
+- Screenshot callouts:
+  - callout 1: Execute Next Checkpoint
+  - callout 2: Refresh 3D + orientation controls
+  - callout 3: Feature table row
+  - callout 4: Manual Sync readiness toggle + reconcile button
+
+![Walkthrough A3 - Execute Existing](../assets/prefab-ui/walkthrough-a3-execute-existing.png)
+
+> **Callout legend:** ① Execute Next Checkpoint — runs the next queued step via the adapter (e.g. `create_sketch`, `create_extrusion`). ② Refresh 3D + orientation controls — exports a PNG from SolidWorks at the chosen view. ③ Feature table row — click to select/highlight a feature in the active model. ④ Manual Sync readiness toggle + Run Diff and Reconcile — capture before/after snapshots and detect manual edits.
+
+- Expected state after action:
+  - checkpoint row status transitions from queued to executed/failed/mocked
+  - preview status and images refresh
+  - selected feature label updates
+
+### Walkthrough B: Start a New Part Design
+
+#### Step B1: Hard reset into new-design flow
+
+- Action:
+  1. Click New Design in lane 1.
+- Screenshot callouts:
+  - callout 1: New Design button
+
+![Walkthrough B1 - New Design Reset](../assets/prefab-ui/walkthrough-b1-new-design-reset.png)
+
+> **Callout legend:** ① New Design button — clears all session state (model path, family, checkpoints, evidence) and sets workflow mode to `new_design`.
+
+- Expected state after action:
+  - workflow mode = `new_design`
+  - active model path/status cleared
+  - feature target text/status cleared
+  - clarifications answer cleared
+  - family classification reset to unclassified/pending
+  - preview status reset to no preview captured
+  - checkpoint execution statuses reset to queued
+  - local model context summary resets to `<none> | unknown | config <unknown> | features 0`
+  - evidence table clears in the clean new-design state
+
+#### Step B2: Define fresh design intent
+
+- Action:
+  1. Enter a new goal in Design Spec.
+  2. Enter assumptions and model settings.
+  3. Click Approve Brief, then Save Preferences.
+- Screenshot callouts:
+  - callout 1: Design goal textbox
+  - callout 2: Assumptions textbox
+  - callout 3: Approve Brief and Save Preferences buttons
+
+![Walkthrough B2 - New Design Inputs](../assets/prefab-ui/walkthrough-b2-new-design-inputs.png)
+
+> **Callout legend:** ① Design goal textbox — describe the target outcome with dimensions and success criteria. ② Assumptions textbox — enter material, layer height, nozzle, clearance targets, and orientation constraints. ③ Approve Brief — persists the goal into the session. Save Preferences — stores provider/profile/model/endpoint choices.
+
+- Expected state after action:
+  - normalized brief reflects the new goal
+  - latest message confirms brief and/or preferences save
+  - provider/profile badges match selected values
+
+#### Step B3: Plan and execute first pass
+
+- Action:
+  1. Click GO or run Refresh Clarifications + Inspect More.
+  2. Review Engineering Signals.
+  3. Click Execute Next Checkpoint.
+- Screenshot callouts:
+  - callout 1: GO button
+  - callout 2: Engineering Signals card
+  - callout 3: Execute Next Checkpoint button
+
+![Walkthrough B3 - New Design Execute](../assets/prefab-ui/walkthrough-b3-new-design-execute.png)
+
+> **Callout legend:** ① GO button — runs Clarify + Inspect in one shot to populate the brief, family, and checkpoint queue. ② Engineering Signals card — shows readiness summary, active model context, and latest error/remediation. ③ Execute Next Checkpoint — starts execution of the first generated checkpoint step.
+
+- Expected state after action:
+  - clarification and family outputs reflect the new goal (or show a recoverable routing/model error)
+  - readiness summary updates
+  - first checkpoint status updates from queued to executed/failed/mocked
+
+### Troubleshooting while validating walkthroughs
+
+- If `New Design` does not clear model/evidence context, confirm you are connected to the latest backend process and restart `dev-ui`.
+- If clarification/family steps return model errors (for example model not found), update provider/profile/model settings and retry.
+
+### Screenshot file naming convention
+
+Store walkthrough screenshots under `docs/assets/prefab-ui/` using this pattern:
+
+- `walkthrough-a1-attach-existing.png`
+- `walkthrough-a2-plan-existing.png`
+- `walkthrough-a3-execute-existing.png`
+- `walkthrough-b1-new-design-reset.png`
+- `walkthrough-b2-new-design-inputs.png`
+- `walkthrough-b3-new-design-execute.png`
 
 ## Notes
 
