@@ -107,6 +107,56 @@ def _on_attach_success() -> list[object]:
     ]
 
 
+def _probe_local_model() -> Fetch:
+    return Fetch.get(
+        f"{API_ORIGIN}/api/ui/local-model/probe",
+        on_success=[
+            SetState("local_model_busy", False),
+            SetState("local_model_available", RESULT.available),
+            SetState("local_model_recommended_tier", RESULT.tier),
+            SetState("local_model_recommended_ollama_model", RESULT.ollama_model),
+            SetState("local_model_pull_command", RESULT.pull_command),
+            SetState("local_model_label", RESULT.label),
+            SetState("local_endpoint", RESULT.openai_endpoint),
+            SetState("model_name", RESULT.service_model),
+            SetState("model_provider", "local"),
+            SetState("local_model_status_text", RESULT.status_message),
+            ShowToast("Local model probe complete"),
+        ],
+        on_error=[
+            SetState("local_model_busy", False),
+            SetState(
+                "local_model_status_text",
+                "Local model probe failed. Confirm the backend can reach Ollama.",
+            ),
+            _error_toast(),
+        ],
+    )
+
+
+def _pull_recommended_local_model() -> Fetch:
+    return Fetch.post(
+        f"{API_ORIGIN}/api/ui/local-model/pull",
+        body={"model": STATE.local_model_recommended_ollama_model},
+        on_success=[
+            SetState("local_model_busy", False),
+            SetState(
+                "local_model_status_text",
+                "Model pull completed. Re-run Auto-Detect Local Model to refresh availability.",
+            ),
+            ShowToast("Recommended Ollama model pull completed"),
+        ],
+        on_error=[
+            SetState("local_model_busy", False),
+            SetState(
+                "local_model_status_text",
+                "Recommended model pull failed. Check Ollama and retry.",
+            ),
+            _error_toast(),
+        ],
+    )
+
+
 def _hydrate_from_result() -> list[Any]:
     state_keys = [
         "workflow_mode",
@@ -120,6 +170,7 @@ def _hydrate_from_result() -> list[Any]:
         "active_model_configuration",
         "feature_target_text",
         "feature_target_status",
+        "feature_grounding_warning_text",
         "normalized_brief",
         "clarifying_questions_text",
         "proposed_family",
@@ -145,6 +196,13 @@ def _hydrate_from_result() -> list[Any]:
         "model_name",
         "model_profile",
         "local_endpoint",
+        "local_model_status_text",
+        "local_model_busy",
+        "local_model_available",
+        "local_model_recommended_tier",
+        "local_model_recommended_ollama_model",
+        "local_model_pull_command",
+        "local_model_label",
         "rag_source_path",
         "rag_namespace",
         "rag_status",
@@ -336,6 +394,11 @@ with PrefabApp(
                                     onChange=SetState("feature_target_text", EVENT),
                                 )
                                 Muted("{{ feature_target_status }}")
+                                with If("feature_grounding_warning_text"):
+                                    Badge(  # type: ignore[call-overload]
+                                        "{{ feature_grounding_warning_text }}",
+                                        variant="destructive",
+                                    )
                                 Muted("{{ active_model_status }}")
                         with CardFooter():
                             with Row(gap=2):
@@ -468,7 +531,7 @@ with PrefabApp(
                                 )
                                 Text("Model name")
                                 Muted(
-                                    "Provider-qualified name is recommended (for example github:openai/gpt-4.1 or local:google/gemma-3-12b-it)."
+                                    "Provider-qualified name is recommended (for example github:openai/gpt-4.1 or local:gemma4:e4b)."
                                 )
                                 Textarea(
                                     name="model_name",
@@ -482,6 +545,67 @@ with PrefabApp(
                                     value=STATE.local_endpoint,
                                     rows=2,
                                     onChange=SetState("local_endpoint", EVENT),
+                                )
+                                Text("Local model controls")
+                                Muted(
+                                    "Use Auto-Detect to replace stale local model names such as llama3.1 with a supported Ollama route."
+                                )
+                                with Row(gap=2):
+                                    Button(
+                                        "Auto-Detect Local Model",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=[
+                                            SetState("local_model_busy", True),
+                                            SetState(
+                                                "local_model_status_text",
+                                                "Detecting Ollama endpoint, hardware tier, and recommended model...",
+                                            ),
+                                            ShowToast("Detecting local model configuration"),
+                                            _probe_local_model(),
+                                        ],
+                                    )
+                                    Button(
+                                        "Pull Recommended Model",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=[
+                                            SetState("local_model_busy", True),
+                                            SetState(
+                                                "local_model_status_text",
+                                                "Pulling the recommended Ollama model. Large downloads can take several minutes...",
+                                            ),
+                                            ShowToast("Starting Ollama model pull"),
+                                            _pull_recommended_local_model(),
+                                        ],
+                                    )
+                                with If("local_model_busy"):
+                                    Badge(
+                                        "Working on local model setup...",
+                                        variant="secondary",
+                                    )
+                                with Else():
+                                    with If("local_model_available"):
+                                        Badge(
+                                            "Ollama reachable",
+                                            variant="success",
+                                        )
+                                    with Else():
+                                        Badge(
+                                            "Ollama not detected yet",
+                                            variant="outline",
+                                        )
+                                with If("local_model_label"):
+                                    Muted(
+                                        "Recommended model: {{ local_model_label }}"
+                                    )
+                                with If("local_model_pull_command"):
+                                    Muted(
+                                        "Recommended pull command: {{ local_model_pull_command }}"
+                                    )
+                                Muted("{{ local_model_status_text }}")  # type: ignore[arg-type]
+                                Muted(
+                                    "Context window is the approximate prompt budget consumed by the current goal, assumptions, model context, docs context, and notes. It is advisory today, not a hard token meter."
                                 )
                         with CardFooter():
                             with Row(gap=2):

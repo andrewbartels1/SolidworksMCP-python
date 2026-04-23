@@ -373,9 +373,9 @@ def _default_model_for_profile(provider: str, profile: str) -> str:
     normalized_profile = (profile or "balanced").lower()
     if provider == "local":
         profile_models = {
-            "small": "local:google/gemma-3-4b-it",
-            "balanced": "local:google/gemma-3-12b-it",
-            "large": "local:google/gemma-3-27b-it",
+            "small": "local:gemma4:e2b",
+            "balanced": "local:gemma4:e4b",
+            "large": "local:gemma4:26b",
         }
         return profile_models.get(normalized_profile, profile_models["balanced"])
 
@@ -385,6 +385,25 @@ def _default_model_for_profile(provider: str, profile: str) -> str:
         "large": "github:openai/gpt-4.1",
     }
     return profile_models.get(normalized_profile, profile_models["balanced"])
+
+
+def _feature_grounding_warning_text(
+    *,
+    active_model_path: str,
+    feature_target_text: str,
+    feature_tree_count: int,
+) -> str:
+    if not active_model_path:
+        return ""
+    if not str(feature_target_text or "").strip():
+        return ""
+    if feature_tree_count > 0:
+        return ""
+    return (
+        "Grounding is unavailable for the current attached model context because "
+        "no feature tree rows were returned. Feature refs such as @Boss-Extrude1 "
+        "cannot be resolved until the adapter can read the active model tree."
+    )
 
 
 def _provider_has_credentials(
@@ -3243,6 +3262,11 @@ def build_dashboard_state(
         f" | config {str(metadata.get('active_model_configuration') or '<unknown>')}"
         f" | features {len(feature_tree_items)}"
     )
+    feature_grounding_warning_text = _feature_grounding_warning_text(
+        active_model_path=active_model_path,
+        feature_target_text=str(metadata.get("feature_target_text") or ""),
+        feature_tree_count=len(feature_tree_items),
+    )
     canonical_prompt_text = "\n".join(
         [
             f"Goal: {session_row.get('user_goal') or DEFAULT_USER_GOAL}",
@@ -3280,6 +3304,7 @@ def build_dashboard_state(
             metadata.get("feature_target_status")
             or "No grounded feature target selected."
         ),
+        feature_grounding_warning_text=feature_grounding_warning_text,
         normalized_brief=(
             metadata.get("normalized_brief")
             or session_row.get("user_goal")
@@ -3310,6 +3335,19 @@ def build_dashboard_state(
         model_name=model_name,
         model_profile=model_profile,
         local_endpoint=local_endpoint,
+        local_model_status_text=str(
+            metadata.get("local_model_status_text") or "Local model controls idle."
+        ),
+        local_model_busy=bool(metadata.get("local_model_busy") or False),
+        local_model_available=bool(metadata.get("local_model_available") or False),
+        local_model_recommended_tier=str(
+            metadata.get("local_model_recommended_tier") or ""
+        ),
+        local_model_recommended_ollama_model=str(
+            metadata.get("local_model_recommended_ollama_model") or ""
+        ),
+        local_model_pull_command=str(metadata.get("local_model_pull_command") or ""),
+        local_model_label=str(metadata.get("local_model_label") or ""),
         rag_source_path=str(metadata.get("rag_source_path") or ""),
         rag_namespace=str(metadata.get("rag_namespace") or "engineering-reference"),
         rag_status=str(

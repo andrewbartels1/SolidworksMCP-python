@@ -603,7 +603,7 @@ async def pull_local_model_endpoint(
     payload: LocalModelPullRequest,
 ) -> LocalModelPullResult:
     """
-    Trigger an Ollama pull for the specified model name (e.g. ``gemma3:12b``).
+    Trigger an Ollama pull for the specified model name (e.g. ``gemma4:e4b``).
 
     The pull runs synchronously via Ollama's ``/api/pull`` endpoint.
     Large models (27B) may take several minutes to download.

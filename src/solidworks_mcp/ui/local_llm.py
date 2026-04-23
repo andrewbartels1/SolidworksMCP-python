@@ -12,10 +12,10 @@ Provides three layers of typed abstraction:
      accept any ``BaseModel`` subclass as ``result_type`` so callers get a fully
      typed, validated response regardless of which backend they use.
 
-Model tiers (Gemma 3 family — same OpenAI-compatible API shape as Gemma 4):
-  small   : google/gemma-3-4b-it (~3 GB VRAM) — CPU-capable, fast
-  balanced: google/gemma-3-12b-it (~8 GB VRAM) — recommended mid-range GPU
-  large   : google/gemma-3-27b-it (~18 GB VRAM) — high-end GPU (3090/4090/A100)
+Model tiers (Gemma 4 family via Ollama's OpenAI-compatible API):
+  small   : gemma4:e2b (~0-4 GB VRAM / CPU-capable) — edge and smoke tests
+  balanced: gemma4:e4b (~8 GB VRAM) — recommended default for local planning
+  large   : gemma4:26b (~18 GB VRAM) — workstation-class local evaluation
 
 Usage::
 
@@ -62,10 +62,8 @@ OLLAMA_OPENAI_ENDPOINT = f"{OLLAMA_DEFAULT_ENDPOINT}/v1"
 class GemmaTierSpec(BaseModel):
     """Hardware and model metadata for a single Gemma inference tier."""
 
-    ollama: str = Field(description="Ollama model tag, e.g. 'gemma3:12b'")
-    service: str = Field(
-        description="service.py model string, e.g. 'local:google/gemma-3-12b-it'"
-    )
+    ollama: str = Field(description="Ollama model tag, e.g. 'gemma4:e4b'")
+    service: str = Field(description="service.py model string, e.g. 'local:gemma4:e4b'")
     label: str = Field(description="Human-readable description shown in UI toasts")
     min_vram_gb: float = Field(ge=0, description="Minimum GPU VRAM in GB (0 = CPU ok)")
     min_ram_gb: float = Field(ge=0, description="Minimum system RAM in GB")
@@ -74,23 +72,23 @@ class GemmaTierSpec(BaseModel):
 # Gemma 3 / Gemma 4 model tiers — typed registry
 GEMMA_TIERS: dict[str, GemmaTierSpec] = {
     "small": GemmaTierSpec(
-        ollama="gemma3:4b",
-        service="local:google/gemma-3-4b-it",
-        label="Gemma 3 4B (small — CPU or 4 GB VRAM)",
+        ollama="gemma4:e2b",
+        service="local:gemma4:e2b",
+        label="Gemma 4 E2B (small — CPU or 4 GB VRAM)",
         min_vram_gb=0,
         min_ram_gb=8,
     ),
     "balanced": GemmaTierSpec(
-        ollama="gemma3:12b",
-        service="local:google/gemma-3-12b-it",
-        label="Gemma 3 12B (balanced — 8 GB VRAM)",
+        ollama="gemma4:e4b",
+        service="local:gemma4:e4b",
+        label="Gemma 4 E4B (balanced — 8 GB VRAM)",
         min_vram_gb=8,
         min_ram_gb=16,
     ),
     "large": GemmaTierSpec(
-        ollama="gemma3:27b",
-        service="local:google/gemma-3-27b-it",
-        label="Gemma 3 27B (large — 18 GB VRAM)",
+        ollama="gemma4:26b",
+        service="local:gemma4:26b",
+        label="Gemma 4 26B (large — 18 GB VRAM)",
         min_vram_gb=18,
         min_ram_gb=32,
     ),
@@ -119,8 +117,8 @@ class LocalLLMConfig(BaseModel):
         description="OpenAI-compatible endpoint for pydantic-ai",
     )
     tier: Literal["small", "balanced", "large"] = Field(default="balanced")
-    ollama_model: str = Field(default="gemma3:12b")
-    service_model: str = Field(default="local:google/gemma-3-12b-it")
+    ollama_model: str = Field(default="gemma4:e4b")
+    service_model: str = Field(default="local:gemma4:e4b")
     api_key: str = Field(
         default="local",
         description="API key sent to Ollama (ignored by Ollama but required by OpenAI client)",
@@ -130,7 +128,7 @@ class LocalLLMConfig(BaseModel):
     def from_env(cls) -> LocalLLMConfig:
         """Build config from environment variables, falling back to defaults."""
         endpoint = os.getenv("SOLIDWORKS_UI_OLLAMA_ENDPOINT", OLLAMA_DEFAULT_ENDPOINT)
-        service_model = os.getenv("SOLIDWORKS_UI_MODEL", "local:google/gemma-3-12b-it")
+        service_model = os.getenv("SOLIDWORKS_UI_MODEL", "local:gemma4:e4b")
         tier = "small"
         for t, spec in GEMMA_TIERS.items():
             if spec.service == service_model:
@@ -165,7 +163,7 @@ class LocalModelProbeResult(BaseModel):
     tier: Literal["small", "balanced", "large"]
     ollama_model: str
     service_model: str = Field(
-        description="Model string for service.py, e.g. 'local:google/gemma-3-12b-it'"
+        description="Model string for service.py, e.g. 'local:gemma4:e4b'"
     )
     label: str
     vram_gb: float = Field(ge=0)
@@ -201,7 +199,7 @@ class LocalModelPullResult(BaseModel):
 class LocalModelPullRequest(BaseModel):
     """Request body for ``POST /api/ui/local-model/pull``."""
 
-    model: str = Field(description="Ollama model tag to pull, e.g. 'gemma3:12b'")
+    model: str = Field(description="Ollama model tag to pull, e.g. 'gemma4:e4b'")
     endpoint: str | None = Field(
         default=None,
         description="Override Ollama base URL (omit to use env / default)",
