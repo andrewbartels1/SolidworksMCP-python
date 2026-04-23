@@ -561,7 +561,9 @@ with PrefabApp(
                                                 "local_model_status_text",
                                                 "Detecting Ollama endpoint, hardware tier, and recommended model...",
                                             ),
-                                            ShowToast("Detecting local model configuration"),
+                                            ShowToast(
+                                                "Detecting local model configuration"
+                                            ),
                                             _probe_local_model(),
                                         ],
                                     )
@@ -596,9 +598,7 @@ with PrefabApp(
                                             variant="outline",
                                         )
                                 with If("local_model_label"):
-                                    Muted(
-                                        "Recommended model: {{ local_model_label }}"
-                                    )
+                                    Muted("Recommended model: {{ local_model_label }}")
                                 with If("local_model_pull_command"):
                                     Muted(
                                         "Recommended pull command: {{ local_model_pull_command }}"
