@@ -44,10 +44,12 @@ try:
     from pydantic_ai import Agent
     from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.providers.openai import OpenAIProvider
+    from pydantic_ai.mcp import MCPServerStreamableHTTP
 except ImportError:  # pragma: no cover
     Agent = None
     OpenAIChatModel = None
     OpenAIProvider = None
+    MCPServerStreamableHTTP = None  # type: ignore[assignment,misc]
 
 try:
     PdfReader = import_module("pypdf").PdfReader
@@ -65,6 +67,7 @@ DEFAULT_PREVIEW_DIR = Path(".solidworks_mcp") / "ui_previews"
 DEFAULT_UPLOADED_MODEL_DIR = Path(".solidworks_mcp") / "ui_uploads"
 DEFAULT_PREVIEW_ORIENTATION = "current"
 DEFAULT_RAG_DIR = Path(".solidworks_mcp") / "rag"
+DEFAULT_CONTEXT_DIR = Path(".solidworks_mcp") / "ui_context"
 DEFAULT_WORKFLOW_MODE = "unselected"
 SUPPORTED_MODEL_UPLOAD_SUFFIXES = {".sldprt", ".sldasm", ".slddrw"}
 
@@ -128,6 +131,13 @@ def ensure_preview_dir(preview_dir: Path | None = None) -> Path:
 def ensure_uploaded_model_dir(upload_dir: Path | None = None) -> Path:
     """Create and return the uploaded-model staging directory."""
     resolved = upload_dir or DEFAULT_UPLOADED_MODEL_DIR
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
+
+
+def ensure_context_dir(context_dir: Path | None = None) -> Path:
+    """Create and return the dashboard context snapshot directory."""
+    resolved = context_dir or DEFAULT_CONTEXT_DIR
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
@@ -217,6 +227,43 @@ def _trace_tool_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return traced
 
 
+def _safe_context_name(context_name: str | None, session_id: str) -> str:
+    base = (context_name or session_id or "prefab-dashboard").strip()
+    allowed = [ch if (ch.isalnum() or ch in {"-", "_"}) else "-" for ch in base]
+    normalized = "".join(allowed).strip("-")
+    return normalized or "prefab-dashboard"
+
+
+def _context_file_path(
+    session_id: str,
+    *,
+    context_name: str | None = None,
+    context_dir: Path | None = None,
+) -> Path:
+    target_dir = ensure_context_dir(context_dir)
+    safe_name = _safe_context_name(context_name, session_id)
+    return target_dir / f"{safe_name}.json"
+
+
+def _filter_docs_text(raw_text: str, docs_query: str, *, max_chars: int = 2400) -> str:
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    if not lines:
+        return "No docs content extracted from the endpoint response."
+
+    query_tokens = [token for token in docs_query.lower().split() if token]
+    if query_tokens:
+        ranked = [
+            line
+            for line in lines
+            if any(token in line.lower() for token in query_tokens)
+        ]
+        selected = ranked[:40] if ranked else lines[:40]
+    else:
+        selected = lines[:40]
+
+    return "\n".join(selected)[:max_chars]
+
+
 def _merge_metadata(
     session_id: str,
     *,
@@ -290,6 +337,36 @@ def _provider_from_model_name(model_name: str) -> str:
     if model_name.startswith("local:"):
         return "local"
     return "custom"
+
+
+def _normalize_model_name_for_provider(
+    model_name: str | None,
+    *,
+    provider: str | None,
+    profile: str | None = None,
+) -> str:
+    """Normalize free-form model names into provider-qualified routing strings."""
+    normalized_provider = (provider or "github").strip().lower()
+    normalized_profile = (profile or "balanced").strip().lower()
+    raw_model = _sanitize_ui_text(model_name, "")
+
+    if not raw_model:
+        return _default_model_for_profile(normalized_provider, normalized_profile)
+
+    # Already provider-qualified.
+    if ":" in raw_model:
+        return raw_model
+
+    if normalized_provider == "local":
+        return f"local:{raw_model}"
+    if normalized_provider == "github":
+        if "/" in raw_model:
+            return f"github:{raw_model}"
+        return f"github:openai/{raw_model}"
+    if normalized_provider in {"openai", "anthropic"}:
+        return f"{normalized_provider}:{raw_model}"
+
+    return raw_model
 
 
 def _default_model_for_profile(provider: str, profile: str) -> str:
@@ -368,8 +445,38 @@ def _normalize_feature_targets(feature_target_text: str | None) -> list[str]:
         normalized = raw.strip()
         if not normalized:
             continue
-        targets.append(normalized[1:] if normalized.startswith("@") else normalized)
+        candidate = normalized[1:] if normalized.startswith("@") else normalized
+        if _looks_like_path_token(candidate):
+            continue
+        targets.append(candidate)
     return targets
+
+
+def _looks_like_path_token(token: str) -> bool:
+    normalized = token.strip()
+    if not normalized:
+        return False
+
+    lowered = normalized.lower()
+    if len(normalized) >= 2 and normalized[1] == ":" and normalized[0].isalpha():
+        return True
+    if "\\" in normalized or "/" in normalized:
+        return True
+    if lowered.endswith(
+        (
+            ".sldprt",
+            ".sldasm",
+            ".slddrw",
+            ".step",
+            ".stp",
+            ".iges",
+            ".igs",
+            ".x_t",
+            ".x_b",
+        )
+    ):
+        return True
+    return False
 
 
 def _feature_target_status(
@@ -377,6 +484,12 @@ def _feature_target_status(
 ) -> tuple[str, list[str], list[str]]:
     requested = _normalize_feature_targets(feature_target_text)
     if not requested:
+        if str(feature_target_text or "").strip():
+            return (
+                "No valid feature targets found. Use feature names such as @Boss-Extrude1 or @Sketch2. File paths are ignored.",
+                [],
+                [],
+            )
         return ("No grounded feature target selected.", [], [])
 
     available = {
@@ -520,9 +633,14 @@ def _compute_readiness(
     *,
     db_ready: bool,
 ) -> dict[str, Any]:
-    model_name = _sanitize_ui_text(
+    provider = _sanitize_ui_text(
+        metadata.get("model_provider"),
+        "",
+    ).lower()
+    model_name = _normalize_model_name_for_provider(
         metadata.get("model_name"),
-        _resolve_model_name(),
+        provider=provider or None,
+        profile=_sanitize_ui_text(metadata.get("model_profile"), "balanced"),
     )
     local_endpoint = _sanitize_ui_text(
         metadata.get("local_endpoint"),
@@ -696,30 +814,31 @@ async def _run_checkpoint_tools(
 def ensure_dashboard_session(
     session_id: str = DEFAULT_SESSION_ID,
     *,
-    user_goal: str = DEFAULT_USER_GOAL,
+    user_goal: str | None = None,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Ensure one dashboard session row and default checkpoints exist."""
     session_row = get_design_session(session_id, db_path=db_path)
+    requested_goal = _sanitize_ui_text(user_goal, "") if user_goal is not None else ""
     if session_row is None:
         upsert_design_session(
             session_id=session_id,
-            user_goal=user_goal,
+            user_goal=requested_goal or DEFAULT_USER_GOAL,
             source_mode=DEFAULT_SOURCE_MODE,
             status="inspect",
             metadata_json=json.dumps(
                 {
-                    "normalized_brief": user_goal,
+                    "normalized_brief": requested_goal or DEFAULT_USER_GOAL,
                     "preview_orientation": DEFAULT_PREVIEW_ORIENTATION,
                 },
                 ensure_ascii=True,
             ),
             db_path=db_path,
         )
-    elif user_goal != session_row["user_goal"]:
+    elif requested_goal and requested_goal != session_row["user_goal"]:
         upsert_design_session(
             session_id=session_id,
-            user_goal=user_goal,
+            user_goal=requested_goal,
             source_mode=session_row["source_mode"],
             accepted_family=session_row["accepted_family"],
             status=session_row["status"],
@@ -957,9 +1076,10 @@ def update_ui_preferences(
     ensure_dashboard_session(session_id, db_path=db_path)
     provider = (model_provider or "github").strip().lower()
     profile = (model_profile or "balanced").strip().lower()
-    resolved_model = _sanitize_ui_text(
+    resolved_model = _normalize_model_name_for_provider(
         model_name,
-        _default_model_for_profile(provider, profile),
+        provider=provider,
+        profile=profile,
     )
     resolved_endpoint = _sanitize_ui_text(
         local_endpoint,
@@ -1007,17 +1127,84 @@ def select_workflow_mode(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Persist the onboarding workflow branch for the active dashboard session."""
-    ensure_dashboard_session(session_id, db_path=db_path)
+    session_row = ensure_dashboard_session(session_id, db_path=db_path)
     normalized_mode = _normalize_workflow_mode(workflow_mode)
     workflow_label, workflow_guidance, _ = _workflow_copy(normalized_mode)
-    metadata = _merge_metadata(
-        session_id,
-        db_path=db_path,
-        workflow_mode=normalized_mode,
-        latest_message=f"Workflow selected: {workflow_label}.",
-        latest_error_text="",
-        remediation_hint="",
-    )
+    if normalized_mode == "new_design":
+        metadata = _parse_json_blob(session_row.get("metadata_json"))
+        metadata.update(
+            {
+                "workflow_mode": normalized_mode,
+                "active_model_path": "",
+                "active_model_status": "No active model connected yet.",
+                "active_model_type": "",
+                "active_model_configuration": "",
+                "feature_target_text": "",
+                "feature_target_status": "No grounded feature target selected.",
+                "selected_feature_name": "",
+                "selected_feature_selector_name": "",
+                "preview_viewer_url": "",
+                "preview_view_urls": {},
+                "preview_status": "No preview captured yet.",
+                "preview_stl_ready": False,
+                "preview_png_ready": False,
+                "clarifying_questions": [],
+                "user_clarification_answer": "",
+                "proposed_family": "unclassified",
+                "family_confidence": "pending",
+                "family_evidence": [],
+                "family_warnings": [],
+                "mocked_tools": [],
+                "rag_source_path": "",
+                "rag_status": "No retrieval source ingested yet.",
+                "rag_index_path": "",
+                "rag_chunk_count": 0,
+                "rag_provenance_text": "No retrieval provenance available yet.",
+                "docs_context_text": "No docs context loaded yet.",
+                "notes_text": "",
+                "orchestration_status": "Ready.",
+                "context_save_status": "",
+                "context_load_status": "",
+                "latest_message": f"Workflow selected: {workflow_label}.",
+                "latest_error_text": "",
+                "remediation_hint": "",
+            }
+        )
+
+        # Use a fresh starter prompt for new-part design work instead of
+        # carrying forward edit-existing goals from the previous run.
+        starter_goal = "Describe the new part you want to design."
+        metadata["normalized_brief"] = starter_goal
+
+        upsert_design_session(
+            session_id=session_id,
+            user_goal=starter_goal,
+            source_mode=session_row.get("source_mode") or DEFAULT_SOURCE_MODE,
+            accepted_family=None,
+            status="inspect",
+            current_checkpoint_index=0,
+            metadata_json=json.dumps(metadata, ensure_ascii=True),
+            db_path=db_path,
+        )
+
+        # Reset queue state so "Execute Next Checkpoint" starts clean.
+        for row in list_plan_checkpoints(session_id, db_path=db_path):
+            update_plan_checkpoint(
+                int(row.get("id") or 0),
+                approved_by_user=False,
+                executed=False,
+                result_json="",
+                db_path=db_path,
+            )
+    else:
+        metadata = _merge_metadata(
+            session_id,
+            db_path=db_path,
+            workflow_mode=normalized_mode,
+            latest_message=f"Workflow selected: {workflow_label}.",
+            latest_error_text="",
+            remediation_hint="",
+        )
     insert_tool_call_record(
         session_id=session_id,
         tool_name="ui.select_workflow_mode",
@@ -1035,6 +1222,474 @@ def select_workflow_mode(
         db_path=db_path,
     )
     return build_dashboard_state(session_id, db_path=db_path)
+
+
+async def run_go_orchestration(
+    session_id: str,
+    *,
+    user_goal: str,
+    assumptions_text: str | None = None,
+    user_answer: str = "",
+    db_path: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Run a single end-to-end pass that updates inputs, review, and output lanes."""
+    try:
+        goal_text = _sanitize_ui_text(user_goal, DEFAULT_USER_GOAL)
+        approve_design_brief(session_id, goal_text, db_path=db_path)
+
+        session_row = get_design_session(session_id, db_path=db_path) or {}
+        metadata = _parse_json_blob(session_row.get("metadata_json"))
+        update_ui_preferences(
+            session_id,
+            assumptions_text=assumptions_text,
+            model_provider=str(metadata.get("model_provider") or "github"),
+            model_profile=str(metadata.get("model_profile") or "balanced"),
+            model_name=metadata.get("model_name"),
+            local_endpoint=metadata.get("local_endpoint"),
+            db_path=db_path,
+        )
+
+        await request_clarifications(
+            session_id,
+            goal_text,
+            user_answer=user_answer,
+            db_path=db_path,
+        )
+        await inspect_family(session_id, goal_text, db_path=db_path)
+
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            orchestration_status="Go run completed: inputs saved, clarifications refreshed, engineering review updated.",
+            latest_message="Go run completed across workflow, review, and model output lanes.",
+            latest_error_text="",
+            remediation_hint="",
+        )
+        insert_tool_call_record(
+            session_id=session_id,
+            tool_name="ui.orchestrate_go",
+            input_json=json.dumps(
+                {
+                    "user_goal": goal_text,
+                    "assumptions_text": assumptions_text,
+                    "user_answer": user_answer,
+                },
+                ensure_ascii=True,
+            ),
+            output_json=json.dumps(
+                {"status": "success", "message": "Go orchestration completed."},
+                ensure_ascii=True,
+            ),
+            success=True,
+            db_path=db_path,
+        )
+    except Exception as exc:
+        logger.exception("[ui.run_go_orchestration] failed session_id={}", session_id)
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            orchestration_status="Go run failed.",
+            latest_error_text=str(exc),
+            remediation_hint="Review provider credentials/model selection and retry Go.",
+        )
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+
+def update_session_notes(
+    session_id: str,
+    *,
+    notes_text: str,
+    db_path: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Persist free-form engineering notes in session metadata."""
+    _merge_metadata(
+        session_id,
+        db_path=db_path,
+        notes_text=notes_text,
+        latest_message="Notes saved.",
+        latest_error_text="",
+        remediation_hint="",
+    )
+    insert_tool_call_record(
+        session_id=session_id,
+        tool_name="ui.notes.update",
+        input_json=json.dumps({"notes_text": notes_text}, ensure_ascii=True),
+        success=True,
+        db_path=db_path,
+    )
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+
+def fetch_docs_context(
+    session_id: str,
+    *,
+    docs_query: str = "",
+    db_path: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Fetch docs text from the docs endpoint and store a filtered context snippet."""
+    docs_url = f"{api_origin}/docs"
+    query_text = _sanitize_ui_text(docs_query, "solidworks workflow")
+    try:
+        request = Request(
+            docs_url,
+            headers={"User-Agent": "solidworks-mcp-ui/1.0"},
+        )
+        with urlopen(request, timeout=8) as response:
+            html = response.read().decode("utf-8", errors="ignore")
+        extractor = _HTMLTextExtractor()
+        extractor.feed(html)
+        snippet = _filter_docs_text(extractor.text(), query_text)
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            docs_query=query_text,
+            docs_context_text=snippet,
+            latest_message="Docs context updated from MCP docs endpoint.",
+            latest_error_text="",
+            remediation_hint="",
+        )
+        insert_tool_call_record(
+            session_id=session_id,
+            tool_name="ui.docs.fetch",
+            input_json=json.dumps(
+                {"query": query_text, "url": docs_url}, ensure_ascii=True
+            ),
+            output_json=json.dumps({"chars": len(snippet)}, ensure_ascii=True),
+            success=True,
+            db_path=db_path,
+        )
+    except Exception as exc:
+        logger.exception("[ui.fetch_docs_context] failed session_id={}", session_id)
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            docs_query=query_text,
+            docs_context_text="",
+            latest_error_text=str(exc),
+            remediation_hint="Verify the /docs endpoint is reachable, then retry docs refresh.",
+        )
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+
+def save_session_context(
+    session_id: str,
+    *,
+    context_name: str | None = None,
+    db_path: Path | None = None,
+    context_dir: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Persist the current dashboard state to a plain JSON file and metadata."""
+    state = build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+    target_path = _context_file_path(
+        session_id,
+        context_name=context_name,
+        context_dir=context_dir,
+    )
+    payload = {
+        "session_id": session_id,
+        "saved_at": int(time.time()),
+        "state": state,
+    }
+    target_path.write_text(
+        json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8"
+    )
+    message = f"Context saved to {target_path}."
+    _merge_metadata(
+        session_id,
+        db_path=db_path,
+        context_save_status=message,
+        context_name_input=_safe_context_name(context_name, session_id),
+        context_file_input=str(target_path),
+        last_context_file=str(target_path),
+        latest_message=message,
+        latest_error_text="",
+        remediation_hint="",
+    )
+    insert_tool_call_record(
+        session_id=session_id,
+        tool_name="ui.context.save",
+        input_json=json.dumps({"context_name": context_name}, ensure_ascii=True),
+        output_json=json.dumps({"path": str(target_path)}, ensure_ascii=True),
+        success=True,
+        db_path=db_path,
+    )
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+
+def load_session_context(
+    session_id: str,
+    *,
+    context_file: str | None = None,
+    db_path: Path | None = None,
+    context_dir: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Load a previously saved plain-file context snapshot back into session metadata."""
+    context_file_text = _sanitize_ui_text(context_file, "")
+    source_path = (
+        Path(context_file_text)
+        if context_file_text
+        else _context_file_path(session_id, context_dir=context_dir)
+    )
+    if not source_path.exists():
+        message = f"Context load failed. File not found: {source_path}."
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            context_load_status=message,
+            context_file_input=str(source_path),
+            latest_error_text=message,
+            remediation_hint="Save context first or provide a valid context file path.",
+        )
+        return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+    try:
+        payload = json.loads(source_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        message = f"Context load failed: {exc}."
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            context_load_status=message,
+            context_file_input=str(source_path),
+            latest_error_text=message,
+            remediation_hint="Ensure the context file is valid JSON saved by this dashboard.",
+        )
+        return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+    loaded_state = payload.get("state") if isinstance(payload, dict) else {}
+    if not isinstance(loaded_state, dict):
+        loaded_state = {}
+
+    session_row = ensure_dashboard_session(session_id, db_path=db_path)
+    metadata = _parse_json_blob(session_row.get("metadata_json"))
+    for key in [
+        "workflow_mode",
+        "assumptions_text",
+        "active_model_path",
+        "active_model_status",
+        "feature_target_text",
+        "feature_target_status",
+        "normalized_brief",
+        "user_clarification_answer",
+        "model_provider",
+        "model_profile",
+        "model_name",
+        "local_endpoint",
+        "rag_source_path",
+        "rag_namespace",
+        "notes_text",
+        "docs_query",
+        "docs_context_text",
+    ]:
+        if key in loaded_state:
+            metadata[key] = loaded_state.get(key)
+
+    upsert_design_session(
+        session_id=session_id,
+        user_goal=_sanitize_ui_text(
+            loaded_state.get("user_goal"),
+            session_row.get("user_goal") or DEFAULT_USER_GOAL,
+        ),
+        source_mode=session_row.get("source_mode") or DEFAULT_SOURCE_MODE,
+        accepted_family=(
+            _sanitize_ui_text(loaded_state.get("accepted_family"), "")
+            or session_row.get("accepted_family")
+        ),
+        status=session_row.get("status") or "active",
+        current_checkpoint_index=session_row.get("current_checkpoint_index") or 0,
+        metadata_json=json.dumps(metadata, ensure_ascii=True),
+        db_path=db_path,
+    )
+
+    message = f"Context loaded from {source_path}."
+    _merge_metadata(
+        session_id,
+        db_path=db_path,
+        context_load_status=message,
+        context_name_input=_safe_context_name(source_path.stem, session_id),
+        context_file_input=str(source_path),
+        last_context_file=str(source_path),
+        latest_message=message,
+        latest_error_text="",
+        remediation_hint="",
+    )
+    insert_tool_call_record(
+        session_id=session_id,
+        tool_name="ui.context.load",
+        input_json=json.dumps({"context_file": str(source_path)}, ensure_ascii=True),
+        success=True,
+        db_path=db_path,
+    )
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+
+async def open_target_model(
+    session_id: str,
+    *,
+    model_path: str | None = None,
+    uploaded_files: list[dict[str, Any]] | None = None,
+    feature_target_text: str | None = None,
+    db_path: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Open a target model in SolidWorks and persist session state before connect/preview."""
+    ensure_dashboard_session(session_id, db_path=db_path)
+    adapter = None
+    resolved_path: Path | None = None
+
+    logger.info(
+        "[ui.open_target_model] session_id={} model_path={} uploaded_files={} feature_targets={}",
+        session_id,
+        model_path,
+        len(uploaded_files) if uploaded_files else 0,
+        feature_target_text or "",
+    )
+
+    if uploaded_files:
+        try:
+            resolved_path = _materialize_uploaded_model(session_id, uploaded_files)
+        except RuntimeError as exc:
+            _merge_metadata(
+                session_id,
+                db_path=db_path,
+                latest_message="Uploaded model could not be prepared.",
+                latest_error_text=str(exc),
+                remediation_hint="Choose a valid .sldprt or .sldasm file and retry.",
+                feature_target_text=feature_target_text or "",
+                workflow_mode="edit_existing",
+            )
+            return build_dashboard_state(
+                session_id, db_path=db_path, api_origin=api_origin
+            )
+    elif model_path:
+        normalized_model_path = _sanitize_model_path_text(model_path)
+        if not normalized_model_path:
+            _merge_metadata(
+                session_id,
+                db_path=db_path,
+                latest_message="No target model was provided.",
+                latest_error_text="Missing model path or uploaded model file.",
+                remediation_hint="Choose a local SolidWorks file or provide an absolute model path.",
+                feature_target_text=feature_target_text or "",
+                workflow_mode="edit_existing",
+            )
+            return build_dashboard_state(
+                session_id, db_path=db_path, api_origin=api_origin
+            )
+        resolved_path = Path(normalized_model_path).expanduser()
+    else:
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            latest_message="No target model was provided.",
+            latest_error_text="Missing model path or uploaded model file.",
+            remediation_hint="Choose a local SolidWorks file or provide an absolute model path.",
+            feature_target_text=feature_target_text or "",
+            workflow_mode="edit_existing",
+        )
+        return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+    assert resolved_path is not None
+    if not resolved_path.exists():
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            latest_message="Target model path was not found.",
+            latest_error_text=f"Missing file: {resolved_path}",
+            remediation_hint="Provide an absolute path to an existing .sldprt or .sldasm file.",
+            active_model_path=str(resolved_path),
+            feature_target_text=feature_target_text or "",
+            workflow_mode="edit_existing",
+        )
+        return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+    config = load_config()
+    adapter = await create_adapter(config)
+    model_info: dict[str, Any] = {}
+    tool_input = {
+        "model_path": str(resolved_path.resolve()),
+        "uploaded_file_name": uploaded_files[0].get("name") if uploaded_files else None,
+        "feature_target_text": feature_target_text or "",
+    }
+    try:
+        await adapter.connect()
+        logger.info(
+            "[ui.open_target_model] opening model path={} ",
+            str(resolved_path.resolve()),
+        )
+        open_result = await adapter.open_model(str(resolved_path.resolve()))
+        if not open_result.is_success:
+            raise RuntimeError(open_result.error or "Failed to open target model.")
+
+        if hasattr(adapter, "get_model_info"):
+            info_result = await adapter.get_model_info()
+            if info_result.is_success and isinstance(info_result.data, dict):
+                model_info = info_result.data
+
+        metadata = _merge_metadata(
+            session_id,
+            db_path=db_path,
+            workflow_mode="edit_existing",
+            active_model_path=str(resolved_path.resolve()),
+            active_model_status=(
+                f"Opened model: {resolved_path.name}"
+                f" | type={model_info.get('type', 'unknown')}"
+            ),
+            active_model_type=str(model_info.get("type") or ""),
+            active_model_configuration=str(
+                model_info.get("configuration") or "Default"
+            ),
+            feature_target_text=feature_target_text or "",
+            latest_message=f"Opened target model {resolved_path.name} in SolidWorks.",
+            latest_error_text="",
+            remediation_hint="",
+        )
+        insert_tool_call_record(
+            session_id=session_id,
+            tool_name="ui.open_target_model",
+            input_json=json.dumps(tool_input, ensure_ascii=True),
+            output_json=json.dumps(metadata, ensure_ascii=True),
+            success=True,
+            db_path=db_path,
+        )
+    except Exception as exc:
+        logger.exception(
+            "[ui.open_target_model] failed session_id={} path={} error={}",
+            session_id,
+            str(resolved_path.resolve()) if resolved_path else "<none>",
+            exc,
+        )
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            workflow_mode="edit_existing",
+            active_model_path=str(resolved_path.resolve()),
+            feature_target_text=feature_target_text or "",
+            latest_message="Failed to open target model.",
+            latest_error_text=str(exc),
+            remediation_hint="Open SolidWorks, verify COM access, and retry with a valid .sldprt/.sldasm path.",
+        )
+        insert_tool_call_record(
+            session_id=session_id,
+            tool_name="ui.open_target_model",
+            input_json=json.dumps(tool_input, ensure_ascii=True),
+            output_json=json.dumps({"error": str(exc)}, ensure_ascii=True),
+            success=False,
+            db_path=db_path,
+        )
+    finally:
+        if adapter is not None:
+            try:
+                await adapter.disconnect()
+            except Exception:
+                logger.debug("Adapter disconnect failed during open-model cleanup")
+
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
 
 
 async def connect_target_model(
@@ -1121,9 +1776,7 @@ async def connect_target_model(
     adapter = await create_adapter(config)
     model_info: dict[str, Any] = {}
     features: list[dict[str, Any]] = []
-    preview_status_message = ""
-    preview_png_ready = False
-    preview_stl_ready = False
+    attach_succeeded = False
     tool_input = {
         "model_path": str(resolved_path.resolve()),
         "uploaded_file_name": uploaded_files[0].get("name") if uploaded_files else None,
@@ -1188,74 +1841,6 @@ async def connect_target_model(
                 db_path=db_path,
             )
 
-        preview_path = ensure_preview_dir() / f"{session_id}.png"
-        logger.info(
-            "[ui.connect_target_model] exporting preview to {}",
-            str(preview_path.resolve()),
-        )
-        export_result = await adapter.export_image(
-            {
-                "file_path": str(preview_path.resolve()),
-                "format_type": "png",
-                "width": 1280,
-                "height": 720,
-                "view_orientation": DEFAULT_PREVIEW_ORIENTATION,
-            }
-        )
-        if export_result.is_success:
-            preview_png_ready = True
-            logger.info(
-                "[ui.connect_target_model] preview export succeeded path={}",
-                str(preview_path.resolve()),
-            )
-            insert_model_state_snapshot(
-                session_id=session_id,
-                model_path=str(resolved_path.resolve()),
-                screenshot_path=str(preview_path.resolve()),
-                state_fingerprint=f"preview::{preview_path.stat().st_mtime_ns}",
-                db_path=db_path,
-            )
-        else:
-            logger.warning(
-                "[ui.connect_target_model] PNG export failed: {}",
-                export_result.error or "<no error detail>",
-            )
-
-        # Export STL for interactive 3D viewer
-        stl_path = ensure_preview_dir() / f"{session_id}.stl"
-        viewer_ts = int(time.time())
-        try:
-            stl_result = await adapter.export_file(str(stl_path.resolve()), "stl")
-            if stl_result.is_success and stl_path.exists():
-                preview_stl_ready = True
-                viewer_ts = int(stl_path.stat().st_mtime)
-                logger.info(
-                    "[ui.connect_target_model] STL export succeeded path={}",
-                    str(stl_path.resolve()),
-                )
-            else:
-                logger.warning(
-                    "[ui.connect_target_model] STL export failed: {}",
-                    stl_result.error or "<no error detail>",
-                )
-        except Exception as _stl_exc:
-            logger.warning(
-                "[ui.connect_target_model] STL export exception: {}", _stl_exc
-            )
-        if preview_stl_ready:
-            preview_status_message = "Interactive 3D preview ready."
-            preview_viewer_url = f"{api_origin}/api/ui/viewer/{session_id}?session_id={session_id}&t={viewer_ts}"
-        elif preview_png_ready:
-            preview_status_message = (
-                "Static preview image ready (interactive STL unavailable)."
-            )
-            preview_viewer_url = ""
-        else:
-            preview_status_message = (
-                "Model attached, but preview generation did not produce image/STL."
-            )
-            preview_viewer_url = ""
-
         metadata = _merge_metadata(
             session_id,
             db_path=db_path,
@@ -1276,11 +1861,13 @@ async def connect_target_model(
             family_confidence=classification.get("confidence") or "low",
             family_evidence=classification.get("evidence") or [],
             family_warnings=classification.get("warnings") or [],
-            latest_message=f"Attached target model {resolved_path.name} for planning and feature edits.",
-            preview_status=preview_status_message,
-            preview_stl_ready=preview_stl_ready,
-            preview_png_ready=preview_png_ready,
-            preview_viewer_url=preview_viewer_url,
+            latest_message=(
+                f"Opened target model {resolved_path.name}. Generating preview views..."
+            ),
+            preview_status="Generating preview views from attached model...",
+            preview_stl_ready=False,
+            preview_png_ready=False,
+            preview_viewer_url="",
             latest_error_text="",
             remediation_hint="",
             latest_snapshot_id=snapshot_id,
@@ -1293,6 +1880,7 @@ async def connect_target_model(
             success=True,
             db_path=db_path,
         )
+        attach_succeeded = True
     except Exception as exc:
         logger.exception(
             "[ui.connect_target_model] failed session_id={} path={} error={}",
@@ -1319,12 +1907,34 @@ async def connect_target_model(
             success=False,
             db_path=db_path,
         )
-    finally:
-        if adapter is not None:
-            try:
-                await adapter.disconnect()
-            except Exception:
-                logger.debug("Adapter disconnect failed during target-model cleanup")
+
+    if attach_succeeded:
+        try:
+            # After the model is attached and persisted, generate the 3D viewer and
+            # screenshots in one refresh pass so the response represents the final UI state.
+            # Reuse the adapter that already opened the requested model so the first
+            # capture pass is guaranteed to target that document.
+            return await refresh_preview(
+                session_id,
+                orientation=DEFAULT_PREVIEW_ORIENTATION,
+                db_path=db_path,
+                preview_dir=ensure_preview_dir(),
+                api_origin=api_origin,
+                adapter_override=adapter,
+                active_model_path_override=str(resolved_path.resolve()),
+                reopen_active_model=False,
+            )
+        except Exception as refresh_exc:
+            logger.warning(
+                "[ui.connect_target_model] post-attach preview refresh failed: {}",
+                str(refresh_exc),
+            )
+
+    if adapter is not None:
+        try:
+            await adapter.disconnect()
+        except Exception:
+            logger.debug("Adapter disconnect failed during target-model cleanup")
 
     return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
 
@@ -1563,17 +2173,96 @@ async def _run_structured_agent(
     resolved_endpoint = local_endpoint or os.getenv(
         "SOLIDWORKS_UI_LOCAL_ENDPOINT", "http://127.0.0.1:11434/v1"
     )
+    # --- Prompt construction ---
+    # Wrap the caller-supplied prompts in clearly labelled sections so that both
+    # the model and any future reader can see exactly what is being submitted.
+    mcp_tool_catalog = (
+        "## SOLIDWORKS MCP TOOL CATALOG\n"
+        "Use these tool names in checkpoint plans and rationale fields:\n"
+        "  open_model, get_model_info, list_features(include_suppressed), get_mass_properties,\n"
+        "  classify_feature_tree, create_sketch, add_line, add_arc, add_circle, add_rectangle,\n"
+        "  create_extrusion, create_revolve, create_cut, export_image, export_step, export_stl,\n"
+        "  select_feature, check_interference [mocked until wired], analyze_geometry,\n"
+        "  generate_vba_code, execute_macro\n"
+        "Prefer tools in the order listed above (inspect → classify → plan → execute → verify).\n"
+        "Do not invent tools not in this list."
+    )
+    enriched_system_prompt = (
+        "## ROLE AND ORCHESTRATION AGENTS\n"
+        f"{system_prompt}\n\n"
+        "## AVAILABLE ORCHESTRATION AGENTS\n"
+        "  - Feature-Tree Reconstruction agent: inspect → classify → delegate; safe checkpoint plans.\n"
+        "  - Printer-Profile Tolerancing agent: converts printer/material inputs to explicit tolerance "
+        "ranges per feature type (press-fit, sliding, snap, hinge, clip).\n"
+        "  - SolidWorks Research Validator: validates material, clearance, and build-volume facts.\n\n"
+        "## GUARDRAILS\n"
+        "  - Use the SolidWorks MCP tool surface for actionable plans.\n"
+        "  - Do not invent unavailable tools; prefer known MCP tool names.\n"
+        "  - If confidence is low or the model is unavailable, propose inspection steps first.\n"
+        "  - For sheet metal or advanced solid families, route to VBA-aware planning.\n"
+        "  - Always include explicit tolerance/clearance values when manufacturing context is present."
+    )
+    enriched_user_prompt = (
+        "## PLANNING REQUEST\n"
+        f"{user_prompt}\n\n"
+        f"{mcp_tool_catalog}"
+    )
+
+    # --- MCP server toolset wiring ---
+    # When SOLIDWORKS_MCP_URL is set (or defaulting to the standard local port),
+    # connect pydantic-ai to the real running MCP server so the agent can call
+    # tools directly rather than only referencing them by name in text.
+    mcp_server_url = os.getenv("SOLIDWORKS_MCP_URL", "http://127.0.0.1:8000/")
+    mcp_agent_tools = os.getenv("SOLIDWORKS_MCP_AGENT_TOOLS", "auto").lower()
+    toolsets: list[Any] = []
+    if mcp_agent_tools != "off" and MCPServerStreamableHTTP is not None:
+        toolsets = [
+            MCPServerStreamableHTTP(
+                mcp_server_url,
+                tool_prefix="sw",
+                include_instructions=True,
+            )
+        ]
+
     _ensure_provider_credentials(resolved_model, resolved_endpoint)
-    configured_model = _build_agent_model(
-        resolved_model,
-        resolved_endpoint,
-    )
-    agent = Agent(
-        configured_model,
-        system_prompt=system_prompt,
-        output_type=[result_type, RecoverableFailure],
-    )
-    result = await agent.run(user_prompt)
+    try:
+        configured_model = _build_agent_model(
+            resolved_model,
+            resolved_endpoint,
+        )
+        agent = Agent(
+            configured_model,
+            system_prompt=enriched_system_prompt,
+            output_type=[result_type, RecoverableFailure],
+            toolsets=toolsets if toolsets else None,
+        )
+        if toolsets:
+            try:
+                async with agent:
+                    result = await agent.run(enriched_user_prompt)
+            except Exception:
+                # MCP server not reachable — fall back to planning-only mode (no live tools)
+                logger.debug(
+                    "MCP server at %s unreachable; falling back to planning-only agent run.",
+                    mcp_server_url,
+                )
+                agent_fallback = Agent(
+                    configured_model,
+                    system_prompt=enriched_system_prompt,
+                    output_type=[result_type, RecoverableFailure],
+                )
+                result = await agent_fallback.run(enriched_user_prompt)
+        else:
+            result = await agent.run(enriched_user_prompt)
+    except Exception as exc:
+        return RecoverableFailure(
+            explanation=f"Model routing failed: {exc}",
+            remediation_steps=[
+                "Open Model Controls and run Auto-Detect Local Model, or switch provider/model to a supported value.",
+            ],
+            retry_focus="Use a provider-qualified model name, then retry this action.",
+            should_retry=True,
+        )
     payload = result.data if hasattr(result, "data") else result.output
     if isinstance(payload, RecoverableFailure):
         return payload
@@ -1601,31 +2290,53 @@ async def request_clarifications(
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
     metadata = _parse_json_blob(session_row.get("metadata_json"))
-    resolved_model_name = _sanitize_ui_text(
+    resolved_model_name = _normalize_model_name_for_provider(
         model_name or metadata.get("model_name"),
-        _resolve_model_name(),
+        provider=_sanitize_ui_text(metadata.get("model_provider"), "github"),
+        profile=_sanitize_ui_text(metadata.get("model_profile"), "balanced"),
     )
     resolved_local_endpoint = _sanitize_ui_text(
         metadata.get("local_endpoint"),
         os.getenv("SOLIDWORKS_UI_LOCAL_ENDPOINT", "http://127.0.0.1:11434/v1"),
     )
+    # --- Prompt: structured sections so the model sees clearly labelled inputs ---
     answer_section = (
-        f"\nUser's answers/clarifications: {user_answer}" if user_answer else ""
+        f"\n## USER ANSWERS / CLARIFICATIONS\n{user_answer}"
+        if user_answer
+        else ""
+    )
+    assumptions_text = _sanitize_ui_text(
+        metadata.get("assumptions_text"), "<none specified>"
     )
     prompt = (
-        "You are preparing a SolidWorks design brief. Return a normalized brief and at most three "
-        "clarifying questions that unblock modeling.\n\n"
-        f"User goal: {user_goal}\n"
-        f"Active model path: {metadata.get('active_model_path', '')}\n"
-        f"Feature target refs: {metadata.get('feature_target_text', '')}\n"
-        f"Reference corpus: {metadata.get('rag_provenance_text', '')}"
-        f"{answer_section}"
+        "## TASK\n"
+        "Prepare a SolidWorks design brief using the Printer-Profile-Tolerancing skill.\n"
+        "Return a normalized_brief and at most three clarifying_questions that unblock the next modeling step.\n\n"
+        "## DESIGN GOAL\n"
+        f"{user_goal}\n\n"
+        "## MANUFACTURING ASSUMPTIONS\n"
+        f"{assumptions_text}\n\n"
+        "## MODEL CONTEXT\n"
+        f"Active model path : {metadata.get('active_model_path', '') or '<none>'}\n"
+        f"Feature target refs: {metadata.get('feature_target_text', '') or '<none>'}\n"
+        f"Reference corpus   : {metadata.get('rag_provenance_text', '') or '<none>'}"
+        f"{answer_section}\n\n"
+        "## OUTPUT CONTRACT\n"
+        "normalized_brief: concise paragraph with explicit dimensions/tolerances where known (≥10 chars).\n"
+        "questions       : list of up to 3 highest-leverage questions that unblock modeling.\n"
+        "  - Include material/layer-height/nozzle values if missing from assumptions.\n"
+        "  - Include critical fit/clearance targets if unspecified.\n"
+        "  - Do not ask questions already answered above."
     )
-    # LLM Call: GitHub Copilot for plan clarification
+    # LLM Call: request_clarifications — routes to configured provider (GitHub or local)
     result = await _run_structured_agent(
         system_prompt=(
-            "You are a CAD planning assistant. Ask only the highest-leverage questions and normalize "
-            "the brief into concise manufacturing-ready language."
+            "## ROLE\n"
+            "You are a CAD planning assistant applying the Printer-Profile-Tolerancing skill.\n"
+            "Normalize goals into manufacturing-ready language with explicit tolerance/clearance "
+            "targets (e.g. '0.30 mm mating clearance', '0.2 mm layer height'). "
+            "Ask only the highest-leverage questions that unblock the SolidWorks modeling steps. "
+            "Always surface material, nozzle size, and orientation constraints when present in the goal."
         ),
         user_prompt=prompt,
         result_type=ClarificationResponse,
@@ -1704,9 +2415,10 @@ async def inspect_family(
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
     metadata = _parse_json_blob(session_row.get("metadata_json"))
-    resolved_model_name = _sanitize_ui_text(
+    resolved_model_name = _normalize_model_name_for_provider(
         model_name or metadata.get("model_name"),
-        _resolve_model_name(),
+        provider=_sanitize_ui_text(metadata.get("model_provider"), "github"),
+        profile=_sanitize_ui_text(metadata.get("model_profile"), "balanced"),
     )
     resolved_local_endpoint = _sanitize_ui_text(
         metadata.get("local_endpoint"),
@@ -1724,11 +2436,54 @@ async def inspect_family(
         f"Local classifier family: {metadata.get('proposed_family', '')}\n"
         f"Local classifier evidence: {' | '.join(metadata.get('family_evidence', []))}"
     )
-    # LLM Call: GitHub Copilot for family classification
+    # Rebuild as clearly demarcated prompt with skill context embedded
+    local_family = metadata.get("proposed_family", "") or "<not yet classified>"
+    local_evidence = " | ".join(metadata.get("family_evidence", [])) or "<none>"
+    prompt = (
+        "## TASK\n"
+        "Apply the Feature-Tree-Reconstruction skill to classify the SolidWorks feature family "
+        "and produce a human-reviewable checkpoint plan.\n\n"
+        "## DESIGN GOAL\n"
+        f"{user_goal}\n\n"
+        "## MODEL CONTEXT\n"
+        f"Active model path  : {metadata.get('active_model_path', '') or '<none>'}\n"
+        f"Active model status: {metadata.get('active_model_status', '') or '<none>'}\n"
+        f"Feature target refs: {metadata.get('feature_target_text', '') or '<none>'}\n"
+        f"Feature target status: {metadata.get('feature_target_status', '') or '<none>'}\n\n"
+        "## LOCAL CLASSIFIER EVIDENCE (pre-computed)\n"
+        f"Family  : {local_family}\n"
+        f"Evidence: {local_evidence}\n\n"
+        "## REFERENCE CORPUS\n"
+        f"{metadata.get('rag_provenance_text', '') or '<none>'}\n\n"
+        "## FEATURE-TREE RECONSTRUCTION SKILL\n"
+        "Inspection sequence when model is available (use your mcp tools):\n"
+        "  open_model → get_model_info → list_features(include_suppressed=True) "
+        "→ get_mass_properties → classify_feature_tree\n"
+        "Feature families: revolve | extrude | sheet_metal | advanced_solid | assembly | drawing | unknown\n"
+        "Delegation rules:\n"
+        "  - sheet_metal or advanced_solid → VBA-aware reconstruction path\n"
+        "  - simple part family → direct MCP checkpoint plan\n"
+        "  - assembly → component-first decomposition, part-level plan per component\n"
+        "Guardrail: never reconstruct from silhouette only. "
+        "If confidence is low and contradictory evidence exists, propose more inspection steps.\n\n"
+        "## OUTPUT CONTRACT\n"
+        "Return: family, confidence (high/medium/low), evidence[], warnings[], checkpoints[3-6].\n"
+        "Each checkpoint: title, allowed_tools[] (from MCP tool catalog), rationale."
+    )
+    # LLM Call: inspect_family — Feature-Tree-Reconstruction agent route
     result = await _run_structured_agent(
         system_prompt=(
-            "You are a SolidWorks routing assistant. Return a family, confidence, evidence, warnings, "
-            "and checkpoint plan suitable for a human-reviewed build."
+            "## ROLE\n"
+            "You are a SolidWorks routing assistant applying the Feature-Tree-Reconstruction skill.\n"
+            "Classify the feature family with evidence and confidence, then produce a safe "
+            "checkpoint plan for human review.\n\n"
+            "## ORCHESTRATION NOTES\n"
+            "  - Inspection before planning: never produce a build plan without at least one "
+            "evidence item from model inspection or user-confirmed context.\n"
+            "  - Propose 3-6 conservative checkpoints. Require human confirmation before each "
+            "irreversible step.\n"
+            "  - For sheet metal or unsupported advanced features, route to VBA-aware planning.\n"
+            "  - Surface warnings when evidence is contradictory or confidence is low."
         ),
         user_prompt=prompt,
         result_type=FamilyInspection,
@@ -1841,6 +2596,9 @@ async def refresh_preview(
     db_path: Path | None = None,
     preview_dir: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
+    adapter_override: Any | None = None,
+    active_model_path_override: str | None = None,
+    reopen_active_model: bool = True,
 ) -> dict[str, Any]:
     """
     Export the current SolidWorks viewport to a PNG preview and STL for the 3D viewer.
@@ -1864,13 +2622,17 @@ async def refresh_preview(
     )
     resolved_preview_dir = ensure_preview_dir(preview_dir)
     preview_path = resolved_preview_dir / f"{session_id}.png"
+    active_model_path = active_model_path_override or metadata.get("active_model_path")
+    adapter = adapter_override
+    owns_adapter = adapter_override is None
 
     try:
-        config = load_config()
-        adapter = await create_adapter(config)
-        await adapter.connect()
-        active_model_path = metadata.get("active_model_path")
-        if active_model_path and hasattr(adapter, "open_model"):
+        if adapter is None:
+            config = load_config()
+            adapter = await create_adapter(config)
+        if owns_adapter:
+            await adapter.connect()
+        if reopen_active_model and active_model_path and hasattr(adapter, "open_model"):
             candidate_path = Path(str(active_model_path))
             if candidate_path.exists():
                 logger.info(
@@ -1889,21 +2651,29 @@ async def refresh_preview(
         viewer_format = "none"  # "glb" | "stl" | "none"
         try:
             glb_result = await adapter.export_file(str(glb_path.resolve()), "glb")
-            if glb_result.is_success and glb_path.exists() and glb_path.stat().st_size > 0:
+            if (
+                glb_result.is_success
+                and glb_path.exists()
+                and glb_path.stat().st_size > 0
+            ):
                 viewer_format = "glb"
                 viewer_ts = int(glb_path.stat().st_mtime)
                 logger.info(
                     "[ui.refresh_preview] GLB export succeeded path={}",
                     str(glb_path.resolve()),
                 )
-        except Exception:
-            logger.debug("[ui.refresh_preview] GLB export skipped (adapter error)")
+        except Exception as _glb_exc:
+            logger.warning("[ui.refresh_preview] GLB export failed: {}", str(_glb_exc))
 
         if viewer_format == "none":
             # GLB unavailable — try STL (merged single mesh)
             try:
                 stl_result = await adapter.export_file(str(stl_path.resolve()), "stl")
-                if stl_result.is_success and stl_path.exists() and stl_path.stat().st_size > 0:
+                if (
+                    stl_result.is_success
+                    and stl_path.exists()
+                    and stl_path.stat().st_size > 0
+                ):
                     viewer_format = "stl"
                     viewer_ts = int(stl_path.stat().st_mtime)
                     logger.info(
@@ -1917,8 +2687,7 @@ async def refresh_preview(
         # the browser re-fetches the model when it changes.  Pass the format so
         # the viewer JS knows which Three.js loader to instantiate.
         preview_viewer_url = (
-            f"{api_origin}/api/ui/viewer/{session_id}"
-            f"?t={viewer_ts}&fmt={viewer_format}"
+            f"{api_origin}/api/ui/viewer/{session_id}?t={viewer_ts}&fmt={viewer_format}"
         )
 
         # ------------------------------------------------------------------ #
@@ -1963,7 +2732,8 @@ async def refresh_preview(
             png_error = str(png_exc)
             logger.warning("[ui.refresh_preview] PNG export exception: {}", png_exc)
 
-        await adapter.disconnect()
+        if owns_adapter:
+            await adapter.disconnect()
 
         # ------------------------------------------------------------------ #
         # Step 3: Export per-orientation PNG thumbnails for the multi-pane view
@@ -1974,14 +2744,36 @@ async def refresh_preview(
             config2 = load_config()
             adapter2 = await create_adapter(config2)
             await adapter2.connect()
-            active_model_path = metadata.get("active_model_path")
             if active_model_path and hasattr(adapter2, "open_model"):
                 candidate_path = Path(str(active_model_path))
                 if candidate_path.exists():
                     await adapter2.open_model(str(candidate_path.resolve()))
+            # Re-select the previously selected feature so its SolidWorks
+            # highlight glow is visible in the orientation screenshots.
+            _sel_name = str(
+                metadata.get("selected_feature_selector_name")
+                or metadata.get("selected_feature_name")
+                or ""
+            ).strip()
+            if _sel_name and hasattr(adapter2, "select_feature"):
+                try:
+                    await adapter2.select_feature(_sel_name)
+                    logger.info(
+                        "[ui.refresh_preview] re-selected '{}' before view screenshots",
+                        _sel_name,
+                    )
+                except Exception as _sel_exc:
+                    logger.debug(
+                        "[ui.refresh_preview] re-select '{}' failed (non-fatal): {}",
+                        _sel_name,
+                        _sel_exc,
+                    )
             for view_name in VIEW_ORIENTATIONS:
                 view_path = resolved_preview_dir / f"{session_id}-{view_name}.png"
                 try:
+                    if _sel_name and hasattr(adapter2, "select_feature"):
+                        # Some view operations can drop selection; re-apply before each capture.
+                        await adapter2.select_feature(_sel_name)
                     view_result = await adapter2.export_image(
                         {
                             "file_path": str(view_path.resolve()),
@@ -2018,8 +2810,23 @@ async def refresh_preview(
                 "[ui.refresh_preview] multi-view export failed: {}", str(_views_exc)
             )
 
+        # Do not clear existing view URLs when a refresh attempt returns no images.
+        # Keep prior captures to avoid UI flicker or apparent state reset.
+        existing_view_urls = metadata.get("preview_view_urls")
+        if isinstance(existing_view_urls, dict):
+            if not preview_view_urls:
+                preview_view_urls = dict(existing_view_urls)
+            else:
+                merged_view_urls = dict(existing_view_urls)
+                merged_view_urls.update(preview_view_urls)
+                preview_view_urls = merged_view_urls
+
         # Compose status message
-        viewer_label = f"3D viewer ({viewer_format.upper()})" if viewer_format != "none" else "3D viewer (no model)"
+        viewer_label = (
+            f"3D viewer ({viewer_format.upper()})"
+            if viewer_format != "none"
+            else "3D viewer (no model)"
+        )
         png_label = "PNG" if png_ok else f"no PNG ({png_error})"
         status_msg = f"Preview refreshed ({viewer_label}, {png_label})."
 
@@ -2028,6 +2835,7 @@ async def refresh_preview(
             db_path=db_path,
             preview_orientation=orientation,
             latest_message=status_msg,
+            preview_status=status_msg,
             latest_snapshot_id=snapshot_id,
             preview_viewer_url=preview_viewer_url,
             preview_stl_ready=(viewer_format != "none"),
@@ -2051,11 +2859,127 @@ async def refresh_preview(
             session_id,
             db_path=db_path,
             latest_message=f"Preview refresh failed: {exc}",
+            preview_status=f"Preview refresh failed: {exc}",
             preview_orientation=orientation,
             latest_error_text=str(exc),
             remediation_hint="Open a model in SolidWorks and retry preview refresh.",
         )
 
+    return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+
+async def highlight_feature(
+    session_id: str,
+    feature_name: str,
+    *,
+    db_path: Path | None = None,
+    api_origin: str = DEFAULT_API_ORIGIN,
+) -> dict[str, Any]:
+    """Select and highlight a named feature in the active SolidWorks model.
+
+    Uses SelectByID2 via the pywin32 adapter.  In mock mode the selection is
+    acknowledged without a COM side-effect.  Returns the full dashboard state
+    so the UI can hydrate cleanly.
+    """
+    ensure_dashboard_session(session_id, db_path=db_path)
+    session_row = get_design_session(session_id, db_path=db_path) or {}
+    metadata = _parse_json_blob(session_row.get("metadata_json"))
+    active_model_path = metadata.get("active_model_path")
+    resolved_name = (feature_name or "").strip()
+    if not resolved_name:
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            latest_error_text="No feature name provided for selection.",
+            remediation_hint="Pass a non-empty feature_name.",
+        )
+        return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
+
+    try:
+        known_feature_names: set[str] = set()
+        for snapshot in list_model_state_snapshots(session_id, db_path=db_path):
+            raw_tree = snapshot.get("feature_tree_json")
+            if not raw_tree:
+                continue
+            try:
+                parsed_tree = json.loads(raw_tree)
+            except Exception:
+                continue
+            if isinstance(parsed_tree, list):
+                known_feature_names.update(
+                    str(item.get("name") or "").strip()
+                    for item in parsed_tree
+                    if str(item.get("name") or "").strip()
+                )
+                if known_feature_names:
+                    break
+
+        config = load_config()
+        adapter = await create_adapter(config)
+        await adapter.connect()
+        if active_model_path and hasattr(adapter, "open_model"):
+            candidate = Path(str(active_model_path))
+            if candidate.exists():
+                await adapter.open_model(str(candidate.resolve()))
+        selected = False
+        entity_type = ""
+        selected_name = resolved_name
+        if hasattr(adapter, "select_feature"):
+            result = await adapter.select_feature(resolved_name)
+            if result.is_success and isinstance(result.data, dict):
+                selected = bool(result.data.get("selected"))
+                entity_type = str(result.data.get("entity_type") or "")
+                selected_name = str(result.data.get("selected_name") or resolved_name)
+        await adapter.disconnect()
+        tracked_only = (not selected) and (resolved_name in known_feature_names)
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            selected_feature_name=resolved_name,
+            selected_feature_selector_name=selected_name,
+            latest_message=(
+                f"Selected '{resolved_name}' ({entity_type}) in SolidWorks."
+                if selected
+                else (
+                    f"Tracking '{resolved_name}' from the feature tree. SolidWorks did not expose a direct selectable handle for that row."
+                    if tracked_only
+                    else f"Could not select feature '{resolved_name}' — name may not match the feature tree."
+                )
+            ),
+            latest_error_text=(
+                ""
+                if (selected or tracked_only)
+                else f"SelectByID2 returned False for '{resolved_name}'."
+            ),
+            remediation_hint=(
+                ""
+                if (selected or tracked_only)
+                else "Check that the feature name exactly matches the SolidWorks feature tree entry."
+            ),
+        )
+        insert_tool_call_record(
+            session_id=session_id,
+            tool_name="ui.highlight_feature",
+            input_json=json.dumps({"feature_name": resolved_name}, ensure_ascii=True),
+            output_json=json.dumps(
+                {
+                    "selected": selected,
+                    "tracked_only": tracked_only,
+                    "entity_type": entity_type,
+                },
+                ensure_ascii=True,
+            ),
+            success=(selected or tracked_only),
+            db_path=db_path,
+        )
+    except Exception as exc:
+        logger.exception("[ui.highlight_feature] failed: {}", exc)
+        _merge_metadata(
+            session_id,
+            db_path=db_path,
+            latest_error_text=str(exc),
+            remediation_hint="Ensure SolidWorks is open with the target model loaded.",
+        )
     return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
 
 
@@ -2069,6 +2993,9 @@ def build_dashboard_state(
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     metadata = _parse_json_blob(session_row.get("metadata_json"))
     db_ready = bool(session_row)
+    workflow_mode = _normalize_workflow_mode(metadata.get("workflow_mode"))
+    active_model_path = _sanitize_model_path_text(metadata.get("active_model_path"))
+    is_new_design_clean = workflow_mode == "new_design" and not active_model_path
 
     checkpoints = []
     for row in list_plan_checkpoints(session_id, db_path=db_path):
@@ -2081,6 +3008,9 @@ def build_dashboard_state(
         elif row["approved_by_user"]:
             status = "approved"
         else:
+            status = "queued"
+
+        if is_new_design_clean and not row["executed"]:
             status = "queued"
 
         mocked_tools = result_payload.get("mocked_tools", [])
@@ -2109,18 +3039,48 @@ def build_dashboard_state(
     )
 
     evidence_rows = []
-    for evidence in list_evidence_links(session_id, db_path=db_path)[-6:]:
-        evidence_rows.append(
-            DashboardEvidenceRow(
-                source=evidence["source_type"],
-                detail=evidence["rationale"] or evidence["source_id"],
-                score=(
-                    f"{evidence['relevance_score']:.2f}"
-                    if evidence["relevance_score"] is not None
-                    else "-"
-                ),
-            ).model_dump()
-        )
+    if not is_new_design_clean:
+        all_evidence = list_evidence_links(session_id, db_path=db_path)
+        model_scoped_sources = {"active_model", "feature_target"}
+
+        filtered_evidence: list[dict[str, Any]] = []
+        for evidence in all_evidence:
+            source_type = str(evidence.get("source_type") or "")
+            source_id = str(evidence.get("source_id") or "")
+            if (
+                source_type in model_scoped_sources
+                and active_model_path
+                and source_id
+                and source_id != active_model_path
+            ):
+                # Keep the table anchored to the currently attached model.
+                continue
+            filtered_evidence.append(evidence)
+
+        # For feature-target grounding, show only the latest result so the
+        # table reflects the current target text instead of historical misses.
+        latest_feature_target: dict[str, Any] | None = None
+        compact_evidence: list[dict[str, Any]] = []
+        for evidence in filtered_evidence:
+            if str(evidence.get("source_type") or "") == "feature_target":
+                latest_feature_target = evidence
+                continue
+            compact_evidence.append(evidence)
+        if latest_feature_target is not None:
+            compact_evidence.append(latest_feature_target)
+
+        for evidence in compact_evidence[-6:]:
+            evidence_rows.append(
+                DashboardEvidenceRow(
+                    source=evidence["source_type"],
+                    detail=evidence["rationale"] or evidence["source_id"],
+                    score=(
+                        f"{evidence['relevance_score']:.2f}"
+                        if evidence["relevance_score"] is not None
+                        else "-"
+                    ),
+                ).model_dump()
+            )
 
     evidence_rows_text = (
         " | ".join(
@@ -2133,6 +3093,7 @@ def build_dashboard_state(
 
     tool_history = list_tool_call_records(session_id, db_path=db_path)
     latest_tool = tool_history[-1]["tool_name"] if tool_history else "waiting"
+    tool_history_text = _trace_json(_trace_tool_records(tool_history[-20:]))
 
     preview_url = ""
     preview_status = "No preview captured yet."
@@ -2145,6 +3106,56 @@ def build_dashboard_state(
             preview_status = (
                 f"Synced from SolidWorks current view. Last file: {preview_path.name}"
             )
+
+    # Feature tree: read from the most-recent snapshot that contains feature data.
+    _META_NAMES = {
+        "sensors",
+        "annotations",
+        "history",
+        "design binder",
+        "solid bodies",
+        "surface bodies",
+        "lights, cameras and scene",
+        "equations",
+        "favorites",
+        "selection sets",
+        "3d views",
+    }
+    _META_TYPES = {
+        "sensorfolder",
+        "annotationfolder",
+        "historyfolder",
+        "designbinder",
+        "solidbodyfolder",
+        "surfacebodyfolder",
+        "lightsfolder",
+        "mategroup",
+    }
+    feature_tree_items: list[dict[str, Any]] = []
+    if not is_new_design_clean:
+        for snap in snapshots:
+            raw_tree = snap.get("feature_tree_json")
+            if raw_tree:
+                try:
+                    parsed = json.loads(raw_tree)
+                    if isinstance(parsed, list):
+                        feature_tree_items = [
+                            f
+                            for f in parsed
+                            if f.get("name", "").lower() not in _META_NAMES
+                            and f.get("type", "").lower() not in _META_TYPES
+                        ]
+                        break
+                except Exception:
+                    pass
+
+    # Mark the selected feature for UI row highlighting
+    _selected_name = str(metadata.get("selected_feature_name") or "").strip()
+    if _selected_name:
+        feature_tree_items = [
+            {**f, "_selected": "●" if f.get("name") == _selected_name else ""}
+            for f in feature_tree_items
+        ]
 
     # 3D viewer URL: read from metadata (set when model connects or preview refreshes)
     preview_viewer_url = _sanitize_preview_viewer_url(
@@ -2194,8 +3205,6 @@ def build_dashboard_state(
         metadata.get("model_provider") or _provider_from_model_name(model_name)
     )
     model_profile = str(metadata.get("model_profile") or "balanced")
-    workflow_mode = _normalize_workflow_mode(metadata.get("workflow_mode"))
-    active_model_path = _sanitize_model_path_text(metadata.get("active_model_path"))
     active_model_status = _sanitize_ui_text(metadata.get("active_model_status"), "")
     if active_model_path and not active_model_status:
         active_model_status = (
@@ -2213,6 +3222,41 @@ def build_dashboard_state(
         os.getenv("SOLIDWORKS_UI_LOCAL_ENDPOINT", "http://127.0.0.1:11434/v1"),
     )
     readiness = _compute_readiness(metadata, db_ready=db_ready)
+
+    active_model_name = Path(active_model_path).name if active_model_path else "<none>"
+    selected_feature_name = str(metadata.get("selected_feature_name") or "")
+    preview_views = metadata.get("preview_view_urls") or {}
+    model_context_lines = [
+        f"Model file: {active_model_name}",
+        f"Absolute path: {active_model_path or '<none>'}",
+        f"Model type: {str(metadata.get('active_model_type') or '<unknown>')}",
+        f"Configuration: {str(metadata.get('active_model_configuration') or '<unknown>')}",
+        f"Feature tree rows: {len(feature_tree_items)}",
+        f"Selected feature: {selected_feature_name or '<none>'}",
+        f"Feature targets: {str(metadata.get('feature_target_text') or '<none>')}",
+        f"Preview views captured: {', '.join(sorted(preview_views.keys())) or '<none>'}",
+        f"Latest preview status: {preview_status}",
+    ]
+    model_context_text = "\n".join(model_context_lines)
+    context_summary = (
+        f"{active_model_name} | {str(metadata.get('active_model_type') or 'unknown')}"
+        f" | config {str(metadata.get('active_model_configuration') or '<unknown>')}"
+        f" | features {len(feature_tree_items)}"
+    )
+    canonical_prompt_text = "\n".join(
+        [
+            f"Goal: {session_row.get('user_goal') or DEFAULT_USER_GOAL}",
+            f"Assumptions: {_sanitize_ui_text(metadata.get('assumptions_text'), '') or '<none>'}",
+            f"Active model path: {active_model_path or '<none>'}",
+            f"Active model status: {active_model_status}",
+            f"Feature targets: {str(metadata.get('feature_target_text') or '<none>')}",
+            f"Feature target status: {str(metadata.get('feature_target_status') or '<none>')}",
+            f"Accepted/proposed family: {session_row.get('accepted_family') or metadata.get('proposed_family') or '<none>'}",
+            f"RAG provenance: {str(metadata.get('rag_provenance_text') or '<none>')}",
+            f"Docs context: {str(metadata.get('docs_context_text') or '<none>')}",
+            f"Engineering notes: {str(metadata.get('notes_text') or '<none>')}",
+        ]
+    )
 
     state = DashboardUIState(
         session_id=session_id,
@@ -2277,13 +3321,26 @@ def build_dashboard_state(
             metadata.get("rag_provenance_text")
             or "No retrieval provenance available yet."
         ),
+        docs_query=str(metadata.get("docs_query") or "SolidWorks MCP endpoints"),
+        docs_context_text=str(
+            metadata.get("docs_context_text") or "No docs context loaded yet."
+        ),
+        notes_text=str(metadata.get("notes_text") or ""),
+        orchestration_status=str(metadata.get("orchestration_status") or "Ready."),
+        context_save_status=str(metadata.get("context_save_status") or ""),
+        context_load_status=str(metadata.get("context_load_status") or ""),
+        context_name_input=str(metadata.get("context_name_input") or session_id),
+        context_file_input=str(metadata.get("last_context_file") or ""),
         readiness_provider_configured=readiness["readiness_provider_configured"],
         readiness_adapter_mode=readiness["readiness_adapter_mode"],
         readiness_preview_ready=readiness["readiness_preview_ready"],
         readiness_db_ready=readiness["readiness_db_ready"],
         readiness_summary=readiness["readiness_summary"],
         context_used_pct=38,
-        context_text="76k / 200k tokens",
+        context_text=context_summary,
+        model_context_text=model_context_text,
+        canonical_prompt_text=canonical_prompt_text,
+        tool_history_text=tool_history_text,
         api_origin=api_origin,
         preview_viewer_url=preview_viewer_url,
         preview_view_urls=metadata.get("preview_view_urls") or {},
@@ -2293,17 +3350,17 @@ def build_dashboard_state(
             if metadata.get("mocked_tools")
             else ""
         ),
+        feature_tree_items=feature_tree_items,
+        selected_feature_name=str(metadata.get("selected_feature_name") or ""),
     ).model_dump()
     logger.debug(
-        "[ui.trace.state] session_id={} payload={}",
+        "[ui.trace.state] session_id={} model_path={} selected={} feature_rows={} preview_views={} latest_tool={}",
         session_id,
-        _trace_json(
-            {
-                "session_row": _trace_session_row(session_row),
-                "metadata": metadata,
-                "state": state,
-            }
-        ),
+        state.get("active_model_path") or "<none>",
+        state.get("selected_feature_name") or "<none>",
+        len(state.get("feature_tree_items") or []),
+        list((state.get("preview_view_urls") or {}).keys()),
+        state.get("latest_tool") or "waiting",
     )
     return state
 
@@ -2344,8 +3401,11 @@ def build_dashboard_trace_payload(
         "tool_records_text": _trace_json(tool_records),
     }
     logger.debug(
-        "[ui.trace.snapshot] session_id={} payload={}",
+        "[ui.trace.snapshot] session_id={} model_path={} selected={} tool_records={} preview_views={}",
         session_id,
-        _trace_json(payload),
+        state.get("active_model_path") or "<none>",
+        state.get("selected_feature_name") or "<none>",
+        len(tool_records),
+        list((state.get("preview_view_urls") or {}).keys()),
     )
     return payload

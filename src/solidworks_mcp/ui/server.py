@@ -52,12 +52,19 @@ from .service import (
     connect_target_model,
     ensure_preview_dir,
     execute_next_checkpoint,
+    highlight_feature,
     ingest_reference_source,
+    fetch_docs_context,
+    load_session_context,
     inspect_family,
+    run_go_orchestration,
     reconcile_manual_edits,
     refresh_preview,
     request_clarifications,
+    save_session_context,
     select_workflow_mode,
+    open_target_model,
+    update_session_notes,
     update_ui_preferences,
 )
 
@@ -147,6 +154,12 @@ class PreviewRefreshRequest(SessionRequest):
     orientation: str = "current"
 
 
+class FeatureSelectRequest(SessionRequest):
+    """Request payload for highlighting a named feature in the SolidWorks model tree."""
+
+    feature_name: str
+
+
 class PreferencesUpdateRequest(SessionRequest):
     """Request payload for assumptions and model preference updates."""
 
@@ -195,6 +208,38 @@ class RagIngestRequest(SessionRequest):
     namespace: str = "engineering-reference"
     chunk_size: int = 1200
     overlap: int = 200
+
+
+class GoOrchestrationRequest(SessionRequest):
+    """Request payload for global Go orchestration action."""
+
+    user_goal: str = DEFAULT_USER_GOAL
+    assumptions_text: str | None = None
+    user_answer: str = ""
+
+
+class DocsContextRequest(SessionRequest):
+    """Request payload for docs-context refresh."""
+
+    query: str = "SolidWorks MCP endpoints"
+
+
+class NotesUpdateRequest(SessionRequest):
+    """Request payload for saving free-form engineering notes."""
+
+    notes_text: str = ""
+
+
+class ContextSaveRequest(SessionRequest):
+    """Request payload for saving context to plain JSON snapshot."""
+
+    context_name: str | None = None
+
+
+class ContextLoadRequest(SessionRequest):
+    """Request payload for loading context snapshot from plain JSON."""
+
+    context_file: str | None = None
 
 
 app = FastAPI(
@@ -382,6 +427,22 @@ async def connect_model(payload: ConnectTargetModelRequest) -> dict[str, Any]:
     )
 
 
+@app.post("/api/ui/model/open")
+async def open_model(payload: ConnectTargetModelRequest) -> dict[str, Any]:
+    """Open a target SolidWorks document first, before full connect/preview processing."""
+    return await open_target_model(
+        payload.session_id,
+        model_path=payload.model_path,
+        uploaded_files=(
+            [uploaded.model_dump() for uploaded in payload.uploaded_files]
+            if payload.uploaded_files
+            else None
+        ),
+        feature_target_text=payload.feature_target_text,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
+
+
 @app.post("/api/ui/rag/ingest")
 async def ingest_rag_source(payload: RagIngestRequest) -> dict[str, Any]:
     """Ingest a user-provided PDF/text source into a local retrieval index."""
@@ -391,6 +452,58 @@ async def ingest_rag_source(payload: RagIngestRequest) -> dict[str, Any]:
         namespace=payload.namespace,
         chunk_size=payload.chunk_size,
         overlap=payload.overlap,
+    )
+
+
+@app.post("/api/ui/orchestrate/go")
+async def orchestrate_go(payload: GoOrchestrationRequest) -> dict[str, Any]:
+    """Run one end-to-end update across workflow, review, and model output lanes."""
+    return await run_go_orchestration(
+        payload.session_id,
+        user_goal=payload.user_goal,
+        assumptions_text=payload.assumptions_text,
+        user_answer=payload.user_answer,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
+
+
+@app.post("/api/ui/docs/context")
+async def refresh_docs_context(payload: DocsContextRequest) -> dict[str, Any]:
+    """Fetch a docs excerpt from the local docs endpoint using a query hint."""
+    return fetch_docs_context(
+        payload.session_id,
+        docs_query=payload.query,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
+
+
+@app.post("/api/ui/notes/update")
+async def save_notes(payload: NotesUpdateRequest) -> dict[str, Any]:
+    """Persist engineering notes for the current dashboard session."""
+    return update_session_notes(
+        payload.session_id,
+        notes_text=payload.notes_text,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
+
+
+@app.post("/api/ui/context/save")
+async def save_context(payload: ContextSaveRequest) -> dict[str, Any]:
+    """Save current dashboard context to plain JSON and metadata."""
+    return save_session_context(
+        payload.session_id,
+        context_name=payload.context_name,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
+
+
+@app.post("/api/ui/context/load")
+async def load_context(payload: ContextLoadRequest) -> dict[str, Any]:
+    """Load dashboard context from plain JSON snapshot."""
+    return load_session_context(
+        payload.session_id,
+        context_file=payload.context_file,
+        api_origin=DEFAULT_API_ORIGIN,
     )
 
 
@@ -450,14 +563,24 @@ async def refresh_preview_image(payload: PreviewRefreshRequest) -> dict[str, Any
     )
 
 
+@app.post("/api/ui/feature/select")
+async def select_feature_endpoint(payload: FeatureSelectRequest) -> dict[str, Any]:
+    """
+    Select and highlight a named feature in the active SolidWorks model.
+
+    Uses SelectByID2 to locate the feature by name, trying common entity type
+    strings (BODYFEATURE, SKETCH, PLANE, COMPONENT) in priority order.
+    Returns the full dashboard state with ``selected_feature_name`` updated.
+    """
+    return await highlight_feature(
+        payload.session_id,
+        payload.feature_name,
+        api_origin=DEFAULT_API_ORIGIN,
+    )
+
+
 @app.post("/api/ui/manual-sync/reconcile")
 async def reconcile_edits(payload: SessionRequest) -> dict[str, Any]:
-    """
-    Detect manual edits by comparing latest two snapshots.
-
-    MOCKED: Simple fingerprint comparison. Future: capture model state
-    (features, masses, sketches) and provide richer diff.
-    """
     return reconcile_manual_edits(payload.session_id)
 
 
@@ -476,7 +599,9 @@ async def probe_local_model_endpoint() -> LocalModelProbeResult:
 
 
 @app.post("/api/ui/local-model/pull")
-async def pull_local_model_endpoint(payload: LocalModelPullRequest) -> LocalModelPullResult:
+async def pull_local_model_endpoint(
+    payload: LocalModelPullRequest,
+) -> LocalModelPullResult:
     """
     Trigger an Ollama pull for the specified model name (e.g. ``gemma3:12b``).
 
@@ -489,7 +614,9 @@ async def pull_local_model_endpoint(payload: LocalModelPullRequest) -> LocalMode
 
 
 @app.post("/api/ui/local-model/query")
-async def query_local_model_endpoint(payload: LocalModelQueryRequest) -> LocalAgentResult:
+async def query_local_model_endpoint(
+    payload: LocalModelQueryRequest,
+) -> LocalAgentResult:
     """
     Run a free-form prompt against the local Ollama model.
 
@@ -508,7 +635,10 @@ async def query_local_model_endpoint(payload: LocalModelQueryRequest) -> LocalAg
     config = LocalLLMConfig.from_env()
     if payload.endpoint:
         config = config.model_copy(
-            update={"endpoint": payload.endpoint, "openai_endpoint": f"{payload.endpoint}/v1"}
+            update={
+                "endpoint": payload.endpoint,
+                "openai_endpoint": f"{payload.endpoint}/v1",
+            }
         )
     if payload.model:
         service_model = (

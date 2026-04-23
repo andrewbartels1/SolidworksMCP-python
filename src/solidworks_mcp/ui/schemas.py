@@ -6,6 +6,8 @@ both backend endpoints and Prefab UI state use the same contract.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -108,6 +110,18 @@ class DashboardUIState(BaseModel):
         default="",
         description="Absolute path to the SolidWorks model the dashboard should inspect and modify.",
     )
+    model_path_input_chooser: str = Field(
+        default="",
+        description="Editable draft path used by the chooser-screen attach textbox.",
+    )
+    model_path_input_edit: str = Field(
+        default="",
+        description="Editable draft path used by the edit-existing attach textbox.",
+    )
+    uploaded_file_payloads: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Temporary browser file-picker payloads used for existing-model attach requests.",
+    )
     active_model_status: str = Field(
         default="No active model connected yet.",
         description="Status line describing the currently attached target model.",
@@ -127,6 +141,10 @@ class DashboardUIState(BaseModel):
     feature_target_status: str = Field(
         default="No grounded feature target selected.",
         description="Validation status for the current feature-target references.",
+    )
+    feature_grounding_warning_text: str = Field(
+        default="",
+        description="Inline warning shown when grounded feature resolution is unavailable for the current model context.",
     )
     normalized_brief: str = Field(
         default="Design a printable U-bracket assembly for cable routing with M4 hardware.",
@@ -231,6 +249,34 @@ class DashboardUIState(BaseModel):
         min_length=5,
         description="OpenAI-compatible local endpoint for local model routing.",
     )
+    local_model_status_text: str = Field(
+        default="Local model controls idle.",
+        description="Operator-facing status for local-model probe and pull actions.",
+    )
+    local_model_busy: bool = Field(
+        default=False,
+        description="Whether a local-model probe or pull action is currently in flight.",
+    )
+    local_model_available: bool = Field(
+        default=False,
+        description="Whether Ollama responded successfully to probe.",
+    )
+    local_model_recommended_tier: str = Field(
+        default="",
+        description="Recommended local model tier reported by the probe endpoint.",
+    )
+    local_model_recommended_ollama_model: str = Field(
+        default="",
+        description="Recommended Ollama model tag reported by the probe endpoint.",
+    )
+    local_model_pull_command: str = Field(
+        default="",
+        description="Recommended Ollama pull command from probe results.",
+    )
+    local_model_label: str = Field(
+        default="",
+        description="Human-readable label for the currently recommended local model.",
+    )
     rag_source_path: str = Field(
         default="",
         description="Local path or http/https URL for BYO retrieval ingestion, such as a PDF, HTML article, or markdown guide.",
@@ -256,6 +302,38 @@ class DashboardUIState(BaseModel):
     rag_provenance_text: str = Field(
         default="No retrieval provenance available yet.",
         description="Condensed provenance summary for the latest ingested retrieval corpus.",
+    )
+    docs_query: str = Field(
+        default="SolidWorks MCP endpoints",
+        description="Search phrase used when fetching docs context from the docs endpoint.",
+    )
+    docs_context_text: str = Field(
+        default="No docs context loaded yet.",
+        description="Filtered docs excerpt shown in the docs pane under the model viewer.",
+    )
+    notes_text: str = Field(
+        default="",
+        description="User-authored engineering notes stored with the session.",
+    )
+    orchestration_status: str = Field(
+        default="Ready.",
+        description="Status line for the global Go orchestration action.",
+    )
+    context_save_status: str = Field(
+        default="",
+        description="Result message for the latest save-context action.",
+    )
+    context_load_status: str = Field(
+        default="",
+        description="Result message for the latest load-context action.",
+    )
+    context_name_input: str = Field(
+        default="prefab-dashboard",
+        description="Draft file-name token used by the save-context button.",
+    )
+    context_file_input: str = Field(
+        default="",
+        description="Draft file path used by the load-context button.",
     )
     readiness_provider_configured: bool = Field(
         default=False,
@@ -287,6 +365,18 @@ class DashboardUIState(BaseModel):
         default="76k / 200k tokens",
         description="Human-readable context budget string for the UI meter.",
     )
+    model_context_text: str = Field(
+        default="No active model context yet.",
+        description="Structured summary of the currently attached local SolidWorks model.",
+    )
+    canonical_prompt_text: str = Field(
+        default="",
+        description="Canonical operator-facing prompt assembled from the active dashboard state.",
+    )
+    tool_history_text: str = Field(
+        default="[]",
+        description="Recent MCP/tool execution history rendered as trace JSON for operator review.",
+    )
     preview_viewer_url: str = Field(
         default="",
         description="URL for the embedded Three.js 3D viewer iframe (changes with each refresh to force reload).",
@@ -302,4 +392,12 @@ class DashboardUIState(BaseModel):
     api_origin: str = Field(
         default="http://127.0.0.1:8766",
         description="Backend origin that Prefab UI is expected to call.",
+    )
+    feature_tree_items: list[dict] = Field(
+        default_factory=list,
+        description="Feature tree rows from the active model (name, type, suppressed, position).",
+    )
+    selected_feature_name: str = Field(
+        default="",
+        description="Name of the feature most recently highlighted in SolidWorks.",
     )

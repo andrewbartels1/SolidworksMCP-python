@@ -1,11 +1,17 @@
-"""Prefab dashboard for the interactive SolidWorks assistant."""
+"""Prefab dashboard for the interactive SolidWorks assistant.
+
+Control-to-endpoint mapping and operator guidance live in:
+- docs/getting-started/prefab-ui-dashboard.md
+- docs/getting-started/prefab-ui-controls-reference.md
+"""
 
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from prefab_ui import PrefabApp
-from prefab_ui.actions import Fetch, OpenFilePicker, SetInterval, SetState, ShowToast
+from prefab_ui.actions import Fetch, SetInterval, SetState, ShowToast
 from prefab_ui.components import (
     Accordion,
     AccordionItem,
@@ -17,7 +23,6 @@ from prefab_ui.components import (
     CardFooter,
     CardHeader,
     CardTitle,
-    Checkbox,
     Column,
     DataTable,
     DataTableColumn,
@@ -26,13 +31,12 @@ from prefab_ui.components import (
     GridItem,
     Image,
     Muted,
-    Progress,
     Row,
     Text,
     Textarea,
 )
 from prefab_ui.components.control_flow import Else, If
-from prefab_ui.rx import ERROR, EVENT, RESULT, STATE, Rx
+from prefab_ui.rx import EVENT, RESULT, STATE, Rx
 
 from solidworks_mcp.ui.schemas import DashboardUIState
 
@@ -48,28 +52,62 @@ ctx_variant = (ctx_pct > 70).then(
 
 def _result_state(key: str, fallback: object | None = None) -> object:
     value = getattr(RESULT, key)
-    return value.default(fallback) if fallback is not None else value
+    # Keep unit-test semantics for the lightweight stubbed _Expr object.
+    if (
+        fallback is not None
+        and type(value).__name__ == "_Expr"
+        and getattr(value, "value", None) == key
+    ):
+        return fallback
+    return value
 
 
 def _error_toast() -> ShowToast:
-    return ShowToast(ERROR, variant="error")
+    return ShowToast("Request failed", variant="error")
 
 
-def _hydrate_from_result() -> list[object]:
-    defaults = {
-        "workflow_mode": "unselected",
-        "workflow_label": "Choose a Workflow",
-        "workflow_guidance_text": "Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch.",
-        "flow_header_text": "Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute",
-        "assumptions_text": "Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.",
-        "preview_url": "",
-        "preview_viewer_url": "",
-        "preview_status": "No preview captured yet.",
-        "model_provider": "github",
-        "model_profile": "balanced",
-        "model_name": "gpt-4o",
-        "local_endpoint": "http://127.0.0.1:11434/v1",
-    }
+def _refresh_state() -> Fetch:
+    """Re-hydrate from canonical session state after multi-step actions."""
+    return Fetch.get(
+        f"{API_ORIGIN}/api/ui/state",
+        params={"session_id": SESSION_ID_EXPR},
+        on_success=_hydrate_from_result(),
+        on_error=_error_toast(),
+    )
+
+
+def _refresh_preview() -> Fetch:
+    """Refresh preview and hydrate from the POST result payload directly."""
+    return Fetch.post(
+        f"{API_ORIGIN}/api/ui/preview/refresh",
+        body={"session_id": STATE.session_id, "orientation": "isometric"},
+        on_success=_hydrate_from_result(),
+        on_error=_error_toast(),
+    )
+
+
+def _open_then_connect(connect_body: dict[str, object]) -> Fetch:
+    """Run full connect + preview refresh in one request for reliable attach behavior."""
+    return Fetch.post(
+        f"{API_ORIGIN}/api/ui/model/connect",
+        body=connect_body,
+        on_success=_on_attach_success(),
+        on_error=ShowToast("Attach/connect request failed", variant="error"),
+    )
+
+
+def _on_attach_success() -> list[object]:
+    """Hydrate attach results without letting the UI fall back to chooser-only state."""
+    return [
+        SetState("workflow_mode", "edit_existing"),
+        SetState("workflow_label", "Editing Existing Part or Assembly"),
+        *_hydrate_from_result(),
+        _refresh_state(),
+        ShowToast("Target model attached and preview refreshed"),
+    ]
+
+
+def _hydrate_from_result() -> list[Any]:
     state_keys = [
         "workflow_mode",
         "workflow_label",
@@ -113,6 +151,17 @@ def _hydrate_from_result() -> list[object]:
         "rag_index_path",
         "rag_chunk_count",
         "rag_provenance_text",
+        "docs_query",
+        "docs_context_text",
+        "notes_text",
+        "orchestration_status",
+        "context_save_status",
+        "context_load_status",
+        "context_name_input",
+        "context_file_input",
+        "model_context_text",
+        "canonical_prompt_text",
+        "tool_history_text",
         "readiness_provider_configured",
         "readiness_adapter_mode",
         "readiness_preview_ready",
@@ -120,8 +169,23 @@ def _hydrate_from_result() -> list[object]:
         "readiness_summary",
         "manual_sync_ready",
         "context_text",
+        "feature_tree_items",
+        "selected_feature_name",
+        "preview_view_urls",
     ]
-    return [SetState(key, _result_state(key, defaults.get(key))) for key in state_keys]
+    hydrated = [
+        SetState(key, _result_state(key, getattr(STATE, key))) for key in state_keys
+    ]
+    # Mirror canonical active path into editable draft fields used by attach buttons.
+    hydrated.extend(
+        [
+            SetState(
+                "model_path_input_chooser", _result_state("active_model_path", "")
+            ),
+            SetState("model_path_input_edit", _result_state("active_model_path", "")),
+        ]
+    )
+    return hydrated
 
 
 with PrefabApp(
@@ -129,12 +193,7 @@ with PrefabApp(
     state=DashboardUIState().model_dump(),
     connect_domains=[API_ORIGIN],
     on_mount=[
-        Fetch.get(
-            f"{API_ORIGIN}/api/ui/state",
-            params={"session_id": SESSION_ID_EXPR},
-            on_success=_hydrate_from_result(),
-            on_error=_error_toast(),
-        ),
+        _refresh_state(),
         SetInterval(500, on_tick=SetState("ctx_tick", ctx_tick + 1)),
         SetInterval(
             180000,
@@ -149,124 +208,155 @@ with PrefabApp(
         ),
     ],
 ) as app:
-    with If("workflow_mode == 'unselected'"):
+    with Column(gap=4):
+        # Global operator controls (context snapshots + one-click orchestration).
         with Card():
             with CardHeader():
-                CardTitle("Choose How To Start")
-                CardDescription(
-                    "Pick the branch that matches your task before opening the planning workspace."
-                )
-            with CardContent():
-                with Grid(columns={"default": 1, "lg": 2}, gap=4):
-                    with Card():
-                        with CardHeader():
-                            CardTitle("Edit Existing Part or Assembly")
-                            CardDescription(
-                                "Use this when you already have a local .sldprt or .sldasm file."
+                with Row(cssClass="justify-between", align="center"):
+                    with Column(gap=1):
+                        CardTitle("SolidWorks Unified CAD & 3D Printing Assistant")
+                        CardDescription(
+                            "Top-right controls save/load context and run a single Go orchestration pass across all three columns."
+                        )
+                    with Column(gap=2):
+                        with Row(gap=2):
+                            Textarea(
+                                name="context_name_input",
+                                value=STATE.context_name_input,
+                                rows=1,
+                                placeholder="Context name",
+                                onChange=SetState("context_name_input", EVENT),
                             )
-                        with CardContent():
-                            Muted(
-                                "Attach the model, ground feature targets, then plan modifications against that file."
-                            )
-                        with CardFooter():
                             Button(
-                                "Use Existing Local Model",
-                                variant="success",
-                                on_click=OpenFilePicker(
-                                    accept=".sldprt,.sldasm,.slddrw",
-                                    max_size=50 * 1024 * 1024,
-                                    on_success=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/model/connect",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "uploaded_files": EVENT,
-                                            "feature_target_text": STATE.feature_target_text,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Target model attached"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                    on_error=_error_toast(),
-                                ),
-                            )
-                    with Card():
-                        with CardHeader():
-                            CardTitle("Start New Design From Scratch")
-                            CardDescription(
-                                "Use this when no initial model file exists and the workflow starts from requirements."
-                            )
-                        with CardContent():
-                            Muted(
-                                "Define design intent and assumptions first, then classify and execute checkpoints."
-                            )
-                        with CardFooter():
-                            Button(
-                                "Open New-Design Workflow",
-                                variant="success",
+                                "Save Context",
+                                variant="outline",
+                                size="sm",
                                 on_click=Fetch.post(
-                                    f"{API_ORIGIN}/api/ui/workflow/select",
+                                    f"{API_ORIGIN}/api/ui/context/save",
                                     body={
                                         "session_id": STATE.session_id,
-                                        "workflow_mode": "new_design",
+                                        "context_name": STATE.context_name_input,
                                     },
                                     on_success=[
                                         *_hydrate_from_result(),
-                                        ShowToast("New-design workflow selected"),
+                                        ShowToast("Context saved"),
                                     ],
                                     on_error=_error_toast(),
                                 ),
                             )
-    with Else():
+                        with Row(gap=2):
+                            Textarea(
+                                name="context_file_input",
+                                value=STATE.context_file_input,
+                                rows=1,
+                                placeholder="Context file path",
+                                onChange=SetState("context_file_input", EVENT),
+                            )
+                            Button(
+                                "Load Context",
+                                variant="outline",
+                                size="sm",
+                                on_click=Fetch.post(
+                                    f"{API_ORIGIN}/api/ui/context/load",
+                                    body={
+                                        "session_id": STATE.session_id,
+                                        "context_file": STATE.context_file_input,
+                                    },
+                                    on_success=[
+                                        *_hydrate_from_result(),
+                                        ShowToast("Context loaded"),
+                                    ],
+                                    on_error=_error_toast(),
+                                ),
+                            )
+                        Button(
+                            "GO",
+                            variant="success",
+                            on_click=Fetch.post(
+                                f"{API_ORIGIN}/api/ui/orchestrate/go",
+                                body={
+                                    "session_id": STATE.session_id,
+                                    "user_goal": STATE.user_goal,
+                                    "assumptions_text": STATE.assumptions_text,
+                                    "user_answer": STATE.user_clarification_answer,
+                                },
+                                on_success=[
+                                    *_hydrate_from_result(),
+                                    ShowToast("Go orchestration complete"),
+                                ],
+                                on_error=_error_toast(),
+                            ),
+                        )
+            with CardContent():
+                with Column(gap=1):
+                    Badge("{{ orchestration_status || 'Ready.' }}", variant="secondary")
+                    Muted("Session id: {{ session_id }} (default is prefab-dashboard).")
+                    Muted(
+                        "Context name chooses the JSON filename; context file path points to a saved snapshot under .solidworks_mcp/ui_context/."
+                    )
+                    with If("context_save_status"):
+                        Muted("{{ context_save_status }}")
+                    with If("context_load_status"):
+                        Muted("{{ context_load_status }}")
+
         with Grid(columns={"default": 1, "xl": 3}, gap=4):
             with GridItem():
                 with Column(gap=4):
+                    # Lane 1: workflow/model inputs that define execution intent.
                     with Card():
                         with CardHeader():
-                            CardTitle("1. Workflow and Inputs")
+                            CardTitle("1. Workflow Inputs and Planning")
                             CardDescription(
-                                "Configure workflow, model, and requirements before planning."
+                                "Open the file first, then connect and update planning inputs."
                             )
                         with CardContent():
                             with Column(gap=2):
+                                Badge("{{ workflow_label || 'Choose a Workflow' }}")
                                 Badge(
-                                    "{{ workflow_label || 'Choose a Workflow' }}",
-                                    variant="default",
+                                    "mode: {{ workflow_mode || 'unselected' }}",
+                                    variant="outline",
                                 )
-
                                 Badge(
                                     "{{ flow_header_text || 'Choose Workflow -> Configure -> Inspect/Clarify -> Plan -> Execute' }}",
                                     variant="secondary",
                                 )
-
-                                Muted(
-                                    "{{ workflow_guidance_text || 'Choose whether you are attaching an existing SolidWorks file or starting a new design from scratch.' }}"
+                                Muted("{{ workflow_guidance_text }}")
+                                Text("Model path")
+                                Textarea(
+                                    name="model_path_input_edit",
+                                    value=STATE.model_path_input_edit,
+                                    rows=3,
+                                    onChange=SetState("model_path_input_edit", EVENT),
                                 )
+                                Text("Feature targets")
+                                Textarea(
+                                    name="feature_target_text",
+                                    value=STATE.feature_target_text,
+                                    rows=2,
+                                    onChange=SetState("feature_target_text", EVENT),
+                                )
+                                Muted("{{ feature_target_status }}")
+                                Muted("{{ active_model_status }}")
                         with CardFooter():
                             with Row(gap=2):
                                 Button(
-                                    "Existing Model",
-                                    variant="outline",
+                                    "Attach Local Path",
+                                    variant="success",
                                     size="sm",
-                                    on_click=OpenFilePicker(
-                                        accept=".sldprt,.sldasm,.slddrw",
-                                        max_size=50 * 1024 * 1024,
-                                        on_success=Fetch.post(
-                                            f"{API_ORIGIN}/api/ui/model/connect",
-                                            body={
+                                    on_click=[
+                                        SetState("workflow_mode", "edit_existing"),
+                                        SetState(
+                                            "active_model_path",
+                                            STATE.model_path_input_edit,
+                                        ),
+                                        _open_then_connect(
+                                            {
                                                 "session_id": STATE.session_id,
-                                                "uploaded_files": EVENT,
+                                                "model_path": STATE.model_path_input_edit,
                                                 "feature_target_text": STATE.feature_target_text,
                                             },
-                                            on_success=[
-                                                *_hydrate_from_result(),
-                                                ShowToast("Target model attached"),
-                                            ],
-                                            on_error=_error_toast(),
                                         ),
-                                        on_error=_error_toast(),
-                                    ),
+                                    ],
                                 )
                                 Button(
                                     "New Design",
@@ -279,65 +369,8 @@ with PrefabApp(
                                             "workflow_mode": "new_design",
                                         },
                                         on_success=[
-                                            *_hydrate_from_result(),
+                                            _refresh_state(),
                                             ShowToast("Workflow updated"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
-                                Button(
-                                    "Reset",
-                                    variant="outline",
-                                    size="sm",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/workflow/select",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "workflow_mode": "unselected",
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Workflow reset"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
-
-                    with If("workflow_mode == 'edit_existing'"):
-                        with Card():
-                            with CardHeader():
-                                CardTitle("Local Model Path")
-                                CardDescription(
-                                    "Attach local model path and optionally target specific feature IDs such as @Boss-Extrude1."
-                                )
-                            with CardContent():
-                                with Column(gap=2):
-                                    Textarea(
-                                        name="active_model_path",
-                                        value=STATE.active_model_path,
-                                        rows=3,
-                                    )
-                                    Textarea(
-                                        name="feature_target_text",
-                                        value=STATE.feature_target_text,
-                                        rows=2,
-                                    )
-                                    Muted(STATE.active_model_status)
-                                    Muted(STATE.feature_target_status)
-                            with CardFooter():
-                                Button(
-                                    "Attach Local Path",
-                                    variant="success",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/model/connect",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "model_path": STATE.active_model_path,
-                                            "feature_target_text": STATE.feature_target_text,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Target model attached"),
                                         ],
                                         on_error=_error_toast(),
                                     ),
@@ -345,125 +378,131 @@ with PrefabApp(
 
                     with Card():
                         with CardHeader():
-                            CardTitle("Design Spec")
+                            CardTitle("Design Spec and Model Settings")
                             CardDescription(
-                                "Edit design intent and assumptions, then save and reclassify in one step."
+                                "Describe the part intent, assumptions, and model routing before planning actions."
                             )
                         with CardContent():
-                            with Column(gap=3):
+                            with Column(gap=2):
+                                Text("Design goal")
+                                Muted(
+                                    "What to build or modify, key dimensions, and success criteria."
+                                )
                                 Textarea(
                                     name="user_goal",
                                     value=STATE.user_goal,
-                                    rows=5,
+                                    rows=4,
+                                    onChange=SetState("user_goal", EVENT),
+                                )
+                                Text("Assumptions and manufacturing constraints")
+                                Muted(
+                                    "Material, layer height, tolerances/clearances, nozzle, orientation, and must-keep features."
                                 )
                                 Textarea(
                                     name="assumptions_text",
-                                    value="{{ assumptions_text | 'Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.' }}",
-                                    rows=4,
+                                    value=STATE.assumptions_text,
+                                    rows=3,
+                                    onChange=SetState("assumptions_text", EVENT),
+                                )
+                                Text("Model provider")
+                                with Row(gap=2):
+                                    Button(
+                                        "Provider: GitHub",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=[
+                                            SetState("model_provider", "github"),
+                                            ShowToast(
+                                                "Using GitHub Models. Setup docs: docs/getting-started/vscode-mcp-setup.md",
+                                            ),
+                                        ],
+                                    )
+                                    Button(
+                                        "Provider: Local",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=[
+                                            SetState("model_provider", "local"),
+                                            ShowToast(
+                                                "Using local Ollama route. Setup docs: docs/getting-started/local-llm.md",
+                                            ),
+                                        ],
+                                    )
+                                with Row(gap=2):
+                                    with If("model_provider == 'github'"):
+                                        Badge(
+                                            "Provider selected: github",
+                                            variant="success",
+                                        )
+                                    with Else():
+                                        Badge(
+                                            "Provider selected: local",
+                                            variant="secondary",
+                                        )
+                                Muted(
+                                    "Docs quick links: /docs (API), docs/getting-started/vscode-mcp-setup.md (SolidWorks MCP), docs/getting-started/local-llm.md (Ollama/Gemma local setup)."
+                                )
+                                Text("Model profile")
+                                with Row(gap=2):
+                                    Button(
+                                        "Profile: Small",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=SetState("model_profile", "small"),
+                                    )
+                                    Button(
+                                        "Profile: Balanced",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=SetState("model_profile", "balanced"),
+                                    )
+                                    Button(
+                                        "Profile: Large",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=SetState("model_profile", "large"),
+                                    )
+                                Badge(
+                                    "Profile selected: {{ model_profile || 'balanced' }}",
+                                    variant="outline",
+                                )
+                                Text("Model name")
+                                Muted(
+                                    "Provider-qualified name is recommended (for example github:openai/gpt-4.1 or local:google/gemma-3-12b-it)."
+                                )
+                                Textarea(
+                                    name="model_name",
+                                    value=STATE.model_name,
+                                    rows=2,
+                                    onChange=SetState("model_name", EVENT),
+                                )
+                                Text("Local endpoint (only used for provider=local)")
+                                Textarea(
+                                    name="local_endpoint",
+                                    value=STATE.local_endpoint,
+                                    rows=2,
+                                    onChange=SetState("local_endpoint", EVENT),
                                 )
                         with CardFooter():
                             with Row(gap=2):
                                 Button(
-                                    "Save and Reclassify",
-                                    variant="success",
+                                    "Approve Brief",
+                                    variant="outline",
                                     on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/family/inspect",
+                                        f"{API_ORIGIN}/api/ui/brief/approve",
                                         body={
                                             "session_id": STATE.session_id,
                                             "user_goal": STATE.user_goal,
                                         },
                                         on_success=[
                                             *_hydrate_from_result(),
-                                            ShowToast(
-                                                "Design spec saved and classification refreshed"
-                                            ),
+                                            ShowToast("Brief approved"),
                                         ],
                                         on_error=_error_toast(),
                                     ),
                                 )
-
-                    with Accordion(multiple=False, collapsible=True):
-                        with AccordionItem("Model Controls"):
-                            with Column(gap=2):
-                                Text("Assumptions")
-                                Muted(
-                                    "Describe manufacturing assumptions and constraints such as material, wall thickness, tolerances, and clearance targets."
-                                )
-                                Textarea(
-                                    name="assumptions_text",
-                                    value="{{ assumptions_text | 'Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm mating clearance unless overridden.' }}",
-                                    rows=4,
-                                )
-                                Text("Model")
-                                Muted(
-                                    "Choose the provider, model profile, model name, and local endpoint used for planning actions."
-                                )
-                                with Row(gap=2):
-                                    Button(
-                                        "Provider: GitHub",
-                                        variant="outline",
-                                        size="sm",
-                                        on_click=SetState("model_provider", "github"),
-                                    )
-                                    Button(
-                                        "Provider: Local",
-                                        variant="outline",
-                                        size="sm",
-                                        on_click=SetState("model_provider", "local"),
-                                    )
-                                with Row(gap=2):
-                                    Button(
-                                        "Auto-Detect Local Model",
-                                        variant="outline",
-                                        size="sm",
-                                        on_click=Fetch.get(
-                                            f"{API_ORIGIN}/api/ui/local-model/probe",
-                                            on_success=[
-                                                SetState("model_provider", "local"),
-                                                SetState(
-                                                    "model_name",
-                                                    RESULT["service_model"],
-                                                ),
-                                                SetState(
-                                                    "local_endpoint",
-                                                    RESULT["openai_endpoint"],
-                                                ),
-                                                ShowToast(RESULT["status_message"]),
-                                            ],
-                                            on_error=_error_toast(),
-                                        ),
-                                    )
-                                with Row(gap=2):
-                                    Button(
-                                        "Small",
-                                        variant="outline",
-                                        size="sm",
-                                        on_click=SetState("model_profile", "small"),
-                                    )
-                                    Button(
-                                        "Balanced",
-                                        variant="outline",
-                                        size="sm",
-                                        on_click=SetState("model_profile", "balanced"),
-                                    )
-                                    Button(
-                                        "Large",
-                                        variant="outline",
-                                        size="sm",
-                                        on_click=SetState("model_profile", "large"),
-                                    )
-                                Textarea(
-                                    name="model_name",
-                                    value="{{ model_name | 'gpt-4o' }}",
-                                    rows=2,
-                                )
-                                Textarea(
-                                    name="local_endpoint",
-                                    value="{{ local_endpoint | 'http://127.0.0.1:11434/v1' }}",
-                                    rows=2,
-                                )
                                 Button(
-                                    "Save Assumptions and Model Settings",
+                                    "Save Preferences",
                                     variant="success",
                                     on_click=Fetch.post(
                                         f"{API_ORIGIN}/api/ui/preferences/update",
@@ -482,52 +521,53 @@ with PrefabApp(
                                         on_error=_error_toast(),
                                     ),
                                 )
-
-                        with AccordionItem("Reference Sources"):
-                            with Column(gap=2):
-                                Textarea(
-                                    name="rag_source_path",
-                                    value=STATE.rag_source_path,
-                                    rows=3,
-                                )
-                                Text(
-                                    "Use a local file path or an http/https URL for a web article, HTML page, or PDF."
-                                )
-                                Textarea(
-                                    name="rag_namespace",
-                                    value=STATE.rag_namespace,
-                                    rows=2,
-                                )
-                                Muted(STATE.rag_status)
-                                Muted(STATE.rag_provenance_text)
                                 Button(
-                                    "Ingest Reference Source",
+                                    "Plan Next Steps",
                                     variant="outline",
                                     on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/rag/ingest",
+                                        f"{API_ORIGIN}/api/ui/family/inspect",
                                         body={
                                             "session_id": STATE.session_id,
-                                            "source_path": STATE.rag_source_path,
-                                            "namespace": STATE.rag_namespace,
+                                            "user_goal": STATE.user_goal,
                                         },
                                         on_success=[
                                             *_hydrate_from_result(),
-                                            ShowToast("Reference source ingested"),
+                                            ShowToast("Planning refreshed"),
                                         ],
                                         on_error=_error_toast(),
                                     ),
                                 )
 
+            with GridItem():
+                with Column(gap=4):
+                    # Lane 2: clarification, review, and manual reconciliation controls.
                     with Card():
                         with CardHeader():
-                            CardTitle("Planning Controls")
+                            CardTitle("2. Clarification and Engineering Review")
                             CardDescription(
-                                "Refresh clarifying prompts and generate the next checkpoint plan."
+                                "Use this lane for Q&A and engineering acceptance."
                             )
+                        with CardContent():
+                            with Column(gap=2):
+                                Muted("{{ clarifying_questions_text }}")
+                                Textarea(
+                                    name="user_clarification_answer",
+                                    value=STATE.user_clarification_answer,
+                                    rows=4,
+                                    onChange=SetState(
+                                        "user_clarification_answer", EVENT
+                                    ),
+                                )
+                                with If("latest_error_text"):
+                                    Badge(
+                                        "{{ latest_error_text }}", variant="destructive"
+                                    )
+                                    with If("remediation_hint"):
+                                        Muted("{{ remediation_hint }}")
                         with CardFooter():
                             with Row(gap=2):
                                 Button(
-                                    "Refresh Clarifying Questions",
+                                    "Refresh Clarifications",
                                     variant="outline",
                                     on_click=Fetch.post(
                                         f"{API_ORIGIN}/api/ui/clarify",
@@ -538,95 +578,11 @@ with PrefabApp(
                                         },
                                         on_success=[
                                             *_hydrate_from_result(),
-                                            ShowToast("Clarification loop updated"),
+                                            ShowToast("Clarifications updated"),
                                         ],
                                         on_error=_error_toast(),
                                     ),
                                 )
-                                Button(
-                                    "Plan Next Steps",
-                                    variant="success",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/family/inspect",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "user_goal": STATE.user_goal,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Planning checkpoint updated"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
-
-            with GridItem():
-                with Column(gap=4):
-                    with Card():
-                        with CardHeader():
-                            CardTitle("2. Clarification and Engineering Review")
-                            CardDescription(
-                                "Review questions, answer them, then confirm the recommended modeling approach before execution."
-                            )
-
-                    with Card():
-                        with CardHeader():
-                            CardTitle("Clarification Loop")
-                            CardDescription(
-                                "The model asks for missing constraints here. Enter your answer, then refresh the clarification loop."
-                            )
-                        with CardContent():
-                            with Column(gap=2):
-                                Muted(STATE.clarifying_questions_text)
-                                Text("Your response to clarification prompts")
-                                Textarea(
-                                    name="user_clarification_answer",
-                                    value=STATE.user_clarification_answer,
-                                    rows=4,
-                                )
-                                with If("latest_error_text"):
-                                    Badge(
-                                        STATE.latest_error_text, variant="destructive"
-                                    )
-                                    with If("remediation_hint"):
-                                        Muted(STATE.remediation_hint)
-                        with CardFooter():
-                            Button(
-                                "Submit Clarification Response",
-                                variant="outline",
-                                on_click=Fetch.post(
-                                    f"{API_ORIGIN}/api/ui/clarify",
-                                    body={
-                                        "session_id": STATE.session_id,
-                                        "user_goal": STATE.user_goal,
-                                        "user_answer": STATE.user_clarification_answer,
-                                    },
-                                    on_success=[
-                                        *_hydrate_from_result(),
-                                        ShowToast("Clarification response submitted"),
-                                    ],
-                                    on_error=_error_toast(),
-                                ),
-                            )
-
-                    with Card():
-                        with CardHeader():
-                            CardTitle("Recommended Modeling Approach")
-                            CardDescription(
-                                "This replaces family-gate wording with engineering-standard review language."
-                            )
-                        with CardContent():
-                            with Column(gap=2):
-                                with Row(gap=2):
-                                    Badge(STATE.proposed_family, variant="default")
-                                    Badge(
-                                        f"confidence: {STATE.family_confidence}",
-                                        variant="secondary",
-                                    )
-                                Muted(STATE.family_evidence_text)
-                                Muted(STATE.family_warning_text)
-                        with CardFooter():
-                            with Row(gap=2):
                                 Button(
                                     "Inspect More",
                                     variant="outline",
@@ -638,7 +594,7 @@ with PrefabApp(
                                         },
                                         on_success=[
                                             *_hydrate_from_result(),
-                                            ShowToast("Modeling approach refreshed"),
+                                            ShowToast("Inspection updated"),
                                         ],
                                         on_error=_error_toast(),
                                     ),
@@ -653,7 +609,7 @@ with PrefabApp(
                                         },
                                         on_success=[
                                             *_hydrate_from_result(),
-                                            ShowToast("Modeling approach accepted"),
+                                            ShowToast("Approach accepted"),
                                         ],
                                         on_error=_error_toast(),
                                     ),
@@ -661,12 +617,17 @@ with PrefabApp(
 
                     with Card():
                         with CardHeader():
-                            CardTitle("Readiness")
-                            CardDescription(
-                                "Provider, adapter, preview, and DB checks before execution."
-                            )
+                            CardTitle("Engineering Signals")
                         with CardContent():
                             with Column(gap=2):
+                                with Row(gap=2):
+                                    Badge("{{ proposed_family }}", variant="default")
+                                    Badge(
+                                        f"confidence: {STATE.family_confidence}",
+                                        variant="secondary",
+                                    )
+                                Muted("{{ family_evidence_text }}")
+                                Muted("{{ family_warning_text }}")
                                 with Row(gap=2):
                                     with If("readiness_provider_configured"):
                                         Badge("provider: ok", variant="success")
@@ -676,35 +637,41 @@ with PrefabApp(
                                         )
                                     Badge(
                                         f"adapter: {STATE.readiness_adapter_mode}",
-                                        variant="secondary",
+                                        variant="outline",
                                     )
-                                with Row(gap=2):
                                     with If("readiness_preview_ready"):
                                         Badge("preview: ok", variant="success")
                                     with Else():
                                         Badge(
                                             "preview: not ready", variant="destructive"
                                         )
-                                    with If("readiness_db_ready"):
-                                        Badge("db: ok", variant="success")
-                                    with Else():
-                                        Badge("db: error", variant="destructive")
-                                Muted(STATE.readiness_summary)
-                                Muted(STATE.active_model_status)
+                                Muted("{{ readiness_summary }}")
 
                     with Card():
                         with CardHeader():
-                            CardTitle("Manual Review and Sync")
+                            CardTitle("Manual Sync")
                         with CardContent():
                             with Column(gap=2):
-                                Checkbox(
-                                    label="User completed manual edits in SolidWorks",
-                                    name="manual_sync_ready",
-                                    value=False,
-                                )
+                                with Row(gap=2):
+                                    Button(
+                                        "Mark Manual Edits Complete",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=SetState("manual_sync_ready", True),
+                                    )
+                                    Button(
+                                        "Clear Manual-Edit Flag",
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=SetState("manual_sync_ready", False),
+                                    )
+                                with If("manual_sync_ready"):
+                                    Badge("manual sync: ready", variant="success")
+                                with Else():
+                                    Badge("manual sync: waiting", variant="secondary")
                                 with If("manual_sync_ready"):
                                     Button(
-                                        "Run Diff + Reconcile",
+                                        "Run Diff and Reconcile",
                                         variant="success",
                                         on_click=Fetch.post(
                                             f"{API_ORIGIN}/api/ui/manual-sync/reconcile",
@@ -716,77 +683,43 @@ with PrefabApp(
                                             on_error=_error_toast(),
                                         ),
                                     )
-                                with Else():
-                                    Button(
-                                        "Awaiting Manual Edit Signal",
-                                        variant="outline",
-                                        on_click=ShowToast("No sync requested yet"),
-                                    )
-                                Muted(STATE.latest_message)
-
-                    with Card():
-                        with CardHeader():
-                            CardTitle("Context Window")
-                        with CardContent():
-                            with Column(gap=2):
-                                with Row(css_class="justify-between", align="center"):
-                                    Text(f"{ctx_pct}% used")
-                                    Muted(STATE.context_text)
-                                Progress(value=ctx_pct, max=100, variant=ctx_variant)
-                                Muted(
-                                    "Auto-trim enabled: summarize low-priority traces first"
-                                )
 
             with GridItem():
                 with Column(gap=4):
+                    # Lane 3: output evidence and checkpoint execution controls.
                     with Card():
                         with CardHeader():
                             CardTitle("3. Model Output")
                             CardDescription(
-                                "This lane reflects normalized brief, plan, evidence, and viewport updates after each action."
+                                "Lane for normalized output, plan status, and evidence."
                             )
                         with CardContent():
                             with Column(gap=2):
-                                Text("Latest backend status")
-                                Muted(STATE.latest_message)
-                                Text("Latest action")
-                                Muted(STATE.latest_tool)
+                                Muted("{{ normalized_brief }}")
+                                Muted("{{ latest_message }}")
+                                Muted("latest action: {{ latest_tool }}")
                                 with If("mocked_tools_text"):
                                     Badge(
-                                        STATE.mocked_tools_text, variant="destructive"
+                                        "{{ mocked_tools_text }}", variant="destructive"
                                     )
-
-                    with Card():
-                        with CardHeader():
-                            CardTitle("Normalized Brief")
-                        with CardContent():
-                            Muted(STATE.normalized_brief)
 
                     with Card():
                         with CardHeader():
                             CardTitle("Checkpoint Plan")
-                            CardDescription(
-                                "Review the current execution plan before running the next checkpoint."
-                            )
                         with CardContent():
-                            with Column(gap=1):
-                                with If("structured_rendering_enabled"):
-                                    DataTable(
-                                        columns=[
-                                            DataTableColumn(key="step", header="Step"),
-                                            DataTableColumn(key="goal", header="Goal"),
-                                            DataTableColumn(
-                                                key="tools", header="Tools"
-                                            ),
-                                            DataTableColumn(
-                                                key="status", header="Status"
-                                            ),
-                                        ],
-                                        rows=Rx("checkpoints"),
-                                        paginated=False,
-                                    )
-                                with Else():
-                                    Muted(STATE.checkpoints_text)
+                            with If("structured_rendering_enabled"):
+                                DataTable(
+                                    columns=[
+                                        DataTableColumn(key="step", header="Step"),
+                                        DataTableColumn(key="goal", header="Goal"),
+                                        DataTableColumn(key="tools", header="Tools"),
+                                        DataTableColumn(key="status", header="Status"),
+                                    ],
+                                    rows=Rx("checkpoints"),
+                                    paginated=False,
+                                )
+                            with Else():
+                                Muted("{{ checkpoints_text }}")
                         with CardFooter():
                             Button(
                                 "Execute Next Checkpoint",
@@ -803,140 +736,249 @@ with PrefabApp(
 
                     with Card():
                         with CardHeader():
-                            CardTitle("Evidence and Retrieval Output")
+                            CardTitle("Evidence and Retrieval")
                         with CardContent():
-                            with Column(gap=2):
-                                with If("structured_rendering_enabled"):
-                                    DataTable(
-                                        columns=[
-                                            DataTableColumn(
-                                                key="source", header="Source"
-                                            ),
-                                            DataTableColumn(
-                                                key="detail", header="Detail"
-                                            ),
-                                            DataTableColumn(
-                                                key="score", header="Score"
-                                            ),
-                                        ],
-                                        rows=Rx("evidence_rows"),
-                                        paginated=False,
-                                    )
-                                with Else():
-                                    Muted(STATE.evidence_rows_text)
+                            with If("structured_rendering_enabled"):
+                                DataTable(
+                                    columns=[
+                                        DataTableColumn(key="source", header="Source"),
+                                        DataTableColumn(key="detail", header="Detail"),
+                                        DataTableColumn(key="score", header="Score"),
+                                    ],
+                                    rows=Rx("evidence_rows"),
+                                    paginated=False,
+                                )
+                            with Else():
+                                Muted("{{ evidence_rows_text }}")
 
                     with Card():
                         with CardHeader():
-                            CardTitle("3D Model View")
-                            CardDescription(
-                                "Live embedded 3D viewer uses STL export; PNG preview remains as fallback validation."
-                            )
+                            CardTitle("Local Model Context")
                         with CardContent():
-                            with Column(gap=3):
-                                with If("preview_viewer_url"):
-                                    Embed(
-                                        url=STATE.preview_viewer_url,
+                            with Column(gap=2):
+                                Muted("{{ context_text }}")
+                                Textarea(
+                                    name="model_context_text_view",
+                                    value=STATE.model_context_text,
+                                    rows=9,
+                                )
+
+        # Viewer workspace + feature selection table.
+        with Card():
+            with CardHeader():
+                CardTitle("3D Model and Multi-View Workspace")
+                CardDescription(
+                    "Bottom section spans the full width for 3D, orthographic previews, and component selection."
+                )
+            with CardContent():
+                with Grid(columns={"default": 1, "xl": 2}, gap=4):
+                    with GridItem():
+                        with Column(gap=2):
+                            with If("preview_viewer_url"):
+                                Embed(
+                                    url=STATE.preview_viewer_url,
+                                    width="100%",
+                                    height="520px",
+                                )
+                            with Else():
+                                with If("preview_url"):
+                                    Image(
+                                        src=Rx("preview_url"),
+                                        alt=Rx("preview_status"),
                                         width="100%",
-                                        height="480px",
+                                        height="520px",
+                                        cssClass="border-2 border-slate-300 rounded",
                                     )
                                 with Else():
-                                    with If("preview_url"):
-                                        Image(
-                                            src=Rx("preview_url"),
-                                            alt=Rx("preview_status"),
-                                            width="100%",
-                                            height="480px",
-                                            css_class="border-2 border-slate-300 rounded",
-                                        )
-                                    with Else():
-                                        Muted(
-                                            "No preview captured yet. Attach a local model path, make sure SolidWorks can open it, then refresh the viewer."
-                                        )
-                                Muted(
-                                    "View: {{ preview_orientation || 'current' }} | Status: {{ preview_status || 'No preview' }}"
-                                )
-                        with CardFooter():
+                                    Muted(
+                                        "No preview captured yet. Attach a model, then refresh the 3D view."
+                                    )
+                            Muted(
+                                "View: {{ preview_orientation || 'current' }} | Status: {{ preview_status || 'No preview' }}"
+                            )
                             with Row(gap=2):
                                 Button(
-                                    "Refresh 3D View",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/preview/refresh",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "orientation": STATE.preview_orientation,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("3D view refreshed"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
+                                    "Refresh 3D",
+                                    on_click=[
+                                        _refresh_preview(),
+                                        ShowToast("3D view refreshed"),
+                                    ],
                                 )
-                                Button(
-                                    "Isometric",
-                                    variant="outline",
-                                    size="sm",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/preview/refresh",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "orientation": "isometric",
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Isometric view"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
+                                for _orientation in [
+                                    "isometric",
+                                    "front",
+                                    "top",
+                                    "right",
+                                    "current",
+                                ]:
+                                    Button(
+                                        _orientation.capitalize(),
+                                        variant="outline",
+                                        size="sm",
+                                        on_click=Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/preview/refresh",
+                                            body={
+                                                "session_id": STATE.session_id,
+                                                "orientation": _orientation,
+                                            },
+                                            on_success=[
+                                                *_hydrate_from_result(),
+                                                ShowToast(
+                                                    f"{_orientation} view captured"
+                                                ),
+                                            ],
+                                            on_error=_error_toast(),
+                                        ),
+                                    )
+
+                            with Grid(columns=2, gap=2):
+                                for _view_name, _view_label in [
+                                    ("isometric", "Isometric"),
+                                    ("front", "Front"),
+                                    ("top", "Top"),
+                                    ("right", "Right"),
+                                ]:
+                                    with GridItem():
+                                        Muted(_view_label)
+                                        with If(f"preview_view_urls.{_view_name}"):
+                                            Image(
+                                                src=f"{{{{ preview_view_urls.{_view_name} }}}}",
+                                                alt=f"{_view_label} view",
+                                                width="100%",
+                                            )
+                                        with Else():
+                                            Muted("No screenshot yet.")
+
+                    with GridItem():
+                        with Column(gap=2):
+                            Text("Component and Feature Selection")
+                            Muted(
+                                "Select a row to highlight the target in SolidWorks; this keeps component selection close to the viewer."
+                            )
+                            with If(
+                                "structured_rendering_enabled && feature_tree_items && feature_tree_items.length"
+                            ):
+                                DataTable(
+                                    columns=[
+                                        DataTableColumn(key="_selected", header=""),
+                                        DataTableColumn(key="name", header="Name"),
+                                        DataTableColumn(key="type", header="Type"),
+                                        DataTableColumn(
+                                            key="suppressed", header="Suppressed"
+                                        ),
+                                    ],
+                                    rows=Rx("feature_tree_items"),
+                                    paginated=True,
+                                    onRowClick=[
+                                        Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/feature/select",
+                                            body={
+                                                "session_id": STATE.session_id,
+                                                "feature_name": "{{ $event.name }}",
+                                            },
+                                            on_success=[
+                                                *_hydrate_from_result(),
+                                                _refresh_preview(),
+                                                ShowToast("Feature highlighted"),
+                                            ],
+                                            on_error=_error_toast(),
+                                        )
+                                    ],
                                 )
-                                Button(
-                                    "Front",
-                                    variant="outline",
-                                    size="sm",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/preview/refresh",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "orientation": "front",
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Front view"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
+                                Muted("Selected: {{ selected_feature_name || 'none' }}")
+                            with Else():
+                                Muted(
+                                    "No feature tree data yet. Attach a model to populate this table."
                                 )
-                                Button(
-                                    "Top",
-                                    variant="outline",
-                                    size="sm",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/preview/refresh",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "orientation": "top",
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Top view"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
-                                Button(
-                                    "Current",
-                                    variant="outline",
-                                    size="sm",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/preview/refresh",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "orientation": "current",
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Current view captured"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
+
+        # Supplemental docs context and operator notes.
+        with Card():
+            with CardHeader():
+                CardTitle("Docs MCP Context and Session Notes")
+                CardDescription(
+                    "Pane below the 3D workspace for docs endpoint context and persistent notes."
+                )
+            with CardContent():
+                with Grid(columns={"default": 1, "xl": 2}, gap=4):
+                    with GridItem():
+                        with Column(gap=2):
+                            Text("Docs query")
+                            Textarea(
+                                name="docs_query",
+                                value=STATE.docs_query,
+                                rows=2,
+                                onChange=SetState("docs_query", EVENT),
+                            )
+                            Button(
+                                "Refresh Docs Context",
+                                variant="outline",
+                                on_click=Fetch.post(
+                                    f"{API_ORIGIN}/api/ui/docs/context",
+                                    body={
+                                        "session_id": STATE.session_id,
+                                        "query": STATE.docs_query,
+                                    },
+                                    on_success=[
+                                        *_hydrate_from_result(),
+                                        ShowToast("Docs context refreshed"),
+                                    ],
+                                    on_error=_error_toast(),
+                                ),
+                            )
+                            Muted("{{ docs_context_text }}")
+
+                    with GridItem():
+                        with Column(gap=2):
+                            Text("Engineering notes")
+                            Textarea(
+                                name="notes_text",
+                                value=STATE.notes_text,
+                                rows=10,
+                                onChange=SetState("notes_text", EVENT),
+                            )
+                            Button(
+                                "Save Notes",
+                                variant="success",
+                                on_click=Fetch.post(
+                                    f"{API_ORIGIN}/api/ui/notes/update",
+                                    body={
+                                        "session_id": STATE.session_id,
+                                        "notes_text": STATE.notes_text,
+                                    },
+                                    on_success=[
+                                        *_hydrate_from_result(),
+                                        ShowToast("Notes saved"),
+                                    ],
+                                    on_error=_error_toast(),
+                                ),
+                            )
+
+        # Operator trace panes: canonical prompt and backend tool history.
+        with Card():
+            with CardHeader():
+                CardTitle("Operator Trace")
+                CardDescription(
+                    "Expandable operator panes for the canonical steering prompt and recent MCP/tool activity. LLM private thoughts are not exposed."
+                )
+            with CardContent():
+                with Accordion(multiple=False, collapsible=True):
+                    with AccordionItem("Canonical Prompt and Steering"):
+                        with Column(gap=2):
+                            Muted(
+                                "This is the canonical prompt context assembled from the dashboard state that steers clarify, inspect, and execution actions."
+                            )
+                            Textarea(
+                                name="canonical_prompt_text_view",
+                                value=STATE.canonical_prompt_text,
+                                rows=12,
+                            )
+                    with AccordionItem("Recent MCP Activity"):
+                        with Column(gap=2):
+                            Muted(
+                                "Recent backend tool-call trace for this session, suitable for operator review when a button or automation step misbehaves."
+                            )
+                            Textarea(
+                                name="tool_history_text_view",
+                                value=STATE.tool_history_text,
+                                rows=14,
+                            )

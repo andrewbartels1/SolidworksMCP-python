@@ -150,8 +150,6 @@ class LocalLLMConfig(BaseModel):
 # ---------------------------------------------------------------------------
 # Probe result — typed response returned by the /api/ui/local-model/probe endpoint
 # ---------------------------------------------------------------------------
-
-
 class LocalModelProbeResult(BaseModel):
     """
     Full hardware-detection and Ollama availability result.
