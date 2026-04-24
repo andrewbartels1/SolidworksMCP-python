@@ -6,6 +6,8 @@
 .pytest_cache
 .ruff_cache
 .benchmarks
+.generated
+.solidworks_mcp
 htmlcov
 coverage.xml
 __pycache__

@@ -9,6 +9,7 @@ import platform
 import time
 from collections.abc import Callable
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
@@ -34,9 +35,9 @@ try:
     PYWIN32_AVAILABLE = True
 except ImportError:  # pragma: no cover
     # Keep names defined for tests that patch module attributes on non-Windows CI.
-    pythoncom = None
-    pywintypes = None
-    win32com = None
+    pythoncom = SimpleNamespace()
+    pywintypes = SimpleNamespace(com_error=Exception)
+    win32com = SimpleNamespace(client=SimpleNamespace())
     PYWIN32_AVAILABLE = False
 
 
