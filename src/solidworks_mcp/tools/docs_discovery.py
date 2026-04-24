@@ -188,15 +188,15 @@ _KNOWN_SW_INTERFACES: dict[str, dict[str, list[str]]] = {
 
 def _enumerate_typeinfo_members(typeinfo: Any) -> tuple[list[str], list[str]]:
     """Enumerate methods and properties from a COM ITypeInfo object.
-    
+
     Uses raw ITypeInfo via pythoncom to walk the function table, which works reliably for
     both early-bound and late-bound COM objects.
-    
+
     Returns (methods, properties) as sorted de-duped lists.
-    
+
     Args:
         typeinfo (Any): The typeinfo value.
-    
+
     Returns:
         tuple[list[str], list[str]]: A tuple containing the resulting values.
     """
@@ -231,13 +231,13 @@ def _enumerate_typeinfo_members(typeinfo: Any) -> tuple[list[str], list[str]]:
 
 def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
     """Enumerate ISldWorks methods/properties via ITypeInfo.
-    
+
     Returns a COM index dict keyed by interface name, with the same shape as the rest of the
     index (``methods``, ``properties``, ``method_count``, ``property_count``).
-    
+
     Args:
         sw_app (Any): The sw app value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -296,10 +296,10 @@ def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
 
 def _discover_vba_references_via_registry() -> dict[str, Any]:
     """Enumerate VBA/TypeLib references via the Windows Registry.
-    
+
     Scans HKEY_CLASSES_ROOT\TypeLib for entries whose name or GUID matches SolidWorks or
     common Office/VBA libraries.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -375,10 +375,10 @@ def _discover_vba_references_via_registry() -> dict[str, Any]:
 
 class SolidWorksDocsDiscovery:
     """Discover and index SolidWorks COM and VBA documentation.
-    
+
     Args:
         output_dir (Path | None): The output dir value. Defaults to None.
-    
+
     Attributes:
         output_dir (Any): The output dir value.
         sw_app (Any): The sw app value.
@@ -386,10 +386,10 @@ class SolidWorksDocsDiscovery:
 
     def __init__(self, output_dir: Path | None = None):
         """Initialize docs discovery.
-        
+
         Args:
             output_dir (Path | None): The output dir value. Defaults to None.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -407,7 +407,7 @@ class SolidWorksDocsDiscovery:
 
     def connect_to_solidworks(self) -> bool:
         """Connect to running SolidWorks instance.
-        
+
         Returns:
             bool: True if connect to solidworks, otherwise False.
         """
@@ -439,11 +439,11 @@ class SolidWorksDocsDiscovery:
 
     def discover_com_objects(self) -> dict[str, Any]:
         """Discover all COM objects and their methods/properties.
-        
+
         Uses ITypeInfo enumeration via pythoncom for ISldWorks, then supplements with the active
         document's interface if a model is open. Falls back to the known-interface catalogue
         when typelib introspection is unavailable.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -531,9 +531,9 @@ class SolidWorksDocsDiscovery:
 
     def discover_vba_references(self) -> dict[str, Any]:
         """Discover VBA/TypeLib references via the Windows Registry.
-        
+
         Scans HKEY_CLASSES_ROOT\TypeLib for SolidWorks and common Office/VBA type libraries.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -550,7 +550,7 @@ class SolidWorksDocsDiscovery:
 
     def discover_all(self) -> dict[str, Any]:
         """Run full discovery of COM and VBA documentation.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -568,10 +568,10 @@ class SolidWorksDocsDiscovery:
 
     def save_index(self, filename: str = "solidworks_docs_index.json") -> Path | None:
         """Save discovered documentation to JSON file.
-        
+
         Args:
             filename (str): The filename value. Defaults to "solidworks_docs_index.json".
-        
+
         Returns:
             Path | None: The result produced by the operation.
         """
@@ -587,7 +587,7 @@ class SolidWorksDocsDiscovery:
 
     def create_search_summary(self) -> dict[str, Any]:
         """Create a summary of indexed documentation for search/reference.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -607,7 +607,7 @@ class SolidWorksDocsDiscovery:
 
 class DiscoverDocsInput(CompatInput):
     """Input schema for docs discovery.
-    
+
     Attributes:
         include_vba (bool): The include vba value.
         output_dir (str | None): The output dir value.
@@ -630,7 +630,7 @@ class DiscoverDocsInput(CompatInput):
 
 class SearchApiHelpInput(CompatInput):
     """Input schema for SolidWorks API help search.
-    
+
     Attributes:
         auto_discover_if_missing (bool): The auto discover if missing value.
         index_file (str | None): The index file value.
@@ -668,11 +668,11 @@ CompatInputT = TypeVar("CompatInputT", bound=CompatInput)
 
 def _normalize_input(input_data: Any, model_type: type[CompatInputT]) -> CompatInputT:
     """Normalize dict/model payloads for direct tool invocation paths.
-    
+
     Args:
         input_data (Any): The input data value.
         model_type (type[CompatInputT]): The model type value.
-    
+
     Returns:
         CompatInputT: The result produced by the operation.
     """
@@ -689,10 +689,10 @@ def _normalize_input(input_data: Any, model_type: type[CompatInputT]) -> CompatI
 
 def _extract_year(value: str | None) -> int | None:
     """Extract a 4-digit year from any string.
-    
+
     Args:
         value (str | None): The value value.
-    
+
     Returns:
         int | None: The result produced by the operation.
     """
@@ -709,7 +709,7 @@ def _extract_year(value: str | None) -> int | None:
 
 def _detect_installed_solidworks_year() -> int | None:
     """Detect the latest installed SolidWorks year from the public samples path.
-    
+
     Returns:
         int | None: The result produced by the operation.
     """
@@ -718,12 +718,16 @@ def _detect_installed_solidworks_year() -> int | None:
         return None
 
     years: list[int] = []
-    for child in root.iterdir():
-        if not child.is_dir():
-            continue
-        year = _extract_year(child.name)
-        if year is not None:
-            years.append(year)
+    try:
+        for child in root.iterdir():
+            if not child.is_dir():
+                continue
+            year = _extract_year(child.name)
+            if year is not None:
+                years.append(year)
+    except OSError:
+        # Path can be inaccessible or missing on CI runners and non-Windows hosts.
+        return None
 
     if not years:
         return None
@@ -732,11 +736,11 @@ def _detect_installed_solidworks_year() -> int | None:
 
 def _resolve_solidworks_year(requested_year: int | None, config: Any) -> int | None:
     """Resolve SolidWorks year from explicit request, config, then local installation.
-    
+
     Args:
         requested_year (int | None): The requested year value.
         config (Any): Configuration values for the operation.
-    
+
     Returns:
         int | None: The result produced by the operation.
     """
@@ -756,10 +760,10 @@ def _resolve_solidworks_year(requested_year: int | None, config: Any) -> int | N
 
 def _load_index_file(index_file: Path) -> dict[str, Any] | None:
     """Load docs index JSON from disk.
-    
+
     Args:
         index_file (Path): The index file value.
-    
+
     Returns:
         dict[str, Any] | None: A dictionary containing the resulting values.
     """
@@ -777,11 +781,11 @@ def _load_index_file(index_file: Path) -> dict[str, Any] | None:
 
 def _find_index_file(year: int | None, explicit_index_file: str | None) -> Path | None:
     """Find the most appropriate index file for a requested year.
-    
+
     Args:
         year (int | None): The year value.
         explicit_index_file (str | None): The explicit index file value.
-    
+
     Returns:
         Path | None: The result produced by the operation.
     """
@@ -813,12 +817,12 @@ def _search_index(
     index: dict[str, Any], query: str, max_results: int
 ) -> list[dict[str, Any]]:
     """Search indexed COM objects/members for a query.
-    
+
     Args:
         index (dict[str, Any]): The index value.
         query (str): Query text used for the operation.
         max_results (int): The max results value.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -830,10 +834,10 @@ def _search_index(
 
     def _score(text: str) -> int:
         """Build internal score.
-        
+
         Args:
             text (str): Input text processed by the operation.
-        
+
         Returns:
             int: The computed numeric result.
         """
@@ -893,10 +897,10 @@ def _search_index(
 
 def _fallback_help_for_query(query: str) -> dict[str, Any]:
     """Provide coherent fallback help when no docs index is available.
-    
+
     Args:
         query (str): Query text used for the operation.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -954,12 +958,12 @@ async def register_docs_discovery_tools(
     mcp: Any, adapter: Any, config: dict[str, Any]
 ) -> int:
     """Register docs discovery tool with FastMCP.
-    
+
     Args:
         mcp (Any): The mcp value.
         adapter (Any): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
     """
@@ -969,29 +973,29 @@ async def register_docs_discovery_tools(
         input_data: DiscoverDocsInput | None = None,
     ) -> dict[str, Any]:
         """Discover and index SolidWorks COM and VBA documentation.
-        
+
         Creates a searchable index of all available COM objects, methods, properties, and VBA
         libraries for the installed SolidWorks version. Useful for building context for
         intelligent MCP tool selection and documentation queries.
-        
+
         Args:
             input_data (DiscoverDocsInput | None): The input data value. Defaults to None.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await discover_solidworks_docs({
                                 "output_dir": "docs-index",
                                 "include_vba": True
                             })
-        
+
                             if result["status"] == "success":
                                 print(f"Discovered {result['summary']['total_methods']} COM methods")
                                 print(f"Output saved to {result['output_file']}")
                             ```
-        
+
                         Note:
                             - Requires Windows + SolidWorks installed and running
                             - Creates .generated/docs-index directory if not present
@@ -1078,13 +1082,13 @@ async def register_docs_discovery_tools(
         input_data: SearchApiHelpInput | None = None,
     ) -> dict[str, Any]:
         """Search SolidWorks API help index and return coherent guidance.
-        
+
         This tool helps when the LLM gets stuck by mapping user intent to discovered COM members
         and practical MCP workflow guidance.
-        
+
         Args:
             input_data (SearchApiHelpInput | None): The input data value. Defaults to None.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """

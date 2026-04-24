@@ -33,6 +33,10 @@ try:
 
     PYWIN32_AVAILABLE = True
 except ImportError:  # pragma: no cover
+    # Keep names defined for tests that patch module attributes on non-Windows CI.
+    pythoncom = None
+    pywintypes = None
+    win32com = None
     PYWIN32_AVAILABLE = False
 
 
