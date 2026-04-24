@@ -68,9 +68,12 @@ class IntelligentRouter:
             "list_configurations",
             "get_file_properties",
             "get_dimension",
-            # Analysis operations (expensive, often repeated)
-            "get_mass_properties",
-            "calculate_mass_properties",
+            # Analysis operations — NOT cached: model state changes with
+            # every feature-creation tool call and the router has no
+            # automatic invalidation. Caching these produced stale
+            # volumes mid-build.
+            # "get_mass_properties",
+            # "calculate_mass_properties",
             "get_material_properties",
             "analyze_geometry",
             "check_interference",
