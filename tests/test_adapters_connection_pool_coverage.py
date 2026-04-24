@@ -1,29 +1,4 @@
-"""
-Tests targeting uncovered lines in connection_pool.py.
-
-Covers:
-- _attempt_async exception path (lines 82-83)
-- _attempt_async_with_error exception path (lines 91-92)
-- _attempt_sync exception path (lines 98-101)
-- _invoke_with_optional_args TypeError path (lines 110-114)
-- _replace_failed_adapter connect raises (lines 126-127)
-- acquire() / release() / cleanup() delegation (lines 156, 168, 177)
-- is_connected True branch (line 186)
-- _get_adapter TimeoutError (lines 197-198)
-- logging during failure in _execute_with_pool (line 255)
-- disconnect error path (line 281)
-- asyncio.QueueEmpty in disconnect while loop (lines 289-290)
-- is_connected False after clear (line 296)
-- health_check healthy adapter accumulates response time (line 324)
-- save_file via pool (line 361)
-- create_part with name/units (lines 380-385)
-- create_assembly with name (lines 402-407)
-- get_model_info via pool (line 502)
-- list_features via pool (line 510)
-- list_configurations via pool (line 517)
-- ConnectionPool acquire wait loop (lines 621-623)
-- ConnectionPool cleanup async close() coroutine (line 653)
-"""
+"""Tests targeting uncovered lines in connection_pool.py."""
 
 import asyncio
 from datetime import datetime
@@ -57,6 +32,8 @@ def _make_pool(pool_size: int = 1, **kwargs) -> ConnectionPoolAdapter:
 
 
 def _make_healthy_health(average_response_time: float = 0.05) -> AdapterHealth:
+    """Test make healthy health."""
+
     return AdapterHealth(
         healthy=True,
         last_check=datetime.now(),
@@ -69,6 +46,8 @@ def _make_healthy_health(average_response_time: float = 0.05) -> AdapterHealth:
 
 
 def _make_unhealthy_health() -> AdapterHealth:
+    """Test make unhealthy health."""
+
     return AdapterHealth(
         healthy=False,
         last_check=datetime.now(),
@@ -93,9 +72,13 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_attempt_async_returns_default_on_exception(self):
+        """Test attempt async returns default on exception."""
+
         pool = _make_pool()
 
         async def raising_op():
+            """Test raising op."""
+
             raise RuntimeError("boom")
 
         result = await pool._attempt_async(raising_op)
@@ -103,9 +86,13 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_attempt_async_returns_custom_default_on_exception(self):
+        """Test attempt async returns custom default on exception."""
+
         pool = _make_pool()
 
         async def raising_op():
+            """Test raising op."""
+
             raise ValueError("oops")
 
         result = await pool._attempt_async(raising_op, default="fallback")
@@ -113,9 +100,13 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_attempt_async_returns_value_on_success(self):
+        """Test attempt async returns value on success."""
+
         pool = _make_pool()
 
         async def good_op():
+            """Test good op."""
+
             return 42
 
         result = await pool._attempt_async(good_op)
@@ -127,9 +118,13 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_attempt_async_with_error_returns_none_exc_on_exception(self):
+        """Test attempt async with error returns none exc on exception."""
+
         pool = _make_pool()
 
         async def raising_op():
+            """Test raising op."""
+
             raise ValueError("bad input")
 
         value, exc = await pool._attempt_async_with_error(raising_op)
@@ -139,9 +134,13 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_attempt_async_with_error_success_path(self):
+        """Test attempt async with error success path."""
+
         pool = _make_pool()
 
         async def good_op():
+            """Test good op."""
+
             return "ok"
 
         value, exc = await pool._attempt_async_with_error(good_op)
@@ -153,27 +152,39 @@ class TestConnectionPoolAdapterCoverage:
     # ------------------------------------------------------------------
 
     def test_attempt_sync_returns_default_on_exception(self):
+        """Test attempt sync returns default on exception."""
+
         pool = _make_pool()
 
         def raising_op():
+            """Test raising op."""
+
             raise RuntimeError("sync boom")
 
         result = pool._attempt_sync(raising_op)
         assert result is None
 
     def test_attempt_sync_returns_custom_default_on_exception(self):
+        """Test attempt sync returns custom default on exception."""
+
         pool = _make_pool()
 
         def raising_op():
+            """Test raising op."""
+
             raise KeyError("missing")
 
         result = pool._attempt_sync(raising_op, default=-1)
         assert result == -1
 
     def test_attempt_sync_returns_value_on_success(self):
+        """Test attempt sync returns value on success."""
+
         pool = _make_pool()
 
         def good_op():
+            """Test good op."""
+
             return "sync_result"
 
         result = pool._attempt_sync(good_op)
@@ -192,11 +203,15 @@ class TestConnectionPoolAdapterCoverage:
 
         # First call (with args) raises TypeError; second call (no args) succeeds.
         async def method_no_args():
+            """Test method no args."""
+
             return AdapterResult(
                 status=AdapterResultStatus.SUCCESS, data="no-args-result"
             )
 
         async def method_with_args(*args):
+            """Test method with args."""
+
             raise TypeError("unexpected keyword argument")
 
         # Attach both sides via side_effect list
@@ -212,6 +227,8 @@ class TestConnectionPoolAdapterCoverage:
         call_count = 0
 
         async def smart_method(*args):
+            """Test smart method."""
+
             nonlocal call_count
             call_count += 1
             if args:
@@ -228,12 +245,16 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_invoke_with_optional_args_success_with_args(self):
+        """Test invoke with optional args success with args."""
+
         pool = _make_pool()
 
         mock_adapter = MagicMock()
         expected = AdapterResult(status=AdapterResultStatus.SUCCESS, data="with-args")
 
         async def method(*args):
+            """Test method."""
+
             return expected
 
         mock_adapter.create_assembly = method
@@ -249,6 +270,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_replace_failed_adapter_returns_exception_when_connect_raises(self):
+        """Test replace failed adapter returns exception when connect raises."""
+
         bad_adapter = MagicMock()
         bad_adapter.connect = AsyncMock(side_effect=ConnectionError("cannot connect"))
 
@@ -268,6 +291,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_acquire_delegates_to_get_adapter(self):
+        """Test acquire delegates to get adapter."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -283,6 +308,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_release_delegates_to_return_adapter(self):
+        """Test release delegates to return adapter."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -298,6 +325,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_cleanup_delegates_to_disconnect(self):
+        """Test cleanup delegates to disconnect."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
         assert pool.pool_initialized is True
@@ -312,6 +341,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_is_connected_true_when_initialized_and_non_empty(self):
+        """Test is connected true when initialized and non empty."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -320,11 +351,15 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_is_connected_false_before_connect(self):
+        """Test is connected false before connect."""
+
         pool = _make_pool(pool_size=1)
         assert pool.is_connected() is False
 
     @pytest.mark.asyncio
     async def test_is_connected_false_after_disconnect(self):
+        """Test is connected false after disconnect."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
         await pool.disconnect()
@@ -337,6 +372,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_get_adapter_raises_after_timeout(self):
+        """Test get adapter raises after timeout."""
+
         pool = _make_pool(pool_size=1, timeout=0.05)
         await pool.connect()
 
@@ -356,13 +393,13 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_execute_with_pool_logs_when_replacement_adapter_fails(self):
-        """When the operation keeps failing and replacement adapter creation also
-        fails, the pool should log the replacement error and eventually return
-        an ERROR result."""
+        """When the operation keeps failing and replacement adapter creation also."""
 
         bad_factory_calls = 0
 
         def bad_factory():
+            """Test bad factory."""
+
             nonlocal bad_factory_calls
             bad_factory_calls += 1
             adapter = MagicMock()
@@ -383,6 +420,8 @@ class TestConnectionPoolAdapterCoverage:
         pool.pool_initialized = True
 
         async def always_fail(adapter):
+            """Test always fail."""
+
             raise RuntimeError("operation failed")
 
         with patch("src.solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
@@ -398,6 +437,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_disconnect_logs_warning_when_adapter_disconnect_raises(self):
+        """Test disconnect logs warning when adapter disconnect raises."""
+
         pool = _make_pool(pool_size=0)
         pool.pool_initialized = True
 
@@ -429,6 +470,8 @@ class TestConnectionPoolAdapterCoverage:
         call_count = 0
 
         def patched_empty():
+            """Test patched empty."""
+
             nonlocal call_count
             call_count += 1
             # First time: report non-empty so loop enters; second time: empty
@@ -436,8 +479,9 @@ class TestConnectionPoolAdapterCoverage:
 
         pool.available_adapters.empty = patched_empty
 
-
         def raising_get_nowait():
+            """Test raising get nowait."""
+
             raise asyncio.QueueEmpty()
 
         pool.available_adapters.get_nowait = raising_get_nowait
@@ -452,6 +496,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_health_check_accumulates_response_time_for_healthy_adapters(self):
+        """Test health check accumulates response time for healthy adapters."""
+
         pool = _make_pool(pool_size=0)
         pool.pool_initialized = True
 
@@ -470,6 +516,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_health_check_with_mixed_healthy_unhealthy_adapters(self):
+        """Test health check with mixed healthy unhealthy adapters."""
+
         pool = _make_pool(pool_size=0)
         pool.pool_initialized = True
 
@@ -497,6 +545,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_save_file_via_pool(self):
+        """Test save file via pool."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -538,6 +588,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_create_assembly_with_name(self):
+        """Test create assembly with name."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -548,6 +600,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_create_assembly_no_name(self):
+        """Test create assembly no name."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -562,6 +616,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_get_model_info_via_pool(self):
+        """Test get model info via pool."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -577,6 +633,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_list_features_via_pool(self):
+        """Test list features via pool."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -591,6 +649,8 @@ class TestConnectionPoolAdapterCoverage:
 
     @pytest.mark.asyncio
     async def test_list_configurations_via_pool(self):
+        """Test list configurations via pool."""
+
         pool = _make_pool(pool_size=1)
         await pool.connect()
 
@@ -615,13 +675,14 @@ class TestConnectionPoolLegacyCoverage:
 
     @pytest.mark.asyncio
     async def test_acquire_wait_loop_gets_connection_after_release(self):
-        """Acquires all connections, then releases one from a background task
-        while the main task is blocked in the wait loop."""
+        """Acquires all connections, then releases one from a background task."""
 
         conn_obj = MagicMock()
         conn_obj.close = None  # no close method
 
         def create_connection():
+            """Test create connection."""
+
             return conn_obj
 
         pool = ConnectionPool(
@@ -633,6 +694,8 @@ class TestConnectionPoolLegacyCoverage:
         assert first is conn_obj
 
         async def release_after_delay():
+            """Test release after delay."""
+
             await asyncio.sleep(0.05)
             await pool.release(first)
 
@@ -652,7 +715,11 @@ class TestConnectionPoolLegacyCoverage:
 
     @pytest.mark.asyncio
     async def test_acquire_times_out_when_no_connection_available(self):
+        """Test acquire times out when no connection available."""
+
         def create_connection():
+            """Test create connection."""
+
             return MagicMock()
 
         pool = ConnectionPool(
@@ -674,13 +741,19 @@ class TestConnectionPoolLegacyCoverage:
         close_called = False
 
         class AsyncCloseConn:
+            """Test async close conn."""
+
             async def close(self):
+                """Test close."""
+
                 nonlocal close_called
                 close_called = True
 
         conn_instance = AsyncCloseConn()
 
         def create_connection():
+            """Test create connection."""
+
             return conn_instance
 
         pool = ConnectionPool(create_connection=create_connection, max_size=1)
@@ -696,9 +769,13 @@ class TestConnectionPoolLegacyCoverage:
         """Connections with no close attribute should be skipped silently."""
 
         class NoCloseConn:
+            """Test no close conn."""
+
             pass
 
         def create_connection():
+            """Test create connection."""
+
             return NoCloseConn()
 
         pool = ConnectionPool(create_connection=create_connection, max_size=1)
@@ -716,11 +793,17 @@ class TestConnectionPoolLegacyCoverage:
         sync_close_called = False
 
         class SyncCloseConn:
+            """Test sync close conn."""
+
             def close(self):
+                """Test close."""
+
                 nonlocal sync_close_called
                 sync_close_called = True
 
         def create_connection():
+            """Test create connection."""
+
             return SyncCloseConn()
 
         pool = ConnectionPool(create_connection=create_connection, max_size=1)

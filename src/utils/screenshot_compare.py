@@ -1,26 +1,18 @@
 """Screenshot equivalence comparison utility.
 
-Computes SSIM and mean-pixel-difference between a reference image and a
-generated image to validate that an LLM-generated SolidWorks part is
-geometrically equivalent to the reference sample.
+Computes SSIM and mean-pixel-difference between a reference image and a generated image
+to validate that an LLM-generated SolidWorks part is geometrically equivalent to the
+reference sample.
 
-Usage:
-    # Single comparison
-    python src/utils/screenshot_compare.py \\
-        --ref  "C:\\Temp\\ref.jpg" \\
-        --gen  "C:\\Temp\\gen.jpg" \\
-        --out  "C:\\Temp\\diff.png" \\
-        --threshold 0.95
+Usage: # Single comparison python src/utils/screenshot_compare.py \ --ref "C:\Temp
+ef.jpg" \ --gen  "C:\Temp\gen.jpg" \ --out  "C:\Temp\diff.png" \ --threshold 0.95
 
-    # Batch from manifest JSON
-    python src/utils/screenshot_compare.py --batch \\
-        --manifest "tests/.generated/screenshot_manifest.json" \\
-        --report   "tests/.generated/screenshot_report.json"
+# Batch from manifest JSON python src/utils/screenshot_compare.py --batch \ --manifest
+"tests/.generated/screenshot_manifest.json" \ --report
+"tests/.generated/screenshot_report.json"
 
-Exit codes:
-    0 = PASS (SSIM >= threshold)
-    1 = FAIL (SSIM < threshold)
-    2 = Error (image load failure or missing dependency)
+Exit codes: 0 = PASS (SSIM >= threshold) 1 = FAIL (SSIM < threshold) 2 = Error (image
+load failure or missing dependency)
 """
 
 from __future__ import annotations
@@ -43,7 +35,14 @@ _RESIZE_TARGET = (1280, 720)  # Normalise resolution before comparison
 
 
 def _load_normalised(path: Path) -> np.ndarray:
-    """Load an image, resize to common resolution, convert to greyscale float array."""
+    """Load an image, resize to common resolution, convert to greyscale float array.
+    
+    Args:
+        path (Path): Filesystem path for the operation.
+    
+    Returns:
+        np.ndarray: The result produced by the operation.
+    """
     img = Image.open(path).convert("RGB")
     img = img.resize(_RESIZE_TARGET, Image.LANCZOS)
     img = img.filter(ImageFilter.GaussianBlur(radius=_BLUR_RADIUS))
@@ -52,7 +51,16 @@ def _load_normalised(path: Path) -> np.ndarray:
 
 
 def compare(ref_path: Path, gen_path: Path, diff_path: Path | None = None) -> dict:
-    """Compare two images.  Returns a result dict with SSIM and mpd."""
+    """Compare two images. Returns a result dict with SSIM and mpd.
+    
+    Args:
+        ref_path (Path): The ref path value.
+        gen_path (Path): The gen path value.
+        diff_path (Path | None): The diff path value. Defaults to None.
+    
+    Returns:
+        dict: A dictionary containing the resulting values.
+    """
     ref_arr = _load_normalised(ref_path)
     gen_arr = _load_normalised(gen_path)
 
@@ -82,6 +90,15 @@ def compare(ref_path: Path, gen_path: Path, diff_path: Path | None = None) -> di
 
 
 def _run_single(args: argparse.Namespace) -> int:
+    """Build internal run single.
+    
+    Args:
+        args (argparse.Namespace): Additional positional arguments forwarded to the call.
+    
+    Returns:
+        int: The computed numeric result.
+    """
+
     ref_path = Path(args.ref)
     gen_path = Path(args.gen)
     diff_path = Path(args.out) if args.out else None
@@ -107,6 +124,15 @@ def _run_single(args: argparse.Namespace) -> int:
 
 
 def _run_batch(args: argparse.Namespace) -> int:
+    """Build internal run batch.
+    
+    Args:
+        args (argparse.Namespace): Additional positional arguments forwarded to the call.
+    
+    Returns:
+        int: The computed numeric result.
+    """
+
     manifest_path = Path(args.manifest)
     report_path = Path(args.report) if args.report else None
 
@@ -160,6 +186,12 @@ def _run_batch(args: argparse.Namespace) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Build internal parser.
+    
+    Returns:
+        argparse.ArgumentParser: The result produced by the operation.
+    """
+
     parser = argparse.ArgumentParser(
         description="Screenshot equivalence comparison for SolidWorks MCP models",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -189,6 +221,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     # Handle --batch flag before subparser
+    """Handle main.
+    
+    Returns:
+        None: None.
+    """
+
     if "--batch" in sys.argv:
         idx = sys.argv.index("--batch")
         sys.argv.pop(idx)

@@ -1,3 +1,5 @@
+"""Tests for test ui server."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,12 +10,16 @@ from src.solidworks_mcp.ui import server
 
 
 def test_should_log_request_paths() -> None:
+    """Test should log request paths."""
+
     assert server._should_log_request("/api/health") is True
     assert server._should_log_request("/api/ui/state") is True
     assert server._should_log_request("/other") is False
 
 
 def test_sanitize_log_payload_redacts_uploaded_data() -> None:
+    """Test sanitize log payload redacts uploaded data."""
+
     payload = {
         "uploaded_files": [{"name": "part.sldprt", "data": "abcd"}],
         "data": "AAAA",
@@ -26,6 +32,8 @@ def test_sanitize_log_payload_redacts_uploaded_data() -> None:
 
 
 def test_decode_request_body_variants() -> None:
+    """Test decode request body variants."""
+
     assert server._decode_request_body(b"") is None
 
     text_result = server._decode_request_body(b"not-json")
@@ -36,9 +44,13 @@ def test_decode_request_body_variants() -> None:
 
 
 def test_main_invokes_uvicorn(monkeypatch) -> None:
+    """Test main invokes uvicorn."""
+
     called: dict[str, Any] = {}
 
     def _fake_run(app, host: str, port: int) -> None:
+        """Test fake run."""
+
         called["host"] = host
         called["port"] = port
         called["app"] = app
@@ -52,7 +64,11 @@ def test_main_invokes_uvicorn(monkeypatch) -> None:
 
 
 def test_api_endpoints(monkeypatch) -> None:
+    """Test api endpoints."""
+
     async def _a(value: dict[str, Any]) -> dict[str, Any]:
+        """Test a."""
+
         return value
 
     monkeypatch.setattr(server, "build_dashboard_state", lambda *a, **k: {"ok": 1})
@@ -71,18 +87,28 @@ def test_api_endpoints(monkeypatch) -> None:
     )
 
     async def _connect(*a, **k):
+        """Test connect."""
+
         return {"connect": 1}
 
     async def _clarify(*a, **k):
+        """Test clarify."""
+
         return {"clarify": 1}
 
     async def _inspect(*a, **k):
+        """Test inspect."""
+
         return {"inspect": 1}
 
     async def _execute(*a, **k):
+        """Test execute."""
+
         return {"execute": 1}
 
     async def _refresh(*a, **k):
+        """Test refresh."""
+
         return {"refresh": 1}
 
     monkeypatch.setattr(server, "connect_target_model", _connect)
@@ -190,6 +216,8 @@ def test_local_model_probe_endpoint(monkeypatch) -> None:
     )
 
     async def _fake_probe(*a, **k):
+        """Test fake probe."""
+
         return fake_probe
 
     import src.solidworks_mcp.ui.local_llm as llm_mod
@@ -209,6 +237,8 @@ def test_local_model_pull_endpoint_success(monkeypatch) -> None:
     from src.solidworks_mcp.ui.local_llm import LocalModelPullResult
 
     async def _fake_pull(model, endpoint=None):
+        """Test fake pull."""
+
         return LocalModelPullResult(queued=True, model=model)
 
     import src.solidworks_mcp.ui.local_llm as llm_mod
@@ -228,12 +258,16 @@ def test_local_model_query_endpoint(monkeypatch) -> None:
     from src.solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
 
     class _FreeForm(BaseModel):
+        """Test free form."""
+
         text: str = "SolidWorks answer"
 
     fake_config = LocalLLMConfig()
     fake_result = LocalAgentResult(success=True, data=_FreeForm(), config=fake_config)
 
     async def _fake_run(**kwargs):
+        """Test fake run."""
+
         return fake_result
 
     import src.solidworks_mcp.ui.local_llm as llm_mod
@@ -256,6 +290,8 @@ def test_local_model_query_endpoint_with_overrides(monkeypatch) -> None:
     from src.solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
 
     class _FreeForm(BaseModel):
+        """Test free form."""
+
         text: str = "ok"
 
     fake_config = LocalLLMConfig()
@@ -264,6 +300,8 @@ def test_local_model_query_endpoint_with_overrides(monkeypatch) -> None:
     captured: dict = {}
 
     async def _fake_run(**kwargs):
+        """Test fake run."""
+
         captured["config"] = kwargs.get("config")
         return fake_result
 
@@ -313,17 +351,25 @@ async def test_startup_event_ingests_knowledge(monkeypatch, tmp_path) -> None:
     saved: list[bool] = []
 
     class _FakeIdx:
+        """Test fake idx."""
+
         chunk_count = 0
 
         def ingest_text(self, text, source=None, tags=None):
+            """Test ingest text."""
+
             ingested.append(source)
             return 1
 
         def save(self):
+            """Test save."""
+
             saved.append(True)
 
         @classmethod
         def load(cls, namespace, rag_dir):
+            """Test load."""
+
             return cls()
 
     monkeypatch.setattr(vr_mod, "VectorRAGIndex", _FakeIdx)
@@ -340,16 +386,24 @@ async def test_startup_event_skips_nonempty_index(monkeypatch) -> None:
     ingested: list[str] = []
 
     class _FakeIdx:
+        """Test fake idx."""
+
         chunk_count = 5  # non-zero → skip
 
         def ingest_text(self, text, source=None, tags=None):
+            """Test ingest text."""
+
             ingested.append(source)
 
         def save(self):
+            """Test save."""
+
             pass
 
         @classmethod
         def load(cls, namespace, rag_dir):
+            """Test load."""
+
             return cls()
 
     monkeypatch.setattr(vr_mod, "VectorRAGIndex", _FakeIdx)
@@ -362,6 +416,8 @@ async def test_startup_event_import_error(monkeypatch) -> None:
     import src.solidworks_mcp.agents.vector_rag as vr_mod
 
     def _raise(*a, **k):
+        """Test raise."""
+
         raise ImportError("no faiss")
 
     monkeypatch.setattr(
@@ -376,6 +432,8 @@ async def test_startup_event_generic_exception(monkeypatch) -> None:
     import src.solidworks_mcp.agents.vector_rag as vr_mod
 
     def _raise(*a, **k):
+        """Test raise."""
+
         raise RuntimeError("disk full")
 
     monkeypatch.setattr(
@@ -393,6 +451,8 @@ def test_middleware_exception_path(monkeypatch) -> None:
 
     @server.app.get("/api/ui/__test_error__")
     async def _error_route():
+        """Test error route."""
+
         raise RuntimeError("intentional middleware test error")
 
     client = TestClient(server.app, raise_server_exceptions=False)

@@ -1,16 +1,14 @@
-"""
-SolidWorks MCP Server - Python Implementation with FastMCP and PydanticAI
+"""SolidWorks MCP Server - Python Implementation with FastMCP and PydanticAI.
 
-This is a comprehensive Python implementation of the SolidWorks MCP server,
-providing 88+ tools for SolidWorks automation with enhanced security,
-configurability, and modern Python architectures.
+This is a comprehensive Python implementation of the SolidWorks MCP server, providing
+88+ tools for SolidWorks automation with enhanced security, configurability, and modern
+Python architectures.
 
-Original TypeScript implementation rights and IP remain with the original author.
-This Python implementation adds FastMCP integration, PydanticAI capabilities,
-and comprehensive testing for local and remote deployment scenarios.
+Original TypeScript implementation rights and IP remain with the original author. This
+Python implementation adds FastMCP integration, PydanticAI capabilities, and
+comprehensive testing for local and remote deployment scenarios.
 
-Author: Andrew Bartels (hobby mechanical engineer learning LLMs and MCP)
-License: MIT
+Author: Andrew Bartels (hobby mechanical engineer learning LLMs and MCP) License: MIT
 """
 
 from typing import Any
@@ -27,14 +25,16 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Execute getattr.
-
+    """Build internal getattr.
+    
     Args:
-        name (str): Describe name.
-
+        name (str): The name value.
+    
     Returns:
-        Any: Describe the returned value.
-
+        Any: The result produced by the operation.
+    
+    Raises:
+        AttributeError: If the operation cannot be completed.
     """
     if name in {"create_server", "main"}:
         from .server import create_server, main
@@ -49,10 +49,9 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    """Execute dir.
-
+    """Build internal dir.
+    
     Returns:
-        list[str]: Describe the returned value.
-
+        list[str]: A list containing the resulting items.
     """
     return sorted(set(globals()) | set(__all__))

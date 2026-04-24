@@ -1,4 +1,5 @@
-"""Intelligent router for COM/VBA execution with optional response caching."""
+"""Intelligent router for COM/VBA execution with optional response caching.
+"""
 
 from __future__ import annotations
 
@@ -15,14 +16,31 @@ OperationCallable = Callable[..., Awaitable[AdapterResult[Any]]]
 
 @dataclass(frozen=True)
 class RouteResult:
-    """Route execution metadata."""
+    """Route execution metadata.
+    
+    Attributes:
+        route (str): The route value.
+        used_cache (bool): The used cache value.
+    """
 
     route: str
     used_cache: bool
 
 
 class IntelligentRouter:
-    """Route operations between COM and VBA paths using complexity analysis."""
+    """Route operations between COM and VBA paths using complexity analysis.
+    
+    Args:
+        analyzer (ComplexityAnalyzer): The analyzer value.
+        cache (ResponseCache): The cache value.
+        cacheable_operations (set[str] | None): The cacheable operations value. Defaults to
+                                                None.
+    
+    Attributes:
+        _analyzer (Any): The analyzer value.
+        _cache (Any): The cache value.
+        _cacheable_operations (Any): The cacheable operations value.
+    """
 
     def __init__(
         self,
@@ -31,11 +49,15 @@ class IntelligentRouter:
         cacheable_operations: set[str] | None = None,
     ) -> None:
         """Initialize router dependencies.
-
+        
         Args:
-            analyzer: Complexity analyzer instance.
-            cache: Response cache manager.
-            cacheable_operations: Optional set of operations eligible for cache.
+            analyzer (ComplexityAnalyzer): The analyzer value.
+            cache (ResponseCache): The cache value.
+            cacheable_operations (set[str] | None): The cacheable operations value. Defaults to
+                                                    None.
+        
+        Returns:
+            None: None.
         """
         self._analyzer = analyzer
         self._cache = cache
@@ -75,19 +97,19 @@ class IntelligentRouter:
         vba_operation: OperationCallable | None,
         cache_ttl_seconds: int | None = None,
     ) -> tuple[AdapterResult[Any], RouteResult]:
-        """Execute operation using selected route and fallback policy.
-
+        """Provide execute support for the intelligent router.
+        
         Args:
-            operation: Logical operation name.
-            payload: Operation input payload.
-            call_args: Positional arguments for adapter call.
-            call_kwargs: Keyword arguments for adapter call.
-            com_operation: COM operation callable.
-            vba_operation: Optional VBA operation callable.
-            cache_ttl_seconds: Optional cache TTL override.
-
+            operation (str): Callable object executed by the helper.
+            payload (object): The payload value.
+            call_args (tuple[Any, ...]): The call args value.
+            call_kwargs (dict[str, Any]): The call kwargs value.
+            com_operation (OperationCallable): The com operation value.
+            vba_operation (OperationCallable | None): The vba operation value.
+            cache_ttl_seconds (int | None): The cache ttl seconds value. Defaults to None.
+        
         Returns:
-            Tuple of adapter result and route metadata.
+            tuple[AdapterResult[Any], RouteResult]: A tuple containing the resulting values.
         """
         if operation in self._cacheable_operations and self._cache.enabled:
             key = self._cache.make_key(operation, payload)
@@ -149,7 +171,16 @@ class IntelligentRouter:
         call_args: tuple[Any, ...],
         call_kwargs: dict[str, Any],
     ) -> AdapterResult[Any]:
-        """Call adapter operation and normalize unexpected exceptions."""
+        """Call adapter operation and normalize unexpected exceptions.
+        
+        Args:
+            operation_callable (OperationCallable): The operation callable value.
+            call_args (tuple[Any, ...]): The call args value.
+            call_kwargs (dict[str, Any]): The call kwargs value.
+        
+        Returns:
+            AdapterResult[Any]: The result produced by the operation.
+        """
         try:
             return await operation_callable(*call_args, **call_kwargs)
         except Exception as exc:
@@ -165,7 +196,17 @@ class IntelligentRouter:
         result: AdapterResult[Any],
         ttl_seconds: int | None,
     ) -> None:
-        """Persist successful operation result in cache when eligible."""
+        """Persist successful operation result in cache when eligible.
+        
+        Args:
+            operation (str): Callable object executed by the helper.
+            payload (object): The payload value.
+            result (AdapterResult[Any]): The result value.
+            ttl_seconds (int | None): The ttl seconds value.
+        
+        Returns:
+            None: None.
+        """
         if operation not in self._cacheable_operations:
             return
         key = self._cache.make_key(operation, payload)

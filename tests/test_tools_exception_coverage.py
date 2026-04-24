@@ -1,8 +1,4 @@
-"""Coverage tests for exception handler branches across multiple tool modules.
-
-Each test triggers an exception path or adapter-error path that was previously
-uncovered, verifying the tool returns a proper error dict instead of crashing.
-"""
+"""Coverage tests for exception handler branches across multiple tool modules."""
 
 from __future__ import annotations
 
@@ -32,9 +28,13 @@ def _make_mcp():
     original_tool = mcp.tool
 
     def compat_tool(*args, **kwargs):
+        """Test compat tool."""
+
         decorator = original_tool(*args, **kwargs)
 
         def _wrap(func):
+            """Test wrap."""
+
             wrapped = decorator(func)
             mcp._tools.append(func)
             return wrapped
@@ -46,6 +46,8 @@ def _make_mcp():
 
 
 def _make_config():
+    """Test make config."""
+
     return SolidWorksMCPConfig(
         deployment_mode=DeploymentMode.LOCAL,
         security_level=SecurityLevel.MINIMAL,
@@ -55,6 +57,8 @@ def _make_config():
 
 
 def _get_tool(mcp, name: str):
+    """Test get tool."""
+
     for fn in mcp._tools:
         if fn.__name__ == name:
             return fn
@@ -89,6 +93,8 @@ def _error_result_adapter(method_name: str, error_msg="adapter_error"):
 
 
 class TestSketchingExceptionPaths:
+    """Test sketching exception paths."""
+
     @pytest.mark.asyncio
     async def test_create_sketch_exception_handler(self):
         """Lines 324-326 — create_sketch exception → error dict."""
@@ -220,6 +226,8 @@ class TestSketchingExceptionPaths:
 
 
 class TestAutomationExceptionPaths:
+    """Test automation exception paths."""
+
     @pytest.mark.asyncio
     async def test_start_macro_recording_adapter_error(self):
         """Line 341 — adapter has method but returns error."""
@@ -274,6 +282,8 @@ class TestAutomationExceptionPaths:
             # Trigger exception by patching after registration
 
             async def _raiser(input_data):
+                """Test raiser."""
+
                 raise RuntimeError("stop error")
 
             with patch.object(
@@ -329,6 +339,8 @@ class TestAutomationExceptionPaths:
 
 
 class TestDrawingAnalysisExceptionPaths:
+    """Test drawing analysis exception paths."""
+
     @pytest.mark.asyncio
     async def test_analyze_drawing_dimensions_adapter_error(self):
         """Line 294 — adapter returns error result."""
@@ -416,6 +428,8 @@ class TestDrawingAnalysisExceptionPaths:
 
 
 class TestMacroRecordingExceptionPaths:
+    """Test macro recording exception paths."""
+
     @pytest.mark.asyncio
     async def test_stop_macro_recording_adapter_error(self):
         """Line 243 — adapter returns error on stop_macro_recording."""
@@ -493,6 +507,8 @@ class TestMacroRecordingExceptionPaths:
 
 
 class TestModelingCoverage:
+    """Test modeling coverage."""
+
     def test_create_extrusion_input_depth_zero_raises(self):
         """Line 134 — depth <= 0 raises ValueError."""
         from src.solidworks_mcp.tools.modeling import CreateExtrusionInput
@@ -527,6 +543,8 @@ class TestModelingCoverage:
 
 
 class TestAnalysisCoverage:
+    """Test analysis coverage."""
+
     @pytest.mark.asyncio
     async def test_get_mass_properties_with_dict_input(self):
         """Line 221 — dict input is validated into MassPropertiesInput."""

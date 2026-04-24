@@ -1,3 +1,6 @@
+"""Utilities for conf.
+"""
+
 # Configuration file for Sphinx documentation
 # Generated for SolidWorks MCP Server
 

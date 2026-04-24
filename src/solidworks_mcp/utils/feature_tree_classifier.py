@@ -1,4 +1,5 @@
-"""Helpers for classifying SolidWorks model families from feature-tree snapshots."""
+"""Helpers for classifying SolidWorks model families from feature-tree snapshots.
+"""
 
 from __future__ import annotations
 
@@ -59,22 +60,61 @@ _DRAWING_TOKENS = (
 
 
 def _as_lower_text(value: Any) -> str:
+    """Build internal as lower text.
+    
+    Args:
+        value (Any): The value value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     return str(value or "").strip().lower()
 
 
 def _feature_text(feature: Mapping[str, Any]) -> str:
+    """Build internal feature text.
+    
+    Args:
+        feature (Mapping[str, Any]): The feature value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     name = _as_lower_text(feature.get("name"))
     feature_type = _as_lower_text(feature.get("type"))
     return f"{name} {feature_type}".strip()
 
 
 def _has_any(texts: list[str], tokens: tuple[str, ...]) -> bool:
+    """Build internal has any.
+    
+    Args:
+        texts (list[str]): The texts value.
+        tokens (tuple[str, ...]): The tokens value.
+    
+    Returns:
+        bool: True if any, otherwise False.
+    """
+
     return any(token in text for token in tokens for text in texts)
 
 
 def _match_examples(
     texts: list[str], tokens: tuple[str, ...], limit: int = 4
 ) -> list[str]:
+    """Build internal match examples.
+    
+    Args:
+        texts (list[str]): The texts value.
+        tokens (tuple[str, ...]): The tokens value.
+        limit (int): The limit value. Defaults to 4.
+    
+    Returns:
+        list[str]: A list containing the resulting items.
+    """
+
     matches: list[str] = []
     for text in texts:
         if any(token in text for token in tokens):
@@ -89,9 +129,16 @@ def classify_feature_tree_snapshot(
     features: list[Mapping[str, Any]] | None,
 ) -> dict[str, Any]:
     """Classify a model family from model-info and feature-tree snapshots.
-
-    The output is intentionally simple and explainable so agents can use it as a
-    planning primitive rather than as a black-box prediction.
+    
+    The output is intentionally simple and explainable so agents can use it as a planning
+    primitive rather than as a black-box prediction.
+    
+    Args:
+        model_info (Mapping[str, Any] | None): The model info value.
+        features (list[Mapping[str, Any]] | None): The features value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
     """
 
     feature_list = list(features or [])

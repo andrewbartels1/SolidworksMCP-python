@@ -1,5 +1,4 @@
-"""
-Utilities for SolidWorks MCP Server.
+"""Utilities for SolidWorks MCP Server.
 """
 
 from .logging import setup_logging

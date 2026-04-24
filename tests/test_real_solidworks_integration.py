@@ -1,8 +1,4 @@
-"""Real SolidWorks integration smoke tests.
-
-These tests intentionally connect to a real local SolidWorks installation through
-pywin32. They are disabled by default and only run when explicitly enabled.
-"""
+"""Real SolidWorks integration smoke tests."""
 
 from __future__ import annotations
 
@@ -319,20 +315,7 @@ async def test_real_load_save_lifecycle(
     real_server: SolidWorksMCPServer,
     integration_output_dir: Path,
 ) -> None:
-    """Test comprehensive load/save/open lifecycle with real SolidWorks.
-
-    Validates the full document lifecycle:
-    1. Create a part
-    2. Save the part
-    3. Close the part
-    4. Load the part using load_part convenience tool
-    5. Verify the document is open
-    6. Save again using save_part convenience tool
-    7. Close the document
-
-    This test ensures that newly added convenience tools (load_part, save_part)
-    integrate properly with the existing SolidWorks CAD workflow.
-    """
+    """Test comprehensive load/save/open lifecycle with real SolidWorks."""
     create_part = _find_tool(real_server, "create_part")
     save_part = _find_tool(real_server, "save_part")
     load_part = _find_tool(real_server, "load_part")

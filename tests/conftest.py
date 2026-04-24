@@ -1,9 +1,4 @@
-"""
-Pytest configuration and fixtures for SolidWorks MCP Server tests.
-
-This module provides common fixtures, test utilities, and configuration
-for comprehensive testing of the SolidWorks MCP Server.
-"""
+"""Pytest configuration and fixtures for SolidWorks MCP Server tests."""
 
 import asyncio
 import inspect

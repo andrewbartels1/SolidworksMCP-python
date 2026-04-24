@@ -1,5 +1,4 @@
-"""
-Configuration management for SolidWorks MCP Server.
+"""Configuration management for SolidWorks MCP Server.
 
 Supports both local and remote deployment with comprehensive security options.
 """
@@ -25,7 +24,13 @@ from pydantic_core.core_schema import ValidationInfo
 
 
 class DeploymentMode(StrEnum):
-    """Deployment mode options."""
+    """Deployment mode options.
+    
+    Attributes:
+        HYBRID (Any): The hybrid value.
+        LOCAL (Any): The local value.
+        REMOTE (Any): The remote value.
+    """
 
     LOCAL = "local"
     REMOTE = "remote"
@@ -33,7 +38,13 @@ class DeploymentMode(StrEnum):
 
 
 class SecurityLevel(StrEnum):
-    """Security level options."""
+    """Security level options.
+    
+    Attributes:
+        MINIMAL (Any): The minimal value.
+        STANDARD (Any): The standard value.
+        STRICT (Any): The strict value.
+    """
 
     MINIMAL = "minimal"  # Local only, no authentication
     STANDARD = "standard"  # API keys, basic validation
@@ -41,7 +52,15 @@ class SecurityLevel(StrEnum):
 
 
 class AdapterType(StrEnum):
-    """SolidWorks adapter implementation options."""
+    """SolidWorks adapter implementation options.
+    
+    Attributes:
+        EDGE_DOTNET (Any): The edge dotnet value.
+        MOCK (Any): The mock value.
+        POWERSHELL (Any): The powershell value.
+        PYWIN32 (Any): The pywin32 value.
+        VBA (Any): The vba value.
+    """
 
     PYWIN32 = "pywin32"  # Direct COM via pywin32
     VBA = "vba"  # VBA-oriented adapter wrapper
@@ -51,7 +70,64 @@ class AdapterType(StrEnum):
 
 
 class SolidWorksMCPConfig(BaseModel):
-    """Main configuration for SolidWorks MCP Server."""
+    """Main configuration for SolidWorks MCP Server.
+    
+    Attributes:
+        adapter_type (AdapterType): The adapter type value.
+        allowed_hosts (list[str]): The allowed hosts value.
+        allowed_origins (list[str]): The allowed origins value.
+        api_key (SecretStr | None): The api key value.
+        api_key_required (bool): The api key required value.
+        api_keys (list[str]): The api keys value.
+        cache_dir (Path | None): The cache dir value.
+        circuit_breaker_enabled (bool): The circuit breaker enabled value.
+        circuit_breaker_threshold (int): The circuit breaker threshold value.
+        circuit_breaker_timeout (int): The circuit breaker timeout value.
+        complexity_parameter_threshold (int): The complexity parameter threshold value.
+        complexity_score_threshold (float): The complexity score threshold value.
+        connection_pool_size (int): The connection pool size value.
+        connection_pooling (bool): The connection pooling value.
+        cors_origins (list[str]): The cors origins value.
+        data_dir (Path): The data dir value.
+        database_url (str): The database url value.
+        debug (bool): The debug value.
+        deployment_mode (DeploymentMode): The deployment mode value.
+        enable_analysis_tools (bool): The enable analysis tools value.
+        enable_audit_logging (bool): The enable audit logging value.
+        enable_circuit_breaker (bool): The enable circuit breaker value.
+        enable_connection_pooling (bool): The enable connection pooling value.
+        enable_cors (bool): The enable cors value.
+        enable_design_tables (bool): The enable design tables value.
+        enable_intelligent_routing (bool): The enable intelligent routing value.
+        enable_macro_recording (bool): The enable macro recording value.
+        enable_pdm (bool): The enable pdm value.
+        enable_rate_limiting (bool): The enable rate limiting value.
+        enable_response_cache (bool): The enable response cache value.
+        enable_sql_integration (bool): The enable sql integration value.
+        enable_windows_validation (bool): The enable windows validation value.
+        host (str): The host value.
+        log_file (Path | None): The log file value.
+        log_level (str): The log level value.
+        max_connections (int): The max connections value.
+        max_retries (int): The max retries value.
+        mock_solidworks (bool): The mock solidworks value.
+        model_config (Any): The model config value.
+        pdm_server (str | None): The pdm server value.
+        pdm_vault (str | None): The pdm vault value.
+        port (int): The port value.
+        rate_limit_enabled (bool): The rate limit enabled value.
+        rate_limit_per_minute (int): The rate limit per minute value.
+        response_cache_max_entries (int): The response cache max entries value.
+        response_cache_ttl_seconds (int): The response cache ttl seconds value.
+        security_level (SecurityLevel): The security level value.
+        solidworks_path (str | None): The solidworks path value.
+        solidworks_year (int | None): The solidworks year value.
+        sql_connection (str | None): The sql connection value.
+        state_file (str | None): The state file value.
+        testing (bool): The testing value.
+        timeout_seconds (float): The timeout seconds value.
+        worker_processes (int): The worker processes value.
+    """
 
     # === Server Configuration ===
     deployment_mode: DeploymentMode = Field(
@@ -280,13 +356,13 @@ class SolidWorksMCPConfig(BaseModel):
     @model_validator(mode="after")
     def sync_legacy_alias_fields(self) -> SolidWorksMCPConfig:
         """Sync test/developer alias fields into canonical runtime fields.
-
+        
         Several fixtures and scripts still populate compatibility fields such as
-        ``rate_limit_enabled`` and ``connection_pooling``. Runtime code reads the
-        canonical fields, so normalize them here after validation.
-
+        ``rate_limit_enabled`` and ``connection_pooling``. Runtime code reads the canonical
+        fields, so normalize them here after validation.
+        
         Returns:
-            The normalized config instance.
+            SolidWorksMCPConfig: The result produced by the operation.
         """
         self.enable_circuit_breaker = self.circuit_breaker_enabled
         self.enable_connection_pooling = self.connection_pooling
@@ -299,7 +375,15 @@ class SolidWorksMCPConfig(BaseModel):
     @field_validator("cache_dir")
     @classmethod
     def set_cache_dir(cls, v: Path | None, info: ValidationInfo) -> Path:
-        """Set default cache directory."""
+        """Set default cache directory.
+        
+        Args:
+            v (Path | None): The v value.
+            info (ValidationInfo): The info value.
+        
+        Returns:
+            Path: The result produced by the operation.
+        """
         if v is None:
             data_dir = cast(
                 Path,
@@ -311,7 +395,15 @@ class SolidWorksMCPConfig(BaseModel):
     @field_validator("log_file")
     @classmethod
     def set_log_file(cls, v: Path | None, info: ValidationInfo) -> Path:
-        """Set default log file path."""
+        """Set default log file path.
+        
+        Args:
+            v (Path | None): The v value.
+            info (ValidationInfo): The info value.
+        
+        Returns:
+            Path: The result produced by the operation.
+        """
         if v is None:
             data_dir = cast(
                 Path,
@@ -323,20 +415,30 @@ class SolidWorksMCPConfig(BaseModel):
     @field_validator("adapter_type")
     @classmethod
     def validate_adapter_type(cls, v: AdapterType, info: ValidationInfo) -> AdapterType:
-        """Validate adapter type based on platform."""
+        """Validate adapter type based on platform.
+        
+        Args:
+            v (AdapterType): The v value.
+            info (ValidationInfo): The info value.
+        
+        Returns:
+            AdapterType: The result produced by the operation.
+        """
         return v
 
     @field_validator("port")
     @classmethod
     def validate_port(cls, v: int) -> int:
-        """Execute validate port.
-
+        """Validate the port.
+        
         Args:
-            v (int): Describe v.
-
+            v (int): The v value.
+        
         Returns:
-            int: Describe the returned value.
-
+            int: The computed numeric result.
+        
+        Raises:
+            ValueError: Port must be between 1 and 65535.
         """
         if v < 1 or v > 65535:
             raise ValueError("Port must be between 1 and 65535")
@@ -345,14 +447,16 @@ class SolidWorksMCPConfig(BaseModel):
     @field_validator("timeout_seconds")
     @classmethod
     def validate_timeout(cls, v: float) -> float:
-        """Execute validate timeout.
-
+        """Validate the timeout.
+        
         Args:
-            v (float): Describe v.
-
+            v (float): The v value.
+        
         Returns:
-            float: Describe the returned value.
-
+            float: The computed numeric result.
+        
+        Raises:
+            ValueError: Timeout_seconds must be > 0.
         """
         if v <= 0:
             raise ValueError("timeout_seconds must be > 0")
@@ -362,12 +466,15 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_complexity_parameter_threshold(cls, v: int) -> int:
         """Validate the complexity parameter threshold.
-
+        
         Args:
-            v: Proposed threshold value.
-
+            v (int): The v value.
+        
         Returns:
-            Validated threshold.
+            int: The computed numeric result.
+        
+        Raises:
+            ValueError: Complexity_parameter_threshold must be >= 1.
         """
         if v < 1:
             raise ValueError("complexity_parameter_threshold must be >= 1")
@@ -377,12 +484,15 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_complexity_score_threshold(cls, v: float) -> float:
         """Validate the complexity score threshold.
-
+        
         Args:
-            v: Proposed score threshold.
-
+            v (float): The v value.
+        
         Returns:
-            Validated threshold.
+            float: The computed numeric result.
+        
+        Raises:
+            ValueError: Complexity_score_threshold must be in (0, 1].
         """
         if v <= 0 or v > 1:
             raise ValueError("complexity_score_threshold must be in (0, 1]")
@@ -392,12 +502,15 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_response_cache_ttl_seconds(cls, v: int) -> int:
         """Validate default response cache TTL.
-
+        
         Args:
-            v: Proposed TTL value in seconds.
-
+            v (int): The v value.
+        
         Returns:
-            Validated TTL.
+            int: The computed numeric result.
+        
+        Raises:
+            ValueError: Response_cache_ttl_seconds must be >= 1.
         """
         if v < 1:
             raise ValueError("response_cache_ttl_seconds must be >= 1")
@@ -407,12 +520,15 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_response_cache_max_entries(cls, v: int) -> int:
         """Validate response cache size.
-
+        
         Args:
-            v: Proposed cache capacity.
-
+            v (int): The v value.
+        
         Returns:
-            Validated cache size.
+            int: The computed numeric result.
+        
+        Raises:
+            ValueError: Response_cache_max_entries must be >= 1.
         """
         if v < 1:
             raise ValueError("response_cache_max_entries must be >= 1")
@@ -420,7 +536,14 @@ class SolidWorksMCPConfig(BaseModel):
 
     @classmethod
     def from_env(cls, env_file: str | None = None) -> SolidWorksMCPConfig:
-        """Build configuration from environment variables."""
+        """Build configuration from environment variables.
+        
+        Args:
+            env_file (str | None): The env file value. Defaults to None.
+        
+        Returns:
+            SolidWorksMCPConfig: The result produced by the operation.
+        """
         import json
 
         env_prefix = "SOLIDWORKS_MCP_"
@@ -429,15 +552,14 @@ class SolidWorksMCPConfig(BaseModel):
         list_like_fields = {"cors_origins", "allowed_hosts", "api_keys"}
 
         def _coerce_env_value(key: str, value: Any) -> Any:
-            """Execute coerce env value.
-
+            """Build internal coerce env value.
+            
             Args:
-                key (str): Describe key.
-                value (Any): Describe value.
-
+                key (str): The key value.
+                value (Any): The value value.
+            
             Returns:
-                Any: Describe the returned value.
-
+                Any: The result produced by the operation.
             """
             if not isinstance(value, str):
                 return value
@@ -467,7 +589,14 @@ class SolidWorksMCPConfig(BaseModel):
         return cls(**raw_values)
 
     def model_post_init(self, __context: Any) -> None:
-        """Post-initialization setup."""
+        """Post-initialization setup.
+        
+        Args:
+            __context (Any): The context value.
+        
+        Returns:
+            None: None.
+        """
         if self.cache_dir is None:
             self.cache_dir = self.data_dir / "cache"
         if self.log_file is None:
@@ -485,12 +614,20 @@ class SolidWorksMCPConfig(BaseModel):
 
     @property
     def is_windows(self) -> bool:
-        """Check if running on Windows."""
+        """Check if running on Windows.
+        
+        Returns:
+            bool: True if windows, otherwise False.
+        """
         return platform.system() == "Windows"
 
     @property
     def can_use_solidworks(self) -> bool:
-        """Check if SolidWorks integration is possible."""
+        """Check if SolidWorks integration is possible.
+        
+        Returns:
+            bool: True if use solidworks, otherwise False.
+        """
         return (
             self.is_windows
             and not self.mock_solidworks
@@ -498,14 +635,22 @@ class SolidWorksMCPConfig(BaseModel):
         )
 
     def get_database_config(self) -> dict[str, Any]:
-        """Get database configuration."""
+        """Get database configuration.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         return {
             "url": self.database_url,
             "echo": self.debug,
         }
 
     def get_security_config(self) -> dict[str, Any]:
-        """Get security configuration."""
+        """Get security configuration.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         return {
             "api_key": self.api_key.get_secret_value() if self.api_key else None,
             "allowed_hosts": self.allowed_hosts,
@@ -518,7 +663,14 @@ class SolidWorksMCPConfig(BaseModel):
 
 
 def load_config(config_file: str | None = None) -> SolidWorksMCPConfig:
-    """Load configuration from file and environment variables."""
+    """Load configuration from file and environment variables.
+    
+    Args:
+        config_file (str | None): The config file value. Defaults to None.
+    
+    Returns:
+        SolidWorksMCPConfig: The result produced by the operation.
+    """
     if config_file:
         config_path = Path(config_file)
         if config_path.exists() and config_path.suffix.lower() == ".json":

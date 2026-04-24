@@ -1,8 +1,7 @@
-"""
-SolidWorks MCP Server - Example Workflows
+"""SolidWorks MCP Server - Example Workflows.
 
-This module provides comprehensive examples of using the SolidWorks MCP server
-for various CAD automation tasks, from basic part creation to complex assemblies.
+This module provides comprehensive examples of using the SolidWorks MCP server for
+various CAD automation tasks, from basic part creation to complex assemblies.
 """
 
 import asyncio
@@ -47,17 +46,40 @@ EXAMPLE_WORKFLOWS = {
 
 
 class SolidWorksMCPDemo:
-    """Demo class for SolidWorks MCP workflows."""
+    """Demo class for SolidWorks MCP workflows.
+    
+    Args:
+        server (Any): The server value.
+    
+    Attributes:
+        logger (Any): The logger value.
+        server (Any): The server value.
+    """
 
     def __init__(self, server):
-        """Initialize demo with MCP server instance."""
+        """Initialize demo with MCP server instance.
+        
+        Args:
+            server (Any): The server value.
+        
+        Returns:
+            Any: The result produced by the operation.
+        """
         self.server = server
         self.logger = logging.getLogger(__name__)
 
     async def call_tool_safe(
         self, tool_name: str, parameters: dict[str, Any]
     ) -> dict[str, Any]:
-        """Safely call a tool with error handling."""
+        """Safely call a tool with error handling.
+        
+        Args:
+            tool_name (str): The tool name value.
+            parameters (dict[str, Any]): The parameters value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         try:
             self.logger.info(f"🔧 Calling tool: {tool_name}")
             result = await self.server.call_tool(tool_name, parameters)
@@ -75,7 +97,11 @@ class SolidWorksMCPDemo:
             return {"status": "error", "message": str(e)}
 
     async def simple_part_workflow(self) -> dict[str, Any]:
-        """Create a simple mechanical part with basic features."""
+        """Create a simple mechanical part with basic features.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         print("\n" + "=" * 50)
         print("🔨 SIMPLE PART WORKFLOW")
         print("=" * 50)
@@ -178,7 +204,11 @@ class SolidWorksMCPDemo:
         return results
 
     async def complex_bracket_workflow(self) -> dict[str, Any]:
-        """Create a complex L-bracket with multiple features."""
+        """Create a complex L-bracket with multiple features.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         print("\n" + "=" * 50)
         print("🏗️ COMPLEX BRACKET WORKFLOW")
         print("=" * 50)
@@ -300,7 +330,11 @@ class SolidWorksMCPDemo:
         return results
 
     async def drawing_package_workflow(self) -> dict[str, Any]:
-        """Create complete drawing package with dimensions."""
+        """Create complete drawing package with dimensions.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         print("\n" + "=" * 50)
         print("📐 DRAWING PACKAGE WORKFLOW")
         print("=" * 50)
@@ -431,7 +465,11 @@ class SolidWorksMCPDemo:
         return results
 
     async def batch_processing_workflow(self) -> dict[str, Any]:
-        """Demonstrate batch processing capabilities."""
+        """Demonstrate batch processing capabilities.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
         print("\n" + "=" * 50)
         print("🔄 BATCH PROCESSING WORKFLOW")
         print("=" * 50)
@@ -544,7 +582,17 @@ class SolidWorksMCPDemo:
         return results
 
     async def run_workflow(self, workflow_name: str) -> dict[str, Any]:
-        """Run a specific workflow by name."""
+        """Run a specific workflow by name.
+        
+        Args:
+            workflow_name (str): The workflow name value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        
+        Raises:
+            ValueError: If the operation cannot be completed.
+        """
         workflow_methods = {
             "simple_part": self.simple_part_workflow,
             "complex_bracket": self.complex_bracket_workflow,
@@ -571,7 +619,11 @@ class SolidWorksMCPDemo:
         return results
 
     async def run_all_workflows(self) -> dict[str, dict[str, Any]]:
-        """Run all available workflows as a comprehensive demo."""
+        """Run all available workflows as a comprehensive demo.
+        
+        Returns:
+            dict[str, dict[str, Any]]: A dictionary containing the resulting values.
+        """
         print("\n" + "=" * 60)
         print("🎭 COMPREHENSIVE SOLIDWORKS MCP DEMONSTRATION")
         print("=" * 60)
@@ -622,19 +674,38 @@ class SolidWorksMCPDemo:
 
 # Example usage functions for standalone testing
 async def run_demo_workflow(server, workflow_name: str = "simple_part"):
-    """Run a single demo workflow."""
+    """Run a single demo workflow.
+    
+    Args:
+        server (Any): The server value.
+        workflow_name (str): The workflow name value. Defaults to "simple_part".
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     demo = SolidWorksMCPDemo(server)
     return await demo.run_workflow(workflow_name)
 
 
 async def run_comprehensive_demo(server):
-    """Run all demo workflows."""
+    """Run all demo workflows.
+    
+    Args:
+        server (Any): The server value.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     demo = SolidWorksMCPDemo(server)
     return await demo.run_all_workflows()
 
 
 def print_available_workflows():
-    """Print information about available workflows."""
+    """Print information about available workflows.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     print("\n" + "=" * 60)
     print("📚 AVAILABLE EXAMPLE WORKFLOWS")
     print("=" * 60)

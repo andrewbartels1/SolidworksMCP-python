@@ -1,4 +1,4 @@
-"""Coverage tests for src/solidworks_mcp/agents/vector_rag.py"""
+"""Coverage tests for src/solidworks_mcp/agents/vector_rag.py."""
 
 from __future__ import annotations
 
@@ -84,10 +84,16 @@ def test_get_embedding_model_caches(monkeypatch: pytest.MonkeyPatch) -> None:
     vector_rag_mod._MODEL_CACHE.pop("_test_cache_key_", None)
 
     class _FakeST:
+        """Test fake st."""
+
         def __init__(self, name: str) -> None:
+            """Test init."""
+
             call_count["n"] += 1
 
     def _fake_require() -> type:
+        """Test fake require."""
+
         return _FakeST
 
     monkeypatch.setattr(vector_rag_mod, "_require_sentence_transformers", _fake_require)
@@ -108,16 +114,22 @@ def test_get_embedding_model_caches(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_chunk_text_empty() -> None:
+    """Test chunk text empty."""
+
     assert _chunk_text("") == []
     assert _chunk_text("   ") == []
 
 
 def test_chunk_text_small() -> None:
+    """Test chunk text small."""
+
     result = _chunk_text("Hello world", chunk_size=100)
     assert result == ["Hello world"]
 
 
 def test_chunk_text_multi_chunk() -> None:
+    """Test chunk text multi chunk."""
+
     text = "A" * 300
     chunks = _chunk_text(text, chunk_size=100, overlap=20)
     assert len(chunks) >= 2
@@ -133,6 +145,8 @@ def test_chunk_text_multi_chunk() -> None:
 def test_ingest_text_empty_returns_zero(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test ingest text empty returns zero."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -144,6 +158,8 @@ def test_ingest_text_empty_returns_zero(
 def test_ingest_text_adds_single_chunk(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test ingest text adds single chunk."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -156,6 +172,8 @@ def test_ingest_text_adds_single_chunk(
 def test_ingest_text_deduplication(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test ingest text deduplication."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -169,6 +187,8 @@ def test_ingest_text_deduplication(
 def test_ingest_text_dedup_disabled(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test ingest text dedup disabled."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -182,6 +202,8 @@ def test_ingest_text_dedup_disabled(
 def test_ingest_large_text_multi_chunk(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test ingest large text multi chunk."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -192,6 +214,8 @@ def test_ingest_large_text_multi_chunk(
 
 
 def test_ingest_with_tags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test ingest with tags."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -207,6 +231,8 @@ def test_ingest_with_tags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
 
 
 def test_query_empty_index(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test query empty index."""
+
     monkeypatch.setattr(
         vector_rag_mod, "_get_embedding_model", lambda *a, **k: _fake_model()
     )
@@ -215,6 +241,8 @@ def test_query_empty_index(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
 
 def test_query_returns_results(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test query returns results."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
     idx = VectorRAGIndex(namespace="test", rag_dir=tmp_path)
@@ -231,6 +259,8 @@ def test_query_returns_results(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
 
 
 def test_save_no_op_when_empty(tmp_path: Path) -> None:
+    """Test save no op when empty."""
+
     idx = VectorRAGIndex(namespace="empty", rag_dir=tmp_path)
     idx.save()  # should not raise; nothing written
     assert not (tmp_path / "empty.faiss").exists()
@@ -239,6 +269,8 @@ def test_save_no_op_when_empty(tmp_path: Path) -> None:
 def test_save_and_load_roundtrip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test save and load roundtrip."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
     idx = VectorRAGIndex(namespace="myns", rag_dir=tmp_path)
@@ -251,12 +283,14 @@ def test_save_and_load_roundtrip(
 
 
 def test_load_missing_files_returns_empty(tmp_path: Path) -> None:
+    """Test load missing files returns empty."""
+
     idx = VectorRAGIndex.load(namespace="nonexistent", rag_dir=tmp_path)
     assert idx.chunk_count == 0
 
 
 def test_load_corrupted_files(tmp_path: Path) -> None:
-    """load() handles corrupt files gracefully and returns empty index."""
+    """Load() handles corrupt files gracefully and returns empty index."""
     faiss_path = tmp_path / "bad.faiss"
     meta_path = tmp_path / "bad.meta.json"
     faiss_path.write_bytes(b"not-valid-faiss-data")
@@ -271,6 +305,8 @@ def test_load_corrupted_files(tmp_path: Path) -> None:
 
 
 def test_query_design_knowledge_empty_index(tmp_path: Path) -> None:
+    """Test query design knowledge empty index."""
+
     result = query_design_knowledge("sketch", rag_dir=tmp_path)
     assert result == ""
 
@@ -278,6 +314,8 @@ def test_query_design_knowledge_empty_index(tmp_path: Path) -> None:
 def test_query_design_knowledge_below_threshold(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test query design knowledge below threshold."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
     idx = VectorRAGIndex(namespace="engineering-reference", rag_dir=tmp_path)
@@ -295,6 +333,8 @@ def test_query_design_knowledge_below_threshold(
 def test_query_design_knowledge_returns_context(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test query design knowledge returns context."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
     idx = VectorRAGIndex(namespace="engineering-reference", rag_dir=tmp_path)
@@ -313,12 +353,16 @@ def test_query_design_knowledge_returns_context(
 
 
 def test_query_design_knowledge_import_error(tmp_path: Path) -> None:
+    """Test query design knowledge import error."""
+
     with patch.object(VectorRAGIndex, "load", side_effect=ImportError("no faiss")):
         result = query_design_knowledge("test", rag_dir=tmp_path)
     assert result == ""
 
 
 def test_query_design_knowledge_generic_error(tmp_path: Path) -> None:
+    """Test query design knowledge generic error."""
+
     with patch.object(VectorRAGIndex, "load", side_effect=RuntimeError("disk error")):
         result = query_design_knowledge("test", rag_dir=tmp_path)
     assert result == ""
@@ -332,6 +376,8 @@ def test_query_design_knowledge_generic_error(tmp_path: Path) -> None:
 def test_build_solidworks_api_docs_index(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test build solidworks api docs index."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
 
@@ -388,6 +434,8 @@ def test_build_solidworks_api_docs_index_no_sw_vba_libs(
 
 
 def test_query_solidworks_api_docs_no_index(tmp_path: Path) -> None:
+    """Test query solidworks api docs no index."""
+
     result = query_solidworks_api_docs("create part", rag_dir=tmp_path)
     assert result == ""
 
@@ -407,6 +455,8 @@ def test_query_solidworks_api_docs_empty_index(
 def test_query_solidworks_api_docs_returns_context(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test query solidworks api docs returns context."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
 
@@ -429,6 +479,8 @@ def test_query_solidworks_api_docs_returns_context(
 def test_query_solidworks_api_docs_below_threshold(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Test query solidworks api docs below threshold."""
+
     fake = _fake_model()
     monkeypatch.setattr(vector_rag_mod, "_get_embedding_model", lambda *a, **k: fake)
 
@@ -448,6 +500,8 @@ def test_query_solidworks_api_docs_below_threshold(
 
 
 def test_query_solidworks_api_docs_import_error(tmp_path: Path) -> None:
+    """Test query solidworks api docs import error."""
+
     with patch.object(VectorRAGIndex, "load", side_effect=ImportError("no faiss")):
         result = query_solidworks_api_docs("test", rag_dir=tmp_path)
     assert result == ""

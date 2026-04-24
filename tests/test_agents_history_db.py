@@ -48,12 +48,18 @@ def _db(tmp_path: Path) -> Path:
 
 
 class TestUtcNowIso:
+    """Test utc now iso."""
+
     def test_returns_iso_string(self):
+        """Test returns iso string."""
+
         ts = _utc_now_iso()
         assert isinstance(ts, str)
         assert "T" in ts  # ISO 8601 separator
 
     def test_contains_utc_offset(self):
+        """Test contains utc offset."""
+
         ts = _utc_now_iso()
         # datetime.now(UTC).isoformat() includes +00:00
         assert "+00:00" in ts or "Z" in ts or ts.endswith("+00:00")
@@ -65,19 +71,27 @@ class TestUtcNowIso:
 
 
 class TestBuildEngineAndInitDb:
+    """Test build engine and init db."""
+
     def test_build_engine_creates_parent_dir(self, tmp_path: Path):
+        """Test build engine creates parent dir."""
+
         nested = tmp_path / "sub" / "agent_memory.sqlite3"
         engine = _build_engine(nested)
         assert nested.parent.exists()
         engine.dispose()
 
     def test_init_db_returns_resolved_path(self, tmp_path: Path):
+        """Test init db returns resolved path."""
+
         db = _db(tmp_path)
         result = init_db(db)
         assert result == db
         assert db.exists()
 
     def test_init_db_creates_tables(self, tmp_path: Path):
+        """Test init db creates tables."""
+
         db = _db(tmp_path)
         init_db(db)
         from sqlmodel import create_engine
@@ -120,7 +134,11 @@ class TestBuildEngineAndInitDb:
 
 
 class TestInsertRun:
+    """Test insert run."""
+
     def test_inserts_row(self, tmp_path: Path):
+        """Test inserts row."""
+
         db = _db(tmp_path)
         insert_run(
             run_id="run-001",
@@ -137,6 +155,8 @@ class TestInsertRun:
         assert rows[0].status == "success"
 
     def test_null_output_json(self, tmp_path: Path):
+        """Test null output json."""
+
         db = _db(tmp_path)
         insert_run(
             run_id="run-002",
@@ -152,6 +172,8 @@ class TestInsertRun:
         assert rows[0].model_name is None
 
     def test_multiple_runs(self, tmp_path: Path):
+        """Test multiple runs."""
+
         db = _db(tmp_path)
         for i in range(5):
             insert_run(
@@ -166,6 +188,8 @@ class TestInsertRun:
         assert len(_query_all(db, AgentRun)) == 5
 
     def test_created_at_is_set(self, tmp_path: Path):
+        """Test created at is set."""
+
         db = _db(tmp_path)
         insert_run(
             run_id="ts-test",
@@ -187,7 +211,11 @@ class TestInsertRun:
 
 
 class TestInsertToolEvent:
+    """Test insert tool event."""
+
     def test_inserts_event(self, tmp_path: Path):
+        """Test inserts event."""
+
         db = _db(tmp_path)
         insert_tool_event(
             run_id="run-ev-001",
@@ -202,6 +230,8 @@ class TestInsertToolEvent:
         assert rows[0].phase == "pre"
 
     def test_null_payload(self, tmp_path: Path):
+        """Test null payload."""
+
         db = _db(tmp_path)
         insert_tool_event(
             run_id="run-ev-002",
@@ -220,7 +250,11 @@ class TestInsertToolEvent:
 
 
 class TestInsertError:
+    """Test insert error."""
+
     def _record(self, **overrides) -> ErrorRecord:
+        """Test record."""
+
         defaults = {
             "source": "pydantic_ai",
             "tool_name": "run_validated_prompt",
@@ -233,6 +267,8 @@ class TestInsertError:
         return ErrorRecord(**defaults)
 
     def test_inserts_error(self, tmp_path: Path):
+        """Test inserts error."""
+
         db = _db(tmp_path)
         insert_error(self._record(), db_path=db)
         rows = _query_all(db, ErrorCatalog)
@@ -240,17 +276,23 @@ class TestInsertError:
         assert rows[0].error_type == "RecoverableFailure"
 
     def test_with_run_id(self, tmp_path: Path):
+        """Test with run id."""
+
         db = _db(tmp_path)
         insert_error(self._record(), run_id="run-err-001", db_path=db)
         rows = _query_all(db, ErrorCatalog)
         assert rows[0].run_id == "run-err-001"
 
     def test_without_run_id(self, tmp_path: Path):
+        """Test without run id."""
+
         _db(tmp_path)
         insert_error(self._record())  # uses default DB path — monkeypatched below
         # Just verify no exception is raised (uses default path in real run)
 
     def test_multiple_errors(self, tmp_path: Path):
+        """Test multiple errors."""
+
         db = _db(tmp_path)
         for i in range(3):
             insert_error(self._record(error_message=f"Error {i}"), db_path=db)
@@ -263,12 +305,18 @@ class TestInsertError:
 
 
 class TestFindRecentErrors:
+    """Test find recent errors."""
+
     def test_returns_empty_on_fresh_db(self, tmp_path: Path):
+        """Test returns empty on fresh db."""
+
         db = _db(tmp_path)
         result = find_recent_errors(db_path=db)
         assert result == []
 
     def test_returns_inserted_errors(self, tmp_path: Path):
+        """Test returns inserted errors."""
+
         db = _db(tmp_path)
         record = ErrorRecord(
             source="adapter",
@@ -285,6 +333,8 @@ class TestFindRecentErrors:
         assert result[0]["run_id"] == "r1"
 
     def test_returns_all_expected_keys(self, tmp_path: Path):
+        """Test returns all expected keys."""
+
         db = _db(tmp_path)
         insert_error(
             ErrorRecord(
@@ -311,6 +361,8 @@ class TestFindRecentErrors:
             assert key in row
 
     def test_respects_limit(self, tmp_path: Path):
+        """Test respects limit."""
+
         db = _db(tmp_path)
         for i in range(10):
             insert_error(
@@ -328,6 +380,8 @@ class TestFindRecentErrors:
         assert len(result) == 3
 
     def test_returns_newest_first(self, tmp_path: Path):
+        """Test returns newest first."""
+
         db = _db(tmp_path)
         for i in range(5):
             insert_error(
@@ -347,6 +401,8 @@ class TestFindRecentErrors:
         assert ids[0] == "E4"  # most recently inserted
 
     def test_default_limit_is_20(self, tmp_path: Path):
+        """Test default limit is 20."""
+
         db = _db(tmp_path)
         for i in range(25):
             insert_error(
@@ -370,10 +426,16 @@ class TestFindRecentErrors:
 
 
 class TestDefaultDbPath:
+    """Test default db path."""
+
     def test_is_path_instance(self):
+        """Test is path instance."""
+
         assert isinstance(DEFAULT_DB_PATH, Path)
 
     def test_has_expected_filename(self):
+        """Test has expected filename."""
+
         assert DEFAULT_DB_PATH.name == "agent_memory.sqlite3"
 
 
@@ -394,7 +456,11 @@ def _query_all(db: Path, model_cls):
 
 
 class TestInteractiveDesignSessionStore:
+    """Test interactive design session store."""
+
     def test_upsert_and_get_design_session(self, tmp_path: Path):
+        """Test upsert and get design session."""
+
         db = _db(tmp_path)
         upsert_design_session(
             session_id="sess-001",
@@ -428,6 +494,8 @@ class TestInteractiveDesignSessionStore:
         assert updated["current_checkpoint_index"] == 2
 
     def test_checkpoint_tool_call_evidence_and_snapshots(self, tmp_path: Path):
+        """Test checkpoint tool call evidence and snapshots."""
+
         db = _db(tmp_path)
         upsert_design_session(
             session_id="sess-002",

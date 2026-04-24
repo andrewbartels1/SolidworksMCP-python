@@ -1,3 +1,6 @@
+"""Utilities for server cli fixed.
+"""
+
 # Typer CLI setup
 import asyncio
 
@@ -49,7 +52,27 @@ def run(
         help="Use mock SolidWorks for testing",
     ),
 ) -> None:
-    """Start the SolidWorks MCP Server."""
+    """Start the SolidWorks MCP Server.
+    
+    Args:
+        config (str): Configuration values for the operation. Defaults to typer.Option(
+                      None,         "--config",         help="Configuration file path",
+                      show_default=False,     ).
+        mode (str): The mode value. Defaults to typer.Option(         None,         "--
+                    mode",         help="Deployment mode (local/remote/hybrid)",
+                    show_default=False,     ).
+        host (str): The host value. Defaults to typer.Option(         "localhost",         "
+                    --host",         help="Server host for remote mode",     ).
+        port (int): The port value. Defaults to typer.Option(         8000,         "--
+                    port",         help="Server port for remote mode",     ).
+        debug (bool): The debug value. Defaults to typer.Option(         False,         "--
+                      debug",         help="Enable debug mode",     ).
+        mock (bool): The mock value. Defaults to typer.Option(         False,         "--
+                     mock",         help="Use mock SolidWorks for testing",     ).
+    
+    Returns:
+        None: None.
+    """
     # Load configuration
     loaded_config = load_config(config)
 

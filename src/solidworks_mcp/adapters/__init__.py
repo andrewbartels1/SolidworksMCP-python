@@ -1,8 +1,7 @@
-"""
-SolidWorks adapter interfaces and factory.
+"""SolidWorks adapter interfaces and factory.
 
-This module provides the adapter pattern infrastructure for different
-SolidWorks integration approaches (pywin32, mock, future edge.js, etc.)
+This module provides the adapter pattern infrastructure for different SolidWorks
+integration approaches (pywin32, mock, future edge.js, etc.)
 """
 
 from .base import AdapterHealth, AdapterResult, SolidWorksAdapter

@@ -44,6 +44,8 @@ def agent_file(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def agent_file_no_frontmatter(tmp_path: Path) -> Path:
+    """Test agent file no frontmatter."""
+
     agents_dir = tmp_path / ".github" / "agents"
     agents_dir.mkdir(parents=True)
     path = agents_dir / "raw-agent.agent.md"
@@ -53,11 +55,15 @@ def agent_file_no_frontmatter(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def db_path(tmp_path: Path) -> Path:
+    """Test db path."""
+
     return tmp_path / "test_harness.sqlite3"
 
 
 @pytest.fixture
 def valid_review() -> ManufacturabilityReview:
+    """Test valid review."""
+
     return ManufacturabilityReview(
         summary="A sufficient summary for testing.",
         orientation_guidance="Print flat on bed.",
@@ -67,6 +73,8 @@ def valid_review() -> ManufacturabilityReview:
 
 @pytest.fixture
 def recoverable_failure() -> RecoverableFailure:
+    """Test recoverable failure."""
+
     return RecoverableFailure(
         explanation="Schema validation failed here.",
         remediation_steps=["Narrow the prompt"],
@@ -81,7 +89,11 @@ def recoverable_failure() -> RecoverableFailure:
 
 
 class TestLoadAgentPrompt:
+    """Test load agent prompt."""
+
     def test_strips_yaml_frontmatter(self, agent_file: Path, monkeypatch):
+        """Test strips yaml frontmatter."""
+
         monkeypatch.chdir(agent_file.parent.parent.parent)
         prompt = _load_agent_prompt("test-agent.agent.md")
         assert "You are a test agent." in prompt
@@ -91,11 +103,15 @@ class TestLoadAgentPrompt:
     def test_returns_raw_when_no_frontmatter(
         self, agent_file_no_frontmatter: Path, monkeypatch
     ):
+        """Test returns raw when no frontmatter."""
+
         monkeypatch.chdir(agent_file_no_frontmatter.parent.parent.parent)
         prompt = _load_agent_prompt("raw-agent.agent.md")
         assert prompt == "You are a raw agent."
 
     def test_strips_leading_trailing_whitespace(self, tmp_path: Path, monkeypatch):
+        """Test strips leading trailing whitespace."""
+
         agents_dir = tmp_path / ".github" / "agents"
         agents_dir.mkdir(parents=True)
         path = agents_dir / "spaced-agent.agent.md"
@@ -114,19 +130,29 @@ class TestLoadAgentPrompt:
 
 
 class TestExtractData:
+    """Test extract data."""
+
     def test_returns_data_attribute_when_present(self):
+        """Test returns data attribute when present."""
+
         obj = SimpleNamespace(data="the_data")
         assert _extract_data(obj) == "the_data"
 
     def test_returns_output_attribute_when_no_data(self):
+        """Test returns output attribute when no data."""
+
         obj = SimpleNamespace(output="the_output")
         assert _extract_data(obj) == "the_output"
 
     def test_returns_value_when_neither_attribute(self):
+        """Test returns value when neither attribute."""
+
         assert _extract_data("plain_string") == "plain_string"
         assert _extract_data(42) == 42
 
     def test_data_takes_precedence_over_output(self):
+        """Test data takes precedence over output."""
+
         obj = SimpleNamespace(data="data_val", output="output_val")
         assert _extract_data(obj) == "data_val"
 
@@ -137,18 +163,26 @@ class TestExtractData:
 
 
 class TestPrettyJson:
+    """Test pretty json."""
+
     def test_returns_valid_json(self, valid_review: ManufacturabilityReview):
+        """Test returns valid json."""
+
         output = pretty_json(valid_review)
         parsed = json.loads(output)
         assert parsed["summary"] == valid_review.summary
 
     def test_is_indented(self, valid_review: ManufacturabilityReview):
+        """Test is indented."""
+
         output = pretty_json(valid_review)
         assert "\n" in output  # indented JSON has newlines
 
     def test_works_for_recoverable_failure(
         self, recoverable_failure: RecoverableFailure
     ):
+        """Test works for recoverable failure."""
+
         output = pretty_json(recoverable_failure)
         parsed = json.loads(output)
         assert "explanation" in parsed
@@ -160,6 +194,8 @@ class TestPrettyJson:
 
 
 class TestRunValidatedPromptSuccess:
+    """Test run validated prompt success."""
+
     @pytest.mark.asyncio
     async def test_returns_validated_model(
         self,
@@ -168,6 +204,8 @@ class TestRunValidatedPromptSuccess:
         valid_review: ManufacturabilityReview,
         monkeypatch,
     ):
+        """Test returns validated model."""
+
         monkeypatch.chdir(agent_file.parent.parent.parent)
 
         mock_result = SimpleNamespace(data=valid_review)
@@ -195,6 +233,8 @@ class TestRunValidatedPromptSuccess:
         valid_review: ManufacturabilityReview,
         monkeypatch,
     ):
+        """Test persists success run."""
+
         monkeypatch.chdir(agent_file.parent.parent.parent)
 
         mock_result = SimpleNamespace(data=valid_review)
@@ -295,6 +335,8 @@ class TestRunValidatedPromptSuccess:
 
 
 class TestRunValidatedPromptRecoverable:
+    """Test run validated prompt recoverable."""
+
     @pytest.mark.asyncio
     async def test_returns_recoverable_failure_when_no_retry(
         self,
@@ -303,6 +345,8 @@ class TestRunValidatedPromptRecoverable:
         recoverable_failure: RecoverableFailure,
         monkeypatch,
     ):
+        """Test returns recoverable failure when no retry."""
+
         monkeypatch.chdir(agent_file.parent.parent.parent)
         recoverable_failure.should_retry = False
 
@@ -437,10 +481,14 @@ class TestRunValidatedPromptRecoverable:
 
 
 class TestRunValidatedPromptException:
+    """Test run validated prompt exception."""
+
     @pytest.mark.asyncio
     async def test_raises_and_logs_error(
         self, agent_file: Path, db_path: Path, monkeypatch
     ):
+        """Test raises and logs error."""
+
         monkeypatch.chdir(agent_file.parent.parent.parent)
 
         mock_agent = MagicMock()

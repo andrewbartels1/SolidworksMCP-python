@@ -1,4 +1,5 @@
-"""Typed output schemas for agent prompt validation."""
+"""Typed output schemas for agent prompt validation.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +9,23 @@ from pydantic import BaseModel, Field
 
 
 class Assumption(BaseModel):
-    """A single explicit assumption in an agent response."""
+    """A single explicit assumption in an agent response.
+    
+    Attributes:
+        statement (str): The statement value.
+    """
 
     statement: str = Field(min_length=3)
 
 
 class Recommendation(BaseModel):
-    """A prioritized recommendation with rationale and risk."""
+    """A prioritized recommendation with rationale and risk.
+    
+    Attributes:
+        rationale (str): The rationale value.
+        risk (Literal["low", "medium", "high"]): The risk value.
+        title (str): The title value.
+    """
 
     title: str = Field(min_length=3)
     rationale: str = Field(min_length=5)
@@ -22,7 +33,16 @@ class Recommendation(BaseModel):
 
 
 class ManufacturabilityReview(BaseModel):
-    """Validation shape for printability-focused agent responses."""
+    """Validation shape for printability-focused agent responses.
+    
+    Attributes:
+        assumptions (list[Assumption]): The assumptions value.
+        build_volume_check (str): The build volume check value.
+        orientation_guidance (str): The orientation guidance value.
+        recommendations (list[Recommendation]): The recommendations value.
+        summary (str): The summary value.
+        tolerance_clearance_notes (list[str]): The tolerance clearance notes value.
+    """
 
     summary: str = Field(min_length=10)
     assumptions: list[Assumption] = Field(default_factory=list)
@@ -36,7 +56,14 @@ class ManufacturabilityReview(BaseModel):
 
 
 class ToolRoutingDecision(BaseModel):
-    """Validation shape for tool-selection/skills documentation prompts."""
+    """Validation shape for tool-selection/skills documentation prompts.
+    
+    Attributes:
+        fallback_strategy (list[str]): The fallback strategy value.
+        intent (str): The intent value.
+        selected_tool_group (str): The selected tool group value.
+        why (str): The why value.
+    """
 
     intent: str = Field(min_length=3)
     selected_tool_group: str = Field(min_length=3)
@@ -45,7 +72,15 @@ class ToolRoutingDecision(BaseModel):
 
 
 class DocsPlan(BaseModel):
-    """Validation shape for docs-engineering responses."""
+    """Validation shape for docs-engineering responses.
+    
+    Attributes:
+        audience (str): The audience value.
+        decisions (list[ToolRoutingDecision]): The decisions value.
+        demo_steps (list[str]): The demo steps value.
+        objective (str): The objective value.
+        sections (list[str]): The sections value.
+    """
 
     audience: str = Field(min_length=3)
     objective: str = Field(min_length=5)
@@ -55,7 +90,14 @@ class DocsPlan(BaseModel):
 
 
 class FeatureStep(BaseModel):
-    """One step in a part reconstruction plan."""
+    """One step in a part reconstruction plan.
+    
+    Attributes:
+        description (str): The description value.
+        mcp_call (str): The mcp call value.
+        step_number (int): The step number value.
+        tool_name (str): The tool name value.
+    """
 
     step_number: int = Field(ge=1)
     tool_name: str = Field(
@@ -69,7 +111,17 @@ class FeatureStep(BaseModel):
 
 
 class ReconstructionPlan(BaseModel):
-    """Structured plan for recreating a SolidWorks part from scratch using MCP tools."""
+    """Structured plan for recreating a SolidWorks part from scratch using MCP tools.
+    
+    Attributes:
+        analysis_summary (str): The analysis summary value.
+        assembly_mates (list[str]): The assembly mates value.
+        complexity_tier (Literal[1, 2, 3, 4]): The complexity tier value.
+        feature_sequence (list[FeatureStep]): The feature sequence value.
+        part_name (str): The part name value.
+        validation_strategy (str): The validation strategy value.
+        vba_required (bool): The vba required value.
+    """
 
     part_name: str = Field(min_length=2)
     complexity_tier: Literal[1, 2, 3, 4] = Field(
@@ -96,7 +148,14 @@ class ReconstructionPlan(BaseModel):
 
 
 class RecoverableFailure(BaseModel):
-    """Typed failure output used when agent needs user-guided retry."""
+    """Typed failure output used when agent needs user-guided retry.
+    
+    Attributes:
+        explanation (str): The explanation value.
+        remediation_steps (list[str]): The remediation steps value.
+        retry_focus (str | None): The retry focus value.
+        should_retry (bool): The should retry value.
+    """
 
     explanation: str = Field(min_length=8)
     remediation_steps: list[str] = Field(default_factory=list)

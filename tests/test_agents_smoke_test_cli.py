@@ -1,8 +1,4 @@
-"""Tests for src/solidworks_mcp/agents/smoke_test.py CLI — targeting 100% coverage.
-
-All tests here are unit tests that mock the LLM call. No live API calls are made.
-Live LLM smoke tests are in tests/test_smoke_agents_live.py (marked `smoke`).
-"""
+"""Tests for src/solidworks_mcp/agents/smoke_test.py CLI — targeting 100% coverage."""
 
 from __future__ import annotations
 
@@ -35,7 +31,11 @@ def _strip_ansi(text: str) -> str:
 
 
 class TestResolveModel:
+    """Test resolve model."""
+
     def test_github_models_prefix(self):
+        """Test github models prefix."""
+
         model = _resolve_model(
             anthropic=False,
             claude_model="claude-sonnet-4-6",
@@ -46,6 +46,8 @@ class TestResolveModel:
         assert model == "github:openai/gpt-4.1"
 
     def test_github_models_custom_model(self):
+        """Test github models custom model."""
+
         model = _resolve_model(
             anthropic=False,
             claude_model="claude-sonnet-4-6",
@@ -56,6 +58,8 @@ class TestResolveModel:
         assert model == "github:mistral-ai/mistral-large"
 
     def test_anthropic_prefix(self):
+        """Test anthropic prefix."""
+
         model = _resolve_model(
             anthropic=True,
             claude_model="claude-sonnet-4-6",
@@ -66,6 +70,8 @@ class TestResolveModel:
         assert model == "anthropic:claude-sonnet-4-6"
 
     def test_anthropic_custom_model(self):
+        """Test anthropic custom model."""
+
         model = _resolve_model(
             anthropic=True,
             claude_model="claude-opus-4-6",
@@ -76,6 +82,8 @@ class TestResolveModel:
         assert model == "anthropic:claude-opus-4-6"
 
     def test_explicit_model_string(self):
+        """Test explicit model string."""
+
         model = _resolve_model(
             anthropic=False,
             claude_model="claude-sonnet-4-6",
@@ -97,6 +105,8 @@ class TestResolveModel:
         assert model.startswith("github:")
 
     def test_raises_when_no_provider(self):
+        """Test raises when no provider."""
+
         import typer
 
         with pytest.raises(typer.BadParameter):
@@ -115,19 +125,27 @@ class TestResolveModel:
 
 
 class TestEnsureProviderCredentials:
+    """Test ensure provider credentials."""
+
     def test_github_with_env_var(self, monkeypatch):
+        """Test github with env var."""
+
         monkeypatch.delenv("GITHUB_API_KEY", raising=False)
         monkeypatch.setenv("GH_TOKEN", "gho_test_token")
         _ensure_provider_credentials("github:openai/gpt-4.1")
         assert os.environ.get("GITHUB_API_KEY") == "gho_test_token"
 
     def test_github_with_github_api_key(self, monkeypatch):
+        """Test github with github api key."""
+
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.setenv("GITHUB_API_KEY", "ghp_test_key")
         _ensure_provider_credentials("github:openai/gpt-4.1")
         assert os.environ["GITHUB_API_KEY"] == "ghp_test_key"
 
     def test_github_fallback_to_gh_cli(self, monkeypatch):
+        """Test github fallback to gh cli."""
+
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_API_KEY", raising=False)
 
@@ -138,6 +156,8 @@ class TestEnsureProviderCredentials:
         assert os.environ.get("GITHUB_API_KEY") == "gh_cli_token"
 
     def test_github_fallback_gh_cli_fails(self, monkeypatch):
+        """Test github fallback gh cli fails."""
+
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_API_KEY", raising=False)
         # Clear any previously set key from earlier tests
@@ -151,6 +171,8 @@ class TestEnsureProviderCredentials:
                 _ensure_provider_credentials("github:openai/gpt-4.1")
 
     def test_github_fallback_gh_cli_exception(self, monkeypatch):
+        """Test github fallback gh cli exception."""
+
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_API_KEY", raising=False)
 
@@ -161,6 +183,8 @@ class TestEnsureProviderCredentials:
                 _ensure_provider_credentials("github:openai/gpt-4.1")
 
     def test_anthropic_missing_key_raises(self, monkeypatch):
+        """Test anthropic missing key raises."""
+
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         import typer
 
@@ -168,10 +192,14 @@ class TestEnsureProviderCredentials:
             _ensure_provider_credentials("anthropic:claude-sonnet-4-6")
 
     def test_anthropic_with_key_set_passes(self, monkeypatch):
+        """Test anthropic with key set passes."""
+
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
         _ensure_provider_credentials("anthropic:claude-sonnet-4-6")  # should not raise
 
     def test_openai_missing_key_raises(self, monkeypatch):
+        """Test openai missing key raises."""
+
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         import typer
 
@@ -179,6 +207,8 @@ class TestEnsureProviderCredentials:
             _ensure_provider_credentials("openai:gpt-4.1")
 
     def test_openai_with_key_set_passes(self, monkeypatch):
+        """Test openai with key set passes."""
+
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
         _ensure_provider_credentials("openai:gpt-4.1")  # should not raise
 
@@ -193,13 +223,21 @@ class TestEnsureProviderCredentials:
 
 
 class TestSchemaChoice:
+    """Test schema choice."""
+
     def test_manufacturability_value(self):
+        """Test manufacturability value."""
+
         assert SchemaChoice.manufacturability == "manufacturability"
 
     def test_docs_value(self):
+        """Test docs value."""
+
         assert SchemaChoice.docs == "docs"
 
     def test_is_str(self):
+        """Test is str."""
+
         assert isinstance(SchemaChoice.manufacturability, str)
 
 
@@ -209,7 +247,11 @@ class TestSchemaChoice:
 
 
 class TestCLIApp:
+    """Test cliapp."""
+
     def _make_agent_dir(self, tmp_path: Path) -> Path:
+        """Test make agent dir."""
+
         agents_dir = tmp_path / ".github" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.agent.md"
@@ -219,16 +261,22 @@ class TestCLIApp:
         return tmp_path
 
     def test_help_output(self):
+        """Test help output."""
+
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
         assert "agent-file" in _strip_ansi(result.output)
 
     def test_missing_required_args(self):
+        """Test missing required args."""
+
         result = runner.invoke(app, [])
         # No args → shows help (no_args_is_help=True); exit code is 0 or 2 depending on Typer version
         assert result.exit_code in (0, 2)
 
     def test_run_manufacturability_success(self, tmp_path: Path, monkeypatch):
+        """Test run manufacturability success."""
+
         cwd = self._make_agent_dir(tmp_path)
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
@@ -262,6 +310,8 @@ class TestCLIApp:
         assert "summary" in result.output
 
     def test_run_docs_schema(self, tmp_path: Path, monkeypatch):
+        """Test run docs schema."""
+
         cwd = self._make_agent_dir(tmp_path)
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
@@ -294,6 +344,8 @@ class TestCLIApp:
         assert "audience" in result.output
 
     def test_run_prints_recoverable_failure_label(self, tmp_path: Path, monkeypatch):
+        """Test run prints recoverable failure label."""
+
         cwd = self._make_agent_dir(tmp_path)
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
@@ -323,6 +375,8 @@ class TestCLIApp:
         assert "RecoverableFailure" in result.output
 
     def test_anthropic_flag_routes_correctly(self, tmp_path: Path, monkeypatch):
+        """Test anthropic flag routes correctly."""
+
         cwd = self._make_agent_dir(tmp_path)
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
@@ -338,6 +392,8 @@ class TestCLIApp:
         captured_model = []
 
         async def _mock_run(**kwargs):
+            """Test mock run."""
+
             captured_model.append(kwargs.get("model_name"))
             return review
 
@@ -363,6 +419,8 @@ class TestCLIApp:
         assert captured_model[0] == "anthropic:claude-sonnet-4-6"
 
     def test_max_retries_passed_through(self, tmp_path: Path, monkeypatch):
+        """Test max retries passed through."""
+
         cwd = self._make_agent_dir(tmp_path)
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
@@ -378,6 +436,8 @@ class TestCLIApp:
         captured_retries = []
 
         async def _mock_run(**kwargs):
+            """Test mock run."""
+
             captured_retries.append(kwargs.get("max_retries_on_recoverable"))
             return review
 
@@ -409,7 +469,11 @@ class TestCLIApp:
 
 
 class TestMainEntryPoint:
+    """Test main entry point."""
+
     def test_main_is_callable(self):
+        """Test main is callable."""
+
         from src.solidworks_mcp.agents.smoke_test import main
 
         assert callable(main)

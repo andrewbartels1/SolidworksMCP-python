@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks sketching tools.
-
-Comprehensive test suite covering sketch creation, geometric entities,
-constraints, and sketch-based operations.
-"""
+"""Tests for SolidWorks sketching tools."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -403,7 +398,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_add_line_fallback_path(self, mcp_server, mock_config):
-        """add_line must use adapter.add_line when add_sketch_line is absent."""
+        """Add_line must use adapter.add_line when add_sketch_line is absent."""
         stub = SimpleNamespace()
         stub.add_line = AsyncMock(
             return_value=Mock(is_success=True, data="Line1", execution_time=0.1)
@@ -416,7 +411,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_add_circle_fallback_path(self, mcp_server, mock_config):
-        """add_circle must use adapter.add_circle when add_sketch_circle is absent."""
+        """Add_circle must use adapter.add_circle when add_sketch_circle is absent."""
         stub = SimpleNamespace()
         stub.add_circle = AsyncMock(
             return_value=Mock(is_success=True, data="Circle1", execution_time=0.1)
@@ -429,7 +424,7 @@ class TestSketchingToolsBranchCoverage:
 
     @pytest.mark.asyncio
     async def test_add_rectangle_fallback_path(self, mcp_server, mock_config):
-        """add_rectangle must use adapter.add_rectangle when add_sketch_rectangle is absent."""
+        """Add_rectangle must use adapter.add_rectangle when add_sketch_rectangle is absent."""
         stub = SimpleNamespace()
         stub.add_rectangle = AsyncMock(
             return_value=Mock(is_success=True, data="Rect1", execution_time=0.1)

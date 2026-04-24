@@ -1,8 +1,7 @@
-"""
-Template Management tools for SolidWorks MCP Server.
+"""Template Management tools for SolidWorks MCP Server.
 
-Provides tools for managing SolidWorks templates including extraction,
-application, comparison, and library management.
+Provides tools for managing SolidWorks templates including extraction, application,
+comparison, and library management.
 """
 
 import time
@@ -19,7 +18,16 @@ from .input_compat import CompatInput
 
 
 class TemplateExtractionInput(BaseModel):
-    """Input schema for extracting template from model."""
+    """Input schema for extracting template from model.
+    
+    Attributes:
+        include_custom_properties (bool): The include custom properties value.
+        include_dimensions (bool): The include dimensions value.
+        save_path (str): The save path value.
+        source_model (str): The source model value.
+        template_name (str): The template name value.
+        template_type (str): The template type value.
+    """
 
     source_model: str = Field(description="Path to source model file")
     template_name: str = Field(description="Name for the extracted template")
@@ -32,7 +40,15 @@ class TemplateExtractionInput(BaseModel):
 
 
 class TemplateApplicationInput(BaseModel):
-    """Input schema for applying template to model."""
+    """Input schema for applying template to model.
+    
+    Attributes:
+        apply_dimensions (bool): The apply dimensions value.
+        apply_materials (bool): The apply materials value.
+        overwrite_existing (bool): The overwrite existing value.
+        target_model (str): The target model value.
+        template_path (str): The template path value.
+    """
 
     template_path: str = Field(description="Path to template file")
     target_model: str = Field(description="Path to target model")
@@ -46,7 +62,15 @@ class TemplateApplicationInput(BaseModel):
 
 
 class TemplateBatchInput(BaseModel):
-    """Input schema for batch template operations."""
+    """Input schema for batch template operations.
+    
+    Attributes:
+        backup_originals (bool): The backup originals value.
+        file_pattern (str): The file pattern value.
+        recursive (bool): The recursive value.
+        source_folder (str): The source folder value.
+        template_path (str): The template path value.
+    """
 
     template_path: str = Field(description="Path to template file")
     source_folder: str = Field(description="Folder containing target models")
@@ -56,7 +80,18 @@ class TemplateBatchInput(BaseModel):
 
 
 class TemplateComparisonInput(CompatInput):
-    """Input schema for comparing templates."""
+    """Input schema for comparing templates.
+    
+    Attributes:
+        comparison_depth (str): The comparison depth value.
+        comparison_type (str): The comparison type value.
+        generate_report (bool): The generate report value.
+        include_dimensions (bool): The include dimensions value.
+        include_materials (bool): The include materials value.
+        include_properties (bool): The include properties value.
+        template1_path (str): The template1 path value.
+        template2_path (str): The template2 path value.
+    """
 
     template1_path: str = Field(description="Path to first template")
     template2_path: str = Field(description="Path to second template")
@@ -76,32 +111,32 @@ async def register_template_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config
 ) -> int:
     """Register template management tools with FastMCP.
-
+    
     Args:
-        mcp: FastMCP server instance
-        adapter: SolidWorks adapter for COM operations
-        config: Configuration settings
-
+        mcp (FastMCP): The mcp value.
+        adapter (SolidWorksAdapter): Adapter instance used for the operation.
+        config (Any): Configuration values for the operation.
+    
     Returns:
-        Number of tools registered
-
+        int: The computed numeric result.
+    
     Example:
-        >>> tool_count = await register_template_management_tools(mcp, adapter, config)
+                        >>> tool_count = await register_template_management_tools(mcp, adapter, config)
     """
     tool_count = 0
 
     @mcp.tool()
     async def extract_template(input_data: TemplateExtractionInput) -> dict[str, Any]:
         """Extract template from existing SolidWorks model.
-
+        
         Args:
-            input_data: Template extraction parameters
-
+            input_data (TemplateExtractionInput): The input data value.
+        
         Returns:
-            Extraction status and template information
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await extract_template(extraction_input)
+                            >>> result = await extract_template(extraction_input)
         """
         try:
             if hasattr(adapter, "extract_template"):
@@ -171,18 +206,18 @@ async def register_template_management_tools(
     @mcp.tool()
     async def apply_template(input_data: TemplateApplicationInput) -> dict[str, Any]:
         """Apply a template to an existing SolidWorks model.
-
-        This tool applies saved template settings including properties,
-        dimensions, and formatting to the target model.
-
+        
+        This tool applies saved template settings including properties, dimensions, and
+        formatting to the target model.
+        
         Args:
-            input_data: Template application parameters
-
+            input_data (TemplateApplicationInput): The input data value.
+        
         Returns:
-            Application status and applied settings
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await apply_template(application_input)
+                            >>> result = await apply_template(application_input)
         """
         try:
             if hasattr(adapter, "apply_template"):
@@ -246,18 +281,18 @@ async def register_template_management_tools(
     @mcp.tool()
     async def batch_apply_template(input_data: TemplateBatchInput) -> dict[str, Any]:
         """Apply template to multiple models in batch.
-
-        This tool processes multiple SolidWorks files and applies
-        the same template configuration to all matching files.
-
+        
+        This tool processes multiple SolidWorks files and applies the same template
+        configuration to all matching files.
+        
         Args:
-            input_data: Batch template application parameters
-
+            input_data (TemplateBatchInput): The input data value.
+        
         Returns:
-            Batch processing results and status
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await batch_apply_template(batch_input)
+                            >>> result = await batch_apply_template(batch_input)
         """
         try:
             if hasattr(adapter, "batch_apply_template"):
@@ -324,18 +359,18 @@ async def register_template_management_tools(
     @mcp.tool()
     async def compare_templates(input_data: TemplateComparisonInput) -> dict[str, Any]:
         """Compare two templates and generate difference report.
-
-        This tool analyzes differences between templates to help
-        understand variations in formatting and properties.
-
+        
+        This tool analyzes differences between templates to help understand variations in
+        formatting and properties.
+        
         Args:
-            input_data: Template comparison parameters
-
+            input_data (TemplateComparisonInput): The input data value.
+        
         Returns:
-            Comparison results and differences
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await compare_templates(comparison_input)
+                            >>> result = await compare_templates(comparison_input)
         """
         try:
             if hasattr(adapter, "compare_templates"):
@@ -428,19 +463,18 @@ async def register_template_management_tools(
     @mcp.tool()
     async def save_to_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
         """Save template to the organization's template library.
-
-        This tool manages a centralized template library with
-        categorization and version control.
-
-
+        
+        This tool manages a centralized template library with categorization and version
+        control.
+        
         Args:
-            input_data: Template library save parameters
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Library save status and location
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await save_to_template_library(library_input)
+                            >>> result = await save_to_template_library(library_input)
         """
 
         try:
@@ -517,18 +551,18 @@ async def register_template_management_tools(
     @mcp.tool()
     async def list_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
         """List available templates from the template library.
-
-        This tool provides browsing and searching capabilities
-        for the organization's template library.
-
+        
+        This tool provides browsing and searching capabilities for the organization's template
+        library.
+        
         Args:
-            input_data: Library listing parameters
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Available templates and metadata
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await list_template_library(list_input)
+                            >>> result = await list_template_library(list_input)
         """
         try:
             if hasattr(adapter, "list_template_library"):

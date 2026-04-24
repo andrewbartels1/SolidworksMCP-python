@@ -29,6 +29,8 @@ class _BackingAdapter:
     """Minimal backing adapter used to test VBA wrapper behavior."""
 
     def __init__(self) -> None:
+        """Test init."""
+
         self.config = {"name": "backing"}
 
     async def connect(self) -> None:
@@ -114,9 +116,13 @@ async def test_intelligent_router_uses_vba_when_preferred() -> None:
     router = IntelligentRouter(analyzer=analyzer, cache=cache)
 
     async def _com(payload: object) -> AdapterResult[dict[str, str]]:
+        """Test com."""
+
         return AdapterResult(status=AdapterResultStatus.ERROR, error="com failed")
 
     async def _vba(payload: object) -> AdapterResult[dict[str, str]]:
+        """Test vba."""
+
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"route": "vba"})
 
     result, route = await router.execute(
@@ -189,11 +195,17 @@ async def test_server_runtime_instrumentation_caches_read_calls() -> None:
     server = SolidWorksMCPServer(cfg)
 
     class _AdapterWithCounter(_BackingAdapter):
+        """Test adapter with counter."""
+
         def __init__(self) -> None:
+            """Test init."""
+
             super().__init__()
             self.calls = 0
 
         async def get_model_info(self) -> AdapterResult[dict[str, str]]:
+            """Test get model info."""
+
             self.calls += 1
             return await super().get_model_info()
 
@@ -256,6 +268,8 @@ async def test_intelligent_router_caches_more_operations() -> None:
     call_count = {"count": 0}
 
     async def _com_operation(payload: object) -> AdapterResult[dict[str, str]]:
+        """Test com operation."""
+
         call_count["count"] += 1
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"cached": False})
 
@@ -297,12 +311,16 @@ async def test_vba_macro_executor_saves_and_executes_macro() -> None:
     )
 
     class _MockAdapter:
+        """Test mock adapter."""
+
         async def execute_macro(
             self, macro_path: str, subroutine: str
         ) -> dict[
             str,
             str,
         ]:
+            """Test execute macro."""
+
             return {"success": True, "output": "macro executed"}
 
     result = await executor.execute_macro(
@@ -322,12 +340,16 @@ async def test_vba_adapter_executes_generated_macro() -> None:
     """VBA adapter should execute generated macros through executor."""
 
     class _MockBackingAdapter(_BackingAdapter):
+        """Test mock backing adapter."""
+
         async def execute_macro(
             self, macro_path: str, subroutine: str
         ) -> dict[
             str,
             str,
         ]:
+            """Test execute macro."""
+
             return {"success": True, "output": "done"}
 
     adapter = VbaGeneratorAdapter(backing_adapter=_MockBackingAdapter())
@@ -343,12 +365,16 @@ def test_vba_adapter_tracks_execution_history() -> None:
     """VBA adapter should maintain execution history."""
 
     class _MockBackingAdapter(_BackingAdapter):
+        """Test mock backing adapter."""
+
         async def execute_macro(
             self, macro_path: str, subroutine: str
         ) -> dict[
             str,
             str,
         ]:
+            """Test execute macro."""
+
             return {"success": True}
 
     adapter = VbaGeneratorAdapter(backing_adapter=_MockBackingAdapter())

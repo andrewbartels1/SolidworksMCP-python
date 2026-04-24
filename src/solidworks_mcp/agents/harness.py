@@ -1,4 +1,5 @@
-"""PydanticAI harness for validating custom agent prompt responses."""
+"""PydanticAI harness for validating custom agent prompt responses.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +27,15 @@ AGENTS_DIR = Path(".github") / "agents"
 
 
 def _load_agent_prompt(agent_file_name: str) -> str:
+    """Build internal agent prompt.
+    
+    Args:
+        agent_file_name (str): The agent file name value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     path = AGENTS_DIR / agent_file_name
     raw = path.read_text(encoding="utf-8")
 
@@ -38,6 +48,15 @@ def _load_agent_prompt(agent_file_name: str) -> str:
 
 
 def _extract_data(result: Any) -> Any:
+    """Build internal extract data.
+    
+    Args:
+        result (Any): The result value.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
+
     if hasattr(result, "data"):
         return result.data
     if hasattr(result, "output"):
@@ -54,7 +73,23 @@ async def run_validated_prompt(
     max_retries_on_recoverable: int = 1,
     db_path: Path | None = None,
 ) -> TModel | RecoverableFailure:
-    """Run one prompt through PydanticAI and validate the output schema."""
+    """Run one prompt through PydanticAI and validate the output schema.
+    
+    Args:
+        agent_file_name (str): The agent file name value.
+        model_name (str): Embedding model name to use.
+        user_prompt (str): The user prompt value.
+        result_type (type[TModel]): The result type value.
+        max_retries_on_recoverable (int): The max retries on recoverable value. Defaults to
+                                          1.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        TModel | RecoverableFailure: The result produced by the operation.
+    
+    Raises:
+        RuntimeError: Pydantic_ai is not importable. Install dependencies and retry.
+    """
     if Agent is None:  # pragma: no cover
         raise RuntimeError(
             "pydantic_ai is not importable. Install dependencies and retry."
@@ -172,5 +207,12 @@ async def run_validated_prompt(
 
 
 def pretty_json(model: BaseModel) -> str:
-    """Return pretty JSON for test output snapshots."""
+    """Return pretty JSON for test output snapshots.
+    
+    Args:
+        model (BaseModel): The model value.
+    
+    Returns:
+        str: The resulting text value.
+    """
     return json.dumps(model.model_dump(mode="json"), indent=2)

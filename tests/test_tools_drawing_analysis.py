@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks drawing analysis tools.
-
-Comprehensive test suite covering drawing analysis, dimension checking,
-annotation validation, compliance verification, and reporting.
-"""
+"""Tests for SolidWorks drawing analysis tools."""
 
 from unittest.mock import AsyncMock, Mock
 

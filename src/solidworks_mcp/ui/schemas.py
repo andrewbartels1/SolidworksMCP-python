@@ -1,7 +1,7 @@
 """Shared Pydantic schemas for the interactive UI dashboard.
 
-These models keep dashboard payloads explicit, validated, and documented so
-both backend endpoints and Prefab UI state use the same contract.
+These models keep dashboard payloads explicit, validated, and documented so both backend
+endpoints and Prefab UI state use the same contract.
 """
 
 from __future__ import annotations
@@ -12,7 +12,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class DashboardCheckpoint(BaseModel):
-    """One checkpoint row shown in the planning/status area."""
+    """One checkpoint row shown in the planning/status area.
+    
+    Attributes:
+        goal (str): The goal value.
+        model_config (Any): The model config value.
+        status (str): The status value.
+        step (str): The step value.
+        tools (str): The tools value.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -39,7 +47,14 @@ class DashboardCheckpoint(BaseModel):
 
 
 class DashboardEvidenceRow(BaseModel):
-    """One evidence row shown in retrieval context."""
+    """One evidence row shown in retrieval context.
+    
+    Attributes:
+        detail (str): The detail value.
+        model_config (Any): The model config value.
+        score (str): The score value.
+        source (str): The source value.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -62,8 +77,92 @@ class DashboardEvidenceRow(BaseModel):
 
 class DashboardUIState(BaseModel):
     """Top-level dashboard state shared between backend and Prefab UI.
-
+    
     Field descriptions are user-facing semantics and validation intent.
+    
+    Attributes:
+        accepted_family (str): The accepted family value.
+        active_model_configuration (str): The active model configuration value.
+        active_model_path (str): The active model path value.
+        active_model_status (str): The active model status value.
+        active_model_type (str): The active model type value.
+        api_origin (str): The api origin value.
+        assumptions_text (str): The assumptions text value.
+        canonical_prompt_text (str): The canonical prompt text value.
+        checkpoints (list[DashboardCheckpoint]): The checkpoints value.
+        checkpoints_text (str): The checkpoints text value.
+        clarifying_questions_text (str): The clarifying questions text value.
+        context_file_input (str): The context file input value.
+        context_load_status (str): The context load status value.
+        context_name_input (str): The context name input value.
+        context_save_status (str): The context save status value.
+        context_text (str): The context text value.
+        context_used_pct (int): The context used pct value.
+        ctx_tick (int): The ctx tick value.
+        docs_context_text (str): The docs context text value.
+        docs_query (str): The docs query value.
+        evidence_rows (list[DashboardEvidenceRow]): The evidence rows value.
+        evidence_rows_text (str): The evidence rows text value.
+        family_confidence (str): The family confidence value.
+        family_evidence_text (str): The family evidence text value.
+        family_warning_text (str): The family warning text value.
+        feature_grounding_warning_text (str): The feature grounding warning text value.
+        feature_target_status (str): The feature target status value.
+        feature_target_text (str): The feature target text value.
+        feature_tree_items (list[dict]): The feature tree items value.
+        flow_header_text (str): The flow header text value.
+        latest_error_text (str): The latest error text value.
+        latest_message (str): The latest message value.
+        latest_tool (str): The latest tool value.
+        local_endpoint (str): The local endpoint value.
+        local_model_available (bool): The local model available value.
+        local_model_busy (bool): The local model busy value.
+        local_model_label (str): The local model label value.
+        local_model_pull_command (str): The local model pull command value.
+        local_model_recommended_ollama_model (str): The local model recommended ollama model
+                                                    value.
+        local_model_recommended_tier (str): The local model recommended tier value.
+        local_model_status_text (str): The local model status text value.
+        manual_sync_ready (bool): The manual sync ready value.
+        mocked_tools_text (str): The mocked tools text value.
+        model_config (Any): The model config value.
+        model_context_text (str): The model context text value.
+        model_name (str): The model name value.
+        model_path_input_chooser (str): The model path input chooser value.
+        model_path_input_edit (str): The model path input edit value.
+        model_profile (str): The model profile value.
+        model_provider (str): The model provider value.
+        normalized_brief (str): The normalized brief value.
+        notes_text (str): The notes text value.
+        orchestration_status (str): The orchestration status value.
+        preview_orientation (str): The preview orientation value.
+        preview_status (str): The preview status value.
+        preview_url (str): The preview url value.
+        preview_view_urls (dict[str, str]): The preview view urls value.
+        preview_viewer_url (str): The preview viewer url value.
+        proposed_family (str): The proposed family value.
+        rag_chunk_count (int): The rag chunk count value.
+        rag_index_path (str): The rag index path value.
+        rag_namespace (str): The rag namespace value.
+        rag_provenance_text (str): The rag provenance text value.
+        rag_source_path (str): The rag source path value.
+        rag_status (str): The rag status value.
+        readiness_adapter_mode (str): The readiness adapter mode value.
+        readiness_db_ready (bool): The readiness db ready value.
+        readiness_preview_ready (bool): The readiness preview ready value.
+        readiness_provider_configured (bool): The readiness provider configured value.
+        readiness_summary (str): The readiness summary value.
+        remediation_hint (str): The remediation hint value.
+        selected_feature_name (str): The selected feature name value.
+        session_id (str): The session id value.
+        structured_rendering_enabled (bool): The structured rendering enabled value.
+        tool_history_text (str): The tool history text value.
+        uploaded_file_payloads (list[dict[str, Any]]): The uploaded file payloads value.
+        user_clarification_answer (str): The user clarification answer value.
+        user_goal (str): The user goal value.
+        workflow_guidance_text (str): The workflow guidance text value.
+        workflow_label (str): The workflow label value.
+        workflow_mode (str): The workflow mode value.
     """
 
     model_config = ConfigDict(extra="forbid")

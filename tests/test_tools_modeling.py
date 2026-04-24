@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks modeling tools.
-
-Comprehensive test suite covering all modeling operations including
-part creation, extrusions, revolves, and dimensional modifications.
-"""
+"""Tests for SolidWorks modeling tools."""
 
 from unittest.mock import AsyncMock, Mock
 

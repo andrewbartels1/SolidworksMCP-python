@@ -14,6 +14,8 @@ from src.solidworks_mcp.agents.retrieval_index import (
 
 
 def test_build_local_retrieval_index_creates_file(tmp_path: Path) -> None:
+    """Test build local retrieval index creates file."""
+
     worked_examples = tmp_path / "worked-examples.md"
     worked_examples.write_text(
         "## Example\nClassifier-first flow with feature-tree audit.",
@@ -56,6 +58,8 @@ def test_build_local_retrieval_index_creates_file(tmp_path: Path) -> None:
 
 
 def test_build_local_retrieval_index_handles_missing_inputs(tmp_path: Path) -> None:
+    """Test build local retrieval index handles missing inputs."""
+
     output_path = tmp_path / "retrieval" / "index.json"
     payload = build_local_retrieval_index(
         output_path=output_path,
@@ -69,6 +73,8 @@ def test_build_local_retrieval_index_handles_missing_inputs(tmp_path: Path) -> N
 
 
 def test_chunk_text_overlapping_chunks() -> None:
+    """Test chunk text overlapping chunks."""
+
     text = "x" * 2400
     chunks = _chunk_text(text, chunk_size=1000, overlap=200)
 
@@ -79,10 +85,14 @@ def test_chunk_text_overlapping_chunks() -> None:
 
 
 def test_read_text_oserror_returns_empty(monkeypatch, tmp_path: Path) -> None:
+    """Test read text oserror returns empty."""
+
     path = tmp_path / "blocked.md"
     path.write_text("ignored", encoding="utf-8")
 
     def _raise_oserror(*args, **kwargs):
+        """Test raise oserror."""
+
         raise OSError("cannot read")
 
     monkeypatch.setattr(Path, "read_text", _raise_oserror)
@@ -92,6 +102,8 @@ def test_read_text_oserror_returns_empty(monkeypatch, tmp_path: Path) -> None:
 def test_build_local_retrieval_index_uses_defaults_and_skips_index_md(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """Test build local retrieval index uses defaults and skips index md."""
+
     monkeypatch.chdir(tmp_path)
 
     worked_examples = tmp_path / "docs" / "user-guide" / "worked-examples.md"

@@ -1,8 +1,7 @@
-"""
-Security module for SolidWorks MCP Server.
+"""Security module for SolidWorks MCP Server.
 
-Provides authentication, authorization, and security features based on
-the configured security level.
+Provides authentication, authorization, and security features based on the configured
+security level.
 """
 
 from typing import Any
@@ -17,16 +16,23 @@ _security_enforcer: SecurityEnforcer | None = None
 
 
 def get_security_enforcer() -> SecurityEnforcer | None:
-    """Return the active runtime security enforcer, if configured."""
+    """Return the active runtime security enforcer, if configured.
+    
+    Returns:
+        SecurityEnforcer | None: The result produced by the operation.
+    """
     return _security_enforcer
 
 
 async def setup_security(mcp: Any, config: SolidWorksMCPConfig) -> None:
     """Configure security middleware based on selected security level.
-
+    
     Args:
-        mcp: Active MCP server instance.
-        config: Loaded server configuration.
+        mcp (Any): The mcp value.
+        config (SolidWorksMCPConfig): Configuration values for the operation.
+    
+    Returns:
+        None: None.
     """
     from ..config import SecurityLevel
 

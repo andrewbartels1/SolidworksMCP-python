@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Local SolidWorks MCP Server startup script.
+"""Local SolidWorks MCP Server startup script.
 
 This script provides easy local testing and development of the SolidWorks MCP server
 with configurable security, deployment modes, and comprehensive logging.
@@ -50,7 +49,18 @@ def create_local_config(
     log_level: str = "INFO",
     solidworks_year: int | None = None,
 ) -> SolidWorksMCPConfig:
-    """Create configuration for local development/testing."""
+    """Create configuration for local development/testing.
+    
+    Args:
+        mock_mode (bool): The mock mode value. Defaults to True.
+        security_level (str): The security level value. Defaults to "minimal".
+        port (int): The port value. Defaults to 8000.
+        log_level (str): The log level value. Defaults to "INFO".
+        solidworks_year (int | None): The solidworks year value. Defaults to None.
+    
+    Returns:
+        SolidWorksMCPConfig: The result produced by the operation.
+    """
 
     # Convert string security level to enum
     security_map = {
@@ -89,7 +99,15 @@ def create_local_config(
 
 
 async def test_server_health(port: int, timeout: float = 10.0) -> bool:
-    """Test if server is responding to health checks."""
+    """Test if server is responding to health checks.
+    
+    Args:
+        port (int): The port value.
+        timeout (float): Maximum time to wait in seconds. Defaults to 10.0.
+    
+    Returns:
+        bool: True if test server health, otherwise False.
+    """
     import aiohttp
 
     try:
@@ -107,7 +125,14 @@ async def test_server_health(port: int, timeout: float = 10.0) -> bool:
 
 
 async def demonstrate_tools(server: SolidWorksMCPServer) -> None:
-    """Demonstrate available tools and their capabilities."""
+    """Demonstrate available tools and their capabilities.
+    
+    Args:
+        server (SolidWorksMCPServer): The server value.
+    
+    Returns:
+        None: None.
+    """
     print("\n" + "=" * 60)
     print("🛠️ AVAILABLE SOLIDWORKS MCP TOOLS")
     print("=" * 60)
@@ -141,7 +166,14 @@ async def demonstrate_tools(server: SolidWorksMCPServer) -> None:
 
 
 async def run_example_workflow(server: SolidWorksMCPServer) -> None:
-    """Run an example SolidWorks automation workflow."""
+    """Run an example SolidWorks automation workflow.
+    
+    Args:
+        server (SolidWorksMCPServer): The server value.
+    
+    Returns:
+        None: None.
+    """
     print("\n" + "=" * 60)
     print("🎬 EXAMPLE WORKFLOW DEMONSTRATION")
     print("=" * 60)
@@ -190,9 +222,26 @@ async def run_example_workflow(server: SolidWorksMCPServer) -> None:
 
 
 def setup_signal_handlers(server: SolidWorksMCPServer) -> None:
-    """Setup graceful shutdown signal handlers."""
+    """Setup graceful shutdown signal handlers.
+    
+    Args:
+        server (SolidWorksMCPServer): The server value.
+    
+    Returns:
+        None: None.
+    """
 
     def signal_handler(signum, frame):
+        """Handle signal handler.
+        
+        Args:
+            signum (Any): The signum value.
+            frame (Any): The frame value.
+        
+        Returns:
+            Any: The result produced by the operation.
+        """
+
         print(f"\n🛑 Received signal {signum}, shutting down gracefully...")
         asyncio.create_task(server.stop())
         sys.exit(0)
@@ -202,7 +251,14 @@ def setup_signal_handlers(server: SolidWorksMCPServer) -> None:
 
 
 def print_startup_banner(config: SolidWorksMCPConfig) -> None:
-    """Print startup banner with configuration info."""
+    """Print startup banner with configuration info.
+    
+    Args:
+        config (SolidWorksMCPConfig): Configuration values for the operation.
+    
+    Returns:
+        None: None.
+    """
     print("\n" + "=" * 60)
     print("🚀 SOLIDWORKS MCP SERVER - LOCAL DEVELOPMENT")
     print("=" * 60)
@@ -217,7 +273,14 @@ def print_startup_banner(config: SolidWorksMCPConfig) -> None:
 
 
 def print_connection_info(config: SolidWorksMCPConfig) -> None:
-    """Print connection information for Claude Desktop."""
+    """Print connection information for Claude Desktop.
+    
+    Args:
+        config (SolidWorksMCPConfig): Configuration values for the operation.
+    
+    Returns:
+        None: None.
+    """
     print("\n" + "=" * 60)
     print("🔌 CLAUDE DESKTOP CONFIGURATION")
     print("=" * 60)
@@ -251,7 +314,11 @@ def print_connection_info(config: SolidWorksMCPConfig) -> None:
 
 
 async def main():
-    """Main server startup and management."""
+    """Main server startup and management.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     parser = argparse.ArgumentParser(
         description="SolidWorks MCP Server - Local Development"
     )

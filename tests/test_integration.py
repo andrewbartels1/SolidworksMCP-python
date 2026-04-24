@@ -1,9 +1,4 @@
-"""
-Integration tests for SolidWorks MCP Server.
-
-Comprehensive end-to-end tests covering complete workflows from server startup
-through tool execution and shutdown.
-"""
+"""Integration tests for SolidWorks MCP Server."""
 
 from unittest.mock import AsyncMock, Mock
 

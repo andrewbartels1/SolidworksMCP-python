@@ -143,8 +143,19 @@ $venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
 $venvPrefab = Join-Path $scriptDir ".venv\Scripts\prefab.exe"
 
 if (-not (Test-Path $venvPython)) {
-    Write-Error "Virtual environment python not found: $venvPython"
+    Write-Error (
+        "Virtual environment python not found: $venvPython`n" +
+        "Run one of:`n" +
+        "  .\dev-commands.ps1 dev-install`n" +
+        "  .\dev-commands.ps1 dev-install-uv"
+    )
     exit 1
+}
+
+$pipCheck = & $venvPython -m pip --version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "pip missing in .venv - bootstrapping with ensurepip..." -ForegroundColor Yellow
+    & $venvPython -m ensurepip --upgrade
 }
 
 Resolve-UiPorts -Ports @($BackendPort, $FrontendPort)

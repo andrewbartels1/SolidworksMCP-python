@@ -14,9 +14,45 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
 $startServerScript = Join-Path $scriptDir "src\utils\start_local_server.py"
 
-if (-not (Test-Path $venvPython)) {
-	Write-Error "Virtual environment python not found: $venvPython"
-	exit 1
+function Test-PythonExecutable {
+	param(
+		[string]$PythonPath
+	)
+
+	if (-not (Test-Path $PythonPath)) {
+		return $false
+	}
+
+	try {
+		& $PythonPath -c "import sys" | Out-Null
+		return $LASTEXITCODE -eq 0
+	}
+	catch {
+		return $false
+	}
+}
+
+function Get-UvExecutable {
+	$candidatePaths = @(
+		(Join-Path $env:USERPROFILE ".local\bin\uv.exe"),
+		(Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages\astral-sh.uv_Microsoft.Winget.Source_8wekyb3d8bbwe\uv.exe"),
+		(Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe"),
+		(Join-Path $env:APPDATA "Python\Scripts\uv.exe"),
+		(Join-Path $scriptDir ".venv\Scripts\uv.exe")
+	)
+
+	$uvCommand = Get-Command uv -ErrorAction SilentlyContinue
+	if ($uvCommand -and $uvCommand.Source) {
+		return $uvCommand.Source
+	}
+
+	foreach ($candidatePath in $candidatePaths) {
+		if ($candidatePath -and (Test-Path $candidatePath)) {
+			return $candidatePath
+		}
+	}
+
+	return $null
 }
 
 if (-not (Test-Path $startServerScript)) {
@@ -24,6 +60,16 @@ if (-not (Test-Path $startServerScript)) {
 	exit 1
 }
 
-# Run the local server startup script (canonical entry point)
-# Pass through all arguments to the Python script
-& $venvPython $startServerScript @args
+if (Test-PythonExecutable $venvPython) {
+	& $venvPython $startServerScript @args
+	exit $LASTEXITCODE
+}
+
+ $uvExecutable = Get-UvExecutable
+if ($uvExecutable) {
+	& $uvExecutable run --project $scriptDir python $startServerScript @args
+	exit $LASTEXITCODE
+}
+
+Write-Error "No usable Python runtime found. Checked $venvPython and uv. Recreate the environment with 'uv venv' and reinstall dependencies if needed."
+exit 1

@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks VBA generation tools.
-
-Comprehensive test suite covering VBA code generation for complex
-operations that exceed COM parameter limits (13+ parameters).
-"""
+"""Tests for SolidWorks VBA generation tools."""
 
 from unittest.mock import AsyncMock, Mock
 

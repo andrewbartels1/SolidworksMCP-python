@@ -1,4 +1,5 @@
-"""VBA adapter path for complex operations with generated macro metadata."""
+"""VBA adapter path for complex operations with generated macro metadata.
+"""
 
 from __future__ import annotations
 
@@ -17,10 +18,20 @@ from .vba_macro_executor import MacroExecutionRequest, VbaMacroExecutor
 
 class VbaGeneratorAdapter:
     """Adapter that executes complex operations through VBA-oriented flow.
-
-    This adapter currently uses the wrapped COM adapter for final execution,
-    but annotates responses as VBA-routed and can be extended to execute
-    generated macros directly in future iterations.
+    
+    This adapter currently uses the wrapped COM adapter for final execution, but annotates
+    responses as VBA-routed and can be extended to execute generated macros directly in
+    future iterations.
+    
+    Args:
+        backing_adapter (Any): The backing adapter value.
+        macro_executor (VbaMacroExecutor | None): The macro executor value. Defaults to
+                                                  None.
+    
+    Attributes:
+        _backing_adapter (Any): The backing adapter value.
+        _macro_executor (Any): The macro executor value.
+        config (Any): The config value.
     """
 
     def __init__(
@@ -28,34 +39,61 @@ class VbaGeneratorAdapter:
         backing_adapter: Any,
         macro_executor: VbaMacroExecutor | None = None,
     ) -> None:
-        """Initialize this object.
-
+        """Initialize the vba generator adapter.
+        
         Args:
-            backing_adapter: Primary adapter used for connection and execution.
-            macro_executor: Optional macro executor for VBA lifecycle management.
+            backing_adapter (Any): The backing adapter value.
+            macro_executor (VbaMacroExecutor | None): The macro executor value. Defaults to
+                                                      None.
+        
+        Returns:
+            None: None.
         """
         self._backing_adapter = backing_adapter
         self._macro_executor = macro_executor or VbaMacroExecutor()
         self.config = getattr(backing_adapter, "config", None)
 
     def __getattr__(self, item: str) -> Any:
-        """Delegate unknown members to backing adapter."""
+        """Delegate unknown members to backing adapter.
+        
+        Args:
+            item (str): The item value.
+        
+        Returns:
+            Any: The result produced by the operation.
+        """
         return getattr(self._backing_adapter, item)
 
     async def connect(self) -> None:
-        """Connect to SolidWorks using wrapped adapter."""
+        """Connect to SolidWorks using wrapped adapter.
+        
+        Returns:
+            None: None.
+        """
         await self._backing_adapter.connect()
 
     async def disconnect(self) -> None:
-        """Disconnect wrapped adapter."""
+        """Disconnect wrapped adapter.
+        
+        Returns:
+            None: None.
+        """
         await self._backing_adapter.disconnect()
 
     def is_connected(self) -> bool:
-        """Return wrapped adapter connection state."""
+        """Return wrapped adapter connection state.
+        
+        Returns:
+            bool: True if connected, otherwise False.
+        """
         return self._backing_adapter.is_connected()
 
     async def health_check(self) -> Any:
-        """Return wrapped adapter health with VBA route marker."""
+        """Return wrapped adapter health with VBA route marker.
+        
+        Returns:
+            Any: The result produced by the operation.
+        """
         health = await self._backing_adapter.health_check()
         if hasattr(health, "metrics"):
             metrics = dict(health.metrics or {})
@@ -67,13 +105,13 @@ class VbaGeneratorAdapter:
         self,
         params: ExtrusionParameters,
     ) -> AdapterResult[Any]:
-        """Execute extrusion through VBA-routed path.
-
+        """Create the extrusion.
+        
         Args:
-            params: Extrusion parameters.
-
+            params (ExtrusionParameters): The params value.
+        
         Returns:
-            Adapter operation result with VBA metadata.
+            AdapterResult[Any]: The result produced by the operation.
         """
         return await self._run_with_vba_metadata(
             operation="create_extrusion",
@@ -86,7 +124,14 @@ class VbaGeneratorAdapter:
         self,
         params: RevolveParameters,
     ) -> AdapterResult[Any]:
-        """Execute revolve through VBA-routed path."""
+        """Create the revolve.
+        
+        Args:
+            params (RevolveParameters): The params value.
+        
+        Returns:
+            AdapterResult[Any]: The result produced by the operation.
+        """
         return await self._run_with_vba_metadata(
             operation="create_revolve",
             payload=params,
@@ -98,7 +143,14 @@ class VbaGeneratorAdapter:
         self,
         params: SweepParameters,
     ) -> AdapterResult[Any]:
-        """Execute sweep through VBA-routed path."""
+        """Create the sweep.
+        
+        Args:
+            params (SweepParameters): The params value.
+        
+        Returns:
+            AdapterResult[Any]: The result produced by the operation.
+        """
         return await self._run_with_vba_metadata(
             operation="create_sweep",
             payload=params,
@@ -110,7 +162,14 @@ class VbaGeneratorAdapter:
         self,
         params: LoftParameters,
     ) -> AdapterResult[Any]:
-        """Execute loft through VBA-routed path."""
+        """Create the loft.
+        
+        Args:
+            params (LoftParameters): The params value.
+        
+        Returns:
+            AdapterResult[Any]: The result produced by the operation.
+        """
         return await self._run_with_vba_metadata(
             operation="create_loft",
             payload=params,
@@ -125,16 +184,16 @@ class VbaGeneratorAdapter:
         com_call: Any,
         vba_code: str,
     ) -> AdapterResult[Any]:
-        """Execute wrapped operation and annotate metadata as VBA-routed.
-
+        """Build internal run with vba metadata.
+        
         Args:
-            operation: Operation name.
-            payload: Operation payload.
-            com_call: Backing adapter callable.
-            vba_code: Generated VBA source string.
-
+            operation (str): Callable object executed by the helper.
+            payload (Any): The payload value.
+            com_call (Any): The com call value.
+            vba_code (str): The vba code value.
+        
         Returns:
-            Adapter result with metadata.
+            AdapterResult[Any]: The result produced by the operation.
         """
         result: AdapterResult[Any] = await com_call(payload)
         metadata = dict(result.metadata or {})
@@ -150,7 +209,14 @@ class VbaGeneratorAdapter:
         return result
 
     def _generate_extrusion_vba(self, params: ExtrusionParameters) -> str:
-        """Generate simple VBA snippet for extrusion operation."""
+        """Generate simple VBA snippet for extrusion operation.
+        
+        Args:
+            params (ExtrusionParameters): The params value.
+        
+        Returns:
+            str: The resulting text value.
+        """
         return (
             "Sub CreateExtrusion()\n"
             "    ' Auto-generated VBA fallback snippet\n"
@@ -159,7 +225,14 @@ class VbaGeneratorAdapter:
         )
 
     def _generate_revolve_vba(self, params: RevolveParameters) -> str:
-        """Generate simple VBA snippet for revolve operation."""
+        """Generate simple VBA snippet for revolve operation.
+        
+        Args:
+            params (RevolveParameters): The params value.
+        
+        Returns:
+            str: The resulting text value.
+        """
         return (
             "Sub CreateRevolve()\n"
             "    ' Auto-generated VBA fallback snippet\n"
@@ -168,7 +241,14 @@ class VbaGeneratorAdapter:
         )
 
     def _generate_sweep_vba(self, params: SweepParameters) -> str:
-        """Generate simple VBA snippet for sweep operation."""
+        """Generate simple VBA snippet for sweep operation.
+        
+        Args:
+            params (SweepParameters): The params value.
+        
+        Returns:
+            str: The resulting text value.
+        """
         return (
             "Sub CreateSweep()\n"
             "    ' Auto-generated VBA fallback snippet\n"
@@ -182,15 +262,15 @@ class VbaGeneratorAdapter:
         macro_name: str = "GeneratedMacro",
         subroutine: str = "Main",
     ) -> AdapterResult[Any]:
-        """Execute generated VBA macro code.
-
+        """Provide execute macro support for the vba generator adapter.
+        
         Args:
-            macro_code: Full VBA source code.
-            macro_name: Descriptive name for this macro.
-            subroutine: Entry point subroutine name.
-
+            macro_code (str): The macro code value.
+            macro_name (str): The macro name value. Defaults to "GeneratedMacro".
+            subroutine (str): The subroutine value. Defaults to "Main".
+        
         Returns:
-            Adapter result wrapping macro execution outcome.
+            AdapterResult[Any]: The result produced by the operation.
         """
         request = MacroExecutionRequest(
             macro_code=macro_code,
@@ -209,18 +289,28 @@ class VbaGeneratorAdapter:
         Any,
     ]:
         """Retrieve VBA macro execution history.
-
+        
         Args:
-            macro_name: Optional specific macro to query.
-
+            macro_name (str | None): The macro name value. Defaults to None.
+        
         Returns:
-            Dictionary of execution results.
+            dict[
+                str,
+                Any,
+            ]: A dictionary containing the resulting values.
         """
         history = self._macro_executor.get_execution_history(macro_name)
         return {key: value.__dict__ for key, value in history.items()}
 
     def _generate_loft_vba(self, params: LoftParameters) -> str:
-        """Generate simple VBA snippet for loft operation."""
+        """Generate simple VBA snippet for loft operation.
+        
+        Args:
+            params (LoftParameters): The params value.
+        
+        Returns:
+            str: The resulting text value.
+        """
         return (
             "Sub CreateLoft()\n"
             "    ' Auto-generated VBA fallback snippet\n"
