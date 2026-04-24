@@ -6,7 +6,6 @@
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-
 Python MCP server for SolidWorks automation with 106 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
 ## Overview
@@ -92,6 +91,20 @@ Common commands:
 - `dev-lint` - lint checks
 - `dev-format` - format code
 - `dev-make-docs-build` - build docs site
+
+### Local CI Replica (Docker)
+
+To mirror GitHub Actions CI locally (Ubuntu + conda env from `solidworks_mcp.yml` + `make test`), run:
+
+```powershell
+.\run-ci-local.ps1
+```
+
+The first run builds the image. Re-run without rebuild when only executing tests:
+
+```powershell
+.\run-ci-local.ps1 -NoBuild
+```
 
 ## Prefab UI Dashboard
 
