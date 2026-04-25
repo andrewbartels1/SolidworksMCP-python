@@ -1,5 +1,4 @@
-"""Intelligent router for COM/VBA execution with optional response caching.
-"""
+"""Intelligent router for COM/VBA execution with optional response caching."""
 
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ OperationCallable = Callable[..., Awaitable[AdapterResult[Any]]]
 @dataclass(frozen=True)
 class RouteResult:
     """Route execution metadata.
-    
+
     Attributes:
         route (str): The route value.
         used_cache (bool): The used cache value.
@@ -29,13 +28,13 @@ class RouteResult:
 
 class IntelligentRouter:
     """Route operations between COM and VBA paths using complexity analysis.
-    
+
     Args:
         analyzer (ComplexityAnalyzer): The analyzer value.
         cache (ResponseCache): The cache value.
         cacheable_operations (set[str] | None): The cacheable operations value. Defaults to
                                                 None.
-    
+
     Attributes:
         _analyzer (Any): The analyzer value.
         _cache (Any): The cache value.
@@ -49,13 +48,13 @@ class IntelligentRouter:
         cacheable_operations: set[str] | None = None,
     ) -> None:
         """Initialize router dependencies.
-        
+
         Args:
             analyzer (ComplexityAnalyzer): The analyzer value.
             cache (ResponseCache): The cache value.
             cacheable_operations (set[str] | None): The cacheable operations value. Defaults to
                                                     None.
-        
+
         Returns:
             None: None.
         """
@@ -101,7 +100,7 @@ class IntelligentRouter:
         cache_ttl_seconds: int | None = None,
     ) -> tuple[AdapterResult[Any], RouteResult]:
         """Provide execute support for the intelligent router.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
             payload (object): The payload value.
@@ -110,7 +109,7 @@ class IntelligentRouter:
             com_operation (OperationCallable): The com operation value.
             vba_operation (OperationCallable | None): The vba operation value.
             cache_ttl_seconds (int | None): The cache ttl seconds value. Defaults to None.
-        
+
         Returns:
             tuple[AdapterResult[Any], RouteResult]: A tuple containing the resulting values.
         """
@@ -175,12 +174,12 @@ class IntelligentRouter:
         call_kwargs: dict[str, Any],
     ) -> AdapterResult[Any]:
         """Call adapter operation and normalize unexpected exceptions.
-        
+
         Args:
             operation_callable (OperationCallable): The operation callable value.
             call_args (tuple[Any, ...]): The call args value.
             call_kwargs (dict[str, Any]): The call kwargs value.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -200,13 +199,13 @@ class IntelligentRouter:
         ttl_seconds: int | None,
     ) -> None:
         """Persist successful operation result in cache when eligible.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
             payload (object): The payload value.
             result (AdapterResult[Any]): The result value.
             ttl_seconds (int | None): The ttl seconds value.
-        
+
         Returns:
             None: None.
         """

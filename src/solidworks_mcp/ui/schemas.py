@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DashboardCheckpoint(BaseModel):
     """One checkpoint row shown in the planning/status area.
-    
+
     Attributes:
         goal (str): The goal value.
         model_config (Any): The model config value.
@@ -48,7 +48,7 @@ class DashboardCheckpoint(BaseModel):
 
 class DashboardEvidenceRow(BaseModel):
     """One evidence row shown in retrieval context.
-    
+
     Attributes:
         detail (str): The detail value.
         model_config (Any): The model config value.
@@ -77,9 +77,9 @@ class DashboardEvidenceRow(BaseModel):
 
 class DashboardUIState(BaseModel):
     """Top-level dashboard state shared between backend and Prefab UI.
-    
+
     Field descriptions are user-facing semantics and validation intent.
-    
+
     Attributes:
         accepted_family (str): The accepted family value.
         active_model_configuration (str): The active model configuration value.

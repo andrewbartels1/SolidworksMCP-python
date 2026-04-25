@@ -25,12 +25,12 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
     """Build internal result value.
-    
+
     Args:
         data (Any): The data value.
         *keys (str): Additional positional arguments forwarded to the call.
         default (Any): Fallback value returned when the operation fails. Defaults to None.
-    
+
     Returns:
         Any: The result produced by the operation.
     """
@@ -50,11 +50,11 @@ def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
     """Build internal normalize input.
-    
+
     Args:
         input_data (Any): The input data value.
         model_type (type[TInput]): The model type value.
-    
+
     Returns:
         TInput: The result produced by the operation.
     """
@@ -65,7 +65,7 @@ def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
 
 class OpenModelInput(BaseModel):
     """Input schema for opening a SolidWorks model.
-    
+
     Attributes:
         file_path (str): The file path value.
     """
@@ -77,7 +77,7 @@ class OpenModelInput(BaseModel):
 
 class CreatePartInput(CompatInput):
     """Input schema for creating a new SolidWorks part.
-    
+
     Attributes:
         material (str | None): The material value.
         name (str): The name value.
@@ -94,13 +94,13 @@ class CreatePartInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the create part input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Name is required.
         """
@@ -110,7 +110,7 @@ class CreatePartInput(CompatInput):
 
 class CreateExtrusionInput(CompatInput):
     """Input schema for creating an extrusion feature.
-    
+
     Attributes:
         both_directions (bool): The both directions value.
         depth (float): The depth value.
@@ -145,13 +145,13 @@ class CreateExtrusionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the create extrusion input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Sketch_name is required.
         """
@@ -165,7 +165,7 @@ class CreateExtrusionInput(CompatInput):
 
 class CreateRevolveInput(CompatInput):
     """Input schema for creating a revolve feature.
-    
+
     Attributes:
         angle (float): The angle value.
         axis_entity (str): The axis entity value.
@@ -196,13 +196,13 @@ class CreateRevolveInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the create revolve input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Angle must be positive.
         """
@@ -212,7 +212,7 @@ class CreateRevolveInput(CompatInput):
 
 class CreateSweepInput(BaseModel):
     """Input schema for creating a sweep feature.
-    
+
     Attributes:
         merge_result (bool): The merge result value.
         path (str): The path value.
@@ -228,7 +228,7 @@ class CreateSweepInput(BaseModel):
 
 class CreateLoftInput(BaseModel):
     """Input schema for creating a loft feature.
-    
+
     Attributes:
         end_tangent (str | None): The end tangent value.
         guide_curves (list[str] | None): The guide curves value.
@@ -250,7 +250,7 @@ class CreateLoftInput(BaseModel):
 
 class GetDimensionInput(CompatInput):
     """Input schema for getting a dimension value.
-    
+
     Attributes:
         dimension_name (str | None): The dimension name value.
         name (str | None): The name value.
@@ -264,13 +264,13 @@ class GetDimensionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the get dimension input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Name is required.
         """
@@ -282,7 +282,7 @@ class GetDimensionInput(CompatInput):
 
 class SetDimensionInput(CompatInput):
     """Input schema for setting a dimension value.
-    
+
     Attributes:
         dimension_name (str | None): The dimension name value.
         name (str | None): The name value.
@@ -300,13 +300,13 @@ class SetDimensionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the set dimension input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Name is required.
         """
@@ -318,7 +318,7 @@ class SetDimensionInput(CompatInput):
 
 class CloseModelInput(BaseModel):
     """Input schema for closing a model.
-    
+
     Attributes:
         save (bool): The save value.
     """
@@ -328,7 +328,7 @@ class CloseModelInput(BaseModel):
 
 class CreateAssemblyInput(CompatInput):
     """Input schema for creating a new assembly.
-    
+
     Attributes:
         components (list[str]): The components value.
         name (str): The name value.
@@ -344,7 +344,7 @@ class CreateAssemblyInput(CompatInput):
 
 class CreateDrawingInput(CompatInput):
     """Input schema for creating a new drawing.
-    
+
     Attributes:
         model_path (str | None): The model path value.
         name (str): The name value.
@@ -362,22 +362,22 @@ async def register_modeling_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register modeling tools with FastMCP.
-    
+
     Registers comprehensive modeling tools for SolidWorks automation including model
     creation, feature creation, and model management operations.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         ```python
                         from solidworks_mcp.tools.modeling import register_modeling_tools
-    
+
                         tool_count = await register_modeling_tools(mcp, adapter, config)
                         print(f"Registered {tool_count} modeling tools")
                         ```
@@ -387,29 +387,29 @@ async def register_modeling_tools(
     @mcp.tool()
     async def open_model(input_data: OpenModelInput) -> dict[str, Any]:
         """Open a SolidWorks model (part, assembly, or drawing).
-        
+
         Opens an existing SolidWorks file and makes it the active document for further
         operations. Supports all standard SolidWorks file formats and provides detailed model
         information upon successful opening.
-        
+
         Args:
             input_data (OpenModelInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await open_model({
                                 "file_path": "C:/Models/bracket.sldprt"
                             })
-        
+
                             if result["status"] == "success":
                                 model = result["model"]
                                 print(f"Opened {model['type']}: {model['name']}")
                                 print(f"Configuration: {model['configuration']}")
                             ```
-        
+
                         Note:
                             File path must be absolute and accessible to SolidWorks.
                             Model becomes the active document for subsequent operations.
@@ -456,27 +456,27 @@ async def register_modeling_tools(
     @mcp.tool()
     async def create_part(input_data: CreatePartInput) -> dict[str, Any]:
         """Create a new SolidWorks part document.
-        
+
         Creates a new SolidWorks part document using the default part template. The new part
         becomes the active document and is ready for modeling operations such as sketch creation
         and feature addition.
-        
+
         Args:
             input_data (CreatePartInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await create_part()
-        
+
                             if result["status"] == "success":
                                 part = result["model"]
                                 print(f"Created new part: {part['name']}")
                                 # Ready for sketching and feature creation
                             ```
-        
+
                         Note:
                             - Uses default SolidWorks part template
                             - Part document is created in memory (not saved)
@@ -518,34 +518,34 @@ async def register_modeling_tools(
     @mcp.tool()
     async def create_assembly(input_data: CreateAssemblyInput) -> dict[str, Any]:
         """Create a new SolidWorks assembly document.
-        
+
         Creates a new SolidWorks assembly document using the default assembly template. The new
         assembly becomes the active document and is ready for component insertion, mating, and
         assembly-level operations.
-        
+
         Args:
             input_data (CreateAssemblyInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await create_assembly()
-        
+
                             if result["status"] == "success":
                                 assembly = result["model"]
                                 print(f"Created new assembly: {assembly['name']}")
                                 # Ready for component insertion and mating
                             ```
-        
+
                         Note:
                             - Uses default SolidWorks assembly template
                             - Assembly document is created in memory (not saved)
                             - Use save operations to persist to disk
                             - Ready for component insertion and mate creation
                             - Assembly tree will initially be empty
-        
+
                         This tool creates a new assembly document using the default assembly template.
                         The new assembly will become the active document.
         """
@@ -582,13 +582,13 @@ async def register_modeling_tools(
     @mcp.tool()
     async def create_drawing(input_data: CreateDrawingInput) -> dict[str, Any]:
         """Create a new SolidWorks drawing document.
-        
+
         This tool creates a new drawing document using the default drawing template. The new
         drawing will become the active document.
-        
+
         Args:
             input_data (CreateDrawingInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -629,29 +629,29 @@ async def register_modeling_tools(
     @mcp.tool()
     async def close_model(input_data: CloseModelInput) -> dict[str, Any]:
         """Close the current SolidWorks model.
-        
+
         Closes the currently active SolidWorks document with an option to save changes before
         closing. This is essential for proper model lifecycle management and preventing data
         loss.
-        
+
         Args:
             input_data (CloseModelInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Close without saving
                             result = await close_model({"save": False})
-        
+
                             # Save and close
                             result = await close_model({"save": True})
-        
+
                             if result["status"] == "success":
                                 print(f"Model closed, saved: {result['saved']}")
                             ```
-        
+
                         Note:
                             - Unsaved changes will be lost if save=False
                             - Always save important work before closing
@@ -684,17 +684,17 @@ async def register_modeling_tools(
     @mcp.tool()
     async def create_extrusion(input_data: CreateExtrusionInput) -> dict[str, Any]:
         """Create an extrusion feature from the active sketch.
-        
+
         Creates a 3D extrusion feature (boss or cut) from the currently active 2D sketch.
         Supports advanced options like draft angles, thin features, bidirectional extrusion, and
         various end conditions for professional modeling workflows.
-        
+
         Args:
             input_data (CreateExtrusionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Simple boss extrusion
@@ -702,14 +702,14 @@ async def register_modeling_tools(
                                 "depth": 25.0,
                                 "merge_result": True
                             })
-        
+
                             # Cut with draft angle
                             result = await create_extrusion({
                                 "depth": 10.0,
                                 "reverse_direction": True,
                                 "draft_angle": 2.0
                             })
-        
+
                             # Thin wall feature
                             result = await create_extrusion({
                                 "depth": 50.0,
@@ -767,17 +767,17 @@ async def register_modeling_tools(
     @mcp.tool()
     async def create_revolve(input_data: CreateRevolveInput) -> dict[str, Any]:
         """Create a revolve feature from the active sketch.
-        
+
         Creates a 3D revolve feature by rotating the active 2D sketch profile around a specified
         axis of revolution. Supports full and partial revolves, thin features, and bidirectional
         revolution for comprehensive rotational modeling.
-        
+
         Args:
             input_data (CreateRevolveInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Full revolution (cylinder)
@@ -785,13 +785,13 @@ async def register_modeling_tools(
                                 "angle": 360.0,
                                 "merge_result": True
                             })
-        
+
                             # Partial revolution (arc section)
                             result = await create_revolve({
                                 "angle": 120.0,
                                 "both_directions": True
                             })
-        
+
                             # Thin wall revolution (pipe)
                             result = await create_revolve({
                                 "angle": 360.0,
@@ -846,28 +846,28 @@ async def register_modeling_tools(
     @mcp.tool()
     async def get_dimension(input_data: GetDimensionInput) -> dict[str, Any]:
         """Get the value of a dimension from the current model.
-        
+
         Retrieves the current value of a named dimension from the active SolidWorks model.
         Dimensions can be from sketches, features, or global dimensions. Useful for parametric
         modeling and design validation.
-        
+
         Args:
             input_data (GetDimensionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Get sketch dimension
                             result = await get_dimension({
                                 "name": "D1@Sketch1"
                             })
-        
+
                             if result["status"] == "success":
                                 dim = result["dimension"]
                                 print(f"Dimension {dim['name']}: {dim['value']} {dim['units']}")
-        
+
                             # Get feature dimension
                             result = await get_dimension({
                                 "name": "D1@Boss-Extrude1"
@@ -908,13 +908,13 @@ async def register_modeling_tools(
     @mcp.tool()
     async def set_dimension(input_data: SetDimensionInput) -> dict[str, Any]:
         """Set the value of a dimension in the current model.
-        
+
         This tool modifies the value of a named dimension and rebuilds the model. Use this to
         parametrically modify your model dimensions.
-        
+
         Args:
             input_data (SetDimensionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """

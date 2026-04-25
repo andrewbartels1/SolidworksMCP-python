@@ -1,5 +1,4 @@
-"""Typed output schemas for agent prompt validation.
-"""
+"""Typed output schemas for agent prompt validation."""
 
 from __future__ import annotations
 
@@ -10,7 +9,7 @@ from pydantic import BaseModel, Field
 
 class Assumption(BaseModel):
     """A single explicit assumption in an agent response.
-    
+
     Attributes:
         statement (str): The statement value.
     """
@@ -20,7 +19,7 @@ class Assumption(BaseModel):
 
 class Recommendation(BaseModel):
     """A prioritized recommendation with rationale and risk.
-    
+
     Attributes:
         rationale (str): The rationale value.
         risk (Literal["low", "medium", "high"]): The risk value.
@@ -34,7 +33,7 @@ class Recommendation(BaseModel):
 
 class ManufacturabilityReview(BaseModel):
     """Validation shape for printability-focused agent responses.
-    
+
     Attributes:
         assumptions (list[Assumption]): The assumptions value.
         build_volume_check (str): The build volume check value.
@@ -57,7 +56,7 @@ class ManufacturabilityReview(BaseModel):
 
 class ToolRoutingDecision(BaseModel):
     """Validation shape for tool-selection/skills documentation prompts.
-    
+
     Attributes:
         fallback_strategy (list[str]): The fallback strategy value.
         intent (str): The intent value.
@@ -73,7 +72,7 @@ class ToolRoutingDecision(BaseModel):
 
 class DocsPlan(BaseModel):
     """Validation shape for docs-engineering responses.
-    
+
     Attributes:
         audience (str): The audience value.
         decisions (list[ToolRoutingDecision]): The decisions value.
@@ -91,7 +90,7 @@ class DocsPlan(BaseModel):
 
 class FeatureStep(BaseModel):
     """One step in a part reconstruction plan.
-    
+
     Attributes:
         description (str): The description value.
         mcp_call (str): The mcp call value.
@@ -112,7 +111,7 @@ class FeatureStep(BaseModel):
 
 class ReconstructionPlan(BaseModel):
     """Structured plan for recreating a SolidWorks part from scratch using MCP tools.
-    
+
     Attributes:
         analysis_summary (str): The analysis summary value.
         assembly_mates (list[str]): The assembly mates value.
@@ -149,7 +148,7 @@ class ReconstructionPlan(BaseModel):
 
 class RecoverableFailure(BaseModel):
     """Typed failure output used when agent needs user-guided retry.
-    
+
     Attributes:
         explanation (str): The explanation value.
         remediation_steps (list[str]): The remediation steps value.

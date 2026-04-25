@@ -1,5 +1,4 @@
-"""In-memory response cache with TTL support for adapter operations.
-"""
+"""In-memory response cache with TTL support for adapter operations."""
 
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ T = TypeVar("T")
 @dataclass(frozen=True)
 class CachePolicy:
     """Cache policy options for adapter responses.
-    
+
     Attributes:
         default_ttl_seconds (int): The default ttl seconds value.
         enabled (bool): The enabled value.
@@ -31,7 +30,7 @@ class CachePolicy:
 @dataclass
 class _CacheEntry(Generic[T]):
     """Internal cache entry with expiration metadata.
-    
+
     Attributes:
         created_at (float): The created at value.
         expires_at (float): The expires at value.
@@ -45,10 +44,10 @@ class _CacheEntry(Generic[T]):
 
 class ResponseCache:
     """Thread-safe in-memory cache for adapter response objects.
-    
+
     Args:
         policy (CachePolicy): The policy value.
-    
+
     Attributes:
         _lock (Any): The lock value.
         _policy (Any): The policy value.
@@ -56,10 +55,10 @@ class ResponseCache:
 
     def __init__(self, policy: CachePolicy) -> None:
         """Initialize this cache.
-        
+
         Args:
             policy (CachePolicy): The policy value.
-        
+
         Returns:
             None: None.
         """
@@ -70,7 +69,7 @@ class ResponseCache:
     @property
     def enabled(self) -> bool:
         """Return whether caching is enabled.
-        
+
         Returns:
             bool: True if enabled, otherwise False.
         """
@@ -78,11 +77,11 @@ class ResponseCache:
 
     def make_key(self, operation: str, payload: object) -> str:
         """Build a deterministic cache key from an operation payload.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
             payload (object): The payload value.
-        
+
         Returns:
             str: The resulting text value.
         """
@@ -92,10 +91,10 @@ class ResponseCache:
 
     def get(self, key: str) -> object | None:
         """Fetch a cached value when present and unexpired.
-        
+
         Args:
             key (str): The key value.
-        
+
         Returns:
             object | None: The result produced by the operation.
         """
@@ -114,12 +113,12 @@ class ResponseCache:
 
     def set(self, key: str, value: object, ttl_seconds: int | None = None) -> None:
         """Store a cache value with expiration.
-        
+
         Args:
             key (str): The key value.
             value (object): The value value.
             ttl_seconds (int | None): The ttl seconds value. Defaults to None.
-        
+
         Returns:
             None: None.
         """
@@ -139,7 +138,7 @@ class ResponseCache:
 
     def _evict_oldest_unlocked(self) -> None:
         """Remove one oldest entry while lock is already held.
-        
+
         Returns:
             None: None.
         """
@@ -153,10 +152,10 @@ class ResponseCache:
 
     def _normalize_payload(self, payload: object) -> str:
         """Normalize payload into a stable JSON string.
-        
+
         Args:
             payload (object): The payload value.
-        
+
         Returns:
             str: The resulting text value.
         """

@@ -83,6 +83,6 @@ tests/.generated/
 mypy_*
 
 .mypy_cache/
-
+uv.lock
 .venv
 .venv/

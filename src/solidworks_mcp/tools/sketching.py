@@ -18,11 +18,11 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
     """Build internal normalize input.
-    
+
     Args:
         input_data (Any): The input data value.
         model_type (type[TInput]): The model type value.
-    
+
     Returns:
         TInput: The result produced by the operation.
     """
@@ -36,7 +36,7 @@ def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
 
 class CreateSketchInput(CompatInput):
     """Input schema for creating a sketch.
-    
+
     Attributes:
         plane (str): The plane value.
         sketch_name (str | None): The sketch name value.
@@ -49,13 +49,13 @@ class CreateSketchInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the create sketch input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Plane is required.
         """
@@ -65,7 +65,7 @@ class CreateSketchInput(CompatInput):
 
 class AddLineInput(CompatInput):
     """Input schema for adding a line to sketch.
-    
+
     Attributes:
         construction (bool): The construction value.
         end_x (float | None): The end x value.
@@ -90,10 +90,10 @@ class AddLineInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the add line input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -105,7 +105,7 @@ class AddLineInput(CompatInput):
 
 class AddCircleInput(CompatInput):
     """Input schema for adding a circle to sketch.
-    
+
     Attributes:
         center_x (float): The center x value.
         center_y (float): The center y value.
@@ -120,13 +120,13 @@ class AddCircleInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the add circle input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Radius must be positive.
         """
@@ -136,7 +136,7 @@ class AddCircleInput(CompatInput):
 
 class AddRectangleInput(CompatInput):
     """Input schema for adding a rectangle to sketch.
-    
+
     Attributes:
         construction (bool): The construction value.
         corner1_x (float | None): The corner1 x value.
@@ -169,13 +169,13 @@ class AddRectangleInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the add rectangle input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Rectangle corners must differ.
         """
@@ -193,7 +193,7 @@ class AddRectangleInput(CompatInput):
 
 class AddArcInput(BaseModel):
     """Input schema for adding an arc to sketch.
-    
+
     Attributes:
         center_x (float): The center x value.
         center_y (float): The center y value.
@@ -213,7 +213,7 @@ class AddArcInput(BaseModel):
 
 class AddSplineInput(BaseModel):
     """Input schema for adding a spline to sketch.
-    
+
     Attributes:
         points (list[dict[str, float]]): The points value.
     """
@@ -225,7 +225,7 @@ class AddSplineInput(BaseModel):
 
 class AddDimensionInput(BaseModel):
     """Input schema for adding a dimension to sketch.
-    
+
     Attributes:
         dimension_type (str): The dimension type value.
         entity1 (str): The entity1 value.
@@ -245,7 +245,7 @@ class AddDimensionInput(BaseModel):
 
 class AddRelationInput(BaseModel):
     """Input schema for adding a geometric relation.
-    
+
     Attributes:
         entity1 (str): The entity1 value.
         entity2 (str | None): The entity2 value.
@@ -263,7 +263,7 @@ class AddRelationInput(BaseModel):
 
 class TutorialSimpleHoleInput(CompatInput):
     """Input schema for creating a simple hole (tutorial example).
-    
+
     Attributes:
         center_x (float): The center x value.
         center_y (float): The center y value.
@@ -282,13 +282,13 @@ class TutorialSimpleHoleInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the tutorial simple hole input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: Depth must be positive.
         """
@@ -302,22 +302,22 @@ async def register_sketching_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register sketching tools with FastMCP.
-    
+
     Registers comprehensive sketching tools for SolidWorks automation including geometry
     creation, constraints, dimensions, and pattern operations.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         ```python
                         from solidworks_mcp.tools.sketching import register_sketching_tools
-    
+
                         tool_count = await register_sketching_tools(mcp, adapter, config)
                         print(f"Registered {tool_count} sketching tools")
                         ```
@@ -327,30 +327,30 @@ async def register_sketching_tools(
     @mcp.tool()
     async def create_sketch(input_data: CreateSketchInput) -> dict[str, Any]:
         """Create a new sketch on the specified plane.
-        
+
         Creates a new sketch on a reference plane and enters sketch edit mode. This is the first
         step for creating any 2D geometry that will be used for 3D features like extrusions,
         revolves, or sweeps.
-        
+
         Args:
             input_data (CreateSketchInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create sketch on top plane for a circular boss
                             result = await create_sketch({
                                 "plane": "Top"
                             })
-        
+
                             if result["status"] == "success":
                                 sketch = result["sketch"]
                                 print(f"Created {sketch['name']} on {sketch['plane']} plane")
                                 # Ready to add geometry with add_line, add_circle, etc.
                             ```
-        
+
                         Note:
                             - Must be called before adding any sketch geometry
                             - Sketch is automatically selected and ready for geometry addition
@@ -391,16 +391,16 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_line(input_data: AddLineInput) -> dict[str, Any]:
         """Add a line to the current sketch.
-        
+
         Adds a line segment between two points in the active sketch. Lines are fundamental
         sketch entities used for creating profiles, construction geometry, and complex shapes.
-        
+
         Args:
             input_data (AddLineInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create horizontal base line for rectangular profile
@@ -408,13 +408,13 @@ async def register_sketching_tools(
                                 "x1": 0, "y1": 0,
                                 "x2": 50, "y2": 0
                             })
-        
+
                             if result["status"] == "success":
                                 line = result["line"]
                                 print(f"Created {line['length']:.1f}mm line: {line['id']}")
                                 # Continue adding more geometry or constraints
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - Coordinates are relative to sketch origin
@@ -474,10 +474,10 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_circle(input_data: AddCircleInput) -> dict[str, Any]:
         """Add a circle to the current sketch.
-        
+
         Args:
             input_data (AddCircleInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -528,17 +528,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_rectangle(input_data: AddRectangleInput) -> dict[str, Any]:
         """Add a rectangle to the current sketch.
-        
+
         Creates a rectangular profile defined by two opposite corner points, automatically
         generating four connected line segments forming a closed rectangle suitable for
         extrusion or other 3D operations.
-        
+
         Args:
             input_data (AddRectangleInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create 20x10mm rectangular profile
@@ -546,13 +546,13 @@ async def register_sketching_tools(
                                 "x1": -10.0, "y1": -5.0,
                                 "x2": 10.0, "y2": 5.0
                             })
-        
+
                             if result["status"] == "success":
                                 rect = result["rectangle"]
                                 print(f"Created {rect['width']}x{rect['height']}mm rectangle")
                                 # Ready for extrusion or further sketch operations
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - Creates four individual line entities with automatic constraints
@@ -613,26 +613,26 @@ async def register_sketching_tools(
     @mcp.tool()
     async def exit_sketch() -> dict[str, Any]:
         """Exit sketch editing mode.
-        
+
         Exits the current sketch editing mode and returns to the 3D modeling environment. This
         is required after completing sketch geometry before creating 3D features like
         extrusions, revolves, or sweeps.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Complete sketch workflow
                             await create_sketch({"plane": "Top"})
                             await add_circle({"center_x": 0, "center_y": 0, "radius": 5})
-        
+
                             result = await exit_sketch()
                             if result["status"] == "success":
                                 print("Sketch completed, ready for 3D operations")
                                 # Now ready for extrude, revolve, etc.
                             ```
-        
+
                         Note:
                             - Must be called after sketch geometry creation
                             - Required before executing 3D modeling operations
@@ -664,17 +664,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_arc(input_data: AddArcInput) -> dict[str, Any]:
         """Add an arc to the current sketch.
-        
+
         Creates a circular arc defined by center point, start point, and end point. Arcs are
         essential for creating rounded corners, curved transitions, and complex curved profiles
         in mechanical designs.
-        
+
         Args:
             input_data (AddArcInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create 90-degree arc for rounded corner (10mm radius)
@@ -683,13 +683,13 @@ async def register_sketching_tools(
                                 "start_x": 20.0, "start_y": 10.0,  # 3 o'clock
                                 "end_x": 10.0, "end_y": 20.0       # 12 o'clock
                             })
-        
+
                             if result["status"] == "success":
                                 arc = result["arc"]
                                 print(f"Created arc: {arc['id']}")
                                 # Perfect for filleting corners automatically
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - Start and end points must be equidistant from center
@@ -738,17 +738,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_spline(input_data: AddSplineInput) -> dict[str, Any]:
         """Add a spline curve to the current sketch.
-        
+
         Creates a smooth, free-form spline curve that passes through or near the specified
         control points. Splines are ideal for creating organic shapes, complex profiles, and
         smooth transitions in industrial design.
-        
+
         Args:
             input_data (AddSplineInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create smooth aerodynamic profile
@@ -761,13 +761,13 @@ async def register_sketching_tools(
                                     {"x": 100.0, "y": 0.0}    # Trailing point
                                 ]
                             })
-        
+
                             if result["status"] == "success":
                                 spline = result["spline"]
                                 print(f"Created smooth profile with {spline['point_count']} points")
                                 # Perfect for aerodynamic and ergonomic shapes
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - More control points create smoother, more complex curves
@@ -805,17 +805,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_centerline(input_data: AddLineInput) -> dict[str, Any]:
         """Add a centerline to the current sketch.
-        
+
         Creates a construction/reference line that serves as a centerline for symmetrical
         features, revolution axes, or construction geometry. Centerlines are non-geometric
         entities used for reference only.
-        
+
         Args:
             input_data (AddLineInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create vertical centerline for symmetric feature
@@ -823,13 +823,13 @@ async def register_sketching_tools(
                                 "x1": 0.0, "y1": -20.0,
                                 "x2": 0.0, "y2": 20.0
                             })
-        
+
                             if result["status"] == "success":
                                 centerline = result["centerline"]
                                 print(f"Created {centerline['type']} centerline: {centerline['id']}")
                                 # Use for mirror operations or revolution axis
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - Centerlines don't contribute to profile geometry
@@ -872,17 +872,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_polygon(input_data: dict[str, Any]) -> dict[str, Any]:
         """Add a regular polygon to the current sketch.
-        
+
         Creates a regular polygon with specified number of sides, center point, and
         circumscribed radius. Polygons are useful for creating hexagonal nuts, octagonal
         features, and other multi-sided geometric shapes.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create M6 hexagonal nut profile (11mm across flats)
@@ -891,13 +891,13 @@ async def register_sketching_tools(
                                 "radius": 6.35,  # 11mm across flats
                                 "sides": 6
                             })
-        
+
                             if result["status"] == "success":
                                 polygon = result["polygon"]
                                 print(f"Created {polygon['sides']}-sided polygon: {polygon['id']}")
                                 # Perfect for nut profiles and gear blanks
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - Radius is circumscribed (vertex-to-center distance)
@@ -941,17 +941,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_ellipse(input_data: dict[str, Any]) -> dict[str, Any]:
         """Add an ellipse to the current sketch.
-        
+
         Creates an elliptical entity with specified center and major/minor axes. Ellipses are
         useful for creating oval holes, ergonomic profiles, and complex curved features in
         mechanical and industrial design.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create oval slot for ergonomic handle
@@ -960,13 +960,13 @@ async def register_sketching_tools(
                                 "major_axis": 30.0,  # 30mm wide
                                 "minor_axis": 15.0   # 15mm tall
                             })
-        
+
                             if result["status"] == "success":
                                 ellipse = result["ellipse"]
                                 print(f"Created {ellipse['major_axis']}x{ellipse['minor_axis']}mm ellipse")
                                 # Perfect for ergonomic cutouts and slots
                             ```
-        
+
                         Note:
                             - Requires an active sketch (use create_sketch first)
                             - Major axis should be larger than minor axis
@@ -1012,17 +1012,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_sketch_constraint(input_data: AddRelationInput) -> dict[str, Any]:
         """Add a geometric constraint/relation between sketch entities.
-        
+
         Creates geometric relationships between sketch entities such as parallel, perpendicular,
         tangent, coincident, etc. Essential for creating fully defined, parametric sketches that
         maintain design intent.
-        
+
         Args:
             input_data (AddRelationInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Make two lines perpendicular for right-angle corner
@@ -1031,13 +1031,13 @@ async def register_sketching_tools(
                                 "entity2": "Line2",
                                 "relation_type": "perpendicular"
                             })
-        
+
                             if result["status"] == "success":
                                 constraint = result["constraint"]
                                 print(f"Applied {constraint['type']} constraint")
                                 # Sketch now maintains 90-degree relationship
                             ```
-        
+
                         Note:
                             - Requires an active sketch with existing entities
                             - Some constraints require only one entity (horizontal, vertical)
@@ -1078,17 +1078,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def add_sketch_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
         """Add a dimension to sketch entities.
-        
+
         Creates dimensional constraints that control the size of sketch entities. Dimensions are
         essential for creating precise, parametric designs that can be easily modified and
         maintain manufacturing tolerances.
-        
+
         Args:
             input_data (AddDimensionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Dimension circle for precise 6mm diameter hole
@@ -1098,13 +1098,13 @@ async def register_sketching_tools(
                                 "dimension_type": "diameter",
                                 "value": 6.0
                             })
-        
+
                             if result["status"] == "success":
                                 dim = result["dimension"]
                                 print(f"Applied {dim['value']}mm {dim['type']} dimension")
                                 # Circle now precisely controlled for manufacturing
                             ```
-        
+
                         Note:
                             - Requires an active sketch with existing entities
                             - Dimensions drive entity size and control parametric behavior
@@ -1149,17 +1149,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def sketch_linear_pattern(input_data: dict[str, Any]) -> dict[str, Any]:
         """Create a linear pattern of sketch entities.
-        
+
         Generates a linear array of selected sketch entities in specified direction(s) with
         defined spacing and count. Essential for creating hole patterns, vent grilles, and
         repetitive geometric features.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create 5x1 hole pattern for ventilation grille
@@ -1169,13 +1169,13 @@ async def register_sketching_tools(
                                 "spacing": 15.0,  # 15mm apart
                                 "count": 5
                             })
-        
+
                             if result["status"] == "success":
                                 pattern = result["pattern"]
                                 print(f"Created {pattern['count']} instances, {pattern['spacing']}mm apart")
                                 # Perfect for mounting hole patterns
                             ```
-        
+
                         Note:
                             - Requires an active sketch with existing entities
                             - Direction vector determines pattern orientation
@@ -1224,17 +1224,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def sketch_circular_pattern(input_data: dict[str, Any]) -> dict[str, Any]:
         """Create a circular pattern of sketch entities.
-        
+
         Generates a circular array of selected sketch entities around a center point with
         specified angular spacing. Essential for creating bolt circles, gear teeth, and other
         radially symmetric features.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create 6-bolt circle pattern for flange
@@ -1244,13 +1244,13 @@ async def register_sketching_tools(
                                 "angle": 360.0,  # Full circle
                                 "count": 6       # 6 bolt holes
                             })
-        
+
                             if result["status"] == "success":
                                 pattern = result["pattern"]
                                 print(f"Created {pattern['count']}-bolt circle pattern")
                                 # Perfect for flange and wheel bolt patterns
                             ```
-        
+
                         Note:
                             - Requires an active sketch with existing entities
                             - Center point determines rotation axis
@@ -1299,17 +1299,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def sketch_mirror(input_data: dict[str, Any]) -> dict[str, Any]:
         """Mirror sketch entities about a centerline.
-        
+
         Creates mirrored copies of selected sketch entities about a reference centerline,
         maintaining symmetrical design relationships. Essential for creating symmetric parts and
         reducing modeling time.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Mirror half of a symmetric bracket about centerline
@@ -1317,13 +1317,13 @@ async def register_sketching_tools(
                                 "entities": ["Line1", "Arc1", "Circle1"],
                                 "mirror_line": "Centerline1"
                             })
-        
+
                             if result["status"] == "success":
                                 mirror = result["mirror"]
                                 print(f"Mirrored {len(mirror['entities'])} entities")
                                 # Creates perfectly symmetric design automatically
                             ```
-        
+
                         Note:
                             - Requires an active sketch with existing entities and centerline
                             - Mirror line must be a construction/centerline entity
@@ -1364,17 +1364,17 @@ async def register_sketching_tools(
     @mcp.tool()
     async def sketch_offset(input_data: dict[str, Any]) -> dict[str, Any]:
         """Create an offset of sketch entities.
-        
+
         Generates offset copies of selected sketch entities at a specified distance, maintaining
         the original entity shape while creating parallel geometry. Essential for wall
         thickness, machining allowances, and clearance features.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create wall thickness by offsetting outer profile inward
@@ -1383,13 +1383,13 @@ async def register_sketching_tools(
                                 "offset_distance": 2.0,     # 2mm wall thickness
                                 "reverse_direction": True   # Inward offset
                             })
-        
+
                             if result["status"] == "success":
                                 offset = result["offset"]
                                 print(f"Created {offset['distance']}mm {offset['direction']} offset")
                                 # Perfect for creating hollow sections and wall features
                             ```
-        
+
                         Note:
                             - Requires an active sketch with existing closed profiles
                             - Offset distance determines wall thickness or clearance
@@ -1444,19 +1444,19 @@ async def register_sketching_tools(
     @mcp.tool()
     async def sketch_tutorial_simple_hole() -> dict[str, Any]:
         """Tutorial: Create a simple circular hole sketch.
-        
+
         Demonstrates complete workflow for creating a basic hole sketch that can be used for
         through-holes, counterbores, or other circular features. This tutorial shows the
         fundamental sketch-to-feature process.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Learn basic sketching workflow
                             result = await sketch_tutorial_simple_hole()
-        
+
                             if result["status"] == "success":
                                 print("Tutorial completed successfully!")
                                 print("Steps performed:")
@@ -1464,13 +1464,13 @@ async def register_sketching_tools(
                                     print(f"  - {step}")
                                 print(f"Next: {result['next_steps']}")
                             ```
-        
+
                         Workflow:
                             1. Creates sketch on Top plane
                             2. Adds 2.5mm radius circle at origin (5mm diameter hole)
                             3. Exits sketch editing mode
                             4. Returns sketch ready for extrusion or cutting operations
-        
+
                         Note:
                             - Demonstrates complete sketch creation workflow
                             - Creates standard 5mm diameter hole geometry
@@ -1530,14 +1530,14 @@ async def register_sketching_tools(
         input_data: TutorialSimpleHoleInput,
     ) -> dict[str, Any]:
         """Create a simple hole as a guided tutorial workflow.
-        
+
         Builds a sketch circle on the selected plane, exits the sketch, and creates a cut
         feature using the supplied diameter and depth. Useful as an end-to-end example of a
         basic subtractive feature.
-        
+
         Args:
             input_data (TutorialSimpleHoleInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """

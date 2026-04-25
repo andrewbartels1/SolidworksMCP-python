@@ -18,7 +18,7 @@ from .input_compat import CompatInput
 
 class CreateDrawingViewInput(BaseModel):
     """Input schema for creating drawing views.
-    
+
     Attributes:
         model_path (str): The model path value.
         orientation (str): The orientation value.
@@ -42,7 +42,7 @@ class CreateDrawingViewInput(BaseModel):
 
 class AddDimensionInput(BaseModel):
     """Input schema for adding dimensions.
-    
+
     Attributes:
         dimension_type (str): The dimension type value.
         entity1 (str): The entity1 value.
@@ -66,7 +66,7 @@ class AddDimensionInput(BaseModel):
 
 class AddNoteInput(BaseModel):
     """Input schema for adding notes/annotations.
-    
+
     Attributes:
         font_size (float): The font size value.
         leader_attachment (str | None): The leader attachment value.
@@ -86,7 +86,7 @@ class AddNoteInput(BaseModel):
 
 class CreateSectionViewInput(BaseModel):
     """Input schema for creating section views.
-    
+
     Attributes:
         label (str): The label value.
         scale (float): The scale value.
@@ -116,7 +116,7 @@ class CreateSectionViewInput(BaseModel):
 
 class CreateDetailViewInput(BaseModel):
     """Input schema for creating detail views.
-    
+
     Attributes:
         center_x (float): The center x value.
         center_y (float): The center y value.
@@ -138,7 +138,7 @@ class CreateDetailViewInput(BaseModel):
 
 class UpdateSheetFormatInput(BaseModel):
     """Input schema for updating sheet format.
-    
+
     Attributes:
         approved_by (str): The approved by value.
         checked_by (str): The checked by value.
@@ -160,7 +160,7 @@ class UpdateSheetFormatInput(BaseModel):
 
 class DrawingCreationInput(CompatInput):
     """Input schema for creating a new drawing.
-    
+
     Attributes:
         auto_populate_views (bool): The auto populate views value.
         model_file (str | None): The model file value.
@@ -188,7 +188,7 @@ class DrawingCreationInput(CompatInput):
 
 class DrawingViewInput(CompatInput):
     """Input schema for drawing view operations.
-    
+
     Attributes:
         drawing_path (str | None): The drawing path value.
         model_file (str | None): The model file value.
@@ -216,7 +216,7 @@ class DrawingViewInput(CompatInput):
 
 class DimensionInput(CompatInput):
     """Input schema for dimension operations.
-    
+
     Attributes:
         dimension_name (str | None): The dimension name value.
         dimension_type (str | None): The dimension type value.
@@ -255,10 +255,10 @@ class DimensionInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the dimension input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -276,7 +276,7 @@ class DimensionInput(CompatInput):
 
 class AnnotationInput(CompatInput):
     """Input schema for annotation operations.
-    
+
     Attributes:
         annotation_type (str): The annotation type value.
         approved_by (str): The approved by value.
@@ -317,10 +317,10 @@ class AnnotationInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the annotation input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -335,23 +335,23 @@ async def register_drawing_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register drawing tools with FastMCP.
-    
+
     Registers comprehensive technical drawing tools for SolidWorks automation including view
     creation, dimensioning, annotation, and drawing standards validation. Essential for
     automated documentation workflows.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         ```python
                         from solidworks_mcp.tools.drawing import register_drawing_tools
-    
+
                         tool_count = await register_drawing_tools(mcp, adapter, config)
                         print(f"Registered {tool_count} drawing tools")
                         ```
@@ -361,17 +361,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def create_drawing_view(input_data: CreateDrawingViewInput) -> dict[str, Any]:
         """Create a drawing view of a SolidWorks model.
-        
+
         Creates technical drawing views including orthographic projections, isometric views,
         section views, and detail views from 3D models. Essential for generating production
         drawings and technical documentation.
-        
+
         Args:
             input_data (CreateDrawingViewInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create front orthographic view of a part
@@ -382,13 +382,13 @@ async def register_drawing_tools(
                                 "scale": 1.0,
                                 "orientation": "front"
                             })
-        
+
                             if result["status"] == "success":
                                 view = result["drawing_view"]
                                 print(f"Created {view['view_type']} view at {view['scale']}:1 scale")
                                 # Ready for dimensioning and annotation
                             ```
-        
+
                         Note:
                             - Model file must exist and be accessible
                             - Drawing sheet must be active before creating views
@@ -422,17 +422,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def add_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
         """Add a dimension to the current drawing.
-        
+
         Creates dimensional annotations on drawing views including linear, radial, angular, and
         diameter dimensions. Essential for manufacturing specifications and quality control
         documentation.
-        
+
         Args:
             input_data (AddDimensionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Add diameter dimension to a hole
@@ -443,13 +443,13 @@ async def register_drawing_tools(
                                 "position_x": 100.0, "position_y": 150.0,
                                 "precision": 2
                             })
-        
+
                             if result["status"] == "success":
                                 dim = result["dimension"]
                                 print(f"Added {dim['type']} dimension with {dim['precision']} decimals")
                                 # Dimension now drives manufacturing specification
                             ```
-        
+
                         Note:
                             - Entities must be visible in current drawing view
                             - Dimension placement affects drawing readability
@@ -524,17 +524,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def add_note(input_data: AddNoteInput) -> dict[str, Any]:
         """Add a note or annotation to the current drawing.
-        
+
         Creates text annotations, callouts, and notes on drawings for specifications,
         instructions, and additional manufacturing information. Essential for comprehensive
         technical documentation.
-        
+
         Args:
             input_data (AddNoteInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                                     ```python
                                     # Add material specification note with leader
@@ -545,13 +545,13 @@ async def register_drawing_tools(
                                         "font_size": 10.0,
                                         "leader_attachment": "Face1"
                                     })
-        
+
                                     if result["status"] == "success":
                                         note = result["note"]
                                         print(f"Added note at {note['font_size']}pt font size")
                                         # Note provides critical manufacturing information
                                     ```
-        
+
                                 Note:
                                     - Text supports standard annotation symbols and formatting
                                     - Leader attachment improves clarity for specific features
@@ -584,17 +584,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def create_section_view(input_data: CreateSectionViewInput) -> dict[str, Any]:
         """Create a section view of the current drawing.
-        
+
         Generates section views that show internal features by cutting through the part along a
         specified section line. Essential for revealing hidden geometry, internal structures,
         and complex assemblies.
-        
+
         Args:
             input_data (CreateSectionViewInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create vertical section through center of part
@@ -605,13 +605,13 @@ async def register_drawing_tools(
                                 "scale": 1.5,
                                 "label": "A"
                             })
-        
+
                             if result["status"] == "success":
                                 section = result["section_view"]
                                 print(f"Created section {section['label']}-A at {section['scale']}:1")
                                 # Section reveals internal features clearly
                             ```
-        
+
                         Note:
                             - Section line direction determines view orientation
                             - Section views automatically show cut surfaces with hatching
@@ -647,17 +647,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def create_detail_view(input_data: CreateDetailViewInput) -> dict[str, Any]:
         """Create a detail view of a specific area.
-        
+
         Generates magnified detail views of specific regions to show fine features, tight
         tolerances, and intricate geometry that requires enhanced visibility for manufacturing
         and inspection.
-        
+
         Args:
             input_data (CreateDetailViewInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create 4x detail view of small threaded hole
@@ -668,13 +668,13 @@ async def register_drawing_tools(
                                 "scale": 4.0,   # 4:1 magnification
                                 "label": "A"
                             })
-        
+
                             if result["status"] == "success":
                                 detail = result["detail_view"]
                                 print(f"Created detail {detail['label']} at {detail['scale']}:1")
                                 # Detail shows thread profile clearly for machining
                             ```
-        
+
                         Note:
                             - Detail circle size determines what geometry is magnified
                             - Higher scale factors reveal fine features for precision work
@@ -710,17 +710,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def update_sheet_format(input_data: UpdateSheetFormatInput) -> dict[str, Any]:
         """Update the sheet format and title block information.
-        
+
         Applies drawing templates and updates title block fields with project information,
         revision data, and drawing metadata. Essential for standardized documentation and
         drawing control.
-        
+
         Args:
             input_data (UpdateSheetFormatInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Apply company standard format with project info
@@ -733,13 +733,13 @@ async def register_drawing_tools(
                                 "approved_by": "R. Wilson",
                                 "drawing_number": "DWG-001-Rev-A"
                             })
-        
+
                             if result["status"] == "success":
                                 format_info = result["sheet_format"]
                                 print(f"Applied {format_info['sheet_size']} format")
                                 # Drawing now has proper title block and company branding
                             ```
-        
+
                         Note:
                             - Format file must exist and be compatible with SolidWorks version
                             - Title block fields support company-specific customization
@@ -774,17 +774,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def auto_dimension_view(input_data: dict[str, Any]) -> dict[str, Any]:
         """Automatically dimension a drawing view.
-        
+
         Analyzes drawing view geometry and automatically adds common dimensions including
         overall sizes, hole diameters, radii, and critical features. Accelerates drawing
         completion and ensures comprehensive dimensioning coverage.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Auto-dimension main view with baseline dimensions
@@ -794,14 +794,14 @@ async def register_drawing_tools(
                                 "include_baseline": True,
                                 "include_centerlines": True
                             })
-        
+
                             if result["status"] == "success":
                                 auto_dims = result["auto_dimensions"]
                                 print(f"Added {auto_dims['dimensions_added']} dimensions")
                                 print(f"Coverage: {auto_dims['coverage']}")
                                 # Drawing now has comprehensive dimensioning
                             ```
-        
+
                         Note:
                             - Analyzes feature geometry to determine appropriate dimensions
                             - Follows drafting standards for dimension placement
@@ -830,17 +830,17 @@ async def register_drawing_tools(
     @mcp.tool()
     async def check_drawing_standards(input_data: dict[str, Any]) -> dict[str, Any]:
         """Check the current drawing against drafting standards.
-        
+
         Validates drawing compliance with industry drafting standards including ANSI Y14.5, ISO
         128, and DIN standards. Identifies non-compliance issues and provides recommendations
         for improvement.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Comprehensive ANSI standards check
@@ -849,7 +849,7 @@ async def register_drawing_tools(
                                 "check_categories": ["dimensions", "tolerances", "symbols"],
                                 "severity_filter": "warning"
                             })
-        
+
                             if result["status"] == "success":
                                 check = result["standards_check"]
                                 print(f"Compliance Score: {check['compliance_score']}%")
@@ -857,7 +857,7 @@ async def register_drawing_tools(
                                 print(f"Errors: {len(check['errors'])}")
                                 # Address issues to improve drawing quality
                             ```
-        
+
                         Note:
                             - Standards compliance ensures drawing acceptance in industry
                             - Regular checking prevents costly revision cycles
@@ -896,13 +896,13 @@ async def register_drawing_tools(
         input_data: DrawingCreationInput,
     ) -> dict[str, Any]:
         """Create a technical drawing from a SolidWorks part or assembly.
-        
+
         Supports selecting a template, output path, sheet format, scale, and optional auto-
         population of standard views for documentation.
-        
+
         Args:
             input_data (DrawingCreationInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -941,13 +941,13 @@ async def register_drawing_tools(
     @mcp.tool()
     async def add_drawing_view(input_data: DrawingViewInput) -> dict[str, Any]:
         """Add, update, or remove a drawing view in an existing drawing.
-        
+
         Supports configuring the target drawing, view type, parent view, scale, and placement
         coordinates for common drawing view workflows.
-        
+
         Args:
             input_data (DrawingViewInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -983,13 +983,13 @@ async def register_drawing_tools(
     @mcp.tool()
     async def add_annotation(input_data: AnnotationInput) -> dict[str, Any]:
         """Add an annotation such as a note, balloon, or surface symbol.
-        
+
         Places annotation text in a drawing with optional font size, leader attachment, and
         title-block style metadata fields.
-        
+
         Args:
             input_data (AnnotationInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -1025,13 +1025,13 @@ async def register_drawing_tools(
     @mcp.tool()
     async def update_title_block(input_data: dict[str, Any]) -> dict[str, Any]:
         """Update title block fields for the active drawing.
-        
+
         Applies drawing metadata such as title, drawing number, and approval fields to keep
         documentation aligned with standards.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """

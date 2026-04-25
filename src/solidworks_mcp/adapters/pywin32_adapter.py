@@ -1918,9 +1918,7 @@ class PyWin32Adapter(SolidWorksAdapter):
             # the geometry from the last rebuild checkpoint, which can be
             # stale after a sequence of feature-creation calls within a
             # single MCP session.
-            self._attempt(
-                lambda: self.currentModel.ForceRebuild3(False), default=None
-            )
+            self._attempt(lambda: self.currentModel.ForceRebuild3(False), default=None)
             mass_props = self._attempt(
                 lambda: self.currentModel.Extension.CreateMassProperty(), default=None
             )

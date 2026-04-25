@@ -19,7 +19,7 @@ from .input_compat import CompatInput
 
 class TemplateExtractionInput(BaseModel):
     """Input schema for extracting template from model.
-    
+
     Attributes:
         include_custom_properties (bool): The include custom properties value.
         include_dimensions (bool): The include dimensions value.
@@ -41,7 +41,7 @@ class TemplateExtractionInput(BaseModel):
 
 class TemplateApplicationInput(BaseModel):
     """Input schema for applying template to model.
-    
+
     Attributes:
         apply_dimensions (bool): The apply dimensions value.
         apply_materials (bool): The apply materials value.
@@ -63,7 +63,7 @@ class TemplateApplicationInput(BaseModel):
 
 class TemplateBatchInput(BaseModel):
     """Input schema for batch template operations.
-    
+
     Attributes:
         backup_originals (bool): The backup originals value.
         file_pattern (str): The file pattern value.
@@ -81,7 +81,7 @@ class TemplateBatchInput(BaseModel):
 
 class TemplateComparisonInput(CompatInput):
     """Input schema for comparing templates.
-    
+
     Attributes:
         comparison_depth (str): The comparison depth value.
         comparison_type (str): The comparison type value.
@@ -111,15 +111,15 @@ async def register_template_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config
 ) -> int:
     """Register template management tools with FastMCP.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (Any): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         >>> tool_count = await register_template_management_tools(mcp, adapter, config)
     """
@@ -128,13 +128,13 @@ async def register_template_management_tools(
     @mcp.tool()
     async def extract_template(input_data: TemplateExtractionInput) -> dict[str, Any]:
         """Extract template from existing SolidWorks model.
-        
+
         Args:
             input_data (TemplateExtractionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await extract_template(extraction_input)
         """
@@ -206,16 +206,16 @@ async def register_template_management_tools(
     @mcp.tool()
     async def apply_template(input_data: TemplateApplicationInput) -> dict[str, Any]:
         """Apply a template to an existing SolidWorks model.
-        
+
         This tool applies saved template settings including properties, dimensions, and
         formatting to the target model.
-        
+
         Args:
             input_data (TemplateApplicationInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await apply_template(application_input)
         """
@@ -281,16 +281,16 @@ async def register_template_management_tools(
     @mcp.tool()
     async def batch_apply_template(input_data: TemplateBatchInput) -> dict[str, Any]:
         """Apply template to multiple models in batch.
-        
+
         This tool processes multiple SolidWorks files and applies the same template
         configuration to all matching files.
-        
+
         Args:
             input_data (TemplateBatchInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await batch_apply_template(batch_input)
         """
@@ -359,16 +359,16 @@ async def register_template_management_tools(
     @mcp.tool()
     async def compare_templates(input_data: TemplateComparisonInput) -> dict[str, Any]:
         """Compare two templates and generate difference report.
-        
+
         This tool analyzes differences between templates to help understand variations in
         formatting and properties.
-        
+
         Args:
             input_data (TemplateComparisonInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await compare_templates(comparison_input)
         """
@@ -463,16 +463,16 @@ async def register_template_management_tools(
     @mcp.tool()
     async def save_to_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
         """Save template to the organization's template library.
-        
+
         This tool manages a centralized template library with categorization and version
         control.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await save_to_template_library(library_input)
         """
@@ -551,16 +551,16 @@ async def register_template_management_tools(
     @mcp.tool()
     async def list_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
         """List available templates from the template library.
-        
+
         This tool provides browsing and searching capabilities for the organization's template
         library.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await list_template_library(list_input)
         """

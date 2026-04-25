@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 class CompatInput(BaseModel):
     """Base schema allowing legacy/extra fields used by existing tests.
-    
+
     Attributes:
         model_config (Any): The model config value.
     """

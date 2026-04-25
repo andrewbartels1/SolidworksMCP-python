@@ -17,11 +17,11 @@ import coverage
 
 def run_command(cmd: list[str], cwd: Path | None = None) -> dict[str, Any]:
     """Run shell command and return results.
-    
+
     Args:
         cmd (list[str]): The cmd value.
         cwd (Path | None): The cwd value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -39,10 +39,10 @@ def run_command(cmd: list[str], cwd: Path | None = None) -> dict[str, Any]:
 
 def validate_test_structure(project_root: Path) -> bool:
     """Validate that all expected test files exist.
-    
+
     Args:
         project_root (Path): The project root value.
-    
+
     Returns:
         bool: True if validate test structure, otherwise False.
     """
@@ -81,10 +81,10 @@ def validate_test_structure(project_root: Path) -> bool:
 
 def run_tests_with_coverage(project_root: Path) -> dict[str, Any]:
     """Run pytest with coverage reporting.
-    
+
     Args:
         project_root (Path): The project root value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -124,10 +124,10 @@ def run_tests_with_coverage(project_root: Path) -> dict[str, Any]:
 
 def run_specific_test_categories(project_root: Path) -> dict[str, Any]:
     """Run tests by category to validate each tool group.
-    
+
     Args:
         project_root (Path): The project root value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -187,10 +187,10 @@ def run_specific_test_categories(project_root: Path) -> dict[str, Any]:
 
 def analyze_coverage_report(project_root: Path) -> dict[str, Any]:
     """Analyze the coverage report and extract key metrics.
-    
+
     Args:
         project_root (Path): The project root value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -237,10 +237,10 @@ def analyze_coverage_report(project_root: Path) -> dict[str, Any]:
 
 def generate_coverage_summary(coverage_data: dict[str, Any]) -> None:
     """Generate and print coverage summary.
-    
+
     Args:
         coverage_data (dict[str, Any]): The coverage data value.
-    
+
     Returns:
         None: None.
     """
@@ -302,10 +302,10 @@ def generate_coverage_summary(coverage_data: dict[str, Any]) -> None:
 
 def validate_documentation(project_root: Path) -> dict[str, Any]:
     """Validate that documentation files exist and are up to date.
-    
+
     Args:
         project_root (Path): The project root value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -346,7 +346,7 @@ def validate_documentation(project_root: Path) -> dict[str, Any]:
 
 def main():
     """Main test validation and coverage analysis.
-    
+
     Returns:
         Any: The result produced by the operation.
     """

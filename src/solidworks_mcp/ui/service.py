@@ -1,5 +1,4 @@
-"""State and backend helpers for the Prefab CAD assistant dashboard.
-"""
+"""State and backend helpers for the Prefab CAD assistant dashboard."""
 
 from __future__ import annotations
 
@@ -75,7 +74,7 @@ SUPPORTED_MODEL_UPLOAD_SUFFIXES = {".sldprt", ".sldasm", ".slddrw"}
 
 class ClarificationResponse(BaseModel):
     """LLM response for goal clarification.
-    
+
     Attributes:
         normalized_brief (str): The normalized brief value.
         questions (list[str]): The questions value.
@@ -87,7 +86,7 @@ class ClarificationResponse(BaseModel):
 
 class CheckpointCandidate(BaseModel):
     """One suggested execution checkpoint.
-    
+
     Attributes:
         allowed_tools (list[str]): The allowed tools value.
         rationale (str): The rationale value.
@@ -101,7 +100,7 @@ class CheckpointCandidate(BaseModel):
 
 class FamilyInspection(BaseModel):
     """LLM response for family classification.
-    
+
     Attributes:
         checkpoints (list[CheckpointCandidate]): The checkpoints value.
         confidence (Literal["low", "medium", "high"]): The confidence value.
@@ -119,14 +118,14 @@ class FamilyInspection(BaseModel):
 
 class _HTMLTextExtractor(HTMLParser):
     """Build internal htmltext extractor.
-    
+
     Attributes:
         _skip_depth (Any): The skip depth value.
     """
 
     def __init__(self) -> None:
         """Initialize the htmltext extractor.
-        
+
         Returns:
             None: None.
         """
@@ -137,11 +136,11 @@ class _HTMLTextExtractor(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """Provide handle starttag support for the htmltext extractor.
-        
+
         Args:
             tag (str): The tag value.
             attrs (list[tuple[str, str | None]]): The attrs value.
-        
+
         Returns:
             None: None.
         """
@@ -151,10 +150,10 @@ class _HTMLTextExtractor(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         """Provide handle endtag support for the htmltext extractor.
-        
+
         Args:
             tag (str): The tag value.
-        
+
         Returns:
             None: None.
         """
@@ -164,10 +163,10 @@ class _HTMLTextExtractor(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         """Provide handle data support for the htmltext extractor.
-        
+
         Args:
             data (str): The data value.
-        
+
         Returns:
             None: None.
         """
@@ -179,7 +178,7 @@ class _HTMLTextExtractor(HTMLParser):
 
     def text(self) -> str:
         """Provide text support for the htmltext extractor.
-        
+
         Returns:
             str: The resulting text value.
         """
@@ -189,10 +188,10 @@ class _HTMLTextExtractor(HTMLParser):
 
 def ensure_preview_dir(preview_dir: Path | None = None) -> Path:
     """Create and return the preview image directory.
-    
+
     Args:
         preview_dir (Path | None): The preview dir value. Defaults to None.
-    
+
     Returns:
         Path: The result produced by the operation.
     """
@@ -203,10 +202,10 @@ def ensure_preview_dir(preview_dir: Path | None = None) -> Path:
 
 def ensure_uploaded_model_dir(upload_dir: Path | None = None) -> Path:
     """Create and return the uploaded-model staging directory.
-    
+
     Args:
         upload_dir (Path | None): The upload dir value. Defaults to None.
-    
+
     Returns:
         Path: The result produced by the operation.
     """
@@ -217,10 +216,10 @@ def ensure_uploaded_model_dir(upload_dir: Path | None = None) -> Path:
 
 def ensure_context_dir(context_dir: Path | None = None) -> Path:
     """Create and return the dashboard context snapshot directory.
-    
+
     Args:
         context_dir (Path | None): The context dir value. Defaults to None.
-    
+
     Returns:
         Path: The result produced by the operation.
     """
@@ -231,10 +230,10 @@ def ensure_context_dir(context_dir: Path | None = None) -> Path:
 
 def _parse_json_blob(payload: str | None) -> dict[str, Any]:
     """Build internal json blob.
-    
+
     Args:
         payload (str | None): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -250,11 +249,11 @@ def _parse_json_blob(payload: str | None) -> dict[str, Any]:
 
 def _sanitize_ui_text(value: Any, fallback: str = "") -> str:
     """Build internal sanitize ui text.
-    
+
     Args:
         value (Any): The value value.
         fallback (str): The fallback value. Defaults to "".
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -275,10 +274,10 @@ def _sanitize_ui_text(value: Any, fallback: str = "") -> str:
 
 def _sanitize_model_path_text(value: Any) -> str:
     """Build internal sanitize model path text.
-    
+
     Args:
         value (Any): The value value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -296,12 +295,12 @@ def _sanitize_preview_viewer_url(
     api_origin: str,
 ) -> str:
     """Build internal sanitize preview viewer url.
-    
+
     Args:
         value (Any): The value value.
         session_id (str): The session id value.
         api_origin (str): The api origin value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -323,10 +322,10 @@ def _sanitize_preview_viewer_url(
 
 def _trace_json_default(value: Any) -> str:
     """Build internal trace json default.
-    
+
     Args:
         value (Any): The value value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -336,10 +335,10 @@ def _trace_json_default(value: Any) -> str:
 
 def _trace_json(value: Any) -> str:
     """Build internal trace json.
-    
+
     Args:
         value (Any): The value value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -349,10 +348,10 @@ def _trace_json(value: Any) -> str:
 
 def _trace_session_row(session_row: dict[str, Any] | None) -> dict[str, Any]:
     """Build internal trace session row.
-    
+
     Args:
         session_row (dict[str, Any] | None): The session row value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -364,10 +363,10 @@ def _trace_session_row(session_row: dict[str, Any] | None) -> dict[str, Any]:
 
 def _trace_tool_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build internal trace tool records.
-    
+
     Args:
         records (list[dict[str, Any]]): The records value.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -389,11 +388,11 @@ def _trace_tool_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _safe_context_name(context_name: str | None, session_id: str) -> str:
     """Build internal safe context name.
-    
+
     Args:
         context_name (str | None): The context name value.
         session_id (str): The session id value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -411,12 +410,12 @@ def _context_file_path(
     context_dir: Path | None = None,
 ) -> Path:
     """Build internal context file path.
-    
+
     Args:
         session_id (str): The session id value.
         context_name (str | None): The context name value. Defaults to None.
         context_dir (Path | None): The context dir value. Defaults to None.
-    
+
     Returns:
         Path: The result produced by the operation.
     """
@@ -428,12 +427,12 @@ def _context_file_path(
 
 def _filter_docs_text(raw_text: str, docs_query: str, *, max_chars: int = 2400) -> str:
     """Build internal filter docs text.
-    
+
     Args:
         raw_text (str): The raw text value.
         docs_query (str): The docs query value.
         max_chars (int): The max chars value. Defaults to 2400.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -464,13 +463,13 @@ def _merge_metadata(
     **updates: Any,
 ) -> dict[str, Any]:
     """Build internal merge metadata.
-    
+
     Args:
         session_id (str): The session id value.
         db_path (Path | None): The db path value. Defaults to None.
         user_goal (str | None): The user goal value. Defaults to None.
         **updates (Any): Additional keyword arguments forwarded to the call.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -516,7 +515,7 @@ def _persist_ui_action(
     checkpoint_id: int | None = None,
 ) -> dict[str, Any]:
     """Persist metadata updates and matching tool-call audit record in one place.
-    
+
     Args:
         session_id (str): The session id value.
         tool_name (str): The tool name value.
@@ -529,7 +528,7 @@ def _persist_ui_action(
         output_metadata (bool): The output metadata value. Defaults to False.
         success (bool): The success value. Defaults to True.
         checkpoint_id (int | None): The checkpoint id value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -566,7 +565,7 @@ def _persist_ui_action(
 
 def _default_checkpoint_specs() -> list[dict[str, Any]]:
     """Build internal default checkpoint specs.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -601,10 +600,10 @@ def _default_checkpoint_specs() -> list[dict[str, Any]]:
 
 def _provider_from_model_name(model_name: str) -> str:
     """Build internal provider from model name.
-    
+
     Args:
         model_name (str): Embedding model name to use.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -627,12 +626,12 @@ def _normalize_model_name_for_provider(
     profile: str | None = None,
 ) -> str:
     """Normalize free-form model names into provider-qualified routing strings.
-    
+
     Args:
         model_name (str | None): Embedding model name to use.
         provider (str | None): The provider value.
         profile (str | None): The profile value. Defaults to None.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -661,11 +660,11 @@ def _normalize_model_name_for_provider(
 
 def _default_model_for_profile(provider: str, profile: str) -> str:
     """Build internal default model for profile.
-    
+
     Args:
         provider (str): The provider value.
         profile (str): The profile value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -694,12 +693,12 @@ def _feature_grounding_warning_text(
     feature_tree_count: int,
 ) -> str:
     """Build internal feature grounding warning text.
-    
+
     Args:
         active_model_path (str): The active model path value.
         feature_target_text (str): The feature target text value.
         feature_tree_count (int): The feature tree count value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -721,11 +720,11 @@ def _provider_has_credentials(
     model_name: str, local_endpoint: str | None = None
 ) -> bool:
     """Build internal provider has credentials.
-    
+
     Args:
         model_name (str): Embedding model name to use.
         local_endpoint (str | None): The local endpoint value. Defaults to None.
-    
+
     Returns:
         bool: True if provider has credentials, otherwise False.
     """
@@ -745,10 +744,10 @@ def _provider_has_credentials(
 
 def _normalize_workflow_mode(workflow_mode: str | None) -> str:
     """Build internal normalize workflow mode.
-    
+
     Args:
         workflow_mode (str | None): The workflow mode value.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -763,11 +762,11 @@ def _workflow_copy(
     workflow_mode: str, active_model_path: str | None = None
 ) -> tuple[str, str, str]:
     """Build internal workflow copy.
-    
+
     Args:
         workflow_mode (str): The workflow mode value.
         active_model_path (str | None): The active model path value. Defaults to None.
-    
+
     Returns:
         tuple[str, str, str]: A tuple containing the resulting values.
     """
@@ -800,10 +799,10 @@ def _workflow_copy(
 
 def _normalize_feature_targets(feature_target_text: str | None) -> list[str]:
     """Build internal normalize feature targets.
-    
+
     Args:
         feature_target_text (str | None): The feature target text value.
-    
+
     Returns:
         list[str]: A list containing the resulting items.
     """
@@ -822,10 +821,10 @@ def _normalize_feature_targets(feature_target_text: str | None) -> list[str]:
 
 def _looks_like_path_token(token: str) -> bool:
     """Build internal looks like path token.
-    
+
     Args:
         token (str): The token value.
-    
+
     Returns:
         bool: True if looks like path token, otherwise False.
     """
@@ -860,11 +859,11 @@ def _feature_target_status(
     features: list[dict[str, Any]], feature_target_text: str | None
 ) -> tuple[str, list[str], list[str]]:
     """Build internal feature target status.
-    
+
     Args:
         features (list[dict[str, Any]]): The features value.
         feature_target_text (str | None): The feature target text value.
-    
+
     Returns:
         tuple[str, list[str], list[str]]: A tuple containing the resulting values.
     """
@@ -918,13 +917,13 @@ def _feature_target_status(
 
 def _read_reference_source(source_path: Path) -> str:
     """Build internal reference source.
-    
+
     Args:
         source_path (Path): The source path value.
-    
+
     Returns:
         str: The resulting text value.
-    
+
     Raises:
         RuntimeError: Install pypdf to ingest PDF sources, or provide a text/markdown file
                       instead.
@@ -944,10 +943,10 @@ def _read_reference_source(source_path: Path) -> str:
 
 def _is_url_reference(source_path: str) -> bool:
     """Build internal is url reference.
-    
+
     Args:
         source_path (str): The source path value.
-    
+
     Returns:
         bool: True if url reference, otherwise False.
     """
@@ -958,13 +957,13 @@ def _is_url_reference(source_path: str) -> bool:
 
 def _read_reference_url(source_url: str) -> tuple[str, str]:
     """Build internal reference url.
-    
+
     Args:
         source_url (str): The source url value.
-    
+
     Returns:
         tuple[str, str]: A tuple containing the resulting values.
-    
+
     Raises:
         RuntimeError: Install pypdf to ingest PDF sources, or provide a text, markdown, or
                       HTML source instead.
@@ -1000,14 +999,14 @@ def _read_reference_url(source_url: str) -> tuple[str, str]:
 
 def _build_agent_model(model_name: str, local_endpoint: str | None = None) -> Any:
     """Build internal agent model.
-    
+
     Args:
         model_name (str): Embedding model name to use.
         local_endpoint (str | None): The local endpoint value. Defaults to None.
-    
+
     Returns:
         Any: The result produced by the operation.
-    
+
     Raises:
         RuntimeError: Pydantic-ai OpenAI provider support is not installed.
     """
@@ -1033,14 +1032,14 @@ def _materialize_uploaded_model(
     uploaded_files: list[dict[str, Any]] | None,
 ) -> Path:
     """Build internal materialize uploaded model.
-    
+
     Args:
         session_id (str): The session id value.
         uploaded_files (list[dict[str, Any]] | None): The uploaded files value.
-    
+
     Returns:
         Path: The result produced by the operation.
-    
+
     Raises:
         RuntimeError: Uploaded model payload is not valid base64 data.
     """
@@ -1082,11 +1081,11 @@ def _compute_readiness(
     db_ready: bool,
 ) -> dict[str, Any]:
     """Build internal compute readiness.
-    
+
     Args:
         metadata (dict[str, Any]): The metadata value.
         db_ready (bool): The db ready value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1139,10 +1138,10 @@ def _compute_readiness(
 
 def _planned_tools(planned: dict[str, Any]) -> list[str]:
     """Build internal planned tools.
-    
+
     Args:
         planned (dict[str, Any]): The planned value.
-    
+
     Returns:
         list[str]: A list containing the resulting items.
     """
@@ -1155,12 +1154,12 @@ async def _run_checkpoint_tools(
     planned: dict[str, Any],
 ) -> dict[str, Any]:
     """Build internal run checkpoint tools.
-    
+
     Unsupported tools are marked as MOCKED and returned in the summary.
-    
+
     Args:
         planned (dict[str, Any]): The planned value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1291,12 +1290,12 @@ def ensure_dashboard_session(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Ensure one dashboard session row and default checkpoints exist.
-    
+
     Args:
         session_id (str): The session id value. Defaults to DEFAULT_SESSION_ID.
         user_goal (str | None): The user goal value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1351,12 +1350,12 @@ def approve_design_brief(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Persist the accepted goal for the active dashboard session.
-    
+
     Args:
         session_id (str): The session id value.
         user_goal (str): The user goal value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1385,12 +1384,12 @@ def accept_family_choice(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Accept the proposed family and advance the session.
-    
+
     Args:
         session_id (str): The session id value.
         family (str | None): The family value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1428,11 +1427,11 @@ async def execute_next_checkpoint(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Handle execute next checkpoint.
-    
+
     Args:
         session_id (str): The session id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1534,11 +1533,11 @@ def reconcile_manual_edits(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Compare the latest two snapshots and summarize the reconciliation step.
-    
+
     Args:
         session_id (str): The session id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1583,7 +1582,7 @@ def update_ui_preferences(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Persist editable assumptions and model/provider preferences.
-    
+
     Args:
         session_id (str): The session id value.
         assumptions_text (str | None): The assumptions text value. Defaults to None.
@@ -1592,7 +1591,7 @@ def update_ui_preferences(
         model_name (str | None): Embedding model name to use. Defaults to None.
         local_endpoint (str | None): The local endpoint value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1644,12 +1643,12 @@ def select_workflow_mode(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Persist the onboarding workflow branch for the active dashboard session.
-    
+
     Args:
         session_id (str): The session id value.
         workflow_mode (str): The workflow mode value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1756,7 +1755,7 @@ async def run_go_orchestration(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Run a single end-to-end pass that updates inputs, review, and output lanes.
-    
+
     Args:
         session_id (str): The session id value.
         user_goal (str): The user goal value.
@@ -1764,7 +1763,7 @@ async def run_go_orchestration(
         user_answer (str): The user answer value. Defaults to "".
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1832,13 +1831,13 @@ def update_session_notes(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Persist free-form engineering notes in session metadata.
-    
+
     Args:
         session_id (str): The session id value.
         notes_text (str): The notes text value.
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1865,13 +1864,13 @@ def fetch_docs_context(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Fetch docs text from the docs endpoint and store a filtered context snippet.
-    
+
     Args:
         session_id (str): The session id value.
         docs_query (str): The docs query value. Defaults to "".
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1923,14 +1922,14 @@ def save_session_context(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Persist the current dashboard state to a plain JSON file and metadata.
-    
+
     Args:
         session_id (str): The session id value.
         context_name (str | None): The context name value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
         context_dir (Path | None): The context dir value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -1977,14 +1976,14 @@ def load_session_context(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Load a previously saved plain-file context snapshot back into session metadata.
-    
+
     Args:
         session_id (str): The session id value.
         context_file (str | None): The context file value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
         context_dir (Path | None): The context dir value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -2094,7 +2093,7 @@ async def open_target_model(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Open a target model in SolidWorks and persist session state before connect/preview.
-    
+
     Args:
         session_id (str): The session id value.
         model_path (str | None): The model path value. Defaults to None.
@@ -2103,10 +2102,10 @@ async def open_target_model(
         feature_target_text (str | None): The feature target text value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
-    
+
     Raises:
         RuntimeError: If the operation cannot be completed.
     """
@@ -2274,7 +2273,7 @@ async def connect_target_model(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Open a target model, inspect its feature tree, and persist grounded context.
-    
+
     Args:
         session_id (str): The session id value.
         model_path (str | None): The model path value. Defaults to None.
@@ -2283,10 +2282,10 @@ async def connect_target_model(
         feature_target_text (str | None): The feature target text value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
-    
+
     Raises:
         RuntimeError: If the operation cannot be completed.
     """
@@ -2537,7 +2536,7 @@ def ingest_reference_source(
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     """Ingest a user-provided local file or URL into a simple local retrieval index.
-    
+
     Args:
         session_id (str): The session id value.
         source_path (str): The source path value.
@@ -2546,7 +2545,7 @@ def ingest_reference_source(
                           1200.
         overlap (int): Number of overlapping characters between chunks. Defaults to 200.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -2711,10 +2710,10 @@ def ingest_reference_source(
 
 def _resolve_model_name(explicit_model: str | None = None) -> str:
     """Build internal resolve model name.
-    
+
     Args:
         explicit_model (str | None): The explicit model value. Defaults to None.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -2726,14 +2725,14 @@ def _ensure_provider_credentials(
     model_name: str, local_endpoint: str | None = None
 ) -> None:
     """Build internal provider credentials.
-    
+
     Args:
         model_name (str): Embedding model name to use.
         local_endpoint (str | None): The local endpoint value. Defaults to None.
-    
+
     Returns:
         None: None.
-    
+
     Raises:
         RuntimeError: Set SOLIDWORKS_UI_LOCAL_ENDPOINT before using local model routing.
     """
@@ -2785,14 +2784,14 @@ async def _run_structured_agent(
     local_endpoint: str | None = None,
 ) -> BaseModel | RecoverableFailure:
     """Build internal run structured agent.
-    
+
     Args:
         system_prompt (str): The system prompt value.
         user_prompt (str): The user prompt value.
         result_type (type[BaseModel]): The result type value.
         model_name (str | None): Embedding model name to use. Defaults to None.
         local_endpoint (str | None): The local endpoint value. Defaults to None.
-    
+
     Returns:
         BaseModel | RecoverableFailure: The result produced by the operation.
     """
@@ -2914,17 +2913,17 @@ async def request_clarifications(
     model_name: str | None = None,
 ) -> dict[str, Any]:
     """Generate focused follow-up questions for the current design goal using LLM.
-    
+
     Calls GitHub Copilot (openai/gpt-4.1) by default or a model specified in
     SOLIDWORKS_UI_MODEL env. Requires GH_TOKEN or GITHUB_API_KEY with models:read scope.
-    
+
     Args:
         session_id (str): The session id value.
         user_goal (str): The user goal value.
         user_answer (str): The user answer value. Defaults to "".
         db_path (Path | None): The db path value. Defaults to None.
         model_name (str | None): Embedding model name to use. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -3045,17 +3044,17 @@ async def inspect_family(
     model_name: str | None = None,
 ) -> dict[str, Any]:
     """Run LLM-backed family classification and suggested checkpoints.
-    
+
     Calls GitHub Copilot to infer the likely SolidWorks feature family (e.g., "bracket",
     "housing", "fastener", "assembly") and suggests 4 conservative checkpoints with allowed
     MCP tools.
-    
+
     Args:
         session_id (str): The session id value.
         user_goal (str): The user goal value.
         db_path (Path | None): The db path value. Defaults to None.
         model_name (str | None): Embedding model name to use. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -3231,11 +3230,11 @@ def _public_preview_url(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> str:
     """Build internal public preview url.
-    
+
     Args:
         preview_path (Path): The preview path value.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -3258,11 +3257,11 @@ async def refresh_preview(
     reopen_active_model: bool = True,
 ) -> dict[str, Any]:
     """Export the current SolidWorks viewport to a PNG preview and STL for the 3D viewer.
-    
+
     Uses export_image(view_orientation=...) from the active adapter. Supports orientations:
     "front", "top", "right", "isometric", "current". Also exports an STL file to power the
     embedded Three.js viewer.
-    
+
     Args:
         session_id (str): The session id value.
         orientation (str): The orientation value. Defaults to DEFAULT_PREVIEW_ORIENTATION.
@@ -3273,7 +3272,7 @@ async def refresh_preview(
         active_model_path_override (str | None): The active model path override value.
                                                  Defaults to None.
         reopen_active_model (bool): The reopen active model value. Defaults to True.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -3546,17 +3545,17 @@ async def highlight_feature(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Select and highlight a named feature in the active SolidWorks model.
-    
+
     Uses SelectByID2 via the pywin32 adapter.  In mock mode the selection is acknowledged
     without a COM side-effect.  Returns the full dashboard state so the UI can hydrate
     cleanly.
-    
+
     Args:
         session_id (str): The session id value.
         feature_name (str): The feature name value.
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -3669,12 +3668,12 @@ def build_dashboard_state(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Assemble the dashboard payload consumed by the Prefab UI.
-    
+
     Args:
         session_id (str): The session id value. Defaults to DEFAULT_SESSION_ID.
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -4079,12 +4078,12 @@ def build_dashboard_trace_payload(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Build the dashboard trace payload.
-    
+
     Args:
         session_id (str): The session id value. Defaults to DEFAULT_SESSION_ID.
         db_path (Path | None): The db path value. Defaults to None.
         api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """

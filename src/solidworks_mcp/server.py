@@ -45,7 +45,7 @@ AGENT_SYSTEM_PROMPT = (
 
 class MCPServerState(BaseModel):
     """Server state management - serializable fields only.
-    
+
     Attributes:
         adapter (Any | None): The adapter value.
         agent (Any | None): The agent value.
@@ -65,10 +65,10 @@ class MCPServerState(BaseModel):
 
 class SolidWorksMCPServer:
     """Main SolidWorks MCP Server class.
-    
+
     Args:
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Attributes:
         _db_logging_enabled (Any): The db logging enabled value.
         _db_path (Any): The db path value.
@@ -82,10 +82,10 @@ class SolidWorksMCPServer:
 
     def __init__(self, config: SolidWorksMCPConfig):
         """Initialize the solid works mcpserver.
-        
+
         Args:
             config (SolidWorksMCPConfig): Configuration values for the operation.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -116,10 +116,10 @@ class SolidWorksMCPServer:
     @staticmethod
     def _env_truthy(value: str | None) -> bool:
         """Build internal env truthy.
-        
+
         Args:
             value (str | None): The value value.
-        
+
         Returns:
             bool: True if env truthy, otherwise False.
         """
@@ -134,12 +134,12 @@ class SolidWorksMCPServer:
         payload: dict[str, Any] | None,
     ) -> None:
         """Build internal log tool event.
-        
+
         Args:
             tool_name (str): The tool name value.
             phase (str): The phase value.
             payload (dict[str, Any] | None): The payload value.
-        
+
         Returns:
             None: None.
         """
@@ -165,7 +165,7 @@ class SolidWorksMCPServer:
 
     def _patch_mcp_for_tests(self) -> None:
         """Expose a lightweight legacy tool registry used by tests.
-        
+
         Returns:
             None: None.
         """
@@ -175,11 +175,11 @@ class SolidWorksMCPServer:
 
         def compat_tool(*args: Any, **kwargs: Any) -> Any:
             """Provide compat tool support for the solid works mcpserver.
-            
+
             Args:
                 *args (Any): Additional positional arguments forwarded to the call.
                 **kwargs (Any): Additional keyword arguments forwarded to the call.
-            
+
             Returns:
                 Any: The result produced by the operation.
             """
@@ -187,10 +187,10 @@ class SolidWorksMCPServer:
 
             def _wrap(func: Any) -> Any:
                 """Build internal wrap.
-                
+
                 Args:
                     func (Any): The func value.
-                
+
                 Returns:
                     Any: The result produced by the operation.
                 """
@@ -200,11 +200,11 @@ class SolidWorksMCPServer:
                     *runner_args: Any, **runner_kwargs: Any
                 ) -> Any:
                     """Run tool with runtime security and invocation normalization.
-                    
+
                     Args:
                         *runner_args (Any): Additional positional arguments forwarded to the call.
                         **runner_kwargs (Any): Additional keyword arguments forwarded to the call.
-                    
+
                     Returns:
                         Any: The result produced by the operation.
                     """
@@ -224,11 +224,11 @@ class SolidWorksMCPServer:
                     *runner_args: Any, **runner_kwargs: Any
                 ) -> Any:
                     """Build internal compat runner.
-                    
+
                     Args:
                         *runner_args (Any): Additional positional arguments forwarded to the call.
                         **runner_kwargs (Any): Additional keyword arguments forwarded to the call.
-                    
+
                     Returns:
                         Any: The result produced by the operation.
                     """
@@ -327,11 +327,11 @@ class SolidWorksMCPServer:
         runner_kwargs: dict[str, Any],
     ) -> Any | None:
         """Extract normalized tool payload from invocation arguments.
-        
+
         Args:
             runner_args (tuple[Any, ...]): The runner args value.
             runner_kwargs (dict[str, Any]): The runner kwargs value.
-        
+
         Returns:
             Any | None: The result produced by the operation.
         """
@@ -348,13 +348,13 @@ class SolidWorksMCPServer:
         runner_kwargs: dict[str, Any],
     ) -> Any:
         """Invoke a registered tool while preserving legacy invocation behavior.
-        
+
         Args:
             func (Any): The func value.
             payload (Any | None): The payload value.
             runner_args (tuple[Any, ...]): The runner args value.
             runner_kwargs (dict[str, Any]): The runner kwargs value.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -367,11 +367,11 @@ class SolidWorksMCPServer:
 
     def _enforce_tool_security(self, tool_name: str, payload: Any | None) -> None:
         """Enforce runtime security policies before tool execution.
-        
+
         Args:
             tool_name (str): The tool name value.
             payload (Any | None): The payload value.
-        
+
         Returns:
             None: None.
         """
@@ -382,7 +382,7 @@ class SolidWorksMCPServer:
 
     def _configure_runtime_services(self) -> None:
         """Initialize router and cache services and instrument adapter methods.
-        
+
         Returns:
             None: None.
         """
@@ -408,7 +408,7 @@ class SolidWorksMCPServer:
 
     def _instrument_adapter_methods(self) -> None:
         """Route selected adapter methods through intelligent router.
-        
+
         Returns:
             None: None.
         """
@@ -483,14 +483,14 @@ class SolidWorksMCPServer:
                 **call_kwargs: Any,
             ) -> AdapterResult[Any]:
                 """Build internal routed call.
-                
+
                 Args:
                     *call_args (Any): Additional positional arguments forwarded to the call.
                     _operation_name (str): The operation name value. Defaults to operation_name.
                     _com_callable (Any): The com callable value. Defaults to original_operation.
                     _vba_callable (Any): The vba callable value. Defaults to vba_operation.
                     **call_kwargs (Any): Additional keyword arguments forwarded to the call.
-                
+
                 Returns:
                     AdapterResult[Any]: The result produced by the operation.
                 """
@@ -525,7 +525,7 @@ class SolidWorksMCPServer:
 
     async def setup(self) -> None:
         """Initialize the server components.
-        
+
         Returns:
             None: None.
         """
@@ -561,7 +561,7 @@ class SolidWorksMCPServer:
 
     async def _setup_agent(self) -> None:
         """Setup PydanticAI agent for enhanced LLM integration.
-        
+
         Returns:
             None: None.
         """
@@ -599,10 +599,10 @@ class SolidWorksMCPServer:
 
     async def _run_local_stdio(self) -> None:
         """Start local MCP stdio transport using the available FastMCP API.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             SolidWorksMCPError: FastMCP server does not expose a stdio runner.
         """
@@ -639,7 +639,7 @@ class SolidWorksMCPServer:
 
     async def start(self) -> None:
         """Start the MCP server.
-        
+
         Returns:
             None: None.
         """
@@ -673,7 +673,7 @@ class SolidWorksMCPServer:
 
     async def _start_http_server(self) -> None:
         """Start HTTP server for remote access.
-        
+
         Returns:
             None: None.
         """
@@ -685,7 +685,7 @@ class SolidWorksMCPServer:
 
     async def stop(self) -> None:
         """Gracefully stop the server.
-        
+
         Returns:
             None: None.
         """
@@ -701,7 +701,7 @@ class SolidWorksMCPServer:
 
     async def health_check(self) -> dict[str, Any]:
         """Get server health status.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -728,7 +728,7 @@ class SolidWorksMCPServer:
 
 async def server_status() -> dict[str, Any]:
     """Get comprehensive server status information.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -741,7 +741,7 @@ async def server_status() -> dict[str, Any]:
 
 async def list_capabilities() -> dict[str, list[str]]:
     """List all available SolidWorks capabilities and tool categories.
-    
+
     Returns:
         dict[str, list[str]]: A dictionary containing the resulting values.
     """
@@ -812,11 +812,11 @@ async def list_capabilities() -> dict[str, list[str]]:
 
 def create_server(config: SolidWorksMCPConfig | None = None) -> SolidWorksMCPServer:
     """Create a SolidWorks MCP Server instance.
-    
+
     Args:
         config (SolidWorksMCPConfig | None): Configuration values for the operation.
                                              Defaults to None.
-    
+
     Returns:
         SolidWorksMCPServer: The result produced by the operation.
     """
@@ -828,10 +828,10 @@ def create_server(config: SolidWorksMCPConfig | None = None) -> SolidWorksMCPSer
 
 async def _run_server(server: SolidWorksMCPServer) -> None:
     """Run server lifecycle with graceful shutdown.
-    
+
     Args:
         server (SolidWorksMCPServer): The server value.
-    
+
     Returns:
         None: None.
     """
@@ -848,10 +848,10 @@ async def _run_server(server: SolidWorksMCPServer) -> None:
 
 async def _run_with_config(config: SolidWorksMCPConfig) -> None:
     """Run the server from a fully prepared config object.
-    
+
     Args:
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
     """
@@ -900,7 +900,7 @@ def cli(
     ),
 ) -> None:
     """Start the SolidWorks MCP Server.
-    
+
     Args:
         config (str | None): Configuration values for the operation. Defaults to
                              typer.Option(         None,         "--config",
@@ -916,7 +916,7 @@ def cli(
                       debug",         help="Enable debug mode",     ).
         mock (bool): The mock value. Defaults to typer.Option(         False,         "--
                      mock",         help="Use mock SolidWorks for testing",     ).
-    
+
     Returns:
         None: None.
     """
@@ -939,7 +939,7 @@ def cli(
 
 async def main() -> None:
     """Legacy async entry point retained for tests and internal callers.
-    
+
     Returns:
         None: None.
     """
@@ -987,7 +987,7 @@ async def main() -> None:
 
 def cli_main() -> None:
     """Console script entry point using Typer CLI.
-    
+
     Returns:
         None: None.
     """
@@ -996,7 +996,7 @@ def cli_main() -> None:
 
 def run_server() -> None:
     """Synchronous entry point for the server.
-    
+
     Returns:
         None: None.
     """

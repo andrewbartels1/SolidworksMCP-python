@@ -18,11 +18,11 @@ TInput = TypeVar("TInput", bound=BaseModel)
 
 def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
     """Build internal normalize input.
-    
+
     Args:
         input_data (Any): The input data value.
         model_type (type[TInput]): The model type value.
-    
+
     Returns:
         TInput: The result produced by the operation.
     """
@@ -36,7 +36,7 @@ def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
 
 class ExportFileInput(CompatInput):
     """Input schema for exporting files.
-    
+
     Attributes:
         file_path (str): The file path value.
         format_type (str): The format type value.
@@ -54,7 +54,7 @@ class ExportFileInput(CompatInput):
 
 class ExportImageInput(CompatInput):
     """Input schema for exporting images.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         format (str | None): The format value.
@@ -92,10 +92,10 @@ class ExportImageInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the export image input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -111,7 +111,7 @@ class ExportImageInput(CompatInput):
 
 class ExportSTEPInput(CompatInput):
     """Input schema for STEP export.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         model_path (str | None): The model path value.
@@ -136,10 +136,10 @@ class ExportSTEPInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the export stepinput.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -149,7 +149,7 @@ class ExportSTEPInput(CompatInput):
 
 class ExportIGESInput(CompatInput):
     """Input schema for IGES export.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         iges_version (str | None): The iges version value.
@@ -174,10 +174,10 @@ class ExportIGESInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the export igesinput.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -187,7 +187,7 @@ class ExportIGESInput(CompatInput):
 
 class ExportSTLInput(CompatInput):
     """Input schema for STL export.
-    
+
     Attributes:
         binary_format (bool): The binary format value.
         file_format (str | None): The file format value.
@@ -216,10 +216,10 @@ class ExportSTLInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the export stlinput.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -229,7 +229,7 @@ class ExportSTLInput(CompatInput):
 
 class ExportPDFInput(CompatInput):
     """Input schema for PDF export.
-    
+
     Attributes:
         color_mode (str): The color mode value.
         drawing_path (str | None): The drawing path value.
@@ -252,10 +252,10 @@ class ExportPDFInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the export pdfinput.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -265,7 +265,7 @@ class ExportPDFInput(CompatInput):
 
 class ExportDWGInput(CompatInput):
     """Input schema for DWG export.
-    
+
     Attributes:
         autocad_version (str | None): The autocad version value.
         drawing_path (str | None): The drawing path value.
@@ -296,10 +296,10 @@ class ExportDWGInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the export dwginput.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -311,7 +311,7 @@ class ExportDWGInput(CompatInput):
 
 class BatchExportInput(CompatInput):
     """Input schema for batch export operations.
-    
+
     Attributes:
         export_format (str | None): The export format value.
         file_pattern (str | None): The file pattern value.
@@ -343,10 +343,10 @@ class BatchExportInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the batch export input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -362,23 +362,23 @@ async def register_export_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register export tools with FastMCP.
-    
+
     Registers comprehensive file export tools for SolidWorks automation supporting multiple
     industry-standard formats including neutral CAD formats, manufacturing formats, and
     documentation outputs.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         ```python
                         from solidworks_mcp.tools.export import register_export_tools
-    
+
                         tool_count = await register_export_tools(mcp, adapter, config)
                         print(f"Registered {tool_count} export tools")
                         ```
@@ -388,17 +388,17 @@ async def register_export_tools(
     @mcp.tool()
     async def export_step(input_data: ExportFileInput) -> dict[str, Any]:
         """Export the current model to STEP format.
-        
+
         Exports SolidWorks models to STEP (Standard for the Exchange of Product Data) format,
         the preferred neutral CAD format for interoperability between different CAD systems and
         manufacturers.
-        
+
         Args:
             input_data (ExportFileInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Export part to STEP for manufacturing
@@ -411,13 +411,13 @@ async def register_export_tools(
                                     "precision": 0.01
                                 }
                             })
-        
+
                             if result["status"] == "success":
                                 export = result["export"]
                                 print(f"STEP file created: {export['file_path']}")
                                 # Ready for CNC programming or CAM software
                             ```
-        
+
                         Note:
                             - STEP format preserves precise geometric data for manufacturing
                             - Most widely supported neutral CAD format in industry
@@ -471,17 +471,17 @@ async def register_export_tools(
     @mcp.tool()
     async def export_iges(input_data: ExportFileInput) -> dict[str, Any]:
         """Export the current model to IGES format.
-        
+
         Exports SolidWorks models to IGES (Initial Graphics Exchange Specification) format, a
         legacy neutral CAD format still widely used for surface modeling and older CAD system
         compatibility.
-        
+
         Args:
             input_data (ExportFileInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Export surface model for legacy CAD system
@@ -494,13 +494,13 @@ async def register_export_tools(
                                     "trim_curves": True
                                 }
                             })
-        
+
                             if result["status"] == "success":
                                 export = result["export"]
                                 print(f"IGES file created: {export['file_path']}")
                                 # Compatible with older CAD/CAM systems
                             ```
-        
+
                         Note:
                             - IGES format is older but still required for some legacy systems
                             - Excellent for surface modeling and complex curve data
@@ -547,16 +547,16 @@ async def register_export_tools(
     @mcp.tool()
     async def export_stl(input_data: ExportFileInput) -> dict[str, Any]:
         """Export the current model to STL format.
-        
+
         Exports SolidWorks models to STL (Stereolithography) format, the standard file format
         for 3D printing, rapid prototyping, and additive manufacturing applications.
-        
+
         Args:
             input_data (ExportFileInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Export high-resolution STL for 3D printing
@@ -570,13 +570,13 @@ async def register_export_tools(
                                     "deviation": 0.1
                                 }
                             })
-        
+
                             if result["status"] == "success":
                                 export = result["export"]
                                 print(f"STL ready for 3D printing: {export['file_path']}")
                                 # Load into slicer software for printing
                             ```
-        
+
                         Note:
                             - STL format creates triangulated mesh representation
                             - Resolution affects both file size and print quality
@@ -624,17 +624,17 @@ async def register_export_tools(
     @mcp.tool()
     async def export_pdf(input_data: ExportFileInput) -> dict[str, Any]:
         """Export the current model or drawing to PDF format.
-        
+
         Creates PDF documents from SolidWorks drawings, assemblies, or parts for documentation,
         sharing, review, and archival purposes. Essential for design review and manufacturing
         documentation.
-        
+
         Args:
             input_data (ExportFileInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Export technical drawings to secured PDF
@@ -652,13 +652,13 @@ async def register_export_tools(
                                     }
                                 }
                             })
-        
+
                             if result["status"] == "success":
                                 export = result["export"]
                                 print(f"PDF documentation: {export['file_path']}")
                                 # Ready for distribution and review
                             ```
-        
+
                         Note:
                             - PDF format preserves drawing layout and annotations
                             - Ideal for design reviews and manufacturing documentation
@@ -706,17 +706,17 @@ async def register_export_tools(
     @mcp.tool()
     async def export_dwg(input_data: ExportFileInput) -> dict[str, Any]:
         """Export the current drawing to DWG format.
-        
+
         Converts SolidWorks drawings to DWG (Drawing) format, the native AutoCAD file format
         widely used in architecture, engineering, and construction industries for 2D technical
         drawings.
-        
+
         Args:
             input_data (ExportFileInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Export architectural drawings to AutoCAD format
@@ -730,13 +730,13 @@ async def register_export_tools(
                                     "line_weights": True
                                 }
                             })
-        
+
                             if result["status"] == "success":
                                 export = result["export"]
                                 print(f"AutoCAD file ready: {export['file_path']}")
                                 # Compatible with AutoCAD and DWG viewers
                             ```
-        
+
                         Note:
                             - DWG format ensures compatibility with AutoCAD ecosystem
                             - Only applicable to SolidWorks drawing files (not 3D models)
@@ -784,16 +784,16 @@ async def register_export_tools(
     @mcp.tool()
     async def export_image(input_data: ExportImageInput) -> dict[str, Any]:
         """Export images of the current model.
-        
+
         Captures high-quality rendered images of SolidWorks models from various view
         orientations for documentation, presentations, marketing materials, and web publication.
-        
+
         Args:
             input_data (ExportImageInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Create high-res marketing image
@@ -803,13 +803,13 @@ async def register_export_tools(
                                 "width": 3840, "height": 2160,  # 4K resolution
                                 "view_orientation": "isometric"
                             })
-        
+
                             if result["status"] == "success":
                                 export = result["export"]
                                 print(f"High-res image: {export['dimensions']} {export['format']}")
                                 # Ready for marketing and presentation use
                             ```
-        
+
                         Note:
                             - PNG format supports transparency for overlay graphics
                             - Higher resolutions create larger file sizes but better quality
@@ -876,17 +876,17 @@ async def register_export_tools(
     @mcp.tool()
     async def batch_export(input_data: BatchExportInput) -> dict[str, Any]:
         """Batch export multiple SolidWorks files to a target format.
-        
+
         Processes entire directories of SolidWorks files and converts them to specified target
         formats. Essential for project migrations, supplier deliverables, and large-scale format
         conversions.
-        
+
         Args:
             input_data (BatchExportInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Convert entire project to STEP for manufacturing
@@ -897,14 +897,14 @@ async def register_export_tools(
                                 "recursive": True,
                                 "file_patterns": ["*.sldprt", "*.sldasm"]
                             })
-        
+
                             if result["status"] == "success":
                                 batch = result["batch_export"]
                                 print(f"Processed {batch['files_processed']} files")
                                 print(f"Success: {batch['files_successful']}, Failed: {batch['files_failed']}")
                                 # All parts ready for CNC programming
                             ```
-        
+
                         Note:
                             - Process can take significant time for large directories
                             - Failed exports are logged with specific error messages

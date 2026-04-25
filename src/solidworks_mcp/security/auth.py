@@ -1,5 +1,4 @@
-"""Authentication and authorization for SolidWorks MCP Server.
-"""
+"""Authentication and authorization for SolidWorks MCP Server."""
 
 import secrets
 from collections.abc import Awaitable, Callable
@@ -13,11 +12,11 @@ F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
 
 def setup_authentication(mcp: Any, config: SolidWorksMCPConfig) -> None:
     """Configure authentication middleware hooks.
-    
+
     Args:
         mcp (Any): The mcp value.
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
     """
@@ -35,11 +34,11 @@ def setup_authentication(mcp: Any, config: SolidWorksMCPConfig) -> None:
 
 def validate_api_key(provided_key: str, expected_key: str) -> bool:
     """Validate API key using constant-time comparison.
-    
+
     Args:
         provided_key (str): The provided key value.
         expected_key (str): The expected key value.
-    
+
     Returns:
         bool: True if validate api key, otherwise False.
     """
@@ -51,23 +50,23 @@ def validate_api_key(provided_key: str, expected_key: str) -> bool:
 
 def require_auth(config: SolidWorksMCPConfig) -> Callable[[F], F]:
     """Decorate a coroutine with authentication checks.
-    
+
     Args:
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         Callable[[F], F]: The result produced by the operation.
     """
 
     def decorator(func: F) -> F:
         """Wrap a coroutine with request-level authentication checks.
-        
+
         Args:
             func (F): The func value.
-        
+
         Returns:
             F: The result produced by the operation.
-        
+
         Raises:
             RuntimeError: Authentication failed: invalid api_key.
         """
@@ -75,14 +74,14 @@ def require_auth(config: SolidWorksMCPConfig) -> Callable[[F], F]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             """Run the wrapped coroutine after API key validation.
-            
+
             Args:
                 *args (Any): Additional positional arguments forwarded to the call.
                 **kwargs (Any): Additional keyword arguments forwarded to the call.
-            
+
             Returns:
                 Any: The result produced by the operation.
-            
+
             Raises:
                 RuntimeError: Authentication failed: invalid api_key.
             """

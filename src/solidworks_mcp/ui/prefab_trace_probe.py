@@ -1,5 +1,4 @@
-"""Minimal Prefab probe app for tracing the UI startup and model-connect flow.
-"""
+"""Minimal Prefab probe app for tracing the UI startup and model-connect flow."""
 
 from __future__ import annotations
 
@@ -39,11 +38,11 @@ DEFAULT_ASSUMPTIONS = "Assume PETG, 0.4mm nozzle, 0.2mm layers, and 0.30mm matin
 
 def _result_state(_key: str, fallback: str = "") -> str:
     """Build internal result state.
-    
+
     Args:
         _key (str): The key value.
         fallback (str): The fallback value. Defaults to "".
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -53,10 +52,10 @@ def _result_state(_key: str, fallback: str = "") -> str:
 
 def _trace_error(step: str) -> list[object]:
     """Build internal trace error.
-    
+
     Args:
         step (str): The step value.
-    
+
     Returns:
         list[object]: A list containing the resulting items.
     """
@@ -69,7 +68,7 @@ def _trace_error(step: str) -> list[object]:
 
 def _hydrate_trace() -> list[object]:
     """Build internal hydrate trace.
-    
+
     Returns:
         list[object]: A list containing the resulting items.
     """
@@ -82,11 +81,11 @@ def _hydrate_trace() -> list[object]:
 
 def _hydrate_preview_from_result() -> list[object]:
     """Update preview-relevant trace_payload fields directly from preview/refresh POST result.
-    
+
     Avoids nested Fetch-in-on_success which is unreliable in prefab_ui 0.19.x. The POST to
     /api/ui/preview/refresh returns build_dashboard_state() whose top-level keys map 1:1 to
     trace_payload.state fields.
-    
+
     Returns:
         list[object]: A list containing the resulting items.
     """
@@ -100,7 +99,7 @@ def _hydrate_preview_from_result() -> list[object]:
 
 def _refresh_preview() -> Fetch:
     """Single preview refresh that chains _refresh_trace() on completion.
-    
+
     Chaining ensures the trace payload (which contains preview_view_urls) is re-fetched
     *after* all 4 orientation PNGs have been written, not in parallel with the preview
     export.  We intentionally skip the intermediate _hydrate_preview_from_result() call
@@ -109,7 +108,7 @@ def _refresh_preview() -> Fetch:
     the orientation PNGs are stored in metadata.  _refresh_trace() (GET
     /api/ui/debug/session) is the single source of truth — it runs after the export
     completes and returns the full trace payload including the correct preview_view_urls.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -123,7 +122,7 @@ def _refresh_preview() -> Fetch:
 
 def _refresh_trace() -> Fetch:
     """Build internal refresh trace.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -138,7 +137,7 @@ def _refresh_trace() -> Fetch:
 
 def _run_checklist() -> Fetch:
     """Build internal run checklist.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -194,7 +193,7 @@ def _run_checklist() -> Fetch:
 
 def _reset_probe_session() -> Fetch:
     """Build internal reset probe session.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """

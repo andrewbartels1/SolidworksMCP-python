@@ -1,5 +1,4 @@
-"""Utilities for prefab smoke minimal.
-"""
+"""Utilities for prefab smoke minimal."""
 
 from prefab_ui import PrefabApp
 from prefab_ui.components import Card, CardContent, CardHeader, CardTitle, Text

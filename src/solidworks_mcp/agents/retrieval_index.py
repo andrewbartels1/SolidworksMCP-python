@@ -1,5 +1,4 @@
-"""Local retrieval index builder for feature-tree audits, tool docs, and failures.
-"""
+"""Local retrieval index builder for feature-tree audits, tool docs, and failures."""
 
 from __future__ import annotations
 
@@ -13,13 +12,13 @@ from .history_db import DEFAULT_DB_PATH, find_recent_errors
 
 def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 150) -> list[str]:
     """Split long text into overlapping chunks for simple local retrieval.
-    
+
     Args:
         text (str): Input text processed by the operation.
         chunk_size (int): Maximum number of characters to keep in each chunk. Defaults to
                           1000.
         overlap (int): Number of overlapping characters between chunks. Defaults to 150.
-    
+
     Returns:
         list[str]: A list containing the resulting items.
     """
@@ -43,10 +42,10 @@ def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 150) -> list[s
 
 def _read_text(path: Path) -> str:
     """Build internal text.
-    
+
     Args:
         path (Path): Filesystem path for the operation.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -66,7 +65,7 @@ def build_local_retrieval_index(
     max_recent_errors: int = 200,
 ) -> dict[str, Any]:
     """Build a JSON retrieval index from local audits, tool docs, and failures.
-    
+
     Args:
         output_path (Path | None): The output path value. Defaults to None.
         worked_examples_path (Path | None): The worked examples path value. Defaults to
@@ -74,7 +73,7 @@ def build_local_retrieval_index(
         tool_catalog_dir (Path | None): The tool catalog dir value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
         max_recent_errors (int): The max recent errors value. Defaults to 200.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """

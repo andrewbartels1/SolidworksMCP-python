@@ -18,7 +18,7 @@ from .input_compat import CompatInput
 
 class VBAExtrusionInput(CompatInput):
     """Input schema for generating VBA extrusion code.
-    
+
     Attributes:
         advanced_options (dict[str, Any] | None): The advanced options value.
         assembly_feature_scope (str | None): The assembly feature scope value.
@@ -90,7 +90,7 @@ class VBAExtrusionInput(CompatInput):
 
 class VBARevolveInput(CompatInput):
     """Input schema for generating VBA revolve code.
-    
+
     Attributes:
         angle (float | None): The angle value.
         angle2 (float): The angle2 value.
@@ -119,10 +119,10 @@ class VBARevolveInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the vbarevolve input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -132,7 +132,7 @@ class VBARevolveInput(CompatInput):
 
 class VBAAssemblyInput(CompatInput):
     """Input schema for generating VBA assembly operations.
-    
+
     Attributes:
         assembly_file (str | None): The assembly file value.
         component_file (str | None): The component file value.
@@ -160,7 +160,7 @@ class VBAAssemblyInput(CompatInput):
 
 class VBADrawingInput(CompatInput):
     """Input schema for generating VBA drawing operations.
-    
+
     Attributes:
         advanced_options (dict[str, Any] | None): The advanced options value.
         drawing_file (str | None): The drawing file value.
@@ -191,7 +191,7 @@ class VBADrawingInput(CompatInput):
 
 class VBABatchInput(CompatInput):
     """Input schema for generating VBA batch operations.
-    
+
     Attributes:
         exclude_list (list[str] | None): The exclude list value.
         export_format (str | None): The export format value.
@@ -223,15 +223,15 @@ async def register_vba_generation_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config
 ) -> int:
     """Register VBA generation tools with FastMCP.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (Any): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         >>> tool_count = await register_vba_generation_tools(mcp, adapter, config)
     """
@@ -240,13 +240,13 @@ async def register_vba_generation_tools(
     @mcp.tool()
     async def generate_vba_extrusion(input_data: VBAExtrusionInput) -> dict[str, Any]:
         """Generate VBA code for complex extrusion operations.
-        
+
         Args:
             input_data (VBAExtrusionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_extrusion(extrusion_input)
         """
@@ -340,13 +340,13 @@ End Sub"""
     @mcp.tool()
     async def generate_vba_revolve(input_data: VBARevolveInput) -> dict[str, Any]:
         """Generate VBA code for complex revolve operations.
-        
+
         Args:
             input_data (VBARevolveInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_revolve(revolve_input)
         """
@@ -440,18 +440,18 @@ End Sub"""
         input_data: VBAAssemblyInput,
     ) -> dict[str, Any]:
         """Generate VBA code for assembly component insertion.
-        
+
         Args:
             input_data (VBAAssemblyInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_assembly_insert(assembly_input)
-        
+
                         Generate VBA code for inserting components into assemblies.
-        
+
                         Creates macro for component insertion with precise positioning.
         """
         try:
@@ -528,13 +528,13 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_drawing_views(input_data: VBADrawingInput) -> dict[str, Any]:
         """Generate VBA code for drawing view creation.
-        
+
         Args:
             input_data (VBADrawingInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_drawing_views(drawing_input)
         """
@@ -643,13 +643,13 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_batch_export(input_data: VBABatchInput) -> dict[str, Any]:
         """Generate VBA code for batch file export operations.
-        
+
         Args:
             input_data (VBABatchInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_batch_export(batch_input)
         """
@@ -748,13 +748,13 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_part_modeling(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate VBA code for complex part modeling operations.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_part_modeling(part_input)
         """
@@ -856,13 +856,13 @@ End Sub"""
     @mcp.tool()
     async def generate_vba_assembly_mates(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate VBA code for assembly mate creation.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_assembly_mates(mate_input)
         """
@@ -958,12 +958,12 @@ End Sub"""
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
         """Generate VBA code for creating drawing dimensions.
-        
+
         Creates macro for various dimension types in drawings.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -1049,16 +1049,16 @@ End Sub'''
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
         """Generate VBA code for file management operations.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_file_operations(file_input)
-        
+
                         Creates macro for custom properties, PDM operations, etc.
         """
         try:
@@ -1160,13 +1160,13 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_macro_recorder(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate VBA code using macro recording patterns.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_vba_macro_recorder(recorder_input)
         """

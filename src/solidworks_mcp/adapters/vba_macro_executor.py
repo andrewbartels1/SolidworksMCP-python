@@ -1,5 +1,4 @@
-"""VBA macro execution lifecycle management for SolidWorks automation.
-"""
+"""VBA macro execution lifecycle management for SolidWorks automation."""
 
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ from .base import AdapterResult, AdapterResultStatus
 @dataclass(frozen=True)
 class MacroExecutionRequest:
     """Request to execute a VBA macro.
-    
+
     Attributes:
         macro_code (str): The macro code value.
         macro_name (str): The macro name value.
@@ -30,7 +29,7 @@ class MacroExecutionRequest:
 @dataclass(frozen=True)
 class MacroExecutionResult:
     """Result of VBA macro execution.
-    
+
     Attributes:
         duration_seconds (float): The duration seconds value.
         error (str | None): The error value.
@@ -48,23 +47,23 @@ class MacroExecutionResult:
 
 class VbaMacroExecutor:
     """Manage VBA macro execution with save and tracking.
-    
+
     This executor handles the full lifecycle: code generation, on-disk persistence,
     execution via the backing adapter, and result tracking.
-    
+
     Args:
         temp_macro_dir (Path | None): The temp macro dir value. Defaults to None.
-    
+
     Attributes:
         _temp_macro_dir (Any): The temp macro dir value.
     """
 
     def __init__(self, temp_macro_dir: Path | None = None) -> None:
         """Initialize macro executor.
-        
+
         Args:
             temp_macro_dir (Path | None): The temp macro dir value. Defaults to None.
-        
+
         Returns:
             None: None.
         """
@@ -77,11 +76,11 @@ class VbaMacroExecutor:
         backing_adapter: Any,
     ) -> AdapterResult[MacroExecutionResult]:
         """Provide execute macro support for the vba macro executor.
-        
+
         Args:
             request (MacroExecutionRequest): The request value.
             backing_adapter (Any): The backing adapter value.
-        
+
         Returns:
             AdapterResult[MacroExecutionResult]: The result produced by the operation.
         """
@@ -140,10 +139,10 @@ class VbaMacroExecutor:
         MacroExecutionResult,
     ]:
         """Retrieve macro execution history.
-        
+
         Args:
             macro_name (str | None): The macro name value. Defaults to None.
-        
+
         Returns:
             dict[
                 str,
@@ -163,11 +162,11 @@ class VbaMacroExecutor:
 
     def _save_macro_to_disk(self, macro_code: str, macro_name: str) -> Path:
         """Save VBA macro code to a file.
-        
+
         Args:
             macro_code (str): The macro code value.
             macro_name (str): The macro name value.
-        
+
         Returns:
             Path: The result produced by the operation.
         """
@@ -186,12 +185,12 @@ class VbaMacroExecutor:
         backing_adapter: Any,
     ) -> dict[str, Any]:
         """Delegate macro execution to backing adapter.
-        
+
         Args:
             macro_path (Path): The macro path value.
             subroutine (str): The subroutine value.
             backing_adapter (Any): The backing adapter value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """

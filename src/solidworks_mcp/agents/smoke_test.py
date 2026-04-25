@@ -1,5 +1,4 @@
-"""CLI for running validated prompt smoke tests against custom agent files.
-"""
+"""CLI for running validated prompt smoke tests against custom agent files."""
 
 from __future__ import annotations
 
@@ -27,7 +26,7 @@ app = typer.Typer(
 
 class SchemaChoice(StrEnum):
     """Handle schema choice.
-    
+
     Attributes:
         docs (Any): The docs value.
         manufacturability (Any): The manufacturability value.
@@ -47,17 +46,17 @@ def _resolve_model(
     model: str | None,
 ) -> str:
     """Resolve effective model id from CLI options.
-    
+
     Args:
         anthropic (bool): The anthropic value.
         claude_model (str): The claude model value.
         github_models (bool): The github models value.
         github_model (str): The github model value.
         model (str | None): The model value.
-    
+
     Returns:
         str: The resulting text value.
-    
+
     Raises:
         BadParameter: --model is required unless --github-models or --anthropic is enabled.
                       Recommended: --github-models (requires GH_TOKEN with models:read
@@ -81,13 +80,13 @@ def _resolve_model(
 
 def _ensure_provider_credentials(model: str) -> None:
     """Provide actionable credential guidance before model invocation.
-    
+
     Args:
         model (str): The model value.
-    
+
     Returns:
         None: None.
-    
+
     Raises:
         BadParameter: OPENAI_API_KEY is not set. Copilot subscription cannot be reused as an
                       OpenAI API key for local pydantic-ai scripts. Use --github-models
@@ -145,14 +144,14 @@ async def _run(
     max_retries_on_recoverable: int,
 ) -> int:
     """Build internal run.
-    
+
     Args:
         agent_file (str): The agent file value.
         model_name (str): Embedding model name to use.
         prompt (str): The prompt value.
         schema (SchemaChoice): The schema value.
         max_retries_on_recoverable (int): The max retries on recoverable value.
-    
+
     Returns:
         int: The computed numeric result.
     """
@@ -239,7 +238,7 @@ def run(
     ] = 1,
 ) -> None:
     """Run a validated custom-agent prompt test and print structured JSON output.
-    
+
     Args:
         agent_file (Annotated[
             str,
@@ -620,10 +619,10 @@ def run(
                                                                                                                                                                                                                                      o
                                                                                                                                                                                                                                      1
                                                                                                                                                                                                                                      .
-    
+
     Returns:
         None: None.
-    
+
     Raises:
         SystemExit: If the operation cannot be completed.
     """
@@ -640,7 +639,7 @@ def run(
 
 def main() -> None:
     """Handle main.
-    
+
     Returns:
         None: None.
     """

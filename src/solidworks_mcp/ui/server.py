@@ -71,7 +71,7 @@ _UI_FILE_SINK_ID: int | None = None
 
 def _configure_ui_file_logging() -> None:
     """Build internal configure ui file logging.
-    
+
     Returns:
         None: None.
     """
@@ -98,10 +98,10 @@ def _configure_ui_file_logging() -> None:
 
 def _should_log_request(path: str) -> bool:
     """Build internal should log request.
-    
+
     Args:
         path (str): Filesystem path for the operation.
-    
+
     Returns:
         bool: True if should log request, otherwise False.
     """
@@ -111,10 +111,10 @@ def _should_log_request(path: str) -> bool:
 
 def _sanitize_log_payload(value: Any) -> Any:
     """Build internal sanitize log payload.
-    
+
     Args:
         value (Any): The value value.
-    
+
     Returns:
         Any: The result produced by the operation.
     """
@@ -136,10 +136,10 @@ def _sanitize_log_payload(value: Any) -> Any:
 
 def _decode_request_body(body: bytes) -> Any:
     """Build internal decode request body.
-    
+
     Args:
         body (bytes): The body value.
-    
+
     Returns:
         Any: The result produced by the operation.
     """
@@ -155,7 +155,7 @@ def _decode_request_body(body: bytes) -> Any:
 
 class SessionRequest(BaseModel):
     """Base request payload containing session scope.
-    
+
     Attributes:
         session_id (str): The session id value.
     """
@@ -165,7 +165,7 @@ class SessionRequest(BaseModel):
 
 class GoalRequest(SessionRequest):
     """Request payload for endpoints that operate on the current design goal.
-    
+
     Attributes:
         user_goal (str): The user goal value.
     """
@@ -175,7 +175,7 @@ class GoalRequest(SessionRequest):
 
 class ClarifyWithAnswerRequest(GoalRequest):
     """Request payload for clarify that includes the user's typed answers.
-    
+
     Attributes:
         user_answer (str): The user answer value.
     """
@@ -185,7 +185,7 @@ class ClarifyWithAnswerRequest(GoalRequest):
 
 class FamilyAcceptRequest(SessionRequest):
     """Request payload for family acceptance.
-    
+
     Attributes:
         family (str | None): The family value.
     """
@@ -195,7 +195,7 @@ class FamilyAcceptRequest(SessionRequest):
 
 class PreviewRefreshRequest(SessionRequest):
     """Request payload for preview refresh requests.
-    
+
     Attributes:
         orientation (str): The orientation value.
     """
@@ -205,7 +205,7 @@ class PreviewRefreshRequest(SessionRequest):
 
 class FeatureSelectRequest(SessionRequest):
     """Request payload for highlighting a named feature in the SolidWorks model tree.
-    
+
     Attributes:
         feature_name (str): The feature name value.
     """
@@ -215,7 +215,7 @@ class FeatureSelectRequest(SessionRequest):
 
 class PreferencesUpdateRequest(SessionRequest):
     """Request payload for assumptions and model preference updates.
-    
+
     Attributes:
         assumptions_text (str): The assumptions text value.
         local_endpoint (str | None): The local endpoint value.
@@ -233,7 +233,7 @@ class PreferencesUpdateRequest(SessionRequest):
 
 class WorkflowSelectionRequest(SessionRequest):
     """Request payload for selecting the onboarding workflow branch.
-    
+
     Attributes:
         workflow_mode (str): The workflow mode value.
     """
@@ -243,7 +243,7 @@ class WorkflowSelectionRequest(SessionRequest):
 
 class UploadedFilePayload(BaseModel):
     """Browser-uploaded file payload returned by Prefab's OpenFilePicker action.
-    
+
     Attributes:
         data (str): The data value.
         name (str): The name value.
@@ -259,7 +259,7 @@ class UploadedFilePayload(BaseModel):
 
 class ConnectTargetModelRequest(SessionRequest):
     """Request payload for attaching an active SolidWorks target model.
-    
+
     Attributes:
         feature_target_text (str | None): The feature target text value.
         model_path (str | None): The model path value.
@@ -274,10 +274,10 @@ class ConnectTargetModelRequest(SessionRequest):
     @classmethod
     def _coerce_empty_uploaded_files(cls, v: object) -> object:
         """Coerce empty string or empty list to None so Pydantic accepts it.
-        
+
         Args:
             v (object): The v value.
-        
+
         Returns:
             object: The result produced by the operation.
         """
@@ -288,7 +288,7 @@ class ConnectTargetModelRequest(SessionRequest):
 
 class RagIngestRequest(SessionRequest):
     """Request payload for BYO retrieval ingestion from a local path or URL.
-    
+
     Attributes:
         chunk_size (int): The chunk size value.
         namespace (str): The namespace value.
@@ -304,7 +304,7 @@ class RagIngestRequest(SessionRequest):
 
 class GoOrchestrationRequest(SessionRequest):
     """Request payload for global Go orchestration action.
-    
+
     Attributes:
         assumptions_text (str | None): The assumptions text value.
         user_answer (str): The user answer value.
@@ -318,7 +318,7 @@ class GoOrchestrationRequest(SessionRequest):
 
 class DocsContextRequest(SessionRequest):
     """Request payload for docs-context refresh.
-    
+
     Attributes:
         query (str): The query value.
     """
@@ -328,7 +328,7 @@ class DocsContextRequest(SessionRequest):
 
 class NotesUpdateRequest(SessionRequest):
     """Request payload for saving free-form engineering notes.
-    
+
     Attributes:
         notes_text (str): The notes text value.
     """
@@ -338,7 +338,7 @@ class NotesUpdateRequest(SessionRequest):
 
 class ContextSaveRequest(SessionRequest):
     """Request payload for saving context to plain JSON snapshot.
-    
+
     Attributes:
         context_name (str | None): The context name value.
     """
@@ -348,7 +348,7 @@ class ContextSaveRequest(SessionRequest):
 
 class ContextLoadRequest(SessionRequest):
     """Request payload for loading context snapshot from plain JSON.
-    
+
     Attributes:
         context_file (str | None): The context file value.
     """
@@ -377,7 +377,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def _startup_ingest_design_knowledge() -> None:
     """Auto-ingest bundled design knowledge markdown files into FAISS on first startup.
-    
+
     Returns:
         None: None.
     """
@@ -426,11 +426,11 @@ async def _startup_ingest_design_knowledge() -> None:
 @app.middleware("http")
 async def log_ui_requests(request: Request, call_next):
     """Handle log ui requests.
-    
+
     Args:
         request (Request): The request value.
         call_next (Any): The call next value.
-    
+
     Returns:
         Any: The result produced by the operation.
     """
@@ -454,7 +454,7 @@ async def log_ui_requests(request: Request, call_next):
 
     async def receive() -> dict[str, Any]:
         """Handle receive.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -497,7 +497,7 @@ app.mount(
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     """Health check endpoint.
-    
+
     Returns:
         dict[str, str]: A dictionary containing the resulting values.
     """
@@ -507,10 +507,10 @@ async def health() -> dict[str, str]:
 @app.get("/api/ui/state")
 async def get_state(session_id: str = Query(DEFAULT_SESSION_ID)) -> dict[str, Any]:
     """Hydrate UI state from active session database.
-    
+
     Args:
         session_id (str): The session id value. Defaults to Query(DEFAULT_SESSION_ID).
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -522,10 +522,10 @@ async def get_debug_session(
     session_id: str = Query(DEFAULT_SESSION_ID),
 ) -> dict[str, Any]:
     """Return a verbose debug snapshot for the active UI session.
-    
+
     Args:
         session_id (str): The session id value. Defaults to Query(DEFAULT_SESSION_ID).
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -538,10 +538,10 @@ async def get_debug_session(
 @app.post("/api/ui/brief/approve")
 async def approve_brief(payload: GoalRequest) -> dict[str, Any]:
     """Accept the user-provided design goal.
-    
+
     Args:
         payload (GoalRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -551,10 +551,10 @@ async def approve_brief(payload: GoalRequest) -> dict[str, Any]:
 @app.post("/api/ui/preferences/update")
 async def update_preferences(payload: PreferencesUpdateRequest) -> dict[str, Any]:
     """Persist assumptions and provider/model preferences in session metadata.
-    
+
     Args:
         payload (PreferencesUpdateRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -571,10 +571,10 @@ async def update_preferences(payload: PreferencesUpdateRequest) -> dict[str, Any
 @app.post("/api/ui/workflow/select")
 async def update_workflow_mode(payload: WorkflowSelectionRequest) -> dict[str, Any]:
     """Persist the workflow choice shown on the opening dashboard screen.
-    
+
     Args:
         payload (WorkflowSelectionRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -587,10 +587,10 @@ async def update_workflow_mode(payload: WorkflowSelectionRequest) -> dict[str, A
 @app.post("/api/ui/model/connect")
 async def connect_model(payload: ConnectTargetModelRequest) -> dict[str, Any]:
     """Attach a target SolidWorks document and derive grounded feature-tree context.
-    
+
     Args:
         payload (ConnectTargetModelRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -610,10 +610,10 @@ async def connect_model(payload: ConnectTargetModelRequest) -> dict[str, Any]:
 @app.post("/api/ui/model/open")
 async def open_model(payload: ConnectTargetModelRequest) -> dict[str, Any]:
     """Open a target SolidWorks document first, before full connect/preview processing.
-    
+
     Args:
         payload (ConnectTargetModelRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -633,10 +633,10 @@ async def open_model(payload: ConnectTargetModelRequest) -> dict[str, Any]:
 @app.post("/api/ui/rag/ingest")
 async def ingest_rag_source(payload: RagIngestRequest) -> dict[str, Any]:
     """Ingest a user-provided PDF/text source into a local retrieval index.
-    
+
     Args:
         payload (RagIngestRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -652,10 +652,10 @@ async def ingest_rag_source(payload: RagIngestRequest) -> dict[str, Any]:
 @app.post("/api/ui/orchestrate/go")
 async def orchestrate_go(payload: GoOrchestrationRequest) -> dict[str, Any]:
     """Run one end-to-end update across workflow, review, and model output lanes.
-    
+
     Args:
         payload (GoOrchestrationRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -671,10 +671,10 @@ async def orchestrate_go(payload: GoOrchestrationRequest) -> dict[str, Any]:
 @app.post("/api/ui/docs/context")
 async def refresh_docs_context(payload: DocsContextRequest) -> dict[str, Any]:
     """Fetch a docs excerpt from the local docs endpoint using a query hint.
-    
+
     Args:
         payload (DocsContextRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -688,10 +688,10 @@ async def refresh_docs_context(payload: DocsContextRequest) -> dict[str, Any]:
 @app.post("/api/ui/notes/update")
 async def save_notes(payload: NotesUpdateRequest) -> dict[str, Any]:
     """Persist engineering notes for the current dashboard session.
-    
+
     Args:
         payload (NotesUpdateRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -705,10 +705,10 @@ async def save_notes(payload: NotesUpdateRequest) -> dict[str, Any]:
 @app.post("/api/ui/context/save")
 async def save_context(payload: ContextSaveRequest) -> dict[str, Any]:
     """Save current dashboard context to plain JSON and metadata.
-    
+
     Args:
         payload (ContextSaveRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -722,10 +722,10 @@ async def save_context(payload: ContextSaveRequest) -> dict[str, Any]:
 @app.post("/api/ui/context/load")
 async def load_context(payload: ContextLoadRequest) -> dict[str, Any]:
     """Load dashboard context from plain JSON snapshot.
-    
+
     Args:
         payload (ContextLoadRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -739,13 +739,13 @@ async def load_context(payload: ContextLoadRequest) -> dict[str, Any]:
 @app.post("/api/ui/clarify")
 async def clarify_goal(payload: ClarifyWithAnswerRequest) -> dict[str, Any]:
     """Call GitHub Copilot to normalize brief and generate clarifying questions.
-    
+
     Requires GH_TOKEN or GITHUB_API_KEY with models:read scope. Accepts optional user_answer
     with the user's typed clarifications.
-    
+
     Args:
         payload (ClarifyWithAnswerRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -757,13 +757,13 @@ async def clarify_goal(payload: ClarifyWithAnswerRequest) -> dict[str, Any]:
 @app.post("/api/ui/family/inspect")
 async def inspect_goal_family(payload: GoalRequest) -> dict[str, Any]:
     """Call GitHub Copilot to classify design family and suggest checkpoints.
-    
+
     Returns: family (string), confidence (low/medium/high), evidence (list), warnings
     (list), checkpoints (with tools and rationale).
-    
+
     Args:
         payload (GoalRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -773,10 +773,10 @@ async def inspect_goal_family(payload: GoalRequest) -> dict[str, Any]:
 @app.post("/api/ui/family/accept")
 async def accept_family(payload: FamilyAcceptRequest) -> dict[str, Any]:
     """Accept the proposed design family and advance status.
-    
+
     Args:
         payload (FamilyAcceptRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -786,13 +786,13 @@ async def accept_family(payload: FamilyAcceptRequest) -> dict[str, Any]:
 @app.post("/api/ui/checkpoints/execute-next")
 async def execute_checkpoint(payload: SessionRequest) -> dict[str, Any]:
     """Handle execute checkpoint.
-    
+
     Runs supported adapter tools (create_sketch, add_line, create_extrusion, create_cut).
     Unsupported tools are marked as MOCKED in checkpoint results and UI state.
-    
+
     Args:
         payload (SessionRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -802,13 +802,13 @@ async def execute_checkpoint(payload: SessionRequest) -> dict[str, Any]:
 @app.post("/api/ui/preview/refresh")
 async def refresh_preview_image(payload: PreviewRefreshRequest) -> dict[str, Any]:
     """Refresh the 3D view pane by exporting the current SolidWorks viewport.
-    
+
     Supported orientations: "front", "top", "right", "isometric", "current". Uses
     export_image() from the active adapter (requires SolidWorks COM available).
-    
+
     Args:
         payload (PreviewRefreshRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -822,14 +822,14 @@ async def refresh_preview_image(payload: PreviewRefreshRequest) -> dict[str, Any
 @app.post("/api/ui/feature/select")
 async def select_feature_endpoint(payload: FeatureSelectRequest) -> dict[str, Any]:
     """Select and highlight a named feature in the active SolidWorks model.
-    
+
     Uses SelectByID2 to locate the feature by name, trying common entity type strings
     (BODYFEATURE, SKETCH, PLANE, COMPONENT) in priority order. Returns the full dashboard
     state with ``selected_feature_name`` updated.
-    
+
     Args:
         payload (FeatureSelectRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -843,10 +843,10 @@ async def select_feature_endpoint(payload: FeatureSelectRequest) -> dict[str, An
 @app.post("/api/ui/manual-sync/reconcile")
 async def reconcile_edits(payload: SessionRequest) -> dict[str, Any]:
     """Handle reconcile edits.
-    
+
     Args:
         payload (SessionRequest): The payload value.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -857,11 +857,11 @@ async def reconcile_edits(payload: SessionRequest) -> dict[str, Any]:
 @app.get("/api/ui/local-model/probe")
 async def probe_local_model_endpoint() -> LocalModelProbeResult:
     """Probe for a running Ollama server and recommend the best Gemma model tier.
-    
+
     Returns a typed ``LocalModelProbeResult`` with hardware detection results, availability,
     pull status, and the ``service_model`` string suitable for passing as ``model_name`` to
     clarify/inspect actions.
-    
+
     Returns:
         LocalModelProbeResult: The result produced by the operation.
     """
@@ -875,13 +875,13 @@ async def pull_local_model_endpoint(
     payload: LocalModelPullRequest,
 ) -> LocalModelPullResult:
     """Trigger an Ollama pull for the specified model name (e.g. ``gemma4:e4b``).
-    
+
     The pull runs synchronously via Ollama's ``/api/pull`` endpoint. Large models (27B) may
     take several minutes to download.
-    
+
     Args:
         payload (LocalModelPullRequest): The payload value.
-    
+
     Returns:
         LocalModelPullResult: The result produced by the operation.
     """
@@ -895,15 +895,15 @@ async def query_local_model_endpoint(
     payload: LocalModelQueryRequest,
 ) -> LocalAgentResult:
     """Run a free-form prompt against the local Ollama model.
-    
+
     The request body carries a ``prompt`` and optional ``system_prompt``. The LLM response
     is validated by pydantic-ai and returned as a typed ``LocalAgentResult`` with
     ``success``, ``data`` (plain string), and ``config`` echoing the connection settings
     used.
-    
+
     Args:
         payload (LocalModelQueryRequest): The payload value.
-    
+
     Returns:
         LocalAgentResult: The result produced by the operation.
     """
@@ -913,7 +913,7 @@ async def query_local_model_endpoint(
 
     class _FreeFormResponse(_BaseModel):
         """Build internal free form response.
-        
+
         Attributes:
             text (str): The text value.
         """
@@ -1102,11 +1102,11 @@ async def get_viewer(
     session_id: str = Path(description="Session identifier for STL file routing"),
 ) -> HTMLResponse:
     """Serve the embedded Three.js 3D model viewer page.
-    
+
     Args:
         session_id (str): The session id value. Defaults to Path(description="Session
                           identifier for STL file routing").
-    
+
     Returns:
         HTMLResponse: The result produced by the operation.
     """
@@ -1115,7 +1115,7 @@ async def get_viewer(
 
 def main() -> None:
     """Run the dashboard backend locally.
-    
+
     Returns:
         None: None.
     """

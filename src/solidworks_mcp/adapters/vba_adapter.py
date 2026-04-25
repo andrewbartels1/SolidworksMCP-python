@@ -1,5 +1,4 @@
-"""VBA adapter path for complex operations with generated macro metadata.
-"""
+"""VBA adapter path for complex operations with generated macro metadata."""
 
 from __future__ import annotations
 
@@ -18,16 +17,16 @@ from .vba_macro_executor import MacroExecutionRequest, VbaMacroExecutor
 
 class VbaGeneratorAdapter:
     """Adapter that executes complex operations through VBA-oriented flow.
-    
+
     This adapter currently uses the wrapped COM adapter for final execution, but annotates
     responses as VBA-routed and can be extended to execute generated macros directly in
     future iterations.
-    
+
     Args:
         backing_adapter (Any): The backing adapter value.
         macro_executor (VbaMacroExecutor | None): The macro executor value. Defaults to
                                                   None.
-    
+
     Attributes:
         _backing_adapter (Any): The backing adapter value.
         _macro_executor (Any): The macro executor value.
@@ -40,12 +39,12 @@ class VbaGeneratorAdapter:
         macro_executor: VbaMacroExecutor | None = None,
     ) -> None:
         """Initialize the vba generator adapter.
-        
+
         Args:
             backing_adapter (Any): The backing adapter value.
             macro_executor (VbaMacroExecutor | None): The macro executor value. Defaults to
                                                       None.
-        
+
         Returns:
             None: None.
         """
@@ -55,10 +54,10 @@ class VbaGeneratorAdapter:
 
     def __getattr__(self, item: str) -> Any:
         """Delegate unknown members to backing adapter.
-        
+
         Args:
             item (str): The item value.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -66,7 +65,7 @@ class VbaGeneratorAdapter:
 
     async def connect(self) -> None:
         """Connect to SolidWorks using wrapped adapter.
-        
+
         Returns:
             None: None.
         """
@@ -74,7 +73,7 @@ class VbaGeneratorAdapter:
 
     async def disconnect(self) -> None:
         """Disconnect wrapped adapter.
-        
+
         Returns:
             None: None.
         """
@@ -82,7 +81,7 @@ class VbaGeneratorAdapter:
 
     def is_connected(self) -> bool:
         """Return wrapped adapter connection state.
-        
+
         Returns:
             bool: True if connected, otherwise False.
         """
@@ -90,7 +89,7 @@ class VbaGeneratorAdapter:
 
     async def health_check(self) -> Any:
         """Return wrapped adapter health with VBA route marker.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -106,10 +105,10 @@ class VbaGeneratorAdapter:
         params: ExtrusionParameters,
     ) -> AdapterResult[Any]:
         """Create the extrusion.
-        
+
         Args:
             params (ExtrusionParameters): The params value.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -125,10 +124,10 @@ class VbaGeneratorAdapter:
         params: RevolveParameters,
     ) -> AdapterResult[Any]:
         """Create the revolve.
-        
+
         Args:
             params (RevolveParameters): The params value.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -144,10 +143,10 @@ class VbaGeneratorAdapter:
         params: SweepParameters,
     ) -> AdapterResult[Any]:
         """Create the sweep.
-        
+
         Args:
             params (SweepParameters): The params value.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -163,10 +162,10 @@ class VbaGeneratorAdapter:
         params: LoftParameters,
     ) -> AdapterResult[Any]:
         """Create the loft.
-        
+
         Args:
             params (LoftParameters): The params value.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -185,13 +184,13 @@ class VbaGeneratorAdapter:
         vba_code: str,
     ) -> AdapterResult[Any]:
         """Build internal run with vba metadata.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
             payload (Any): The payload value.
             com_call (Any): The com call value.
             vba_code (str): The vba code value.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -210,10 +209,10 @@ class VbaGeneratorAdapter:
 
     def _generate_extrusion_vba(self, params: ExtrusionParameters) -> str:
         """Generate simple VBA snippet for extrusion operation.
-        
+
         Args:
             params (ExtrusionParameters): The params value.
-        
+
         Returns:
             str: The resulting text value.
         """
@@ -226,10 +225,10 @@ class VbaGeneratorAdapter:
 
     def _generate_revolve_vba(self, params: RevolveParameters) -> str:
         """Generate simple VBA snippet for revolve operation.
-        
+
         Args:
             params (RevolveParameters): The params value.
-        
+
         Returns:
             str: The resulting text value.
         """
@@ -242,10 +241,10 @@ class VbaGeneratorAdapter:
 
     def _generate_sweep_vba(self, params: SweepParameters) -> str:
         """Generate simple VBA snippet for sweep operation.
-        
+
         Args:
             params (SweepParameters): The params value.
-        
+
         Returns:
             str: The resulting text value.
         """
@@ -263,12 +262,12 @@ class VbaGeneratorAdapter:
         subroutine: str = "Main",
     ) -> AdapterResult[Any]:
         """Provide execute macro support for the vba generator adapter.
-        
+
         Args:
             macro_code (str): The macro code value.
             macro_name (str): The macro name value. Defaults to "GeneratedMacro".
             subroutine (str): The subroutine value. Defaults to "Main".
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -289,10 +288,10 @@ class VbaGeneratorAdapter:
         Any,
     ]:
         """Retrieve VBA macro execution history.
-        
+
         Args:
             macro_name (str | None): The macro name value. Defaults to None.
-        
+
         Returns:
             dict[
                 str,
@@ -304,10 +303,10 @@ class VbaGeneratorAdapter:
 
     def _generate_loft_vba(self, params: LoftParameters) -> str:
         """Generate simple VBA snippet for loft operation.
-        
+
         Args:
             params (LoftParameters): The params value.
-        
+
         Returns:
             str: The resulting text value.
         """

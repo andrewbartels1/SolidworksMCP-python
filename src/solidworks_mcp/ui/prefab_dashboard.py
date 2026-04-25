@@ -51,11 +51,11 @@ ctx_variant = (ctx_pct > 70).then(
 
 def _result_state(key: str, fallback: object | None = None) -> object:
     """Build internal result state.
-    
+
     Args:
         key (str): The key value.
         fallback (object | None): The fallback value. Defaults to None.
-    
+
     Returns:
         object: The result produced by the operation.
     """
@@ -73,7 +73,7 @@ def _result_state(key: str, fallback: object | None = None) -> object:
 
 def _error_toast() -> ShowToast:
     """Build internal error toast.
-    
+
     Returns:
         ShowToast: The result produced by the operation.
     """
@@ -83,7 +83,7 @@ def _error_toast() -> ShowToast:
 
 def _refresh_state() -> Fetch:
     """Re-hydrate from canonical session state after multi-step actions.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -97,7 +97,7 @@ def _refresh_state() -> Fetch:
 
 def _refresh_preview() -> Fetch:
     """Refresh preview and hydrate from the POST result payload directly.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -111,10 +111,10 @@ def _refresh_preview() -> Fetch:
 
 def _open_then_connect(connect_body: dict[str, object]) -> Fetch:
     """Run full connect + preview refresh in one request for reliable attach behavior.
-    
+
     Args:
         connect_body (dict[str, object]): The connect body value.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -128,7 +128,7 @@ def _open_then_connect(connect_body: dict[str, object]) -> Fetch:
 
 def _on_attach_success() -> list[object]:
     """Hydrate attach results without letting the UI fall back to chooser-only state.
-    
+
     Returns:
         list[object]: A list containing the resulting items.
     """
@@ -143,7 +143,7 @@ def _on_attach_success() -> list[object]:
 
 def _probe_local_model() -> Fetch:
     """Build internal probe local model.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -176,7 +176,7 @@ def _probe_local_model() -> Fetch:
 
 def _pull_recommended_local_model() -> Fetch:
     """Build internal pull recommended local model.
-    
+
     Returns:
         Fetch: The result produced by the operation.
     """
@@ -205,7 +205,7 @@ def _pull_recommended_local_model() -> Fetch:
 
 def _hydrate_from_result() -> list[Any]:
     """Build internal hydrate from result.
-    
+
     Returns:
         list[Any]: A list containing the resulting items.
     """
