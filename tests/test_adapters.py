@@ -128,20 +128,25 @@ class TestMockAdapter:
         await mock_adapter.connect()
 
         # Test create part
+
         result = await mock_adapter.create_part("TestPart", "mm")
         assert result.is_success
         assert result.data["name"] == "TestPart"
+
         assert result.data["units"] == "mm"
 
         # Test create extrusion
+
         result = await mock_adapter.create_extrusion("Sketch1", 10.0, "blind")
         assert result.is_success
+
         assert result.data["depth"] == 10.0
         assert result.data["direction"] == "blind"
 
     @pytest.mark.asyncio
     async def test_mock_adapter_sketch_operations(self, mock_adapter):
         """Test mock adapter sketch operations."""
+
         await mock_adapter.connect()
 
         # Test create sketch
@@ -152,12 +157,14 @@ class TestMockAdapter:
         # Test add sketch line
         result = await mock_adapter.add_sketch_line(0, 0, 10, 10, False)
         assert result.is_success
+
         assert result.data["start"] == {"x": 0, "y": 0}
         assert result.data["end"] == {"x": 10, "y": 10}
 
     @pytest.mark.asyncio
     async def test_mock_adapter_error_simulation(self, mock_config):
         """Test mock adapter error simulation."""
+
         config = mock_config
         config.simulate_errors = True
         adapter = MockSolidWorksAdapter(config)
@@ -1791,6 +1798,24 @@ class TestPyWin32AdapterBranches:
         result = adapter._try_select_by_feature_tree(target_doc, "Boss", ["Boss"])
         assert result is None
 
+    def test_try_select_by_feature_tree_empty_name_returns_none(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_feature_tree should skip empty feature names via _matches(False)."""
+        adapter = self._build_adapter(monkeypatch)
+        feature = SimpleNamespace(
+            Name="",
+            Select2=Mock(return_value=False),
+            GetNextFeature=Mock(return_value=None),
+        )
+        target_doc = SimpleNamespace(FirstFeature=Mock(return_value=feature))
+
+        result = adapter._try_select_by_feature_tree(
+            target_doc, "TargetFeature", ["TargetFeature"]
+        )
+
+        assert result is None
+
     # ── execute_macro helpers ───────────────────────────────────────────────
 
     def test_invoke_run_macro2_tuple_success(self, monkeypatch) -> None:
@@ -1824,7 +1849,9 @@ class TestPyWin32AdapterBranches:
             adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
 
     @pytest.mark.asyncio
-    async def test_export_image_returns_error_without_connection(self, monkeypatch) -> None:
+    async def test_export_image_returns_error_without_connection(
+        self, monkeypatch
+    ) -> None:
         """export_image should validate currentModel and swApp preconditions."""
         adapter = self._build_adapter(monkeypatch)
 
@@ -1839,7 +1866,9 @@ class TestPyWin32AdapterBranches:
         assert no_sw.error == "SolidWorks not connected"
 
     @pytest.mark.asyncio
-    async def test_export_image_success_with_orientation(self, monkeypatch, tmp_path) -> None:
+    async def test_export_image_success_with_orientation(
+        self, monkeypatch, tmp_path
+    ) -> None:
         """export_image should set orientation and persist an image on success."""
         adapter = self._build_adapter(monkeypatch)
         output_file = tmp_path / "shot.png"
@@ -1914,7 +1943,9 @@ class TestPyWin32AdapterBranches:
         assert saved is True
         assert extension.SaveAs2.call_count == 2
 
-    def test_save_stl_with_extension_returns_false_on_failure(self, monkeypatch) -> None:
+    def test_save_stl_with_extension_returns_false_on_failure(
+        self, monkeypatch
+    ) -> None:
         """_save_stl_with_extension should return False when SaveAs2 keeps failing."""
         adapter = self._build_adapter(monkeypatch)
         extension = SimpleNamespace(SaveAs2=Mock(side_effect=RuntimeError("fail")))
@@ -2019,6 +2050,558 @@ class TestPyWin32AdapterBranches:
         adapter.swApp.RunMacro2.assert_called_once_with(
             str(macro_file), "MyMacroModule", "main", 0, 0
         )
+
+    @pytest.mark.asyncio
+    async def test_export_file_stl_errors_when_extension_missing(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """export_file should fail STL export when target document has no Extension."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "missing_ext.stl"
+
+        target_doc = SimpleNamespace(
+            ResolveAllLightweightComponents=Mock(),
+            Extension=None,
+        )
+        adapter.currentModel = target_doc
+        adapter.swApp = SimpleNamespace(ActiveDoc=target_doc)
+
+        result = await adapter.export_file(str(out_file), "stl")
+        assert result.is_error
+        assert "No Extension object available for STL export" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_export_file_stl_success_via_extension_path(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """export_file should complete STL export when SaveAs2 path succeeds."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "ok_ext.stl"
+
+        extension = SimpleNamespace(SaveAs2=Mock())
+        target_doc = SimpleNamespace(
+            ResolveAllLightweightComponents=Mock(),
+            Extension=extension,
+            SaveAs3=Mock(),
+        )
+        adapter.currentModel = target_doc
+        adapter.swApp = SimpleNamespace(ActiveDoc=target_doc)
+
+        monkeypatch.setattr(
+            adapter,
+            "_prepare_stl_export_data",
+            Mock(return_value=SimpleNamespace(Merge=True, ExportBodiesAs=0)),
+        )
+        monkeypatch.setattr(
+            adapter, "_save_stl_with_extension", Mock(return_value=True)
+        )
+        monkeypatch.setattr(adapter, "_save_stl_with_fallback", Mock())
+
+        result = await adapter.export_file(str(out_file), "stl")
+
+        assert result.is_success
+        target_doc.ResolveAllLightweightComponents.assert_called_once_with(True)
+        adapter._save_stl_with_extension.assert_called_once()
+        adapter._save_stl_with_fallback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_export_file_stl_falls_back_to_saveas3(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """export_file should use _save_stl_with_fallback when SaveAs2 path fails."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "fallback_ok.stl"
+
+        extension = SimpleNamespace(SaveAs2=Mock())
+        target_doc = SimpleNamespace(
+            ResolveAllLightweightComponents=Mock(),
+            Extension=extension,
+            SaveAs3=Mock(),
+        )
+        adapter.currentModel = target_doc
+        adapter.swApp = SimpleNamespace(ActiveDoc=target_doc)
+
+        monkeypatch.setattr(
+            adapter,
+            "_prepare_stl_export_data",
+            Mock(return_value=SimpleNamespace(Merge=True, ExportBodiesAs=0)),
+        )
+        monkeypatch.setattr(
+            adapter, "_save_stl_with_extension", Mock(return_value=False)
+        )
+        monkeypatch.setattr(adapter, "_save_stl_with_fallback", Mock(return_value=None))
+
+        result = await adapter.export_file(str(out_file), "stl")
+
+        assert result.is_success
+        adapter._save_stl_with_extension.assert_called_once()
+        adapter._save_stl_with_fallback.assert_called_once_with(
+            target_doc, str(out_file)
+        )
+
+    @pytest.mark.asyncio
+    async def test_export_file_non_stl_accepts_false_when_file_written(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """export_file should succeed if SaveAs3 is False but output file exists."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "out.step"
+
+        def _saveas3(path, *_args):
+            out_file.write_text("ok", encoding="utf-8")
+            return False
+
+        target_doc = SimpleNamespace(SaveAs3=Mock(side_effect=_saveas3))
+        adapter.currentModel = target_doc
+        adapter.swApp = SimpleNamespace(ActiveDoc=target_doc)
+
+        result = await adapter.export_file(str(out_file), "step")
+
+        assert result.is_success
+        target_doc.SaveAs3.assert_called_once()
+
+    def test_save_stl_with_fallback_succeeds_when_file_exists(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """_save_stl_with_fallback should return cleanly when output exists after SaveAs3."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "fallback_success.stl"
+
+        def _saveas3(path, *_args):
+            out_file.write_text("solid", encoding="utf-8")
+            return True
+
+        target_doc = SimpleNamespace(SaveAs3=Mock(side_effect=_saveas3))
+
+        adapter._save_stl_with_fallback(target_doc, str(out_file))
+        target_doc.SaveAs3.assert_called_once_with(str(out_file), 0, 2)
+
+    def test_save_stl_with_fallback_swallows_saveas3_error_if_file_exists(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """_save_stl_with_fallback should not raise when SaveAs3 errors but file is present."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "already_exists.stl"
+        out_file.write_text("solid", encoding="utf-8")
+        target_doc = SimpleNamespace(SaveAs3=Mock(side_effect=RuntimeError("COM fail")))
+
+        adapter._save_stl_with_fallback(target_doc, str(out_file))
+        target_doc.SaveAs3.assert_called_once_with(str(out_file), 0, 2)
+
+    @pytest.mark.asyncio
+    async def test_export_file_returns_error_without_active_model(
+        self, monkeypatch
+    ) -> None:
+        """export_file should return a guard error when currentModel is missing."""
+        adapter = self._build_adapter(monkeypatch)
+
+        result = await adapter.export_file("C:/tmp/out.step", "step")
+
+        assert result.is_error
+        assert result.error == "No active model"
+
+    @pytest.mark.asyncio
+    async def test_dimension_methods_return_error_without_active_model(
+        self, monkeypatch
+    ) -> None:
+        """get_dimension/set_dimension should guard when there is no current model."""
+        adapter = self._build_adapter(monkeypatch)
+
+        get_result = await adapter.get_dimension("D1@Sketch1")
+        set_result = await adapter.set_dimension("D1@Sketch1", 12.5)
+
+        assert get_result.is_error
+        assert get_result.error == "No active model"
+        assert set_result.is_error
+        assert set_result.error == "No active model"
+
+    @pytest.mark.asyncio
+    async def test_save_file_raises_when_save3_none_and_save_missing(
+        self, monkeypatch
+    ) -> None:
+        """save_file should error when Save3 returns None and no Save fallback exists."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            Save3=Mock(return_value=None),
+            GetPathName=Mock(return_value=""),
+        )
+
+        result = await adapter.save_file()
+
+        assert result.is_error
+        assert "Failed to save file" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_model_info_and_list_features_return_error_without_model(
+        self, monkeypatch
+    ) -> None:
+        """get_model_info/list_features should return guard errors when model is absent."""
+        adapter = self._build_adapter(monkeypatch)
+
+        info_result = await adapter.get_model_info()
+        list_result = await adapter.list_features()
+
+        assert info_result.is_error
+        assert info_result.error == "No active model"
+        assert list_result.is_error
+        assert list_result.error == "No active model"
+
+    @pytest.mark.asyncio
+    async def test_list_features_handles_none_feature_in_reverse_fallback(
+        self, monkeypatch
+    ) -> None:
+        """list_features should ignore None entries returned by reverse position traversal."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=Mock(return_value=None),
+            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(return_value=1)),
+            FeatureByPositionReverse=Mock(return_value=None),
+        )
+
+        result = await adapter.list_features(include_suppressed=True)
+
+        assert result.is_success
+        assert result.data == []
+
+    def test_try_select_by_component_non_callable_and_selector_exception(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_component should skip non-callable selectors and swallow selector errors."""
+        adapter = self._build_adapter(monkeypatch)
+        component = SimpleNamespace(
+            Select4="not-callable",
+            Select=Mock(side_effect=RuntimeError("COM select fail")),
+            Select2=Mock(return_value=False),
+        )
+        target_doc = SimpleNamespace(GetComponentByName=Mock(return_value=component))
+
+        result = adapter._try_select_by_component(target_doc, ["Axle"], "Axle")
+
+        assert result is None
+
+    def test_try_select_by_feature_tree_empty_name_select2_exception_and_next(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_feature_tree should handle empty names, Select2 exceptions, and continue traversal."""
+        adapter = self._build_adapter(monkeypatch)
+
+        second = SimpleNamespace(
+            Name="TargetFeature",
+            Select2=Mock(return_value=True),
+            GetNextFeature=Mock(return_value=None),
+        )
+        first = SimpleNamespace(
+            Name="TargetFeature",
+            Select2=Mock(side_effect=RuntimeError("select fail")),
+            GetNextFeature=Mock(return_value=second),
+        )
+        target_doc = SimpleNamespace(FirstFeature=Mock(return_value=first))
+
+        result = adapter._try_select_by_feature_tree(
+            target_doc, "TargetFeature", ["TargetFeature"]
+        )
+
+        assert result is not None
+        assert result["selected"] is True
+        assert result["selected_name"] == "TargetFeature"
+
+    @pytest.mark.asyncio
+    async def test_select_feature_returns_component_strategy_result(
+        self, monkeypatch
+    ) -> None:
+        """select_feature should return when component strategy succeeds."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="Asm1.SLDASM"),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            GetComponentByName=Mock(
+                return_value=SimpleNamespace(
+                    Select4=Mock(return_value=True),
+                    Select=Mock(return_value=False),
+                    Select2=Mock(return_value=False),
+                )
+            ),
+            FirstFeature=Mock(return_value=None),
+        )
+        adapter.currentModel = target_doc
+
+        result = await adapter.select_feature("Bracket-1")
+
+        assert result.is_success
+        assert result.data["selected"] is True
+        assert result.data["entity_type"] == "component:Select4"
+
+    @pytest.mark.asyncio
+    async def test_select_feature_returns_feature_tree_strategy_result(
+        self, monkeypatch
+    ) -> None:
+        """select_feature should return when extension/component fail but feature-tree succeeds."""
+        adapter = self._build_adapter(monkeypatch)
+        feature = SimpleNamespace(
+            Name="Boss-Extrude1",
+            Select2=Mock(return_value=True),
+            GetNextFeature=Mock(return_value=None),
+        )
+        target_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="Part1.SLDPRT"),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            GetComponentByName=Mock(return_value=None),
+            FirstFeature=Mock(return_value=feature),
+        )
+        adapter.currentModel = target_doc
+
+        result = await adapter.select_feature("Boss-Extrude1")
+
+        assert result.is_success
+        assert result.data["selected"] is True
+        assert result.data["entity_type"] == "feature-tree"
+
+    @pytest.mark.asyncio
+    async def test_select_feature_returns_error_without_active_model(
+        self, monkeypatch
+    ) -> None:
+        """select_feature should guard when there is no active model."""
+        adapter = self._build_adapter(monkeypatch)
+
+        result = await adapter.select_feature("Boss-Extrude1")
+
+        assert result.is_error
+        assert result.error == "No active model"
+
+    @pytest.mark.asyncio
+    async def test_connect_and_document_creation_not_connected_paths(
+        self, monkeypatch
+    ) -> None:
+        """Cover connection/document creation branches when COM app is missing."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.swApp = None
+        assert adapter._resolve_template_path([8, 0], ".prtdot") is None
+
+        adapter.currentModel = SimpleNamespace(GetTitle=Mock(return_value="Part1"))
+        close_result = await adapter.close_model()
+        assert close_result.is_error
+        assert "not connected" in (close_result.error or "").lower()
+
+        monkeypatch.setattr(adapter, "is_connected", lambda: True)
+        adapter.swApp = None
+        part_result = await adapter.create_part()
+        assembly_result = await adapter.create_assembly()
+        drawing_result = await adapter.create_drawing()
+        assert part_result.is_error
+        assert assembly_result.is_error
+        assert drawing_result.is_error
+        assert "not connected" in (part_result.error or "").lower()
+        assert "not connected" in (assembly_result.error or "").lower()
+        assert "not connected" in (drawing_result.error or "").lower()
+
+    @pytest.mark.asyncio
+    async def test_connect_raises_when_com_app_instance_is_none(
+        self, monkeypatch
+    ) -> None:
+        """connect should raise when COM returns None instead of an app instance."""
+        adapter = self._build_adapter(monkeypatch)
+
+        fake_client = SimpleNamespace(
+            GetActiveObject=Mock(return_value=None),
+            Dispatch=Mock(return_value=None),
+        )
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.win32com",
+            SimpleNamespace(client=fake_client),
+            raising=False,
+        )
+
+        with pytest.raises(SolidWorksMCPError, match="instance is None"):
+            await adapter.connect()
+
+    @pytest.mark.asyncio
+    async def test_create_extrusion_and_revolve_feature_none_errors(
+        self, monkeypatch
+    ) -> None:
+        """create_extrusion/create_revolve should error when feature manager returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureManager=SimpleNamespace(
+                FeatureExtrusion3=Mock(return_value=None),
+                FeatureExtrusion2=Mock(return_value=None),
+                FeatureRevolve2=Mock(return_value=None),
+            )
+        )
+
+        extrusion_result = await adapter.create_extrusion(
+            SimpleNamespace(
+                depth=5.0,
+                draft_angle=0.0,
+                reverse_direction=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+        revolve_result = await adapter.create_revolve(
+            SimpleNamespace(
+                angle=90.0,
+                reverse_direction=False,
+                both_directions=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+
+        assert extrusion_result.is_error
+        assert "Failed to create extrusion feature" in (extrusion_result.error or "")
+        assert revolve_result.is_error
+        assert "Failed to create revolve feature" in (revolve_result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sketch_empty_plane_and_total_select_failure(
+        self, monkeypatch
+    ) -> None:
+        """create_sketch should skip empty candidates and surface explicit plane selection failure."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=Mock(return_value=None),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            SketchManager=SimpleNamespace(InsertSketch=Mock(return_value=None)),
+            GetActiveSketch2=Mock(return_value="Sketch1"),
+        )
+
+        failed = await adapter.create_sketch("")
+        assert failed.is_error
+        assert "Failed to select plane" in (failed.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_and_mass_property_guard_and_fallback_errors(
+        self, monkeypatch
+    ) -> None:
+        """Cover sketch guard returns and mass-properties fallback error branches."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = None
+        assert (await adapter.create_sketch("Top")).is_error
+        assert (await adapter.get_mass_properties()).is_error
+
+        adapter.currentSketchManager = None
+        assert (await adapter.add_sketch_dimension("L1", None, "linear", 10.0)).is_error
+        assert (await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)).is_error
+        assert (
+            await adapter.sketch_circular_pattern(["L1"], 0.0, 0.0, 180.0, 4)
+        ).is_error
+        assert (await adapter.sketch_mirror(["L1"], "CL1")).is_error
+        assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_error
+
+        adapter.currentModel = SimpleNamespace(
+            ForceRebuild3=Mock(return_value=True),
+            Extension=SimpleNamespace(CreateMassProperty=Mock(return_value=None)),
+            GetMassProperties=[0.0, 0.0, 0.0, 1.0, 2.0, 3.0],
+        )
+        mass_result = await adapter.get_mass_properties()
+        assert mass_result.is_success
+        assert mass_result.data is not None
+        assert mass_result.data.moments_of_inertia == {
+            "Ixx": 0.0,
+            "Iyy": 0.0,
+            "Izz": 0.0,
+            "Ixy": 0.0,
+            "Ixz": 0.0,
+            "Iyz": 0.0,
+        }
+
+        # IMassProperty path with short MOI tuple should zero-fill inertia values.
+        adapter.currentModel = SimpleNamespace(
+            ForceRebuild3=Mock(return_value=True),
+            Extension=SimpleNamespace(
+                CreateMassProperty=Mock(
+                    return_value=SimpleNamespace(
+                        Volume=1.0,
+                        SurfaceArea=2.0,
+                        Mass=3.0,
+                        CenterOfMass=[0.0, 0.0, 0.0],
+                        GetMomentOfInertia=Mock(return_value=[1.0]),
+                    )
+                )
+            ),
+        )
+        short_moi = await adapter.get_mass_properties()
+        assert short_moi.is_success
+        assert short_moi.data is not None
+        assert short_moi.data.moments_of_inertia == {
+            "Ixx": 0.0,
+            "Iyy": 0.0,
+            "Izz": 0.0,
+            "Ixy": 0.0,
+            "Ixz": 0.0,
+            "Iyz": 0.0,
+        }
+
+        adapter.currentModel = SimpleNamespace(
+            ForceRebuild3=Mock(return_value=True),
+            Extension=SimpleNamespace(CreateMassProperty=Mock(return_value=None)),
+            GetMassProperties=[0.0, 0.0, 0.0],
+        )
+        mass_error = await adapter.get_mass_properties()
+        assert mass_error.is_error
+        assert "Failed to get mass properties" in (mass_error.error or "")
+
+    @pytest.mark.asyncio
+    async def test_export_image_and_stl_prep_failure_paths(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """Cover export_image all-methods-failed and STL export-data exception branch."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace()
+        adapter.swApp = SimpleNamespace(
+            ActiveDoc=None,
+            Frame=SimpleNamespace(SetFocus=Mock()),
+        )
+
+        monkeypatch.setattr(
+            adapter,
+            "_save_screenshot_with_modelview",
+            lambda *_args, **_kwargs: False,
+        )
+        monkeypatch.setattr(
+            adapter,
+            "_save_screenshot_with_targetdoc",
+            lambda *_args, **_kwargs: False,
+        )
+        monkeypatch.setattr(
+            adapter,
+            "_save_screenshot_with_saveas3",
+            lambda *_args, **_kwargs: None,
+        )
+
+        failed = await adapter.export_image(
+            {
+                "file_path": str(tmp_path / "never-created.png"),
+                "orientation": "current",
+                "width": 800,
+                "height": 600,
+            }
+        )
+        assert failed.is_error
+        assert "All screenshot methods produced no output" in (failed.error or "")
+
+        adapter.swApp = SimpleNamespace(
+            GetExportFileData=Mock(side_effect=RuntimeError("COM failure"))
+        )
+        assert adapter._prepare_stl_export_data() is None
+
+    @pytest.mark.asyncio
+    async def test_set_dimension_setvalue_failure_branch(self, monkeypatch) -> None:
+        """set_dimension should report error when SetValue3 returns False."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            Parameter=Mock(
+                return_value=SimpleNamespace(SetValue3=Mock(return_value=False))
+            )
+        )
+
+        result = await adapter.set_dimension("D1@Sketch1", 10.0)
+        assert result.is_error
+        assert "Failed to set dimension" in (result.error or "")
 
 
 class TestMockAdapterAdditionalCoverage:

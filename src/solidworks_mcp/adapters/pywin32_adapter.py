@@ -2180,8 +2180,6 @@ class PyWin32Adapter(SolidWorksAdapter):
             target_doc = (
                 self.swApp.ActiveDoc if self.swApp else None
             ) or self.currentModel
-            if not target_doc:
-                raise RuntimeError("No active SolidWorks document for screenshot")
 
             # Ensure SolidWorks window is focused so the viewport is rendered.
             # Required for both view changes and bitmap capture.
@@ -2373,8 +2371,6 @@ class PyWin32Adapter(SolidWorksAdapter):
             target_doc = (
                 getattr(self.swApp, "ActiveDoc", None) if self.swApp else None
             ) or self.currentModel
-            if not target_doc:
-                raise RuntimeError("No active SolidWorks document for export")
 
             # ----------------------------------------------------------------
             # STL export: use Extension.SaveAs2 + ISTLExportData
@@ -2723,9 +2719,6 @@ class PyWin32Adapter(SolidWorksAdapter):
                 Returns:
                     None: None.
                 """
-                if not feature:
-                    return
-
                 name = str(getattr(feature, "Name", ""))
                 feature_type = str(
                     self._attempt(lambda: feature.GetTypeName2(), default="Unknown")

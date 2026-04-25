@@ -22,7 +22,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Any
-
+import numpy as np
 logger = logging.getLogger(__name__)
 
 DEFAULT_RAG_DIR = Path(".solidworks_mcp") / "rag"
@@ -215,8 +215,6 @@ class VectorRAGIndex:
         Returns:
             Any: The result produced by the operation.
         """
-
-        import numpy as np  # type: ignore[import]
 
         model = self._get_model()
         vecs = model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)

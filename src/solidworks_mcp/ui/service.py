@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import inspect
 import json
 import os
 import subprocess
@@ -2847,11 +2848,19 @@ async def _run_structured_agent(
     mcp_agent_tools = os.getenv("SOLIDWORKS_MCP_AGENT_TOOLS", "auto").lower()
     toolsets: list[Any] = []
     if mcp_agent_tools != "off" and MCPServerStreamableHTTP is not None:
+        mcp_kwargs: dict[str, Any] = {"tool_prefix": "sw"}
+        try:
+            params = inspect.signature(MCPServerStreamableHTTP).parameters
+            if "include_instructions" in params:
+                mcp_kwargs["include_instructions"] = True
+        except (TypeError, ValueError):
+            # Some callables may not provide a runtime signature.
+            pass
+
         toolsets = [
             MCPServerStreamableHTTP(
                 mcp_server_url,
-                tool_prefix="sw",
-                include_instructions=True,
+                **mcp_kwargs,
             )
         ]
 
