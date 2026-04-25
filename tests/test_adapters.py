@@ -2402,6 +2402,11 @@ class TestPyWin32AdapterBranches:
         """connect should raise when COM returns None instead of an app instance."""
         adapter = self._build_adapter(monkeypatch)
 
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            SimpleNamespace(CoInitialize=Mock(), CoUninitialize=Mock()),
+            raising=False,
+        )
         fake_client = SimpleNamespace(
             GetActiveObject=Mock(return_value=None),
             Dispatch=Mock(return_value=None),
