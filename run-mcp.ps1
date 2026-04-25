@@ -65,7 +65,7 @@ if (Test-PythonExecutable $venvPython) {
 	exit $LASTEXITCODE
 }
 
- $uvExecutable = Get-UvExecutable
+	$uvExecutable = Get-UvExecutable
 if ($uvExecutable) {
 	& $uvExecutable run --project $scriptDir python $startServerScript @args
 	exit $LASTEXITCODE
