@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import shutil
+import sys
 import time
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -963,3 +964,333 @@ async def test_search_api_help_exception_path(
     result = await search_tool({"query": "OpenDoc6"})
     assert result["status"] == "error"
     assert "API help search failed" in result["message"]
+
+
+def test_enumerate_typeinfo_members_happy_path_and_error_item() -> None:
+    """Covers method/property extraction, dedupe, and per-item exception continue."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    class _TypeAttr:
+        cFuncs = 4
+
+    class _FuncDesc:
+        def __init__(self, memid: int, invkind: int):
+            self.memid = memid
+            self.invkind = invkind
+
+    class _TypeInfo:
+        def GetTypeAttr(self):
+            return _TypeAttr()
+
+        def GetFuncDesc(self, i: int):
+            if i == 3:
+                raise RuntimeError("bad func")
+            return [_FuncDesc(1, 1), _FuncDesc(2, 2), _FuncDesc(1, 1)][i]
+
+        def GetNames(self, memid: int):
+            return {1: ["OpenDoc6"], 2: ["Visible"]}[memid]
+
+    methods, properties = docs_mod._enumerate_typeinfo_members(_TypeInfo())
+    assert methods == ["OpenDoc6"]
+    assert properties == ["Visible"]
+
+
+def test_discover_com_via_typeinfo_no_win32(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Covers early-return branch when win32com is unavailable."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
+    assert docs_mod._discover_com_via_typeinfo(object()) == {}
+
+
+def test_discover_com_via_typeinfo_with_impl_interfaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Covers implemented-interface merge path and counters."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+
+    class _TypeAttr:
+        cImplTypes = 1
+
+    class _TypeInfo:
+        def GetTypeAttr(self):
+            return _TypeAttr()
+
+        def GetRefTypeOfImplType(self, _idx: int):
+            return "ref"
+
+        def GetRefTypeInfo(self, _ref):
+            return object()
+
+    class _Ole:
+        def GetTypeInfo(self):
+            return _TypeInfo()
+
+    sw_app = SimpleNamespace(_oleobj_=_Ole())
+
+    def _enum_members(typeinfo):
+        if isinstance(typeinfo, _TypeInfo):
+            return ["OpenDoc6"], ["Visible"]
+        return ["CloseDoc"], ["FrameState"]
+
+    monkeypatch.setattr(docs_mod, "_enumerate_typeinfo_members", _enum_members)
+
+    index, total_m, total_p = docs_mod._discover_com_via_typeinfo(sw_app)
+    assert "ISldWorks" in index
+    assert set(index["ISldWorks"]["methods"]) == {"OpenDoc6", "CloseDoc"}
+    assert set(index["ISldWorks"]["properties"]) == {"Visible", "FrameState"}
+    assert total_m == 2
+    assert total_p == 2
+
+
+def test_discover_com_via_typeinfo_outer_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Covers exception path when GetTypeInfo fails."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    sw_app = SimpleNamespace(
+        _oleobj_=SimpleNamespace(
+            GetTypeInfo=lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
+    )
+
+    index, total_m, total_p = docs_mod._discover_com_via_typeinfo(sw_app)
+    assert index == {}
+    assert total_m == 0
+    assert total_p == 0
+
+
+def test_discover_vba_references_via_registry_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Covers Windows registry scan success, duplicate guard, and query fallback."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+
+    class _FakeWinReg:
+        HKEY_CLASSES_ROOT = object()
+        KEY_READ = 1
+
+        def OpenKey(self, root, key, access=None):
+            return (root, key, access)
+
+        def EnumKey(self, key, idx: int):
+            name = key[1]
+            if name == "TypeLib":
+                values = ["{GUID-1}"]
+            elif name == "{GUID-1}":
+                values = ["1.0", "2.0"]
+            else:
+                values = []
+            if idx >= len(values):
+                raise OSError("done")
+            return values[idx]
+
+        def QueryValueEx(self, key, _name: str):
+            version = key[1]
+            if version == "2.0":
+                raise OSError("missing")
+            return "SldWorks Type Library", None
+
+        def CloseKey(self, _key):
+            return None
+
+    monkeypatch.setitem(sys.modules, "winreg", _FakeWinReg())
+    refs = docs_mod._discover_vba_references_via_registry()
+    assert refs
+    only = next(iter(refs.values()))
+    assert only["status"] == "available"
+
+
+def test_discover_com_objects_with_typeinfo_and_active_doc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Covers typeinfo logging path and active document supplement path."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    discovery = docs_mod.SolidWorksDocsDiscovery(
+        output_dir=Path("tests/.generated/docs-typeinfo-active")
+    )
+    discovery.sw_app = SimpleNamespace(
+        ActiveDoc=SimpleNamespace(
+            _oleobj_=SimpleNamespace(GetTypeInfo=lambda: object())
+        ),
+        RevisionNumber=lambda: "33.4",
+    )
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    monkeypatch.setattr(
+        docs_mod,
+        "_discover_com_via_typeinfo",
+        lambda _sw: ({"ISldWorks": {"methods": ["OpenDoc6"], "properties": []}}, 1, 0),
+    )
+    monkeypatch.setattr(
+        docs_mod,
+        "_enumerate_typeinfo_members",
+        lambda _ti: (["GetTitle"], ["ActiveView"]),
+    )
+
+    result = discovery.discover_com_objects()
+    assert "ISldWorks" in result
+    assert "IModelDoc2_active" in result
+
+
+def test_find_index_file_none_when_missing() -> None:
+    """Covers _find_index_file final return None branch."""
+    from src.solidworks_mcp.tools.docs_discovery import _find_index_file
+
+    assert _find_index_file(2099, "tests/.generated/does-not-exist.json") is None
+
+
+@pytest.mark.asyncio
+async def test_discover_tool_sets_rag_indexed_true_when_rag_rebuild_succeeds(
+    mcp_server,
+    mock_config: SolidWorksMCPConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    temp_dir: Path,
+) -> None:
+    """Covers RAG rebuild success branch in discover_solidworks_docs."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+
+    discover_tool = None
+    for tool in mcp_server._tools:
+        if tool.name == "discover_solidworks_docs":
+            discover_tool = tool.func
+            break
+    assert discover_tool is not None
+
+    class _FakeDiscovery:
+        def __init__(self, output_dir=None):
+            self.output_dir = output_dir
+
+        def discover_all(self):
+            return {"com_objects": {}, "vba_references": {}}
+
+        def save_index(self, filename="solidworks_docs_index.json"):
+            path = temp_dir / filename
+            path.write_text("{}", encoding="utf-8")
+            return path
+
+        def create_search_summary(self):
+            return {
+                "total_com_objects": 0,
+                "total_methods": 0,
+                "total_properties": 0,
+                "solidworks_version": None,
+                "available_vba_libs": [],
+            }
+
+    class _FakeRagIndex:
+        chunk_count = 7
+
+        def save(self):
+            return None
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
+
+    fake_vector_rag = SimpleNamespace(
+        build_solidworks_api_docs_index=lambda _output: _FakeRagIndex()
+    )
+    monkeypatch.setitem(
+        sys.modules, "solidworks_mcp.agents.vector_rag", fake_vector_rag
+    )
+
+    result = await discover_tool({"output_dir": str(temp_dir), "year": 2026})
+    assert result["status"] == "success"
+    assert result["rag_indexed"] is True
+
+
+@pytest.mark.asyncio
+async def test_discover_tool_handles_rag_import_error(
+    mcp_server,
+    mock_config: SolidWorksMCPConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    temp_dir: Path,
+) -> None:
+    """Covers ImportError branch when vector_rag rebuild is unavailable."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+
+    discover_tool = None
+    for tool in mcp_server._tools:
+        if tool.name == "discover_solidworks_docs":
+            discover_tool = tool.func
+            break
+    assert discover_tool is not None
+
+    class _FakeDiscovery:
+        def __init__(self, output_dir=None):
+            self.output_dir = output_dir
+
+        def discover_all(self):
+            return {"com_objects": {}, "vba_references": {}}
+
+        def save_index(self, filename="solidworks_docs_index.json"):
+            path = temp_dir / filename
+            path.write_text("{}", encoding="utf-8")
+            return path
+
+        def create_search_summary(self):
+            return {
+                "total_com_objects": 0,
+                "total_methods": 0,
+                "total_properties": 0,
+                "solidworks_version": None,
+                "available_vba_libs": [],
+            }
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
+
+    # Module exists but missing the imported symbol -> ImportError in "from ... import ...".
+    monkeypatch.setitem(
+        sys.modules, "solidworks_mcp.agents.vector_rag", SimpleNamespace()
+    )
+
+    result = await discover_tool({"output_dir": str(temp_dir), "year": 2026})
+    assert result["status"] == "success"
+    assert result["rag_indexed"] is False
+
+
+@pytest.mark.asyncio
+async def test_discover_tool_top_level_exception_path(
+    mcp_server,
+    mock_config: SolidWorksMCPConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Covers top-level exception handler in discover_solidworks_docs."""
+    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+
+    discover_tool = None
+    for tool in mcp_server._tools:
+        if tool.name == "discover_solidworks_docs":
+            discover_tool = tool.func
+            break
+    assert discover_tool is not None
+
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        docs_mod,
+        "SolidWorksDocsDiscovery",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("construct failed")
+        ),
+    )
+
+    result = await discover_tool({})
+    assert result["status"] == "error"
+    assert "Discovery failed" in result["message"]

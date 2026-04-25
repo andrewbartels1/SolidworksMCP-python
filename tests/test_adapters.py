@@ -1823,6 +1823,203 @@ class TestPyWin32AdapterBranches:
         with pytest.raises(SolidWorksMCPError):
             adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
 
+    @pytest.mark.asyncio
+    async def test_export_image_returns_error_without_connection(self, monkeypatch) -> None:
+        """export_image should validate currentModel and swApp preconditions."""
+        adapter = self._build_adapter(monkeypatch)
+
+        no_model = await adapter.export_image({"file_path": "C:/tmp/out.png"})
+        assert no_model.is_error
+        assert no_model.error == "No active model"
+
+        adapter.currentModel = SimpleNamespace()
+        adapter.swApp = None
+        no_sw = await adapter.export_image({"file_path": "C:/tmp/out.png"})
+        assert no_sw.is_error
+        assert no_sw.error == "SolidWorks not connected"
+
+    @pytest.mark.asyncio
+    async def test_export_image_success_with_orientation(self, monkeypatch, tmp_path) -> None:
+        """export_image should set orientation and persist an image on success."""
+        adapter = self._build_adapter(monkeypatch)
+        output_file = tmp_path / "shot.png"
+
+        def _save_bitmap(path, *_args):
+            output_file.write_text("image", encoding="utf-8")
+            return True
+
+        target_doc = SimpleNamespace(
+            SaveBitmapWithVariableSize=Mock(side_effect=_save_bitmap),
+            ShowNamedView2=Mock(),
+            ViewZoomToFit2=Mock(),
+        )
+        adapter.currentModel = target_doc
+        adapter.swApp = SimpleNamespace(
+            ActiveDoc=target_doc,
+            Frame=SimpleNamespace(SetFocus=Mock()),
+        )
+
+        result = await adapter.export_image(
+            {
+                "file_path": str(output_file),
+                "view_orientation": "front",
+                "width": 640,
+                "height": 480,
+            }
+        )
+
+        assert result.is_success
+        assert result.data["file_path"] == str(output_file)
+        assert result.data["format"] == "PNG"
+        assert result.data["dimensions"] == "640x480"
+        assert result.data["view"] == "front"
+        target_doc.ShowNamedView2.assert_called_once_with("", 1)
+        target_doc.ViewZoomToFit2.assert_called_once()
+
+    def test_prepare_stl_export_data_paths(self, monkeypatch) -> None:
+        """_prepare_stl_export_data should handle missing app, missing data, and success."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.swApp = None
+        assert adapter._prepare_stl_export_data() is None
+
+        adapter.swApp = SimpleNamespace(GetExportFileData=Mock(return_value=None))
+        assert adapter._prepare_stl_export_data() is None
+
+        stl_data = SimpleNamespace(Merge=False, ExportBodiesAs=1)
+        adapter.swApp = SimpleNamespace(GetExportFileData=Mock(return_value=stl_data))
+        result = adapter._prepare_stl_export_data()
+        assert result is stl_data
+        assert stl_data.Merge is True
+        assert stl_data.ExportBodiesAs == 0
+
+    def test_save_stl_with_extension_fallback_to_no_export_data(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """_save_stl_with_extension should retry SaveAs2 with None export data."""
+        adapter = self._build_adapter(monkeypatch)
+        out_file = tmp_path / "out.stl"
+
+        call_counter = {"count": 0}
+
+        def _saveas2(path, *_args):
+            call_counter["count"] += 1
+            if call_counter["count"] == 1:
+                raise RuntimeError("type mismatch")
+            out_file.write_text("solid", encoding="utf-8")
+
+        extension = SimpleNamespace(SaveAs2=Mock(side_effect=_saveas2))
+        saved = adapter._save_stl_with_extension(extension, object(), str(out_file))
+
+        assert saved is True
+        assert extension.SaveAs2.call_count == 2
+
+    def test_save_stl_with_extension_returns_false_on_failure(self, monkeypatch) -> None:
+        """_save_stl_with_extension should return False when SaveAs2 keeps failing."""
+        adapter = self._build_adapter(monkeypatch)
+        extension = SimpleNamespace(SaveAs2=Mock(side_effect=RuntimeError("fail")))
+
+        saved = adapter._save_stl_with_extension(
+            extension, object(), "C:/tmp/missing.stl"
+        )
+
+        assert saved is False
+
+    def test_save_stl_with_fallback_raises_when_file_not_created(
+        self, monkeypatch
+    ) -> None:
+        """_save_stl_with_fallback should raise when SaveAs3 does not create output."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(SaveAs3=Mock(return_value=False))
+
+        with pytest.raises(Exception, match="STL export failed"):
+            adapter._save_stl_with_fallback(target_doc, "C:/tmp/missing.stl")
+
+    @pytest.mark.asyncio
+    async def test_select_feature_uses_extension_strategy(self, monkeypatch) -> None:
+        """select_feature should return selected result when SelectByID2 succeeds."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            GetTitle=Mock(return_value="MyPart.SLDPRT"),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
+            FirstFeature=Mock(return_value=None),
+        )
+
+        result = await adapter.select_feature("Boss-Extrude1")
+
+        assert result.is_success
+        assert result.data["selected"] is True
+        assert result.data["feature_name"] == "Boss-Extrude1"
+        assert result.data["entity_type"] == "BODYFEATURE"
+
+    @pytest.mark.asyncio
+    async def test_select_feature_returns_unselected_when_all_strategies_fail(
+        self, monkeypatch
+    ) -> None:
+        """select_feature should return selected=False when no strategy finds a match."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            GetTitle=Mock(return_value="MyPart.SLDPRT"),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            GetComponentByName=Mock(return_value=None),
+            FirstFeature=Mock(return_value=None),
+        )
+
+        result = await adapter.select_feature("MissingFeature")
+
+        assert result.is_success
+        assert result.data == {
+            "selected": False,
+            "feature_name": "MissingFeature",
+            "selected_name": "MissingFeature",
+        }
+
+    @pytest.mark.asyncio
+    async def test_execute_macro_returns_error_without_macro_path(
+        self, monkeypatch
+    ) -> None:
+        """execute_macro should error when neither macro_path nor macro_file is provided."""
+        adapter = self._build_adapter(monkeypatch)
+        result = await adapter.execute_macro({})
+        assert result.is_error
+        assert result.error == "No macro_path provided"
+
+    @pytest.mark.asyncio
+    async def test_execute_macro_returns_error_when_file_missing(
+        self, monkeypatch
+    ) -> None:
+        """execute_macro should error when macro file path does not exist."""
+        adapter = self._build_adapter(monkeypatch)
+        result = await adapter.execute_macro({"macro_path": "C:/missing/not_found.swp"})
+        assert result.is_error
+        assert "Macro file not found" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_execute_macro_success_with_macro_file_alias(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """execute_macro should accept macro_file alias and parse module name from file."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=(True, 0)))
+
+        macro_file = tmp_path / "my_macro.swp"
+        macro_file.write_text('Attribute VB_Name = "MyMacroModule"\n', encoding="utf-8")
+
+        result = await adapter.execute_macro(
+            {
+                "macro_file": str(macro_file),
+                "proc_name": "main",
+            }
+        )
+
+        assert result.is_success
+        assert result.data["macro_path"] == str(macro_file)
+        assert result.data["module_name"] == "MyMacroModule"
+        assert result.data["errors"] == 0
+        adapter.swApp.RunMacro2.assert_called_once_with(
+            str(macro_file), "MyMacroModule", "main", 0, 0
+        )
+
 
 class TestMockAdapterAdditionalCoverage:
     """Target additional edge paths for mock adapter coverage."""

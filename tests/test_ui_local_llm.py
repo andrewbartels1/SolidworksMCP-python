@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import types
 import urllib.request
 from unittest.mock import AsyncMock, MagicMock
 
@@ -155,6 +156,25 @@ def test_detect_gpu_vram_gb_fallback_zero(monkeypatch: pytest.MonkeyPatch) -> No
     assert result == 0.0
 
 
+def test_detect_gpu_vram_gb_windows_wmic_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Covers Windows WMIC fallback path when nvidia-smi is unavailable."""
+
+    def _check_output(cmd, **_kwargs):
+        if cmd and cmd[0] == "nvidia-smi":
+            raise OSError("nvidia-smi missing")
+        if cmd and cmd[0] == "wmic":
+            return "AdapterRAM\n2147483648\n4294967296\n"
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(local_llm_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(local_llm_mod.subprocess, "check_output", _check_output)
+
+    result = _detect_gpu_vram_gb()
+    assert result == pytest.approx(4.0, abs=0.1)
+
+
 # ---------------------------------------------------------------------------
 # _detect_system_ram_gb
 # ---------------------------------------------------------------------------
@@ -176,6 +196,21 @@ def test_detect_system_ram_gb_no_psutil(monkeypatch: pytest.MonkeyPatch) -> None
     try:
         result = _detect_system_ram_gb()
         assert isinstance(result, float)
+    finally:
+        if original_psutil == "ABSENT":
+            del sys.modules["psutil"]
+        else:
+            sys.modules["psutil"] = original_psutil  # type: ignore[assignment]
+
+
+def test_detect_system_ram_gb_prefers_psutil_when_available() -> None:
+    """Covers psutil branch by injecting a minimal module in sys.modules."""
+    original_psutil = sys.modules.get("psutil", "ABSENT")
+    try:
+        sys.modules["psutil"] = types.SimpleNamespace(
+            virtual_memory=lambda: types.SimpleNamespace(total=8 * (1024**3))
+        )
+        assert _detect_system_ram_gb() == pytest.approx(8.0, abs=0.1)
     finally:
         if original_psutil == "ABSENT":
             del sys.modules["psutil"]
@@ -219,6 +254,17 @@ async def test_ollama_health_unavailable(monkeypatch: pytest.MonkeyPatch) -> Non
         raise ConnectionRefusedError("no server")
 
     monkeypatch.setattr(urllib.request, "urlopen", _raise)
+    assert await _ollama_health() is False
+
+
+async def test_ollama_health_outer_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Covers outer exception handler when run_in_executor itself fails."""
+
+    class _BoomLoop:
+        def run_in_executor(self, *_args, **_kwargs):
+            raise RuntimeError("loop failure")
+
+    monkeypatch.setattr(asyncio, "get_event_loop", lambda: _BoomLoop())
     assert await _ollama_health() is False
 
 
