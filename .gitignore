@@ -75,6 +75,7 @@ tests/.generated/
 # Runtime-generated agent / cache artifacts
 .generated/
 .solidworks_mcp/
+htmlcov/
 
 # Claude local settings
 .claude/
