@@ -591,6 +591,22 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "create_extrusion", lambda adapter: adapter.create_extrusion(params)
         )
 
+    async def create_cut_extrude(
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Create cut-extrude using pool."""
+        return await self._execute_with_pool(
+            "create_cut_extrude", lambda adapter: adapter.create_cut_extrude(params)
+        )
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Add fillet using pool."""
+        return await self._execute_with_pool(
+            "add_fillet", lambda adapter: adapter.add_fillet(radius, edge_names)
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
@@ -721,6 +737,67 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """
         return await self._execute_with_pool(
             "add_rectangle", lambda adapter: adapter.add_rectangle(x1, y1, x2, y2)
+        )
+
+    async def add_arc(
+        self,
+        center_x: float,
+        center_y: float,
+        start_x: float,
+        start_y: float,
+        end_x: float,
+        end_y: float,
+    ) -> AdapterResult[str]:
+        """Add arc using pool.
+
+        Args:
+            center_x (float): Arc center X coordinate.
+            center_y (float): Arc center Y coordinate.
+            start_x (float): Arc start X coordinate.
+            start_y (float): Arc start Y coordinate.
+            end_x (float): Arc end X coordinate.
+            end_y (float): Arc end Y coordinate.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_arc",
+            lambda adapter: adapter.add_arc(
+                center_x,
+                center_y,
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+            ),
+        )
+
+    async def add_sketch_dimension(
+        self,
+        entity1: str,
+        entity2: str | None,
+        dimension_type: str,
+        value: float,
+    ) -> AdapterResult[str]:
+        """Add sketch dimension using pool."""
+        return await self._execute_with_pool(
+            "add_sketch_dimension",
+            lambda adapter: adapter.add_sketch_dimension(
+                entity1,
+                entity2,
+                dimension_type,
+                value,
+            ),
+        )
+
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check sketch definition status using pool."""
+        return await self._execute_with_pool(
+            "check_sketch_fully_defined",
+            lambda adapter: adapter.check_sketch_fully_defined(sketch_name),
         )
 
     async def exit_sketch(self) -> AdapterResult[None]:

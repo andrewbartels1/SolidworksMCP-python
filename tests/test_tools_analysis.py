@@ -51,9 +51,9 @@ class TestAnalysisTools:
 
         # Find and call the tool
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "calculate_mass_properties":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -91,9 +91,9 @@ class TestAnalysisTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "check_interference":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -120,9 +120,9 @@ class TestAnalysisTools:
         input_data = MassPropertiesInput(model_path="missing_part.sldprt", units="kg")
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "calculate_mass_properties":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -145,9 +145,9 @@ class TestAnalysisTools:
         input_data = InterferenceCheckInput(assembly_path="corrupt_assembly.sldasm")
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "check_interference":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -215,11 +215,11 @@ class TestAnalysisTools:
 
         calculate_tool = None
         alias_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "calculate_mass_properties":
-                calculate_tool = tool.handler
+                calculate_tool = tool.fn
             if tool.name == "get_mass_properties":
-                alias_tool = tool.handler
+                alias_tool = tool.fn
 
         assert calculate_tool is not None
         assert alias_tool is not None
@@ -246,13 +246,13 @@ class TestAnalysisTools:
         check_tool = None
         geometry_tool = None
         material_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "check_interference":
-                check_tool = tool.handler
+                check_tool = tool.fn
             if tool.name == "analyze_geometry":
-                geometry_tool = tool.handler
+                geometry_tool = tool.fn
             if tool.name == "get_material_properties":
-                material_tool = tool.handler
+                material_tool = tool.fn
 
         assert check_tool is not None
         assert geometry_tool is not None

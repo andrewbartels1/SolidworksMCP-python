@@ -41,6 +41,9 @@ from solidworks_mcp.ui.schemas import DashboardUIState
 
 API_ORIGIN = os.getenv("SOLIDWORKS_UI_API_ORIGIN", "http://127.0.0.1:8766")
 SESSION_ID_EXPR = "{{ session_id || 'prefab-dashboard' }}"
+SHOW_EXPERIMENTAL_ORCHESTRATION = os.getenv(
+    "SOLIDWORKS_UI_EXPERIMENTAL_ORCHESTRATION", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 ctx_tick = Rx("ctx_tick")
 ctx_pct = (ctx_tick % 24) * 3 + 18
@@ -379,24 +382,30 @@ with PrefabApp(
                                     on_error=_error_toast(),
                                 ),
                             )
-                        Button(
-                            "GO",
-                            variant="success",
-                            on_click=Fetch.post(
-                                f"{API_ORIGIN}/api/ui/orchestrate/go",
-                                body={
-                                    "session_id": STATE.session_id,
-                                    "user_goal": STATE.user_goal,
-                                    "assumptions_text": STATE.assumptions_text,
-                                    "user_answer": STATE.user_clarification_answer,
-                                },
-                                on_success=[
-                                    *_hydrate_from_result(),
-                                    ShowToast("Go orchestration complete"),
-                                ],
-                                on_error=_error_toast(),
-                            ),
-                        )
+                        if SHOW_EXPERIMENTAL_ORCHESTRATION:
+                            Button(
+                                "GO",
+                                variant="success",
+                                on_click=Fetch.post(
+                                    f"{API_ORIGIN}/api/ui/orchestrate/go",
+                                    body={
+                                        "session_id": STATE.session_id,
+                                        "user_goal": STATE.user_goal,
+                                        "assumptions_text": STATE.assumptions_text,
+                                        "user_answer": STATE.user_clarification_answer,
+                                    },
+                                    on_success=[
+                                        *_hydrate_from_result(),
+                                        ShowToast("Go orchestration complete"),
+                                    ],
+                                    on_error=_error_toast(),
+                                ),
+                            )
+                        else:
+                            Badge(
+                                "GO orchestration hidden (set SOLIDWORKS_UI_EXPERIMENTAL_ORCHESTRATION=1 to enable)",
+                                variant="outline",
+                            )
             with CardContent():
                 with Column(gap=1):
                     Badge("{{ orchestration_status || 'Ready.' }}", variant="secondary")
@@ -447,7 +456,7 @@ with PrefabApp(
                                 )
                                 Muted("{{ feature_target_status }}")
                                 with If("feature_grounding_warning_text"):
-                                    Badge(  # type: ignore[call-overload]
+                                    Badge(
                                         "{{ feature_grounding_warning_text }}",
                                         variant="destructive",
                                     )
@@ -655,7 +664,7 @@ with PrefabApp(
                                     Muted(
                                         "Recommended pull command: {{ local_model_pull_command }}"
                                     )
-                                Muted("{{ local_model_status_text }}")  # type: ignore[arg-type]
+                                Muted("{{ local_model_status_text }}")
                                 Muted(
                                     "Context window is the approximate prompt budget consumed by the current goal, assumptions, model context, docs context, and notes. It is advisory today, not a hard token meter."
                                 )
@@ -697,99 +706,125 @@ with PrefabApp(
                                         on_error=_error_toast(),
                                     ),
                                 )
-                                Button(
-                                    "Plan Next Steps",
-                                    variant="outline",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/family/inspect",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "user_goal": STATE.user_goal,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Planning refreshed"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
+                                if SHOW_EXPERIMENTAL_ORCHESTRATION:
+                                    Button(
+                                        "Plan Next Steps",
+                                        variant="outline",
+                                        on_click=Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/family/inspect",
+                                            body={
+                                                "session_id": STATE.session_id,
+                                                "user_goal": STATE.user_goal,
+                                            },
+                                            on_success=[
+                                                *_hydrate_from_result(),
+                                                ShowToast("Planning refreshed"),
+                                            ],
+                                            on_error=_error_toast(),
+                                        ),
+                                    )
+                        if not SHOW_EXPERIMENTAL_ORCHESTRATION:
+                            Muted(
+                                "Planning actions hidden while orchestration is stabilized. Use Attach Model, Save Preferences, and the preview workspace for the stable path."
+                            )
 
             with GridItem():
                 with Column(gap=4):
                     # Lane 2: clarification, review, and manual reconciliation controls.
-                    with Card():
-                        with CardHeader():
-                            CardTitle("2. Clarification and Engineering Review")
-                            CardDescription(
-                                "Use this lane for Q&A and engineering acceptance."
-                            )
-                        with CardContent():
-                            with Column(gap=2):
-                                Muted("{{ clarifying_questions_text }}")
-                                Textarea(
-                                    name="user_clarification_answer",
-                                    value=STATE.user_clarification_answer,
-                                    rows=4,
-                                    onChange=SetState(
-                                        "user_clarification_answer", EVENT
-                                    ),
+                    if SHOW_EXPERIMENTAL_ORCHESTRATION:
+                        with Card():
+                            with CardHeader():
+                                CardTitle("2. Clarification and Engineering Review")
+                                CardDescription(
+                                    "Use this lane for Q&A and engineering acceptance."
                                 )
-                                with If("latest_error_text"):
-                                    Badge(
-                                        "{{ latest_error_text }}", variant="destructive"
+                            with CardContent():
+                                with Column(gap=2):
+                                    Muted("{{ clarifying_questions_text }}")
+                                    Textarea(
+                                        name="user_clarification_answer",
+                                        value=STATE.user_clarification_answer,
+                                        rows=4,
+                                        onChange=SetState(
+                                            "user_clarification_answer", EVENT
+                                        ),
                                     )
-                                    with If("remediation_hint"):
-                                        Muted("{{ remediation_hint }}")
-                        with CardFooter():
-                            with Row(gap=2):
-                                Button(
-                                    "Refresh Clarifications",
-                                    variant="outline",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/clarify",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "user_goal": STATE.user_goal,
-                                            "user_answer": STATE.user_clarification_answer,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Clarifications updated"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
+                                    with If("latest_error_text"):
+                                        Badge(
+                                            "{{ latest_error_text }}",
+                                            variant="destructive",
+                                        )
+                                        with If("remediation_hint"):
+                                            Muted("{{ remediation_hint }}")
+                            with CardFooter():
+                                with Row(gap=2):
+                                    Button(
+                                        "Refresh Clarifications",
+                                        variant="outline",
+                                        on_click=Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/clarify",
+                                            body={
+                                                "session_id": STATE.session_id,
+                                                "user_goal": STATE.user_goal,
+                                                "user_answer": STATE.user_clarification_answer,
+                                            },
+                                            on_success=[
+                                                *_hydrate_from_result(),
+                                                ShowToast("Clarifications updated"),
+                                            ],
+                                            on_error=_error_toast(),
+                                        ),
+                                    )
+                                    Button(
+                                        "Inspect More",
+                                        variant="outline",
+                                        on_click=Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/family/inspect",
+                                            body={
+                                                "session_id": STATE.session_id,
+                                                "user_goal": STATE.user_goal,
+                                            },
+                                            on_success=[
+                                                *_hydrate_from_result(),
+                                                ShowToast("Inspection updated"),
+                                            ],
+                                            on_error=_error_toast(),
+                                        ),
+                                    )
+                                    Button(
+                                        "Accept Approach",
+                                        on_click=Fetch.post(
+                                            f"{API_ORIGIN}/api/ui/family/accept",
+                                            body={
+                                                "session_id": STATE.session_id,
+                                                "family": STATE.proposed_family,
+                                            },
+                                            on_success=[
+                                                *_hydrate_from_result(),
+                                                ShowToast("Approach accepted"),
+                                            ],
+                                            on_error=_error_toast(),
+                                        ),
+                                    )
+                    else:
+                        with Card():
+                            with CardHeader():
+                                CardTitle("2. Review and Manual Sync")
+                                CardDescription(
+                                    "Clarification and acceptance actions are hidden until orchestration is stabilized."
                                 )
-                                Button(
-                                    "Inspect More",
-                                    variant="outline",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/family/inspect",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "user_goal": STATE.user_goal,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Inspection updated"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
-                                Button(
-                                    "Accept Approach",
-                                    on_click=Fetch.post(
-                                        f"{API_ORIGIN}/api/ui/family/accept",
-                                        body={
-                                            "session_id": STATE.session_id,
-                                            "family": STATE.proposed_family,
-                                        },
-                                        on_success=[
-                                            *_hydrate_from_result(),
-                                            ShowToast("Approach accepted"),
-                                        ],
-                                        on_error=_error_toast(),
-                                    ),
-                                )
+                            with CardContent():
+                                with Column(gap=2):
+                                    Muted(
+                                        "Use the design inputs, attach flow, preview workspace, and feature table for the stable operator path."
+                                    )
+                                    with If("latest_error_text"):
+                                        Badge(
+                                            "{{ latest_error_text }}",
+                                            variant="destructive",
+                                        )
+                                        with If("remediation_hint"):
+                                            Muted("{{ remediation_hint }}")
 
                     with Card():
                         with CardHeader():
@@ -883,33 +918,42 @@ with PrefabApp(
                         with CardHeader():
                             CardTitle("Checkpoint Plan")
                         with CardContent():
-                            with If("structured_rendering_enabled"):
-                                DataTable(
-                                    columns=[
-                                        DataTableColumn(key="step", header="Step"),
-                                        DataTableColumn(key="goal", header="Goal"),
-                                        DataTableColumn(key="tools", header="Tools"),
-                                        DataTableColumn(key="status", header="Status"),
-                                    ],
-                                    rows=Rx("checkpoints"),
-                                    paginated=False,
+                            if SHOW_EXPERIMENTAL_ORCHESTRATION:
+                                with If("structured_rendering_enabled"):
+                                    DataTable(
+                                        columns=[
+                                            DataTableColumn(key="step", header="Step"),
+                                            DataTableColumn(key="goal", header="Goal"),
+                                            DataTableColumn(
+                                                key="tools", header="Tools"
+                                            ),
+                                            DataTableColumn(
+                                                key="status", header="Status"
+                                            ),
+                                        ],
+                                        rows=Rx("checkpoints"),
+                                        paginated=False,
+                                    )
+                                with Else():
+                                    Muted("{{ checkpoints_text }}")
+                            else:
+                                Muted(
+                                    "Checkpoint execution UI is hidden while tool wiring is stabilized."
                                 )
-                            with Else():
-                                Muted("{{ checkpoints_text }}")
                         with CardFooter():
-                            Button(
-                                "Execute Next Checkpoint",
-                                on_click=Fetch.post(
-                                    f"{API_ORIGIN}/api/ui/checkpoints/execute-next",
-                                    body={"session_id": STATE.session_id},
-                                    on_success=[
-                                        *_hydrate_from_result(),
-                                        ShowToast("Checkpoint updated"),
-                                    ],
-                                    on_error=_error_toast(),
-                                ),
-                            )
-
+                            if SHOW_EXPERIMENTAL_ORCHESTRATION:
+                                Button(
+                                    "Execute Next Checkpoint",
+                                    on_click=Fetch.post(
+                                        f"{API_ORIGIN}/api/ui/checkpoints/execute-next",
+                                        body={"session_id": STATE.session_id},
+                                        on_success=[
+                                            *_hydrate_from_result(),
+                                            ShowToast("Checkpoint updated"),
+                                        ],
+                                        on_error=_error_toast(),
+                                    ),
+                                )
                     with Card():
                         with CardHeader():
                             CardTitle("Evidence and Retrieval")

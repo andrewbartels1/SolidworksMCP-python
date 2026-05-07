@@ -31,23 +31,23 @@ async def register_tools(mcp: FastMCP, adapter, config) -> int:
     Returns:
         int: The computed numeric result.
     """
-    tool_count = 0
-
     logger.info("Registering SolidWorks MCP tools...")
 
     # Register tool categories
-    tool_count += await register_modeling_tools(mcp, adapter, config)
-    tool_count += await register_sketching_tools(mcp, adapter, config)
-    tool_count += await register_drawing_tools(mcp, adapter, config)
-    tool_count += await register_drawing_analysis_tools(mcp, adapter, config)
-    tool_count += await register_analysis_tools(mcp, adapter, config)
-    tool_count += await register_export_tools(mcp, adapter, config)
-    tool_count += await register_automation_tools(mcp, adapter, config)
-    tool_count += await register_file_management_tools(mcp, adapter, config)
-    tool_count += await register_vba_generation_tools(mcp, adapter, config)
-    tool_count += await register_template_management_tools(mcp, adapter, config)
-    tool_count += await register_macro_recording_tools(mcp, adapter, config)
-    tool_count += await register_docs_discovery_tools(mcp, adapter, config)
+    await register_modeling_tools(mcp, adapter, config)
+    await register_sketching_tools(mcp, adapter, config)
+    await register_drawing_tools(mcp, adapter, config)
+    await register_drawing_analysis_tools(mcp, adapter, config)
+    await register_analysis_tools(mcp, adapter, config)
+    await register_export_tools(mcp, adapter, config)
+    await register_automation_tools(mcp, adapter, config)
+    await register_file_management_tools(mcp, adapter, config)
+    await register_vba_generation_tools(mcp, adapter, config)
+    await register_template_management_tools(mcp, adapter, config)
+    await register_macro_recording_tools(mcp, adapter, config)
+    await register_docs_discovery_tools(mcp, adapter, config)
+
+    tool_count = len(await mcp.list_tools())
 
     logger.info(f"Registered {tool_count} SolidWorks tools")
     return tool_count

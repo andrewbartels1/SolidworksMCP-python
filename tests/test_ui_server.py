@@ -66,24 +66,43 @@ def test_main_invokes_uvicorn(monkeypatch) -> None:
 def test_api_endpoints(monkeypatch) -> None:
     """Test api endpoints."""
 
+    from src.solidworks_mcp.ui.routers import (
+        session as session_router,
+        docs as docs_router,
+        model as model_router,
+        llm as llm_router,
+        checkpoint as checkpoint_router,
+        preview as preview_router,
+    )
+
     async def _a(value: dict[str, Any]) -> dict[str, Any]:
         """Test a."""
 
         return value
 
-    monkeypatch.setattr(server, "build_dashboard_state", lambda *a, **k: {"ok": 1})
     monkeypatch.setattr(
-        server, "build_dashboard_trace_payload", lambda *a, **k: {"trace": 1}
+        session_router, "build_dashboard_state", lambda *a, **k: {"ok": 1}
     )
-    monkeypatch.setattr(server, "approve_design_brief", lambda *a, **k: {"approved": 1})
-    monkeypatch.setattr(server, "update_ui_preferences", lambda *a, **k: {"prefs": 1})
-    monkeypatch.setattr(server, "select_workflow_mode", lambda *a, **k: {"workflow": 1})
     monkeypatch.setattr(
-        server, "ingest_reference_source", lambda *a, **k: {"ingest": 1}
+        session_router, "build_dashboard_trace_payload", lambda *a, **k: {"trace": 1}
     )
-    monkeypatch.setattr(server, "accept_family_choice", lambda *a, **k: {"family": 1})
     monkeypatch.setattr(
-        server, "reconcile_manual_edits", lambda *a, **k: {"reconcile": 1}
+        session_router, "approve_design_brief", lambda *a, **k: {"approved": 1}
+    )
+    monkeypatch.setattr(
+        session_router, "update_ui_preferences", lambda *a, **k: {"prefs": 1}
+    )
+    monkeypatch.setattr(
+        session_router, "select_workflow_mode", lambda *a, **k: {"workflow": 1}
+    )
+    monkeypatch.setattr(
+        docs_router, "ingest_reference_source", lambda *a, **k: {"ingest": 1}
+    )
+    monkeypatch.setattr(
+        session_router, "accept_family_choice", lambda *a, **k: {"family": 1}
+    )
+    monkeypatch.setattr(
+        session_router, "reconcile_manual_edits", lambda *a, **k: {"reconcile": 1}
     )
 
     async def _connect(*a, **k):
@@ -111,11 +130,11 @@ def test_api_endpoints(monkeypatch) -> None:
 
         return {"refresh": 1}
 
-    monkeypatch.setattr(server, "connect_target_model", _connect)
-    monkeypatch.setattr(server, "request_clarifications", _clarify)
-    monkeypatch.setattr(server, "inspect_family", _inspect)
-    monkeypatch.setattr(server, "execute_next_checkpoint", _execute)
-    monkeypatch.setattr(server, "refresh_preview", _refresh)
+    monkeypatch.setattr(model_router, "connect_target_model", _connect)
+    monkeypatch.setattr(llm_router, "request_clarifications", _clarify)
+    monkeypatch.setattr(llm_router, "inspect_family", _inspect)
+    monkeypatch.setattr(checkpoint_router, "execute_next_checkpoint", _execute)
+    monkeypatch.setattr(preview_router, "refresh_preview", _refresh)
 
     client = TestClient(server.app)
 
@@ -336,7 +355,11 @@ def test_startup_event_no_knowledge_dir(monkeypatch) -> None:
 
 def test_middleware_logs_non_ui_requests(monkeypatch) -> None:
     """Non-UI paths bypass the logging middleware without error."""
-    monkeypatch.setattr(server, "build_dashboard_state", lambda *a, **k: {"ok": 1})
+    from src.solidworks_mcp.ui.routers import session as session_router
+
+    monkeypatch.setattr(
+        session_router, "build_dashboard_state", lambda *a, **k: {"ok": 1}
+    )
     client = TestClient(server.app)
     resp = client.get("/api/ui/state")
     assert resp.status_code == 200

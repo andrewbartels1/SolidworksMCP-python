@@ -59,9 +59,9 @@ class TestDrawingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_technical_drawing":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -103,9 +103,9 @@ class TestDrawingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "add_drawing_view":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -144,9 +144,9 @@ class TestDrawingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "add_dimension":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -185,9 +185,9 @@ class TestDrawingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "add_annotation":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -230,9 +230,9 @@ class TestDrawingTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "update_title_block":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -261,9 +261,9 @@ class TestDrawingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_technical_drawing":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -290,9 +290,9 @@ class TestDrawingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "add_drawing_view":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -395,7 +395,8 @@ class TestDrawingToolsBranchCoverage:
             del mock_adapter.add_dimension
 
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "add_dimension"), None
+            (t.fn for t in await mcp_server.list_tools() if t.name == "add_dimension"),
+            None,
         )
         assert tool_func is not None
 
@@ -418,7 +419,8 @@ class TestDrawingToolsBranchCoverage:
             return_value=Mock(is_success=False, error="dim failed", execution_time=0.1)
         )
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "add_dimension"), None
+            (t.fn for t in await mcp_server.list_tools() if t.name == "add_dimension"),
+            None,
         )
         input_data = AddDimensionInput(
             dimension_type="linear",
@@ -447,8 +449,8 @@ class TestDrawingToolsBranchCoverage:
         )
         tool_func = next(
             (
-                t.handler
-                for t in mcp_server._tools
+                t.fn
+                for t in await mcp_server.list_tools()
                 if t.name == "create_technical_drawing"
             ),
             None,
@@ -475,8 +477,8 @@ class TestDrawingToolsBranchCoverage:
         )
         tool_func = next(
             (
-                t.handler
-                for t in mcp_server._tools
+                t.fn
+                for t in await mcp_server.list_tools()
                 if t.name == "create_technical_drawing"
             ),
             None,
@@ -502,7 +504,12 @@ class TestDrawingToolsBranchCoverage:
             view_name="Front View",
         )
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "add_drawing_view"), None
+            (
+                t.fn
+                for t in await mcp_server.list_tools()
+                if t.name == "add_drawing_view"
+            ),
+            None,
         )
         result = await tool_func(input_data=input_data)
         assert result["status"] == "success"
@@ -528,7 +535,8 @@ class TestDrawingToolsBranchCoverage:
             position_y=20.0,
         )
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "add_annotation"), None
+            (t.fn for t in await mcp_server.list_tools() if t.name == "add_annotation"),
+            None,
         )
         result = await tool_func(input_data=input_data)
         assert result["status"] == "error"
@@ -549,7 +557,8 @@ class TestDrawingToolsBranchCoverage:
             position_y=200.0,
         )
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "add_annotation"), None
+            (t.fn for t in await mcp_server.list_tools() if t.name == "add_annotation"),
+            None,
         )
         result = await tool_func(input_data=input_data)
         assert result["status"] == "success"
@@ -569,7 +578,11 @@ class TestDrawingToolsBranchCoverage:
             )
         )
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "update_title_block"),
+            (
+                t.fn
+                for t in await mcp_server.list_tools()
+                if t.name == "update_title_block"
+            ),
             None,
         )
         result = await tool_func(
@@ -588,7 +601,11 @@ class TestDrawingToolsBranchCoverage:
 
         payload = {"drawing_path": "d.slddrw", "title": "Widget", "revision": "A"}
         tool_func = next(
-            (t.handler for t in mcp_server._tools if t.name == "update_title_block"),
+            (
+                t.fn
+                for t in await mcp_server.list_tools()
+                if t.name == "update_title_block"
+            ),
             None,
         )
         result = await tool_func(input_data=payload)
@@ -615,7 +632,7 @@ class TestDrawingToolsBranchCoverage:
             return_value=Mock(is_success=False, error=None, execution_time=0.1)
         )
 
-        by_name = {t.name: t.handler for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["create_technical_drawing"](
             input_data=DrawingCreationInput(model_file="part.sldprt")
@@ -662,7 +679,7 @@ class TestDrawingToolsBranchCoverage:
             side_effect=RuntimeError("title boom")
         )
 
-        by_name = {t.name: t.handler for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["create_technical_drawing"](
             input_data=DrawingCreationInput(model_file="part.sldprt")
@@ -700,7 +717,8 @@ class TestDrawingToolsBranchCoverage:
             del mock_adapter.add_dimension
 
         tool_func = next(
-            (t.func for t in mcp_server._tools if t.name == "add_dimension"), None
+            (t.fn for t in await mcp_server.list_tools() if t.name == "add_dimension"),
+            None,
         )
         result = await tool_func(
             {
@@ -712,10 +730,10 @@ class TestDrawingToolsBranchCoverage:
         )
 
         assert result["status"] == "success"
-        assert result["data"]["entity1"] == "Edge1"
-        assert result["data"]["entity2"] == "Edge2"
-        assert result["data"]["position"] == {"x": 11.0, "y": 22.0}
-        assert result["data"]["precision"] == 3
+        assert result["dimension"]["entity1"] == "Edge1"
+        assert result["dimension"]["entity2"] == "Edge2"
+        assert result["dimension"]["position"] == {"x": 11.0, "y": 22.0}
+        assert result["dimension"]["precision"] == 3
 
     @pytest.mark.asyncio
     async def test_legacy_drawing_tools_success_paths(
@@ -723,7 +741,7 @@ class TestDrawingToolsBranchCoverage:
     ):
         """Covers success branches for legacy drawing utility tools."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         view = await by_name["create_drawing_view"](
             CreateDrawingViewInput(model_path="m.sldprt", view_type="isometric")
@@ -768,7 +786,7 @@ class TestDrawingToolsBranchCoverage:
     ):
         """Covers exception handlers in legacy drawing utility tools."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["create_drawing_view"]({"bad": True})
         r2 = await by_name["add_note"]({"bad": True})

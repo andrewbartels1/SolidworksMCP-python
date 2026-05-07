@@ -75,9 +75,9 @@ class TestCompleteWorkflows:
 
         # Step 1: Create part
         create_part_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "create_part":
-                create_part_tool = tool.func
+                create_part_tool = tool.fn
                 break
         assert create_part_tool is not None
 
@@ -89,9 +89,9 @@ class TestCompleteWorkflows:
 
         # Step 2: Create sketch
         create_sketch_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "create_sketch":
-                create_sketch_tool = tool.func
+                create_sketch_tool = tool.fn
                 break
         assert create_sketch_tool is not None
 
@@ -101,9 +101,9 @@ class TestCompleteWorkflows:
 
         # Step 3: Add circle
         add_circle_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "add_circle":
-                add_circle_tool = tool.func
+                add_circle_tool = tool.fn
                 break
         assert add_circle_tool is not None
 
@@ -115,21 +115,21 @@ class TestCompleteWorkflows:
 
         # Step 4: Exit sketch
         exit_sketch_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "exit_sketch":
-                exit_sketch_tool = tool.func
+                exit_sketch_tool = tool.fn
                 break
         assert exit_sketch_tool is not None
 
-        exit_result = await exit_sketch_tool({})
+        exit_result = await exit_sketch_tool()
         workflow_results.append(("exit_sketch", exit_result))
         assert exit_result["status"] == "success"
 
         # Step 5: Create extrusion
         create_extrusion_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "create_extrusion":
-                create_extrusion_tool = tool.func
+                create_extrusion_tool = tool.fn
                 break
         assert create_extrusion_tool is not None
 
@@ -203,9 +203,9 @@ class TestCompleteWorkflows:
 
         # Find create_part tool
         create_part_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "create_part":
-                create_part_tool = tool.func
+                create_part_tool = tool.fn
                 break
         assert create_part_tool is not None
 
@@ -236,9 +236,9 @@ class TestCompleteWorkflows:
 
         # Find tool
         create_part_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "create_part":
-                create_part_tool = tool.func
+                create_part_tool = tool.fn
                 break
         assert create_part_tool is not None
 
@@ -281,9 +281,9 @@ class TestCompleteWorkflows:
 
         # Find tool
         create_part_tool = None
-        for tool in server.mcp._tools:
+        for tool in await server.mcp.list_tools():
             if tool.name == "create_part":
-                create_part_tool = tool.func
+                create_part_tool = tool.fn
                 break
         assert create_part_tool is not None
 
@@ -342,9 +342,9 @@ class TestCompleteWorkflows:
             for tool_name in tool_names:
                 # Find tool
                 tool_func = None
-                for tool in server.mcp._tools:
+                for tool in await server.mcp.list_tools():
                     if tool.name == tool_name:
-                        tool_func = tool.func
+                        tool_func = tool.fn
                         break
 
                 if tool_func is not None:

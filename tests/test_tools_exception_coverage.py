@@ -22,26 +22,8 @@ from src.solidworks_mcp.config import (
 
 
 def _make_mcp():
-    """Create a FastMCP instance with _tools list for backward-compat."""
+    """Create a plain FastMCP instance."""
     mcp = FastMCP("test")
-    mcp._tools = []
-    original_tool = mcp.tool
-
-    def compat_tool(*args, **kwargs):
-        """Test compat tool."""
-
-        decorator = original_tool(*args, **kwargs)
-
-        def _wrap(func):
-            """Test wrap."""
-
-            wrapped = decorator(func)
-            mcp._tools.append(func)
-            return wrapped
-
-        return _wrap
-
-    mcp.tool = compat_tool
     return mcp
 
 
@@ -56,13 +38,13 @@ def _make_config():
     )
 
 
-def _get_tool(mcp, name: str):
+async def _get_tool(mcp, name: str):
     """Test get tool."""
 
-    for fn in mcp._tools:
-        if fn.__name__ == name:
-            return fn
-    raise KeyError(f"Tool {name!r} not registered in mcp._tools")
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
 
 
 def _error_adapter(method_name: str, exc=RuntimeError("boom")):
@@ -107,7 +89,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_adapter("create_sketch")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "create_sketch")
+        fn = await _get_tool(mcp, "create_sketch")
         result = await fn(CreateSketchInput(plane="Front"))
         assert result["status"] == "error"
         assert "Unexpected error" in result["message"]
@@ -124,7 +106,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_result_adapter("add_sketch_line", "line failed")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "add_line")
+        fn = await _get_tool(mcp, "add_line")
         result = await fn(AddLineInput(x1=0, y1=0, x2=1, y2=1))
         assert result["status"] == "error"
         assert "line failed" in result["message"]
@@ -141,7 +123,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_adapter("add_sketch_line")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "add_line")
+        fn = await _get_tool(mcp, "add_line")
         result = await fn(AddLineInput(x1=0, y1=0, x2=1, y2=1))
         assert result["status"] == "error"
 
@@ -157,7 +139,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_adapter("add_sketch_circle")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "add_circle")
+        fn = await _get_tool(mcp, "add_circle")
         result = await fn(AddCircleInput(center_x=0, center_y=0, radius=5))
         assert result["status"] == "error"
 
@@ -173,7 +155,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_result_adapter("add_sketch_rectangle", "rect failed")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "add_rectangle")
+        fn = await _get_tool(mcp, "add_rectangle")
         result = await fn(AddRectangleInput(x1=0, y1=0, x2=1, y2=1))
         assert result["status"] == "error"
 
@@ -189,7 +171,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_adapter("add_sketch_rectangle")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "add_rectangle")
+        fn = await _get_tool(mcp, "add_rectangle")
         result = await fn(AddRectangleInput(x1=0, y1=0, x2=1, y2=1))
         assert result["status"] == "error"
 
@@ -202,7 +184,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_result_adapter("exit_sketch", "exit failed")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "exit_sketch")
+        fn = await _get_tool(mcp, "exit_sketch")
         result = await fn()
         assert result["status"] == "error"
 
@@ -215,7 +197,7 @@ class TestSketchingExceptionPaths:
         adapter = _error_adapter("exit_sketch")
         await register_sketching_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "exit_sketch")
+        fn = await _get_tool(mcp, "exit_sketch")
         result = await fn()
         assert result["status"] == "error"
 
@@ -245,7 +227,7 @@ class TestAutomationExceptionPaths:
         )
         await register_automation_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "start_macro_recording")
+        fn = await _get_tool(mcp, "automation_start_macro_recording")
         result = await fn(RecordMacroInput(macro_name="test", description="d"))
         assert result["status"] == "error"
 
@@ -262,7 +244,7 @@ class TestAutomationExceptionPaths:
         adapter.start_macro_recording = AsyncMock(side_effect=RuntimeError("boom"))
         await register_automation_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "start_macro_recording")
+        fn = await _get_tool(mcp, "automation_start_macro_recording")
         result = await fn(RecordMacroInput(macro_name="test", description="d"))
         assert result["status"] == "error"
 
@@ -277,7 +259,7 @@ class TestAutomationExceptionPaths:
         # Patch the inner dict-return path to raise
         with patch("src.solidworks_mcp.tools.automation.logger"):
             await register_automation_tools(mcp, adapter, _make_config())
-            fn = _get_tool(mcp, "stop_macro_recording")
+            fn = await _get_tool(mcp, "automation_stop_macro_recording")
 
             # Trigger exception by patching after registration
 
@@ -309,7 +291,7 @@ class TestAutomationExceptionPaths:
         adapter.batch_process_files = AsyncMock(side_effect=RuntimeError("batch boom"))
         await register_automation_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "batch_process_files")
+        fn = await _get_tool(mcp, "batch_process_files")
         result = await fn(
             BatchProcessInput(source_directory="/tmp", operation_type="rebuild")
         )
@@ -328,7 +310,7 @@ class TestAutomationExceptionPaths:
         adapter.manage_design_table = AsyncMock(side_effect=RuntimeError("dt boom"))
         await register_automation_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "manage_design_table")
+        fn = await _get_tool(mcp, "manage_design_table")
         result = await fn(DesignTableInput(table_type="create", excel_file="test.xlsx"))
         assert result["status"] == "error"
 
@@ -358,7 +340,7 @@ class TestDrawingAnalysisExceptionPaths:
         )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "analyze_drawing_dimensions")
+        fn = await _get_tool(mcp, "analyze_drawing_dimensions")
         result = await fn(DimensionAnalysisInput(drawing_path="test.slddrw"))
         assert result["status"] == "error"
 
@@ -377,7 +359,7 @@ class TestDrawingAnalysisExceptionPaths:
         )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "analyze_drawing_dimensions")
+        fn = await _get_tool(mcp, "analyze_drawing_dimensions")
         result = await fn(DimensionAnalysisInput(drawing_path="test.slddrw"))
         assert result["status"] == "error"
 
@@ -396,7 +378,7 @@ class TestDrawingAnalysisExceptionPaths:
         )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "analyze_drawing_annotations")
+        fn = await _get_tool(mcp, "analyze_drawing_annotations")
         result = await fn(AnnotationAnalysisInput(drawing_path="test.slddrw"))
         assert result["status"] == "error"
 
@@ -415,7 +397,7 @@ class TestDrawingAnalysisExceptionPaths:
         )
         await register_drawing_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "check_drawing_compliance")
+        fn = await _get_tool(mcp, "check_drawing_compliance")
         result = await fn(
             ComplianceCheckInput(drawing_path="test.slddrw", standard="ASME")
         )
@@ -446,7 +428,7 @@ class TestMacroRecordingExceptionPaths:
         )
         await register_macro_recording_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "stop_macro_recording")
+        fn = await _get_tool(mcp, "stop_macro_recording")
         result = await fn({"session_id": "abc", "save_path": "/tmp/m.swp"})
         assert result["status"] == "error"
 
@@ -463,7 +445,7 @@ class TestMacroRecordingExceptionPaths:
         adapter.execute_macro = AsyncMock(side_effect=RuntimeError("exec boom"))
         await register_macro_recording_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "execute_macro")
+        fn = await _get_tool(mcp, "execute_macro")
         result = await fn(MacroPlaybackInput(macro_path="/tmp/m.swp"))
         assert result["status"] == "error"
 
@@ -480,7 +462,7 @@ class TestMacroRecordingExceptionPaths:
         adapter.optimize_macro = AsyncMock(side_effect=RuntimeError("opt boom"))
         await register_macro_recording_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "optimize_macro")
+        fn = await _get_tool(mcp, "optimize_macro")
         result = await fn(MacroAnalysisInput(macro_path="/tmp/m.swp"))
         assert result["status"] == "error"
 
@@ -496,7 +478,7 @@ class TestMacroRecordingExceptionPaths:
         adapter.create_macro_library = AsyncMock(side_effect=RuntimeError("lib boom"))
         await register_macro_recording_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "create_macro_library")
+        fn = await _get_tool(mcp, "create_macro_library")
         result = await fn({"library_path": "/tmp/lib", "library_name": "TestLib"})
         assert result["status"] == "error"
 
@@ -532,7 +514,7 @@ class TestModelingCoverage:
         adapter = _error_adapter("close_model")
         await register_modeling_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "close_model")
+        fn = await _get_tool(mcp, "close_model")
         result = await fn({"save": False})
         assert result["status"] == "error"
 
@@ -556,7 +538,7 @@ class TestAnalysisCoverage:
         await adapter.create_part()
         await register_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "get_mass_properties")
+        fn = await _get_tool(mcp, "get_mass_properties")
         result = await fn({"include_hidden": False})
         # dict input path taken; should succeed or return an analysis result
         assert isinstance(result, dict)
@@ -572,7 +554,7 @@ class TestAnalysisCoverage:
         await adapter.create_part()
         await register_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "get_mass_properties")
+        fn = await _get_tool(mcp, "get_mass_properties")
         result = await fn(None)
         assert isinstance(result, dict)
 
@@ -585,7 +567,8 @@ class TestAnalysisCoverage:
         adapter = MockSolidWorksAdapter({})
         await register_analysis_tools(mcp, adapter, _make_config())
 
-        fn = _get_tool(mcp, "get_material_properties")
+        fn = await _get_tool(mcp, "get_material_properties")
         result = await fn()
         assert result["status"] == "success"
         assert "material" in result
+

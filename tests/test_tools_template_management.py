@@ -63,9 +63,9 @@ class TestTemplateManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "extract_template":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -111,9 +111,9 @@ class TestTemplateManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "apply_template":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -177,9 +177,9 @@ class TestTemplateManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_apply_template":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -236,9 +236,9 @@ class TestTemplateManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "compare_templates":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -291,9 +291,9 @@ class TestTemplateManagementTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_to_template_library":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -360,9 +360,9 @@ class TestTemplateManagementTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "list_template_library":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -398,9 +398,9 @@ class TestTemplateManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "extract_template":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -419,19 +419,19 @@ class TestTemplateManagementTools:
         save_tool = None
         list_tool = None
 
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "extract_template":
-                extract_tool = tool.handler
+                extract_tool = tool.fn
             if tool.name == "apply_template":
-                apply_tool = tool.handler
+                apply_tool = tool.fn
             if tool.name == "batch_apply_template":
-                batch_tool = tool.handler
+                batch_tool = tool.fn
             if tool.name == "compare_templates":
-                compare_tool = tool.handler
+                compare_tool = tool.fn
             if tool.name == "save_to_template_library":
-                save_tool = tool.handler
+                save_tool = tool.fn
             if tool.name == "list_template_library":
-                list_tool = tool.handler
+                list_tool = tool.fn
 
         assert extract_tool is not None
         assert apply_tool is not None
@@ -524,15 +524,15 @@ class TestTemplateManagementTools:
         compare_tool = None
         save_tool = None
         list_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "apply_template":
-                apply_tool = tool.handler
+                apply_tool = tool.fn
             if tool.name == "compare_templates":
-                compare_tool = tool.handler
+                compare_tool = tool.fn
             if tool.name == "save_to_template_library":
-                save_tool = tool.handler
+                save_tool = tool.fn
             if tool.name == "list_template_library":
-                list_tool = tool.handler
+                list_tool = tool.fn
 
         assert apply_tool is not None
         assert compare_tool is not None
@@ -635,7 +635,7 @@ class TestTemplateManagementBranchCoverage:
     ):
         """Exercise exception blocks for typed-input template tools via compat runner."""
         await register_template_management_tools(mcp_server, mock_adapter, mock_config)
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["extract_template"]({"bad": True})
         r2 = await by_name["apply_template"]({"bad": True})
@@ -656,7 +656,7 @@ class TestTemplateManagementBranchCoverage:
         )
 
         tool = next(
-            t.handler for t in mcp_server._tools if t.name == "batch_apply_template"
+            t.fn for t in await mcp_server.list_tools() if t.name == "batch_apply_template"
         )
         result = await tool(
             input_data=TemplateBatchInput(
@@ -675,7 +675,7 @@ class TestTemplateManagementBranchCoverage:
         """Cover category/search/sort fallback branches in list_template_library."""
         await register_template_management_tools(mcp_server, object(), mock_config)
         tool = next(
-            t.handler for t in mcp_server._tools if t.name == "list_template_library"
+            t.fn for t in await mcp_server.list_tools() if t.name == "list_template_library"
         )
 
         usage_sorted = await tool(
@@ -715,10 +715,10 @@ class TestTemplateManagementBranchCoverage:
         )
 
         save_tool = next(
-            t.handler for t in mcp_server._tools if t.name == "save_to_template_library"
+            t.fn for t in await mcp_server.list_tools() if t.name == "save_to_template_library"
         )
         list_tool = next(
-            t.handler for t in mcp_server._tools if t.name == "list_template_library"
+            t.fn for t in await mcp_server.list_tools() if t.name == "list_template_library"
         )
 
         save_result = await save_tool(input_data={"template_name": "bad"})

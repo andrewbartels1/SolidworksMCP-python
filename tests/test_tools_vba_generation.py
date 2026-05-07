@@ -80,9 +80,9 @@ End Sub""",
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_extrusion":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -144,9 +144,9 @@ End Sub""",
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_revolve":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -207,9 +207,9 @@ End Sub""",
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_assembly_insert":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -270,9 +270,9 @@ End Sub""",
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_drawing_views":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -336,9 +336,9 @@ End Sub""",
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_batch_export":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -365,9 +365,9 @@ End Sub""",
         input_data = VBAExtrusionInput(sketch_name="InvalidSketch", depth=25.0)
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_extrusion":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -442,9 +442,9 @@ End Sub""",
         input_data = VBAExtrusionInput(sketch_name="ComplexSketch", depth=50.0)
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_extrusion":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -478,7 +478,7 @@ class TestVBAGenerationBranchCoverage:
             side_effect=RuntimeError("boom batch")
         )
 
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["generate_vba_revolve"](
             VBARevolveInput(sketch_name="S1", axis_reference="A1", angle_degrees=90.0)
@@ -530,7 +530,7 @@ class TestVBAGenerationBranchCoverage:
             return_value=Mock(is_success=False, error=None)
         )
 
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         extrusion = await by_name["generate_vba_extrusion"](
             VBAExtrusionInput(sketch_name="Sketch1", depth=10.0)
@@ -568,7 +568,7 @@ class TestVBAGenerationBranchCoverage:
     ):
         """Cover success, unsupported-operation, and exception branches for dict-input VBA tools."""
         await register_vba_generation_tools(mcp_server, object(), mock_config)
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         part_ok = await by_name["generate_vba_part_modeling"](
             {"operation": "fillet", "radius": 2.5}

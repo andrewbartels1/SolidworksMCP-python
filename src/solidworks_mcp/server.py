@@ -13,9 +13,7 @@ import os
 import platform
 import sys
 import uuid
-from functools import wraps
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import typer
@@ -92,7 +90,6 @@ class SolidWorksMCPServer:
         self.config = config
         self.state = MCPServerState(config=config)
         self.mcp = FastMCP("SolidWorks MCP Server")
-        self._patch_mcp_for_tests()
         self.server = None
         self._setup_complete = False
         self._db_logging_enabled = self._env_truthy(
@@ -162,223 +159,6 @@ class SolidWorksMCPServer:
             )
         except Exception as exc:  # pragma: no cover
             logger.debug("Tool event logging skipped due to error: {}", exc)
-
-    def _patch_mcp_for_tests(self) -> None:
-        """Expose a lightweight legacy tool registry used by tests.
-
-        Returns:
-            None: None.
-        """
-        mcp_runtime = self.mcp
-        mcp_runtime._tools = []  # type: ignore[attr-defined]
-        original_tool = mcp_runtime.tool
-
-        def compat_tool(*args: Any, **kwargs: Any) -> Any:
-            """Provide compat tool support for the solid works mcpserver.
-
-            Args:
-                *args (Any): Additional positional arguments forwarded to the call.
-                **kwargs (Any): Additional keyword arguments forwarded to the call.
-
-            Returns:
-                Any: The result produced by the operation.
-            """
-            decorator = original_tool(*args, **kwargs)
-
-            def _wrap(func: Any) -> Any:
-                """Build internal wrap.
-
-                Args:
-                    func (Any): The func value.
-
-                Returns:
-                    Any: The result produced by the operation.
-                """
-
-                @wraps(func)
-                async def _guarded_runner(
-                    *runner_args: Any, **runner_kwargs: Any
-                ) -> Any:
-                    """Run tool with runtime security and invocation normalization.
-
-                    Args:
-                        *runner_args (Any): Additional positional arguments forwarded to the call.
-                        **runner_kwargs (Any): Additional keyword arguments forwarded to the call.
-
-                    Returns:
-                        Any: The result produced by the operation.
-                    """
-                    tool_name = getattr(func, "__name__", "unknown")
-                    payload = self._extract_payload(runner_args, runner_kwargs)
-                    self._enforce_tool_security(tool_name=tool_name, payload=payload)
-                    return await self._invoke_tool_callable(
-                        func=func,
-                        payload=payload,
-                        runner_args=runner_args,
-                        runner_kwargs=runner_kwargs,
-                    )
-
-                wrapped = decorator(_guarded_runner)
-
-                async def _compat_runner(
-                    *runner_args: Any, **runner_kwargs: Any
-                ) -> Any:
-                    """Build internal compat runner.
-
-                    Args:
-                        *runner_args (Any): Additional positional arguments forwarded to the call.
-                        **runner_kwargs (Any): Additional keyword arguments forwarded to the call.
-
-                    Returns:
-                        Any: The result produced by the operation.
-                    """
-                    tool_name = getattr(func, "__name__", "unknown")
-                    payload = self._extract_payload(runner_args, runner_kwargs)
-
-                    logger.debug(
-                        "[Tool] {} called | input={}",
-                        tool_name,
-                        str(payload)[:200] if payload is not None else "(none)",
-                    )
-                    self._log_tool_event(
-                        tool_name=tool_name,
-                        phase="pre",
-                        payload={
-                            "input": payload,
-                        },
-                    )
-
-                    try:
-                        self._enforce_tool_security(
-                            tool_name=tool_name, payload=payload
-                        )
-                        result = await self._invoke_tool_callable(
-                            func=func,
-                            payload=payload,
-                            runner_args=runner_args,
-                            runner_kwargs=runner_kwargs,
-                        )
-                    except Exception as exc:
-                        self._log_tool_event(
-                            tool_name=tool_name,
-                            phase="error",
-                            payload={
-                                "error": str(exc),
-                                "error_type": exc.__class__.__name__,
-                            },
-                        )
-                        raise
-
-                    logger.debug(
-                        "[Tool] {} → status={}",
-                        tool_name,
-                        result.get("status", "?")
-                        if isinstance(result, dict)
-                        else type(result).__name__,
-                    )
-                    self._log_tool_event(
-                        tool_name=tool_name,
-                        phase="post",
-                        payload={
-                            "status": result.get("status", "?")
-                            if isinstance(result, dict)
-                            else type(result).__name__,
-                            "message": result.get("message")
-                            if isinstance(result, dict)
-                            else None,
-                        },
-                    )
-
-                    if isinstance(result, dict) and "data" not in result:
-                        payload_items = {
-                            k: v
-                            for k, v in result.items()
-                            if k not in ("status", "message", "execution_time")
-                        }
-                        if len(payload_items) == 1:
-                            result["data"] = next(iter(payload_items.values()))
-                        else:
-                            dict_payloads = [
-                                v for v in payload_items.values() if isinstance(v, dict)
-                            ]
-                            result["data"] = (
-                                dict_payloads[0]
-                                if len(dict_payloads) == 1
-                                else payload_items
-                            )
-                    return result
-
-                mcp_runtime._tools.append(  # type: ignore[attr-defined]
-                    SimpleNamespace(
-                        name=getattr(func, "__name__", "unknown"),
-                        func=_compat_runner,
-                        handler=_compat_runner,
-                    )
-                )
-                return wrapped
-
-            return _wrap
-
-        mcp_runtime.tool = compat_tool  # type: ignore[method-assign]
-
-    def _extract_payload(
-        self,
-        runner_args: tuple[Any, ...],
-        runner_kwargs: dict[str, Any],
-    ) -> Any | None:
-        """Extract normalized tool payload from invocation arguments.
-
-        Args:
-            runner_args (tuple[Any, ...]): The runner args value.
-            runner_kwargs (dict[str, Any]): The runner kwargs value.
-
-        Returns:
-            Any | None: The result produced by the operation.
-        """
-        payload = runner_kwargs.get("input_data")
-        if payload is None and runner_args:
-            payload = runner_args[0]
-        return payload
-
-    async def _invoke_tool_callable(
-        self,
-        func: Any,
-        payload: Any | None,
-        runner_args: tuple[Any, ...],
-        runner_kwargs: dict[str, Any],
-    ) -> Any:
-        """Invoke a registered tool while preserving legacy invocation behavior.
-
-        Args:
-            func (Any): The func value.
-            payload (Any | None): The payload value.
-            runner_args (tuple[Any, ...]): The runner args value.
-            runner_kwargs (dict[str, Any]): The runner kwargs value.
-
-        Returns:
-            Any: The result produced by the operation.
-        """
-        params = list(inspect.signature(func).parameters.values())
-        if len(params) == 0:
-            return await func()
-        if len(params) == 1 and payload is not None:
-            return await func(payload)
-        return await func(*runner_args, **runner_kwargs)
-
-    def _enforce_tool_security(self, tool_name: str, payload: Any | None) -> None:
-        """Enforce runtime security policies before tool execution.
-
-        Args:
-            tool_name (str): The tool name value.
-            payload (Any | None): The payload value.
-
-        Returns:
-            None: None.
-        """
-        enforcer = security.get_security_enforcer()
-        if enforcer is None:
-            return
-        enforcer.enforce(tool_name=tool_name, payload=payload)
 
     def _configure_runtime_services(self) -> None:
         """Initialize router and cache services and instrument adapter methods.
@@ -545,10 +325,9 @@ class SolidWorksMCPServer:
         self._configure_runtime_services()
         self.state.adapter = self.adapter
 
-        # Register tools
-        self.state.tool_count = await tools.register_tools(
-            self.mcp, self.adapter, self.config
-        )
+        # Register tools and derive canonical count from FastMCP runtime
+        await tools.register_tools(self.mcp, self.adapter, self.config)
+        self.state.tool_count = len(await self.mcp.list_tools())
         self.server = self.mcp
 
         # Setup PydanticAI agent after tools are registered so the agent can bind

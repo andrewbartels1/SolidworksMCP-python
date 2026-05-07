@@ -24,8 +24,11 @@ def _query_all(db: Path, model_class: type) -> list:
     from sqlmodel import Session, create_engine, select
 
     engine = create_engine(f"sqlite:///{db}")
-    with Session(engine) as session:
-        return session.exec(select(model_class)).all()
+    try:
+        with Session(engine) as session:
+            return list(session.exec(select(model_class)).all())
+    finally:
+        engine.dispose()
 
 
 class TestInsertConversationEvent:

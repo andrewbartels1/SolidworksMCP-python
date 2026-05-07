@@ -27,7 +27,7 @@ class TestFileManagementTools:
             mcp_server, mock_adapter, mock_config
         )
         # Ensure the reported tool count matches the number of tools actually registered
-        registered_tool_names = {tool.name for tool in mcp_server._tools}
+        registered_tool_names = {tool.name for tool in await mcp_server.list_tools()}
         assert tool_count == len(registered_tool_names)
 
     @pytest.mark.asyncio
@@ -66,9 +66,9 @@ class TestFileManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "manage_file_properties":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -110,9 +110,9 @@ class TestFileManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "convert_file_format":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -171,9 +171,9 @@ class TestFileManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_file_operations":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -206,9 +206,9 @@ class TestFileManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "manage_file_properties":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -233,9 +233,9 @@ class TestFileManagementTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "convert_file_format":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -255,13 +255,13 @@ class TestFileManagementTools:
         manage_tool = None
         convert_tool = None
         batch_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "manage_file_properties":
-                manage_tool = tool.handler
+                manage_tool = tool.fn
             if tool.name == "convert_file_format":
-                convert_tool = tool.handler
+                convert_tool = tool.fn
             if tool.name == "batch_file_operations":
-                batch_tool = tool.handler
+                batch_tool = tool.fn
 
         assert manage_tool is not None
         assert convert_tool is not None
@@ -299,9 +299,9 @@ class TestFileManagementTools:
         mock_adapter.save_file = AsyncMock(side_effect=RuntimeError("disk unavailable"))
 
         save_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_file":
-                save_tool = tool.handler
+                save_tool = tool.fn
                 break
 
         assert save_tool is not None
@@ -326,9 +326,9 @@ class TestFileManagementTools:
         )
 
         save_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_file":
-                save_tool = tool.handler
+                save_tool = tool.fn
                 break
 
         assert save_tool is not None
@@ -344,9 +344,9 @@ class TestFileManagementTools:
         await register_file_management_tools(mcp_server, object(), mock_config)
 
         save_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_file":
-                save_tool = tool.handler
+                save_tool = tool.fn
                 break
 
         fallback_result = await save_tool(input_data={"force_save": False})
@@ -365,9 +365,9 @@ class TestFileManagementTools:
         )
 
         save_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_file":
-                save_tool = tool.handler
+                save_tool = tool.fn
                 break
 
         result = await save_tool(input_data={"force_save": True})
@@ -384,11 +384,11 @@ class TestFileManagementTools:
 
         save_as_tool = None
         properties_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_as":
-                save_as_tool = tool.handler
+                save_as_tool = tool.fn
             if tool.name == "get_file_properties":
-                properties_tool = tool.handler
+                properties_tool = tool.fn
 
         assert save_as_tool is not None
         assert properties_tool is not None
@@ -415,9 +415,9 @@ class TestFileManagementTools:
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
 
         save_as_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_as":
-                save_as_tool = tool.handler
+                save_as_tool = tool.fn
                 break
 
         assert save_as_tool is not None
@@ -456,9 +456,9 @@ class TestFileManagementTools:
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
 
         save_as_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_as":
-                save_as_tool = tool.handler
+                save_as_tool = tool.fn
                 break
 
         assert save_as_tool is not None
@@ -476,27 +476,15 @@ class TestFileManagementTools:
         assert export_error["status"] == "error"
         assert "export failed" in export_error["message"]
 
-        fallback_server = Mock()
-        fallback_server._tools = []
+        from fastmcp import FastMCP
 
-        def _tool_decorator():
-            """Test helper for tool decorator."""
-
-            def _register(func):
-                """Test helper for register."""
-                fallback_server._tools.append(Mock(name=func.__name__, handler=func))
-                fallback_server._tools[-1].name = func.__name__
-                return func
-
-            return _register
-
-        fallback_server.tool = _tool_decorator
+        fallback_server = FastMCP("fallback-test")
         await register_file_management_tools(fallback_server, object(), mock_config)
 
         fallback_save_as = None
-        for tool in fallback_server._tools:
+        for tool in await fallback_server.list_tools():
             if tool.name == "save_as":
-                fallback_save_as = tool.handler
+                fallback_save_as = tool.fn
                 break
 
         assert fallback_save_as is not None
@@ -516,9 +504,9 @@ class TestFileManagementTools:
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
 
         save_as_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_as":
-                save_as_tool = tool.handler
+                save_as_tool = tool.fn
                 break
 
         assert save_as_tool is not None
@@ -546,9 +534,9 @@ class TestFileManagementTools:
         )
 
         batch_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_file_operations":
-                batch_tool = tool.handler
+                batch_tool = tool.fn
                 break
 
         assert batch_tool is not None
@@ -578,13 +566,13 @@ class TestFileManagementTools:
         manage_tool = None
         convert_tool = None
         batch_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "manage_file_properties":
-                manage_tool = tool.handler
+                manage_tool = tool.fn
             if tool.name == "convert_file_format":
-                convert_tool = tool.handler
+                convert_tool = tool.fn
             if tool.name == "batch_file_operations":
-                batch_tool = tool.handler
+                batch_tool = tool.fn
 
         assert manage_tool is not None
         assert convert_tool is not None
@@ -660,13 +648,13 @@ class TestFileManagementTools:
         get_model_info_tool = None
         list_features_tool = None
         list_configs_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "get_model_info":
-                get_model_info_tool = tool.handler
+                get_model_info_tool = tool.fn
             if tool.name == "list_features":
-                list_features_tool = tool.handler
+                list_features_tool = tool.fn
             if tool.name == "list_configurations":
-                list_configs_tool = tool.handler
+                list_configs_tool = tool.fn
 
         assert get_model_info_tool is not None
         assert list_features_tool is not None
@@ -783,9 +771,9 @@ class TestFileManagementTools:
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
 
         classify_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "classify_feature_tree":
-                classify_tool = tool.handler
+                classify_tool = tool.fn
 
         assert classify_tool is not None
 
@@ -844,11 +832,11 @@ class TestFileManagementTools:
 
         load_part_tool = None
         load_assembly_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "load_part":
-                load_part_tool = tool.handler
+                load_part_tool = tool.fn
             if tool.name == "load_assembly":
-                load_assembly_tool = tool.handler
+                load_assembly_tool = tool.fn
 
         assert load_part_tool is not None
         assert load_assembly_tool is not None
@@ -917,11 +905,11 @@ class TestFileManagementTools:
 
         save_part_tool = None
         save_assembly_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "save_part":
-                save_part_tool = tool.handler
+                save_part_tool = tool.fn
             if tool.name == "save_assembly":
-                save_assembly_tool = tool.handler
+                save_assembly_tool = tool.fn
 
         assert save_part_tool is not None
         assert save_assembly_tool is not None
@@ -987,15 +975,15 @@ class TestFileManagementTools:
         list_features_tool = None
         list_configs_tool = None
         classify_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "get_model_info":
-                get_model_info_tool = tool.handler
+                get_model_info_tool = tool.fn
             if tool.name == "list_features":
-                list_features_tool = tool.handler
+                list_features_tool = tool.fn
             if tool.name == "list_configurations":
-                list_configs_tool = tool.handler
+                list_configs_tool = tool.fn
             if tool.name == "classify_feature_tree":
-                classify_tool = tool.handler
+                classify_tool = tool.fn
 
         assert get_model_info_tool is not None
         assert list_features_tool is not None
@@ -1027,11 +1015,11 @@ class TestFileManagementTools:
 
         load_part_tool = None
         load_assembly_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "load_part":
-                load_part_tool = tool.handler
+                load_part_tool = tool.fn
             if tool.name == "load_assembly":
-                load_assembly_tool = tool.handler
+                load_assembly_tool = tool.fn
 
         assert load_part_tool is not None
         assert load_assembly_tool is not None

@@ -21,6 +21,31 @@ from src.solidworks_mcp.agents.vector_rag import (
 )
 
 
+@pytest.fixture
+def temp_rag_dir() -> Path:
+    """Create temporary RAG directory for all test classes."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.fixture
+def mock_model():
+    """Mock SentenceTransformer model."""
+    model = MagicMock()
+    model.encode.side_effect = lambda texts, **kw: _fake_embeddings(texts)
+    return model
+
+
+@pytest.fixture
+def patched_embeddings(mock_model):
+    """Patch embedding model retrieval for all classes."""
+    with patch(
+        "src.solidworks_mcp.agents.vector_rag._get_embedding_model",
+        return_value=mock_model,
+    ):
+        yield mock_model
+
+
 def _fake_embeddings(texts: list[str], dim: int = 16) -> np.ndarray:
     """Generate fake embeddings for testing."""
     np.random.seed(hash(str(texts)) % 2**32)
@@ -29,28 +54,6 @@ def _fake_embeddings(texts: list[str], dim: int = 16) -> np.ndarray:
 
 class TestVectorRAGIndexOperations:
     """Test VectorRAGIndex FAISS operations."""
-
-    @pytest.fixture
-    def temp_rag_dir(self) -> Path:
-        """Create temporary RAG directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
-    @pytest.fixture
-    def mock_model(self):
-        """Mock SentenceTransformer model."""
-        model = MagicMock()
-        model.encode.side_effect = lambda texts, **kw: _fake_embeddings(texts)
-        return model
-
-    @pytest.fixture
-    def patched_embeddings(self, mock_model):
-        """Patch embedding model retrieval."""
-        with patch(
-            "src.solidworks_mcp.agents.vector_rag._get_embedding_model",
-            return_value=mock_model,
-        ):
-            yield mock_model
 
     def test_ingest_text_basic(self, temp_rag_dir: Path, patched_embeddings) -> None:
         """Test basic text ingestion into index."""
@@ -200,9 +203,10 @@ class TestVectorRAGIndexOperations:
         assert len(idx2._meta) > 0
 
     def test_load_nonexistent_index(self, temp_rag_dir: Path) -> None:
-        """Test loading nonexistent index raises error."""
-        with pytest.raises((FileNotFoundError, IOError)):
-            VectorRAGIndex.load(namespace="nonexistent", rag_dir=temp_rag_dir)
+        """Test loading nonexistent index returns an empty index."""
+        idx = VectorRAGIndex.load(namespace="nonexistent", rag_dir=temp_rag_dir)
+        assert isinstance(idx, VectorRAGIndex)
+        assert idx.chunk_count == 0
 
     def test_ingest_from_url(self, temp_rag_dir: Path, patched_embeddings) -> None:
         """Test ingesting from URL (mocked)."""

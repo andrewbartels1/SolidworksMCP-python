@@ -106,11 +106,11 @@ def _load_catalog() -> list[dict[str, Any]]:
         return json.load(fh)
 
 
-def _find_tool(server: SolidWorksMCPServer, tool_name: str):
+async def _find_tool(server: SolidWorksMCPServer, tool_name: str):
     """Test helper for find tool."""
-    for tool in server.mcp._tools:
+    for tool in await server.mcp.list_tools():
         if tool.name == tool_name:
-            return tool.func
+            return tool.fn
     return None
 
 
@@ -193,7 +193,7 @@ class TestLevelASchema:
         self, mock_server: SolidWorksMCPServer
     ) -> None:
         """At least 95 tools must be registered (verified count as of SolidWorks 2026)."""
-        registered = len(mock_server.mcp._tools)
+        registered = len(await mock_server.mcp.list_tools())
         assert registered >= 95, (
             f"Expected ≥95 registered tools, found {registered}. "
             "Run the server setup and registration pipeline before this test."
@@ -210,7 +210,7 @@ class TestLevelASchema:
                 "tool_catalog.json not found – run generate_tool_catalog.py first"
             )
 
-        registered_names = {t.name for t in mock_server.mcp._tools}
+        registered_names = {t.name for t in await mock_server.mcp.list_tools()}
         missing: list[str] = []
         for entry in catalog:
             name = entry["tool_name"]
@@ -231,7 +231,7 @@ class TestLevelASchema:
         self, mock_server: SolidWorksMCPServer
     ) -> None:
         """Every registered tool must have a unique name."""
-        names = [t.name for t in mock_server.mcp._tools]
+        names = [t.name for t in await mock_server.mcp.list_tools()]
         seen: dict[str, int] = {}
         for n in names:
             seen[n] = seen.get(n, 0) + 1
@@ -252,8 +252,8 @@ class TestLevelASchema:
         self, mock_server: SolidWorksMCPServer
     ) -> None:
         """Every registered tool must expose a callable func."""
-        for tool in mock_server.mcp._tools:
-            assert callable(tool.func), f"Tool '{tool.name}' func is not callable"
+        for tool in await mock_server.mcp.list_tools():
+            assert callable(tool.fn), f"Tool '{tool.name}' func is not callable"
 
     @pytest.mark.asyncio
     async def test_catalog_json_structure(self) -> None:
@@ -551,12 +551,15 @@ class TestLevelBSmokeExecution:
         results: list[dict[str, Any]] = []
         failed: list[str] = []
 
-        for tool in mock_server.mcp._tools:
+        import inspect
+
+        for tool in await mock_server.mcp.list_tools():
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
+            _takes_args = bool(inspect.signature(tool.fn).parameters)
             t0 = time.perf_counter()
             try:
-                result = await tool.func(payload)
+                result = await tool.fn(payload) if _takes_args else await tool.fn()
                 elapsed = time.perf_counter() - t0
                 status = (
                     result.get("status", "unknown")
@@ -600,11 +603,11 @@ class TestLevelBSmokeExecution:
     ) -> None:
         """Every tool must return a dict (not None, not a bare string, not an exception)."""
         non_dict: list[str] = []
-        for tool in mock_server.mcp._tools:
+        for tool in await mock_server.mcp.list_tools():
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
             try:
-                result = await tool.func(payload)
+                result = await tool.fn(payload) if inspect.signature(tool.fn).parameters else await tool.fn()
                 if not isinstance(result, dict):
                     non_dict.append(f"{name}: returned {type(result).__name__}")
             except Exception:
@@ -620,11 +623,11 @@ class TestLevelBSmokeExecution:
     ) -> None:
         """Every tool response dict must contain a 'status' key."""
         missing_status: list[str] = []
-        for tool in mock_server.mcp._tools:
+        for tool in await mock_server.mcp.list_tools():
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
             try:
-                result = await tool.func(payload)
+                result = await tool.fn(payload) if inspect.signature(tool.fn).parameters else await tool.fn()
                 if isinstance(result, dict) and "status" not in result:
                     missing_status.append(name)
             except Exception:
@@ -644,11 +647,11 @@ class TestLevelBSmokeExecution:
         total_bytes = 0
         size_rows: list[dict[str, Any]] = []
 
-        for tool in mock_server.mcp._tools:
+        for tool in await mock_server.mcp.list_tools():
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
             try:
-                result = await tool.func(payload)
+                result = await tool.fn(payload) if inspect.signature(tool.fn).parameters else await tool.fn()
             except Exception as exc:
                 # Size-budget test is not responsible for behavioral failures.
                 size_rows.append({"tool": name, "bytes": 0, "error": str(exc)})
@@ -711,7 +714,7 @@ class TestLevelCRealCOM:
     @pytest.mark.asyncio
     async def test_c01_health_check(self, real_server: SolidWorksMCPServer) -> None:
         """SolidWorks COM connection must report healthy."""
-        tool = _find_tool(real_server, "discover_solidworks_docs")
+        tool = await _find_tool(real_server, "discover_solidworks_docs")
         assert tool is not None, "discover_solidworks_docs not registered"
         result = await tool({})
         assert isinstance(result, dict)
@@ -727,12 +730,12 @@ class TestLevelCRealCOM:
         DEMO_DIR.mkdir(parents=True, exist_ok=True)
         part_path = DEMO_DIR / "smoke_c02_part.sldprt"
 
-        create = _find_tool(real_server, "create_part")
+        create = await _find_tool(real_server, "create_part")
         assert create, "create_part not registered"
         result = await create({"name": "smoke_c02_part"})
         assert result["status"] == "success", f"create_part failed: {result}"
 
-        save_as = _find_tool(real_server, "save_as")
+        save_as = await _find_tool(real_server, "save_as")
         assert save_as, "save_as not registered"
         result = await save_as({"file_path": str(part_path)})
         assert result["status"] == "success", f"save_as failed: {result}"
@@ -746,24 +749,24 @@ class TestLevelCRealCOM:
         DEMO_DIR.mkdir(parents=True, exist_ok=True)
         part_path = DEMO_DIR / "smoke_c03_roundtrip.sldprt"
 
-        create = _find_tool(real_server, "create_part")
+        create = await _find_tool(real_server, "create_part")
         result = await create({"name": "smoke_c03_roundtrip"})
         assert result["status"] == "success"
 
-        save_as = _find_tool(real_server, "save_as")
+        save_as = await _find_tool(real_server, "save_as")
         result = await save_as({"file_path": str(part_path)})
         assert result["status"] == "success"
         assert part_path.exists()
 
-        close_model = _find_tool(real_server, "close_model")
+        close_model = await _find_tool(real_server, "close_model")
         result = await close_model({"save": False})
         assert result["status"] in {"success", "error"}
 
-        open_model = _find_tool(real_server, "open_model")
+        open_model = await _find_tool(real_server, "open_model")
         result = await open_model({"file_path": str(part_path)})
         assert result["status"] == "success"
 
-        save_file = _find_tool(real_server, "save_file")
+        save_file = await _find_tool(real_server, "save_file")
         result = await save_file({"force_save": True})
         assert result["status"] == "success"
 
@@ -772,14 +775,14 @@ class TestLevelCRealCOM:
         """Open a shipped sample part and verify file properties can be read."""
         sample_part = _find_sample_part()
 
-        open_tool = _find_tool(real_server, "open_model")
+        open_tool = await _find_tool(real_server, "open_model")
         assert open_tool
         result = await open_tool({"file_path": str(sample_part)})
         assert result["status"] == "success"
 
-        props_tool = _find_tool(real_server, "get_file_properties")
+        props_tool = await _find_tool(real_server, "get_file_properties")
         assert props_tool
-        result = await props_tool({})
+        result = await props_tool()
         assert result["status"] == "success"
 
     @pytest.mark.asyncio
@@ -789,12 +792,12 @@ class TestLevelCRealCOM:
         step_path = DEMO_DIR / "smoke_c05_export.step"
 
         sample_part = _find_sample_part()
-        open_tool = _find_tool(real_server, "open_model")
+        open_tool = await _find_tool(real_server, "open_model")
         assert open_tool
         result = await open_tool({"file_path": str(sample_part)})
         assert result["status"] == "success", f"open_model failed: {result}"
 
-        tool = _find_tool(real_server, "export_step")
+        tool = await _find_tool(real_server, "export_step")
         assert tool
         result = await tool({"file_path": str(step_path), "format_type": "step"})
         assert result["status"] == "success", f"STEP export failed: {result}"
@@ -807,12 +810,12 @@ class TestLevelCRealCOM:
         img_path = DEMO_DIR / "smoke_c06_image.jpg"
 
         sample_part = _find_sample_part()
-        open_tool = _find_tool(real_server, "open_model")
+        open_tool = await _find_tool(real_server, "open_model")
         assert open_tool
         result = await open_tool({"file_path": str(sample_part)})
         assert result["status"] == "success", f"open_model failed: {result}"
 
-        tool = _find_tool(real_server, "export_image")
+        tool = await _find_tool(real_server, "export_image")
         assert tool
         result = await tool({"file_path": str(img_path), "format_type": "jpg"})
         assert result["status"] == "success", f"Image export failed: {result}"
@@ -827,12 +830,12 @@ class TestLevelCRealCOM:
         """Create an assembly and save it."""
         DEMO_DIR.mkdir(parents=True, exist_ok=True)
         asm_path = DEMO_DIR / "smoke_c07_assembly.sldasm"
-        tool = _find_tool(real_server, "create_assembly")
+        tool = await _find_tool(real_server, "create_assembly")
         assert tool
         result = await tool({"name": "smoke_c07_asm"})
         assert result["status"] == "success"
 
-        save_as = _find_tool(real_server, "save_as")
+        save_as = await _find_tool(real_server, "save_as")
         result = await save_as({"file_path": str(asm_path)})
         assert result["status"] == "success"
         assert asm_path.exists()
@@ -840,7 +843,7 @@ class TestLevelCRealCOM:
     @pytest.mark.asyncio
     async def test_c08_close_model(self, real_server: SolidWorksMCPServer) -> None:
         """Close the active document cleanly."""
-        tool = _find_tool(real_server, "close_model")
+        tool = await _find_tool(real_server, "close_model")
         assert tool
         result = await tool({"save": False})
         assert result["status"] in ("success", "error"), (
@@ -852,17 +855,17 @@ class TestLevelCRealCOM:
         """Open one of the shipped 2026 sample parts and read its file properties."""
         sample_part = _find_sample_part()
 
-        open_tool = _find_tool(real_server, "open_model")
+        open_tool = await _find_tool(real_server, "open_model")
         assert open_tool
         result = await open_tool({"file_path": str(sample_part)})
         assert result["status"] == "success", f"open_model failed: {result}"
 
-        props = _find_tool(real_server, "get_file_properties")
+        props = await _find_tool(real_server, "get_file_properties")
         assert props
-        result = await props({})
+        result = await props()
         assert result["status"] == "success"
 
-        close = _find_tool(real_server, "close_model")
+        close = await _find_tool(real_server, "close_model")
         await close({"save": False})
 
     @pytest.mark.asyncio
@@ -870,7 +873,7 @@ class TestLevelCRealCOM:
         self, real_server: SolidWorksMCPServer, output_dir: Path
     ) -> None:
         """Discover live COM surface and write compatibility report."""
-        tool = _find_tool(real_server, "discover_solidworks_docs")
+        tool = await _find_tool(real_server, "discover_solidworks_docs")
         assert tool
 
         docs_out = output_dir / "docs-index"
@@ -910,12 +913,12 @@ class TestLevelCRealCOM:
         """Open a sample part and validate read-before-write tools for tree/config context."""
         sample_part = _find_sample_part()
 
-        open_tool = _find_tool(real_server, "open_model")
+        open_tool = await _find_tool(real_server, "open_model")
         assert open_tool is not None, "open_model not registered"
         opened = await open_tool({"file_path": str(sample_part)})
         assert opened.get("status") == "success", f"open_model failed: {opened}"
 
-        list_features_tool = _find_tool(real_server, "list_features")
+        list_features_tool = await _find_tool(real_server, "list_features")
         assert list_features_tool is not None, "list_features not registered"
         features_result = await list_features_tool({"include_suppressed": False})
         assert features_result.get("status") == "success", (
@@ -925,9 +928,9 @@ class TestLevelCRealCOM:
             f"Expected list in features payload: {features_result}"
         )
 
-        list_configs_tool = _find_tool(real_server, "list_configurations")
+        list_configs_tool = await _find_tool(real_server, "list_configurations")
         assert list_configs_tool is not None, "list_configurations not registered"
-        configs_result = await list_configs_tool({})
+        configs_result = await list_configs_tool()
         assert configs_result.get("status") == "success", (
             f"list_configurations failed: {configs_result}"
         )

@@ -240,8 +240,9 @@ def test_provider_credentials_checks(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
         service._ensure_provider_credentials("anthropic:claude")
 
-    with pytest.raises(RuntimeError, match="SOLIDWORKS_UI_LOCAL_ENDPOINT"):
-        service._ensure_provider_credentials("local:foo")
+    # local: no longer raises when endpoint env var is missing; _build_agent_model
+    # defaults to http://127.0.0.1:11434/v1 so the check was redundant.
+    service._ensure_provider_credentials("local:foo")  # must not raise
 
 
 def test_build_agent_model_local_without_provider(
@@ -255,8 +256,21 @@ def test_build_agent_model_local_without_provider(
     with pytest.raises(RuntimeError, match="provider support is not installed"):
         service._build_agent_model("local:my-model")
 
-    assert (
-        service._build_agent_model("github:openai/gpt-4.1") == "github:openai/gpt-4.1"
+    # With OpenAIChatModel=None, github: also raises because it needs OpenAIChatModel.
+    with pytest.raises(RuntimeError, match="OpenAI support is not installed"):
+        service._build_agent_model("github:openai/gpt-4.1")
+
+
+def test_build_agent_model_github_with_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that github: prefix returns an OpenAIChatModel backed by GitHubProvider."""
+    monkeypatch.setenv("GITHUB_API_KEY", "test-gh-token-for-build-check")
+    from pydantic_ai.models.openai import OpenAIChatModel as _OAI  # noqa: PLC0415
+
+    github_model = service._build_agent_model("github:openai/gpt-4.1")
+    assert isinstance(github_model, _OAI), (
+        f"expected OpenAIChatModel, got {type(github_model)}"
     )
 
 

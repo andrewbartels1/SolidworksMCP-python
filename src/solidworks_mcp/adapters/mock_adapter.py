@@ -943,6 +943,45 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["sketch_operation"] / 2,
         )
 
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock check for sketch definition status.
+
+        Args:
+            sketch_name (str | None): Optional sketch name to inspect. Defaults to None.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Definition status payload.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 3)
+        self._operation_count += 1
+
+        resolved_name = sketch_name or self._current_sketch or "Sketch1"
+        if sketch_name and sketch_name not in self._sketches:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Sketch not found: {sketch_name}",
+            )
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "sketch_name": resolved_name,
+                "is_fully_defined": True,
+                "definition_state": "fully_defined",
+                "source": "mock",
+                "raw_status": True,
+            },
+            execution_time=self._delays["sketch_operation"] / 3,
+        )
+
     async def get_mass_properties(self) -> AdapterResult[MassProperties]:
         """Mock getting mass properties.
 

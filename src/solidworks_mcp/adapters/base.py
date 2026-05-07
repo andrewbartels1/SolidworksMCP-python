@@ -220,6 +220,8 @@ class ExtrusionParameters(BaseModel):
     both_directions: bool = False
     thin_feature: bool = False
     thin_thickness: float | None = None
+    auto_fillet_corners: bool = False
+    fillet_corners_radius: float = 0.0
     end_condition: str = "Blind"
     up_to_surface: str | None = None
     merge_result: bool = True
@@ -756,6 +758,22 @@ class SolidWorksAdapter(ABC):
             error="add_sketch_dimension is not implemented by this adapter",
         )
 
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check whether a sketch is fully defined.
+
+        Args:
+            sketch_name (str | None): Optional sketch name to inspect. Defaults to None.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Definition status payload.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="check_sketch_fully_defined is not implemented by this adapter",
+        )
+
     async def sketch_linear_pattern(
         self,
         entities: list[str],
@@ -877,6 +895,44 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="create_cut is not implemented by this adapter",
+        )
+
+    async def create_cut_extrude(
+        self, params: "ExtrusionParameters"
+    ) -> "AdapterResult[Any]":
+        """Create a cut-extrude feature from the active sketch.
+
+        Cuts material from the current solid body using the active sketch profile.
+        Equivalent to SolidWorks Insert > Cut > Extrude.
+
+        Args:
+            params (ExtrusionParameters): Depth and direction parameters.
+
+        Returns:
+            AdapterResult: Feature result or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_cut_extrude is not implemented by this adapter",
+        )
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> "AdapterResult[Any]":
+        """Add a fillet feature to selected edges.
+
+        Rounds the selected edges of the current solid body with the given radius.
+
+        Args:
+            radius (float): Fillet radius in millimeters.
+            edge_names (list[str]): List of edge names to fillet.
+
+        Returns:
+            AdapterResult: Feature result or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_fillet is not implemented by this adapter",
         )
 
     @abstractmethod

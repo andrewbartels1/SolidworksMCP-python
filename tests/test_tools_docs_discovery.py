@@ -43,11 +43,11 @@ def _real_solidworks_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-def _find_tool(server: SolidWorksMCPServer, tool_name: str):
+async def _find_tool(server: SolidWorksMCPServer, tool_name: str):
     """Find a tool by name in the MCP server."""
-    for tool in server.mcp._tools:
+    for tool in await server.mcp.list_tools():
         if tool.name == tool_name:
-            return tool.func
+            return tool.fn
     raise AssertionError(f"Tool '{tool_name}' not found")
 
 
@@ -87,7 +87,7 @@ async def test_discover_solidworks_docs_available(
 ) -> None:
     """Test that docs discovery tool is registered."""
     try:
-        discover_tool = _find_tool(real_server, "discover_solidworks_docs")
+        discover_tool = await _find_tool(real_server, "discover_solidworks_docs")
         assert discover_tool is not None, (
             "discover_solidworks_docs tool should be registered"
         )
@@ -111,7 +111,7 @@ async def test_discover_solidworks_docs_execution(
 ) -> None:
     """Test that docs discovery tool executes successfully with real SolidWorks."""
     try:
-        discover_tool = _find_tool(real_server, "discover_solidworks_docs")
+        discover_tool = await _find_tool(real_server, "discover_solidworks_docs")
     except AssertionError:
         pytest.skip("discover_solidworks_docs tool not yet registered")
 
@@ -231,9 +231,9 @@ async def test_search_solidworks_api_help_with_index(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     search_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "search_solidworks_api_help":
-            search_tool = tool.func
+            search_tool = tool.fn
             break
 
     assert search_tool is not None
@@ -497,9 +497,9 @@ async def test_discover_solidworks_docs_tool_error_paths(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -522,9 +522,9 @@ async def test_discover_solidworks_docs_tool_success_path(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -859,9 +859,9 @@ async def test_discover_solidworks_docs_tool_non_windows_error(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -886,9 +886,9 @@ async def test_search_api_help_auto_discovers_when_index_missing(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     search_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "search_solidworks_api_help":
-            search_tool = tool.func
+            search_tool = tool.fn
             break
     assert search_tool is not None
 
@@ -947,9 +947,9 @@ async def test_search_api_help_exception_path(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     search_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "search_solidworks_api_help":
-            search_tool = tool.func
+            search_tool = tool.fn
             break
     assert search_tool is not None
 
@@ -1160,9 +1160,9 @@ async def test_discover_tool_sets_rag_indexed_true_when_rag_rebuild_succeeds(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -1222,9 +1222,9 @@ async def test_discover_tool_handles_rag_import_error(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -1275,9 +1275,9 @@ async def test_discover_tool_top_level_exception_path(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 

@@ -80,11 +80,11 @@ def _ok(data):
     )
 
 
-def _tool(mcp_server, name: str):
+async def _tool(mcp_server, name: str):
     """Test helper for tool."""
-    for registered in mcp_server._tools:
+    for registered in await mcp_server.list_tools():
         if registered.name == name:
-            return registered.handler
+            return registered.fn
     raise AssertionError(f"Tool not found: {name}")
 
 
@@ -233,24 +233,24 @@ async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
     await register_drawing_tools(mcp_server, object(), mock_config)
 
     assert (
-        await _tool(mcp_server, "create_drawing_view")(
+        await (await _tool(mcp_server, "create_drawing_view"))(
             input_data=CreateDrawingViewInput(model_path="m.sldprt", view_type="front")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_dimension")(
+        await (await _tool(mcp_server, "add_dimension"))(
             input_data=DrawingAddDimensionInput(
                 dimension_type="linear", entity1="L1", position_x=1, position_y=2
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_note")(
+        await (await _tool(mcp_server, "add_note"))(
             input_data=AddNoteInput(text="n", position_x=1, position_y=2)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "create_section_view")(
+        await (await _tool(mcp_server, "create_section_view"))(
             input_data=CreateSectionViewInput(
                 section_line_start=(0, 0),
                 section_line_end=(1, 1),
@@ -260,29 +260,29 @@ async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "create_detail_view")(
+        await (await _tool(mcp_server, "create_detail_view"))(
             input_data=CreateDetailViewInput(
                 center_x=0, center_y=0, radius=2, view_position_x=3, view_position_y=4
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "update_sheet_format")(
+        await (await _tool(mcp_server, "update_sheet_format"))(
             input_data=UpdateSheetFormatInput(format_file="f.slddrt")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "auto_dimension_view")(
+        await (await _tool(mcp_server, "auto_dimension_view"))(
             input_data={"view_name": "Front"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "check_drawing_standards")(
+        await (await _tool(mcp_server, "check_drawing_standards"))(
             input_data={"standard": "ANSI"}
         )
     )["status"] == "success"
 
-    alias_result = await _tool(mcp_server, "add_dimension")(
+    alias_result = await (await _tool(mcp_server, "add_dimension"))(
         input_data=DimensionInput(
             entities=["E1", "E2"], position=[5, 6], dimension_type="linear"
         )
@@ -290,20 +290,20 @@ async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
     assert alias_result["status"] == "success"
 
     assert (
-        await _tool(mcp_server, "create_technical_drawing")(
+        await (await _tool(mcp_server, "create_technical_drawing"))(
             input_data=DrawingCreationInput(
                 output_path="o.slddrw", auto_populate_views=True
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_drawing_view")(
+        await (await _tool(mcp_server, "add_drawing_view"))(
             input_data=DrawingViewInput(
                 view_name="Front", view_type="front", position=[1, 1]
             )
         )
     )["status"] == "success"
-    assert (await _tool(mcp_server, "update_title_block")(input_data={"title": "A"}))[
+    assert (await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "A"}))[
         "status"
     ] == "success"
 
@@ -331,39 +331,39 @@ async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
     await register_export_tools(mcp_server, _ExportFallbackAdapter(), mock_config)
 
     assert (
-        await _tool(mcp_server, "export_step")(
+        await (await _tool(mcp_server, "export_step"))(
             input_data={"file_path": "a.step", "format_type": "step"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_iges")(
+        await (await _tool(mcp_server, "export_iges"))(
             input_data=ExportFileInput(file_path="a.igs", format_type="iges")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_stl")(
+        await (await _tool(mcp_server, "export_stl"))(
             input_data=ExportFileInput(file_path="a.stl", format_type="stl")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_pdf")(
+        await (await _tool(mcp_server, "export_pdf"))(
             input_data=ExportFileInput(file_path="a.pdf", format_type="pdf")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_dwg")(
+        await (await _tool(mcp_server, "export_dwg"))(
             input_data=ExportFileInput(file_path="a.dwg", format_type="dwg")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_image")(
+        await (await _tool(mcp_server, "export_image"))(
             input_data=ExportImageInput(
                 output_path="a.png", image_format="png", resolution="800x600"
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "batch_export")(
+        await (await _tool(mcp_server, "batch_export"))(
             input_data=BatchExportInput(
                 source_directory="src",
                 output_directory="out",
@@ -373,7 +373,7 @@ async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
         )
     )["status"] == "success"
 
-    error_result = await _tool(mcp_server, "export_step")(
+    error_result = await (await _tool(mcp_server, "export_step"))(
         input_data={"file_path": None, "format_type": "step"}
     )
     assert error_result["status"] == "error"
@@ -385,32 +385,32 @@ async def test_drawing_analysis_simulation_paths(mcp_server, mock_config):
     await register_drawing_analysis_tools(mcp_server, object(), mock_config)
 
     assert (
-        await _tool(mcp_server, "analyze_drawing_comprehensive")(
+        await (await _tool(mcp_server, "analyze_drawing_comprehensive"))(
             input_data=DrawingAnalysisInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "analyze_drawing_dimensions")(
+        await (await _tool(mcp_server, "analyze_drawing_dimensions"))(
             input_data=DimensionAnalysisInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "analyze_drawing_annotations")(
+        await (await _tool(mcp_server, "analyze_drawing_annotations"))(
             input_data=AnnotationAnalysisInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "check_drawing_compliance")(
+        await (await _tool(mcp_server, "check_drawing_compliance"))(
             input_data=ComplianceCheckInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "analyze_drawing_views")(
+        await (await _tool(mcp_server, "analyze_drawing_views"))(
             input_data={"drawing_path": "a.slddrw"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_drawing_report")(
+        await (await _tool(mcp_server, "generate_drawing_report"))(
             input_data={"drawing_path": "a.slddrw", "report_type": "summary"}
         )
     )["status"] == "success"
@@ -422,27 +422,27 @@ async def test_vba_generation_uncovered_branches(mcp_server, mock_config):
     await register_vba_generation_tools(mcp_server, object(), mock_config)
 
     assert (
-        await _tool(mcp_server, "generate_vba_extrusion")(
+        await (await _tool(mcp_server, "generate_vba_extrusion"))(
             input_data=VBAExtrusionInput(depth=5)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_revolve")(
+        await (await _tool(mcp_server, "generate_vba_revolve"))(
             input_data=VBARevolveInput(angle_degrees=180)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_assembly_insert")(
+        await (await _tool(mcp_server, "generate_vba_assembly_insert"))(
             input_data=VBAAssemblyInput(component_path="c.sldprt")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_drawing_views")(
+        await (await _tool(mcp_server, "generate_vba_drawing_views"))(
             input_data=VBADrawingInput(model_path="m.sldprt", scale=1.0)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_batch_export")(
+        await (await _tool(mcp_server, "generate_vba_batch_export"))(
             input_data=VBABatchInput(
                 operation_type="export",
                 file_pattern="*.sldprt",
@@ -452,37 +452,37 @@ async def test_vba_generation_uncovered_branches(mcp_server, mock_config):
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_part_modeling")(
+        await (await _tool(mcp_server, "generate_vba_part_modeling"))(
             input_data={"operation": "shell", "thickness": 2.0}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_part_modeling")(
+        await (await _tool(mcp_server, "generate_vba_part_modeling"))(
             input_data={"operation": "fillet", "radius": 3.0}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_assembly_mates")(
+        await (await _tool(mcp_server, "generate_vba_assembly_mates"))(
             input_data={"mate_type": "concentric"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_drawing_dimensions")(
+        await (await _tool(mcp_server, "generate_vba_drawing_dimensions"))(
             input_data={"dimension_type": "angular", "precision": 3}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_file_operations")(
+        await (await _tool(mcp_server, "generate_vba_file_operations"))(
             input_data={"operation": "pack_and_go", "target_folder": "C:/tmp"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_vba_macro_recorder")(
+        await (await _tool(mcp_server, "generate_vba_macro_recorder"))(
             input_data={"operation": "create_template", "macro_name": "MyMacro"}
         )
     )["status"] == "success"
 
-    unsupported = await _tool(mcp_server, "generate_vba_file_operations")(
+    unsupported = await (await _tool(mcp_server, "generate_vba_file_operations"))(
         input_data={"operation": "unknown"}
     )
     assert unsupported["status"] == "error"
@@ -578,94 +578,94 @@ async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
     await register_sketching_tools(mcp_server, _SketchAdapterStub(), mock_config)
 
     assert (
-        await _tool(mcp_server, "create_sketch")(
+        await (await _tool(mcp_server, "create_sketch"))(
             input_data=CreateSketchInput(plane="Top", sketch_name="S1")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_line")(
+        await (await _tool(mcp_server, "add_line"))(
             input_data=AddLineInput(start_x=0, start_y=0, end_x=5, end_y=0)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_circle")(
+        await (await _tool(mcp_server, "add_circle"))(
             input_data=AddCircleInput(center_x=0, center_y=0, radius=2)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_rectangle")(
+        await (await _tool(mcp_server, "add_rectangle"))(
             input_data=AddRectangleInput(
                 corner1_x=0, corner1_y=0, corner2_x=5, corner2_y=3
             )
         )
     )["status"] == "success"
-    assert (await _tool(mcp_server, "exit_sketch")())["status"] == "success"
+    assert (await (await _tool(mcp_server, "exit_sketch"))())["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_arc")(
+        await (await _tool(mcp_server, "add_arc"))(
             input_data=AddArcInput(
                 center_x=0, center_y=0, start_x=1, start_y=0, end_x=0, end_y=1
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_spline")(
+        await (await _tool(mcp_server, "add_spline"))(
             input_data=AddSplineInput(
                 points=[{"x": 0, "y": 0}, {"x": 1, "y": 1}, {"x": 2, "y": 0}]
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_centerline")(
+        await (await _tool(mcp_server, "add_centerline"))(
             input_data=AddLineInput(x1=0, y1=0, x2=0, y2=5)
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_polygon")(input_data={"sides": 6, "radius": 5})
+        await (await _tool(mcp_server, "add_polygon"))(input_data={"sides": 6, "radius": 5})
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_ellipse")(
+        await (await _tool(mcp_server, "add_ellipse"))(
             input_data={"major_axis": 10, "minor_axis": 5}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_sketch_constraint")(
+        await (await _tool(mcp_server, "add_sketch_constraint"))(
             input_data=AddRelationInput(
                 entity1="L1", entity2="L2", relation_type="parallel"
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_sketch_dimension")(
+        await (await _tool(mcp_server, "add_sketch_dimension"))(
             input_data=SketchAddDimensionInput(
                 entity1="L1", dimension_type="linear", value=10
             )
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "sketch_linear_pattern")(
+        await (await _tool(mcp_server, "sketch_linear_pattern"))(
             input_data={"entities": ["L1"], "count": 3}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "sketch_circular_pattern")(
+        await (await _tool(mcp_server, "sketch_circular_pattern"))(
             input_data={"entities": ["L1"], "count": 6}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "sketch_mirror")(
+        await (await _tool(mcp_server, "sketch_mirror"))(
             input_data={"entities": ["L1"], "mirror_line": "CL1"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "sketch_offset")(
+        await (await _tool(mcp_server, "sketch_offset"))(
             input_data={"entities": ["L1"], "offset_distance": 1.5}
         )
     )["status"] == "success"
-    assert (await _tool(mcp_server, "sketch_tutorial_simple_hole")())[
+    assert (await (await _tool(mcp_server, "sketch_tutorial_simple_hole"))())[
         "status"
     ] == "success"
     assert (
-        await _tool(mcp_server, "tutorial_simple_hole")(
+        await (await _tool(mcp_server, "tutorial_simple_hole"))(
             input_data=TutorialSimpleHoleInput(
                 plane="Top", center_x=0, center_y=0, diameter=5, depth=3
             )
@@ -680,7 +680,7 @@ async def test_sketching_error_branches_with_exceptions(mcp_server, mock_config)
     adapter.add_arc = AsyncMock(side_effect=RuntimeError("arc failed"))
     await register_sketching_tools(mcp_server, adapter, mock_config)
 
-    result = await _tool(mcp_server, "add_arc")(
+    result = await (await _tool(mcp_server, "add_arc"))(
         input_data=AddArcInput(
             center_x=0, center_y=0, start_x=1, start_y=0, end_x=0, end_y=1
         )
@@ -863,51 +863,51 @@ async def test_drawing_and_analysis_adapter_passthrough_success(
     await register_drawing_analysis_tools(mcp_server, adapter, mock_config)
 
     assert (
-        await _tool(mcp_server, "create_technical_drawing")(
+        await (await _tool(mcp_server, "create_technical_drawing"))(
             input_data=DrawingCreationInput(output_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_drawing_view")(
+        await (await _tool(mcp_server, "add_drawing_view"))(
             input_data=DrawingViewInput(view_name="Front")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "add_annotation")(
+        await (await _tool(mcp_server, "add_annotation"))(
             input_data=AnnotationInput(text="n", annotation_type="Note")
         )
     )["status"] == "success"
-    assert (await _tool(mcp_server, "update_title_block")(input_data={"title": "T"}))[
+    assert (await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "T"}))[
         "status"
     ] == "success"
 
     assert (
-        await _tool(mcp_server, "analyze_drawing_comprehensive")(
+        await (await _tool(mcp_server, "analyze_drawing_comprehensive"))(
             input_data=DrawingAnalysisInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "analyze_drawing_dimensions")(
+        await (await _tool(mcp_server, "analyze_drawing_dimensions"))(
             input_data=DimensionAnalysisInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "analyze_drawing_annotations")(
+        await (await _tool(mcp_server, "analyze_drawing_annotations"))(
             input_data=AnnotationAnalysisInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "check_drawing_compliance")(
+        await (await _tool(mcp_server, "check_drawing_compliance"))(
             input_data=ComplianceCheckInput(drawing_path="a.slddrw")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "analyze_drawing_views")(
+        await (await _tool(mcp_server, "analyze_drawing_views"))(
             input_data={"drawing_path": "a.slddrw"}
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "generate_drawing_report")(
+        await (await _tool(mcp_server, "generate_drawing_report"))(
             input_data={"drawing_path": "a.slddrw"}
         )
     )["status"] == "success"
@@ -951,37 +951,37 @@ async def test_export_tools_native_adapter_methods(mcp_server, mock_config):
     await register_export_tools(mcp_server, _ExportNativeAdapter(), mock_config)
 
     assert (
-        await _tool(mcp_server, "export_step")(
+        await (await _tool(mcp_server, "export_step"))(
             input_data=ExportFileInput(file_path="a.step", format_type="step")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_iges")(
+        await (await _tool(mcp_server, "export_iges"))(
             input_data=ExportFileInput(file_path="a.igs", format_type="iges")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_stl")(
+        await (await _tool(mcp_server, "export_stl"))(
             input_data=ExportFileInput(file_path="a.stl", format_type="stl")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_pdf")(
+        await (await _tool(mcp_server, "export_pdf"))(
             input_data=ExportFileInput(file_path="a.pdf", format_type="pdf")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_dwg")(
+        await (await _tool(mcp_server, "export_dwg"))(
             input_data=ExportFileInput(file_path="a.dwg", format_type="dwg")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "export_image")(
+        await (await _tool(mcp_server, "export_image"))(
             input_data=ExportImageInput(file_path="a.png", format_type="png")
         )
     )["status"] == "success"
     assert (
-        await _tool(mcp_server, "batch_export")(
+        await (await _tool(mcp_server, "batch_export"))(
             input_data=BatchExportInput(
                 source_directory="src", output_directory="out", format_type="step"
             )
@@ -1015,21 +1015,21 @@ async def test_sketching_tool_error_return_branches(mcp_server, mock_config):
     )
     await register_sketching_tools(mcp_server, adapter, mock_config)
 
-    assert (await _tool(mcp_server, "add_polygon")(input_data={"sides": 5}))[
+    assert (await (await _tool(mcp_server, "add_polygon"))(input_data={"sides": 5}))[
         "status"
     ] == "error"
     assert (
-        await _tool(mcp_server, "add_ellipse")(
+        await (await _tool(mcp_server, "add_ellipse"))(
             input_data={"major_axis": 10, "minor_axis": 5}
         )
     )["status"] == "error"
     assert (
-        await _tool(mcp_server, "sketch_mirror")(
+        await (await _tool(mcp_server, "sketch_mirror"))(
             input_data={"entities": ["L1"], "mirror_line": "CL1"}
         )
     )["status"] == "error"
     assert (
-        await _tool(mcp_server, "sketch_offset")(
+        await (await _tool(mcp_server, "sketch_offset"))(
             input_data={"entities": ["L1"], "offset_distance": 1.0}
         )
     )["status"] == "error"
@@ -1040,12 +1040,12 @@ async def test_vba_generation_unsupported_branches(mcp_server, mock_config):
     """Test vba generation unsupported branches."""
     await register_vba_generation_tools(mcp_server, object(), mock_config)
 
-    bad_part = await _tool(mcp_server, "generate_vba_part_modeling")(
+    bad_part = await (await _tool(mcp_server, "generate_vba_part_modeling"))(
         input_data={"operation": "does_not_exist"}
     )
     assert bad_part["status"] == "error"
 
-    bad_macro = await _tool(mcp_server, "generate_vba_macro_recorder")(
+    bad_macro = await (await _tool(mcp_server, "generate_vba_macro_recorder"))(
         input_data={"operation": "nope"}
     )
     assert bad_macro["status"] == "error"

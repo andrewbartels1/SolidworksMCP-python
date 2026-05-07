@@ -257,7 +257,9 @@ class TestSolidWorksMCPServer:
                         await server.setup()
 
                         assert server._setup_complete is True
-                        assert server.state.tool_count == 42
+                        assert server.state.tool_count == len(
+                            await server.mcp.list_tools()
+                        )
                         assert server.state.adapter is not None
                         assert server.server is not None
 
@@ -500,8 +502,8 @@ class TestSolidWorksMCPServer:
             await server._run_local_stdio()
 
     @pytest.mark.asyncio
-    async def test_patch_mcp_for_tests_compat_runner_data_mapping(self, mock_config):
-        """Test compat wrapper adds inferred data payload for legacy test calls."""
+    async def test_fastmcp_call_tool_returns_structured_content(self, mock_config):
+        """Test native FastMCP call_tool returns structured content payloads."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -514,13 +516,13 @@ class TestSolidWorksMCPServer:
             """Test helper for sample no args."""
             return {"status": "success", "message": "ok", "value": 7}
 
-        by_name = {tool.name: tool.handler for tool in server.mcp._tools}
+        with_input = await server.mcp.call_tool(
+            "sample_with_input", {"payload": {"a": 1}}
+        )
+        assert with_input.structured_content["result"] == {"x": 1}
 
-        with_input = await by_name["sample_with_input"](input_data={"a": 1})
-        assert with_input["data"] == {"x": 1}
-
-        no_args = await by_name["sample_no_args"]()
-        assert no_args["data"] == 7
+        no_args = await server.mcp.call_tool("sample_no_args", {})
+        assert no_args.structured_content["value"] == 7
 
 
 @pytest.mark.asyncio
@@ -649,12 +651,12 @@ class TestServerIntegration:
         perf_monitor.assert_max_time(0.1)  # Health check should be instant
 
 
-class TestServerCompatRunnerEdgeCases:
-    """Branch coverage for server _patch_mcp_for_tests compat runner."""
+class TestServerFastMCPEdgeCases:
+    """Branch coverage for FastMCP-native direct tool invocation behavior."""
 
     @pytest.mark.asyncio
-    async def test_compat_runner_multiple_items_one_dict(self, mock_config):
-        """Result with multiple payload items but only one dict value → data = that dict."""
+    async def test_tool_result_multiple_items_one_dict(self, mock_config):
+        """Structured content preserves tool result with multiple payload items."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -668,13 +670,12 @@ class TestServerCompatRunnerEdgeCases:
                 "details": {"key": "value"},
             }
 
-        by_name = {tool.name: tool.handler for tool in server.mcp._tools}
-        result = await by_name["multi_one_dict"](input_data={})
-        assert result["data"] == {"key": "value"}
+        result = await server.mcp.call_tool("multi_one_dict", {"payload": {}})
+        assert result.structured_content["details"] == {"key": "value"}
 
     @pytest.mark.asyncio
-    async def test_compat_runner_multiple_items_multiple_dicts(self, mock_config):
-        """Result with multiple dict payload items → data = full payload_items dict."""
+    async def test_tool_result_multiple_items_multiple_dicts(self, mock_config):
+        """Structured content preserves multiple dict payload items."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -687,15 +688,13 @@ class TestServerCompatRunnerEdgeCases:
                 "part_b": {"y": 2},
             }
 
-        by_name = {tool.name: tool.handler for tool in server.mcp._tools}
-        result = await by_name["multi_many_dicts"](input_data={})
-        # data should be the payload_items dict when multiple dicts exist
-        assert "part_a" in result["data"]
-        assert "part_b" in result["data"]
+        result = await server.mcp.call_tool("multi_many_dicts", {"payload": {}})
+        assert "part_a" in result.structured_content
+        assert "part_b" in result.structured_content
 
     @pytest.mark.asyncio
-    async def test_compat_runner_result_already_has_data_field(self, mock_config):
-        """Result that already includes 'data' key is not modified."""
+    async def test_tool_result_with_data_field(self, mock_config):
+        """Structured content includes preexisting data field unchanged."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -703,13 +702,12 @@ class TestServerCompatRunnerEdgeCases:
             """Test helper for with data key."""
             return {"status": "success", "message": "ok", "data": {"existing": True}}
 
-        by_name = {tool.name: tool.handler for tool in server.mcp._tools}
-        result = await by_name["with_data_key"](input_data={})
-        assert result["data"] == {"existing": True}
+        result = await server.mcp.call_tool("with_data_key", {"payload": {}})
+        assert result.structured_content["data"] == {"existing": True}
 
     @pytest.mark.asyncio
-    async def test_compat_runner_single_param_without_payload(self, mock_config):
-        """Covers fallback branch when single-arg tool is called without input_data."""
+    async def test_tool_single_param_named_argument(self, mock_config):
+        """Single-parameter tool can be called via native argument mapping."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -721,10 +719,9 @@ class TestServerCompatRunnerEdgeCases:
                 "payload": payload,
             }
 
-        by_name = {tool.name: tool.handler for tool in server.mcp._tools}
-        result = await by_name["takes_one"](payload={"x": 1})
-        assert result["status"] == "success"
-        assert result["data"] == {"x": 1}
+        result = await server.mcp.call_tool("takes_one", {"payload": {"x": 1}})
+        assert result.structured_content["status"] == "success"
+        assert result.structured_content["payload"] == {"x": 1}
 
 
 def test_run_server_keyboard_interrupt_is_silent():

@@ -4,6 +4,10 @@ An interactive CAD design assistant with real-time SolidWorks integration. Click
 
 For a complete control-by-control mapping (every button/input to endpoint/service), see `docs/getting-started/prefab-ui-controls-reference.md`.
 
+For current pass/fail accounting of each visible control and component, see `docs/getting-started/prefab-ui-validation-matrix.md`.
+
+For a tested end-to-end example using local Gemma inference and the SolidWorks U-Joint sample bracket, see `docs/getting-started/prefab-ui-u-joint-bracket-runbook.md`.
+
 ## Features
 
 - **Design Intent Pane** (wider left side): Edit goals, ask clarifying questions, classify the design family

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from sqlalchemy.pool import NullPool
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 DEFAULT_DB_PATH = Path(".solidworks_mcp") / "agent_memory.sqlite3"
@@ -309,7 +310,9 @@ def _build_engine(db_path: Path | None = None):
     """
     resolved = db_path or DEFAULT_DB_PATH
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{resolved}", echo=False)
+    # NullPool closes sqlite connections immediately after each session/transaction,
+    # which prevents a long-lived pool from surfacing ResourceWarning noise at process exit.
+    return create_engine(f"sqlite:///{resolved}", echo=False, poolclass=NullPool)
 
 
 def init_db(db_path: Path | None = None) -> Path:
@@ -323,7 +326,10 @@ def init_db(db_path: Path | None = None) -> Path:
     """
     resolved = db_path or DEFAULT_DB_PATH
     engine = _build_engine(resolved)
-    SQLModel.metadata.create_all(engine)
+    try:
+        SQLModel.metadata.create_all(engine)
+    finally:
+        engine.dispose()
     return resolved
 
 
@@ -845,6 +851,54 @@ def list_plan_checkpoints(
         }
         for row in rows
     ]
+
+
+def replace_plan_checkpoints(
+    *,
+    session_id: str,
+    checkpoints: list[dict[str, Any]],
+    db_path: Path | None = None,
+) -> None:
+    """Replace all session checkpoints with a new ordered checkpoint list.
+
+    Args:
+        session_id (str): The session id value.
+        checkpoints (list[dict[str, Any]]): Replacement checkpoint records.
+        db_path (Path | None): The db path value. Defaults to None.
+
+    Returns:
+        None: None.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    now = _utc_now_iso()
+
+    with Session(engine) as session:
+        existing_rows = session.exec(
+            select(PlanCheckpoint).where(PlanCheckpoint.session_id == session_id)
+        ).all()
+        for existing in existing_rows:
+            session.delete(existing)
+
+        for index, item in enumerate(checkpoints, start=1):
+            planned_action_json = str(item.get("planned_action_json") or "{}")
+            title = str(item.get("title") or f"Checkpoint {index}")
+            approved_by_user = bool(item.get("approved_by_user", index == 1))
+            row = PlanCheckpoint(
+                session_id=session_id,
+                checkpoint_index=int(item.get("checkpoint_index") or index),
+                title=title,
+                planned_action_json=planned_action_json,
+                approved_by_user=approved_by_user,
+                executed=False,
+                result_json=None,
+                rollback_snapshot_id=None,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+
+        session.commit()
 
 
 def insert_tool_call_record(

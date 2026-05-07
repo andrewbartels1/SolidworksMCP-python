@@ -64,9 +64,9 @@ class TestMacroRecordingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "start_macro_recording":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -114,9 +114,9 @@ class TestMacroRecordingTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "stop_macro_recording":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -163,9 +163,9 @@ class TestMacroRecordingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "execute_macro":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -229,9 +229,9 @@ class TestMacroRecordingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_macro":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -293,9 +293,9 @@ class TestMacroRecordingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_execute_macros":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -351,9 +351,9 @@ class TestMacroRecordingTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "optimize_macro":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -406,9 +406,9 @@ class TestMacroRecordingTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_macro_library":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -440,9 +440,9 @@ class TestMacroRecordingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "start_macro_recording":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -461,9 +461,9 @@ class TestMacroRecordingTools:
         )
 
         start_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "start_macro_recording":
-                start_tool = tool.handler
+                start_tool = tool.fn
                 break
 
         assert start_tool is not None
@@ -482,9 +482,9 @@ class TestMacroRecordingTools:
         await register_macro_recording_tools(mcp_server, object(), mock_config)
 
         stop_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "stop_macro_recording":
-                stop_tool = tool.handler
+                stop_tool = tool.fn
                 break
 
         assert stop_tool is not None
@@ -510,9 +510,9 @@ class TestMacroRecordingTools:
         )
 
         stop_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "stop_macro_recording":
-                stop_tool = tool.handler
+                stop_tool = tool.fn
                 break
 
         exception_result = await stop_tool(input_data={"session_id": "REC-2"})
@@ -532,13 +532,13 @@ class TestMacroRecordingTools:
         start_tool = None
         execute_tool = None
         batch_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "start_macro_recording":
-                start_tool = tool.handler
+                start_tool = tool.fn
             if tool.name == "execute_macro":
-                execute_tool = tool.handler
+                execute_tool = tool.fn
             if tool.name == "batch_execute_macros":
-                batch_tool = tool.handler
+                batch_tool = tool.fn
 
         assert start_tool is not None
         assert execute_tool is not None
@@ -551,7 +551,7 @@ class TestMacroRecordingTools:
             )
         )
         assert start_result["status"] == "success"
-        assert start_result["data"]["status"] == "recording"
+        assert start_result["recording_session"]["status"] == "recording"
 
         execute_result = await execute_tool(
             input_data=MacroPlaybackInput(
@@ -582,9 +582,9 @@ class TestMacroRecordingTools:
         mock_adapter.execute_macro = AsyncMock(side_effect=RuntimeError("engine down"))
 
         execute_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "execute_macro":
-                execute_tool = tool.handler
+                execute_tool = tool.fn
                 break
 
         assert execute_tool is not None
@@ -607,9 +607,9 @@ class TestMacroRecordingTools:
         )
 
         execute_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "execute_macro":
-                execute_tool = tool.handler
+                execute_tool = tool.fn
                 break
 
         assert execute_tool is not None
@@ -625,9 +625,9 @@ class TestMacroRecordingTools:
         await register_macro_recording_tools(mcp_server, object(), mock_config)
 
         analyze_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_macro":
-                analyze_tool = tool.handler
+                analyze_tool = tool.fn
                 break
 
         assert analyze_tool is not None
@@ -650,9 +650,9 @@ class TestMacroRecordingTools:
             return_value=Mock(is_success=False, error="parse failure")
         )
         analyze_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_macro":
-                analyze_tool = tool.handler
+                analyze_tool = tool.fn
                 break
 
         error_result = await analyze_tool(
@@ -672,9 +672,9 @@ class TestMacroRecordingTools:
         )
 
         batch_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_execute_macros":
-                batch_tool = tool.handler
+                batch_tool = tool.fn
                 break
 
         assert batch_tool is not None
@@ -700,11 +700,11 @@ class TestMacroRecordingTools:
 
         optimize_tool = None
         library_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "optimize_macro":
-                optimize_tool = tool.handler
+                optimize_tool = tool.fn
             if tool.name == "create_macro_library":
-                library_tool = tool.handler
+                library_tool = tool.fn
 
         assert optimize_tool is not None
         assert library_tool is not None
@@ -744,11 +744,11 @@ class TestMacroRecordingTools:
 
         optimize_tool = None
         library_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "optimize_macro":
-                optimize_tool = tool.handler
+                optimize_tool = tool.fn
             if tool.name == "create_macro_library":
-                library_tool = tool.handler
+                library_tool = tool.fn
 
         assert optimize_tool is not None
         assert library_tool is not None

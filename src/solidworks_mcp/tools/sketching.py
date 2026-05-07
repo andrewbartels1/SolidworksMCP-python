@@ -298,6 +298,19 @@ class TutorialSimpleHoleInput(CompatInput):
             raise ValueError("depth must be positive")
 
 
+class CheckSketchDefinitionInput(CompatInput):
+    """Input schema for checking sketch definition status.
+
+    Attributes:
+        sketch_name (str | None): Optional sketch name to inspect.
+    """
+
+    sketch_name: str | None = Field(
+        default=None,
+        description="Optional sketch name. If omitted, checks the active or last sketch.",
+    )
+
+
 async def register_sketching_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -656,6 +669,47 @@ async def register_sketching_tools(
 
         except Exception as e:
             logger.error(f"Error in exit_sketch tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
+    async def check_sketch_fully_defined(
+        input_data: CheckSketchDefinitionInput | None = None,
+    ) -> dict[str, Any]:
+        """Check whether a sketch is fully defined.
+
+        Args:
+            input_data (CheckSketchDefinitionInput | None): Optional sketch selector.
+
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+        """
+        try:
+            normalized = _normalize_input(
+                input_data or {},
+                CheckSketchDefinitionInput,
+            )
+            result = await adapter.check_sketch_fully_defined(normalized.sketch_name)
+
+            if not result.is_success:
+                return {
+                    "status": "error",
+                    "message": f"Failed to inspect sketch definition: {result.error}",
+                }
+
+            payload = result.data or {}
+            state = payload.get("definition_state", "unknown")
+            return {
+                "status": "success",
+                "message": f"Sketch definition state: {state}",
+                "sketch": payload,
+                "execution_time": result.execution_time,
+            }
+
+        except Exception as e:
+            logger.error(f"Error in check_sketch_fully_defined tool: {e}")
             return {
                 "status": "error",
                 "message": f"Unexpected error: {str(e)}",

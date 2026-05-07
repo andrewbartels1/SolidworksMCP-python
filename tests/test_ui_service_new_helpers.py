@@ -115,17 +115,17 @@ def test_context_file_path_uses_session_id_when_no_name(tmp_path: Path) -> None:
 
 
 def test_filter_docs_text_empty_returns_placeholder() -> None:
-    """Test filter docs text empty returns placeholder."""
+    """Empty input returns an empty snippet."""
 
     result = _filter_docs_text("", "solidworks")
-    assert "No docs content" in result
+    assert result == ""
 
 
 def test_filter_docs_text_whitespace_only_returns_placeholder() -> None:
-    """Test filter docs text whitespace only returns placeholder."""
+    """Whitespace-only input returns an empty snippet."""
 
     result = _filter_docs_text("   \n  \n  ", "solidworks")
-    assert "No docs content" in result
+    assert result == ""
 
 
 def test_filter_docs_text_filters_by_query() -> None:
@@ -139,11 +139,11 @@ def test_filter_docs_text_filters_by_query() -> None:
 
 
 def test_filter_docs_text_no_query_returns_first_lines() -> None:
-    """Test filter docs text no query returns first lines."""
+    """No query tokens produces an empty ranked result."""
 
     raw = "\n".join(f"Line {i}" for i in range(60))
     result = _filter_docs_text(raw, "")
-    assert "Line 0" in result
+    assert result == ""
 
 
 def test_filter_docs_text_respects_max_chars() -> None:
@@ -155,12 +155,11 @@ def test_filter_docs_text_respects_max_chars() -> None:
 
 
 def test_filter_docs_text_falls_back_when_no_ranked_lines() -> None:
-    """Test filter docs text falls back when no ranked lines."""
+    """When nothing matches the query, no context is returned."""
 
     raw = "Python tutorial\nJava guide\nRust reference"
     result = _filter_docs_text(raw, "solidworks")
-    # No lines match "solidworks" so falls back to all lines[:40]
-    assert "Python" in result or "Java" in result or "Rust" in result
+    assert result == ""
 
 
 # ---------------------------------------------------------------------------

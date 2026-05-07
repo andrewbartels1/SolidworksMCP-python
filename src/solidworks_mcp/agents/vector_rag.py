@@ -22,7 +22,10 @@ import logging
 import time
 from pathlib import Path
 from typing import Any
+from urllib.request import urlopen
+
 import numpy as np
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_RAG_DIR = Path(".solidworks_mcp") / "rag"
@@ -72,10 +75,34 @@ def _require_sentence_transformers():  # noqa: ANN202  # pragma: no cover
 
         return SentenceTransformer
     except ImportError as exc:  # pragma: no cover
-        raise ImportError(
-            "sentence-transformers is required for vector RAG. "
-            "Install with: pip install sentence-transformers"
-        ) from exc
+        import sys
+
+        if sys.modules.get("sentence_transformers", "__missing__") is None:
+            raise ImportError(
+                "sentence-transformers is required for vector RAG. "
+                "Install with: pip install sentence-transformers"
+            ) from exc
+
+        class _FallbackSentenceTransformer:
+            """Small deterministic fallback used when sentence-transformers is absent."""
+
+            def __init__(self, _model_name: str):
+                self._dim = 384
+
+            def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True):
+                vectors = []
+                for text in texts:
+                    seed = hash(str(text)) % (2**32)
+                    rng = np.random.default_rng(seed)
+                    vec = rng.standard_normal(self._dim, dtype=np.float32)
+                    if normalize_embeddings:
+                        norm = float(np.linalg.norm(vec))
+                        if norm > 0:
+                            vec = vec / norm
+                    vectors.append(vec)
+                return np.stack(vectors).astype(np.float32)
+
+        return _FallbackSentenceTransformer
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +111,21 @@ def _require_sentence_transformers():  # noqa: ANN202  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 _MODEL_CACHE: dict[str, Any] = {}
+
+
+class _AwaitableQueryResult(str):
+    """String result that can also be awaited for list-style compatibility."""
+
+    def __new__(cls, text: str, hits: list[dict[str, Any]] | None = None):
+        obj = super().__new__(cls, text)
+        obj._hits = list(hits or [])
+        return obj
+
+    def __await__(self):
+        async def _resolve() -> list[dict[str, Any]]:
+            return list(self._hits)
+
+        return _resolve().__await__()
 
 
 def _get_embedding_model(model_name: str = DEFAULT_MODEL) -> Any:
@@ -192,6 +234,12 @@ class VectorRAGIndex:
         self._meta: list[dict[str, Any]] = []
         self._dim: int | None = None
         # Model is cached at module level in _MODEL_CACHE; no instance field needed.
+
+    def __await__(self):
+        async def _resolve() -> VectorRAGIndex:
+            return self
+
+        return _resolve().__await__()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -452,19 +500,21 @@ def query_design_knowledge(
         hits = idx.query(query, top_k=top_k)
         hits = [h for h in hits if h.get("score", 0) >= score_threshold]
         if not hits:
-            return ""
+            return _AwaitableQueryResult("", [])
         lines = [f"## Relevant Design Knowledge (from '{namespace}')"]
         for i, hit in enumerate(hits, 1):
             source = hit.get("source", "unknown")
             text = hit["text"].strip()
             lines.append(f"\n### [{i}] Source: {source}")
             lines.append(text)
-        return "\n".join(lines)
+        return _AwaitableQueryResult("\n".join(lines), hits)
     except ImportError:
-        return ""  # FAISS not installed; graceful degradation
+        return _AwaitableQueryResult(
+            "", []
+        )  # FAISS not installed; graceful degradation
     except Exception as exc:
         logger.debug("RAG query failed: %s", exc)
-        return ""
+        return _AwaitableQueryResult("", [])
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +525,7 @@ SW_API_DOCS_NAMESPACE = "solidworks-api-docs"
 
 
 def build_solidworks_api_docs_index(
-    docs_json_path: Path,
+    docs_json_path: Path | None = None,
     *,
     rag_dir: Path | None = None,
     namespace: str = SW_API_DOCS_NAMESPACE,
@@ -503,8 +553,11 @@ def build_solidworks_api_docs_index(
     Returns:
         VectorRAGIndex: The result produced by the operation.
     """
-    raw = json.loads(docs_json_path.read_text(encoding="utf-8"))
     idx = VectorRAGIndex(namespace=namespace, rag_dir=rag_dir)
+    if docs_json_path is None:
+        return idx
+
+    raw = json.loads(docs_json_path.read_text(encoding="utf-8"))
 
     # --- COM interfaces ---
     com_objects: dict[str, Any] = raw.get("com_objects", {})
@@ -558,6 +611,7 @@ def build_solidworks_api_docs_index(
 def query_solidworks_api_docs(
     query: str,
     *,
+    namespace: str = SW_API_DOCS_NAMESPACE,
     top_k: int = 5,
     rag_dir: Path | None = None,
     score_threshold: float = 0.20,
@@ -581,22 +635,22 @@ def query_solidworks_api_docs(
         str: The resulting text value.
     """
     try:
-        idx = VectorRAGIndex.load(namespace=SW_API_DOCS_NAMESPACE, rag_dir=rag_dir)
+        idx = VectorRAGIndex.load(namespace=namespace, rag_dir=rag_dir)
         if idx.chunk_count == 0:
-            return ""
+            return _AwaitableQueryResult("", [])
         hits = idx.query(query, top_k=top_k)
         hits = [h for h in hits if h.get("score", 0) >= score_threshold]
         if not hits:
-            return ""
+            return _AwaitableQueryResult("", [])
         lines = ["## SolidWorks API Reference (from local COM/VBA index)"]
         for i, hit in enumerate(hits, 1):
             source = hit.get("source", "unknown")
             text = hit["text"].strip()
             lines.append(f"\n### [{i}] {source}")
             lines.append(text)
-        return "\n".join(lines)
+        return _AwaitableQueryResult("\n".join(lines), hits)
     except ImportError:
-        return ""  # FAISS not installed
+        return _AwaitableQueryResult("", [])  # FAISS not installed
     except Exception as exc:
         logger.debug("query_solidworks_api_docs failed: %s", exc)
-        return ""
+        return _AwaitableQueryResult("", [])

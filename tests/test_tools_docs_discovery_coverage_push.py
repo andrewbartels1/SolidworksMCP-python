@@ -53,9 +53,9 @@ async def test_discover_docs_tool_rag_index_rebuild_success(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -124,9 +124,9 @@ async def test_discover_docs_tool_rag_index_rebuild_faiss_import_error(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -185,9 +185,9 @@ async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     discover_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.func
+            discover_tool = tool.fn
             break
     assert discover_tool is not None
 
@@ -490,9 +490,9 @@ async def test_search_api_help_tool_no_index_file(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     search_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "search_solidworks_api_help":
-            search_tool = tool.func
+            search_tool = tool.fn
             break
     assert search_tool is not None
 
@@ -522,9 +522,9 @@ async def test_search_api_help_tool_empty_index_file(
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
     search_tool = None
-    for tool in mcp_server._tools:
+    for tool in await mcp_server.list_tools():
         if tool.name == "search_solidworks_api_help":
-            search_tool = tool.func
+            search_tool = tool.fn
             break
     assert search_tool is not None
 

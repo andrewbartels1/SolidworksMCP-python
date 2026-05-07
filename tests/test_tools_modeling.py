@@ -30,7 +30,7 @@ class TestModelingTools:
         tool_count = await register_modeling_tools(
             mcp_server, mock_adapter, mock_config
         )
-        assert tool_count == 8
+        assert tool_count == 10
 
     @pytest.mark.asyncio
     async def test_open_model_success(self, mcp_server, mock_adapter, mock_config):
@@ -47,9 +47,9 @@ class TestModelingTools:
 
         # Find and call the tool
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "open_model":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -72,9 +72,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "open_model":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = OpenModelInput(file_path="nonexistent.sldprt")
@@ -97,9 +97,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_part":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = CreatePartInput(
@@ -126,9 +126,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_assembly":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = CreateAssemblyInput(
@@ -158,9 +158,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_drawing":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = CreateDrawingInput(
@@ -190,9 +190,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_extrusion":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = CreateExtrusionInput(
@@ -217,9 +217,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_revolve":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = CreateRevolveInput(
@@ -246,9 +246,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "get_dimension":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = GetDimensionInput(dimension_name="D1@Sketch1")
@@ -272,9 +272,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "set_dimension":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = SetDimensionInput(
@@ -296,9 +296,9 @@ class TestModelingTools:
         mock_adapter.create_part = AsyncMock(side_effect=Exception("Test exception"))
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_part":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         input_data = CreatePartInput(name="test_part")
@@ -335,9 +335,9 @@ class TestModelingTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_part":
-                tool_func = tool.func
+                tool_func = tool.fn
                 break
 
         perf_monitor.start()
@@ -415,7 +415,10 @@ class TestModelingTools:
             return_value=Mock(is_success=False, error="set failed")
         )
 
-        tool = {registered.name: registered.func for registered in mcp_server._tools}
+        tool = {
+            registered.name: registered.fn
+            for registered in await mcp_server.list_tools()
+        }
 
         assert (await tool["create_assembly"](CreateAssemblyInput(name="A1")))[
             "status"
@@ -460,7 +463,10 @@ class TestModelingTools:
         mock_adapter.get_dimension = AsyncMock(side_effect=RuntimeError("getd boom"))
         mock_adapter.set_dimension = AsyncMock(side_effect=RuntimeError("setd boom"))
 
-        tool = {registered.name: registered.func for registered in mcp_server._tools}
+        tool = {
+            registered.name: registered.fn
+            for registered in await mcp_server.list_tools()
+        }
 
         assert (await tool["open_model"](OpenModelInput(file_path="C:/x.sldprt")))[
             "status"

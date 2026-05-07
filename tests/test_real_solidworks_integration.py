@@ -36,17 +36,17 @@ def _real_solidworks_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-def _find_tool(server: SolidWorksMCPServer, tool_name: str):
+async def _find_tool(server: SolidWorksMCPServer, tool_name: str):
     """Test helper for find tool."""
-    for tool in server.mcp._tools:
+    for tool in await server.mcp.list_tools():
         if tool.name == tool_name:
-            return tool.func
+            return tool.fn
     raise AssertionError(f"Tool '{tool_name}' not found")
 
 
-def _tool_names(server: SolidWorksMCPServer) -> list[str]:
+async def _tool_names(server: SolidWorksMCPServer) -> list[str]:
     """Test helper for tool names."""
-    return sorted(tool.name for tool in server.mcp._tools)
+    return sorted(tool.name for tool in await server.mcp.list_tools())
 
 
 @pytest_asyncio.fixture
@@ -94,7 +94,7 @@ async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
                 pass
         else:
             # Fallback: close only the current active model
-            close_tool = _find_tool(server, "close_model")
+            close_tool = await _find_tool(server, "close_model")
             try:
                 await close_tool(CloseModelInput(save=False))
             except Exception:
@@ -119,14 +119,12 @@ async def test_real_registered_tool_catalog_snapshot(
     integration_output_dir: Path,
 ) -> None:
     """Verify tool catalog coverage and persist a local snapshot for auditing."""
-    tool_names = _tool_names(real_server)
+    tool_names = await _tool_names(real_server)
     duplicate_counts = {
         name: count for name, count in Counter(tool_names).items() if count > 1
     }
-    allowed_duplicate_counts = {
-        # Intentional aliases registered from different tool categories.
-        "start_macro_recording": 2,
-        "stop_macro_recording": 2,
+    allowed_duplicate_counts: dict[str, int] = {
+        # No intentional duplicate tool names are expected.
     }
 
     assert duplicate_counts == allowed_duplicate_counts, (
@@ -197,11 +195,11 @@ async def test_real_part_create_save_open_close(
     integration_output_dir: Path,
 ) -> None:
     """Create a part, save it, reopen it, and save again via real tools."""
-    create_part = _find_tool(real_server, "create_part")
-    save_as = _find_tool(real_server, "save_as")
-    open_model = _find_tool(real_server, "open_model")
-    save_file = _find_tool(real_server, "save_file")
-    close_model = _find_tool(real_server, "close_model")
+    create_part = await _find_tool(real_server, "create_part")
+    save_as = await _find_tool(real_server, "save_as")
+    open_model = await _find_tool(real_server, "open_model")
+    save_file = await _find_tool(real_server, "save_file")
+    close_model = await _find_tool(real_server, "close_model")
 
     part_result = await create_part(CreatePartInput(name="MCP_Integration_Part"))
     assert part_result["status"] == "success", part_result
@@ -239,9 +237,9 @@ async def test_real_assembly_create_and_save(
     integration_output_dir: Path,
 ) -> None:
     """Create and save a real SolidWorks assembly document."""
-    create_assembly = _find_tool(real_server, "create_assembly")
-    save_as = _find_tool(real_server, "save_as")
-    close_model = _find_tool(real_server, "close_model")
+    create_assembly = await _find_tool(real_server, "create_assembly")
+    save_as = await _find_tool(real_server, "save_as")
+    close_model = await _find_tool(real_server, "close_model")
 
     assembly_result = await create_assembly(
         CreateAssemblyInput(name="MCP_Integration_Assembly")
@@ -272,11 +270,11 @@ async def test_real_cross_category_minimal_smoke(
     integration_output_dir: Path,
 ) -> None:
     """Run a deterministic low-risk workflow touching multiple tool categories."""
-    create_part = _find_tool(real_server, "create_part")
-    save_as = _find_tool(real_server, "save_as")
-    open_model = _find_tool(real_server, "open_model")
-    save_file = _find_tool(real_server, "save_file")
-    close_model = _find_tool(real_server, "close_model")
+    create_part = await _find_tool(real_server, "create_part")
+    save_as = await _find_tool(real_server, "save_as")
+    open_model = await _find_tool(real_server, "open_model")
+    save_file = await _find_tool(real_server, "save_file")
+    close_model = await _find_tool(real_server, "close_model")
 
     part_result = await create_part(CreatePartInput(name="MCP_CrossCategory_Smoke"))
     assert part_result["status"] == "success", part_result
@@ -316,10 +314,10 @@ async def test_real_load_save_lifecycle(
     integration_output_dir: Path,
 ) -> None:
     """Test comprehensive load/save/open lifecycle with real SolidWorks."""
-    create_part = _find_tool(real_server, "create_part")
-    save_part = _find_tool(real_server, "save_part")
-    load_part = _find_tool(real_server, "load_part")
-    close_model = _find_tool(real_server, "close_model")
+    create_part = await _find_tool(real_server, "create_part")
+    save_part = await _find_tool(real_server, "save_part")
+    load_part = await _find_tool(real_server, "load_part")
+    close_model = await _find_tool(real_server, "close_model")
 
     # Step 1: Create a new part
     part_result = await create_part(CreatePartInput(name="MCP_LoadSave_Lifecycle"))
@@ -356,3 +354,93 @@ async def test_real_load_save_lifecycle(
     # Step 6: Close the reloaded part
     close_final_result = await close_model(CloseModelInput(save=True))
     assert close_final_result["status"] in {"success", "error"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.windows_only
+@pytest.mark.solidworks_only
+async def test_real_arc_measurements_smoke(
+    real_server: SolidWorksMCPServer,
+    integration_output_dir: Path,
+) -> None:
+    """Smoke test: create a sketch with arcs/circles and dimension them without dialog.
+
+    Covers radial dimensions on arcs and circles.  The preference toggle
+    swInputDimValOnCreate (62) must remain False for the full dimension
+    operation (including SetSystemValue3) so the Modify dialog never appears.
+    """
+    create_part = await _find_tool(real_server, "create_part")
+    save_as = await _find_tool(real_server, "save_as")
+    create_sketch = await _find_tool(real_server, "create_sketch")
+    add_circle = await _find_tool(real_server, "add_circle")
+    add_arc = await _find_tool(real_server, "add_arc")
+    add_sketch_dimension = await _find_tool(real_server, "add_sketch_dimension")
+    exit_sketch = await _find_tool(real_server, "exit_sketch")
+    close_model = await _find_tool(real_server, "close_model")
+
+    # Create a fresh part
+    part_result = await create_part(CreatePartInput(name="MCP_ArcMeasurements_Smoke"))
+    assert part_result["status"] == "success", part_result
+
+    # Open a sketch on the Front plane
+    sketch_result = await create_sketch({"plane": "Front"})
+    assert sketch_result["status"] == "success", sketch_result
+
+    # Add a circle (radius 20 mm, centred at origin)
+    circle_result = await add_circle({"center_x": 0.0, "center_y": 0.0, "radius": 20.0})
+    assert circle_result["status"] == "success", circle_result
+    circle_entity = circle_result["data"]["entity_name"]
+
+    # Add a 90-degree arc (quarter circle, radius 15 mm)
+    # Start at (15, 0), end at (0, 15), centre at origin
+    arc_result = await add_arc({
+        "center_x": 0.0,
+        "center_y": 0.0,
+        "start_x": 15.0,
+        "start_y": 0.0,
+        "end_x": 0.0,
+        "end_y": 15.0,
+    })
+    assert arc_result["status"] == "success", arc_result
+    arc_entity = arc_result["data"]["entity_name"]
+
+    # Dimension the circle radius (radial)
+    circle_dim_result = await add_sketch_dimension({
+        "entity1": circle_entity,
+        "dimension_type": "radial",
+        "value": 20.0,
+    })
+    assert circle_dim_result["status"] == "success", (
+        f"Circle radial dimension failed: {circle_dim_result}"
+    )
+    assert circle_dim_result.get("data") is not None, (
+        "Circle radial dimension returned no data"
+    )
+
+    # Dimension the arc radius (radial)
+    arc_dim_result = await add_sketch_dimension({
+        "entity1": arc_entity,
+        "dimension_type": "radial",
+        "value": 15.0,
+    })
+    assert arc_dim_result["status"] == "success", (
+        f"Arc radial dimension failed: {arc_dim_result}"
+    )
+    assert arc_dim_result.get("data") is not None, (
+        "Arc radial dimension returned no data"
+    )
+
+    # Exit sketch
+    exit_result = await exit_sketch({})
+    assert exit_result["status"] == "success", exit_result
+
+    # Save and close
+    part_path = integration_output_dir / "mcp_arc_measurements_smoke.sldprt"
+    save_as_result = await save_as(
+        SaveAsInput(file_path=str(part_path), format_type="solidworks", overwrite=True)
+    )
+    assert save_as_result["status"] == "success", save_as_result
+
+    close_result = await close_model(CloseModelInput(save=False))
+    assert close_result["status"] in {"success", "error"}

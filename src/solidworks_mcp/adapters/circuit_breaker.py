@@ -441,6 +441,22 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "create_extrusion", lambda: self.adapter.create_extrusion(params)
         )
 
+    async def create_cut_extrude(
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Create cut-extrude through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_cut_extrude", lambda: self.adapter.create_cut_extrude(params)
+        )
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Add fillet through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_fillet", lambda: self.adapter.add_fillet(radius, edge_names)
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
@@ -570,6 +586,67 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         """
         return await self._execute_with_circuit_breaker(
             "add_rectangle", lambda: self.adapter.add_rectangle(x1, y1, x2, y2)
+        )
+
+    async def add_arc(
+        self,
+        center_x: float,
+        center_y: float,
+        start_x: float,
+        start_y: float,
+        end_x: float,
+        end_y: float,
+    ) -> AdapterResult[str]:
+        """Add arc through circuit breaker.
+
+        Args:
+            center_x (float): Arc center X coordinate.
+            center_y (float): Arc center Y coordinate.
+            start_x (float): Arc start X coordinate.
+            start_y (float): Arc start Y coordinate.
+            end_x (float): Arc end X coordinate.
+            end_y (float): Arc end Y coordinate.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "add_arc",
+            lambda: self.adapter.add_arc(
+                center_x,
+                center_y,
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+            ),
+        )
+
+    async def add_sketch_dimension(
+        self,
+        entity1: str,
+        entity2: str | None,
+        dimension_type: str,
+        value: float,
+    ) -> AdapterResult[str]:
+        """Add sketch dimension through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_sketch_dimension",
+            lambda: self.adapter.add_sketch_dimension(
+                entity1,
+                entity2,
+                dimension_type,
+                value,
+            ),
+        )
+
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check sketch definition status through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "check_sketch_fully_defined",
+            lambda: self.adapter.check_sketch_fully_defined(sketch_name),
         )
 
     async def exit_sketch(self) -> AdapterResult[None]:

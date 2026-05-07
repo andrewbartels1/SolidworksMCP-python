@@ -114,9 +114,9 @@ class TestDrawingAnalysisTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_comprehensive":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -185,9 +185,9 @@ class TestDrawingAnalysisTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_dimensions":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -268,9 +268,9 @@ class TestDrawingAnalysisTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_annotations":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -352,9 +352,9 @@ class TestDrawingAnalysisTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "check_drawing_compliance":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -437,9 +437,9 @@ class TestDrawingAnalysisTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_views":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -504,9 +504,9 @@ class TestDrawingAnalysisTools:
         }
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_drawing_report":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -538,9 +538,9 @@ class TestDrawingAnalysisTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_comprehensive":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -559,19 +559,19 @@ class TestDrawingAnalysisTools:
         compare_tool = None
         completeness_tool = None
 
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_comprehensive":
-                comprehensive_tool = tool.handler
+                comprehensive_tool = tool.fn
             if tool.name == "analyze_drawing_dimensions":
-                dimension_tool = tool.handler
+                dimension_tool = tool.fn
             if tool.name == "analyze_drawing_annotations":
-                annotation_tool = tool.handler
+                annotation_tool = tool.fn
             if tool.name == "check_drawing_compliance":
-                compliance_tool = tool.handler
+                compliance_tool = tool.fn
             if tool.name == "compare_drawing_versions":
-                compare_tool = tool.handler
+                compare_tool = tool.fn
             if tool.name == "validate_drawing_completeness":
-                completeness_tool = tool.handler
+                completeness_tool = tool.fn
 
         assert comprehensive_tool is not None
         assert dimension_tool is not None
@@ -646,15 +646,15 @@ class TestDrawingAnalysisTools:
         report_tool = None
         compare_tool = None
         completeness_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_views":
-                view_tool = tool.handler
+                view_tool = tool.fn
             if tool.name == "generate_drawing_report":
-                report_tool = tool.handler
+                report_tool = tool.fn
             if tool.name == "compare_drawing_versions":
-                compare_tool = tool.handler
+                compare_tool = tool.fn
             if tool.name == "validate_drawing_completeness":
-                completeness_tool = tool.handler
+                completeness_tool = tool.fn
 
         assert view_tool is not None
         assert report_tool is not None
@@ -697,15 +697,15 @@ class TestDrawingAnalysisTools:
         report_tool = None
         compare_tool = None
         completeness_tool = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "analyze_drawing_views":
-                view_tool = tool.handler
+                view_tool = tool.fn
             if tool.name == "generate_drawing_report":
-                report_tool = tool.handler
+                report_tool = tool.fn
             if tool.name == "compare_drawing_versions":
-                compare_tool = tool.handler
+                compare_tool = tool.fn
             if tool.name == "validate_drawing_completeness":
-                completeness_tool = tool.handler
+                completeness_tool = tool.fn
 
         view_exception = await view_tool(input_data={"drawing_path": "demo.slddrw"})
         assert view_exception["status"] == "error"

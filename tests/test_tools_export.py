@@ -52,9 +52,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_step":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -92,9 +92,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_iges":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -133,9 +133,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_stl":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -173,9 +173,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_pdf":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -213,9 +213,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_dwg":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -254,9 +254,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_image":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -322,9 +322,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_export":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -354,9 +354,9 @@ class TestExportTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "export_step":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -435,7 +435,7 @@ class TestExportToolsBranchCoverage:
             return_value=Mock(is_success=False, error=None, execution_time=0.1)
         )
 
-        by_name = {t.name: t.handler for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["export_iges"](
             input_data=ExportIGESInput(model_path="a.sldprt", output_path="a.iges")
@@ -486,7 +486,7 @@ class TestExportToolsBranchCoverage:
         mock_adapter.export_image = AsyncMock(side_effect=RuntimeError("boom image"))
         mock_adapter.batch_export = AsyncMock(side_effect=RuntimeError("boom batch"))
 
-        by_name = {t.name: t.func for t in mcp_server._tools}
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         results = [
             await by_name["export_iges"](
@@ -525,7 +525,7 @@ class TestExportToolsBranchCoverage:
         await register_export_tools(mcp_server, mock_adapter, mock_config)
         mock_adapter.export_step = AsyncMock(side_effect=RuntimeError("boom step"))
 
-        tool = next(t.func for t in mcp_server._tools if t.name == "export_step")
+        tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "export_step")
         result = await tool(
             ExportSTEPInput(model_path="test_part.sldprt", output_path="out.step")
         )

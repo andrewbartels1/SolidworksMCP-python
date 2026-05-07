@@ -326,6 +326,45 @@ class CloseModelInput(BaseModel):
     save: bool = Field(default=False, description="Save the model before closing")
 
 
+class CreateCutExtrudeInput(CompatInput):
+    """Input schema for creating a cut-extrude feature.
+
+    Attributes:
+        depth (float): Cut depth in millimeters.
+        draft_angle (float): Draft angle in degrees.
+        end_condition (str): End condition type.
+        reverse_direction (bool): Reverse cut direction.
+    """
+
+    depth: float = Field(description="Cut depth in millimeters")
+    draft_angle: float = Field(default=0.0, description="Draft angle in degrees")
+    reverse_direction: bool = Field(default=False, description="Reverse cut direction")
+    end_condition: str = Field(default="Blind", description="End condition type")
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.depth <= 0:
+            raise ValueError("depth must be positive")
+
+
+class AddFilletInput(CompatInput):
+    """Input schema for adding a fillet feature.
+
+    Attributes:
+        edge_names (list[str]): Edge names to fillet.
+        radius (float): Fillet radius in millimeters.
+    """
+
+    radius: float = Field(description="Fillet radius in millimeters")
+    edge_names: list[str] = Field(
+        default_factory=list,
+        description="Named edges to fillet (e.g. 'Edge<1>'). Leave empty to fillet all edges.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.radius <= 0:
+            raise ValueError("radius must be positive")
+
+
 class CreateAssemblyInput(CompatInput):
     """Input schema for creating a new assembly.
 
@@ -950,5 +989,101 @@ async def register_modeling_tools(
                 "message": f"Unexpected error: {str(e)}",
             }
 
-    tool_count = 8  # Number of tools registered
+    @mcp.tool()
+    async def create_cut_extrude(input_data: CreateCutExtrudeInput) -> dict[str, Any]:
+        """Cut material from the active model using the current sketch profile.
+
+        Creates a Cut-Extrude feature (Insert > Cut > Extrude) from the active sketch.
+        Use this after exit_sketch when you want to remove material — e.g. to create
+        windows, holes, slots, or any through/blind cut in an existing solid body.
+
+        Args:
+            input_data (CreateCutExtrudeInput): Depth, direction and draft parameters.
+
+        Returns:
+            dict[str, Any]: Status and feature details.
+
+        Example:
+            ```python
+            # Cut a blind pocket 10 mm deep
+            result = await create_cut_extrude({"depth": 10.0})
+
+            # Through-all cut (use a depth larger than the solid)
+            result = await create_cut_extrude({"depth": 200.0})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, CreateCutExtrudeInput)
+            params = ExtrusionParameters(
+                depth=input_data.depth,
+                draft_angle=input_data.draft_angle,
+                reverse_direction=input_data.reverse_direction,
+                both_directions=False,
+                thin_feature=False,
+                thin_thickness=None,
+                end_condition=input_data.end_condition,
+                merge_result=False,
+                feature_scope=False,
+                auto_select=True,
+            )
+            result = await adapter.create_cut_extrude(params)
+            if result.is_success:
+                feature = result.data
+                return {
+                    "status": "success",
+                    "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
+                    "cut_extrude": {
+                        "name": _result_value(feature, "feature_name", "name", default="Cut-Extrude"),
+                        "depth": input_data.depth,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            else:
+                return {"status": "error", "message": f"Failed to create cut-extrude: {result.error}"}
+        except Exception as e:
+            logger.error(f"Error in create_cut_extrude tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def add_fillet(input_data: AddFilletInput) -> dict[str, Any]:
+        """Add a fillet (rounded edge) to selected edges of the current model.
+
+        Rounds the specified named edges with the given radius. Edge names use the
+        SolidWorks convention, e.g. 'Edge<1>', or you can leave edge_names empty to
+        fillet all edges if the adapter supports it.
+
+        Args:
+            input_data (AddFilletInput): Radius and edge names.
+
+        Returns:
+            dict[str, Any]: Status and feature details.
+
+        Example:
+            ```python
+            # Fillet two specific edges with 2 mm radius
+            result = await add_fillet({"radius": 2.0, "edge_names": ["Edge<1>", "Edge<2>"]})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, AddFilletInput)
+            result = await adapter.add_fillet(input_data.radius, input_data.edge_names)
+            if result.is_success:
+                feature = result.data
+                return {
+                    "status": "success",
+                    "message": f"Created fillet: {_result_value(feature, 'feature_name', 'name', default='Fillet')}",
+                    "fillet": {
+                        "name": _result_value(feature, "feature_name", "name", default="Fillet"),
+                        "radius": input_data.radius,
+                        "edges": input_data.edge_names,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            else:
+                return {"status": "error", "message": f"Failed to add fillet: {result.error}"}
+        except Exception as e:
+            logger.error(f"Error in add_fillet tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 10  # Number of tools registered
     return tool_count

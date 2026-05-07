@@ -73,9 +73,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_code":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -117,9 +117,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
-            if tool.name == "start_macro_recording":
-                tool_func = tool.handler
+        for tool in await mcp_server.list_tools():
+            if tool.name == "automation_start_macro_recording":
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -174,9 +174,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "batch_process_files":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -219,9 +219,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "manage_design_table":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -271,9 +271,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "execute_workflow":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -319,9 +319,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "create_template":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -367,9 +367,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "optimize_performance":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         assert tool_func is not None
@@ -400,9 +400,9 @@ class TestAutomationTools:
         )
 
         tool_func = None
-        for tool in mcp_server._tools:
+        for tool in await mcp_server.list_tools():
             if tool.name == "generate_vba_code":
-                tool_func = tool.handler
+                tool_func = tool.fn
                 break
 
         result = await tool_func(input_data=input_data)
@@ -416,15 +416,17 @@ class TestAutomationTools:
         """Test fallback simulation branches for all automation tools."""
         await register_automation_tools(mcp_server, object(), mock_config)
 
-        by_name = {tool.name: tool.handler for tool in mcp_server._tools}
+        by_name = {tool.name: tool.fn for tool in await mcp_server.list_tools()}
 
         vba = await by_name["generate_vba_code"](
             input_data=VBAGenerationInput(operation_type="Create Block")
         )
-        start = await by_name["start_macro_recording"](
+        start = await by_name["automation_start_macro_recording"](
             input_data=RecordMacroInput(recording_name="Macro A")
         )
-        stop = await by_name["stop_macro_recording"](input_data={"session": "x"})
+        stop = await by_name["automation_stop_macro_recording"](
+            input_data={"session": "x"}
+        )
         batch = await by_name["batch_process_files"](
             input_data=BatchProcessInput(
                 source_directory="./parts",
@@ -491,12 +493,12 @@ class TestAutomationTools:
             side_effect=RuntimeError("perf boom")
         )
 
-        by_name = {tool.name: tool.handler for tool in mcp_server._tools}
+        by_name = {tool.name: tool.fn for tool in await mcp_server.list_tools()}
 
         vba = await by_name["generate_vba_code"](
             input_data=VBAGenerationInput(operation_type="X")
         )
-        start = await by_name["start_macro_recording"](
+        start = await by_name["automation_start_macro_recording"](
             input_data=RecordMacroInput(recording_name="Y")
         )
         batch = await by_name["batch_process_files"](
