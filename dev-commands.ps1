@@ -177,6 +177,7 @@ function dev-test-full {
 
     # Generate tool catalog
     Invoke-Venv @("src/utils/generate_tool_catalog.py", "--json-only")
+    Get-ChildItem -Recurse -Filter "*.pyc*" | Remove-Item
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Tool catalog generation failed; aborting." -ForegroundColor Red
         return
@@ -196,10 +197,10 @@ function dev-test-full {
     }
 
     # Keep live SolidWorks smoke checks serial to avoid overloading COM/SolidWorks.
-    Invoke-Pytest @("tests/test_all_endpoints_harness.py", "-k", "test_smoke_all_tools", "-n", "1", "--no-cov", "-q")
+    Invoke-Pytest @("tests/solidworks_mcp/test_all_endpoints_harness.py", "-k", "test_smoke_all_tools", "-n", "1", "--no-cov", "-q")
     if ($LASTEXITCODE -ne 0) { Write-Host "Smoke harness failed; aborting." -ForegroundColor Red; return }
 
-    Invoke-Pytest @("tests/test_all_endpoints_harness.py", "-k", "test_c10_docs_discovery_and_compat", "-n", "1", "--no-cov", "-q")
+    Invoke-Pytest @("tests/solidworks_mcp/test_all_endpoints_harness.py", "-k", "test_c10_docs_discovery_and_compat", "-n", "1", "--no-cov", "-q")
 
     # Resolve GitHub token for smoke tests
     if (-not $env:GITHUB_API_KEY -and -not $env:GH_TOKEN) {

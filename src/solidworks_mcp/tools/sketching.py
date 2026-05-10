@@ -751,6 +751,7 @@ async def register_sketching_tools(
                             - Commonly used for fillets and rounded profiles
         """
         try:
+            input_data = _normalize_input(input_data, AddArcInput)
             result = await adapter.add_arc(
                 input_data.center_x,
                 input_data.center_y,
@@ -1137,6 +1138,11 @@ async def register_sketching_tools(
         essential for creating precise, parametric designs that can be easily modified and
         maintain manufacturing tolerances.
 
+        In live SolidWorks automation, sketch dimensions can otherwise trigger the interactive
+        ``Modify`` approval dialog. The adapter suppresses the relevant sketch-input preferences
+        for the automation session and uses the dedicated radial/diameter APIs for circles and
+        arcs so this tool remains non-interactive.
+
         Args:
             input_data (AddDimensionInput): The input data value.
 
@@ -1164,8 +1170,11 @@ async def register_sketching_tools(
                             - Dimensions drive entity size and control parametric behavior
                             - Over-dimensioning can cause constraint conflicts
                             - Essential for manufacturing precision and design intent
+                            - Radial and diameter dimensions use SolidWorks-specific APIs to avoid
+                              falling back to the interactive Smart Dimension approval flow
         """
         try:
+            input_data = _normalize_input(input_data, AddDimensionInput)
             result = await adapter.add_sketch_dimension(
                 input_data.entity1,
                 input_data.entity2,
