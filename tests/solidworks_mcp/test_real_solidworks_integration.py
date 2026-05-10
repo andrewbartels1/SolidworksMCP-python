@@ -369,6 +369,11 @@ async def test_real_arc_measurements_smoke(
     Covers radial dimensions on arcs and circles.  The preference toggle
     swInputDimValOnCreate (62) must remain False for the full dimension
     operation (including SetSystemValue3) so the Modify dialog never appears.
+
+    This test intentionally relies on the popup-safe adapter path: direct COM
+    dimension creation with minimal extra COM chatter.  Regressions here tend
+    to come from reintroducing AddDimension2 probing or non-essential cleanup
+    calls around dimension creation/teardown.
     """
     create_part = await _find_tool(real_server, "create_part")
     save_as = await _find_tool(real_server, "save_as")
@@ -390,7 +395,7 @@ async def test_real_arc_measurements_smoke(
     # Add a circle (radius 20 mm, centred at origin)
     circle_result = await add_circle({"center_x": 0.0, "center_y": 0.0, "radius": 20.0})
     assert circle_result["status"] == "success", circle_result
-    circle_entity = circle_result["data"]["entity_name"]
+    circle_entity = circle_result["circle"]["id"]
 
     # Add a 90-degree arc (quarter circle, radius 15 mm)
     # Start at (15, 0), end at (0, 15), centre at origin
@@ -403,7 +408,7 @@ async def test_real_arc_measurements_smoke(
         "end_y": 15.0,
     })
     assert arc_result["status"] == "success", arc_result
-    arc_entity = arc_result["data"]["entity_name"]
+    arc_entity = arc_result["arc"]["id"]
 
     # Dimension the circle radius (radial)
     circle_dim_result = await add_sketch_dimension({
@@ -414,7 +419,7 @@ async def test_real_arc_measurements_smoke(
     assert circle_dim_result["status"] == "success", (
         f"Circle radial dimension failed: {circle_dim_result}"
     )
-    assert circle_dim_result.get("data") is not None, (
+    assert circle_dim_result.get("dimension") is not None, (
         "Circle radial dimension returned no data"
     )
 
@@ -427,12 +432,12 @@ async def test_real_arc_measurements_smoke(
     assert arc_dim_result["status"] == "success", (
         f"Arc radial dimension failed: {arc_dim_result}"
     )
-    assert arc_dim_result.get("data") is not None, (
+    assert arc_dim_result.get("dimension") is not None, (
         "Arc radial dimension returned no data"
     )
 
     # Exit sketch
-    exit_result = await exit_sketch({})
+    exit_result = await exit_sketch()
     assert exit_result["status"] == "success", exit_result
 
     # Save and close

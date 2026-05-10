@@ -862,9 +862,9 @@ class TestPyWin32AdapterBranches:
         adapter.currentModel = SimpleNamespace(GetTitle=lambda: "ActiveModel")
         adapter.currentSketch = object()
         adapter.currentSketchManager = object()
+        toggle_call_count = fake_app.SetUserPreferenceToggle.call_count
         await adapter.disconnect()
-        fake_app.SetUserPreferenceToggle.assert_any_call(150, True)
-        fake_app.SetUserPreferenceToggle.assert_any_call(149, True)
+        assert fake_app.SetUserPreferenceToggle.call_count == toggle_call_count
         assert adapter.swApp is None
         assert adapter.currentSketchManager is None
         co_uninitialize.assert_called_once()
