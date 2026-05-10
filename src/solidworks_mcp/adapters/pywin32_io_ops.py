@@ -1,88 +1,30 @@
-"""I/O and document-query operations extracted from the PyWin32Adapter.
+"""DEPRECATED: This module has been refactored into mixin classes.
 
-This module groups model load/save/export operations plus feature/configuration
-query helpers so the main adapter class stays thinner and easier to test.
+All functionality previously provided by this module has been moved to:
+- SolidWorksIOMixin in solidworks/io.py
 
-All public functions accept the adapter as their first argument and return
-``AdapterResult`` values through the adapter's shared COM wrapper.
+This file is retained for reference only and is no longer used by PyWin32Adapter.
+
+Migration complete as of current refactoring effort.
 """
 
-from __future__ import annotations
 
-import os
-from datetime import datetime
-from types import SimpleNamespace
-from typing import Any, cast
-
-try:
-    import pythoncom
-    import win32com.client
-except ImportError:  # pragma: no cover
-    pythoncom = SimpleNamespace(VT_BYREF=0, VT_I4=0)
-    win32com = SimpleNamespace(client=SimpleNamespace(VARIANT=lambda *_args: 0))
-
-from .base import (
-    AdapterResult,
-    AdapterResultStatus,
-    SolidWorksModel,
-)
-
-
-def _as_result(value: Any) -> AdapterResult[Any]:
-    """Cast adapter wrapper output to a typed AdapterResult.
-
-    The adapter exposes a dynamically-typed ``_handle_com_operation_call``
-    helper; this utility keeps strict type checkers satisfied in this module.
-    """
-    return cast(AdapterResult[Any], value)
-
-
-def _set_dimension_auto_approve(adapter: Any, enabled: bool) -> bool | None:
-    """Set the global dimension-input preference toggle.
+def open_model(adapter: Any, file_path: str) -> SolidWorksModel:
+    """Open a SolidWorks model file and set it as active on the adapter.
 
     Args:
-        adapter: Active pywin32 adapter instance.
-        enabled: Whether the interactive value-on-create dialog should remain
-            enabled. ``False`` suppresses confirmation dialogs during
-            automation-oriented dimension workflows.
+        adapter: Connected ``PyWin32Adapter`` instance.
+        file_path: Path to a ``.sldprt``, ``.sldasm``, or ``.slddrw`` file.
 
     Returns:
-        Previously configured toggle value if readable; otherwise ``None``.
+        SolidWorksModel: Model metadata for the opened document.
+
+    Raises:
+        ValueError: If the extension is unsupported.
+        Exception: If SolidWorks fails to open the requested document.
     """
-    pref_toggle = adapter.constants["swInputDimValOnCreate"]
-    previous_value = adapter._attempt(
-        lambda: bool(adapter.swApp.GetUserPreferenceToggle(pref_toggle)),
-        default=None,
-    )
-    adapter._attempt(
-        lambda: adapter.swApp.SetUserPreferenceToggle(pref_toggle, enabled),
-        default=None,
-    )
-    return previous_value
-
-
-def _restore_dimension_auto_approve(adapter: Any, previous_value: bool | None) -> None:
-    """Restore the global dimension-input preference toggle.
-
-    Args:
-        adapter: Active pywin32 adapter instance.
-        previous_value: Previous value returned by
-            :func:`_set_dimension_auto_approve`. ``None`` means no restoration
-            should be attempted.
-    """
-    if previous_value is None:
-        return
-    pref_toggle = adapter.constants["swInputDimValOnCreate"]
-    adapter._attempt(
-        lambda: adapter.swApp.SetUserPreferenceToggle(pref_toggle, previous_value),
-        default=None,
-    )
-
-
-def _open_model_impl(adapter: Any, file_path: str) -> SolidWorksModel:
     resolved_path = os.path.abspath(file_path)
     file_path_lower = resolved_path.lower()
-
     if file_path_lower.endswith(".sldprt"):
         doc_type = adapter.constants["swDocPART"]
         model_type = "Part"
@@ -95,23 +37,15 @@ def _open_model_impl(adapter: Any, file_path: str) -> SolidWorksModel:
     else:
         raise ValueError(f"Unsupported file type: {resolved_path}")
 
+    app = adapter.swApp
     errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
     warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-
-    app = adapter.swApp
-    model = app.OpenDoc6(
-        resolved_path,
-        doc_type,
-        1,
-        "",
-        errors,
-        warnings,
-    )
+    model = app.OpenDoc6(resolved_path, doc_type, 1, "", errors, warnings)
     if not model:
         raise Exception(f"Failed to open model: {resolved_path}")
 
     adapter.currentModel = model
-    title = adapter._read_model_title(model)
+    title = read_model_title(adapter, model)
     active_config = adapter._attempt(lambda: model.GetActiveConfiguration())
     config = (
         adapter._attempt(lambda: active_config.GetName(), default="Default")
@@ -135,54 +69,94 @@ def _open_model_impl(adapter: Any, file_path: str) -> SolidWorksModel:
     )
 
 
-def open_model(adapter: Any, file_path: str) -> AdapterResult[SolidWorksModel]:
-    """Open a SolidWorks document and set it as the current model."""
-    if not adapter.is_connected():
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-        )
-    return cast(
-        AdapterResult[SolidWorksModel],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "open_model", _open_model_impl, adapter, file_path
-            )
-        ),
-    )
+def close_model(adapter: Any, save: bool = False) -> None:
+    """Close the current SolidWorks model and optionally save first.
 
-
-def _close_model_impl(adapter: Any, save: bool) -> None:
+    Args:
+        adapter: Connected ``PyWin32Adapter`` instance.
+        save: When ``True``, calls ``Save`` before closing.
+    """
     model = adapter.currentModel
     app = adapter.swApp
-    if model is None or app is None:
-        raise Exception("SolidWorks application is not connected")
-
     if save:
         model.Save()
-
     app.CloseDoc(model.GetTitle())
     adapter.currentModel = None
 
 
-def close_model(adapter: Any, save: bool = False) -> AdapterResult[None]:
-    """Close the active model with optional save."""
-    if not adapter.currentModel:
-        return AdapterResult(
-            status=AdapterResultStatus.WARNING, error="No active model to close"
+def resolve_template_path(
+    adapter: Any, preferred_indices: list[int], extension: str
+) -> str | None:
+    """Resolve a template path from SolidWorks user preference slots.
+
+    Args:
+        adapter: Connected ``PyWin32Adapter`` instance.
+        preferred_indices: Preference indices to probe in order.
+        extension: Expected template extension such as ``.prtdot``.
+
+    Returns:
+        str | None: First existing template match, otherwise first non-empty
+        path candidate, or ``None`` if nothing is configured.
+    """
+    existing_match: str | None = None
+    first_non_empty: str | None = None
+    app = adapter.swApp
+    if app is None:
+        return None
+
+    for index in preferred_indices:
+        template = adapter._attempt(
+            lambda idx=index: app.GetUserPreferenceStringValue(idx)
         )
-    return cast(
-        AdapterResult[None],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "close_model", _close_model_impl, adapter, save
-            )
-        ),
-    )
+        if not template or not isinstance(template, str):
+            continue
+        if first_non_empty is None:
+            first_non_empty = template
+        if template.lower().endswith(extension.lower()) and os.path.exists(template):
+            existing_match = template
+            break
+
+    return existing_match or first_non_empty
 
 
-def _create_part_impl(
-    adapter: Any, _name: str | None, _units: str | None
+def read_model_title(adapter: Any, model: Any) -> str:
+    """Read a model title regardless of COM exposing method or property.
+
+    Args:
+        adapter: ``PyWin32Adapter`` instance used for safe COM access helpers.
+        model: SolidWorks model COM object.
+
+    Returns:
+        str: Best-effort model title, defaulting to ``"Untitled"``.
+    """
+    title = adapter._attempt(lambda: adapter._get_attr_or_call(model, "GetTitle"))
+    if isinstance(title, str) and title:
+        return title
+
+    title_value = getattr(model, "Title", None)
+    if isinstance(title_value, str) and title_value:
+        return title_value
+
+    return "Untitled"
+
+
+def create_part(
+    adapter: Any, name: str | None = None, units: str | None = None
 ) -> SolidWorksModel:
+    """Create a new part document and set it as active.
+
+    Args:
+        adapter: Connected ``PyWin32Adapter`` instance.
+        name: Reserved for future naming policy.
+        units: Reserved for future units policy.
+
+    Returns:
+        SolidWorksModel: Metadata for the new part document.
+
+    Raises:
+        Exception: If no part template is configured or creation fails.
+    """
+    _ = name, units
     model = None
     app = adapter.swApp
     if app is None:
@@ -193,7 +167,7 @@ def _create_part_impl(
         model = adapter._attempt(new_part)
 
     if not model:
-        part_template = adapter._resolve_template_path([8, 0, 1, 2, 3], ".prtdot")
+        part_template = resolve_template_path(adapter, [8, 0, 1, 2, 3], ".prtdot")
         if not part_template:
             raise Exception("No part template configured in SolidWorks")
         model = app.NewDocument(part_template, 0, 0, 0)
@@ -202,9 +176,10 @@ def _create_part_impl(
         raise Exception("Failed to create new part")
 
     adapter.currentModel = model
+    title = read_model_title(adapter, model)
     return SolidWorksModel(
         path="",
-        name=adapter._read_model_title(model),
+        name=title,
         type="Part",
         is_active=True,
         configuration="Default",
@@ -212,27 +187,20 @@ def _create_part_impl(
     )
 
 
-def create_part(
-    adapter: Any,
-    name: str | None = None,
-    units: str | None = None,
-) -> AdapterResult[SolidWorksModel]:
-    """Create a new part document."""
-    if not adapter.is_connected():
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-        )
-    return cast(
-        AdapterResult[SolidWorksModel],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "create_part", _create_part_impl, adapter, name, units
-            )
-        ),
-    )
+def create_assembly(adapter: Any, name: str | None = None) -> SolidWorksModel:
+    """Create a new assembly document and set it as active.
 
+    Args:
+        adapter: Connected ``PyWin32Adapter`` instance.
+        name: Reserved for future naming policy.
 
-def _create_assembly_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
+    Returns:
+        SolidWorksModel: Metadata for the new assembly document.
+
+    Raises:
+        Exception: If no assembly template is configured or creation fails.
+    """
+    _ = name
     model = None
     app = adapter.swApp
     if app is None:
@@ -243,7 +211,7 @@ def _create_assembly_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
         model = adapter._attempt(new_assembly)
 
     if not model:
-        asm_template = adapter._resolve_template_path([9, 2, 3, 1, 0], ".asmdot")
+        asm_template = resolve_template_path(adapter, [9, 2, 3, 1, 0], ".asmdot")
         if not asm_template:
             raise Exception("No assembly template configured in SolidWorks")
         model = app.NewDocument(asm_template, 0, 0, 0)
@@ -252,9 +220,10 @@ def _create_assembly_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
         raise Exception("Failed to create new assembly")
 
     adapter.currentModel = model
+    title = read_model_title(adapter, model)
     return SolidWorksModel(
         path="",
-        name=adapter._read_model_title(model),
+        name=title,
         type="Assembly",
         is_active=True,
         configuration="Default",
@@ -262,26 +231,20 @@ def _create_assembly_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
     )
 
 
-def create_assembly(
-    adapter: Any,
-    name: str | None = None,
-) -> AdapterResult[SolidWorksModel]:
-    """Create a new assembly document."""
-    if not adapter.is_connected():
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-        )
-    return cast(
-        AdapterResult[SolidWorksModel],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "create_assembly", _create_assembly_impl, adapter, name
-            )
-        ),
-    )
+def create_drawing(adapter: Any, name: str | None = None) -> SolidWorksModel:
+    """Create a new drawing document and set it as active.
 
+    Args:
+        adapter: Connected ``PyWin32Adapter`` instance.
+        name: Reserved for future naming policy.
 
-def _create_drawing_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
+    Returns:
+        SolidWorksModel: Metadata for the new drawing document.
+
+    Raises:
+        Exception: If creation fails.
+    """
+    _ = name
     app = adapter.swApp
     if app is None:
         raise Exception("SolidWorks application is not connected")
@@ -295,9 +258,10 @@ def _create_drawing_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
         raise Exception("Failed to create new drawing")
 
     adapter.currentModel = model
+    title = read_model_title(adapter, model)
     return SolidWorksModel(
         path="",
-        name=adapter._read_model_title(model),
+        name=title,
         type="Drawing",
         is_active=True,
         configuration="Default",
@@ -305,188 +269,58 @@ def _create_drawing_impl(adapter: Any, _name: str | None) -> SolidWorksModel:
     )
 
 
-def create_drawing(
-    adapter: Any,
-    name: str | None = None,
-) -> AdapterResult[SolidWorksModel]:
-    """Create a new drawing document."""
-    if not adapter.is_connected():
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-        )
-    return cast(
-        AdapterResult[SolidWorksModel],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "create_drawing", _create_drawing_impl, adapter, name
-            )
-        ),
-    )
-
-
-def _export_file_impl(adapter: Any, file_path: str, format_type: str) -> None:
-    format_map = {
-        "step": 0,
-        "iges": 1,
-        "stl": 2,
-        "pdf": 3,
-        "dwg": 4,
-        "jpg": 5,
-        "glb": 41,
-        "gltf": 41,
-    }
-
-    format_lower = format_type.lower()
-    if format_lower not in format_map:
-        raise Exception(f"Unsupported export format: {format_type}")
-
-    resolved_path = os.path.abspath(file_path)
-    os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
-    if os.path.exists(resolved_path):
-        adapter._attempt(lambda: os.remove(resolved_path))
-
-    target_doc = (
-        getattr(adapter.swApp, "ActiveDoc", None) if adapter.swApp else None
-    ) or adapter.currentModel
-
-    if format_lower == "stl":
-        adapter._attempt(lambda: target_doc.ResolveAllLightweightComponents(True))
-        ext = getattr(target_doc, "Extension", None)
-        if ext is None:
-            raise RuntimeError("No Extension object available for STL export")
-
-        stl_data = adapter._prepare_stl_export_data()
-        if not adapter._save_stl_with_extension(ext, stl_data, resolved_path):
-            adapter._save_stl_with_fallback(target_doc, resolved_path)
-        return None
-
-    success = target_doc.SaveAs3(resolved_path, 0, 2)
-    if not success and not os.path.exists(resolved_path):
-        raise Exception(f"SaveAs3 returned False and no file produced: {resolved_path}")
-
-
-def export_file(
-    adapter: Any,
-    file_path: str,
-    format_type: str,
-) -> AdapterResult[None]:
-    """Export the active model to a target format."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[None],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "export_file", _export_file_impl, adapter, file_path, format_type
-            )
-        ),
-    )
-
-
-def _get_dimension_impl(adapter: Any, name: str) -> float:
-    """Read a named model dimension from SolidWorks.
+def get_dimension(adapter: Any, name: str) -> float:
+    """Read a named model dimension in millimetres.
 
     Args:
-        adapter: Active pywin32 adapter instance.
-        name: Fully-qualified SolidWorks dimension name.
+        adapter: ``PyWin32Adapter`` with an active model.
+        name: Fully-qualified dimension name.
 
     Returns:
-        Dimension value in millimetres.
+        float: Dimension value in millimetres.
 
     Raises:
-        Exception: If the dimension name cannot be resolved.
+        Exception: If the dimension does not exist.
     """
-    previous_dim_dialog_pref = _set_dimension_auto_approve(adapter, False)
-    try:
-        dimension = adapter.currentModel.Parameter(name)
-        if not dimension:
-            raise Exception(f"Dimension '{name}' not found")
-        value = dimension.GetValue3(8, None)
-        return float(value) * 1000.0
-    finally:
-        _restore_dimension_auto_approve(adapter, previous_dim_dialog_pref)
+    dimension = adapter.currentModel.Parameter(name)
+    if not dimension:
+        raise Exception(f"Dimension '{name}' not found")
+    value = dimension.GetValue3(8, None)
+    return value * 1000
 
 
-def get_dimension(adapter: Any, name: str) -> AdapterResult[float]:
-    """Read a model dimension in millimetres.
+def set_dimension(adapter: Any, name: str, value: float) -> None:
+    """Set a named model dimension in millimetres and rebuild.
 
     Args:
-        adapter: Active pywin32 adapter instance.
-        name: Fully-qualified SolidWorks dimension name.
-
-    Returns:
-        AdapterResult[float]: Dimension value in millimetres when successful.
-    """
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[float],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "get_dimension", _get_dimension_impl, adapter, name
-            )
-        ),
-    )
-
-
-def _set_dimension_impl(adapter: Any, name: str, value: float) -> None:
-    """Set a named model dimension and force a rebuild.
-
-    Args:
-        adapter: Active pywin32 adapter instance.
-        name: Fully-qualified SolidWorks dimension name.
+        adapter: ``PyWin32Adapter`` with an active model.
+        name: Fully-qualified dimension name.
         value: New value in millimetres.
 
     Raises:
-        Exception: If the dimension name cannot be resolved or the write fails.
+        Exception: If the dimension is missing or update fails.
     """
-    previous_dim_dialog_pref = _set_dimension_auto_approve(adapter, False)
-    try:
-        dimension = adapter.currentModel.Parameter(name)
-        if not dimension:
-            raise Exception(f"Dimension '{name}' not found")
+    dimension = adapter.currentModel.Parameter(name)
+    if not dimension:
+        raise Exception(f"Dimension '{name}' not found")
 
-        success = dimension.SetValue3(value / 1000.0, 8, None)
-        if not success:
-            raise Exception(f"Failed to set dimension '{name}'")
+    success = dimension.SetValue3(value / 1000.0, 8, None)
+    if not success:
+        raise Exception(f"Failed to set dimension '{name}'")
 
-        adapter.currentModel.ForceRebuild3(False)
-    finally:
-        _restore_dimension_auto_approve(adapter, previous_dim_dialog_pref)
+    adapter.currentModel.ForceRebuild3(False)
 
 
-def set_dimension(adapter: Any, name: str, value: float) -> AdapterResult[None]:
-    """Set a model dimension in millimetres and rebuild.
+def save_file(adapter: Any, file_path: str | None = None) -> None:
+    """Save the active model to its current path or to a new file path.
 
     Args:
-        adapter: Active pywin32 adapter instance.
-        name: Fully-qualified SolidWorks dimension name.
-        value: New value in millimetres.
+        adapter: ``PyWin32Adapter`` with an active model.
+        file_path: Optional target path for Save As.
 
-    Returns:
-        AdapterResult[None]: Success/error status for the update operation.
+    Raises:
+        Exception: If save operation does not produce a file.
     """
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[None],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "set_dimension", _set_dimension_impl, adapter, name, value
-            )
-        ),
-    )
-
-
-def _is_save_success(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value == 0
-    return bool(value)
-
-
-def _save_file_impl(adapter: Any, file_path: str | None = None) -> None:
     if file_path:
         resolved_path = os.path.abspath(file_path)
         os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
@@ -498,18 +332,18 @@ def _save_file_impl(adapter: Any, file_path: str | None = None) -> None:
             adapter._attempt(lambda: os.remove(resolved_path))
 
         save_as3_result = adapter.currentModel.SaveAs3(resolved_path, 0, 0)
-        if not _is_save_success(save_as3_result):
+        if not _is_success(save_as3_result):
             save_as = getattr(adapter.currentModel, "SaveAs", None)
             if callable(save_as):
                 fallback_result = save_as(resolved_path)
-                if not _is_save_success(fallback_result):
+                if not _is_success(fallback_result):
                     raise Exception(f"Failed to save as: {resolved_path}")
             else:
                 raise Exception(f"Failed to save as: {resolved_path}")
 
         if not os.path.exists(resolved_path):
             raise Exception(f"File not written after save: {resolved_path}")
-        return None
+        return
 
     save_result = adapter._attempt(lambda: adapter.currentModel.Save3(1, None, None))
     if save_result is None:
@@ -519,51 +353,39 @@ def _save_file_impl(adapter: Any, file_path: str | None = None) -> None:
         else:
             raise Exception("Failed to save file")
 
-    if _is_save_success(save_result):
-        return None
+    if _is_success(save_result):
+        return
 
     path_attr = getattr(adapter.currentModel, "GetPathName", "")
     model_path = path_attr() if callable(path_attr) else path_attr
     if model_path and os.path.exists(model_path):
-        return None
+        return
     raise Exception("Failed to save file")
 
 
-def save_file(adapter: Any, file_path: str | None = None) -> AdapterResult[None]:
-    """Save the active model to current or provided path."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[None],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "save_file", _save_file_impl, adapter, file_path
-            )
-        ),
-    )
+def rebuild_model(adapter: Any) -> None:
+    """Force a model rebuild.
 
+    Args:
+        adapter: ``PyWin32Adapter`` with an active model.
 
-def _rebuild_model_impl(adapter: Any) -> None:
+    Raises:
+        Exception: If SolidWorks reports rebuild failure.
+    """
     success = adapter.currentModel.ForceRebuild3(False)
     if not success:
         raise Exception("Failed to rebuild model")
 
 
-def rebuild_model(adapter: Any) -> AdapterResult[None]:
-    """Force a model rebuild."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[None],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "rebuild_model", _rebuild_model_impl, adapter
-            )
-        ),
-    )
+def get_model_info(adapter: Any) -> dict[str, Any]:
+    """Collect summary metadata about the active model.
 
+    Args:
+        adapter: ``PyWin32Adapter`` with an active model.
 
-def _get_model_info_impl(adapter: Any) -> dict[str, Any]:
+    Returns:
+        dict[str, Any]: Model information payload used by tool responses.
+    """
     active_config = adapter.currentModel.GetActiveConfiguration()
     return {
         "title": adapter.currentModel.GetTitle(),
@@ -576,180 +398,17 @@ def _get_model_info_impl(adapter: Any) -> dict[str, Any]:
     }
 
 
-def get_model_info(adapter: Any) -> AdapterResult[dict[str, Any]]:
-    """Return summary metadata for the active model."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[dict[str, Any]],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "get_model_info", _get_model_info_impl, adapter
-            )
-        ),
-    )
+def list_configurations(adapter: Any) -> list[str]:
+    """List all configuration names on the active model.
 
+    Args:
+        adapter: ``PyWin32Adapter`` with an active model.
 
-def _is_feature_suppressed(adapter: Any, feature: Any) -> bool:
-    suppressed_direct = adapter._attempt(lambda: feature.IsSuppressed(), default=None)
-    if suppressed_direct is not None:
-        return bool(suppressed_direct)
-
-    suppressed_result = adapter._attempt(
-        lambda: feature.IsSuppressed2(0, []), default=None
-    )
-    if isinstance(suppressed_result, (tuple, list)):
-        return bool(suppressed_result[0]) if suppressed_result else False
-    return bool(suppressed_result) if suppressed_result is not None else False
-
-
-def _append_feature_entry(
-    adapter: Any,
-    feature: Any,
-    position: int,
-    include_suppressed: bool,
-    features: list[dict[str, Any]],
-    seen: set[tuple[str, str]],
-) -> None:
-    name = str(getattr(feature, "Name", ""))
-    feature_type = str(
-        adapter._attempt(lambda: feature.GetTypeName2(), default="Unknown")
-    )
-    dedupe_key = (name, feature_type)
-    if dedupe_key in seen:
-        return
-    seen.add(dedupe_key)
-
-    suppressed = _is_feature_suppressed(adapter, feature)
-    if not include_suppressed and suppressed:
-        return
-
-    features.append(
-        {
-            "name": name,
-            "type": feature_type,
-            "suppressed": suppressed,
-            "position": position,
-        }
-    )
-
-
-def _list_features_impl(adapter: Any, include_suppressed: bool) -> list[dict[str, Any]]:
-    features: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-
-    feature = adapter._attempt(lambda: adapter.currentModel.FirstFeature())
-    pos = 0
-    guard = 0
-    while feature and guard < 10000:
-        _append_feature_entry(
-            adapter,
-            feature,
-            pos,
-            include_suppressed,
-            features,
-            seen,
-        )
-        pos += 1
-        guard += 1
-        next_feature = adapter._attempt(
-            lambda current_feature=feature: current_feature.GetNextFeature()
-        )
-        if next_feature is None:
-            break
-        feature = next_feature
-
-    if features:
-        return features
-
-    feature_manager = getattr(adapter.currentModel, "FeatureManager", None)
-    count = (
-        adapter._attempt(
-            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0
-        )
-        if feature_manager is not None
-        else 0
-    )
-
-    for reverse_pos in range(1, count + 1):
-        feature = adapter._attempt(
-            lambda pos=reverse_pos: adapter.currentModel.FeatureByPositionReverse(pos)
-        )
-        if feature is None:
-            continue
-        position = count - reverse_pos
-        _append_feature_entry(
-            adapter,
-            feature,
-            position,
-            include_suppressed,
-            features,
-            seen,
-        )
-
-    return features
-
-
-def list_features(
-    adapter: Any,
-    include_suppressed: bool = False,
-) -> AdapterResult[list[dict[str, Any]]]:
-    """List feature-tree entries on the active model."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[list[dict[str, Any]]],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "list_features", _list_features_impl, adapter, include_suppressed
-            )
-        ),
-    )
-
-
-def _select_feature_impl(adapter: Any, feature_name: str) -> dict[str, Any]:
-    target_doc = adapter.currentModel
-    candidate_names = adapter._build_feature_candidate_names(feature_name, target_doc)
-
-    result = adapter._try_select_by_extension(target_doc, candidate_names, feature_name)
-    if result:
-        return cast(dict[str, Any], result)
-
-    result = adapter._try_select_by_component(target_doc, candidate_names, feature_name)
-    if result:
-        return cast(dict[str, Any], result)
-
-    result = adapter._try_select_by_feature_tree(
-        target_doc, feature_name, candidate_names
-    )
-    if result:
-        return cast(dict[str, Any], result)
-
-    return {
-        "selected": False,
-        "feature_name": feature_name,
-        "selected_name": feature_name,
-    }
-
-
-def select_feature(adapter: Any, feature_name: str) -> AdapterResult[dict[str, Any]]:
-    """Select a named feature through extension/component/tree strategies."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[dict[str, Any]],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "select_feature", _select_feature_impl, adapter, feature_name
-            )
-        ),
-    )
-
-
-def _list_configurations_impl(adapter: Any) -> list[str]:
+    Returns:
+        list[str]: Configuration names, or empty list when unavailable.
+    """
     raw_names = getattr(adapter.currentModel, "GetConfigurationNames", None)
     names = raw_names() if callable(raw_names) else raw_names
-
     if names is None:
         names = []
     if isinstance(names, str):
@@ -768,15 +427,84 @@ def _list_configurations_impl(adapter: Any) -> list[str]:
     return []
 
 
-def list_configurations(adapter: Any) -> AdapterResult[list[str]]:
-    """Return all active model configuration names."""
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-    return cast(
-        AdapterResult[list[str]],
-        _as_result(
-            adapter._handle_com_operation_call(
-                "list_configurations", _list_configurations_impl, adapter
-            )
-        ),
+def get_mass_properties(adapter: Any) -> MassProperties:
+    """Get mass properties for the active model.
+
+    Args:
+        adapter: ``PyWin32Adapter`` with an active model.
+
+    Returns:
+        MassProperties: Computed mass, volume, area, COM, and inertia terms.
+
+    Raises:
+        Exception: If mass properties cannot be determined.
+    """
+    adapter._attempt(lambda: adapter.currentModel.ForceRebuild3(False), default=None)
+    mass_props = adapter._attempt(
+        lambda: adapter.currentModel.Extension.CreateMassProperty(), default=None
     )
+
+    if mass_props:
+        volume = mass_props.Volume * 1e9
+        surface_area = mass_props.SurfaceArea * 1e6
+        mass = mass_props.Mass
+
+        center_of_mass = [0.0, 0.0, 0.0]
+        com = adapter._attempt(lambda: mass_props.CenterOfMass, default=None)
+        if isinstance(com, (list, tuple)) and len(com) >= 3:
+            center_of_mass = [com[0] * 1000, com[1] * 1000, com[2] * 1000]
+
+        moi = adapter._attempt(lambda: mass_props.GetMomentOfInertia(0), default=None)
+        if not isinstance(moi, (list, tuple)) or len(moi) < 9:
+            moi = [0.0] * 9
+    else:
+        raw = adapter._attempt(
+            lambda: adapter.currentModel.GetMassProperties, default=None
+        )
+        if not isinstance(raw, (list, tuple)) or len(raw) < 6:
+            raise Exception("Failed to get mass properties")
+
+        center_of_mass = [raw[0] * 1000.0, raw[1] * 1000.0, raw[2] * 1000.0]
+        volume = raw[3] * 1e9
+        surface_area = raw[4] * 1e6
+        mass = raw[5]
+
+        moi = [0.0] * 9
+        if len(raw) >= 12:
+            moi[0] = raw[6]
+            moi[4] = raw[7]
+            moi[8] = raw[8]
+            moi[1] = raw[9]
+            moi[5] = raw[10]
+            moi[2] = raw[11]
+
+    return MassProperties(
+        volume=volume,
+        surface_area=surface_area,
+        mass=mass,
+        center_of_mass=center_of_mass,
+        moments_of_inertia={
+            "Ixx": moi[0],
+            "Iyy": moi[4],
+            "Izz": moi[8],
+            "Ixy": moi[1],
+            "Ixz": moi[2],
+            "Iyz": moi[5],
+        },
+    )
+
+
+def _is_success(value: Any) -> bool:
+    """Interpret SolidWorks save API return values consistently.
+
+    Args:
+        value: Return value from ``Save*`` COM calls.
+
+    Returns:
+        bool: ``True`` when return value indicates success.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 0
+    return bool(value)

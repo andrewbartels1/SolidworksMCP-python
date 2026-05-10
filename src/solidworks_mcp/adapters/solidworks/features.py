@@ -1,22 +1,4 @@
-"""Feature-domain operations extracted from the PyWin32Adapter.
-
-This module contains all boss-extrude, cut-extrude, revolve, sweep, loft,
-fillet, and chamfer logic that was previously embedded in the monolithic
-``PyWin32Adapter`` class.  Each public function accepts the adapter as its
-first argument so it can access shared state (``currentModel``, ``constants``,
-etc.) without subclassing.
-
-All dimensional inputs are expected in **millimetres** and are converted to
-metres internally before being forwarded to the SolidWorks COM API.
-
-Typical usage::
-
-    from solidworks_mcp.adapters import pywin32_feature_ops
-
-    result = pywin32_feature_ops.create_extrusion(adapter, params)
-    if result.status == AdapterResultStatus.SUCCESS:
-        print(result.data.name)
-"""
+"""Feature-domain mixin for PyWin32 SolidWorks operations."""
 
 from __future__ import annotations
 
@@ -24,7 +6,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
-from .base import (
+from ..base import (
     AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
@@ -35,7 +17,46 @@ from .base import (
 )
 
 
-def create_extrusion(
+class SolidWorksFeaturesMixin:
+    """Expose SolidWorks feature methods via mixin-local implementation helpers."""
+
+    async def create_extrusion(
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _create_extrusion_impl(self, params)
+
+    async def create_revolve(
+        self, params: RevolveParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _create_revolve_impl(self, params)
+
+    async def create_sweep(
+        self, params: SweepParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _create_sweep_impl(self, params)
+
+    async def create_loft(
+        self, params: LoftParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _create_loft_impl(self, params)
+
+    async def create_cut_extrude(
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _create_cut_extrude_impl(self, params)
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _add_fillet_impl(self, radius, edge_names)
+
+    async def add_chamfer(
+        self, distance: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        return _add_chamfer_impl(self, distance, edge_names)
+
+
+def _create_extrusion_impl(
     adapter: Any, params: ExtrusionParameters
 ) -> AdapterResult[SolidWorksFeature]:
     """Create a boss-extrude feature from the active sketch profile.
@@ -248,7 +269,7 @@ def create_extrusion(
     return adapter._handle_com_operation("create_extrusion", _extrusion_operation)
 
 
-def create_revolve(
+def _create_revolve_impl(
     adapter: Any, params: RevolveParameters
 ) -> AdapterResult[SolidWorksFeature]:
     """Create a revolve feature from the active sketch profile around a centre axis.
@@ -345,7 +366,7 @@ def create_revolve(
     return adapter._handle_com_operation("create_revolve", _revolve_operation)
 
 
-def create_sweep(
+def _create_sweep_impl(
     adapter: Any, params: SweepParameters
 ) -> AdapterResult[SolidWorksFeature]:
     """Placeholder for sweep feature creation — not yet implemented.
@@ -375,7 +396,7 @@ def create_sweep(
     )
 
 
-def create_loft(
+def _create_loft_impl(
     adapter: Any, params: LoftParameters
 ) -> AdapterResult[SolidWorksFeature]:
     """Placeholder for loft feature creation — not yet implemented.
@@ -404,7 +425,7 @@ def create_loft(
     )
 
 
-def create_cut_extrude(
+def _create_cut_extrude_impl(
     adapter: Any, params: ExtrusionParameters
 ) -> AdapterResult[SolidWorksFeature]:
     """Create a cut-extrude feature from the active sketch profile.
@@ -651,7 +672,7 @@ def create_cut_extrude(
     return adapter._handle_com_operation("create_cut_extrude", _cut_operation)
 
 
-def add_fillet(
+def _add_fillet_impl(
     adapter: Any, radius: float, edge_names: list[str]
 ) -> AdapterResult[SolidWorksFeature]:
     """Create a constant-radius fillet on one or more named edges.
@@ -745,7 +766,7 @@ def add_fillet(
     return adapter._handle_com_operation("add_fillet", _fillet_operation)
 
 
-def add_chamfer(
+def _add_chamfer_impl(
     adapter: Any, distance: float, edge_names: list[str]
 ) -> AdapterResult[SolidWorksFeature]:
     """Create an equal-distance chamfer on one or more named edges.

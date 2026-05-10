@@ -1,76 +1,180 @@
-"""Sketch-domain operations extracted from the PyWin32Adapter.
-
-This module contains all sketch-creation, geometry-primitive, constraint,
-dimension, and sketch-pattern logic that was previously embedded in the
-monolithic ``PyWin32Adapter`` class.  Each public function accepts the adapter
-as its first argument so it can access shared state (``currentModel``,
-``currentSketchManager``, ``constants``, etc.) without subclassing.
-
-All dimensional inputs (x/y coordinates, radius, offset distance …) are
-expected in **millimetres** and are converted to metres internally before
-being forwarded to the SolidWorks COM API.
-
-Typical usage::
-
-    from solidworks_mcp.adapters import pywin32_sketch_ops
-
-    result = pywin32_sketch_ops.create_sketch(adapter, "Top")
-    if result.status == AdapterResultStatus.SUCCESS:
-        line = pywin32_sketch_ops.add_line(adapter, 0, 0, 50, 0)
-        circle = pywin32_sketch_ops.add_circle(adapter, 25, 0, 10)
-        pywin32_sketch_ops.exit_sketch(adapter)
-"""
+"""Sketch-domain mixin for PyWin32 SolidWorks operations."""
 
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
-from .base import AdapterResult, AdapterResultStatus
-
-
-def _set_dimension_auto_approve(adapter: Any, enabled: bool) -> bool | None:
-    """Set the global dimension-input dialog preference.
-
-    Args:
-        adapter: Active pywin32 adapter instance.
-        enabled: Whether the interactive value-on-create dialog should remain
-            enabled. ``False`` suppresses the dialog so dimensions can be
-            created and valued programmatically without user confirmation.
-
-    Returns:
-        Previous preference value when available, otherwise ``None``.
-    """
-    pref_toggle = adapter.constants["swInputDimValOnCreate"]
-    previous_value = adapter._attempt(
-        lambda: bool(adapter.swApp.GetUserPreferenceToggle(pref_toggle)),
-        default=None,
-    )
-    adapter._attempt(
-        lambda: adapter.swApp.SetUserPreferenceToggle(pref_toggle, enabled),
-        default=None,
-    )
-    return previous_value
+from ..base import AdapterResult, AdapterResultStatus
 
 
-def _restore_dimension_auto_approve(adapter: Any, previous_value: bool | None) -> None:
-    """Restore the global dimension-input dialog preference.
+class SolidWorksSketchMixin:
+    """Expose sketch creation and editing methods via mixin-local implementation."""
 
-    Args:
-        adapter: Active pywin32 adapter instance.
-        previous_value: Previously captured preference value. ``None`` means no
-            reliable previous value was available and no restoration is applied.
-    """
-    if previous_value is None:
-        return
-    pref_toggle = adapter.constants["swInputDimValOnCreate"]
-    adapter._attempt(
-        lambda: adapter.swApp.SetUserPreferenceToggle(pref_toggle, previous_value),
-        default=None,
-    )
+    @staticmethod
+    def _adapter(obj: Any) -> Any:
+        """Return the runtime adapter object for dynamic attribute access."""
+        return cast(Any, obj)
+
+    def _point_xyz(self, point_obj: Any) -> tuple[float, float, float] | None:
+        adapter = self._adapter(self)
+        return cast(
+            tuple[float, float, float] | None,
+            adapter._sketch_geometry.point_xyz(point_obj),
+        )
+
+    def _set_point_xyz(self, point_obj: Any, x: float, y: float, z: float) -> bool:
+        adapter = self._adapter(self)
+        return cast(bool, adapter._sketch_geometry.set_point_xyz(point_obj, x, y, z))
+
+    def _read_segment_endpoints(
+        self, entity: Any
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+        adapter = self._adapter(self)
+        return cast(
+            tuple[tuple[float, float, float], tuple[float, float, float]] | None,
+            adapter._sketch_geometry.read_segment_endpoints(entity),
+        )
+
+    def _segment_point_objects(self, entity: Any) -> tuple[Any | None, Any | None]:
+        adapter = self._adapter(self)
+        return cast(
+            tuple[Any | None, Any | None],
+            adapter._sketch_geometry.segment_point_objects(entity),
+        )
+
+    def _shared_segment_vertex(
+        self, entity1: Any, entity2: Any
+    ) -> tuple[Any, Any, Any] | None:
+        adapter = self._adapter(self)
+        return cast(
+            tuple[Any, Any, Any] | None,
+            adapter._sketch_geometry.shared_segment_vertex(entity1, entity2),
+        )
+
+    def _smart_dimension_direction(self, dx: float, dy: float) -> int:
+        adapter = self._adapter(self)
+        return cast(int, adapter._sketch_geometry.smart_dimension_direction(dx, dy))
+
+    def _single_line_dimension_placement(
+        self, entity: Any
+    ) -> tuple[float, float, float, int] | None:
+        adapter = self._adapter(self)
+        return cast(
+            tuple[float, float, float, int] | None,
+            adapter._sketch_geometry.single_line_dimension_placement(entity),
+        )
+
+    def _angular_dimension_placement(
+        self, entity1: Any, entity2: Any
+    ) -> tuple[float, float, float, int] | None:
+        adapter = self._adapter(self)
+        return cast(
+            tuple[float, float, float, int] | None,
+            adapter._sketch_geometry.angular_dimension_placement(entity1, entity2),
+        )
+
+    async def create_sketch(self, plane: str) -> AdapterResult[str]:
+        return _create_sketch_impl(self, plane)
+
+    async def add_line(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
+        return _add_line_impl(self, x1, y1, x2, y2)
+
+    async def add_circle(
+        self, center_x: float, center_y: float, radius: float
+    ) -> AdapterResult[str]:
+        return _add_circle_impl(self, center_x, center_y, radius)
+
+    async def add_rectangle(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
+        return _add_rectangle_impl(self, x1, y1, x2, y2)
+
+    async def add_arc(
+        self,
+        center_x: float,
+        center_y: float,
+        start_x: float,
+        start_y: float,
+        end_x: float,
+        end_y: float,
+    ) -> AdapterResult[str]:
+        return _add_arc_impl(self, center_x, center_y, start_x, start_y, end_x, end_y)
+
+    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
+        return _add_spline_impl(self, points)
+
+    async def add_centerline(
+        self, x1: float, y1: float, x2: float, y2: float
+    ) -> AdapterResult[str]:
+        return _add_centerline_impl(self, x1, y1, x2, y2)
+
+    async def add_polygon(
+        self, center_x: float, center_y: float, radius: float, sides: int
+    ) -> AdapterResult[str]:
+        return _add_polygon_impl(self, center_x, center_y, radius, sides)
+
+    async def add_ellipse(
+        self, center_x: float, center_y: float, major_axis: float, minor_axis: float
+    ) -> AdapterResult[str]:
+        return _add_ellipse_impl(self, center_x, center_y, major_axis, minor_axis)
+
+    async def add_sketch_constraint(
+        self, entity1: str, entity2: str | None, relation_type: str
+    ) -> AdapterResult[str]:
+        return _add_sketch_constraint_impl(self, entity1, entity2, relation_type)
+
+    async def add_sketch_dimension(
+        self, entity1: str, entity2: str | None, dimension_type: str, value: float
+    ) -> AdapterResult[str]:
+        return _add_sketch_dimension_impl(self, entity1, entity2, dimension_type, value)
+
+    async def sketch_linear_pattern(
+        self,
+        entities: list[str],
+        direction_x: float,
+        direction_y: float,
+        spacing: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        return _sketch_linear_pattern_impl(
+            self, entities, direction_x, direction_y, spacing, count
+        )
+
+    async def sketch_circular_pattern(
+        self,
+        entities: list[str],
+        center_x: float,
+        center_y: float,
+        angle: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        return _sketch_circular_pattern_impl(
+            self, entities, center_x, center_y, angle, count
+        )
+
+    async def sketch_mirror(
+        self, entities: list[str], mirror_line: str
+    ) -> AdapterResult[str]:
+        return _sketch_mirror_impl(self, entities, mirror_line)
+
+    async def sketch_offset(
+        self, entities: list[str], offset_distance: float, reverse_direction: bool
+    ) -> AdapterResult[str]:
+        return _sketch_offset_impl(self, entities, offset_distance, reverse_direction)
+
+    async def exit_sketch(self) -> AdapterResult[None]:
+        return _exit_sketch_impl(self)
+
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        return _check_sketch_fully_defined_impl(self, sketch_name)
 
 
-def create_sketch(adapter: Any, plane: str) -> AdapterResult[str]:
+def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
     """Open a new sketch on a named reference plane.
 
     The function resolves English short-hand names (``"Top"``, ``"Front"``,
@@ -227,7 +331,7 @@ def create_sketch(adapter: Any, plane: str) -> AdapterResult[str]:
     return adapter._handle_com_operation("create_sketch", _sketch_operation)
 
 
-def add_line(
+def _add_line_impl(
     adapter: Any, x1: float, y1: float, x2: float, y2: float
 ) -> AdapterResult[str]:
     """Add a straight line segment to the active sketch.
@@ -279,7 +383,7 @@ def add_line(
     return adapter._handle_com_operation("add_line", _line_operation)
 
 
-def add_circle(
+def _add_circle_impl(
     adapter: Any, center_x: float, center_y: float, radius: float
 ) -> AdapterResult[str]:
     """Add a circle to the active sketch defined by centre and radius.
@@ -327,7 +431,7 @@ def add_circle(
     return adapter._handle_com_operation("add_circle", _circle_operation)
 
 
-def add_rectangle(
+def _add_rectangle_impl(
     adapter: Any, x1: float, y1: float, x2: float, y2: float
 ) -> AdapterResult[str]:
     """Add a corner-defined rectangle to the active sketch.
@@ -377,7 +481,7 @@ def add_rectangle(
     return adapter._handle_com_operation("add_rectangle", _rectangle_operation)
 
 
-def add_arc(
+def _add_arc_impl(
     adapter: Any,
     center_x: float,
     center_y: float,
@@ -450,7 +554,9 @@ def add_arc(
     return adapter._handle_com_operation("add_arc", _arc_operation)
 
 
-def add_spline(adapter: Any, points: list[dict[str, float]]) -> AdapterResult[str]:
+def _add_spline_impl(
+    adapter: Any, points: list[dict[str, float]]
+) -> AdapterResult[str]:
     """Add a NURBS spline through the supplied control points.
 
     Calls ``SketchManager.CreateSpline2`` with the flattened XYZ coordinate
@@ -506,7 +612,7 @@ def add_spline(adapter: Any, points: list[dict[str, float]]) -> AdapterResult[st
     return adapter._handle_com_operation("add_spline", _spline_operation)
 
 
-def add_centerline(
+def _add_centerline_impl(
     adapter: Any, x1: float, y1: float, x2: float, y2: float
 ) -> AdapterResult[str]:
     """Add a construction centre-line to the active sketch.
@@ -559,7 +665,7 @@ def add_centerline(
     return adapter._handle_com_operation("add_centerline", _centerline_operation)
 
 
-def add_polygon(
+def _add_polygon_impl(
     adapter: Any,
     center_x: float,
     center_y: float,
@@ -621,7 +727,7 @@ def add_polygon(
     return adapter._handle_com_operation("add_polygon", _polygon_operation)
 
 
-def add_ellipse(
+def _add_ellipse_impl(
     adapter: Any,
     center_x: float,
     center_y: float,
@@ -689,7 +795,7 @@ def add_ellipse(
     return adapter._handle_com_operation("add_ellipse", _ellipse_operation)
 
 
-def add_sketch_constraint(
+def _add_sketch_constraint_impl(
     adapter: Any,
     entity1: str,
     entity2: str | None,
@@ -755,7 +861,7 @@ def add_sketch_constraint(
     return adapter._handle_com_operation("add_sketch_constraint", _constraint_operation)
 
 
-def add_sketch_dimension(
+def _add_sketch_dimension_impl(
     adapter: Any,
     entity1: str,
     entity2: str | None,
@@ -764,7 +870,7 @@ def add_sketch_dimension(
 ) -> AdapterResult[str]:
     """Add a driven dimension to one or two registered sketch entities.
 
-    Supports two dimension types:
+        Supports linear, angular, radial, and diameter dimensions:
 
     * **linear** — places a horizontal or vertical smart dimension on a single
       entity.  The text-placement point is computed by
@@ -773,11 +879,16 @@ def add_sketch_dimension(
       segments sharing a common vertex.  The vertex is found via
       ``adapter._shared_segment_vertex`` and multiple direction/segment
       combinations are tried until one succeeds.
+    * **radial** / **diameter** — places a radius or diameter dimension on a
+      selected sketch arc or circle using ``IModelDoc2.AddRadialDimension2`` or
+      ``IModelDoc2.AddDiameterDimension2``.
 
-    Temporarily sets the SolidWorks preference
-    ``swInputDimValOnCreate`` to ``False`` during creation so the value
-    dialog does not appear interactively, then restores it in a ``finally``
-    block.
+    SolidWorks can otherwise enter the interactive ``Modify`` approval flow
+    during sketch dimension creation. The adapter keeps the relevant
+    sketch-input preferences disabled for the full automation session in
+    ``_ComSessionCoordinator.set_automation_preferences`` and uses the dedicated
+    radial/diameter APIs here because that path is more reliable in unattended
+    COM sessions.
 
     Dimensional values for **linear** dimensions are in **millimetres**;
     for **angular** dimensions they are in **degrees**.
@@ -788,8 +899,10 @@ def add_sketch_dimension(
         entity1: Registered entity ID of the primary sketch entity.
         entity2: Registered entity ID of a secondary sketch entity (required
             for angular dimensions), or ``None``.
-        dimension_type: ``"linear"`` or ``"angular"`` (case-insensitive).
-        value: Dimension value.  Millimetres for linear; degrees for angular.
+        dimension_type: ``"linear"``, ``"angular"``, ``"radial"``, or
+            ``"diameter"`` (case-insensitive).
+        value: Dimension value. Millimetres for linear, radial, and diameter;
+            degrees for angular.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -833,6 +946,19 @@ def add_sketch_dimension(
         """
         import math as _math_dim
 
+        def _radial_dimension_placement() -> tuple[float, float, float, int]:
+            """Compute a deterministic placement for radial/diameter dimensions.
+
+            Avoids additional COM geometry reads that can block on some live sessions.
+            """
+            offset = max(0.01, min(0.05, abs(value) / 1000.0 + 0.01))
+            return (
+                offset,
+                offset,
+                0.0,
+                adapter.constants["swSmartDimensionDirectionUp"],
+            )
+
         if not adapter.currentModel:
             return f"Dimension_{int(time.time() * 1000) % 10000}"
 
@@ -856,6 +982,8 @@ def add_sketch_dimension(
             placement = adapter._angular_dimension_placement(entity1_obj, entity2_obj)
         elif dim_type == "linear":
             placement = adapter._single_line_dimension_placement(entity1_obj)
+        elif dim_type in {"radial", "diameter"}:
+            placement = _radial_dimension_placement()
 
         if placement is None:
             raise Exception(
@@ -913,24 +1041,34 @@ def add_sketch_dimension(
                         return display_dim
             return None
 
-        previous_dim_dialog_pref = None
-        try:
-            # SOLIDWORKS API guidance for IModelDocExtension.AddDimension:
-            # disable swInputDimValOnCreate to suppress the value confirmation
-            # dialog and auto-approve dimension creation during automation.
-            previous_dim_dialog_pref = _set_dimension_auto_approve(adapter, False)
+        if dim_type == "angular":
+            display_dim = _try_create_angular_dimension()
+        else:
+            adapter.currentModel.ClearSelection2(True)
+            if not adapter._select_sketch_entity(entity1_obj, append=False):
+                raise Exception(f"Failed to select primary entity '{entity1}'")
+            if entity2_obj is not None and not adapter._select_sketch_entity(
+                entity2_obj, append=True
+            ):
+                raise Exception(f"Failed to select secondary entity '{entity2}'")
 
-            if dim_type == "angular":
-                display_dim = _try_create_angular_dimension()
+            if dim_type == "radial":
+                display_dim = adapter._attempt(
+                    lambda: adapter.currentModel.AddRadialDimension2(
+                        text_x, text_y, text_z
+                    ),
+                    default=None,
+                )
+            elif dim_type == "diameter":
+                display_dim = adapter._attempt(
+                    lambda: adapter.currentModel.AddDiameterDimension2(
+                        text_x, text_y, text_z
+                    ),
+                    default=None,
+                )
             else:
-                adapter.currentModel.ClearSelection2(True)
-                if not adapter._select_sketch_entity(entity1_obj, append=False):
-                    raise Exception(f"Failed to select primary entity '{entity1}'")
-                if entity2_obj is not None and not adapter._select_sketch_entity(
-                    entity2_obj, append=True
-                ):
-                    raise Exception(f"Failed to select secondary entity '{entity2}'")
-
+                # Use a single deterministic AddDimension call for non-angular
+                # dimensions that require extension-line direction.
                 display_dim = adapter._attempt(
                     lambda: adapter.currentModel.Extension.AddDimension(
                         text_x, text_y, text_z, direction
@@ -966,16 +1104,12 @@ def add_sketch_dimension(
                     if hasattr(dim_obj, "SystemValue"):
                         dim_obj.SystemValue = value_si
 
-        finally:
-            _restore_dimension_auto_approve(adapter, previous_dim_dialog_pref)
-            adapter.currentModel.ClearSelection2(True)
-
         return adapter._register_sketch_entity("Dimension", display_dim)
 
     return adapter._handle_com_operation("add_sketch_dimension", _dimension_operation)
 
 
-def sketch_linear_pattern(
+def _sketch_linear_pattern_impl(
     adapter: Any,
     entities: list[str],
     direction_x: float,
@@ -1020,7 +1154,7 @@ def sketch_linear_pattern(
     )
 
 
-def sketch_circular_pattern(
+def _sketch_circular_pattern_impl(
     adapter: Any,
     entities: list[str],
     center_x: float,
@@ -1065,7 +1199,7 @@ def sketch_circular_pattern(
     )
 
 
-def sketch_mirror(
+def _sketch_mirror_impl(
     adapter: Any, entities: list[str], mirror_line: str
 ) -> AdapterResult[str]:
     """Mirror sketch entities across a centre-line — placeholder, not yet fully implemented.
@@ -1100,7 +1234,7 @@ def sketch_mirror(
     return adapter._handle_com_operation("sketch_mirror", _mirror_operation)
 
 
-def sketch_offset(
+def _sketch_offset_impl(
     adapter: Any,
     entities: list[str],
     offset_distance: float,
@@ -1140,7 +1274,7 @@ def sketch_offset(
     return adapter._handle_com_operation("sketch_offset", _offset_operation)
 
 
-def exit_sketch(adapter: Any) -> AdapterResult[None]:
+def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
     """Exit the current sketch editing mode and return to the part/assembly context.
 
     Calls ``SketchManager.InsertSketch(True)`` which toggles the sketch editor
@@ -1187,7 +1321,7 @@ def exit_sketch(adapter: Any) -> AdapterResult[None]:
     return adapter._handle_com_operation("exit_sketch", _exit_operation)
 
 
-def check_sketch_fully_defined(
+def _check_sketch_fully_defined_impl(
     adapter: Any,
     sketch_name: str | None = None,
 ) -> AdapterResult[dict[str, Any]]:

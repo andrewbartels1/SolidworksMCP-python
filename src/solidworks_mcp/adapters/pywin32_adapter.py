@@ -10,7 +10,6 @@ import platform
 import time
 from collections.abc import Callable
 from datetime import datetime
-from functools import partial
 from types import SimpleNamespace
 from typing import Any, TypeVar
 
@@ -19,13 +18,13 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
-    MassProperties,
     SolidWorksAdapter,
 )
-from .pywin32_delegate_mixins import (
-    PyWin32FeatureOpsMixin,
-    PyWin32IOOpsMixin,
-    PyWin32SketchOpsMixin,
+from .solidworks import (
+    SolidWorksFeaturesMixin,
+    SolidWorksIOMixin,
+    SolidWorksSelectionMixin,
+    SolidWorksSketchMixin,
 )
 
 try:
@@ -214,9 +213,25 @@ class _ComSessionCoordinator:
         """Toggle the SolidWorks warning and question dialog preferences.
 
         Sets user preference toggles 150 and 149 to suppress (or restore)
-        popup dialogs during automated workflows.  Should be called with
-        ``interactive=False`` immediately after connecting and
-        ``interactive=True`` before disconnecting.
+        popup dialogs during automated workflows. Also manages the
+        sketch-dimension input toggles so sketch dimensions do not require the
+        interactive Modify confirmation while automation is active.
+
+        Verified against the SolidWorks 2026 constants type library, the
+        relevant sketch-dimension toggles are:
+
+        * ``swInputDimValOnCreate`` = 10
+        * ``swSketchAcceptNumericInput`` = 372
+        * ``swSketchCreateDimensionOnlyWhenEntered`` = 520
+        * ``swScaleSketchOnFirstDimension`` = 642
+
+        These stay disabled for the full automation session instead of being
+        toggled around individual dimension calls, because once SolidWorks
+        enters the modal approval flow, extra COM cleanup chatter tends to make
+        recovery less reliable.
+
+        Should be called with ``interactive=False`` immediately after
+        connecting and ``interactive=True`` before disconnecting.
 
         Args:
             app: The live ``SldWorks.Application`` COM object.
@@ -226,6 +241,11 @@ class _ComSessionCoordinator:
         """
         app.SetUserPreferenceToggle(150, interactive)
         app.SetUserPreferenceToggle(149, interactive)
+        if not interactive:
+            app.SetUserPreferenceToggle(10, False)
+            app.SetUserPreferenceToggle(372, False)
+            app.SetUserPreferenceToggle(520, False)
+            app.SetUserPreferenceToggle(642, False)
 
     async def connect(self) -> None:
         """Orchestrate the full SolidWorks connection sequence.
@@ -258,11 +278,14 @@ class _ComSessionCoordinator:
     async def disconnect(self) -> None:
         """Clear session state and release the COM apartment.
 
-        Resets all adapter model/sketch references to ``None``, restores
-        interactive dialog preferences on the SolidWorks application (if
-        still reachable), and always uninitialises the COM apartment via
-        ``finally`` so the apartment is freed even if preference restoration
-        raises.
+        Resets all adapter model/sketch references to ``None`` and always
+        uninitialises the COM apartment via ``finally`` so the apartment is
+        freed even if the SolidWorks process is already unstable.
+
+        Disconnect deliberately avoids additional UI preference COM calls.
+        Real SolidWorks sessions can hit RPC teardown failures when toggles are
+        restored during shutdown, so automation-safe preferences are applied on
+        connect and left untouched during disconnect.
 
         Side Effects:
             Sets ``adapter.currentModel``, ``adapter.currentSketch``,
@@ -275,14 +298,6 @@ class _ComSessionCoordinator:
             self._adapter.currentSketch = None
             self._adapter.currentSketchManager = None
             self._adapter._reset_sketch_entity_registry()
-
-            if self._adapter.swApp:
-                self._adapter._attempt(
-                    lambda: self.set_automation_preferences(
-                        self._adapter.swApp, interactive=True
-                    ),
-                    default=None,
-                )
             self._adapter.swApp = None
         finally:
             self.uninitialize_com_apartment()
@@ -1011,9 +1026,7 @@ class _FeatureSelectionService:
         for candidate in candidate_names:
             component_name = candidate.split("@", 1)[0]
             component = self._adapter._attempt(
-                lambda component_name=component_name: get_component_by_name(
-                    component_name
-                ),
+                lambda name=component_name: get_component_by_name(name),
                 default=None,
             )
             if component is None:
@@ -1080,18 +1093,12 @@ class _FeatureSelectionService:
             guard += 1
             feature_ref = feature
             tree_name = self._adapter._attempt(
-                lambda feature_ref=feature_ref: str(feature_ref.Name or ""),
+                lambda current_feature=feature_ref: str(current_feature.Name or ""),
                 default="",
             )
-            normalized_tree_name = self.normalize_feature_name(tree_name)
-            matches = bool(
-                normalized_tree_name
-                and (
-                    normalized_tree_name in normalized_candidates
-                    or normalized_tree_name.split("@", 1)[0] in normalized_bases
-                )
-            )
-            if matches:
+            if self._matches_candidate_name(
+                tree_name, normalized_candidates, normalized_bases
+            ):
                 try:
                     if feature.Select2(False, 0):
                         return {
@@ -1103,18 +1110,189 @@ class _FeatureSelectionService:
                 except Exception:
                     pass
             next_feature = self._adapter._attempt(
-                lambda feature_ref=feature_ref: feature_ref.GetNextFeature()
+                lambda current_feature=feature_ref: current_feature.GetNextFeature()
             )
             if next_feature is None:
                 break
             feature = next_feature
         return None
 
+    @classmethod
+    def _matches_candidate_name(
+        cls,
+        raw_name: str | None,
+        normalized_candidates: set[str],
+        normalized_bases: set[str],
+    ) -> bool:
+        """Check whether a raw feature name matches candidate name sets.
+
+        Args:
+            raw_name: Name read from the feature tree.
+            normalized_candidates: Full normalized candidate names.
+            normalized_bases: Candidate names with any ``@doc`` suffix removed.
+
+        Returns:
+            bool: ``True`` when name matches either full or base candidate sets.
+        """
+        normalized_name = cls.normalize_feature_name(raw_name)
+        if not normalized_name:
+            return False
+        if normalized_name in normalized_candidates:
+            return True
+        return normalized_name.split("@", 1)[0] in normalized_bases
+
+    def select_feature(self, feature_name: str) -> dict[str, Any]:
+        """Run all feature-selection strategies and return best-effort payload.
+
+        Args:
+            feature_name: Feature name requested by caller.
+
+        Returns:
+            dict[str, Any]: Selection result payload.
+        """
+        target_doc = self._adapter.currentModel
+        candidate_names = self.build_feature_candidate_names(feature_name, target_doc)
+
+        result = self.try_select_by_extension(target_doc, candidate_names, feature_name)
+        if result:
+            return result
+
+        result = self.try_select_by_component(target_doc, candidate_names, feature_name)
+        if result:
+            return result
+
+        result = self.try_select_by_feature_tree(
+            target_doc, feature_name, candidate_names
+        )
+        if result:
+            return result
+
+        return {
+            "selected": False,
+            "feature_name": feature_name,
+            "selected_name": feature_name,
+        }
+
+    def list_features(self, include_suppressed: bool = False) -> list[dict[str, Any]]:
+        """Enumerate model features using primary and fallback traversal paths.
+
+        Args:
+            include_suppressed: Include suppressed features when ``True``.
+
+        Returns:
+            list[dict[str, Any]]: Ordered feature descriptors.
+        """
+        features: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+
+        feature = self._adapter._attempt(
+            lambda: self._adapter.currentModel.FirstFeature()
+        )
+        pos = 0
+        guard = 0
+        while feature and guard < 10000:
+            self._append_feature_to(features, seen, feature, pos, include_suppressed)
+            pos += 1
+            guard += 1
+            next_feature = self._adapter._attempt(
+                lambda current_feature=feature: current_feature.GetNextFeature()
+            )
+            if next_feature is None:
+                break
+            feature = next_feature
+
+        if features:
+            return features
+
+        feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
+        count = self._adapter._attempt(
+            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0
+        )
+        for reverse_pos in range(1, count + 1):
+            feature = self._adapter._attempt(
+                lambda pos=reverse_pos: (
+                    self._adapter.currentModel.FeatureByPositionReverse(pos)
+                )
+            )
+            if feature is None:
+                continue
+            self._append_feature_to(
+                features,
+                seen,
+                feature,
+                count - reverse_pos,
+                include_suppressed,
+            )
+
+        return features
+
+    def _append_feature_to(
+        self,
+        features: list[dict[str, Any]],
+        seen: set[tuple[str, str]],
+        feature: Any,
+        position: int,
+        include_suppressed: bool,
+    ) -> None:
+        """Append one feature descriptor when dedupe and suppression rules allow.
+
+        Args:
+            features: Output list being populated.
+            seen: Dedupe set of ``(name, type)`` keys.
+            feature: Feature COM object.
+            position: Display position index.
+            include_suppressed: Include suppressed entries when ``True``.
+        """
+        name = str(getattr(feature, "Name", ""))
+        feature_type = str(
+            self._adapter._attempt(lambda: feature.GetTypeName2(), default="Unknown")
+        )
+        dedupe_key = (name, feature_type)
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+
+        suppressed = self._is_feature_suppressed(feature)
+        if not include_suppressed and suppressed:
+            return
+
+        features.append(
+            {
+                "name": name,
+                "type": feature_type,
+                "suppressed": suppressed,
+                "position": position,
+            }
+        )
+
+    def _is_feature_suppressed(self, feature: Any) -> bool:
+        """Determine feature suppression state across COM API variants.
+
+        Args:
+            feature: Feature COM object.
+
+        Returns:
+            bool: ``True`` when feature is suppressed.
+        """
+        suppressed_direct = self._adapter._attempt(
+            lambda: feature.IsSuppressed(), default=None
+        )
+        if suppressed_direct is not None:
+            return bool(suppressed_direct)
+
+        suppressed_result = self._adapter._attempt(
+            lambda: feature.IsSuppressed2(0, []), default=None
+        )
+        if isinstance(suppressed_result, (tuple, list)):
+            return bool(suppressed_result[0]) if suppressed_result else False
+        return bool(suppressed_result) if suppressed_result is not None else False
+
 
 class PyWin32Adapter(
-    PyWin32IOOpsMixin,
-    PyWin32SketchOpsMixin,
-    PyWin32FeatureOpsMixin,
+    SolidWorksSketchMixin,
+    SolidWorksFeaturesMixin,
+    SolidWorksIOMixin,
+    SolidWorksSelectionMixin,
     SolidWorksAdapter,
 ):
     """SolidWorks adapter using pywin32 COM integration.
@@ -1206,7 +1384,10 @@ class PyWin32Adapter(
             "swEndCondUpToVertex": 5,
             "swEndCondMidPlane": 6,
             # Dimension preferences / directions
-            "swInputDimValOnCreate": 62,
+            "swInputDimValOnCreate": 10,
+            "swSketchAcceptNumericInput": 372,
+            "swSketchCreateDimensionOnlyWhenEntered": 520,
+            "swScaleSketchOnFirstDimension": 642,
             "swSmartDimensionDirectionRight": 0,
             "swSmartDimensionDirectionUp": 1,
             "swSmartDimensionDirectionLeft": 2,
@@ -1360,7 +1541,11 @@ class PyWin32Adapter(
         )
 
     def _handle_com_operation(
-        self, operation_name: str, operation_func: Callable[[], T]
+        self,
+        operation_name: str,
+        operation_func: Callable[..., T],
+        *operation_args: Any,
+        **operation_kwargs: Any,
     ) -> AdapterResult[T]:
         """Helper to handle COM operations with error handling and timing.
 
@@ -1387,7 +1572,7 @@ class PyWin32Adapter(
         start_time = time.time()
 
         try:
-            result = operation_func()
+            result = operation_func(*operation_args, **operation_kwargs)
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, True)
             return AdapterResult(
@@ -1411,23 +1596,6 @@ class PyWin32Adapter(
                 error=f"Error in {operation_name}: {e}",
                 execution_time=execution_time,
             )
-
-    def _handle_com_operation_call(
-        self,
-        operation_name: str,
-        operation_func: Callable[..., T],
-        *args: Any,
-        **kwargs: Any,
-    ) -> AdapterResult[T]:
-        """Call a callable with arguments through the standard COM operation wrapper.
-
-        This helper keeps operation bodies as top-level functions and avoids
-        nested closures inside adapter methods.
-        """
-        return self._handle_com_operation(
-            operation_name,
-            partial(operation_func, *args, **kwargs),
-        )
 
     def _attempt(
         self, operation: Callable[[], T], default: T | None = None
@@ -1513,197 +1681,6 @@ class PyWin32Adapter(
     def _set_display_dimension_value(self, display_dim: Any, value_mm: float) -> None:
         """Set created display dimension to the requested value in meters."""
         self._sketch_geometry.set_display_dimension_value(display_dim, value_mm)
-
-    def _point_xyz(self, point_obj: Any) -> tuple[float, float, float] | None:
-        """Extract XYZ from sketch point-like COM objects in meters."""
-        return self._sketch_geometry.point_xyz(point_obj)
-
-    def _set_point_xyz(self, point_obj: Any, x: float, y: float, z: float) -> bool:
-        """Set XYZ on a sketch point-like COM object in meters."""
-        return self._sketch_geometry.set_point_xyz(point_obj, x, y, z)
-
-    def _read_segment_endpoints(
-        self, entity: Any
-    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
-        """Return sketch-segment start/end coordinates in meters when available."""
-        return self._sketch_geometry.read_segment_endpoints(entity)
-
-    def _segment_point_objects(self, entity: Any) -> tuple[Any | None, Any | None]:
-        """Return start/end sketch-point COM objects for a segment when available."""
-        return self._sketch_geometry.segment_point_objects(entity)
-
-    def _shared_segment_vertex(
-        self, entity1: Any, entity2: Any
-    ) -> tuple[Any, Any, Any] | None:
-        """Return the shared point object and one point object per segment at that vertex."""
-        return self._sketch_geometry.shared_segment_vertex(entity1, entity2)
-
-    def _smart_dimension_direction(self, dx: float, dy: float) -> int:
-        """Map a direction vector to the closest swSmartDimensionDirection_e value."""
-        return self._sketch_geometry.smart_dimension_direction(dx, dy)
-
-    def _single_line_dimension_placement(
-        self, entity: Any
-    ) -> tuple[float, float, float, int] | None:
-        """Compute text position and direction for a single line dimension."""
-        return self._sketch_geometry.single_line_dimension_placement(entity)
-
-    def _angular_dimension_placement(
-        self, entity1: Any, entity2: Any
-    ) -> tuple[float, float, float, int] | None:
-        """Compute text position and direction for an angle between two segments."""
-        return self._sketch_geometry.angular_dimension_placement(entity1, entity2)
-
-    def _resolve_template_path(
-        self, preferred_indices: list[int], extension: str
-    ) -> str | None:
-        """Resolve a SolidWorks template path from user preferences.
-
-        Installations vary by where template paths are stored; this probes multiple slots and
-        prefers existing files with the expected extension.
-
-        Args:
-            preferred_indices (list[int]): The preferred indices value.
-            extension (str): The extension value.
-
-        Returns:
-            str | None: The result produced by the operation.
-        """
-        existing_match: str | None = None
-        first_non_empty: str | None = None
-
-        app = self.swApp
-        if app is None:
-            return None
-
-        for index in preferred_indices:
-            template = self._attempt(
-                lambda idx=index: app.GetUserPreferenceStringValue(idx)
-            )
-
-            if not template or not isinstance(template, str):
-                continue
-
-            if first_non_empty is None:
-                first_non_empty = template
-
-            if template.lower().endswith(extension.lower()) and os.path.exists(
-                template
-            ):
-                existing_match = template
-                break
-
-        return existing_match or first_non_empty
-
-    def _read_model_title(self, model: Any) -> str:
-        """Read model title regardless of COM exposing method or value.
-
-        Args:
-            model (Any): The model value.
-
-        Returns:
-            str: The resulting text value.
-        """
-        title = self._attempt(lambda: self._get_attr_or_call(model, "GetTitle"))
-        if isinstance(title, str) and title:
-            return title
-
-        title_value = getattr(model, "Title", None)
-        if isinstance(title_value, str) and title_value:
-            return title_value
-
-        return "Untitled"
-
-    async def get_mass_properties(self) -> AdapterResult[MassProperties]:
-        """Get mass properties of the current model.
-
-        Returns:
-            AdapterResult[MassProperties]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to get mass properties.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _mass_props_operation() -> MassProperties:
-            # Get mass properties
-            """Build internal mass props operation.
-
-            Returns:
-                MassProperties: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to get mass properties.
-            """
-            # Force a rebuild first — otherwise the IMassProperty reflects
-            # the geometry from the last rebuild checkpoint, which can be
-            # stale after a sequence of feature-creation calls within a
-            # single MCP session.
-            self._attempt(lambda: self.currentModel.ForceRebuild3(False), default=None)
-            mass_props = self._attempt(
-                lambda: self.currentModel.Extension.CreateMassProperty(), default=None
-            )
-
-            if mass_props:
-                # Preferred path: IMassProperty object
-                volume = mass_props.Volume * 1e9  # Convert m³ to mm³
-                surface_area = mass_props.SurfaceArea * 1e6  # Convert m² to mm²
-                mass = mass_props.Mass  # Already in kg
-
-                # Center of mass and inertia members vary across COM versions.
-                center_of_mass = [0.0, 0.0, 0.0]
-                com = self._attempt(lambda: mass_props.CenterOfMass, default=None)
-                if isinstance(com, (list, tuple)) and len(com) >= 3:
-                    center_of_mass = [com[0] * 1000, com[1] * 1000, com[2] * 1000]
-
-                moi = self._attempt(
-                    lambda: mass_props.GetMomentOfInertia(0), default=None
-                )
-                if not isinstance(moi, (list, tuple)) or len(moi) < 9:
-                    moi = [0.0] * 9
-            else:
-                # Fallback path: IModelDoc2.GetMassProperties tuple property
-                raw = self._attempt(
-                    lambda: self.currentModel.GetMassProperties, default=None
-                )
-                if not isinstance(raw, (list, tuple)) or len(raw) < 6:
-                    raise Exception("Failed to get mass properties")
-
-                center_of_mass = [raw[0] * 1000.0, raw[1] * 1000.0, raw[2] * 1000.0]
-                volume = raw[3] * 1e9  # m³ -> mm³
-                surface_area = raw[4] * 1e6  # m² -> mm²
-                mass = raw[5]
-
-                moi = [0.0] * 9
-                if len(raw) >= 12:
-                    # Mapping from documented SW tuple order:
-                    # [6]=Ixx, [7]=Iyy, [8]=Izz, [9]=Lxy, [10]=Lyz, [11]=Lzx
-                    moi[0] = raw[6]
-                    moi[4] = raw[7]
-                    moi[8] = raw[8]
-                    moi[1] = raw[9]
-                    moi[5] = raw[10]
-                    moi[2] = raw[11]
-
-            return MassProperties(
-                volume=volume,
-                surface_area=surface_area,
-                mass=mass,
-                center_of_mass=center_of_mass,
-                moments_of_inertia={
-                    "Ixx": moi[0],
-                    "Iyy": moi[4],
-                    "Izz": moi[8],
-                    "Ixy": moi[1],
-                    "Ixz": moi[2],
-                    "Iyz": moi[5],
-                },
-            )
-
-        return self._handle_com_operation("get_mass_properties", _mass_props_operation)
 
     def _set_view_orientation(
         self, target_doc: Any, orientation: str, view_const: int
@@ -2053,94 +2030,112 @@ class PyWin32Adapter(
                 "(tried Extension.SaveAs2 and SaveAs3)"
             )
 
-    @staticmethod
-    def _normalize_feature_name(raw_name: str | None) -> str:
-        """Normalise a raw feature/component name for case-insensitive comparison.
+    async def export_file(
+        self, file_path: str, format_type: str
+    ) -> AdapterResult[None]:
+        """Export the current model to a file.
 
         Args:
-            raw_name: Raw name, may be None.
+            file_path (str): Path to the target file.
+            format_type (str): The format type value.
 
         Returns:
-            str: Stripped, quote-removed, casefolded string.
+            AdapterResult[None]: The result produced by the operation.
+
+        Raises:
+            Exception: If the operation cannot be completed.
+            RuntimeError: No active SolidWorks document for export.
         """
-        return _FeatureSelectionService.normalize_feature_name(raw_name)
+        if not self.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
 
-    def _build_feature_candidate_names(
-        self, feature_name: str, target_doc: Any
-    ) -> list[str]:
-        """Build the list of candidate names (bare + @doc-stem / @doc-title variants).
+        def _export_operation() -> None:
+            """Build internal export operation.
 
-        Args:
-            feature_name: Base feature name.
-            target_doc: Active SolidWorks document COM object.
+            Returns:
+                None: None.
 
-        Returns:
-            list[str]: One to three candidate strings, e.g. ["Boss", "Boss@MyPart",
-                "Boss@MyPart.SLDPRT"].
-        """
-        return self._feature_selector.build_feature_candidate_names(
-            feature_name, target_doc
-        )
+            Raises:
+                Exception: If the operation cannot be completed.
+                RuntimeError: No active SolidWorks document for export.
+            """
+            format_map = {
+                "step": 0,  # swSaveAsSTEP
+                "iges": 1,  # swSaveAsIGS
+                "stl": 2,  # swSaveAsSTL
+                "pdf": 3,  # swSaveAsPDF
+                "dwg": 4,  # swSaveAsDWG
+                "jpg": 5,  # swSaveAsJPEG
+                "glb": 41,  # swSaveAsGLTF (binary GLTF, SW 2023+)
+                "gltf": 41,  # same enum value, text GLTF
+            }
 
-    def _try_select_by_extension(
-        self,
-        target_doc: Any,
-        candidate_names: list[str],
-        feature_name: str,
-    ) -> dict[str, Any] | None:
-        """Try SelectByID2 for each candidate × entity-type pair.
+            format_lower = format_type.lower()
+            if format_lower not in format_map:
+                raise Exception(f"Unsupported export format: {format_type}")
 
-        Args:
-            target_doc: Active SolidWorks document COM object.
-            candidate_names: Ordered list of name candidates to attempt.
-            feature_name: Original feature name for the result payload.
+            resolved_path = os.path.abspath(file_path)
+            os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
 
-        Returns:
-            Result dict on first success, or None if all attempts fail.
-        """
-        return self._feature_selector.try_select_by_extension(
-            target_doc, candidate_names, feature_name
-        )
+            if os.path.exists(resolved_path):
+                self._attempt(lambda: os.remove(resolved_path))
 
-    def _try_select_by_component(
-        self,
-        target_doc: Any,
-        candidate_names: list[str],
-        feature_name: str,
-    ) -> dict[str, Any] | None:
-        """Try selecting via GetComponentByName and component Select methods.
+            # Prefer swApp.ActiveDoc — more reliably typed than the late-bound
+            # IDispatch reference stored in self.currentModel after OpenDoc6.
+            # Use getattr so tests can pass a SimpleNamespace without ActiveDoc.
+            target_doc = (
+                getattr(self.swApp, "ActiveDoc", None) if self.swApp else None
+            ) or self.currentModel
 
-        Args:
-            target_doc: Active SolidWorks document COM object.
-            candidate_names: Ordered list of name candidates to attempt.
-            feature_name: Original feature name for the result payload.
+            # ----------------------------------------------------------------
+            # STL export: use Extension.SaveAs2 + ISTLExportData
+            # for both parts AND assemblies.  SaveAs3 with format=2 works for
+            # parts but is unreliable for assemblies (only exports first body).
+            # ----------------------------------------------------------------
+            if format_lower == "stl":
+                # For assemblies, resolve lightweight components first so all
+                # geometry is available for the mesh export.
+                self._attempt(lambda: target_doc.ResolveAllLightweightComponents(True))
 
-        Returns:
-            Result dict on first success, or None if unavailable or all fail.
-        """
-        return self._feature_selector.try_select_by_component(
-            target_doc, candidate_names, feature_name
-        )
+                ext = getattr(target_doc, "Extension", None)
+                if ext is None:
+                    raise RuntimeError("No Extension object available for STL export")
 
-    def _try_select_by_feature_tree(
-        self,
-        target_doc: Any,
-        feature_name: str,
-        candidate_names: list[str],
-    ) -> dict[str, Any] | None:
-        """Walk the feature tree and select the first matching feature.
+                stl_data = self._prepare_stl_export_data()
+                if not self._save_stl_with_extension(ext, stl_data, resolved_path):
+                    # SaveAs2 didn't produce file — try SaveAs3 fallback
+                    self._save_stl_with_fallback(target_doc, resolved_path)
 
-        Args:
-            target_doc: Active SolidWorks document COM object.
-            feature_name: Original feature name for the result payload.
-            candidate_names: Candidate name list used to derive normalised lookup sets.
+                return None
 
-        Returns:
-            Result dict on first match, or None if no match is found.
-        """
-        return self._feature_selector.try_select_by_feature_tree(
-            target_doc, feature_name, candidate_names
-        )
+            # ----------------------------------------------------------------
+            # All other formats — classic SaveAs3 path.
+            # SaveAs3 signature: SaveAs3(FileName, Version, Options)
+            # Version = 0 means "current version" (swSaveAsCurrentVersion).
+            # SolidWorks infers the export format from the file extension, so
+            # we must NOT pass the format-enum value as the Version argument.
+            # ----------------------------------------------------------------
+            _ = format_map[format_lower]  # validate format is known; value unused
+            logger.debug(
+                "[pywin32.export_file] SaveAs3 {} (version=0, options=Silent)",
+                resolved_path,
+            )
+            success = target_doc.SaveAs3(
+                resolved_path,
+                0,  # swSaveAsCurrentVersion — format inferred from file extension
+                2,  # swSaveAsOptions_Silent
+            )
+
+            if not success and not os.path.exists(resolved_path):
+                raise Exception(
+                    f"SaveAs3 returned False and no file produced: {resolved_path}"
+                )
+
+            return None
+
+        return self._handle_com_operation("export_file", _export_operation)
 
     def _get_document_type(self) -> str:
         """Helper method to get document type.
@@ -2225,4 +2220,3 @@ class PyWin32Adapter(
             return self._invoke_run_macro2(macro_path, module_name, proc_name)
 
         return self._handle_com_operation("execute_macro", _run)
-
