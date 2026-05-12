@@ -66,6 +66,21 @@ pytestmark = [
 ]
 
 
+# Tests that need a real .SLDASM file to exercise OpenDoc6 read the path
+# from this env var. Set it to any local SolidWorks assembly; tests skip
+# cleanly when it's unset or the file isn't present.
+_TEST_ASSEMBLY_ENV_VAR = "SOLIDWORKS_MCP_TEST_ASSEMBLY"
+
+
+def _test_assembly_path() -> str:
+    """Return the .SLDASM path used by file-loading regression tests.
+
+    Reads ``SOLIDWORKS_MCP_TEST_ASSEMBLY``. Returns an empty string when
+    unset; callers should ``pytest.skip`` in that case.
+    """
+    return os.environ.get(_TEST_ASSEMBLY_ENV_VAR, "").strip()
+
+
 # ---- ComExecutor unit tests (don't need SW) ----
 # These still run only when _REAL_ENABLED because they pull in pywin32.
 
@@ -181,12 +196,12 @@ async def test_open_model_succeeds(connected_adapter) -> None:
 
     Skips if the canonical test assembly isn't on this box.
     """
-    test_assy = (
-        r"F:\Aurora Photonics\Aurora Designs"
-        r"\Aurora_Raman_Microscope.SLDASM"
-    )
-    if not os.path.exists(test_assy):
-        pytest.skip(f"test assembly not present: {test_assy}")
+    test_assy = _test_assembly_path()
+    if not test_assy or not os.path.exists(test_assy):
+        pytest.skip(
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
+            "to run this test"
+        )
 
     result = await connected_adapter.open_model(test_assy)
     assert result.is_success, f"open_model failed: {result.error}"
@@ -201,12 +216,12 @@ async def test_get_model_info_fields_populate(connected_adapter) -> None:
     callable`` on ``GetTitle()`` (pywin32 method-vs-property bug) and
     ``AttributeError: <unknown>.GetRebuildStatus`` (dead API call).
     """
-    test_assy = (
-        r"F:\Aurora Photonics\Aurora Designs"
-        r"\Aurora_Raman_Microscope.SLDASM"
-    )
-    if not os.path.exists(test_assy):
-        pytest.skip(f"test assembly not present: {test_assy}")
+    test_assy = _test_assembly_path()
+    if not test_assy or not os.path.exists(test_assy):
+        pytest.skip(
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
+            "to run this test"
+        )
 
     await connected_adapter.open_model(test_assy)
     result = await connected_adapter.get_model_info()
@@ -235,12 +250,12 @@ async def test_get_model_info_works_from_worker_thread(
     raised ``AttributeError: SldWorks.Application.<method>`` because the
     cached IDispatch was bound to the connect-thread's apartment.
     """
-    test_assy = (
-        r"F:\Aurora Photonics\Aurora Designs"
-        r"\Aurora_Raman_Microscope.SLDASM"
-    )
-    if not os.path.exists(test_assy):
-        pytest.skip(f"test assembly not present: {test_assy}")
+    test_assy = _test_assembly_path()
+    if not test_assy or not os.path.exists(test_assy):
+        pytest.skip(
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
+            "to run this test"
+        )
 
     await connected_adapter.open_model(test_assy)
 
