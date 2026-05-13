@@ -328,7 +328,10 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
         adapter._last_sketch_name = sketch_name
         return sketch_name
 
-    return adapter._handle_com_operation("create_sketch", _sketch_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("create_sketch", _sketch_operation),
+    )
 
 
 def _add_line_impl(
@@ -378,9 +381,11 @@ def _add_line_impl(
         )
         if not line:
             raise Exception("Failed to create line")
-        return adapter._register_sketch_entity("Line", line)
+        return cast(AdapterResult[str], adapter._register_sketch_entity("Line", line))
 
-    return adapter._handle_com_operation("add_line", _line_operation)
+    return cast(
+        AdapterResult[str], adapter._handle_com_operation("add_line", _line_operation)
+    )
 
 
 def _add_circle_impl(
@@ -426,9 +431,14 @@ def _add_circle_impl(
         )
         if not circle:
             raise Exception("Failed to create circle")
-        return adapter._register_sketch_entity("Circle", circle)
+        return cast(
+            AdapterResult[str], adapter._register_sketch_entity("Circle", circle)
+        )
 
-    return adapter._handle_com_operation("add_circle", _circle_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_circle", _circle_operation),
+    )
 
 
 def _add_rectangle_impl(
@@ -476,9 +486,14 @@ def _add_rectangle_impl(
         )
         if not lines:
             raise Exception("Failed to create rectangle")
-        return adapter._register_sketch_entity("Rectangle", lines)
+        return cast(
+            AdapterResult[str], adapter._register_sketch_entity("Rectangle", lines)
+        )
 
-    return adapter._handle_com_operation("add_rectangle", _rectangle_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_rectangle", _rectangle_operation),
+    )
 
 
 def _add_arc_impl(
@@ -549,9 +564,11 @@ def _add_arc_impl(
         )
         if not arc:
             raise Exception("Failed to create arc")
-        return adapter._register_sketch_entity("Arc", arc)
+        return cast(AdapterResult[str], adapter._register_sketch_entity("Arc", arc))
 
-    return adapter._handle_com_operation("add_arc", _arc_operation)
+    return cast(
+        AdapterResult[str], adapter._handle_com_operation("add_arc", _arc_operation)
+    )
 
 
 def _add_spline_impl(
@@ -609,7 +626,10 @@ def _add_spline_impl(
             raise Exception("Failed to create spline")
         return f"Spline_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("add_spline", _spline_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_spline", _spline_operation),
+    )
 
 
 def _add_centerline_impl(
@@ -662,7 +682,10 @@ def _add_centerline_impl(
             raise Exception("Failed to create centerline")
         return f"Centerline_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("add_centerline", _centerline_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_centerline", _centerline_operation),
+    )
 
 
 def _add_polygon_impl(
@@ -724,7 +747,10 @@ def _add_polygon_impl(
             raise Exception("Failed to create polygon")
         return f"Polygon_{sides}sided_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("add_polygon", _polygon_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_polygon", _polygon_operation),
+    )
 
 
 def _add_ellipse_impl(
@@ -792,7 +818,10 @@ def _add_ellipse_impl(
             raise Exception("Failed to create ellipse")
         return f"Ellipse_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("add_ellipse", _ellipse_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_ellipse", _ellipse_operation),
+    )
 
 
 def _add_sketch_constraint_impl(
@@ -858,7 +887,10 @@ def _add_sketch_constraint_impl(
         relation_map.get(relation_type.lower(), 0)
         return f"Constraint_{relation_type}_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("add_sketch_constraint", _constraint_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_sketch_constraint", _constraint_operation),
+    )
 
 
 def _add_sketch_dimension_impl(
@@ -1104,9 +1136,15 @@ def _add_sketch_dimension_impl(
                     if hasattr(dim_obj, "SystemValue"):
                         dim_obj.SystemValue = value_si
 
-        return adapter._register_sketch_entity("Dimension", display_dim)
+        return cast(
+            AdapterResult[str],
+            adapter._register_sketch_entity("Dimension", display_dim),
+        )
 
-    return adapter._handle_com_operation("add_sketch_dimension", _dimension_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("add_sketch_dimension", _dimension_operation),
+    )
 
 
 def _sketch_linear_pattern_impl(
@@ -1149,8 +1187,11 @@ def _sketch_linear_pattern_impl(
     def _linear_pattern_operation() -> str:
         return f"LinearPattern_{count}x{spacing}_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation(
-        "sketch_linear_pattern", _linear_pattern_operation
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation(
+            "sketch_linear_pattern", _linear_pattern_operation
+        ),
     )
 
 
@@ -1194,8 +1235,11 @@ def _sketch_circular_pattern_impl(
     def _circular_pattern_operation() -> str:
         return f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation(
-        "sketch_circular_pattern", _circular_pattern_operation
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation(
+            "sketch_circular_pattern", _circular_pattern_operation
+        ),
     )
 
 
@@ -1231,7 +1275,10 @@ def _sketch_mirror_impl(
     def _mirror_operation() -> str:
         return f"Mirror_{mirror_line}_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("sketch_mirror", _mirror_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("sketch_mirror", _mirror_operation),
+    )
 
 
 def _sketch_offset_impl(
@@ -1271,7 +1318,10 @@ def _sketch_offset_impl(
         direction = "inward" if reverse_direction else "outward"
         return f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
 
-    return adapter._handle_com_operation("sketch_offset", _offset_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("sketch_offset", _offset_operation),
+    )
 
 
 def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
@@ -1318,7 +1368,10 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         adapter._reset_sketch_entity_registry()
         return None
 
-    return adapter._handle_com_operation("exit_sketch", _exit_operation)
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation("exit_sketch", _exit_operation),
+    )
 
 
 def _check_sketch_fully_defined_impl(
@@ -1597,6 +1650,9 @@ def _check_sketch_fully_defined_impl(
             "raw_status": None,
         }
 
-    return adapter._handle_com_operation(
-        "check_sketch_fully_defined", _get_sketch_payload
+    return cast(
+        AdapterResult[str],
+        adapter._handle_com_operation(
+            "check_sketch_fully_defined", _get_sketch_payload
+        ),
     )

@@ -710,7 +710,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"],
         )
 
-    async def create_sketch(self, plane: str) -> AdapterResult[dict[str, Any]]:
+    async def create_sketch(self, plane: str) -> AdapterResult[dict[str, Any]]:  # type: ignore[override]
         """Mock creating a sketch.
 
         Args:

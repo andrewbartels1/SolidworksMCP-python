@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from ..base import AdapterResult, AdapterResultStatus
 
 
 class SolidWorksSelectionMixin:
     """Expose feature-selection and feature-list methods through a mixin."""
+
+    if TYPE_CHECKING:
+        # Mixin protocol: declare attributes that must exist on the parent class
+        currentModel: Any
+        _feature_selector: Any
+
+        def _handle_com_operation(
+            self, operation_name: str, operation: Callable[..., Any], *args: Any
+        ) -> AdapterResult[Any]: ...
 
     async def list_features(
         self, include_suppressed: bool = False

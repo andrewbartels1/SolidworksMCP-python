@@ -85,7 +85,7 @@ class VbaGeneratorAdapter:
         Returns:
             bool: True if connected, otherwise False.
         """
-        return self._backing_adapter.is_connected()
+        return bool(self._backing_adapter.is_connected())
 
     async def health_check(self) -> Any:
         """Return wrapped adapter health with VBA route marker.

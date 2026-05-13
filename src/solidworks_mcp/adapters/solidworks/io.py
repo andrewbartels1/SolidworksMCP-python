@@ -385,7 +385,7 @@ class SolidWorksIOMixin:
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
             value = dimension.GetValue3(8, None)
-            return value * 1000
+            return cast(float, value * 1000)
 
         return cast(
             AdapterResult[float],

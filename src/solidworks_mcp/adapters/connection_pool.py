@@ -93,11 +93,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         if adapter_factory is None:
             from .mock_adapter import MockSolidWorksAdapter
 
-            def adapter_factory():
+            def adapter_factory() -> MockSolidWorksAdapter:
                 """Provide adapter factory support for the connection pool adapter.
 
                 Returns:
-                    Any: The result produced by the operation.
+                    MockSolidWorksAdapter: The result produced by the operation.
                 """
 
                 return MockSolidWorksAdapter(config or {})
@@ -350,7 +350,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
                 if adapter:
                     # Don't return failed adapter to pool, create a new one
-                    await self._attempt_async(lambda a=adapter: a.disconnect())
+                    from .base import SolidWorksAdapter
+
+                    typed_adapter: SolidWorksAdapter = adapter
+                    await self._attempt_async(lambda a=typed_adapter: a.disconnect())
 
                     replacement_error = await self._attempt_async(
                         self._replace_failed_adapter
@@ -386,8 +389,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             None: None.
         """
         for adapter in self.pool:
+            from .base import SolidWorksAdapter
+
+            typed_adapter: SolidWorksAdapter = adapter
             _, error = await self._attempt_async_with_error(
-                lambda current_adapter=adapter: current_adapter.disconnect()
+                lambda a=typed_adapter: a.disconnect()
             )
             if error is not None:
                 logger.warning(f"Error disconnecting adapter: {error}")
@@ -437,9 +443,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         # Check health of all adapters
         for adapter in self.pool:
-            health = await self._attempt_async(
-                lambda current_adapter=adapter: current_adapter.health_check()
-            )
+            from .base import SolidWorksAdapter
+
+            typed_adapter: SolidWorksAdapter = adapter
+            health = await self._attempt_async(lambda a=typed_adapter: a.health_check())
             if not health:
                 continue
             if health.healthy:
@@ -564,14 +571,19 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         return await self._execute_with_pool("create_assembly", _op)
 
-    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create drawing using pool.
+
+        Args:
+            name (str | None): The name value. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_pool(
-            "create_drawing", lambda adapter: adapter.create_drawing()
+            "create_drawing", lambda adapter: adapter.create_drawing(name)
         )
 
     # Feature operations
@@ -870,7 +882,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         return await self._execute_with_pool(
-            "execute_macro", lambda adapter: adapter.execute_macro(params)
+            "execute_macro",
+            lambda adapter: adapter.execute_macro(params),  # type: ignore[attr-defined]
         )
 
     # Export operations

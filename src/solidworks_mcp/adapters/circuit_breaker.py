@@ -329,7 +329,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "execute_macro", lambda: self.adapter.execute_macro(params)
+            "execute_macro", lambda: self.adapter.execute_macro(params)  # type: ignore[attr-defined]
         )
 
     async def create_part(
@@ -414,14 +414,17 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
         return await self._execute_with_circuit_breaker("create_assembly", _op)
 
-    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(self, name: str | None = None) -> AdapterResult[SolidWorksModel]:
         """Create drawing through circuit breaker.
+
+        Args:
+            name (str | None): The name value. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_drawing", lambda: self.adapter.create_drawing()
+            "create_drawing", lambda: self.adapter.create_drawing(name)
         )
 
     # Feature operations
@@ -809,7 +812,7 @@ class CircuitBreaker:
         self.expected_exception = expected_exception
         self.state = CircuitState.CLOSED
         self.failure_count = 0
-        self.last_failure_time = 0
+        self.last_failure_time = 0.0
 
     async def call(self, operation: Callable[[], object | Awaitable[object]]) -> object:
         """Provide call support for the circuit breaker.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from ..base import (
     AdapterResult,
@@ -266,7 +266,10 @@ def _create_extrusion_impl(
             properties={"created": datetime.now().isoformat()},
         )
 
-    return adapter._handle_com_operation("create_extrusion", _extrusion_operation)
+    return cast(
+        AdapterResult[SolidWorksFeature],
+        adapter._handle_com_operation("create_extrusion", _extrusion_operation),
+    )
 
 
 def _create_revolve_impl(
@@ -363,7 +366,10 @@ def _create_revolve_impl(
             properties={"created": datetime.now().isoformat()},
         )
 
-    return adapter._handle_com_operation("create_revolve", _revolve_operation)
+    return cast(
+        AdapterResult[SolidWorksFeature],
+        adapter._handle_com_operation("create_revolve", _revolve_operation),
+    )
 
 
 def _create_sweep_impl(
@@ -669,7 +675,10 @@ def _create_cut_extrude_impl(
             properties={"created": datetime.now().isoformat()},
         )
 
-    return adapter._handle_com_operation("create_cut_extrude", _cut_operation)
+    return cast(
+        AdapterResult[SolidWorksFeature],
+        adapter._handle_com_operation("create_cut_extrude", _cut_operation),
+    )
 
 
 def _add_fillet_impl(
@@ -763,7 +772,10 @@ def _add_fillet_impl(
             properties={"created": datetime.now().isoformat()},
         )
 
-    return adapter._handle_com_operation("add_fillet", _fillet_operation)
+    return cast(
+        AdapterResult[SolidWorksFeature],
+        adapter._handle_com_operation("add_fillet", _fillet_operation),
+    )
 
 
 def _add_chamfer_impl(
@@ -843,4 +855,7 @@ def _add_chamfer_impl(
             properties={"created": datetime.now().isoformat()},
         )
 
-    return adapter._handle_com_operation("add_chamfer", _chamfer_operation)
+    return cast(
+        AdapterResult[SolidWorksFeature],
+        adapter._handle_com_operation("add_chamfer", _chamfer_operation),
+    )

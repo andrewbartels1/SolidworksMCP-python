@@ -161,7 +161,7 @@ class AdapterFactory:
         if adapter_type != AdapterType.MOCK and config.enable_connection_pooling:
             adapter = self._wrap_with_connection_pool(adapter, config)
 
-        return adapter
+        return adapter  # type: ignore[return-value]
 
     def _determine_adapter_type(self, config: SolidWorksMCPConfig) -> AdapterType:
         """Determine optimal adapter type based on environment and config.
@@ -329,7 +329,7 @@ def _register_default_adapters() -> None:
     """
     # Always register mock adapter
     AdapterFactory.register_adapter(AdapterType.MOCK, MockSolidWorksAdapter)
-    AdapterFactory.register_adapter(AdapterType.VBA, VbaGeneratorAdapter)
+    AdapterFactory.register_adapter(AdapterType.VBA, VbaGeneratorAdapter)  # type: ignore[arg-type]
 
     # Register pywin32 adapter if on Windows
     if platform.system() == "Windows":
