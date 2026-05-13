@@ -575,3 +575,118 @@ class TestInteractiveDesignSessionStore:
         graphs = list_sketch_graph_snapshots("sess-002", db_path=db)
         assert len(graphs) == 1
         assert "line" in graphs[0]["nodes_json"]
+
+
+def test_update_plan_checkpoint_missing_row_is_noop(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    upsert_design_session(session_id="sess-missing", user_goal="x", db_path=db)
+    update_plan_checkpoint(9999, executed=True, db_path=db)
+    assert list_plan_checkpoints("sess-missing", db_path=db) == []
+
+
+def test_update_plan_checkpoint_sets_rollback_snapshot_id(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    upsert_design_session(session_id="sess-rb", user_goal="x", db_path=db)
+    checkpoint_id = insert_plan_checkpoint(
+        session_id="sess-rb",
+        checkpoint_index=1,
+        title="step",
+        planned_action_json="{}",
+        db_path=db,
+    )
+
+    update_plan_checkpoint(checkpoint_id, rollback_snapshot_id=42, db_path=db)
+
+    rows = list_plan_checkpoints("sess-rb", db_path=db)
+    assert len(rows) == 1
+    assert rows[0]["rollback_snapshot_id"] == 42
+
+
+def test_list_records_filters_by_checkpoint_id(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    upsert_design_session(session_id="sess-filter", user_goal="x", db_path=db)
+    cp1 = insert_plan_checkpoint(
+        session_id="sess-filter",
+        checkpoint_index=1,
+        title="cp1",
+        planned_action_json="{}",
+        db_path=db,
+    )
+    cp2 = insert_plan_checkpoint(
+        session_id="sess-filter",
+        checkpoint_index=2,
+        title="cp2",
+        planned_action_json="{}",
+        db_path=db,
+    )
+
+    insert_tool_call_record(
+        session_id="sess-filter",
+        checkpoint_id=cp1,
+        tool_name="t1",
+        input_json="{}",
+        output_json="{}",
+        success=True,
+        db_path=db,
+    )
+    insert_tool_call_record(
+        session_id="sess-filter",
+        checkpoint_id=cp2,
+        tool_name="t2",
+        input_json="{}",
+        output_json="{}",
+        success=True,
+        db_path=db,
+    )
+
+    filtered_tools = list_tool_call_records(
+        "sess-filter", checkpoint_id=cp2, db_path=db
+    )
+    assert len(filtered_tools) == 1
+    assert filtered_tools[0]["tool_name"] == "t2"
+
+    insert_evidence_link(
+        session_id="sess-filter",
+        checkpoint_id=cp1,
+        source_type="doc",
+        source_id="a",
+        db_path=db,
+    )
+    insert_evidence_link(
+        session_id="sess-filter",
+        checkpoint_id=cp2,
+        source_type="doc",
+        source_id="b",
+        db_path=db,
+    )
+    filtered_evidence = list_evidence_links(
+        "sess-filter", checkpoint_id=cp1, db_path=db
+    )
+    assert len(filtered_evidence) == 1
+    assert filtered_evidence[0]["source_id"] == "a"
+
+
+def test_list_sketch_graph_snapshots_filters_model_path(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    insert_sketch_graph_snapshot(
+        session_id="sess-graph",
+        model_path="A.sldprt",
+        nodes_json="[]",
+        edges_json="[]",
+        db_path=db,
+    )
+    insert_sketch_graph_snapshot(
+        session_id="sess-graph",
+        model_path="B.sldprt",
+        nodes_json="[]",
+        edges_json="[]",
+        db_path=db,
+    )
+
+    filtered = list_sketch_graph_snapshots(
+        "sess-graph",
+        model_path="B.sldprt",
+        db_path=db,
+    )
+    assert len(filtered) == 1
+    assert filtered[0]["model_path"] == "B.sldprt"

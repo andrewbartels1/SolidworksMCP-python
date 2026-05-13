@@ -12,6 +12,7 @@ import pytest
 
 from src.solidworks_mcp.adapters.base import (
     AdapterHealth,
+    AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
     SolidWorksFeature,
@@ -382,6 +383,27 @@ class TestCircuitBreakerCoverage:
         assert health.connection_status == "circuit_breaker_open"
 
     @pytest.mark.asyncio
+    async def test_health_check_initializes_metrics_when_missing(self):
+        """Health checks should create a metrics dict when the adapter returns None."""
+        cb, inner = self._make_cb()
+        inner.health_check = AsyncMock(
+            return_value=AdapterHealth(
+                healthy=True,
+                last_check=datetime.now(),
+                error_count=0,
+                success_count=1,
+                average_response_time=0.1,
+                connection_status="connected",
+                metrics=None,
+            )
+        )
+
+        health = await cb.health_check()
+
+        assert health.metrics is not None
+        assert health.metrics["circuit_breaker"]["state"] == cb.state.value
+
+    @pytest.mark.asyncio
     async def test_get_model_info_via_circuit_breaker(self):
         """Line 235 — get_model_info delegates through circuit breaker."""
         cb, inner = self._make_cb()
@@ -416,6 +438,79 @@ class TestCircuitBreakerCoverage:
         await inner.create_part()
         result = await cb.list_configurations()
         assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_remaining_circuit_breaker_wrappers(self):
+        """Cover remaining thin circuit-breaker wrapper methods."""
+        cb, inner = self._make_cb()
+
+        feature_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=SolidWorksFeature(id="f1", name="Fillet1", type="Fillet"),
+        )
+        string_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data="Dim1")
+        dict_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"fully_defined": True}
+        )
+        macro_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"macro": "ok"}
+        )
+        export_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"path": "preview.png"}
+        )
+        file_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
+        model_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
+
+        inner.create_part = AsyncMock(return_value=model_result)
+        inner.create_assembly = AsyncMock(return_value=model_result)
+        inner.create_cut_extrude = AsyncMock(return_value=feature_result)
+        inner.add_fillet = AsyncMock(return_value=feature_result)
+        inner.add_arc = AsyncMock(
+            return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="Arc1")
+        )
+        inner.add_sketch_dimension = AsyncMock(return_value=string_result)
+        inner.check_sketch_fully_defined = AsyncMock(return_value=dict_result)
+        inner.execute_macro = AsyncMock(return_value=macro_result)
+        inner.export_image = AsyncMock(return_value=export_result)
+        inner.export_file = AsyncMock(return_value=file_result)
+
+        async def passthrough(operation_name, operation):
+            return await operation()
+
+        cb._execute_with_circuit_breaker = AsyncMock(side_effect=passthrough)
+        cb._invoke_with_optional_args = AsyncMock(return_value=file_result)
+
+        extrusion = ExtrusionParameters(depth=2.0)
+
+        part_result = await cb.create_part(name="MyPart", units="mm")
+        default_part_result = await cb.create_part()
+        assembly_result = await cb.create_assembly(name="MyAssembly")
+        default_assembly_result = await cb.create_assembly()
+        cut_result = await cb.create_cut_extrude(extrusion)
+        fillet_result = await cb.add_fillet(1.5, ["Edge1"])
+        macro_exec = await cb.execute_macro({"name": "macro"})
+        arc_result = await cb.add_arc(0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+        dim_result = await cb.add_sketch_dimension("Line1", None, "linear", 5.0)
+        sketch_result = await cb.check_sketch_fully_defined("Sketch1")
+        image_result = await cb.export_image({"output": "preview.png"})
+        export_file_result = await cb.export_file("model.step", "step")
+
+        assert part_result is file_result
+        assert default_part_result is model_result
+        assert assembly_result is file_result
+        assert default_assembly_result is model_result
+        assert cut_result is feature_result
+        assert fillet_result is feature_result
+        assert macro_exec is macro_result
+        assert arc_result.status == AdapterResultStatus.SUCCESS
+        assert dim_result is string_result
+        assert sketch_result is dict_result
+        assert image_result is export_result
+        assert export_file_result is file_result
+        cb._invoke_with_optional_args.assert_any_call(inner.create_part, "MyPart", "mm")
+        cb._invoke_with_optional_args.assert_any_call(
+            inner.create_assembly, "MyAssembly"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -643,6 +738,138 @@ class TestConnectionPoolAdapterCoverage:
         result = await pool.save_file("/tmp/test.sldprt")
         # Mock adapter returns success or error — just check it runs
         assert result.status in (AdapterResultStatus.SUCCESS, AdapterResultStatus.ERROR)
+
+    def test_default_adapter_factory_uses_mock_adapter(self):
+        """No explicit factory should fall back to MockSolidWorksAdapter."""
+        pool = ConnectionPoolAdapter(config={"mock_solidworks": True})
+        created = pool.adapter_factory()
+        assert isinstance(created, MockSolidWorksAdapter)
+
+    @pytest.mark.asyncio
+    async def test_initialize_pool_logs_and_skips_failed_adapter(self):
+        """Pool initialization should skip adapters that fail to connect."""
+        first = MockSolidWorksAdapter({})
+        first.connect = AsyncMock(side_effect=RuntimeError("no connect"))
+        second = MockSolidWorksAdapter({})
+        calls = [first, second]
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: calls.pop(0), pool_size=2)
+
+        await pool.connect()
+
+        assert pool.size == 1
+        assert pool.available_adapters.qsize() == 1
+
+    @pytest.mark.asyncio
+    async def test_initialize_pool_returns_when_marked_initialized_under_lock(self):
+        """The second pool_initialized guard should exit without creating adapters."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+
+        await pool._lock.acquire()
+        task = asyncio.create_task(pool._initialize_pool())
+        await asyncio.sleep(0)
+        pool.pool_initialized = True
+        pool._lock.release()
+        await task
+
+        assert pool.size == 0
+        assert pool.available_adapters.qsize() == 0
+
+    @pytest.mark.asyncio
+    async def test_health_check_skips_missing_adapter_health(self):
+        """Connection-pool health_check should continue when adapter health is unavailable."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        pool.pool_initialized = True
+        adapter = MockSolidWorksAdapter({})
+        adapter.health_check = AsyncMock(side_effect=RuntimeError("boom"))
+        pool.pool = [adapter]
+
+        health = await pool.health_check()
+
+        assert health.healthy is False
+        assert health.metrics["healthy_adapters"] == 0
+
+    @pytest.mark.asyncio
+    async def test_remaining_pool_wrappers(self):
+        """Cover remaining thin connection-pool wrapper methods."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        stub = SimpleNamespace(
+            create_cut_extrude=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data=SolidWorksFeature(id="f1", name="Cut1", type="Cut"),
+                )
+            ),
+            add_fillet=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data=SolidWorksFeature(id="f2", name="Fillet1", type="Fillet"),
+                )
+            ),
+            add_arc=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data="Arc1"
+                )
+            ),
+            add_sketch_dimension=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data="Dim1"
+                )
+            ),
+            check_sketch_fully_defined=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data={"fully_defined": True},
+                )
+            ),
+            execute_macro=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data={"macro": "ok"},
+                )
+            ),
+            export_image=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data={"path": "preview.png"},
+                )
+            ),
+            export_file=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data=None
+                )
+            ),
+        )
+
+        async def passthrough(operation_name, operation):
+            return await operation(stub)
+
+        pool._execute_with_pool = AsyncMock(side_effect=passthrough)
+
+        extrusion = ExtrusionParameters(depth=3.0)
+
+        cut_result = await pool.create_cut_extrude(extrusion)
+        fillet_result = await pool.add_fillet(2.0, ["Edge1"])
+        macro_result = await pool.execute_macro({"name": "macro"})
+        arc_result = await pool.add_arc(0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+        dim_result = await pool.add_sketch_dimension("Line1", None, "linear", 2.5)
+        sketch_result = await pool.check_sketch_fully_defined("Sketch1")
+        image_result = await pool.export_image({"output": "preview.png"})
+        export_file_result = await pool.export_file("model.step", "step")
+
+        assert cut_result.data.name == "Cut1"
+        assert fillet_result.data.name == "Fillet1"
+        assert macro_result.data["macro"] == "ok"
+        assert arc_result.data == "Arc1"
+        assert dim_result.data == "Dim1"
+        assert sketch_result.data["fully_defined"] is True
+        assert image_result.data["path"] == "preview.png"
+        assert export_file_result.status == AdapterResultStatus.SUCCESS
 
 
 # ---------------------------------------------------------------------------

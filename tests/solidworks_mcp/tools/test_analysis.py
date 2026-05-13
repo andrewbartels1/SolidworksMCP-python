@@ -236,6 +236,9 @@ class TestAnalysisTools:
         )
         assert alias_dict["status"] == "success"
 
+        alias_model = await alias_tool(input_data=MassPropertiesInput())
+        assert alias_model["status"] == "success"
+
     @pytest.mark.asyncio
     async def test_analysis_tools_exception_and_fallback_paths(
         self, mcp_server, mock_adapter, mock_config

@@ -4,6 +4,7 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="Coverage placeholder for 1:1 source/test mapping")
 
+
 def test_placeholder_feature_tree_classifier() -> None:
     """Tracks missing direct coverage for src.solidworks_mcp.utils.feature_tree_classifier."""
     assert "src.solidworks_mcp.utils.feature_tree_classifier"

@@ -607,7 +607,11 @@ class TestLevelBSmokeExecution:
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
             try:
-                result = await tool.fn(payload) if inspect.signature(tool.fn).parameters else await tool.fn()
+                result = (
+                    await tool.fn(payload)
+                    if inspect.signature(tool.fn).parameters
+                    else await tool.fn()
+                )
                 if not isinstance(result, dict):
                     non_dict.append(f"{name}: returned {type(result).__name__}")
             except Exception:
@@ -627,7 +631,11 @@ class TestLevelBSmokeExecution:
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
             try:
-                result = await tool.fn(payload) if inspect.signature(tool.fn).parameters else await tool.fn()
+                result = (
+                    await tool.fn(payload)
+                    if inspect.signature(tool.fn).parameters
+                    else await tool.fn()
+                )
                 if isinstance(result, dict) and "status" not in result:
                     missing_status.append(name)
             except Exception:
@@ -651,7 +659,11 @@ class TestLevelBSmokeExecution:
             name = tool.name
             payload = _SMOKE_PAYLOADS.get(name, {})
             try:
-                result = await tool.fn(payload) if inspect.signature(tool.fn).parameters else await tool.fn()
+                result = (
+                    await tool.fn(payload)
+                    if inspect.signature(tool.fn).parameters
+                    else await tool.fn()
+                )
             except Exception as exc:
                 # Size-budget test is not responsible for behavioral failures.
                 size_rows.append({"tool": name, "bytes": 0, "error": str(exc)})

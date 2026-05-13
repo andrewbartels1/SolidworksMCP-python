@@ -571,4 +571,3 @@ class TestAnalysisCoverage:
         result = await fn()
         assert result["status"] == "success"
         assert "material" in result
-

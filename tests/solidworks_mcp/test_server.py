@@ -831,3 +831,150 @@ class TestServerMainEntrypoint:
                             await main()
 
         server_inst.stop.assert_called_once()
+
+
+def test_configure_runtime_services_returns_when_adapter_missing(mock_config):
+    """Covers early return branch when runtime adapter is not available."""
+    server = SolidWorksMCPServer(mock_config)
+    server.adapter = None
+
+    server._configure_runtime_services()
+    assert server._router is None
+
+
+def test_instrument_adapter_methods_returns_when_router_missing(mock_config):
+    """Covers guard branch when routing prerequisites are incomplete."""
+    server = SolidWorksMCPServer(mock_config)
+    server.adapter = Mock()
+    server._router = None
+
+    server._instrument_adapter_methods()
+
+
+@pytest.mark.asyncio
+async def test_routed_call_falls_back_to_com_when_router_unavailable(mock_config):
+    """Covers wrapped-operation fallback path when router is None at call-time."""
+
+    class _Adapter:
+        async def create_extrusion(self, *args, **kwargs):
+            return {"args": args, "kwargs": kwargs}
+
+    server = SolidWorksMCPServer(mock_config)
+    server.adapter = _Adapter()
+    server._router = object()  # enables wrapper installation
+
+    server._instrument_adapter_methods()
+    server._router = None  # force call-time fallback branch
+
+    result = await server.adapter.create_extrusion("x", depth=10)
+    assert result == {"args": ("x",), "kwargs": {"depth": 10}}
+
+
+@pytest.mark.asyncio
+async def test_run_local_stdio_sets_server_and_awaits_sync_runner_result(mock_config):
+    """Covers server assignment, stdin exception path, and awaitable run_stdio result."""
+    import src.solidworks_mcp.server as server_module
+
+    server = SolidWorksMCPServer(mock_config)
+    server.config.mock_solidworks = False
+    server.server = None
+
+    awaited = {"done": False}
+
+    async def _runner():
+        awaited["done"] = True
+
+    server.mcp = SimpleNamespace(run_stdio=lambda: _runner())
+
+    class _BadStdin:
+        closed = False
+
+        def readable(self):
+            raise RuntimeError("stdin probe failed")
+
+    with patch.object(server_module.sys, "stdin", _BadStdin()):
+        await server._run_local_stdio()
+
+    assert server.server is server.mcp
+    assert awaited["done"] is True
+
+
+@pytest.mark.asyncio
+async def test_start_marks_connected_on_success(mock_config):
+    """Covers successful adapter connect branch in start()."""
+    server = SolidWorksMCPServer(mock_config)
+    server.config.deployment_mode = DeploymentMode.LOCAL
+    server.setup = AsyncMock()
+    server._run_local_stdio = AsyncMock()
+
+    adapter = Mock()
+    adapter.connect = AsyncMock(return_value=None)
+    server.adapter = adapter
+
+    await server.start()
+
+    assert server.state.is_connected is True
+
+
+@pytest.mark.asyncio
+async def test_start_logs_mock_fallback_warning_when_connect_fails(mock_config):
+    """Covers connect-failure fallback warning branch in non-mock mode."""
+    server = SolidWorksMCPServer(mock_config)
+    server.config.deployment_mode = DeploymentMode.LOCAL
+    server.config.mock_solidworks = False
+    server.setup = AsyncMock()
+    server._run_local_stdio = AsyncMock()
+
+    adapter = Mock()
+    adapter.connect = AsyncMock(side_effect=RuntimeError("connect failed"))
+    server.adapter = adapter
+
+    with patch("src.solidworks_mcp.server.logger.warning") as mock_warning:
+        await server.start()
+
+    assert any(
+        "Continuing with mock adapter for testing" in str(call.args[0])
+        for call in mock_warning.call_args_list
+    )
+
+
+def test_cli_applies_overrides_and_runs_with_loaded_config():
+    """Covers CLI override branches before async run invocation."""
+    cfg = SolidWorksMCPConfig()
+    captured: dict[str, SolidWorksMCPConfig] = {}
+
+    async def _fake_run_with_config(config):
+        captured["cfg"] = config
+
+    from src.solidworks_mcp.server import cli
+
+    with patch("src.solidworks_mcp.server.load_config", return_value=cfg):
+        with patch(
+            "src.solidworks_mcp.server._run_with_config", new=_fake_run_with_config
+        ):
+            cli(
+                config=None,
+                mode="remote",
+                host="0.0.0.0",
+                port=9123,
+                debug=True,
+                mock=True,
+            )
+
+    assert captured["cfg"] is cfg
+    assert cfg.deployment_mode == DeploymentMode.REMOTE
+    assert cfg.host == "0.0.0.0"
+    assert cfg.port == 9123
+    assert cfg.debug is True
+    assert cfg.log_level == "DEBUG"
+    assert cfg.mock_solidworks is True
+
+
+def test_cli_main_delegates_to_typer_run():
+    """Covers cli_main console-entry delegation branch."""
+    from src.solidworks_mcp.server import cli, cli_main
+
+    with patch("src.solidworks_mcp.server.typer.run") as mock_run:
+        cli_main()
+
+    mock_run.assert_called_once_with(cli)

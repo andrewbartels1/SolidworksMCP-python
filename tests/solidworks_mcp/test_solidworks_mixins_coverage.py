@@ -36,6 +36,11 @@ def _build_adapter(monkeypatch) -> PyWin32Adapter:
         SimpleNamespace(com_error=RuntimeError),
         raising=False,
     )
+    monkeypatch.setattr(
+        "src.solidworks_mcp.adapters.pywin32_adapter._ComSessionCoordinator",
+        lambda _adapter: SimpleNamespace(),
+        raising=False,
+    )
     return PyWin32Adapter({})
 
 
@@ -127,6 +132,51 @@ class TestSolidWorksIOMixinNotConnected:
         result = await adapter.create_drawing()
         assert result.is_error
         assert "not connected" in (result.error or "").lower()
+
+    @pytest.mark.asyncio
+    async def test_open_model_uses_int_errors_when_variant_ctor_missing(
+        self, monkeypatch
+    ) -> None:
+        """open_model should pass integer error/warning refs when VARIANT is unavailable."""
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(adapter, "is_connected", lambda: True)
+
+        class _Cfg:
+            @staticmethod
+            def GetName() -> str:
+                return "Default"
+
+        model = MagicMock()
+        model.GetActiveConfiguration.return_value = _Cfg()
+        app = MagicMock()
+        app.OpenDoc6.return_value = model
+
+        adapter.swApp = app
+        adapter.constants = {
+            "swDocPART": 1,
+            "swDocASSEMBLY": 2,
+            "swDocDRAWING": 3,
+        }
+        adapter._attempt = lambda operation, default=None: operation()
+        adapter._read_model_title = lambda _m: "Part1"
+
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.solidworks.io.win32com",
+            SimpleNamespace(client=SimpleNamespace(VARIANT=None)),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.solidworks.io.pythoncom",
+            SimpleNamespace(VT_BYREF=0x4000, VT_I4=3),
+            raising=False,
+        )
+
+        result = await adapter.open_model("model.sldprt")
+
+        assert result.is_success
+        args = app.OpenDoc6.call_args.args
+        assert args[4] == 0
+        assert args[5] == 0
 
 
 # ---------------------------------------------------------------------------

@@ -10,12 +10,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from src.solidworks_mcp.agents.smoke_test import (
-    SchemaChoice,
-    _ensure_provider_credentials,
-    _resolve_model,
-    app,
-)
+import src.solidworks_mcp.agents.smoke_test as smoke_test
+from src.solidworks_mcp.agents.schemas import RecoverableFailure
+
+SchemaChoice = smoke_test.SchemaChoice
+_ensure_provider_credentials = smoke_test._ensure_provider_credentials
+_resolve_model = smoke_test._resolve_model
+app = smoke_test.app
 
 runner = CliRunner()
 
@@ -289,8 +290,9 @@ class TestCLIApp:
             build_volume_check="Fits envelope.",
         )
 
-        with patch(
-            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt",
+        with patch.object(
+            smoke_test,
+            "run_validated_prompt",
             new=AsyncMock(return_value=review),
         ):
             result = runner.invoke(
@@ -323,8 +325,9 @@ class TestCLIApp:
             objective="Document bracket workflow.",
         )
 
-        with patch(
-            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt",
+        with patch.object(
+            smoke_test,
+            "run_validated_prompt",
             new=AsyncMock(return_value=plan),
         ):
             result = runner.invoke(
@@ -355,8 +358,9 @@ class TestCLIApp:
             should_retry=False,
         )
 
-        with patch(
-            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt",
+        with patch.object(
+            smoke_test,
+            "run_validated_prompt",
             new=AsyncMock(return_value=failure),
         ):
             result = runner.invoke(
@@ -397,9 +401,7 @@ class TestCLIApp:
             captured_model.append(kwargs.get("model_name"))
             return review
 
-        with patch(
-            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=_mock_run
-        ):
+        with patch.object(smoke_test, "run_validated_prompt", new=_mock_run):
             result = runner.invoke(
                 app,
                 [
@@ -441,9 +443,7 @@ class TestCLIApp:
             captured_retries.append(kwargs.get("max_retries_on_recoverable"))
             return review
 
-        with patch(
-            "src.solidworks_mcp.agents.smoke_test.run_validated_prompt", new=_mock_run
-        ):
+        with patch.object(smoke_test, "run_validated_prompt", new=_mock_run):
             result = runner.invoke(
                 app,
                 [
@@ -482,5 +482,3 @@ class TestMainEntryPoint:
 # ---------------------------------------------------------------------------
 # Import at module top avoids repetitive imports in tests
 # ---------------------------------------------------------------------------
-
-from src.solidworks_mcp.agents.schemas import RecoverableFailure  # noqa: E402

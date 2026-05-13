@@ -620,6 +620,38 @@ class TestMacroRecordingTools:
         assert "macro syntax error" in result["message"]
 
     @pytest.mark.asyncio
+    async def test_execute_macro_fallback_pause_between_runs_invokes_sleep(
+        self, mcp_server, mock_config, monkeypatch
+    ):
+        """Fallback execute path should sleep between runs when pause is configured."""
+        await register_macro_recording_tools(mcp_server, object(), mock_config)
+
+        execute_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "execute_macro":
+                execute_tool = tool.fn
+                break
+
+        assert execute_tool is not None
+
+        sleep_calls: list[float] = []
+        monkeypatch.setattr(
+            "src.solidworks_mcp.tools.macro_recording.time.sleep",
+            lambda seconds: sleep_calls.append(float(seconds)),
+        )
+
+        result = await execute_tool(
+            input_data=MacroPlaybackInput(
+                macro_file="fallback.swp",
+                repeat_count=3,
+                pause_between_runs=0.25,
+            )
+        )
+
+        assert result["status"] == "success"
+        assert len(sleep_calls) == 2
+
+    @pytest.mark.asyncio
     async def test_analyze_macro_fallback_path(self, mcp_server, mock_config):
         """Test analyze_macro fallback branch."""
         await register_macro_recording_tools(mcp_server, object(), mock_config)

@@ -2,6 +2,7 @@
 
 from src.solidworks_mcp.utils.feature_tree_classifier import (
     classify_feature_tree_snapshot,
+    _match_examples,
 )
 
 
@@ -73,3 +74,25 @@ def test_classify_unknown_path_with_non_sketch_features() -> None:
     assert result["family"] == "unknown"
     assert result["warnings"]
     assert "No strong feature-family evidence" in result["warnings"][0]
+
+
+def test_match_examples_honors_limit_break() -> None:
+    """Covers early-break branch in _match_examples once limit is reached."""
+    texts = [
+        "boss-extrude1 featureextrusion",
+        "boss-extrude2 featureextrusion",
+        "boss-extrude3 featureextrusion",
+    ]
+    matches = _match_examples(texts, ("extrude",), limit=2)
+    assert len(matches) == 2
+
+
+def test_match_examples_limit_one_breaks_immediately() -> None:
+    """Exercises break+return path with the smallest possible limit."""
+    texts = [
+        "revolve1 bossrevolve",
+        "revolve2 bossrevolve",
+    ]
+
+    matches = _match_examples(texts, ("revolve",), limit=1)
+    assert matches == ["revolve1 bossrevolve"]

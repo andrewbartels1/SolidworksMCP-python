@@ -446,3 +446,21 @@ async def test_legacy_circuit_breaker_paths():
     value = await c.call(lambda: 7)
     assert value == 7
     assert c.state == CircuitState.CLOSED
+
+
+@pytest.mark.asyncio
+async def test_base_default_optional_methods_return_not_implemented_errors():
+    """Concrete adapters inherit default error responses for optional APIs."""
+    adapter = _DummyAdapter({})
+
+    fully_defined = await adapter.check_sketch_fully_defined()
+    assert fully_defined.is_error
+    assert "not implemented" in (fully_defined.error or "").lower()
+
+    cut = await adapter.create_cut_extrude(SimpleNamespace(depth=1.0))
+    assert cut.is_error
+    assert "not implemented" in (cut.error or "").lower()
+
+    fillet = await adapter.add_fillet(radius=1.0, edge_names=["Edge<1>"])
+    assert fillet.is_error
+    assert "not implemented" in (fillet.error or "").lower()

@@ -656,7 +656,9 @@ class TestTemplateManagementBranchCoverage:
         )
 
         tool = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "batch_apply_template"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "batch_apply_template"
         )
         result = await tool(
             input_data=TemplateBatchInput(
@@ -675,7 +677,9 @@ class TestTemplateManagementBranchCoverage:
         """Cover category/search/sort fallback branches in list_template_library."""
         await register_template_management_tools(mcp_server, object(), mock_config)
         tool = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "list_template_library"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "list_template_library"
         )
 
         usage_sorted = await tool(
@@ -715,10 +719,14 @@ class TestTemplateManagementBranchCoverage:
         )
 
         save_tool = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "save_to_template_library"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "save_to_template_library"
         )
         list_tool = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "list_template_library"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "list_template_library"
         )
 
         save_result = await save_tool(input_data={"template_name": "bad"})

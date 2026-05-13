@@ -14,6 +14,7 @@ from src.solidworks_mcp.adapters import (
     AdapterFactory,
     create_adapter,
 )
+from src.solidworks_mcp.adapters.factory import _register_default_adapters
 from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from src.solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreaker,
@@ -67,6 +68,7 @@ class TestAdapterFactory:
 
     def test_adapter_factory_registry(self):
         """Test that all adapter types are registered."""
+        _register_default_adapters()
         factory = AdapterFactory()
 
         # Test that factory has all expected adapter types
@@ -2607,6 +2609,299 @@ class TestPyWin32AdapterBranches:
         result = await adapter.set_dimension("D1@Sketch1", 10.0)
         assert result.is_error
         assert "Failed to set dimension" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_com_coordinator_initialize_skip_and_acquire_failure_paths(
+        self, monkeypatch
+    ) -> None:
+        """Coordinator should skip duplicate init and raise last COM error after retries."""
+        adapter = self._build_adapter(monkeypatch)
+
+        co_init = Mock()
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            SimpleNamespace(CoInitialize=co_init, CoUninitialize=Mock()),
+            raising=False,
+        )
+        adapter._com_initialized = True
+        adapter._initialize_com_apartment()
+        co_init.assert_not_called()
+
+        async def _fast_sleep(_seconds):
+            return None
+
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep", _fast_sleep
+        )
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.win32com",
+            SimpleNamespace(
+                client=SimpleNamespace(
+                    GetActiveObject=Mock(side_effect=RuntimeError("active fail")),
+                    Dispatch=Mock(side_effect=RuntimeError("dispatch fail")),
+                )
+            ),
+            raising=False,
+        )
+
+        with pytest.raises(SolidWorksMCPError, match="dispatch fail"):
+            await adapter._acquire_solidworks_application()
+
+    @pytest.mark.asyncio
+    async def test_com_coordinator_wait_ready_timeout_and_no_revision_branch(
+        self, monkeypatch
+    ) -> None:
+        """wait_for_server_ready should no-op without RevisionNumber and timeout when never ready."""
+        adapter = self._build_adapter(monkeypatch)
+
+        await adapter._wait_for_server_ready(SimpleNamespace())
+
+        async def _fast_sleep(_seconds):
+            return None
+
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep", _fast_sleep
+        )
+
+        never_ready = SimpleNamespace(RevisionNumber=lambda: None)
+        with pytest.raises(SolidWorksMCPError, match="did not become ready"):
+            await adapter._wait_for_server_ready(never_ready)
+
+    @pytest.mark.parametrize(
+        "select4_result,select2_result,select_result,expected",
+        [
+            (True, False, False, True),
+            (False, True, False, True),
+            (False, False, True, True),
+            (False, False, False, False),
+        ],
+    )
+    def test_sketch_geometry_select_entity_variants(
+        self, monkeypatch, select4_result, select2_result, select_result, expected
+    ) -> None:
+        """select_entity should follow Select4 -> Select2 -> Select fallback order."""
+        adapter = self._build_adapter(monkeypatch)
+        entity = SimpleNamespace(
+            Select4=Mock(return_value=select4_result),
+            Select2=Mock(return_value=select2_result),
+            Select=Mock(return_value=select_result),
+        )
+        assert adapter._select_sketch_entity(entity, append=False) is expected
+
+    def test_sketch_geometry_set_display_dimension_value_fallbacks(
+        self, monkeypatch
+    ) -> None:
+        """set_display_dimension_value should use SetSystemValue3, then SetSystemValue2, then SystemValue."""
+        adapter = self._build_adapter(monkeypatch)
+
+        dim3 = SimpleNamespace(
+            SetSystemValue3=Mock(return_value=True),
+            SetSystemValue2=Mock(return_value=True),
+        )
+        display3 = SimpleNamespace(
+            GetDimension2=Mock(return_value=dim3), GetDimension=Mock(return_value=None)
+        )
+        adapter._set_display_dimension_value(display3, 12.0)
+        dim3.SetSystemValue3.assert_called_once()
+
+        dim2 = SimpleNamespace(
+            SetSystemValue3=Mock(side_effect=RuntimeError("no v3")),
+            SetSystemValue2=Mock(return_value=True),
+        )
+        display2 = SimpleNamespace(
+            GetDimension2=Mock(return_value=dim2), GetDimension=Mock(return_value=None)
+        )
+        adapter._set_display_dimension_value(display2, 13.0)
+        dim2.SetSystemValue2.assert_called_once()
+
+        dim1 = SimpleNamespace(
+            SetSystemValue3=Mock(side_effect=RuntimeError("no v3")),
+            SetSystemValue2=Mock(side_effect=RuntimeError("no v2")),
+            SystemValue=None,
+        )
+        display1 = SimpleNamespace(
+            GetDimension2=Mock(return_value=dim1), GetDimension=Mock(return_value=None)
+        )
+        adapter._set_display_dimension_value(display1, 14.0)
+        assert dim1.SystemValue == pytest.approx(0.014)
+
+    @pytest.mark.parametrize(
+        "point_obj,expected",
+        [
+            (None, None),
+            (SimpleNamespace(X=1.0, Y=2.0, Z=3.0), (1.0, 2.0, 3.0)),
+            (SimpleNamespace(GetCoords=lambda: [4.0, 5.0, 6.0]), (4.0, 5.0, 6.0)),
+            (SimpleNamespace(GetCoords=lambda: [1.0, 2.0]), None),
+        ],
+    )
+    def test_sketch_geometry_point_xyz_variants(
+        self, monkeypatch, point_obj, expected
+    ) -> None:
+        """point_xyz should support direct XYZ, GetCoords fallback, and invalid payloads."""
+        adapter = self._build_adapter(monkeypatch)
+        assert adapter._sketch_geometry.point_xyz(point_obj) == expected
+
+    @pytest.mark.parametrize(
+        "mode,expected", [("setcoords", True), ("setcoords2", True), ("none", False)]
+    )
+    def test_sketch_geometry_set_point_xyz_variants(
+        self, monkeypatch, mode, expected
+    ) -> None:
+        """set_point_xyz should try SetCoords then SetCoords2 and return False on full failure."""
+        adapter = self._build_adapter(monkeypatch)
+
+        if mode == "setcoords":
+            point = SimpleNamespace(
+                SetCoords=Mock(return_value=True), SetCoords2=Mock(return_value=True)
+            )
+        elif mode == "setcoords2":
+            point = SimpleNamespace(
+                SetCoords=Mock(side_effect=RuntimeError("no setcoords")),
+                SetCoords2=Mock(return_value=True),
+            )
+        else:
+            point = SimpleNamespace(
+                SetCoords=Mock(side_effect=RuntimeError("no setcoords")),
+                SetCoords2=Mock(side_effect=RuntimeError("no setcoords2")),
+            )
+
+        assert adapter._sketch_geometry.set_point_xyz(point, 1.0, 2.0, 3.0) is expected
+
+    def test_sketch_geometry_segment_vertex_and_placement_paths(
+        self, monkeypatch
+    ) -> None:
+        """Sketch geometry helpers should cover endpoint parsing, shared vertices, and placement edge cases."""
+        adapter = self._build_adapter(monkeypatch)
+        service = adapter._sketch_geometry
+
+        segment = SimpleNamespace(
+            GetStartPoint=(0.0, 0.0, 0.0), GetEndPoint=(10.0, 0.0, 0.0)
+        )
+        assert service.read_segment_endpoints(segment) == (
+            (0.0, 0.0, 0.0),
+            (10.0, 0.0, 0.0),
+        )
+        assert service.segment_point_objects(
+            SimpleNamespace(GetStartPoint2="p1", GetEndPoint2="p2")
+        ) == ("p1", "p2")
+
+        shared_p = SimpleNamespace(X=0.0, Y=0.0, Z=0.0)
+        other_p = SimpleNamespace(X=1.0, Y=0.0, Z=0.0)
+        e1 = SimpleNamespace(GetStartPoint2=shared_p, GetEndPoint2=other_p)
+        e2 = SimpleNamespace(
+            GetStartPoint2=shared_p, GetEndPoint2=SimpleNamespace(X=0.0, Y=1.0, Z=0.0)
+        )
+        shared = service.shared_segment_vertex(e1, e2)
+        assert shared is not None
+
+        assert (
+            service.smart_dimension_direction(1.0, 0.1)
+            == adapter.constants["swSmartDimensionDirectionRight"]
+        )
+        assert (
+            service.smart_dimension_direction(-1.0, 0.0)
+            == adapter.constants["swSmartDimensionDirectionLeft"]
+        )
+        assert (
+            service.smart_dimension_direction(0.0, 1.0)
+            == adapter.constants["swSmartDimensionDirectionUp"]
+        )
+
+        assert (
+            service.single_line_dimension_placement(
+                SimpleNamespace(
+                    GetStartPoint=(0.0, 0.0, 0.0), GetEndPoint=(0.0, 0.0, 0.0)
+                )
+            )
+            is None
+        )
+        placement = service.single_line_dimension_placement(segment)
+        assert placement is not None
+
+        assert (
+            service.angular_dimension_placement(
+                segment,
+                SimpleNamespace(
+                    GetStartPoint=(20.0, 0.0, 0.0), GetEndPoint=(30.0, 0.0, 0.0)
+                ),
+            )
+            is None
+        )
+        angle_ok = service.angular_dimension_placement(
+            SimpleNamespace(
+                GetStartPoint=(0.0, 0.0, 0.0), GetEndPoint=(10.0, 0.0, 0.0)
+            ),
+            SimpleNamespace(
+                GetStartPoint=(0.0, 0.0, 0.0), GetEndPoint=(0.0, 10.0, 0.0)
+            ),
+        )
+        assert angle_ok is not None
+
+    @pytest.mark.parametrize(
+        "current_path,current_title,active_path,active_title,expect_active",
+        [
+            (None, None, "C:/a.sldprt", "A", False),
+            ("C:/a.sldprt", "A", "C:/a.sldprt", "B", True),
+            (None, "A", None, "A", True),
+            ("C:/a.sldprt", "A", "C:/b.sldprt", "A", False),
+        ],
+    )
+    def test_document_routing_identity_and_resolution_variants(
+        self,
+        monkeypatch,
+        current_path,
+        current_title,
+        active_path,
+        active_title,
+        expect_active,
+    ) -> None:
+        """Document routing should pick active or current model based on identity/path/title policy."""
+        adapter = self._build_adapter(monkeypatch)
+
+        def _doc(path, title):
+            return SimpleNamespace(
+                GetPathName=(lambda: path) if path is not None else (lambda: ""),
+                GetTitle=(lambda: title) if title is not None else (lambda: ""),
+            )
+
+        current_doc = _doc(current_path, current_title)
+        active_doc = _doc(active_path, active_title)
+        adapter.currentModel = current_doc
+        adapter.swApp = SimpleNamespace(ActiveDoc=active_doc)
+
+        resolved = adapter._resolve_export_target_doc()
+        assert (resolved is active_doc) is expect_active
+
+        path_value, title_value = adapter._document_identity(current_doc)
+        if current_path:
+            assert path_value is not None
+        if current_title:
+            assert title_value == current_title
+
+    def test_pywin32_wrapper_delegations(self, monkeypatch) -> None:
+        """Thin pywin32 wrappers should delegate to coordinator/geometry/routing services."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter._session_coordinator = SimpleNamespace(
+            initialize_com_apartment=Mock(),
+            uninitialize_com_apartment=Mock(),
+            acquire_solidworks_application=AsyncMock(return_value="app"),
+            wait_for_server_ready=AsyncMock(return_value=None),
+            set_automation_preferences=Mock(),
+        )
+        adapter._sketch_geometry = SimpleNamespace(
+            select_entity=Mock(return_value=True),
+            set_display_dimension_value=Mock(),
+        )
+        adapter._document_routing = SimpleNamespace(
+            document_identity=Mock(return_value=("C:/x.sldprt", "X")),
+        )
+
+        adapter._initialize_com_apartment()
+        adapter._uninitialize_com_apartment()
+        assert adapter._select_sketch_entity(SimpleNamespace(), append=False) is True
+        adapter._set_display_dimension_value(SimpleNamespace(), 10.0)
+        assert adapter._document_identity(SimpleNamespace()) == ("C:/x.sldprt", "X")
 
 
 class TestMockAdapterAdditionalCoverage:

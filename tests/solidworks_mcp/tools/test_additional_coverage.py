@@ -303,9 +303,9 @@ async def test_drawing_tools_simulation_branches(mcp_server, mock_config):
             )
         )
     )["status"] == "success"
-    assert (await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "A"}))[
-        "status"
-    ] == "success"
+    assert (
+        await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "A"})
+    )["status"] == "success"
 
 
 class _ExportFallbackAdapter:
@@ -620,7 +620,9 @@ async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
         )
     )["status"] == "success"
     assert (
-        await (await _tool(mcp_server, "add_polygon"))(input_data={"sides": 6, "radius": 5})
+        await (await _tool(mcp_server, "add_polygon"))(
+            input_data={"sides": 6, "radius": 5}
+        )
     )["status"] == "success"
     assert (
         await (await _tool(mcp_server, "add_ellipse"))(
@@ -877,9 +879,9 @@ async def test_drawing_and_analysis_adapter_passthrough_success(
             input_data=AnnotationInput(text="n", annotation_type="Note")
         )
     )["status"] == "success"
-    assert (await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "T"}))[
-        "status"
-    ] == "success"
+    assert (
+        await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "T"})
+    )["status"] == "success"
 
     assert (
         await (await _tool(mcp_server, "analyze_drawing_comprehensive"))(

@@ -537,6 +537,65 @@ class TestAutomationTools:
         assert optimize["status"] == "error"
         assert "Unexpected error" in optimize["message"]
 
+    @pytest.mark.asyncio
+    async def test_automation_remaining_error_returns(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover adapter error-return branches for remaining automation tools."""
+        await register_automation_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.batch_process_files = AsyncMock(
+            return_value=Mock(is_success=False, error="batch failed")
+        )
+        mock_adapter.manage_design_table = AsyncMock(
+            return_value=Mock(is_success=False, error="table failed")
+        )
+        mock_adapter.execute_workflow = AsyncMock(
+            return_value=Mock(is_success=False, error="workflow failed")
+        )
+        mock_adapter.create_template = AsyncMock(
+            return_value=Mock(is_success=False, error="template failed")
+        )
+        mock_adapter.optimize_performance = AsyncMock(
+            return_value=Mock(is_success=False, error="performance failed")
+        )
+
+        by_name = {tool.name: tool.fn for tool in await mcp_server.list_tools()}
+
+        batch = await by_name["batch_process_files"](
+            input_data=BatchProcessInput(source_directory="./parts", operation="export")
+        )
+        table = await by_name["manage_design_table"](
+            input_data=DesignTableInput(operation="create")
+        )
+        workflow = await by_name["execute_workflow"](
+            input_data=WorkflowInput(
+                workflow_name="WF",
+                steps=[{"name": "step-1"}],
+                parallel_execution=False,
+                error_handling="stop",
+            )
+        )
+        template = await by_name["create_template"](
+            input_data=TemplateInput(template_type="part", template_name="StdPart")
+        )
+        optimize = await by_name["optimize_performance"](
+            input_data={"optimization_type": "general"}
+        )
+
+        assert batch["status"] == "error" and "batch failed" in batch["message"]
+        assert table["status"] == "error" and "table failed" in table["message"]
+        assert (
+            workflow["status"] == "error" and "workflow failed" in workflow["message"]
+        )
+        assert (
+            template["status"] == "error" and "template failed" in template["message"]
+        )
+        assert (
+            optimize["status"] == "error"
+            and "performance failed" in optimize["message"]
+        )
+
     @pytest.mark.unit
     def test_vba_generation_input_validation(self):
         """Test input validation for VBA generation."""

@@ -680,6 +680,43 @@ class TestDrawingAnalysisTools:
         assert completeness_ok["status"] == "success"
 
     @pytest.mark.asyncio
+    async def test_drawing_analysis_annotation_and_compliance_adapter_errors(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover adapter error branches for annotation and compliance tools."""
+        await register_drawing_analysis_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.analyze_drawing_annotations = AsyncMock(
+            return_value=Mock(is_success=False, error="annotation analysis failed")
+        )
+        mock_adapter.check_drawing_compliance = AsyncMock(
+            return_value=Mock(is_success=False, error="compliance failed")
+        )
+
+        annotation_tool = None
+        compliance_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "analyze_drawing_annotations":
+                annotation_tool = tool.fn
+            if tool.name == "check_drawing_compliance":
+                compliance_tool = tool.fn
+
+        assert annotation_tool is not None
+        assert compliance_tool is not None
+
+        annotation_error = await annotation_tool(
+            input_data=AnnotationAnalysisInput(drawing_path="demo.slddrw")
+        )
+        assert annotation_error["status"] == "error"
+        assert "annotation analysis failed" in annotation_error["message"]
+
+        compliance_error = await compliance_tool(
+            input_data=ComplianceCheckInput(drawing_path="demo.slddrw", standard="ISO")
+        )
+        assert compliance_error["status"] == "error"
+        assert "compliance failed" in compliance_error["message"]
+
+    @pytest.mark.asyncio
     async def test_drawing_analysis_exception_handlers(
         self, mcp_server, mock_adapter, mock_config
     ):

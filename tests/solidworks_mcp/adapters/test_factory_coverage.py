@@ -80,6 +80,31 @@ def test_create_adapter_vba_uses_backing_adapter_with_built_config(monkeypatch) 
     assert adapter._backing_adapter.config["solidworks_path"] == "mock://solidworks"
 
 
+def test_create_adapter_vba_uses_mock_backing_with_raw_config(monkeypatch) -> None:
+    """When VBA backing resolves to MOCK, raw config object should be passed through."""
+
+    factory = AdapterFactory()
+    monkeypatch.setattr(
+        factory,
+        "_adapter_registry",
+        {
+            AdapterType.VBA: VbaGeneratorAdapter,
+            AdapterType.PYWIN32: _DummyAdapter,
+            AdapterType.MOCK: _DummyAdapter,
+        },
+    )
+    monkeypatch.setattr(
+        factory, "_determine_vba_backing_type", lambda _cfg: AdapterType.MOCK
+    )
+
+    cfg = _base_config(adapter_type=AdapterType.VBA)
+    adapter = factory._create_adapter_impl(cfg)
+
+    assert isinstance(adapter, VbaGeneratorAdapter)
+    assert isinstance(adapter._backing_adapter, _DummyAdapter)
+    assert adapter._backing_adapter.config is cfg
+
+
 def test_create_adapter_vba_raises_when_backing_type_unregistered(monkeypatch) -> None:
     """Test create adapter vba raises when backing type unregistered."""
 

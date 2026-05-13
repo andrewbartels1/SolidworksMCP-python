@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import FastMCP
 
 from src.solidworks_mcp.tools.export import (
     BatchExportInput,
@@ -525,10 +526,86 @@ class TestExportToolsBranchCoverage:
         await register_export_tools(mcp_server, mock_adapter, mock_config)
         mock_adapter.export_step = AsyncMock(side_effect=RuntimeError("boom step"))
 
-        tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "export_step")
+        tool = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "export_step"
+        )
         result = await tool(
             ExportSTEPInput(model_path="test_part.sldprt", output_path="out.step")
         )
 
         assert result["status"] == "error"
         assert "unexpected error" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_export_image_error_and_export_file_fallback_paths(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover image adapter explicit-error branch and export_file fallback success branch."""
+        await register_export_tools(mcp_server, mock_adapter, mock_config)
+
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
+
+        mock_adapter.export_image = AsyncMock(
+            return_value=Mock(
+                is_success=False, error="image export failed", execution_time=0.1
+            )
+        )
+        image_error = await by_name["export_image"](
+            input_data=ExportImageInput(model_path="a.sldprt", output_path="a.png")
+        )
+        assert image_error["status"] == "error"
+        assert "image export failed" in image_error["message"]
+
+        class _FileOnlyAdapter:
+            export_file = AsyncMock(
+                return_value=Mock(
+                    is_success=True, data={"ok": True}, execution_time=0.2
+                )
+            )
+
+        fallback_server = FastMCP("Export Fallback Test")
+        await register_export_tools(fallback_server, _FileOnlyAdapter(), mock_config)
+        fallback_tools = {t.name: t.fn for t in await fallback_server.list_tools()}
+
+        fallback = await fallback_tools["export_image"](
+            input_data=ExportImageInput(
+                file_path="model.sldprt",
+                model_path="model.sldprt",
+                output_path="model.png",
+            )
+        )
+        assert fallback["status"] == "success"
+        assert fallback["export"]["file_path"] == "model.sldprt"
+
+        class _FileOnlyErrorAdapter:
+            export_file = AsyncMock(
+                return_value=Mock(
+                    is_success=False, error="file export failed", execution_time=0.2
+                )
+            )
+
+        error_server = FastMCP("Export Error Fallback Test")
+        await register_export_tools(error_server, _FileOnlyErrorAdapter(), mock_config)
+        error_tools = {t.name: t.fn for t in await error_server.list_tools()}
+        file_error = await error_tools["export_image"](
+            input_data=ExportImageInput(
+                file_path="model.sldprt",
+                model_path="model.sldprt",
+                output_path="model.png",
+            )
+        )
+        assert file_error["status"] == "error"
+        assert "file export failed" in file_error["message"]
+
+        no_method_server = FastMCP("Export Simulated Test")
+        await register_export_tools(no_method_server, object(), mock_config)
+        no_method_tools = {t.name: t.fn for t in await no_method_server.list_tools()}
+        simulated = await no_method_tools["export_image"](
+            input_data=ExportImageInput(
+                file_path="model.sldprt",
+                model_path="model.sldprt",
+                output_path="model.png",
+            )
+        )
+        assert simulated["status"] == "success"
+        assert simulated["export"]["file_path"] == "model.sldprt"

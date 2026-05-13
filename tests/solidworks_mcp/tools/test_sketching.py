@@ -404,7 +404,9 @@ class TestSketchingToolsBranchCoverage:
             return_value=Mock(is_success=True, data="Line1", execution_time=0.1)
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "add_line")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_line"
+        )
         result = await tool_func(AddLineInput(x1=0, y1=0, x2=10, y2=10))
         assert result["status"] == "success"
         stub.add_line.assert_called_once()
@@ -417,10 +419,29 @@ class TestSketchingToolsBranchCoverage:
             return_value=Mock(is_success=True, data="Circle1", execution_time=0.1)
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "add_circle")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_circle"
+        )
         result = await tool_func(AddCircleInput(center_x=0, center_y=0, radius=5))
         assert result["status"] == "success"
         stub.add_circle.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_add_circle_error_path(self, mcp_server, mock_config):
+        """Add_circle should surface adapter error payloads."""
+        stub = SimpleNamespace()
+        stub.add_circle = AsyncMock(
+            return_value=Mock(
+                is_success=False, error="circle failed", execution_time=0.1
+            )
+        )
+        await register_sketching_tools(mcp_server, stub, mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_circle"
+        )
+        result = await tool_func(AddCircleInput(center_x=0, center_y=0, radius=5))
+        assert result["status"] == "error"
+        assert "circle failed" in result["message"]
 
     @pytest.mark.asyncio
     async def test_add_rectangle_fallback_path(self, mcp_server, mock_config):
@@ -430,7 +451,9 @@ class TestSketchingToolsBranchCoverage:
             return_value=Mock(is_success=True, data="Rect1", execution_time=0.1)
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "add_rectangle")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_rectangle"
+        )
         result = await tool_func(AddRectangleInput(x1=0, y1=0, x2=10, y2=10))
         assert result["status"] == "success"
         stub.add_rectangle.assert_called_once()
@@ -550,7 +573,9 @@ class TestSketchingToolsBranchCoverage:
             return_value=Mock(is_success=True, data="Mirror1", execution_time=0.1)
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "sketch_mirror")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "sketch_mirror"
+        )
         result = await tool_func({"entities": ["Line1", "Arc1"], "mirror_line": "CL1"})
         assert result["status"] == "success"
         assert result["mirror"]["entities"] == ["Line1", "Arc1"]
@@ -563,7 +588,9 @@ class TestSketchingToolsBranchCoverage:
             return_value=Mock(is_success=True, data="Offset1", execution_time=0.1)
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "sketch_offset")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "sketch_offset"
+        )
 
         r1 = await tool_func(
             {"entities": ["R1"], "offset_distance": 3.0, "reverse_direction": False}
@@ -591,10 +618,57 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "sketch_tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "sketch_tutorial_simple_hole"
         )
         result = await tool_func()
         assert result["status"] == "error" and "sketch failed" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_check_sketch_fully_defined_success_empty_payload_and_exception(
+        self, mcp_server, mock_config
+    ):
+        """Sketch-definition helper should handle empty successful payloads and exceptions."""
+        stub = SimpleNamespace()
+        stub.check_sketch_fully_defined = AsyncMock(
+            return_value=Mock(is_success=True, data=None, execution_time=0.1)
+        )
+        await register_sketching_tools(mcp_server, stub, mock_config)
+        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
+
+        success = await by_name["check_sketch_fully_defined"]()
+        assert success["status"] == "success"
+        assert success["sketch"] == {}
+        assert "unknown" in success["message"]
+
+        stub.check_sketch_fully_defined = AsyncMock(side_effect=RuntimeError("boom"))
+        failure = await by_name["check_sketch_fully_defined"]()
+        assert failure["status"] == "error"
+        assert "Unexpected error: boom" in failure["message"]
+
+    @pytest.mark.asyncio
+    async def test_tutorial_simple_hole_create_sketch_failure(
+        self, mcp_server, mock_config
+    ):
+        """tutorial_simple_hole should fail early when sketch creation fails."""
+        stub = SimpleNamespace()
+        stub.create_sketch = AsyncMock(
+            return_value=Mock(is_success=False, error="sketch failed")
+        )
+        await register_sketching_tools(mcp_server, stub, mock_config)
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "tutorial_simple_hole"
+        )
+        result = await tool_func(
+            TutorialSimpleHoleInput(
+                plane="Top", center_x=0, center_y=0, diameter=8, depth=10
+            )
+        )
+        assert result["status"] == "error"
+        assert "sketch failed" in result["message"]
 
     @pytest.mark.asyncio
     async def test_sketch_tutorial_hole_add_circle_failure(
@@ -610,7 +684,9 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "sketch_tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "sketch_tutorial_simple_hole"
         )
         result = await tool_func()
         assert result["status"] == "error" and "circle failed" in result["message"]
@@ -632,7 +708,9 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "sketch_tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "sketch_tutorial_simple_hole"
         )
         result = await tool_func()
         assert result["status"] == "error" and "exit failed" in result["message"]
@@ -644,7 +722,9 @@ class TestSketchingToolsBranchCoverage:
         stub.create_sketch = AsyncMock(side_effect=RuntimeError("boom"))
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "sketch_tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "sketch_tutorial_simple_hole"
         )
         result = await tool_func()
         assert result["status"] == "error"
@@ -663,7 +743,9 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "tutorial_simple_hole"
         )
         result = await tool_func(
             TutorialSimpleHoleInput(
@@ -687,7 +769,9 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "tutorial_simple_hole"
         )
         result = await tool_func(
             TutorialSimpleHoleInput(
@@ -714,7 +798,9 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "tutorial_simple_hole"
         )
         result = await tool_func(
             TutorialSimpleHoleInput(
@@ -745,7 +831,9 @@ class TestSketchingToolsBranchCoverage:
         )
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "tutorial_simple_hole"
         )
         result = await tool_func(
             TutorialSimpleHoleInput(
@@ -763,7 +851,9 @@ class TestSketchingToolsBranchCoverage:
         stub.create_sketch = AsyncMock(side_effect=RuntimeError("boom"))
         await register_sketching_tools(mcp_server, stub, mock_config)
         tool_func = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "tutorial_simple_hole"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "tutorial_simple_hole"
         )
         result = await tool_func(
             TutorialSimpleHoleInput(

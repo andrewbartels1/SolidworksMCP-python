@@ -106,6 +106,13 @@ def test_complexity_analyzer_prefers_vba_for_complex_payloads() -> None:
     assert decision.complexity_score > 0
 
 
+def test_complexity_analyzer_history_bias_zero_when_only_vba_history() -> None:
+    """History bias should be zero when there are no COM attempts yet."""
+    analyzer = ComplexityAnalyzer()
+    analyzer.record_result(operation="op", route="vba", success=True)
+    assert analyzer._history_bias("op") == 0.0
+
+
 @pytest.mark.asyncio
 async def test_intelligent_router_uses_vba_when_preferred() -> None:
     """Router should execute VBA route when complexity recommends it."""
@@ -136,6 +143,37 @@ async def test_intelligent_router_uses_vba_when_preferred() -> None:
 
     assert result.is_success is True
     assert route.route == "vba"
+
+
+@pytest.mark.asyncio
+async def test_intelligent_router_uses_vba_fallback_after_com_failure() -> None:
+    """Router should cache and return successful VBA fallback after COM failure."""
+    analyzer = ComplexityAnalyzer(parameter_threshold=999, score_threshold=0.999)
+    cache = ResponseCache(
+        CachePolicy(enabled=True, default_ttl_seconds=60, max_entries=8)
+    )
+    router = IntelligentRouter(analyzer=analyzer, cache=cache)
+
+    async def _com(payload: object) -> AdapterResult[dict[str, str]]:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="com failed")
+
+    async def _vba(payload: object) -> AdapterResult[dict[str, str]]:
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"route": "vba-fallback"}
+        )
+
+    payload = {"k": "v"}
+    result, route = await router.execute(
+        operation="create_extrusion",
+        payload=payload,
+        call_args=(payload,),
+        call_kwargs={},
+        com_operation=_com,
+        vba_operation=_vba,
+    )
+
+    assert result.is_success is True
+    assert route.route == "vba-fallback"
 
 
 @pytest.mark.asyncio
@@ -333,6 +371,34 @@ async def test_vba_macro_executor_saves_and_executes_macro() -> None:
     assert result.data.success is True
     assert result.metadata is not None
     assert "macro_path" in result.metadata
+
+
+@pytest.mark.asyncio
+async def test_vba_macro_executor_normalizes_none_data_payload() -> None:
+    """Executor should normalize result objects with empty data to a dict payload."""
+    executor = VbaMacroExecutor()
+
+    request = MacroExecutionRequest(
+        macro_code="Sub Main()\nEnd Sub",
+        macro_name="test_macro_empty_data",
+        subroutine="Main",
+    )
+
+    class _DataWrapper:
+        data = None
+
+    class _MockAdapter:
+        async def execute_macro(self, macro_path: str, subroutine: str) -> _DataWrapper:
+            return _DataWrapper()
+
+    result = await executor.execute_macro(
+        request=request, backing_adapter=_MockAdapter()
+    )
+
+    assert result.is_success is True
+    assert result.data is not None
+    assert result.data.success is False
+    assert result.data.output is None
 
 
 @pytest.mark.asyncio

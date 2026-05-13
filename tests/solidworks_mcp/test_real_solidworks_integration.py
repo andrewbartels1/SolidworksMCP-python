@@ -399,23 +399,27 @@ async def test_real_arc_measurements_smoke(
 
     # Add a 90-degree arc (quarter circle, radius 15 mm)
     # Start at (15, 0), end at (0, 15), centre at origin
-    arc_result = await add_arc({
-        "center_x": 0.0,
-        "center_y": 0.0,
-        "start_x": 15.0,
-        "start_y": 0.0,
-        "end_x": 0.0,
-        "end_y": 15.0,
-    })
+    arc_result = await add_arc(
+        {
+            "center_x": 0.0,
+            "center_y": 0.0,
+            "start_x": 15.0,
+            "start_y": 0.0,
+            "end_x": 0.0,
+            "end_y": 15.0,
+        }
+    )
     assert arc_result["status"] == "success", arc_result
     arc_entity = arc_result["arc"]["id"]
 
     # Dimension the circle radius (radial)
-    circle_dim_result = await add_sketch_dimension({
-        "entity1": circle_entity,
-        "dimension_type": "radial",
-        "value": 20.0,
-    })
+    circle_dim_result = await add_sketch_dimension(
+        {
+            "entity1": circle_entity,
+            "dimension_type": "radial",
+            "value": 20.0,
+        }
+    )
     assert circle_dim_result["status"] == "success", (
         f"Circle radial dimension failed: {circle_dim_result}"
     )
@@ -424,11 +428,13 @@ async def test_real_arc_measurements_smoke(
     )
 
     # Dimension the arc radius (radial)
-    arc_dim_result = await add_sketch_dimension({
-        "entity1": arc_entity,
-        "dimension_type": "radial",
-        "value": 15.0,
-    })
+    arc_dim_result = await add_sketch_dimension(
+        {
+            "entity1": arc_entity,
+            "dimension_type": "radial",
+            "value": 15.0,
+        }
+    )
     assert arc_dim_result["status"] == "success", (
         f"Arc radial dimension failed: {arc_dim_result}"
     )
