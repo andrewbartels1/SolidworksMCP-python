@@ -115,7 +115,7 @@ Performance history resets on server restart (in-memory only; SQLite backing is 
 
 #### Direct COM Adapter (`adapters/pywin32_adapter.py`)
 
-~2200-line Windows COM adapter covering document management, part modeling, assembly operations, sketching, analysis, drawing, and export. The primary execution path for all production work.
+~2200-line Windows COM adapter covering document management, part modeling, assembly operations, sketching, analysis, drawing, and export. The primary execution path for all production work. Newly reworked with a scalable Mixin type architecture for all the future COM API tool additions.
 
 #### Circuit Breaker (`adapters/circuit_breaker.py`)
 
@@ -148,4 +148,4 @@ All adapter methods map directly to the SolidWorks COM API via pywin32. No gaps 
 
 - Documented architecture: [../user-guide/architecture.md](../user-guide/architecture.md)
 - Gap analysis detail: [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md)
-- Config reference: [src/solidworks_mcp/config.py](src/solidworks_mcp/config.py)
+- Config reference: `src/solidworks_mcp/config.py`

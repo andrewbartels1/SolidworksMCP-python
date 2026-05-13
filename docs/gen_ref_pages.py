@@ -51,4 +51,4 @@ with mkdocs_gen_files.open("api/SUMMARY.md", "w") as nav_file:
     )
     nav_file.writelines(nav.build_literate_nav())
 
-print("✓ Generated API documentation pages from src/solidworks_mcp")
+print("Generated API documentation pages from src/solidworks_mcp")

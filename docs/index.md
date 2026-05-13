@@ -13,7 +13,7 @@
 
 **AI-Assisted SolidWorks Automation with MCP**
 
-🚀 **106 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
+🚀 **109 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
 
 ## Overview
 
@@ -43,7 +43,7 @@ The project emphasizes an inspect -> classify -> delegate loop instead of blind 
 
 ### 2) Broad Tool Surface with Practical Coverage
 
-- 106 tools across modeling, sketching, drawing, analysis, export, automation, templates, macros, and docs discovery
+- 109 tools across modeling, sketching, drawing, analysis, export, automation, templates, macros, and docs discovery
 - one server API surface for both simple operations and advanced workflows
 
 ### 3) Reliable Execution Path for Complex Operations
@@ -105,7 +105,7 @@ Healthy startup logs include:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Registered 76 SolidWorks tools`
+- `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
 
 ### Linux / WSL only
@@ -139,17 +139,18 @@ Then connect your client to `http://<windows-host-ip>:8000`.
 
 | Category | Tools | Description |
 |----------|-------|-------------|
-| **Modeling** | 9 | Part creation, features, assemblies |
-| **Sketching** | 17 | Complete sketching toolkit with constraints |
-| **Drawing** | 8 | Drawing creation and management |
-| **Drawing Analysis** | 10 | Quality analysis and compliance checking |
-| **Analysis** | 4 | Mass properties, simulation, validation |
+| **Modeling** | 11 | Part creation, features, assemblies |
+| **Sketching** | 19 | Complete sketching toolkit with constraints |
+| **Drawing** | 12 | Drawing creation and management |
+| **Drawing Analysis** | 8 | Quality analysis and compliance checking |
+| **Analysis** | 5 | Mass properties, simulation, validation |
 | **Export** | 7 | Multi-format export and conversion |
 | **Automation** | 8 | Batch processing and workflows |
-| **File Management** | 3 | File operations and organization |
+| **File Management** | 14 | File operations and organization |
 | **VBA Generation** | 10 | Dynamic VBA code for complex operations |
 | **Template Management** | 6 | Template creation and standardization |
-| **Macro Recording** | 8 | Macro recording, optimization, and libraries |
+| **Macro Recording** | 7 | Macro recording, optimization, and libraries |
+| **Docs Discovery** | 2 | API and COM documentation discovery and lookup |
 
 ## Architecture Overview
 
@@ -177,11 +178,13 @@ Ready to automate your SolidWorks workflows? Check out our comprehensive guides:
 
 - [**Installation Guide**](getting-started/installation.md) - Set up your development environment
 - [**Quick Start**](getting-started/quickstart.md) - Your first SolidWorks automation  
+- [**Tutorial Tracks (Work-In-Progress!)**](getting-started/tutorial-tracks.md) - Learn with prompt-only, UI-assisted, or hybrid workflows
+- [**U-Joint Assembly Tutorial (Work-In-Progress!)**](getting-started/tutorials/u-joint-assembly-build.md) - Build a complete 8-part mechanical assembly from scratch using MCP + Prefab UI
 - [**Agents and Prompt Testing**](agents/agents-and-testing.md) - Use custom agents and validate outputs with PydanticAI + SQLite memory
 - [**VS Code MCP Setup**](getting-started/vscode-mcp-setup.md) - Connect VS Code and GitHub Copilot to this server
 - [**Claude Code MCP Setup**](getting-started/claude-code-setup.md) - Connect Claude Code to this server
 - [**Architecture Overview**](user-guide/architecture.md) - Understand the system design
-- [**Tools Overview**](user-guide/tools-overview.md) - Explore all 90+ available tools
+- [**Tools Overview**](user-guide/tools-overview.md) - Explore all 109 available tools
 - [**Agent UI Workflows**](agents/agent-ui-workflows.md) - Plan visual decision workflows for hinges, sourcing, and printability
 - [**Agent Memory and Recovery**](agents/agent-memory-and-recovery.md) - Use local SQLite history to troubleshoot and recover from failure states
 

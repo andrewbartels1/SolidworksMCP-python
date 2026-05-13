@@ -1,6 +1,6 @@
 # Real SolidWorks Tool Validation Matrix
 
-This page documents how the project validates the full MCP tool set with deterministic test behavior.
+This page documents what is validated with real SolidWorks and what is still simulated.
 
 ## Validation Model
 
@@ -10,6 +10,18 @@ The project uses two layers:
 2. Real execution smoke workflows for core CAD lifecycle paths.
 
 This split keeps tests deterministic and maintainable while still validating real COM connectivity.
+
+## What Works Today
+
+- Tool registration and catalog snapshots.
+- Real part, assembly, and sketch lifecycle smoke flows.
+- Real COM connectivity on Windows with SolidWorks installed.
+
+## What Is Still Simulated
+
+- Mock adapter outputs: the mock adapter is the local test/dev replacement for SolidWorks COM. It returns canned responses so unit tests and offline workflows can run without SolidWorks, but it does not validate a real CAD result.
+- Some UI preview and checkpoint paths.
+- Scenario-specific automation and macro behavior that would be flaky in unattended runs.
 
 ## Layer 1: All-Tools Catalog Validation
 

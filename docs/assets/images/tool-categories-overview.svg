@@ -9,13 +9,13 @@
   <rect width="700" height="375" fill="none" stroke="#E0E0E0" stroke-width="1.5" rx="8"/>
 
   <text x="350" y="26" text-anchor="middle" font-size="14" font-weight="bold" fill="#212121">SolidWorks MCP — Tool Categories Overview</text>
-  <text x="350" y="40" text-anchor="middle" font-size="11" fill="#757575">105 tools across 12 functional areas</text>
+  <text x="350" y="40" text-anchor="middle" font-size="11" fill="#757575">109 tools across 12 functional areas</text>
 
   <!-- Centre hub -->
   <ellipse cx="350" cy="185" rx="58" ry="38" fill="#1565C0" stroke="#0D47A1" stroke-width="2"/>
   <text x="350" y="181" text-anchor="middle" font-size="11" font-weight="bold" fill="white">SolidWorks</text>
   <text x="350" y="196" text-anchor="middle" font-size="11" font-weight="bold" fill="white">MCP Server</text>
-  <text x="350" y="210" text-anchor="middle" font-size="10" fill="#90CAF9">105 tools</text>
+  <text x="350" y="210" text-anchor="middle" font-size="10" fill="#90CAF9">109 tools</text>
 
   <!-- Category bubbles around hub, 12 items arranged in a wheel -->
   <!-- Angles: 0,30,60,90,120,150,180,210,240,270,300,330 degrees -->
@@ -24,13 +24,13 @@
   <!-- 1: Modeling (top, 90°) -->
   <ellipse cx="350" cy="82" rx="55" ry="28" fill="#E3F2FD" stroke="#1565C0" stroke-width="1.8"/>
   <text x="350" y="78" text-anchor="middle" font-size="10" font-weight="bold" fill="#0D47A1">Modeling</text>
-  <text x="350" y="92" text-anchor="middle" font-size="10" fill="#1565C0">9 tools</text>
+  <text x="350" y="92" text-anchor="middle" font-size="10" fill="#1565C0">11 tools</text>
   <line x1="350" y1="110" x2="350" y2="147" stroke="#1565C0" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
 
   <!-- 2: Sketching (30°) -->
   <ellipse cx="498" cy="93" rx="55" ry="28" fill="#E8F5E9" stroke="#2E7D32" stroke-width="1.8"/>
   <text x="498" y="89" text-anchor="middle" font-size="10" font-weight="bold" fill="#1B5E20">Sketching</text>
-  <text x="498" y="103" text-anchor="middle" font-size="10" fill="#2E7D32">18 tools</text>
+  <text x="498" y="103" text-anchor="middle" font-size="10" fill="#2E7D32">19 tools</text>
   <line x1="455" y1="107" x2="400" y2="158" stroke="#2E7D32" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
 
   <!-- 3: Drawing (0°, right) -->
@@ -54,7 +54,7 @@
   <!-- 6: File Management (210°) -->
   <ellipse cx="202" cy="278" rx="62" ry="28" fill="#E0F7FA" stroke="#00838F" stroke-width="1.8"/>
   <text x="202" y="274" text-anchor="middle" font-size="10" font-weight="bold" fill="#004D40">File Management</text>
-  <text x="202" y="288" text-anchor="middle" font-size="10" fill="#00838F">13 tools</text>
+  <text x="202" y="288" text-anchor="middle" font-size="10" fill="#00838F">14 tools</text>
   <line x1="245" y1="264" x2="300" y2="214" stroke="#00838F" stroke-width="1.2" marker-end="url(#a)" stroke-dasharray="4,3"/>
 
   <!-- 7: Automation (180°, left) -->

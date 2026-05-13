@@ -1,173 +1,209 @@
-# U-Joint Rebuild Prompt Pack (Bracket + Parts + Assembly)
+# U-Joint Rebuild Prompts
 
-Use these prompts in order. They now distinguish between two different bracket targets:
+**Note:** These prompts are for when you have access to the reference SolidWorks sample models and want to match them exactly. For learning and from-scratch builds, start with the [U-Joint Assembly Tutorial](../tutorials/u-joint-assembly-build.md) instead.
 
-- exact SolidWorks sample parity
-- print-optimized PETG variant
+Reference models location:
 
-Do not mix those targets in one run.
-
-## Prompt 1A: Bracket (exact sample parity)
-
-Create only the bracket part from an empty file and match the SolidWorks sample bracket as closely as possible.
-
-Source model to inspect first:
-
-- `C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\bracket.sldprt`
-
-Rules:
-
-- Inspect the source feature tree before planning or sketching.
-- Feature tree must end up exactly: `Sketch1`, `Base-Extrude-Thin`, `Sketch2`, `Cut-Extrude1`.
-- `Sketch1` is an open profile, not a closed contour.
-- Measured `Sketch1` segment endpoints from the sample are:
-  - line: `(0.0, 0.0)` to `(0.0, 82.55)`
-  - line: `(0.0, 82.55)` to `(-57.15, 82.55)`
-  - line: `(-77.216, 27.494)` to `(-44.45, 0.0)`
-  - line: `(-44.45, 0.0)` to `(0.0, 0.0)`
-- `Base-Extrude-Thin` uses the sample thin-wall settings, not the print variant settings.
-- `Sketch2` must be placed on the top flange face, not the global `Top` plane.
-- `Sketch2` must create `Cut-Extrude1` as a blind cut with depth `10.0 mm` downward.
-- Match the sample appearance as well as the geometry: same feature order, same hole placement, same overall proportions, same color if appearance metadata is available.
-- Do not add extra features beyond the four target items unless the model is invalid without them.
-- Screenshot exports must be captured from the rebuilt `u_bracket_from_prompt.sldprt` document, not whichever SolidWorks window is currently active.
-
-Validation output required:
-
-- Report the resulting feature tree in order.
-- Report the measured thin-wall value, extrusion depth, and hole diameter from the rebuilt part.
-- Report whether `Sketch2` was created on a model face or on a reference plane.
-- Report any deviation from the 4-feature target.
-
-## Prompt 1B: Bracket (print-optimized PETG variant)
-
-Create only the bracket part from an empty file and do not copy geometry from any existing model.
-
-Requirements:
-
-- Feature names must be exactly: `Sketch1`, `Base-Extrude-Thin`, `Sketch2`.
-- `Sketch1` is an open bent-link profile (top flange, vertical web, bottom rail, angled lead-in tab).
-- `Base-Extrude-Thin` uses `1.5 mm` wall thickness and one-direction depth extrusion out of `Sketch1`.
-- `Sketch2` adds one mounting hole on the top flange (`4.2 mm` diameter M4 pilot) and cuts through all.
-- Keep bend transitions smooth (arc transitions, no sharp internal stress corners).
-- Material intent: PETG, `0.2 mm` layer, `0.6 mm` nozzle.
-- Do not add extra features beyond `Sketch1`, `Base-Extrude-Thin`, `Sketch2` unless required to fix invalid geometry.
-
-Validation output required:
-
-- Report resulting feature tree in order.
-- Report thin-wall value, extrusion depth, and hole diameter.
-- Report any deviation from the 3-feature target.
-
-## Prompt 2: Remaining U-Joint part set (single-pass planner)
-
-Create a complete U-joint part plan from scratch for these parts only:
-
-- Yoke_male
-- Yoke_female
-- Spider
-- Pin
-- Crank-shaft
-- Crank-arm
-- Crank-knob
-- Bracket
-
-Rules:
-
-- Build each part in its own file from an empty part template.
-- Use stable feature names per part: Sketch1, BaseFeature, Sketch2, Refinement1 (or fewer if unnecessary).
-- Apply print-aware constraints: PETG, 0.2 mm layer, 0.6 mm nozzle.
-- Use 1.0 mm clearance budget only at mating interfaces.
-- Prefer symmetric references and datum-driven dimensions to keep assembly constraints robust.
-- For cylindrical mating elements (pin/spider bores), report shaft/hole nominals and resulting clearance.
-- For `Bracket`, explicitly state whether you are using Prompt `1A` exact-sample parity or Prompt `1B` print-optimized variant.
-- Do not infer hidden dimensions from any final sample model unless the selected bracket mode is `1A` exact-sample parity.
-
-Output format:
-
-- For each part, return:
-  - part_name
-  - ordered_feature_plan
-  - critical_dimensions
-  - mating_interfaces
-  - print_risks_and_mitigations
-
-## Prompt 3: UJoint.SLDASM assembly build
-
-Create assembly UJoint.SLDASM from the generated parts without referencing prebuilt mates.
-
-Assembly rules:
-
-- Insert components with fixed origin strategy: one grounded primary component, all others mated relative to datums.
-- Create only deterministic mates (coincident, concentric, distance, angle as required).
-- Preserve intended DOF where rotation is required; do not over-constrain the mechanism.
-- Validate for interference and report collisions before finalizing.
-- Output final mate list with component pair, mate type, and target references.
-
-Validation output required:
-
-- Mate count and status (fully defined / under-defined / over-defined).
-- Interference summary.
-- Motion sanity statement for the joint.
-
-## Prompt 4: Final QA and parity check
-
-Run a final parity check between generated part/assembly set and the intended U-joint topology.
-
-Checklist:
-
-- All required part files exist.
-- Bracket feature tree matches the selected bracket mode:
-  - exact sample parity: `Sketch1`, `Base-Extrude-Thin`, `Sketch2`, `Cut-Extrude1`
-  - print variant: `Sketch1`, `Base-Extrude-Thin`, `Sketch2`
-- Assembly resolves all required components.
-- No blocking rebuild errors.
-- No unresolved mate references.
-- Export isometric PNG for each part and for final assembly.
-
-Return a pass/fail table with actionable corrections for each failed line item.
-
-## How To Use This Pack In The Prefab UI
-
-1. Start with Prompt 1A *or* Prompt 1B (never both in one session).
-2. After bracket completion, run Prompt 2 to plan remaining parts.
-3. Run Prompt 3 to build `UJoint.SLDASM` from generated parts.
-4. Run Prompt 4 and fix any failed checklist lines before export.
-
-### Bracket Artifact Script (Prompt 1A parity helper)
-
-Reference script:
-
-- `docs/getting-started/tutorial-parts/build_u_bracket_artifact.py`
-
-Current parity settings implemented in the script:
-
-- `Base-Extrude-Thin` depth: `38.1 mm`
-- thin wall: `6.35 mm`
-- thin feature auto-fillet corners: enabled
-- thin feature fillet radius: `3.175 mm`
-- hole diameter: `12.70 mm`
-- hole center offset: `19.05 mm` from the right edge reference (centerline-driven)
-- `Cut-Extrude1` depth: blind `10.0 mm` (downward)
-- end-of-run document state: closes stray documents and restores only `u_bracket_from_prompt.sldprt` as the active model
-
-Run from repository root:
-
-```powershell
-.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_u_bracket_artifact.py
+```
+C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\
 ```
 
-Expected outputs:
+## Reference Model Analysis
 
-- `docs/getting-started/tutorial-parts/u_bracket_from_prompt.sldprt`
-- `docs/getting-started/tutorial-parts/u_bracket_from_prompt_isometric.png`
-- `docs/getting-started/tutorial-parts/answer_key_bracket_isometric.png`
+Before using these prompts, inspect the reference assembly to understand the geometry:
 
-### Annotated screenshot references (Prompt 1A review)
+- `bracket.sldprt` — Mounting base
+- `Yoke_male.sldprt` — Primary yoke arm
+- `Yoke_female.sldprt` — Secondary yoke arm  
+- `Spider.sldprt` — Cross hub connecting yokes
+- `Pin.sldprt` — Shaft pin (qty 4 in assembly)
+- `Crank_shaft.sldprt` — Drive shaft
+- `Crank_arm.sldprt` — Actuation lever
+- `Crank_knob.sldprt` — Grip handle
+- `UJoint.SLDASM` — Complete assembly
 
-- Rebuilt bracket image: `docs/getting-started/tutorial-parts/u_bracket_from_prompt_isometric.png`
-- Sample answer key image: `docs/getting-started/tutorial-parts/answer_key_bracket_isometric.png`
-- Review checklist overlay items:
-  - top flange hole on the same face as the sample reference
-  - blind cut depth of `10.0 mm`
-  - feature order `Sketch1 -> Base-Extrude-Thin -> Sketch2 -> Cut-Extrude1`
+## Prompt 1: Bracket (Exact Parity)
+
+Use this prompt if you want to match the reference bracket exactly and keep the same feature-tree shape.
+
+```
+Create Bracket_v1.SLDPRT from scratch to match the reference model exactly.
+
+Use mm units and do not add extra features.
+
+Required feature tree:
+1. Sketch1
+2. Base-Extrude-Thin
+3. Sketch2
+4. Cut-Extrude1
+
+Build steps (exact dimensions):
+1. On Front Plane, create Sketch1 using these connected line segments:
+   - (0.00, 0.00) to (0.00, 82.55)
+   - (0.00, 82.55) to (-57.15, 82.55)
+   - (-57.15, 82.55) to (-77.216, 27.494)
+   - (-77.216, 27.494) to (-44.45, 0.00)
+   
+   Add dimensions to ALL lines, ensure all sketches are fully defined before moving on. 
+   Ensure the first and last points are NOT connected, it's an open u-bracket design.
+
+2. Create Base-Extrude-Thin:
+   - Mid-plane depth: 38.10
+   - Thin wall thickness: 6.35
+   - Auto-fillet corners ON
+   - Corner radius: 3.175
+
+3. Create Sketch2 on the top planar face (offset plane from Top Plane at 88.90 if needed).
+
+4. In Sketch2:
+   - Add centerline from (0.00, 0.00) to (-57.15, 0.00)
+   - Add circle centered at (-44.45, 0.00) with diameter 12.70
+
+5. Create Cut-Extrude1:
+   - Blind cut depth: 10.00
+
+Validation requirements:
+- Report final feature tree names in order.
+- Export isometric PNG as bracket_isometric.png.
+- Compare against reference bracket isometric and report mismatch status.
+
+Save the part as Bracket_v1.SLDPRT.
+```
+
+Verification snapshot from this run:
+
+![Generated bracket vs answer key](../../assets/images/tutorials/u_bracket_generated_vs_answer.png)
+
+## Prompt 2: All Yoke Parts (Exact Parity)
+
+```
+Create Yoke_male.SLDPRT and Yoke_female.SLDPRT from scratch to match the reference models exactly.
+
+Reference models:
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_male.sldprt
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_female.sldprt
+
+Steps:
+1. Inspect the reference yoke parts and extract geometry, dimensions, and feature sequence
+2. Build Yoke_male.SLDPRT with exact feature tree and dimensions
+3. Build Yoke_female.SLDPRT (may be identical or slightly different)
+4. Replicate appearance and material properties
+5. Validate: Report feature tree for each yoke and confirm they match reference models
+
+Export isometric PNG for each: Yoke_male_isometric.png and Yoke_female_isometric.png
+```
+
+## Prompt 3: Spider and Pin
+
+```
+Create Spider.SLDPRT and Pin.SLDPRT from scratch to match the reference models exactly.
+
+Reference models:
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Spider.sldprt
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Pin.sldprt
+
+Steps:
+1. Inspect reference parts and extract exact dimensions and feature sequences
+2. Build Spider.SLDPRT: cross-shaped hub with four radial bores for pins
+3. Build Pin.SLDPRT: cylindrical shaft with head flange
+4. Match all critical dimensions and tolerances
+5. Validate: Report feature tree for each part
+
+Export isometric PNG for each: Spider_isometric.png and Pin_isometric.png
+```
+
+## Prompt 4: Crank Parts (Shaft, Arm, Knob)
+
+```
+Create Crank_shaft.SLDPRT, Crank_arm.SLDPRT, and Crank_knob.SLDPRT from scratch to match reference models exactly.
+
+Reference models:
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Crank_shaft.sldprt
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Crank_arm.sldprt
+- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Crank_knob.sldprt
+
+Steps:
+1. Inspect all three crank parts and extract geometry
+2. Build Crank_shaft.SLDPRT with drive flange and mounting holes
+3. Build Crank_arm.SLDPRT with connection bore and grip section
+4. Build Crank_knob.SLDPRT with sphere body and connection post
+5. Match all critical dimensions
+6. Validate: Report feature tree for each part
+
+Export isometric PNG: Crank_shaft_isometric.png, Crank_arm_isometric.png, Crank_knob_isometric.png
+```
+
+## Prompt 5: Assembly Build (Exact Parity)
+
+```
+Create UJoint.SLDASM from scratch to match the reference assembly exactly.
+
+Reference assembly: C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\UJoint.SLDASM
+
+Steps:
+1. Inspect reference assembly: component tree, mate list, DOF constraints
+2. Insert all 8 parts (or required qty) with exact mate sequence
+3. Replicate every mate (coincident, concentric, distance, angle, etc.)
+4. Validate final assembly:
+   - All parts present in correct locations
+   - All mates fully defined (no under-constraint)
+   - No over-constraint
+   - No interference between parts
+   - Mechanism articulates smoothly (if applicable)
+5. Report:
+   - Total mate count and types
+   - Interference analysis
+   - Motion summary (free DOF, constrained DOF)
+
+Export isometric PNG of final assembly.
+```
+
+## Prompt 6: Final QA and Parity Check
+
+```
+Perform final parity check between your generated parts/assembly and the reference UJoint.SLDASM.
+
+Checklist:
+- [ ] All 8 parts exist and are correctly named
+- [ ] Each part feature tree matches reference model
+- [ ] Assembly has all required mates
+- [ ] Assembly is fully defined
+- [ ] No interference detected
+- [ ] Crank shaft and driven components articulate correctly
+- [ ] All dimensions within ±0.5% of reference models
+- [ ] Material properties match (if specified)
+- [ ] Appearance/color matches reference (if specified)
+
+For any mismatches:
+- Identify which part or mate differs
+- Report the specific deviation
+- Provide corrective action (re-build part, adjust mate, etc.)
+- Re-validate after correction
+
+Generate final pass/fail report with images (isometric view from 3 angles).
+```
+
+---
+
+## When to Use These Prompts
+
+**Use these prompts if:**
+
+- You want to match the exact SolidWorks reference sample
+- You're validating MCP tool accuracy against known geometry
+- You need a precise baseline for comparative testing
+
+**Use the [U-Joint Assembly Tutorial](../tutorials/u-joint-assembly-build.md) if:**
+
+- You're learning MCP and the Prefab UI workflow
+- You want to build from scratch without reference constraints
+- You want to modify dimensions for your application
+- You're designing a custom U-joint variant
+
+---
+
+## Related
+
+- [U-Joint Assembly Tutorial (From Scratch)](../tutorials/u-joint-assembly-build.md)
+- [Prefab UI Dashboard](../prefab-ui-dashboard.md)
+- [Tool Catalog](../../user-guide/tool-catalog/index.md)

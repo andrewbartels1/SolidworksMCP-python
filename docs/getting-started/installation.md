@@ -107,7 +107,7 @@ Healthy startup logs include:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Registered 76 SolidWorks tools`
+- `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
 
 ## Troubleshooting

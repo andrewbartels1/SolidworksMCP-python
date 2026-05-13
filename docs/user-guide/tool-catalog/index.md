@@ -1,16 +1,16 @@
-# Tool Catalog — All 106 Tools
+# Tool Catalog — All 109 Tools
 
-This reference documents all **106 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **109 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
-![Tool categories overview — 106 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
+![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
 
 ## Quick Navigation
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Modeling Tools](modeling.md) | 9 | Create and manipulate SolidWorks parts, assemblies, and drawings, including sketches, extrusions, revolves, and assemblies. |
-| [Sketching Tools](sketching.md) | 18 | Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply geometric constraints and dimensions. |
+| [Modeling Tools](modeling.md) | 11 | Create and manipulate SolidWorks parts, assemblies, and drawings, including sketches, extrusions, revolves, and assemblies. |
+| [Sketching Tools](sketching.md) | 19 | Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply geometric constraints and dimensions. |
 | [Drawing Tools](drawing.md) | 12 | Create and edit 2-D technical drawings: add projected, section, and detail views, place annotations, and auto-dimension layouts. |
 | [Drawing Analysis Tools](drawing-analysis.md) | 8 | Quality-gate your drawings by analyzing dimensions, annotations, view coverage, standards compliance, and completeness. |
 | [Analysis Tools](analysis.md) | 5 | Extract engineering properties from models, including mass, volume, center of mass, inertia, and material metadata. |

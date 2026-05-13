@@ -1,10 +1,27 @@
 # Analysis Tools
 
-Extract engineering properties from models: mass, volume, centre of mass, moments of inertia, interference between solids, geometry curvature and thickness, and material properties. Essential for design validation.
+Use these after a model or assembly already exists. Start with mass properties, then
+interference checking, then geometry analysis, then material properties.
 
-> **Prerequisite:** An active model (part or assembly) with solid geometry.
+> **Prerequisite:** An active model or assembly with solid geometry.
 
 **Total tools in this category: 5**
+
+## Recommended order
+
+1. `calculate_mass_properties` or `get_mass_properties`
+2. `check_interference`
+3. `analyze_geometry`
+4. `get_material_properties`
+
+## Known limits
+
+- `get_mass_properties` is a compatibility alias for `calculate_mass_properties`.
+- These tools do not create or modify geometry.
+- In tests and local development, the mock adapter stands in for SolidWorks COM and
+  returns canned success/error payloads so the suite can run without a live SolidWorks
+  session, this is mostly for CI and testing use cases. Use a real SolidWorks 
+  Tinstallation to validate engineering results.
 
 ---
 
