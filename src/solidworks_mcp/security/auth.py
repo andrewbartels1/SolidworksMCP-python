@@ -100,7 +100,7 @@ def require_auth(config: SolidWorksMCPConfig) -> Callable[[F], F]:
                 payload = args[0]
 
             payload_dict: dict[str, Any] = {}
-            if hasattr(payload, "model_dump"):
+            if payload is not None and hasattr(payload, "model_dump"):
                 payload_dict = cast(dict[str, Any], payload.model_dump())
             elif isinstance(payload, dict):
                 payload_dict = payload

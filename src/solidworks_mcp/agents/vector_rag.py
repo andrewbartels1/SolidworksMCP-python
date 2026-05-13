@@ -21,7 +21,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Generator
 from urllib.request import urlopen
 
 import numpy as np
@@ -50,7 +50,7 @@ def _require_faiss() -> Any:  # pragma: no cover
     """
 
     try:
-        import faiss  # type: ignore[import]
+        import faiss
 
         return faiss
     except ImportError as exc:  # pragma: no cover
@@ -71,7 +71,7 @@ def _require_sentence_transformers() -> Any:  # pragma: no cover
     """
 
     try:
-        from sentence_transformers import SentenceTransformer  # type: ignore[import]
+        from sentence_transformers import SentenceTransformer
 
         return SentenceTransformer
     except ImportError as exc:  # pragma: no cover
@@ -89,7 +89,12 @@ def _require_sentence_transformers() -> Any:  # pragma: no cover
             def __init__(self, _model_name: str):
                 self._dim = 384
 
-            def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True):
+            def encode(
+                self,
+                texts: list[str],
+                convert_to_numpy: bool = True,
+                normalize_embeddings: bool = True,
+            ) -> Any:
                 vectors = []
                 for text in texts:
                     seed = hash(str(text)) % (2**32)
@@ -116,12 +121,14 @@ _MODEL_CACHE: dict[str, Any] = {}
 class _AwaitableQueryResult(str):
     """String result that can also be awaited for list-style compatibility."""
 
+    _hits: list[dict[str, Any]]
+
     def __new__(cls, text: str, hits: list[dict[str, Any]] | None = None):
         obj = super().__new__(cls, text)
         obj._hits = list(hits or [])
         return obj
 
-    def __await__(self):
+    def __await__(self) -> Generator[Any, None, list[dict[str, Any]]]:
         async def _resolve() -> list[dict[str, Any]]:
             return list(self._hits)
 
@@ -235,7 +242,7 @@ class VectorRAGIndex:
         self._dim: int | None = None
         # Model is cached at module level in _MODEL_CACHE; no instance field needed.
 
-    def __await__(self):
+    def __await__(self) -> Generator[Any, None, VectorRAGIndex]:
         async def _resolve() -> VectorRAGIndex:
             return self
 

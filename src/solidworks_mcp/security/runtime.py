@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 import secrets
 from dataclasses import dataclass
 
@@ -132,12 +133,12 @@ class SecurityEnforcer:
         if api_key is not None:
             get_secret_value = getattr(api_key, "get_secret_value", None)
             if callable(get_secret_value):
-                return get_secret_value()
-            return str(api_key)
+                return cast("str | None", get_secret_value())
+            return cast(str, api_key)
 
         api_keys = getattr(self._config, "api_keys", [])
         if api_keys:
-            return api_keys[0]
+            return cast("str | None", api_keys[0])
         return None
 
 

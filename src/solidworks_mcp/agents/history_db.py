@@ -456,7 +456,7 @@ def find_recent_errors(
     engine = _build_engine(resolved)
     with Session(engine) as session:
         rows = session.exec(
-            select(ErrorCatalog).order_by(ErrorCatalog.id.desc()).limit(limit)
+            select(ErrorCatalog).order_by(ErrorCatalog.id.desc()).limit(limit)  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -587,13 +587,13 @@ def find_run_timeline(run_id: str, db_path: Path | None = None) -> dict[str, Any
         tool_events = session.exec(
             select(ToolEvent)
             .where(ToolEvent.run_id == run_id)
-            .order_by(ToolEvent.id.asc())
+            .order_by(ToolEvent.id.asc())  # type: ignore[union-attr]
         ).all()
 
         convo_events = session.exec(
             select(ConversationEvent)
             .where(ConversationEvent.run_id == run_id)
-            .order_by(ConversationEvent.id.asc())
+            .order_by(ConversationEvent.id.asc())  # type: ignore[union-attr]
         ).all()
 
         events = []
@@ -621,7 +621,7 @@ def find_run_timeline(run_id: str, db_path: Path | None = None) -> dict[str, Any
                 }
             )
 
-        events.sort(key=lambda e: e["timestamp"])
+        events.sort(key=lambda e: e["timestamp"] or "")  # type: ignore[return-value]
         timeline["events"] = events
 
     return timeline
@@ -869,7 +869,7 @@ def list_plan_checkpoints(
         rows = session.exec(
             select(PlanCheckpoint)
             .where(PlanCheckpoint.session_id == session_id)
-            .order_by(PlanCheckpoint.checkpoint_index.asc())
+            .order_by(PlanCheckpoint.checkpoint_index.asc())  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -1006,7 +1006,7 @@ def list_tool_call_records(
         query = select(ToolCallRecord).where(ToolCallRecord.session_id == session_id)
         if checkpoint_id is not None:
             query = query.where(ToolCallRecord.checkpoint_id == checkpoint_id)
-        rows = session.exec(query.order_by(ToolCallRecord.id.asc())).all()
+        rows = session.exec(query.order_by(ToolCallRecord.id.asc())).all()  # type: ignore[union-attr]
 
     return [
         {
@@ -1090,7 +1090,7 @@ def list_evidence_links(
         query = select(EvidenceLink).where(EvidenceLink.session_id == session_id)
         if checkpoint_id is not None:
             query = query.where(EvidenceLink.checkpoint_id == checkpoint_id)
-        rows = session.exec(query.order_by(EvidenceLink.id.asc())).all()
+        rows = session.exec(query.order_by(EvidenceLink.id.asc())).all()  # type: ignore[union-attr]
 
     return [
         {
@@ -1172,7 +1172,7 @@ def list_model_state_snapshots(
         rows = session.exec(
             select(ModelStateSnapshot)
             .where(ModelStateSnapshot.session_id == session_id)
-            .order_by(ModelStateSnapshot.id.desc())
+            .order_by(ModelStateSnapshot.id.desc())  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -1255,7 +1255,7 @@ def list_sketch_graph_snapshots(
         )
         if model_path is not None:
             query = query.where(SketchGraphSnapshot.model_path == model_path)
-        rows = session.exec(query.order_by(SketchGraphSnapshot.id.desc())).all()
+        rows = session.exec(query.order_by(SketchGraphSnapshot.id.desc())).all()  # type: ignore[union-attr]
 
     return [
         {
