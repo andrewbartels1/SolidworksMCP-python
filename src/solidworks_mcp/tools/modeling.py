@@ -915,6 +915,8 @@ async def register_modeling_tools(
         """
         try:
             input_data = _normalize_input(input_data, GetDimensionInput)
+            if not input_data.name:
+                return {"status": "error", "message": "Dimension name is required"}
             result = await adapter.get_dimension(input_data.name)
 
             if result.is_success:
@@ -959,6 +961,8 @@ async def register_modeling_tools(
         """
         try:
             input_data = _normalize_input(input_data, SetDimensionInput)
+            if not input_data.name:
+                return {"status": "error", "message": "Dimension name is required"}
             result = await adapter.set_dimension(input_data.name, input_data.value)
 
             if result.is_success:

@@ -162,7 +162,7 @@ class MacroBatchInput(CompatInput):
 
 
 async def register_macro_recording_tools(
-    mcp: FastMCP, adapter: SolidWorksAdapter, config
+    mcp: FastMCP, adapter: SolidWorksAdapter, config: Any
 ) -> int:
     """Register macro recording and playback tools with FastMCP.
 

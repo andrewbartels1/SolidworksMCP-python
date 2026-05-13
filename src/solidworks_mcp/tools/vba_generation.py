@@ -220,7 +220,7 @@ class VBABatchInput(CompatInput):
 
 
 async def register_vba_generation_tools(
-    mcp: FastMCP, adapter: SolidWorksAdapter, config
+    mcp: FastMCP, adapter: SolidWorksAdapter, config: Any
 ) -> int:
     """Register VBA generation tools with FastMCP.
 
@@ -388,8 +388,8 @@ End Sub"""
         False, _ ' ReverseDir
         3, _ ' Type (swEndCondBlind)
         3, _ ' Type2
-        {input_data.angle * 3.14159 / 180.0}, _ ' Angle (radians)
-        {input_data.angle2 * 3.14159 / 180.0}, _ ' Angle2
+        {(input_data.angle or 0.0) * 3.14159 / 180.0}, _ ' Angle (radians)
+        {(input_data.angle2 or 0.0) * 3.14159 / 180.0}, _ ' Angle2
         {str(input_data.merge_result).lower()}, _ ' MergeResult
         False, _ ' FeatureScope
         False, _ ' Auto
