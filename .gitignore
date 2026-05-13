@@ -76,6 +76,8 @@ tests/.generated/
 .generated/
 .solidworks_mcp/
 htmlcov/
+.playwright-mcp/
+tmp/ui_smoke/
 
 # Claude local settings
 .claude/

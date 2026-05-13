@@ -98,10 +98,14 @@ function dev-help {
     Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only)"
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
+    Write-Host "  dev-format          Format code only (ruff format)"
     Write-Host "  dev-build           Build package for distribution"
     Write-Host "  dev-run             Start the MCP server"
     Write-Host "  dev-ui              Start FastAPI backend + Prefab dashboard"
     Write-Host "  dev-ui-probe        Start FastAPI backend + Prefab probe target"
+    Write-Host "  dev-docs-build      Build documentation once (mkdocs build --clean)"
+    Write-Host "  dev-docs-strict     Build documentation in strict mode"
+    Write-Host "  dev-docs-audit      Run verbose + strict docs audit and write summary"
     Write-Host "  dev-docs            Build and serve documentation (http://localhost:8000)"
     Write-Host "  dev-docs-discovery  Index SolidWorks COM/VBA documentation (Windows + SW running)"
     Write-Host "  dev-clean           Remove build/cache artifacts"
@@ -256,6 +260,13 @@ function dev-lint {
     else { Write-Host "Lint issues found." -ForegroundColor Yellow }
 }
 
+function dev-format {
+    Write-Host "Formatting code..." -ForegroundColor Cyan
+    Invoke-Venv @("-m", "ruff", "format", "src/", "tests/")
+    if ($LASTEXITCODE -eq 0) { Write-Host "Format complete." -ForegroundColor Green }
+    else { Write-Host "Formatting failed." -ForegroundColor Red }
+}
+
 function dev-build {
     Write-Host "Building package..." -ForegroundColor Cyan
     Invoke-Venv @("-m", "build")
@@ -274,8 +285,8 @@ function dev-ui {
 }
 
 function dev-ui-probe {
-    Write-Host "Starting UI probe (FastAPI + Prefab probe)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "run-ui.ps1") -FrontendTarget "src/solidworks_mcp/ui/prefab_trace_probe.py"
+    Write-Host "Starting UI probe alias (FastAPI + Prefab dashboard)..." -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "run-ui.ps1") -FrontendTarget "src/solidworks_mcp/ui/prefab_dashboard.py"
 }
 
 function dev-docs {
@@ -284,6 +295,27 @@ function dev-docs {
     if ($LASTEXITCODE -ne 0) { Write-Host "Docs build failed." -ForegroundColor Red; return }
     Write-Host "Serving at http://localhost:8000 (Ctrl+C to stop)..." -ForegroundColor Yellow
     Invoke-Venv @("-m", "mkdocs", "serve", "--dev-addr=localhost:8000")
+}
+
+function dev-docs-build {
+    Write-Host "Building docs..." -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "scripts\docs\build-docs.ps1")
+    if ($LASTEXITCODE -eq 0) { Write-Host "Docs build passed." -ForegroundColor Green }
+    else { Write-Host "Docs build failed." -ForegroundColor Red }
+}
+
+function dev-docs-strict {
+    Write-Host "Building docs in strict mode..." -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "scripts\docs\build-docs.ps1") -Strict
+    if ($LASTEXITCODE -eq 0) { Write-Host "Strict docs build passed." -ForegroundColor Green }
+    else { Write-Host "Strict docs build reported warnings/errors." -ForegroundColor Yellow }
+}
+
+function dev-docs-audit {
+    Write-Host "Running docs audit (verbose + strict)..." -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "scripts\docs\audit-docs.ps1")
+    if ($LASTEXITCODE -eq 0) { Write-Host "Docs audit completed." -ForegroundColor Green }
+    else { Write-Host "Docs audit failed." -ForegroundColor Red }
 }
 
 function dev-docs-discovery {

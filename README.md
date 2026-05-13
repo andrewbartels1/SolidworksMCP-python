@@ -6,7 +6,20 @@
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 106 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 109 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+
+## Featured Tutorial: Build a U-Joint Assembly from Scratch
+
+Learn the MCP + Prefab UI workflow by building a complete 8-part mechanical assembly step-by-step.
+
+![U-bracket UI prompt flow demo](docs/assets/images/tutorials/u_bracket_ui_prompt_flow.gif)
+
+**[→ Start the U-Joint Assembly Tutorial](docs/getting-started/tutorials/u-joint-assembly-build.md)**
+
+Choose your learning path:
+- **UI-Assisted (recommended for learning):** Interactive Prefab dashboard with real-time 3D feedback
+- **Prompt-only (fastest):** Script-driven part generation with Python
+- **Hybrid:** Combine both approaches for flexibility
 
 ## Overview
 
@@ -26,6 +39,18 @@ It includes:
 - COM/VBA routing and adapter safety wrappers
 - tool coverage across modeling, sketching, drawing, analysis, export, automation, templates, and macros
 - optional agent orchestration/testing utilities under `src/solidworks_mcp/agents/`
+
+## Supported Today
+
+- Windows + SolidWorks COM automation for the main CAD lifecycle.
+- Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
+- Prefab UI preview sync from the active viewport as PNG.
+
+## Not Yet / Simulated
+
+- Mock adapter output is simulated and should not be treated as engineering truth.
+- Live 3D viewport streaming in the UI.
+- Checkpoint-level interference validation in the UI runner.
 
 ## What Works (Verified Windows Setup)
 
@@ -50,7 +75,7 @@ When this is correct, startup logs show:
 - Git.
 - SolidWorks installed and launched at least once.
 
-Linux/WSL is useful for docs/tests/mock mode, but not for direct COM automation at the moment, this is planned to be supported later after the codebase is working well and more stable.
+Linux/WSL is useful for docs/tests/mock mode, but not for direct COM automation.
 
 ## Quick Start (Windows, python.org)
 
@@ -90,7 +115,9 @@ Common commands:
 - `dev-test-full` - run full test suite (includes smoke/integration paths)
 - `dev-lint` - lint checks
 - `dev-format` - format code
-- `dev-make-docs-build` - build docs site
+- `dev-docs-build` - build docs site once
+- `dev-docs-strict` - strict docs build (fails on warnings)
+- `dev-docs-audit` - generate docs audit report in `.generated/docs`
 
 ### Local CI Replica (Docker)
 
@@ -185,6 +212,42 @@ Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
 
 Replace the script path with your local repository path.
 
+## LM Studio MCP Configuration (Windows)
+
+Set your LM Studio MCP config file to include this server (LM Studio expects `mcpServers`):
+
+```json
+{
+  "mcpServers": {
+    "solidworks-mcp-server": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\Users\\andre\\OneDrive\\Documents\\GitHub\\SolidworksMCP-python\\run-mcp.ps1"
+      ]
+    }
+  }
+}
+```
+
+Alternative direct-python entry:
+
+```json
+{
+  "mcpServers": {
+    "solidworks-mcp-server": {
+      "command": "C:\\Users\\andre\\OneDrive\\Documents\\GitHub\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "solidworks_mcp.server"]
+    }
+  }
+}
+```
+
+After saving, restart LM Studio so it reloads MCP servers.
+
 ## Common Windows Fixes
 
 If `python` is not found:
@@ -224,6 +287,8 @@ Direct links:
 
 - [Installation](docs/getting-started/installation.md)
 - [Quick Start](docs/getting-started/quickstart.md)
+- [Tutorial: U-Joint Assembly Build](docs/getting-started/tutorials/u-joint-assembly-build.md)
+- [Tutorial Tracks](docs/getting-started/tutorial-tracks.md)
 - [Prefab UI Dashboard](docs/getting-started/prefab-ui-dashboard.md)
 - [VS Code MCP Setup](docs/getting-started/vscode-mcp-setup.md)
 - [Architecture](docs/user-guide/architecture.md)
