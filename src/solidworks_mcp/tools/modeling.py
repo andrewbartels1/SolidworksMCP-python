@@ -1033,13 +1033,18 @@ async def register_modeling_tools(
                     "status": "success",
                     "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
                     "cut_extrude": {
-                        "name": _result_value(feature, "feature_name", "name", default="Cut-Extrude"),
+                        "name": _result_value(
+                            feature, "feature_name", "name", default="Cut-Extrude"
+                        ),
                         "depth": input_data.depth,
                     },
                     "execution_time": result.execution_time,
                 }
             else:
-                return {"status": "error", "message": f"Failed to create cut-extrude: {result.error}"}
+                return {
+                    "status": "error",
+                    "message": f"Failed to create cut-extrude: {result.error}",
+                }
         except Exception as e:
             logger.error(f"Error in create_cut_extrude tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
@@ -1073,14 +1078,19 @@ async def register_modeling_tools(
                     "status": "success",
                     "message": f"Created fillet: {_result_value(feature, 'feature_name', 'name', default='Fillet')}",
                     "fillet": {
-                        "name": _result_value(feature, "feature_name", "name", default="Fillet"),
+                        "name": _result_value(
+                            feature, "feature_name", "name", default="Fillet"
+                        ),
                         "radius": input_data.radius,
                         "edges": input_data.edge_names,
                     },
                     "execution_time": result.execution_time,
                 }
             else:
-                return {"status": "error", "message": f"Failed to add fillet: {result.error}"}
+                return {
+                    "status": "error",
+                    "message": f"Failed to add fillet: {result.error}",
+                }
         except Exception as e:
             logger.error(f"Error in add_fillet tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}

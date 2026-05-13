@@ -1,7 +1,10 @@
 """Automation tools for SolidWorks MCP Server.
 
-Provides tools for automation including VBA code generation, macro recording, batch
-processing, and workflow automation in SolidWorks.
+Use these when the workflow is already defined and you need repeatable execution.
+Recommended order: generate_vba_code for complex steps, record or stop a macro when a
+manual flow should be captured, batch_process_files for many files, manage_design_table
+for configuration-driven variants, execute_workflow for scripted pipelines,
+create_template for reusable standards, and optimize_performance for tuning.
 """
 
 from typing import Any
@@ -431,26 +434,18 @@ End Sub
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            # For now, simulate macro recording stop
-            return {
-                "status": "success",
-                "message": "Stopped macro recording",
-                "macro_recording": {
-                    "status": "stopped",
-                    "end_time": "2024-01-01T10:05:00Z",
-                    "duration": "5 minutes",
-                    "actions_recorded": 15,
-                    "file_location": "C:\\Users\\User\\AppData\\Local\\SolidWorks\\Macros\\recorded_macro.swp",
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error in stop_macro_recording tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        # For now, simulate macro recording stop
+        return {
+            "status": "success",
+            "message": "Stopped macro recording",
+            "macro_recording": {
+                "status": "stopped",
+                "end_time": "2024-01-01T10:05:00Z",
+                "duration": "5 minutes",
+                "actions_recorded": 15,
+                "file_location": "C:\\Users\\User\\AppData\\Local\\SolidWorks\\Macros\\recorded_macro.swp",
+            },
+        }
 
     @mcp.tool()
     async def batch_process_files(input_data: BatchProcessInput) -> dict[str, Any]:

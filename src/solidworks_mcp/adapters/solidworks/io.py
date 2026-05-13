@@ -69,7 +69,9 @@ class SolidWorksIOMixin:
                 continue
             if first_non_empty is None:
                 first_non_empty = template
-            if template.lower().endswith(extension.lower()) and os.path.exists(template):
+            if template.lower().endswith(extension.lower()) and os.path.exists(
+                template
+            ):
                 existing_match = template
                 break
 
@@ -234,9 +236,7 @@ class SolidWorksIOMixin:
                 model = adapter._attempt(new_part)
 
             if not model:
-                part_template = self._resolve_template_path(
-                    [8, 0, 1, 2, 3], ".prtdot"
-                )
+                part_template = self._resolve_template_path([8, 0, 1, 2, 3], ".prtdot")
                 if not part_template:
                     raise Exception("No part template configured in SolidWorks")
                 model = app.NewDocument(part_template, 0, 0, 0)
@@ -290,9 +290,7 @@ class SolidWorksIOMixin:
                 model = adapter._attempt(new_assembly)
 
             if not model:
-                asm_template = self._resolve_template_path(
-                    [9, 2, 3, 1, 0], ".asmdot"
-                )
+                asm_template = self._resolve_template_path([9, 2, 3, 1, 0], ".asmdot")
                 if not asm_template:
                     raise Exception("No assembly template configured in SolidWorks")
                 model = app.NewDocument(asm_template, 0, 0, 0)
@@ -534,9 +532,13 @@ class SolidWorksIOMixin:
                 "title": adapter.currentModel.GetTitle(),
                 "path": adapter.currentModel.GetPathName(),
                 "type": adapter._get_document_type(),
-                "configuration": active_config.GetName() if active_config else "Default",
+                "configuration": active_config.GetName()
+                if active_config
+                else "Default",
                 "is_dirty": adapter.currentModel.GetSaveFlag(),
-                "feature_count": adapter.currentModel.FeatureManager.GetFeatureCount(True),
+                "feature_count": adapter.currentModel.FeatureManager.GetFeatureCount(
+                    True
+                ),
                 "rebuild_status": adapter.currentModel.GetRebuildStatus(),
             }
 
@@ -600,9 +602,12 @@ class SolidWorksIOMixin:
 
         def _get() -> MassProperties:
             """Get mass properties."""
-            adapter._attempt(lambda: adapter.currentModel.ForceRebuild3(False), default=None)
+            adapter._attempt(
+                lambda: adapter.currentModel.ForceRebuild3(False), default=None
+            )
             mass_props = adapter._attempt(
-                lambda: adapter.currentModel.Extension.CreateMassProperty(), default=None
+                lambda: adapter.currentModel.Extension.CreateMassProperty(),
+                default=None,
             )
 
             if mass_props:

@@ -12,7 +12,7 @@ idx.ingest_text("snap-fit-guide.md content …", source="snap-fit-guide.md") idx
 
 # Query later idx2 = VectorRAGIndex.load(namespace="3d-print-design") hits =
 idx2.query("snap fit cantilever deflection", top_k=5) for hit in hits:
-print(hit["score"], hit["text"][:120])
+print(hit["score"], hit.get("text", ""))
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ DEFAULT_OVERLAP = 150
 # ---------------------------------------------------------------------------
 
 
-def _require_faiss():  # noqa: ANN202  # pragma: no cover
+def _require_faiss() -> Any:  # pragma: no cover
     """Return the required require faiss.
 
     Returns:
@@ -59,7 +59,7 @@ def _require_faiss():  # noqa: ANN202  # pragma: no cover
         ) from exc
 
 
-def _require_sentence_transformers():  # noqa: ANN202  # pragma: no cover
+def _require_sentence_transformers() -> Any:  # pragma: no cover
     """Return the required require sentence transformers.
 
     Returns:

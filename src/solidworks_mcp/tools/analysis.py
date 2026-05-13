@@ -1,7 +1,9 @@
 """Analysis tools for SolidWorks MCP Server.
 
-Provides tools for analyzing SolidWorks models including mass properties, interference
-checking, geometry analysis, and material properties.
+Use these after a model or assembly already exists. Recommended order:
+calculate_mass_properties or get_mass_properties, then check_interference, then
+analyze_geometry, then get_material_properties. These tools are for validation and
+inspection, not for creating geometry.
 """
 
 from typing import Any
@@ -353,28 +355,20 @@ async def register_analysis_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            # Simulated material properties
-            return {
-                "status": "success",
-                "material": {
-                    "name": "Steel, Plain Carbon",
-                    "density": {"value": 7850, "units": "kg/m³"},
-                    "elastic_modulus": {"value": 200000, "units": "MPa"},
-                    "yield_strength": {"value": 250, "units": "MPa"},
-                    "ultimate_tensile_strength": {"value": 400, "units": "MPa"},
-                    "poissons_ratio": 0.29,
-                    "thermal_conductivity": {"value": 50, "units": "W/(m·K)"},
-                    "specific_heat": {"value": 460, "units": "J/(kg·K)"},
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error in get_material_properties tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        # Simulated material properties
+        return {
+            "status": "success",
+            "material": {
+                "name": "Steel, Plain Carbon",
+                "density": {"value": 7850, "units": "kg/m³"},
+                "elastic_modulus": {"value": 200000, "units": "MPa"},
+                "yield_strength": {"value": 250, "units": "MPa"},
+                "ultimate_tensile_strength": {"value": 400, "units": "MPa"},
+                "poissons_ratio": 0.29,
+                "thermal_conductivity": {"value": 50, "units": "W/(m·K)"},
+                "specific_heat": {"value": 460, "units": "J/(kg·K)"},
+            },
+        }
 
     # Future analysis tools:
     # - perform_fea_analysis (if FEA capabilities are available)

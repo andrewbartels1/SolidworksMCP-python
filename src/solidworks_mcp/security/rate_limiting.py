@@ -25,9 +25,6 @@ class RateLimiter:
         Args:
             max_requests (int): The max requests value.
             time_window (int): The time window value. Defaults to 60.
-
-        Returns:
-            Any: The result produced by the operation.
         """
         self.max_requests = max_requests
         self.time_window = time_window

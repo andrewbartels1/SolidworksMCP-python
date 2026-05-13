@@ -389,9 +389,6 @@ class SolidWorksDocsDiscovery:
 
         Args:
             output_dir (Path | None): The output dir value. Defaults to None.
-
-        Returns:
-            Any: The result produced by the operation.
         """
         self.output_dir = output_dir or Path(".generated/docs-index")
         self.output_dir.mkdir(parents=True, exist_ok=True)

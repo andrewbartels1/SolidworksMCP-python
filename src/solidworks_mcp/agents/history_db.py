@@ -299,14 +299,14 @@ class SketchGraphSnapshot(SQLModel, table=True):
     created_at: str
 
 
-def _build_engine(db_path: Path | None = None):
+def _build_engine(db_path: Path | None = None) -> Any:
     """Build a local SQLite engine from the configured path.
 
     Args:
         db_path (Path | None): The db path value. Defaults to None.
 
     Returns:
-        Any: The result produced by the operation.
+        Any: SQLAlchemy engine instance for the resolved SQLite path.
     """
     resolved = db_path or DEFAULT_DB_PATH
     resolved.parent.mkdir(parents=True, exist_ok=True)
@@ -809,6 +809,43 @@ def update_plan_checkpoint(
         if rollback_snapshot_id is not None:
             row.rollback_snapshot_id = rollback_snapshot_id
         row.updated_at = _utc_now_iso()
+        session.add(row)
+        session.commit()
+
+
+def update_plan_checkpoint_planned_action(
+    checkpoint_id: int,
+    *,
+    planned_action_json: str,
+    executed: bool | None = None,
+    result_json: str | None = None,
+    db_path: Path | None = None,
+) -> None:
+    """Update checkpoint planned-action JSON and optional execution status.
+
+    Args:
+        checkpoint_id: Target checkpoint row ID.
+        planned_action_json: New planned action payload encoded as JSON string.
+        executed: Optional executed flag override.
+        result_json: Optional result payload override.
+        db_path: Optional SQLite path override.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    with Session(engine) as session:
+        row = session.exec(
+            select(PlanCheckpoint).where(PlanCheckpoint.id == checkpoint_id)
+        ).first()
+        if row is None:
+            return
+
+        row.planned_action_json = planned_action_json
+        if executed is not None:
+            row.executed = executed
+        if result_json is not None:
+            row.result_json = result_json
+        row.updated_at = _utc_now_iso()
+
         session.add(row)
         session.commit()
 

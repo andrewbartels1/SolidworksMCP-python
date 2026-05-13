@@ -320,9 +320,6 @@ class SolidWorksAdapter(ABC):
 
         Args:
             config (object | None): Configuration values for the operation. Defaults to None.
-
-        Returns:
-            Any: The result produced by the operation.
         """
         if config is None:
             normalized_config: dict[str, Any] = {}

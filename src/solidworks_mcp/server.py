@@ -83,9 +83,6 @@ class SolidWorksMCPServer:
 
         Args:
             config (SolidWorksMCPConfig): Configuration values for the operation.
-
-        Returns:
-            Any: The result produced by the operation.
         """
         self.config = config
         self.state = MCPServerState(config=config)
