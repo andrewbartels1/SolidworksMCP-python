@@ -780,6 +780,10 @@ class TestPyWin32AdapterBranches:
         assert result.data == ["Default"]
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        __import__("platform").system() != "Windows",
+        reason="win32com only available on Windows",
+    )
     async def test_connect_disconnect_and_document_creation_paths(self, monkeypatch):
         """Test COM connect lifecycle plus model creation/open branches with mocks."""
         adapter = self._build_adapter(monkeypatch)
