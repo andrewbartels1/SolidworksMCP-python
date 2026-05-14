@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
+from . import sw_type_info
 from .base import (
     AdapterHealth,
     AdapterResult,
@@ -26,6 +27,7 @@ from .base import (
     SolidWorksModel,
     SweepParameters,
 )
+from .com_executor import ComExecutor
 
 try:
     import pythoncom
@@ -137,6 +139,21 @@ class PyWin32Adapter(SolidWorksAdapter):
         self.currentSketch: Any | None = None
         self.currentSketchManager: Any | None = None
 
+        # Single dedicated STA worker thread that owns ALL COM work.
+        #
+        # Background: SolidWorks COM is STA. An ``IDispatch`` proxy obtained
+        # on thread A cannot be invoked from thread B — pywin32 surfaces this
+        # as ``AttributeError: SldWorks.Application.<method>`` at call time.
+        # FastMCP dispatches async tool handlers on worker threads distinct
+        # from the thread where ``connect()`` ran.
+        #
+        # By funneling all COM calls through a single thread owned by this
+        # adapter, we sidestep the entire cross-thread proxy problem. Instance
+        # attributes like ``self.swApp`` and ``self.currentModel`` remain
+        # valid as long as they're only *touched* from inside executor jobs
+        # (which ``_handle_com_operation`` enforces).
+        self._com = ComExecutor(name=f"sw-com-{id(self):x}")
+
         # COM constants (equivalent to SolidWorks API constants)
         self.constants = {
             # Document types
@@ -179,31 +196,61 @@ class PyWin32Adapter(SolidWorksAdapter):
                             print("Connected to SolidWorks successfully")
                             ```
         """
-        try:
-            # Initialize COM apartment
-            pythoncom.CoInitialize()
+        # Start the dedicated COM thread (idempotent). CoInitialize runs on
+        # that thread; the main thread never touches COM directly.
+        self._com.start()
 
-            # Try to get existing SolidWorks instance
+        def _do_connect() -> Any:
+            """Acquire SolidWorks on the COM worker thread.
+
+            Forces **late binding** (``dynamic.Dispatch``) even when the
+            makepy-generated wrapper is loaded. Rationale: this adapter's
+            OpenDoc6 / Save / etc. calls pass ``win32com.client.VARIANT``
+            out-parameters, which only work with late-bound dispatches.
+            Early-bound wrappers require ``pythoncom.Missing`` instead, a
+            much larger migration.
+
+            Late binding + ``sw_type_info.flag_methods`` gives us:
+              - VARIANT out-params keep working (legacy-compatible)
+              - Zero-arg methods (``GetType``, ``GetTitle``, …) resolve as
+                methods, not properties (fixes TypeError class of bugs)
+            """
+            from win32com.client import dynamic
+
             try:
-                self.swApp = win32com.client.GetActiveObject("SldWorks.Application")
+                # GetActiveObject by default returns an early-bound wrapper
+                # if one exists; wrap in dynamic.Dispatch to force late.
+                raw = win32com.client.GetActiveObject("SldWorks.Application")
+                app = dynamic.Dispatch(raw._oleobj_)
             except pywintypes.com_error:
-                # Create new SolidWorks instance
-                self.swApp = win32com.client.Dispatch("SldWorks.Application")
+                app = dynamic.Dispatch("SldWorks.Application")
 
-            if self.swApp is None:
-                raise SolidWorksMCPError("SolidWorks COM application instance is None")
+            if app is None:
+                raise SolidWorksMCPError(
+                    "SolidWorks COM application instance is None"
+                )
 
-            app = self.swApp
+            # Flag ISldWorks methods so ``app.RevisionNumber()``,
+            # ``app.ActiveDoc``, etc. dispatch as methods, not properties.
+            sw_type_info.flag_methods(app, "ISldWorks")
 
-            # Ensure SolidWorks is visible
+            # Make SolidWorks visible for automation.
             app.Visible = True
 
-            # Disable confirmation dialogs for automation
+            # Disable confirmation dialogs for batch processing.
             app.SetUserPreferenceToggle(150, False)  # Hide warnings
             app.SetUserPreferenceToggle(149, False)  # Hide questions
 
+            return app
+
+        try:
+            self.swApp = self._com.run(_do_connect, timeout=30.0)
         except Exception as e:
-            raise SolidWorksMCPError(f"Failed to connect to SolidWorks: {e}") from e
+            # If connect failed, stop the executor so we don't leak the thread.
+            self._com.stop()
+            raise SolidWorksMCPError(
+                f"Failed to connect to SolidWorks: {e}"
+            ) from e
 
     async def disconnect(self) -> None:
         """Disconnect from SolidWorks application.
@@ -226,20 +273,34 @@ class PyWin32Adapter(SolidWorksAdapter):
                                 await adapter.disconnect()
                             ```
         """
+        def _do_disconnect() -> None:
+            """Release COM state on the COM worker thread."""
+            if self.swApp is not None:
+                try:
+                    # Re-enable user preferences so the SW GUI is usable
+                    # after automation stops.
+                    self.swApp.SetUserPreferenceToggle(150, True)
+                    self.swApp.SetUserPreferenceToggle(149, True)
+                except Exception:
+                    pass
+            # Clear cached dispatches so their ID-based flag-cache entries
+            # are re-flagged fresh on the next connect.
+            sw_type_info.invalidate_flag_cache()
+            self.swApp = None
+            self.currentModel = None
+            self.currentSketch = None
+            self.currentSketchManager = None
+
         try:
-            if self.currentModel:
-                self.currentModel = None
-            if self.currentSketch:
-                self.currentSketch = None
-                self.currentSketchManager = None
-            if self.swApp:
-                # Re-enable user preferences
-                self.swApp.SetUserPreferenceToggle(150, True)
-                self.swApp.SetUserPreferenceToggle(149, True)
-                self.swApp = None
+            if self._com._thread is not None and self._com._thread.is_alive():
+                # Run the COM-touching cleanup on the owning thread, then
+                # stop that thread so it can CoUninitialize cleanly.
+                try:
+                    self._com.run(_do_disconnect, timeout=5.0)
+                except Exception as e:
+                    logger.warning(f"disconnect() run error: {e!r}")
         finally:
-            # Uninitialize COM apartment
-            pythoncom.CoUninitialize()
+            self._com.stop()
 
     def is_connected(self) -> bool:
         """Check if connected to SolidWorks.
@@ -333,8 +394,24 @@ class PyWin32Adapter(SolidWorksAdapter):
         """
         start_time = time.time()
 
+        # Route the operation to the dedicated COM thread. The closure runs
+        # with the correct apartment and never sees a cross-thread IDispatch.
+        if self._com._thread is None or not self._com._thread.is_alive():
+            execution_time = time.time() - start_time
+            self.update_metrics(execution_time, False)
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Error in {operation_name}: ComExecutor is not "
+                    "running (call connect() first)"
+                ),
+                execution_time=execution_time,
+            )
+
         try:
-            result = operation_func()
+            # Timeout is generous — some SW ops (imports, rebuilds of large
+            # assemblies) legitimately take a minute+.
+            result = self._com.run(operation_func, timeout=120.0)
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, True)
             return AdapterResult(
@@ -353,9 +430,15 @@ class PyWin32Adapter(SolidWorksAdapter):
         except Exception as e:
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, False)
+            # Include exception class so post-mortem diagnostics can tell
+            # AttributeError (cross-thread — would indicate a regression in
+            # ComExecutor routing) from generic failures.
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=f"Error in {operation_name}: {e}",
+                error=(
+                    f"Error in {operation_name}: "
+                    f"{type(e).__name__}: {e}"
+                ),
                 execution_time=execution_time,
             )
 
@@ -502,6 +585,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             if not model:
                 raise Exception(f"Failed to open model: {resolved_path}")
+
+            # Flag doc-specific methods so zero-arg calls like GetTitle(),
+            # GetPathName(), GetActiveConfiguration() dispatch as methods,
+            # not properties. ``doc_type`` is already resolved above from
+            # the file extension; use it directly to pick the right SW
+            # interface (IModelDoc2 + IAssemblyDoc / IPartDoc / IDrawingDoc).
+            sw_type_info.flag_doc(model, doc_type)
 
             # Set as current model
             self.currentModel = model
@@ -2649,16 +2739,35 @@ class PyWin32Adapter(SolidWorksAdapter):
             Returns:
                 dict[str, Any]: A dictionary containing the resulting values.
             """
+            # Intermediate dispatches (Configuration, FeatureManager) are
+            # freshly returned from SW — flag their methods so zero-arg
+            # accessors like ``.GetName()``, ``.GetFeatureCount()``
+            # dispatch as methods, not properties.
+            config = sw_type_info.flagged(
+                self.currentModel.GetActiveConfiguration(), "IConfiguration"
+            )
+            feat_mgr = sw_type_info.flagged(
+                self.currentModel.FeatureManager, "IFeatureManager"
+            )
+
             info = {
                 "title": self.currentModel.GetTitle(),
                 "path": self.currentModel.GetPathName(),
                 "type": self._get_document_type(),
-                "configuration": self.currentModel.GetActiveConfiguration().GetName()
-                if self.currentModel.GetActiveConfiguration()
-                else "Default",
+                # IConfiguration.Name is a property, not a method.
+                "configuration": config.Name if config else "Default",
                 "is_dirty": self.currentModel.GetSaveFlag(),
-                "feature_count": self.currentModel.FeatureManager.GetFeatureCount(True),
-                "rebuild_status": self.currentModel.GetRebuildStatus(),
+                "feature_count": feat_mgr.GetFeatureCount(True)
+                if feat_mgr
+                else 0,
+                # GetRebuildStatus isn't in the SW 2025 TLB. IsTessellationValid
+                # is the modern proxy: false => rebuild needed.
+                "needs_rebuild": not bool(
+                    self._attempt(
+                        lambda: self.currentModel.IsTessellationValid(),
+                        default=True,
+                    )
+                ),
             }
             return info
 
