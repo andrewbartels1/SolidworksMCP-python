@@ -10,6 +10,7 @@
 .solidworks_mcp
 htmlcov
 coverage.xml
+tests/solidworks_mcp/coverage
 __pycache__
 *.pyc
 *.pyo
