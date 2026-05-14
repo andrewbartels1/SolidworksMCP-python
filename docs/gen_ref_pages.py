@@ -1,8 +1,8 @@
 """Generate the code reference pages and navigation.
 
-This script scans the src/solidworks_mcp source tree and generates
-corresponding markdown files with mkdocstrings directives. These are
-then displayed in the "API Reference" section of the documentation.
+This script scans the src/solidworks_mcp source tree and generates corresponding
+markdown files with mkdocstrings directives. These are then displayed in the "API
+Reference" section of the documentation.
 """
 
 from pathlib import Path

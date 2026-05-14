@@ -1,4 +1,5 @@
-"""VBA macro execution lifecycle management for SolidWorks automation."""
+"""VBA macro execution lifecycle management for SolidWorks automation.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +15,11 @@ from .base import AdapterResult, AdapterResultStatus
 @dataclass(frozen=True)
 class MacroExecutionRequest:
     """Request to execute a VBA macro.
-
+    
     Attributes:
-        macro_code: Full VBA source code string.
-        macro_name: Identifier for this macro (for logging).
-        subroutine: Subroutine entry point name (if not ``Main``).
+        macro_code (str): The macro code value.
+        macro_name (str): The macro name value.
+        subroutine (str): The subroutine value.
     """
 
     macro_code: str
@@ -29,13 +30,13 @@ class MacroExecutionRequest:
 @dataclass(frozen=True)
 class MacroExecutionResult:
     """Result of VBA macro execution.
-
+    
     Attributes:
-        success: Whether execution completed without error.
-        macro_name: Identifying name of executed macro.
-        output: Captured output or result data.
-        error: Error message if execution failed.
-        duration_seconds: Elapsed time in seconds.
+        duration_seconds (float): The duration seconds value.
+        error (str | None): The error value.
+        macro_name (str): The macro name value.
+        output (str | dict[str, Any] | None): The output value.
+        success (bool): The success value.
     """
 
     success: bool
@@ -47,17 +48,25 @@ class MacroExecutionResult:
 
 class VbaMacroExecutor:
     """Manage VBA macro execution with save and tracking.
-
+    
     This executor handles the full lifecycle: code generation, on-disk persistence,
     execution via the backing adapter, and result tracking.
+    
+    Args:
+        temp_macro_dir (Path | None): The temp macro dir value. Defaults to None.
+    
+    Attributes:
+        _temp_macro_dir (Any): The temp macro dir value.
     """
 
     def __init__(self, temp_macro_dir: Path | None = None) -> None:
         """Initialize macro executor.
-
+        
         Args:
-            temp_macro_dir: Optional temporary directory for macro storage.
-                Defaults to system temp.
+            temp_macro_dir (Path | None): The temp macro dir value. Defaults to None.
+        
+        Returns:
+            None: None.
         """
         self._temp_macro_dir = temp_macro_dir or Path(tempfile.gettempdir())
         self._execution_history: dict[str, MacroExecutionResult] = {}
@@ -67,14 +76,14 @@ class VbaMacroExecutor:
         request: MacroExecutionRequest,
         backing_adapter: Any,
     ) -> AdapterResult[MacroExecutionResult]:
-        """Execute a VBA macro using the backing adapter.
-
+        """Provide execute macro support for the vba macro executor.
+        
         Args:
-            request: Macro execution request with code and metadata.
-            backing_adapter: SolidWorks adapter for macro execution.
-
+            request (MacroExecutionRequest): The request value.
+            backing_adapter (Any): The backing adapter value.
+        
         Returns:
-            Adapter result wrapping macro execution outcome.
+            AdapterResult[MacroExecutionResult]: The result produced by the operation.
         """
         start_time = datetime.utcnow()
         macro_path = self._save_macro_to_disk(request.macro_code, request.macro_name)
@@ -131,12 +140,16 @@ class VbaMacroExecutor:
         MacroExecutionResult,
     ]:
         """Retrieve macro execution history.
-
+        
         Args:
-            macro_name: Optional name to filter results; if None returns all history.
-
+            macro_name (str | None): The macro name value. Defaults to None.
+        
         Returns:
-            Dictionary mapping macro names to execution results.
+            dict[
+                str,
+                MacroExecutionResult,
+            ]: A dictionary containing the
+                                                                    resulting values.
         """
         if macro_name is not None:
             return (
@@ -150,13 +163,13 @@ class VbaMacroExecutor:
 
     def _save_macro_to_disk(self, macro_code: str, macro_name: str) -> Path:
         """Save VBA macro code to a file.
-
+        
         Args:
-            macro_code: VBA source code.
-            macro_name: Macro identifier for filename.
-
+            macro_code (str): The macro code value.
+            macro_name (str): The macro name value.
+        
         Returns:
-            Path to saved macro file.
+            Path: The result produced by the operation.
         """
         safe_name = "".join(
             c if c.isalnum() or c in ("_", "-") else "_" for c in macro_name
@@ -173,14 +186,14 @@ class VbaMacroExecutor:
         backing_adapter: Any,
     ) -> dict[str, Any]:
         """Delegate macro execution to backing adapter.
-
+        
         Args:
-            macro_path: Path to saved macro file.
-            subroutine: VBA subroutine entry point.
-            backing_adapter: SolidWorks adapter.
-
+            macro_path (Path): The macro path value.
+            subroutine (str): The subroutine value.
+            backing_adapter (Any): The backing adapter value.
+        
         Returns:
-            Execution result dictionary from adapter.
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         if not hasattr(backing_adapter, "execute_macro"):
             return {

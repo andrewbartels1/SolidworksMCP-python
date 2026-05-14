@@ -1,4 +1,5 @@
-"""Complexity analysis for routing operations between COM and VBA paths."""
+"""Complexity analysis for routing operations between COM and VBA paths.
+"""
 
 from __future__ import annotations
 
@@ -11,11 +12,11 @@ from pydantic import BaseModel
 @dataclass(frozen=True)
 class OperationProfile:
     """Complexity profile metadata for an operation.
-
+    
     Attributes:
-        name: Operation name.
-        base_complexity: Baseline complexity value in range ``[0.0, 1.0]``.
-        vba_preferred: Whether operation naturally leans toward VBA path.
+        base_complexity (float): The base complexity value.
+        name (str): The name value.
+        vba_preferred (bool): The vba preferred value.
     """
 
     name: str
@@ -24,7 +25,15 @@ class OperationProfile:
 
 
 class RoutingDecision(BaseModel):
-    """Complexity-based routing decision."""
+    """Complexity-based routing decision.
+    
+    Attributes:
+        complexity_score (float): The complexity score value.
+        operation (str): The operation value.
+        parameter_count (int): The parameter count value.
+        prefer_vba (bool): The prefer vba value.
+        reason (str): The reason value.
+    """
 
     operation: str
     parameter_count: int
@@ -34,7 +43,16 @@ class RoutingDecision(BaseModel):
 
 
 class ComplexityAnalyzer:
-    """Analyze operation complexity and recommend COM or VBA execution path."""
+    """Analyze operation complexity and recommend COM or VBA execution path.
+    
+    Args:
+        parameter_threshold (int): The parameter threshold value. Defaults to 12.
+        score_threshold (float): The score threshold value. Defaults to 0.6.
+    
+    Attributes:
+        _parameter_threshold (Any): The parameter threshold value.
+        _score_threshold (Any): The score threshold value.
+    """
 
     def __init__(
         self,
@@ -42,12 +60,13 @@ class ComplexityAnalyzer:
         score_threshold: float = 0.6,
     ) -> None:
         """Initialize analyzer state.
-
+        
         Args:
-            parameter_threshold: Hard threshold where parameter count indicates
-                VBA preference.
-            score_threshold: Score threshold in range ``[0.0, 1.0]`` used for
-                route recommendation.
+            parameter_threshold (int): The parameter threshold value. Defaults to 12.
+            score_threshold (float): The score threshold value. Defaults to 0.6.
+        
+        Returns:
+            None: None.
         """
         self._parameter_threshold = max(parameter_threshold, 1)
         self._score_threshold = max(min(score_threshold, 1.0), 0.1)
@@ -56,13 +75,13 @@ class ComplexityAnalyzer:
 
     def analyze(self, operation: str, payload: object) -> RoutingDecision:
         """Produce a routing recommendation for an operation call.
-
+        
         Args:
-            operation: Adapter operation name.
-            payload: Operation payload or arguments.
-
+            operation (str): Callable object executed by the helper.
+            payload (object): The payload value.
+        
         Returns:
-            Structured routing decision.
+            RoutingDecision: The result produced by the operation.
         """
         profile = self._profiles.get(
             operation,
@@ -107,11 +126,14 @@ class ComplexityAnalyzer:
 
     def record_result(self, operation: str, route: str, success: bool) -> None:
         """Record operation outcome for future routing influence.
-
+        
         Args:
-            operation: Operation name.
-            route: Executed route identifier (``"com"`` or ``"vba"``).
-            success: Whether execution succeeded.
+            operation (str): Callable object executed by the helper.
+            route (str): The route value.
+            success (bool): The success value.
+        
+        Returns:
+            None: None.
         """
         history = self._history.setdefault(
             operation,
@@ -127,7 +149,14 @@ class ComplexityAnalyzer:
             history[key] += 1
 
     def _history_bias(self, operation: str) -> float:
-        """Compute historical bias toward VBA based on COM reliability."""
+        """Compute historical bias toward VBA based on COM reliability.
+        
+        Args:
+            operation (str): Callable object executed by the helper.
+        
+        Returns:
+            float: The computed numeric result.
+        """
         history = self._history.get(operation)
         if history is None:
             return 0.0
@@ -142,7 +171,14 @@ class ComplexityAnalyzer:
         return max(min(failure_ratio, 1.0), 0.0)
 
     def _count_parameters(self, payload: object) -> int:
-        """Count meaningful parameters in payload recursively."""
+        """Count meaningful parameters in payload recursively.
+        
+        Args:
+            payload (object): The payload value.
+        
+        Returns:
+            int: The computed numeric result.
+        """
         if payload is None:
             return 0
 
@@ -161,7 +197,11 @@ class ComplexityAnalyzer:
         return 1
 
     def _default_profiles(self) -> dict[str, OperationProfile]:
-        """Return default complexity profiles for high-impact operations."""
+        """Return default complexity profiles for high-impact operations.
+        
+        Returns:
+            dict[str, OperationProfile]: A dictionary containing the resulting values.
+        """
         return {
             # Modeling operations - likely to benefit from VBA routing
             "create_extrusion": OperationProfile(

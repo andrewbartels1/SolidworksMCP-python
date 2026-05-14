@@ -1,9 +1,4 @@
-"""
-Pytest test runner configuration and utilities.
-
-This module provides test discovery, coverage reporting, and integration
-test execution for the SolidWorks MCP Server.
-"""
+"""Pytest test runner configuration and utilities."""
 
 import os
 import sys

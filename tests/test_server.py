@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks MCP Server and configuration.
-
-Comprehensive test suite covering server lifecycle, configuration loading,
-security setup, tool registration, and health monitoring.
-"""
+"""Tests for SolidWorks MCP Server and configuration."""
 
 import os
 from argparse import Namespace
@@ -12,6 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from src.solidworks_mcp import security as security_module
 from src.solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
@@ -27,6 +23,16 @@ from src.solidworks_mcp.server import (
     main,
     server_status,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_runtime_security_enforcer():
+    """Prevent leaked global runtime security state from affecting server tests."""
+    security_module._security_enforcer = None
+    try:
+        yield
+    finally:
+        security_module._security_enforcer = None
 
 
 class TestSolidWorksMCPConfig:
@@ -648,7 +654,7 @@ class TestServerCompatRunnerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_compat_runner_multiple_items_one_dict(self, mock_config):
-        """result with multiple payload items but only one dict value → data = that dict."""
+        """Result with multiple payload items but only one dict value → data = that dict."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -668,7 +674,7 @@ class TestServerCompatRunnerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_compat_runner_multiple_items_multiple_dicts(self, mock_config):
-        """result with multiple dict payload items → data = full payload_items dict."""
+        """Result with multiple dict payload items → data = full payload_items dict."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()
@@ -689,7 +695,7 @@ class TestServerCompatRunnerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_compat_runner_result_already_has_data_field(self, mock_config):
-        """result that already includes 'data' key is not modified."""
+        """Result that already includes 'data' key is not modified."""
         server = SolidWorksMCPServer(mock_config)
 
         @server.mcp.tool()

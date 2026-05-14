@@ -1,5 +1,4 @@
-"""
-Tools for SolidWorks MCP Server.
+"""Tools for SolidWorks MCP Server.
 
 This module provides all the MCP tools for SolidWorks automation, organized by category.
 """
@@ -22,7 +21,16 @@ from .vba_generation import register_vba_generation_tools
 
 
 async def register_tools(mcp: FastMCP, adapter, config) -> int:
-    """Register all SolidWorks MCP tools."""
+    """Register all SolidWorks MCP tools.
+    
+    Args:
+        mcp (FastMCP): The mcp value.
+        adapter (Any): Adapter instance used for the operation.
+        config (Any): Configuration values for the operation.
+    
+    Returns:
+        int: The computed numeric result.
+    """
     tool_count = 0
 
     logger.info("Registering SolidWorks MCP tools...")

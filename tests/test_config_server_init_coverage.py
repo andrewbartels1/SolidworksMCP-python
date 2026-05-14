@@ -15,6 +15,8 @@ from src.solidworks_mcp.config import AdapterType, SolidWorksMCPConfig, load_con
 
 
 class TestConfigValidatorCoverage:
+    """Test config validator coverage."""
+
     def test_cache_dir_defaults_when_none(self):
         """Lines 246-252 — cache_dir=None triggers set_cache_dir to derive path."""
         cfg = SolidWorksMCPConfig(mock_solidworks=True, cache_dir=None)
@@ -42,6 +44,8 @@ class TestConfigValidatorCoverage:
             SolidWorksMCPConfig(mock_solidworks=True, port=70000)
 
     def test_validate_port_boundary_valid(self):
+        """Test validate port boundary valid."""
+
         cfg = SolidWorksMCPConfig(mock_solidworks=True, port=1)
         assert cfg.port == 1
         cfg2 = SolidWorksMCPConfig(mock_solidworks=True, port=65535)
@@ -74,6 +78,8 @@ class TestConfigValidatorCoverage:
 
 
 class TestServerCoverage:
+    """Test server coverage."""
+
     @pytest.mark.asyncio
     async def test_run_local_stdio_skips_when_mock_and_stdin_unavailable(self):
         """Lines 224-225 — mock mode + unreadable stdin → returns without error."""
@@ -148,6 +154,8 @@ class TestServerCoverage:
         ran = []
 
         async def fake_run(**kwargs):
+            """Test fake run."""
+
             ran.append(kwargs)
 
         server.mcp.run = lambda **kwargs: fake_run(**kwargs)
@@ -186,6 +194,8 @@ class TestServerCoverage:
 
 
 class TestInitCoverage:
+    """Test init coverage."""
+
     def test_lazy_load_create_server(self):
         """Lines 40-46 — __getattr__ loads create_server on demand."""
         import src.solidworks_mcp as sw
@@ -224,6 +234,8 @@ class TestInitCoverage:
 
 
 class TestValidationImportErrorCoverage:
+    """Test validation import error coverage."""
+
     def test_solidworks_validation_handles_missing_pywin32(self):
         """Lines 74-75 — ImportError when win32com not installed is caught silently."""
         # Remove win32com from sys.modules so the import inside the validator fails

@@ -1,8 +1,7 @@
-"""
-PyWin32 SolidWorks adapter for Windows COM integration.
+"""PyWin32 SolidWorks adapter for Windows COM integration.
 
-This adapter uses pywin32 to communicate with SolidWorks via COM,
-providing real SolidWorks automation capabilities on Windows platforms.
+This adapter uses pywin32 to communicate with SolidWorks via COM, providing real
+SolidWorks automation capabilities on Windows platforms.
 """
 
 import os
@@ -10,6 +9,7 @@ import platform
 import time
 from collections.abc import Callable
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
@@ -35,7 +35,11 @@ try:
     import win32com.client
 
     PYWIN32_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
+    # Keep names defined for tests that patch module attributes on non-Windows CI.
+    pythoncom = SimpleNamespace()
+    pywintypes = SimpleNamespace(com_error=Exception)
+    win32com = SimpleNamespace(client=SimpleNamespace())
     PYWIN32_AVAILABLE = False
 
 
@@ -47,8 +51,14 @@ T = TypeVar("T")
 def _parse_vb_module_name(macro_path: str) -> str:
     """Read ``Attribute VB_Name = "..."`` from a SolidWorks text macro file.
 
-    Falls back to the file stem (e.g. ``paper_airplane`` for ``paper_airplane.swp``),
-    then to ``"SolidWorksMacro"`` which is the name used by the macro recorder.
+    Falls back to the file stem (e.g. ``paper_airplane`` for ``paper_airplane.swp``), then
+    to ``"SolidWorksMacro"`` which is the name used by the macro recorder.
+
+    Args:
+        macro_path (str): The macro path value.
+
+    Returns:
+        str: The resulting text value.
     """
     try:
         with open(macro_path, encoding="utf-8", errors="replace") as fh:
@@ -61,60 +71,65 @@ def _parse_vb_module_name(macro_path: str) -> str:
     except OSError:
         pass
     stem = os.path.splitext(os.path.basename(macro_path))[0]
-    return stem if stem else "SolidWorksMacro"
+    if stem and not stem.startswith(".") and stem.strip("."):
+        return stem
+    return "SolidWorksMacro"
 
 
 class PyWin32Adapter(SolidWorksAdapter):
     """SolidWorks adapter using pywin32 COM integration.
 
-    This adapter provides direct COM integration with SolidWorks using pywin32,
-    enabling real-time automation and control of SolidWorks applications on Windows.
+    This adapter provides direct COM integration with SolidWorks using pywin32, enabling
+    real-time automation and control of SolidWorks applications on Windows.
+
+    Args:
+        config (dict[str, Any] | None): Configuration values for the operation. Defaults to
+                                        None.
+
+    Raises:
+        SolidWorksMCPError: PyWin32Adapter requires Windows platform.
 
     Attributes:
-        sw_app: SolidWorks application COM object
-        sw_model: Current active SolidWorks model
-        config: Configuration dictionary for adapter settings
-        connected: Boolean indicating connection status
-        last_error: Last error message encountered
+        constants (Any): The constants value.
 
     Example:
-        ```python
-        adapter = PyWin32Adapter({'timeout': 30})
-        result = await adapter.connect()
-        if result.status == AdapterResultStatus.SUCCESS:
-            print("Connected to SolidWorks successfully")
-        ```
+                        ```python
+                        adapter = PyWin32Adapter({'timeout': 30})
+                        result = await adapter.connect()
+                        if result.status == AdapterResultStatus.SUCCESS:
+                            print("Connected to SolidWorks successfully")
+                        ```
     """
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize PyWin32Adapter with configuration.
 
         Args:
-            config: Optional configuration dictionary containing:
-                - timeout (int): Connection timeout in seconds (default: 30)
-                - auto_connect (bool): Auto-connect on initialization (default: False)
-                - startup_timeout (int): SolidWorks startup timeout (default: 60)
-                - operation_timeout (int): Operation timeout in seconds (default: 300)
+            config (dict[str, Any] | None): Configuration values for the operation. Defaults to
+                                            None.
+
+        Returns:
+            None: None.
 
         Raises:
-            SolidWorksMCPError: If pywin32 is not available or not on Windows platform
+            SolidWorksMCPError: PyWin32Adapter requires Windows platform.
 
         Example:
-            ```python
-            config = {
-                "timeout": 30,
-                "auto_connect": True,
-                "startup_timeout": 60
-            }
-            adapter = PyWin32Adapter(config)
-            ```
+                            ```python
+                            config = {
+                                "timeout": 30,
+                                "auto_connect": True,
+                                "startup_timeout": 60
+                            }
+                            adapter = PyWin32Adapter(config)
+                            ```
         """
-        if not PYWIN32_AVAILABLE:
+        if not PYWIN32_AVAILABLE:  # pragma: no cover
             raise SolidWorksMCPError(
                 "pywin32 is not available. Install with: pip install pywin32"
             )
 
-        if platform.system() != "Windows":
+        if platform.system() != "Windows":  # pragma: no cover
             raise SolidWorksMCPError("PyWin32Adapter requires Windows platform")
 
         super().__init__(config)
@@ -165,24 +180,21 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def connect(self) -> None:
         """Connect to SolidWorks application via COM.
 
-        Establishes connection to SolidWorks application through COM interface.
-        Attempts to connect to existing instance first, creates new instance if needed.
+        Establishes connection to SolidWorks application through COM interface. Attempts to
+        connect to existing instance first, creates new instance if needed.
+
+        Returns:
+            None: None.
 
         Raises:
-            SolidWorksMCPError: If connection to SolidWorks fails
-
-        Note:
-            This method automatically:
-            - Initializes COM apartment for thread safety
-            - Makes SolidWorks visible for automation
-            - Disables confirmation dialogs for batch processing
+            SolidWorksMCPError: If the operation cannot be completed.
 
         Example:
-            ```python
-            adapter = PyWin32Adapter()
-            await adapter.connect()
-            print("Connected to SolidWorks successfully")
-            ```
+                            ```python
+                            adapter = PyWin32Adapter()
+                            await adapter.connect()
+                            print("Connected to SolidWorks successfully")
+                            ```
         """
         # Start the dedicated COM thread (idempotent). CoInitialize runs on
         # that thread; the main thread never touches COM directly.
@@ -243,22 +255,23 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def disconnect(self) -> None:
         """Disconnect from SolidWorks application.
 
-        Properly disconnects from SolidWorks COM interface and cleans up resources.
-        This method should always be called when finished to prevent memory leaks.
+        Properly disconnects from SolidWorks COM interface and cleans up resources. This method
+        should always be called when finished to prevent memory leaks.
 
-        Note:
-            - Clears references to current model and application
-            - Uninitialize COM apartment
-            - Does not close SolidWorks application itself
+        Note: - Clears references to current model and application - Uninitialize COM apartment
+        - Does not close SolidWorks application itself
+
+        Returns:
+            None: None.
 
         Example:
-            ```python
-            try:
-                await adapter.connect()
-                # ... do work ...
-            finally:
-                await adapter.disconnect()
-            ```
+                            ```python
+                            try:
+                                await adapter.connect()
+                                # ... do work ...
+                            finally:
+                                await adapter.disconnect()
+                            ```
         """
         def _do_disconnect() -> None:
             """Release COM state on the COM worker thread."""
@@ -293,42 +306,35 @@ class PyWin32Adapter(SolidWorksAdapter):
         """Check if connected to SolidWorks.
 
         Returns:
-            bool: True if connected to SolidWorks application, False otherwise
+            bool: True if connected, otherwise False.
 
         Example:
-            ```python
-            if adapter.is_connected():
-                print("Ready to automate SolidWorks")
-            else:
-                await adapter.connect()
-            ```
+                            ```python
+                            if adapter.is_connected():
+                                print("Ready to automate SolidWorks")
+                            else:
+                                await adapter.connect()
+                            ```
         """
         return self.swApp is not None
 
     async def health_check(self) -> AdapterHealth:
         """Get adapter health status.
 
-        Performs comprehensive health check including connection status,
-        operation metrics, and SolidWorks application responsiveness.
+        Performs comprehensive health check including connection status, operation metrics, and
+        SolidWorks application responsiveness.
 
         Returns:
-            AdapterHealth: Health status object containing:
-                - healthy (bool): Overall health status
-                - last_check (datetime): Timestamp of check
-                - error_count (int): Total errors encountered
-                - success_count (int): Total successful operations
-                - average_response_time (float): Average operation time in seconds
-                - connection_status (str): Connection state description
-                - metrics (dict): Additional adapter-specific metrics
+            AdapterHealth: The result produced by the operation.
 
         Example:
-            ```python
-            health = await adapter.health_check()
-            if health.healthy:
-                print(f"Adapter healthy, {health.success_count} operations completed")
-            else:
-                print(f"Adapter unhealthy: {health.error_count} errors")
-            ```
+                            ```python
+                            health = await adapter.health_check()
+                            if health.healthy:
+                                print(f"Adapter healthy, {health.success_count} operations completed")
+                            else:
+                                print(f"Adapter unhealthy: {health.error_count} errors")
+                            ```
         """
         healthy = self.is_connected()
 
@@ -366,29 +372,25 @@ class PyWin32Adapter(SolidWorksAdapter):
     ) -> AdapterResult[T]:
         """Helper to handle COM operations with error handling and timing.
 
-        Wraps COM operations with comprehensive error handling, performance metrics,
-        and standardized result formatting. All SolidWorks COM calls should use this.
+        Wraps COM operations with comprehensive error handling, performance metrics, and
+        standardized result formatting. All SolidWorks COM calls should use this.
 
         Args:
-            operation_name: Name of the operation for logging and metrics
-            operation_func: Callable that performs the COM operation
+            operation_name (str): The operation name value.
+            operation_func (Callable[[], T]): The operation func value.
 
         Returns:
-            AdapterResult: Standardized result object containing:
-                - status: SUCCESS, ERROR, or WARNING
-                - data: Operation result data
-                - execution_time: Time taken in seconds
-                - error_info: Error details if operation failed
+            AdapterResult[T]: The result produced by the operation.
 
         Example:
-            ```python
-            result = self._handle_com_operation(
-                "create_sketch",
-                lambda: self.swApp.ActiveDoc.SketchManager.InsertSketch(True)
-            )
-            if result.status == AdapterResultStatus.SUCCESS:
-                print("Sketch created successfully")
-            ```
+                            ```python
+                            result = self._handle_com_operation(
+                                "create_sketch",
+                                lambda: self.swApp.ActiveDoc.SketchManager.InsertSketch(True)
+                            )
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                print("Sketch created successfully")
+                            ```
         """
         start_time = time.time()
 
@@ -443,17 +445,18 @@ class PyWin32Adapter(SolidWorksAdapter):
     def _attempt(
         self, operation: Callable[[], T], default: T | None = None
     ) -> T | None:
-        """Execute a best-effort operation.
+        """Build internal attempt.
 
-        Keep non-critical fallback handling in one place instead of scattering
-        broad try/except blocks throughout operation code.
+        Keep non-critical fallback handling in one place instead of scattering broad try/except
+        blocks throughout operation code.
 
         Args:
-            operation: Zero-argument callable to evaluate.
-            default: Value returned when operation raises.
+            operation (Callable[[], T]): Callable object executed by the helper.
+            default (T | None): Fallback value returned when the operation fails. Defaults to
+                                None.
 
         Returns:
-            T | None: Operation result, or default on failure.
+            T | None: The result produced by the operation.
         """
         try:
             return operation()
@@ -463,13 +466,13 @@ class PyWin32Adapter(SolidWorksAdapter):
     def _attempt_with_error(
         self, operation: Callable[[], T]
     ) -> tuple[T | None, Exception | None]:
-        """Execute an operation and capture any exception.
+        """Build internal attempt with error.
 
         Args:
-            operation: Zero-argument callable to evaluate.
+            operation (Callable[[], T]): Callable object executed by the helper.
 
         Returns:
-            tuple[T | None, Exception | None]: Operation result and captured exception.
+            tuple[T | None, Exception | None]: A tuple containing the resulting values.
         """
         try:
             return operation(), None
@@ -480,11 +483,11 @@ class PyWin32Adapter(SolidWorksAdapter):
         """Read COM attribute exposed as a property or zero-arg method.
 
         Args:
-            obj: COM object instance.
-            attr_name: Attribute or method name.
+            obj (Any): The obj value.
+            attr_name (str): The attr name value.
 
         Returns:
-            Any: Resolved value from property access or method invocation.
+            Any: The result produced by the operation.
         """
         attr = getattr(obj, attr_name, None)
         return attr() if callable(attr) else attr
@@ -492,8 +495,14 @@ class PyWin32Adapter(SolidWorksAdapter):
     def _get_feature_id(self, feature: Any) -> str:
         """Extract a stable string feature ID from COM feature objects.
 
-        Some SolidWorks COM bindings return an int-like value from GetID(), while
-        others return a .NET object exposing ToString().
+        Some SolidWorks COM bindings return an int-like value from GetID(), while others return
+        a .NET object exposing ToString().
+
+        Args:
+            feature (Any): The feature value.
+
+        Returns:
+            str: The resulting text value.
         """
         feature_id_getter = getattr(feature, "GetID", None)
         feature_id_value = (
@@ -505,27 +514,26 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Open a SolidWorks model file.
 
-        Opens a SolidWorks document and sets it as the current active model.
-        Supports Part (.sldprt), Assembly (.sldasm), and Drawing (.slddrw) files.
+        Opens a SolidWorks document and sets it as the current active model. Supports Part
+        (.sldprt), Assembly (.sldasm), and Drawing (.slddrw) files.
 
         Args:
-            file_path: Absolute path to the SolidWorks file to open
+            file_path (str): Path to the target file.
 
         Returns:
-            AdapterResult[SolidWorksModel]: Result containing:
-                - SolidWorksModel object with file info and properties
-                - Error details if opening failed
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
 
         Raises:
-            SolidWorksMCPError: If not connected to SolidWorks
+            Exception: If the operation cannot be completed.
+            ValueError: If the operation cannot be completed.
 
         Example:
-            ```python
-            result = await adapter.open_model("C:/Models/bracket.sldprt")
-            if result.status == AdapterResultStatus.SUCCESS:
-                model = result.data
-                print(f"Opened {model.name} ({model.type})")
-            ```
+                            ```python
+                            result = await adapter.open_model("C:/Models/bracket.sldprt")
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                model = result.data
+                                print(f"Opened {model.name} ({model.type})")
+                            ```
         """
         if not self.is_connected():
             return AdapterResult(
@@ -533,11 +541,14 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _open_operation() -> SolidWorksModel:
-            """Execute open operation.
+            """Build internal operation.
 
             Returns:
-                SolidWorksModel: Describe the returned value.
+                SolidWorksModel: The result produced by the operation.
 
+            Raises:
+                Exception: If the operation cannot be completed.
+                ValueError: If the operation cannot be completed.
             """
             resolved_path = os.path.abspath(file_path)
 
@@ -559,12 +570,10 @@ class PyWin32Adapter(SolidWorksAdapter):
             errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
             warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
 
-            # Safe to read ``self.swApp`` directly: we're on the COM thread
-            # that owns it (enforced by routing through ``self._com``).
+            # Note: swApp is guaranteed non-None by is_connected() check above.
+            # No need to guard here; if swApp somehow becomes None, OpenDoc6 will fail
+            # naturally with COM error, which is caught by _handle_com_operation.
             app = self.swApp
-            if app is None:
-                raise Exception("SolidWorks application is not connected")
-
             model = app.OpenDoc6(
                 resolved_path,
                 doc_type,
@@ -620,22 +629,19 @@ class PyWin32Adapter(SolidWorksAdapter):
         Closes the currently active SolidWorks model with optional saving.
 
         Args:
-            save: Whether to save the model before closing (default: False)
+            save (bool): The save value. Defaults to False.
 
         Returns:
-            AdapterResult[None]: Result indicating success or failure
-
-        Note:
-            If no model is active, returns a WARNING status rather than ERROR
+            AdapterResult[None]: The result produced by the operation.
 
         Example:
-            ```python
-            # Close without saving
-            await adapter.close_model()
+                            ```python
+                            # Close without saving
+                            await adapter.close_model()
 
-            # Close with saving
-            await adapter.close_model(save=True)
-            ```
+                            # Close with saving
+                            await adapter.close_model(save=True)
+                            ```
         """
         if not self.currentModel:
             return AdapterResult(
@@ -651,11 +657,10 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _close_operation() -> None:
-            """Execute close operation.
+            """Build internal operation.
 
             Returns:
-                None: Describe the returned value.
-
+                None: None.
             """
             if save:
                 model.Save()
@@ -671,8 +676,15 @@ class PyWin32Adapter(SolidWorksAdapter):
     ) -> str | None:
         """Resolve a SolidWorks template path from user preferences.
 
-        Installations vary by where template paths are stored; this probes multiple
-        slots and prefers existing files with the expected extension.
+        Installations vary by where template paths are stored; this probes multiple slots and
+        prefers existing files with the expected extension.
+
+        Args:
+            preferred_indices (list[int]): The preferred indices value.
+            extension (str): The extension value.
+
+        Returns:
+            str | None: The result produced by the operation.
         """
         existing_match: str | None = None
         first_non_empty: str | None = None
@@ -701,7 +713,14 @@ class PyWin32Adapter(SolidWorksAdapter):
         return existing_match or first_non_empty
 
     def _read_model_title(self, model: Any) -> str:
-        """Read model title regardless of COM exposing method or value."""
+        """Read model title regardless of COM exposing method or value.
+
+        Args:
+            model (Any): The model value.
+
+        Returns:
+            str: The resulting text value.
+        """
         title = self._attempt(lambda: self._get_attr_or_call(model, "GetTitle"))
         if isinstance(title, str) and title:
             return title
@@ -715,18 +734,31 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_part(
         self, name: str | None = None, units: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
-        """Create a new part document."""
+        """Create a new part document.
+
+        Args:
+            name (str | None): The name value. Defaults to None.
+            units (str | None): The units value. Defaults to None.
+
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create new part.
+        """
         if not self.is_connected():
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
         def _create_operation() -> SolidWorksModel:
-            """Execute create operation.
+            """Build internal operation.
 
             Returns:
-                SolidWorksModel: Describe the returned value.
+                SolidWorksModel: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create new part.
             """
             model = None
             app = self.swApp
@@ -770,18 +802,30 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_assembly(
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
-        """Create a new assembly document."""
+        """Create a new assembly document.
+
+        Args:
+            name (str | None): The name value. Defaults to None.
+
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create new assembly.
+        """
         if not self.is_connected():
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
         def _create_operation() -> SolidWorksModel:
-            """Execute create operation.
+            """Build internal operation.
 
             Returns:
-                SolidWorksModel: Describe the returned value.
+                SolidWorksModel: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create new assembly.
             """
             model = None
             app = self.swApp
@@ -819,18 +863,30 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_drawing(
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
-        """Create a new drawing document."""
+        """Create a new drawing document.
+
+        Args:
+            name (str | None): The name value. Defaults to None.
+
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create new drawing.
+        """
         if not self.is_connected():
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
         def _create_operation() -> SolidWorksModel:
-            """Execute create operation.
+            """Build internal operation.
 
             Returns:
-                SolidWorksModel: Describe the returned value.
+                SolidWorksModel: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create new drawing.
             """
             app = self.swApp
             if app is None:
@@ -865,7 +921,17 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_extrusion(
         self, params: ExtrusionParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Create an extrusion feature."""
+        """Create an extrusion feature.
+
+        Args:
+            params (ExtrusionParameters): The params value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create extrusion feature.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -873,11 +939,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _extrusion_operation() -> SolidWorksFeature:
             # Get feature manager
-            """Execute extrusion operation.
+            """Build internal extrusion operation.
 
             Returns:
-                SolidWorksFeature: Describe the returned value.
+                SolidWorksFeature: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create extrusion feature.
             """
             featureManager = self.currentModel.FeatureManager
 
@@ -986,18 +1054,30 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Create a revolve feature."""
+        """Create a revolve feature.
+
+        Args:
+            params (RevolveParameters): The params value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create revolve feature.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _revolve_operation() -> SolidWorksFeature:
-            """Execute revolve operation.
+            """Build internal revolve operation.
 
             Returns:
-                SolidWorksFeature: Describe the returned value.
+                SolidWorksFeature: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create revolve feature.
             """
             featureManager = self.currentModel.FeatureManager
 
@@ -1049,7 +1129,14 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_sweep(
         self, params: SweepParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Create a sweep feature."""
+        """Create a sweep feature.
+
+        Args:
+            params (SweepParameters): The params value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+        """
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="Sweep feature not implemented in basic pywin32 adapter",
@@ -1058,7 +1145,14 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_loft(
         self, params: LoftParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Create a loft feature."""
+        """Create a loft feature.
+
+        Args:
+            params (LoftParameters): The params value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+        """
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="Loft feature not implemented in basic pywin32 adapter",
@@ -1067,30 +1161,27 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_sketch(self, plane: str) -> AdapterResult[str]:
         """Create a new sketch on the specified plane.
 
-        Creates a new sketch on the specified reference plane and sets it as active.
-        The sketch is ready for adding geometry (lines, circles, etc.).
+        Creates a new sketch on the specified reference plane and sets it as active. The sketch
+        is ready for adding geometry (lines, circles, etc.).
 
         Args:
-            plane: Name of the reference plane. Supports:
-                - Standard names: "Top", "Front", "Right"
-                - Coordinate names: "XY", "XZ", "YZ"
-                - Full names: "Top Plane", "Front Plane", "Right Plane"
+            plane (str): The plane value.
 
         Returns:
-            AdapterResult[str]: Result containing sketch name if successful
+            AdapterResult[str]: The result produced by the operation.
 
         Raises:
-            SolidWorksMCPError: If no active model or plane selection fails
+            Exception: If the operation cannot be completed.
 
         Example:
-            ```python
-            # Create sketch on top plane
-            result = await adapter.create_sketch("Top")
-            if result.status == AdapterResultStatus.SUCCESS:
-                sketch_name = result.data
-                print(f"Created sketch: {sketch_name}")
-                # Now ready to add geometry
-            ```
+                            ```python
+                            # Create sketch on top plane
+                            result = await adapter.create_sketch("Top")
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                sketch_name = result.data
+                                print(f"Created sketch: {sketch_name}")
+                                # Now ready to add geometry
+                            ```
         """
         if not self.currentModel:
             return AdapterResult(
@@ -1099,11 +1190,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _sketch_operation() -> str:
             # Select the plane first
-            """Execute sketch operation.
+            """Build internal sketch operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: If the operation cannot be completed.
             """
             plane_name_map = {
                 "Top": "Top Plane",
@@ -1114,6 +1207,19 @@ class PyWin32Adapter(SolidWorksAdapter):
                 "YZ": "Right Plane",
             }
 
+            # Spanish-UI SolidWorks names default planes "Alzado"/"Planta"/
+            # "Vista lateral". Map each semantic name to its locale variants
+            # so the feature lookup below finds the right plane regardless
+            # of install language.
+            semantic_plane_aliases = {
+                "Top": ["Top Plane", "Planta"],
+                "Front": ["Front Plane", "Alzado"],
+                "Right": ["Right Plane", "Vista lateral"],
+                "XY": ["Top Plane", "Planta"],
+                "XZ": ["Front Plane", "Alzado"],
+                "YZ": ["Right Plane", "Vista lateral"],
+            }
+
             actual_plane = plane_name_map.get(plane, plane)
 
             selected = False
@@ -1121,11 +1227,15 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             # Prefer direct feature lookup to avoid SelectByID2 variant mismatch.
             plane_candidates = [
+                *semantic_plane_aliases.get(plane, []),
                 actual_plane,
                 plane,
                 "Top Plane",
                 "Front Plane",
                 "Right Plane",
+                "Planta",
+                "Alzado",
+                "Vista lateral",
             ]
             for candidate in plane_candidates:
                 if not candidate:
@@ -1201,29 +1311,29 @@ class PyWin32Adapter(SolidWorksAdapter):
     ) -> AdapterResult[str]:
         """Add a line to the current sketch.
 
-        Creates a line segment in the active sketch between two points.
-        Coordinates are automatically converted from millimeters to meters.
+        Creates a line segment in the active sketch between two points. Coordinates are
+        automatically converted from millimeters to meters.
 
         Args:
-            x1: Starting point X coordinate in millimeters
-            y1: Starting point Y coordinate in millimeters
-            x2: Ending point X coordinate in millimeters
-            y2: Ending point Y coordinate in millimeters
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
 
         Returns:
-            AdapterResult[str]: Result containing line identifier if successful
+            AdapterResult[str]: The result produced by the operation.
 
         Raises:
-            SolidWorksMCPError: If no active sketch or line creation fails
+            Exception: Failed to create line.
 
         Example:
-            ```python
-            # Create horizontal line 50mm long starting at origin
-            result = await adapter.add_line(0, 0, 50, 0)
-            if result.status == AdapterResultStatus.SUCCESS:
-                line_id = result.data
-                print(f"Created line: {line_id}")
-            ```
+                            ```python
+                            # Create horizontal line 50mm long starting at origin
+                            result = await adapter.add_line(0, 0, 50, 0)
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                line_id = result.data
+                                print(f"Created line: {line_id}")
+                            ```
         """
         if not self.currentSketchManager:
             return AdapterResult(
@@ -1232,11 +1342,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _line_operation() -> str:
             # Convert mm to meters
-            """Execute line operation.
+            """Build internal line operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create line.
             """
             line = self.currentSketchManager.CreateLine(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
@@ -1258,24 +1370,24 @@ class PyWin32Adapter(SolidWorksAdapter):
         Coordinates are automatically converted from millimeters to meters.
 
         Args:
-            center_x: Circle center X coordinate in millimeters
-            center_y: Circle center Y coordinate in millimeters
-            radius: Circle radius in millimeters (must be positive)
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            radius (float): The radius value.
 
         Returns:
-            AdapterResult[str]: Result containing circle identifier if successful
+            AdapterResult[str]: The result produced by the operation.
 
         Raises:
-            SolidWorksMCPError: If no active sketch or circle creation fails
+            Exception: Failed to create circle.
 
         Example:
-            ```python
-            # Create 25mm diameter circle centered at (10, 20)
-            result = await adapter.add_circle(10, 20, 12.5)
-            if result.status == AdapterResultStatus.SUCCESS:
-                circle_id = result.data
-                print(f"Created circle: {circle_id}")
-            ```
+                            ```python
+                            # Create 25mm diameter circle centered at (10, 20)
+                            result = await adapter.add_circle(10, 20, 12.5)
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                circle_id = result.data
+                                print(f"Created circle: {circle_id}")
+                            ```
         """
         if not self.currentSketchManager:
             return AdapterResult(
@@ -1284,11 +1396,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _circle_operation() -> str:
             # Convert mm to meters
-            """Execute circle operation.
+            """Build internal circle operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create circle.
             """
             circle = self.currentSketchManager.CreateCircleByRadius(
                 center_x / 1000.0, center_y / 1000.0, 0, radius / 1000.0
@@ -1306,30 +1420,29 @@ class PyWin32Adapter(SolidWorksAdapter):
     ) -> AdapterResult[str]:
         """Add a rectangle to the current sketch.
 
-        Creates a rectangle in the active sketch defined by two corner points.
-        The rectangle is created as four connected lines with automatic constraints.
+        Creates a rectangle in the active sketch defined by two corner points. The rectangle is
+        created as four connected lines with automatic constraints.
 
         Args:
-            x1: First corner X coordinate in millimeters
-            y1: First corner Y coordinate in millimeters
-            x2: Opposite corner X coordinate in millimeters
-            y2: Opposite corner Y coordinate in millimeters
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
 
         Returns:
-            AdapterResult[str]: Result containing rectangle identifier if successful
+            AdapterResult[str]: The result produced by the operation.
 
-        Note:
-            The rectangle is oriented parallel to the coordinate axes.
-            Corner points can be specified in any order.
+        Raises:
+            Exception: Failed to create rectangle.
 
         Example:
-            ```python
-            # Create 50x30mm rectangle from origin
-            result = await adapter.add_rectangle(0, 0, 50, 30)
-            if result.status == AdapterResultStatus.SUCCESS:
-                rect_id = result.data
-                print(f"Created rectangle: {rect_id}")
-            ```
+                            ```python
+                            # Create 50x30mm rectangle from origin
+                            result = await adapter.add_rectangle(0, 0, 50, 30)
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                rect_id = result.data
+                                print(f"Created rectangle: {rect_id}")
+                            ```
         """
         if not self.currentSketchManager:
             return AdapterResult(
@@ -1338,11 +1451,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _rectangle_operation() -> str:
             # Convert mm to meters
-            """Execute rectangle operation.
+            """Build internal rectangle operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create rectangle.
             """
             lines = self.currentSketchManager.CreateCornerRectangle(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
@@ -1366,33 +1481,31 @@ class PyWin32Adapter(SolidWorksAdapter):
     ) -> AdapterResult[str]:
         """Add an arc to the current sketch.
 
-        Creates a circular arc in the active sketch defined by center point,
-        start point, and end point. Arc is drawn counterclockwise from start to end.
+        Creates a circular arc in the active sketch defined by center point, start point, and
+        end point. Arc is drawn counterclockwise from start to end.
 
         Args:
-            center_x: Arc center X coordinate in millimeters
-            center_y: Arc center Y coordinate in millimeters
-            start_x: Arc start point X coordinate in millimeters
-            start_y: Arc start point Y coordinate in millimeters
-            end_x: Arc end point X coordinate in millimeters
-            end_y: Arc end point Y coordinate in millimeters
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            start_x (float): The start x value.
+            start_y (float): The start y value.
+            end_x (float): The end x value.
+            end_y (float): The end y value.
 
         Returns:
-            AdapterResult[str]: Result containing arc identifier if successful
+            AdapterResult[str]: The result produced by the operation.
 
-        Note:
-            - Start and end points should be equidistant from center
-            - Arc direction is counterclockwise from start to end point
-            - For full circles, use add_circle() instead
+        Raises:
+            Exception: Failed to create arc.
 
         Example:
-            ```python
-            # Create 90-degree arc from (20,0) to (0,20) centered at origin
-            result = await adapter.add_arc(0, 0, 20, 0, 0, 20)
-            if result.status == AdapterResultStatus.SUCCESS:
-                arc_id = result.data
-                print(f"Created arc: {arc_id}")
-            ```
+                            ```python
+                            # Create 90-degree arc from (20,0) to (0,20) centered at origin
+                            result = await adapter.add_arc(0, 0, 20, 0, 0, 20)
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                arc_id = result.data
+                                print(f"Created arc: {arc_id}")
+                            ```
         """
         if not self.currentSketchManager:
             return AdapterResult(
@@ -1401,11 +1514,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _arc_operation() -> str:
             # Convert mm to meters
-            """Execute arc operation.
+            """Build internal arc operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create arc.
             """
             arc = self.currentSketchManager.CreateArc(
                 center_x / 1000.0,
@@ -1429,35 +1544,32 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
         """Add a spline to the current sketch.
 
-        Creates a smooth spline curve through the specified control points.
-        The spline automatically generates smooth transitions between points.
+        Creates a smooth spline curve through the specified control points. The spline
+        automatically generates smooth transitions between points.
 
         Args:
-            points: List of point dictionaries, each containing:
-                - 'x': X coordinate in millimeters
-                - 'y': Y coordinate in millimeters
-            Minimum 3 points required for spline creation.
+            points (list[dict[str, float]]): The points value.
 
         Returns:
-            AdapterResult[str]: Result containing spline identifier if successful
+            AdapterResult[str]: The result produced by the operation.
 
         Raises:
-            SolidWorksMCPError: If insufficient points or spline creation fails
+            Exception: Failed to create spline.
 
         Example:
-            ```python
-            # Create curved spline through 4 points
-            spline_points = [
-                {'x': 0, 'y': 0},
-                {'x': 20, 'y': 10},
-                {'x': 40, 'y': -5},
-                {'x': 60, 'y': 0}
-            ]
-            result = await adapter.add_spline(spline_points)
-            if result.status == AdapterResultStatus.SUCCESS:
-                spline_id = result.data
-                print(f"Created spline: {spline_id}")
-            ```
+                            ```python
+                            # Create curved spline through 4 points
+                            spline_points = [
+                                {'x': 0, 'y': 0},
+                                {'x': 20, 'y': 10},
+                                {'x': 40, 'y': -5},
+                                {'x': 60, 'y': 0}
+                            ]
+                            result = await adapter.add_spline(spline_points)
+                            if result.status == AdapterResultStatus.SUCCESS:
+                                spline_id = result.data
+                                print(f"Created spline: {spline_id}")
+                            ```
         """
         if not self.currentSketchManager:
             return AdapterResult(
@@ -1466,11 +1578,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _spline_operation() -> str:
             # Convert points to SolidWorks format (mm to meters)
-            """Execute spline operation.
+            """Build internal spline operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create spline.
             """
             spline_points = []
             for point in points:
@@ -1492,7 +1606,20 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_centerline(
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
-        """Add a centerline to the current sketch."""
+        """Add a centerline to the current sketch.
+
+        Args:
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create centerline.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1500,11 +1627,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _centerline_operation() -> str:
             # Convert mm to meters and create centerline
-            """Execute centerline operation.
+            """Build internal centerline operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create centerline.
             """
             centerline = self.currentSketchManager.CreateCenterLine(
                 x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
@@ -1520,7 +1649,20 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_polygon(
         self, center_x: float, center_y: float, radius: float, sides: int
     ) -> AdapterResult[str]:
-        """Add a polygon to the current sketch."""
+        """Add a polygon to the current sketch.
+
+        Args:
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            radius (float): The radius value.
+            sides (int): The sides value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create polygon.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1528,11 +1670,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _polygon_operation() -> str:
             # Convert mm to meters
-            """Execute polygon operation.
+            """Build internal polygon operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create polygon.
             """
             polygon = self.currentSketchManager.CreatePolygon(
                 center_x / 1000.0,
@@ -1553,7 +1697,20 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_ellipse(
         self, center_x: float, center_y: float, major_axis: float, minor_axis: float
     ) -> AdapterResult[str]:
-        """Add an ellipse to the current sketch."""
+        """Add an ellipse to the current sketch.
+
+        Args:
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            major_axis (float): The major axis value.
+            minor_axis (float): The minor axis value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create ellipse.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1561,11 +1718,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _ellipse_operation() -> str:
             # Convert mm to meters
-            """Execute ellipse operation.
+            """Build internal ellipse operation.
 
             Returns:
-                str: Describe the returned value.
+                str: The resulting text value.
 
+            Raises:
+                Exception: Failed to create ellipse.
             """
             ellipse = self.currentSketchManager.CreateEllipse(
                 center_x / 1000.0,
@@ -1589,7 +1748,16 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_sketch_constraint(
         self, entity1: str, entity2: str | None, relation_type: str
     ) -> AdapterResult[str]:
-        """Add a geometric constraint between sketch entities."""
+        """Add a geometric constraint between sketch entities.
+
+        Args:
+            entity1 (str): The entity1 value.
+            entity2 (str | None): The entity2 value.
+            relation_type (str): The relation type value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1597,11 +1765,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _constraint_operation() -> str:
             # Map relation types to SolidWorks constants
-            """Execute constraint operation.
+            """Build internal constraint operation.
 
             Returns:
-                str: Describe the returned value.
-
+                str: The resulting text value.
             """
             relation_map = {
                 "parallel": self.constants.get("swConstraintType_PARALLEL", 0),
@@ -1635,7 +1802,17 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_sketch_dimension(
         self, entity1: str, entity2: str | None, dimension_type: str, value: float
     ) -> AdapterResult[str]:
-        """Add a dimension to sketch entities."""
+        """Add a dimension to sketch entities.
+
+        Args:
+            entity1 (str): The entity1 value.
+            entity2 (str | None): The entity2 value.
+            dimension_type (str): The dimension type value.
+            value (float): The value value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1644,11 +1821,10 @@ class PyWin32Adapter(SolidWorksAdapter):
         def _dimension_operation() -> str:
             # For now, return a success without actual dimension - this requires entity selection
             # which is complex in the basic adapter
-            """Execute dimension operation.
+            """Build internal dimension operation.
 
             Returns:
-                str: Describe the returned value.
-
+                str: The resulting text value.
             """
             dimension_id = (
                 f"Dimension_{dimension_type}_{value}_{int(time.time() * 1000) % 10000}"
@@ -1666,7 +1842,18 @@ class PyWin32Adapter(SolidWorksAdapter):
         spacing: float,
         count: int,
     ) -> AdapterResult[str]:
-        """Create a linear pattern of sketch entities."""
+        """Create a linear pattern of sketch entities.
+
+        Args:
+            entities (list[str]): The entities value.
+            direction_x (float): The direction x value.
+            direction_y (float): The direction y value.
+            spacing (float): The spacing value.
+            count (int): The count value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1674,11 +1861,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _linear_pattern_operation() -> str:
             # For now, return a success placeholder - linear patterns require entity selection
-            """Execute linear pattern operation.
+            """Build internal linear pattern operation.
 
             Returns:
-                str: Describe the returned value.
-
+                str: The resulting text value.
             """
             pattern_id = (
                 f"LinearPattern_{count}x{spacing}_{int(time.time() * 1000) % 10000}"
@@ -1698,7 +1884,18 @@ class PyWin32Adapter(SolidWorksAdapter):
         angle: float,
         count: int,
     ) -> AdapterResult[str]:
-        """Create a circular pattern of sketch entities."""
+        """Create a circular pattern of sketch entities.
+
+        Args:
+            entities (list[str]): The entities value.
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            angle (float): The angle value.
+            count (int): The count value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1706,11 +1903,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _circular_pattern_operation() -> str:
             # For now, return a success placeholder - circular patterns require entity selection
-            """Execute circular pattern operation.
+            """Build internal circular pattern operation.
 
             Returns:
-                str: Describe the returned value.
-
+                str: The resulting text value.
             """
             pattern_id = (
                 f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
@@ -1725,7 +1921,15 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def sketch_mirror(
         self, entities: list[str], mirror_line: str
     ) -> AdapterResult[str]:
-        """Mirror sketch entities about a centerline."""
+        """Mirror sketch entities about a centerline.
+
+        Args:
+            entities (list[str]): The entities value.
+            mirror_line (str): The mirror line value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1733,11 +1937,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _mirror_operation() -> str:
             # For now, return a success placeholder - mirroring requires entity selection
-            """Execute mirror operation.
+            """Build internal mirror operation.
 
             Returns:
-                str: Describe the returned value.
-
+                str: The resulting text value.
             """
             mirror_id = f"Mirror_{mirror_line}_{int(time.time() * 1000) % 10000}"
 
@@ -1748,7 +1951,16 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def sketch_offset(
         self, entities: list[str], offset_distance: float, reverse_direction: bool
     ) -> AdapterResult[str]:
-        """Create an offset of sketch entities."""
+        """Create an offset of sketch entities.
+
+        Args:
+            entities (list[str]): The entities value.
+            offset_distance (float): The offset distance value.
+            reverse_direction (bool): The reverse direction value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -1756,11 +1968,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _offset_operation() -> str:
             # For now, return a success placeholder - offsetting requires entity selection
-            """Execute offset operation.
+            """Build internal offset operation.
 
             Returns:
-                str: Describe the returned value.
-
+                str: The resulting text value.
             """
             direction = "inward" if reverse_direction else "outward"
             offset_id = f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
@@ -1770,7 +1981,14 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("sketch_offset", _offset_operation)
 
     async def get_mass_properties(self) -> AdapterResult[MassProperties]:
-        """Get mass properties of the current model."""
+        """Get mass properties of the current model.
+
+        Returns:
+            AdapterResult[MassProperties]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to get mass properties.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -1778,12 +1996,21 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _mass_props_operation() -> MassProperties:
             # Get mass properties
-            """Execute mass props operation.
+            """Build internal mass props operation.
 
             Returns:
-                MassProperties: Describe the returned value.
+                MassProperties: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to get mass properties.
             """
+            # Force a rebuild first — otherwise the IMassProperty reflects
+            # the geometry from the last rebuild checkpoint, which can be
+            # stale after a sequence of feature-creation calls within a
+            # single MCP session.
+            self._attempt(
+                lambda: self.currentModel.ForceRebuild3(False), default=None
+            )
             mass_props = self._attempt(
                 lambda: self.currentModel.Extension.CreateMassProperty(), default=None
             )
@@ -1846,16 +2073,157 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("get_mass_properties", _mass_props_operation)
 
-    async def export_image(self, payload: dict) -> AdapterResult[dict]:
-        """
-        Export a screenshot of the current model to a PNG/JPG file.
+    def _set_view_orientation(
+        self, target_doc: Any, orientation: str, view_const: int
+    ) -> None:
+        """Set SolidWorks view orientation with graceful fallback.
 
-        Payload keys (matching ExportImageInput):
-            file_path (str): Output path including extension.
-            format_type (str): "png" or "jpg". Default "png".
-            width (int): Pixel width. Default 1280.
-            height (int): Pixel height. Default 720.
-            view_orientation (str): "front" | "top" | "right" | "isometric" | "current".
+        ShowNamedView2 can fail for assemblies with lightweight components,
+        but screenshot can still succeed with current view. Logs warning on failure.
+
+        Args:
+            target_doc: SolidWorks model document
+            orientation: Orientation name (for logging)
+            view_const: SolidWorks view constant (1-9)
+
+        Returns:
+            None (operation always succeeds or fails silently)
+        """
+        try:
+            target_doc.ShowNamedView2("", view_const)
+        except Exception as exc:
+            logger.warning(
+                "[pywin32.export_image] ShowNamedView2({}) failed ({}), "
+                "continuing with current view",
+                orientation,
+                exc,
+            )
+
+    def _zoom_to_fit(self, target_doc: Any) -> None:
+        """Zoom model to fit viewport with fallback.
+
+        Tries IModelDoc2.ViewZoomToFit2() first; falls back to
+        IModelView.ZoomToFit() on the active view. Logs warning if both fail.
+
+        Args:
+            target_doc: SolidWorks model document
+
+        Returns:
+            None (operation always succeeds or fails silently)
+        """
+        try:
+            target_doc.ViewZoomToFit2()
+        except Exception:
+            try:
+                active_view = target_doc.ActiveView
+                if active_view is not None:
+                    active_view.ZoomToFit()
+            except Exception as exc:
+                logger.warning(
+                    "[pywin32.export_image] ZoomToFit failed ({}), "
+                    "screenshot may be zoomed out",
+                    exc,
+                )
+
+    def _save_screenshot_with_modelview(
+        self, model_view: Any, resolved_path: str, width: int, height: int
+    ) -> bool:
+        """Try IModelView2.SaveBitmapWithVariableSize for screenshot.
+
+        Args:
+            model_view: Active model view object
+            resolved_path: Full path where to save image
+            width: Image width in pixels
+            height: Image height in pixels
+
+        Returns:
+            True if file was created, False otherwise.
+        """
+        try:
+            success = model_view.SaveBitmapWithVariableSize(
+                resolved_path, width, height
+            )
+            return bool(success) and os.path.exists(resolved_path)
+        except Exception as exc:
+            logger.debug(
+                "[pywin32.export_image] IModelView.SaveBitmapWithVariableSize failed ({}), "
+                "trying IModelDoc2 path",
+                exc,
+            )
+            return False
+
+    def _save_screenshot_with_targetdoc(
+        self, target_doc: Any, resolved_path: str, width: int, height: int
+    ) -> bool:
+        """Try IModelDoc2.SaveBitmapWithVariableSize for screenshot.
+
+        Args:
+            target_doc: SolidWorks model document
+            resolved_path: Full path where to save image
+            width: Image width in pixels
+            height: Image height in pixels
+
+        Returns:
+            True if file was created, False otherwise.
+        """
+        try:
+            success = target_doc.SaveBitmapWithVariableSize(
+                resolved_path, width, height
+            )
+            return bool(success) and os.path.exists(resolved_path)
+        except Exception as exc:
+            logger.debug(
+                "[pywin32.export_image] IModelDoc2.SaveBitmapWithVariableSize failed ({}), "
+                "trying SaveAs3 image export",
+                exc,
+            )
+            return False
+
+    def _save_screenshot_with_saveas3(
+        self, target_doc: Any, resolved_path: str
+    ) -> None:
+        """Final fallback: SaveAs3 with image extension for screenshot.
+
+        SolidWorks determines export format from file extension (.png, .jpg, .bmp, etc.).
+        This path works on all SolidWorks versions without needing COM vtable access.
+
+        Args:
+            target_doc: SolidWorks model document
+            resolved_path: Full path where to save image
+
+        Raises:
+            RuntimeError: If SaveAs3 fails or file is not created.
+        """
+        try:
+            target_doc.SaveAs3(
+                resolved_path, 0, 2
+            )  # swSaveAsCurrentVersion=0, Silent=2
+            if os.path.exists(resolved_path):
+                return
+        except Exception as exc:
+            logger.debug(
+                "[pywin32.export_image] SaveAs3 failed: {}",
+                exc,
+            )
+
+        raise RuntimeError(f"All screenshot methods failed for {resolved_path}")
+
+    async def export_image(self, payload: dict) -> AdapterResult[dict]:
+        """Export a screenshot of the current model to a PNG/JPG file.
+
+        Payload keys (matching ExportImageInput): file_path (str): Output path including
+        extension. format_type (str): "png" or "jpg". Default "png". width (int): Pixel width.
+        Default 1280. height (int): Pixel height. Default 720. view_orientation (str): "front" |
+        "top" | "right" | "isometric" | "current".
+
+        Args:
+            payload (dict): The payload value.
+
+        Returns:
+            AdapterResult[dict]: The result produced by the operation.
+
+        Raises:
+            RuntimeError: If the operation cannot be completed.
         """
         if not self.currentModel:
             return AdapterResult(
@@ -1885,6 +2253,15 @@ class PyWin32Adapter(SolidWorksAdapter):
         }
 
         def _screenshot_operation() -> dict:
+            """Build internal screenshot operation.
+
+            Returns:
+                dict: A dictionary containing the resulting values.
+
+            Raises:
+                RuntimeError: If the operation cannot be completed.
+            """
+
             import os as _os
 
             resolved = _os.path.abspath(file_path)
@@ -1900,96 +2277,33 @@ class PyWin32Adapter(SolidWorksAdapter):
 
             # Ensure SolidWorks window is focused so the viewport is rendered.
             # Required for both view changes and bitmap capture.
-            try:
-                self.swApp.Frame.SetFocus()
-            except Exception:
-                pass
+            self._attempt(lambda: self.swApp.Frame.SetFocus())
 
             # Set view orientation if requested
             if orientation != "current" and orientation in _VIEW_CONSTANTS:
                 view_const = _VIEW_CONSTANTS[orientation]
-                # ShowNamedView2("", swStandardViews_e) applies a standard view.
-                # Wrapped in try/except — assemblies can raise COM errors here
-                # (e.g. Lightweight components) but the screenshot can still succeed.
-                try:
-                    target_doc.ShowNamedView2("", view_const)
-                except Exception as _vnv_exc:
-                    logger.warning(
-                        "[pywin32.export_image] ShowNamedView2 failed ({}), "
-                        "continuing with current view",
-                        _vnv_exc,
-                    )
+                self._set_view_orientation(target_doc, orientation, view_const)
 
-            # Zoom to fit so the model fills the viewport before capture.
-            # IModelDoc2.ViewZoomToFit2() is the primary method; fall back to
-            # IModelView.ZoomToFit() on the active view object if that raises.
-            try:
-                target_doc.ViewZoomToFit2()
-            except Exception:
-                try:
-                    _active_view = target_doc.ActiveView
-                    if _active_view is not None:
-                        _active_view.ZoomToFit()
-                except Exception as _ztf_exc:
-                    logger.warning(
-                        "[pywin32.export_image] ZoomToFit failed ({}), "
-                        "screenshot may be zoomed out",
-                        _ztf_exc,
-                    )
+            # Zoom to fit so the model fills the viewport before capture
+            self._zoom_to_fit(target_doc)
 
-            # Preferred path: IModelView2.SaveBitmapWithVariableSize
-            # The active view object is more reliably typed than IModelDoc2 when
-            # accessed via late-bound IDispatch (OpenDoc6 returns a generic pointer).
-            saved = False
-            model_view = None
-            try:
-                model_view = target_doc.ActiveView
-            except Exception:
-                pass
-
-            if model_view is not None:
-                try:
-                    success = model_view.SaveBitmapWithVariableSize(
-                        resolved, width, height
-                    )
-                    saved = bool(success) and _os.path.exists(resolved)
-                except Exception as _mv_exc:
-                    logger.debug(
-                        "[pywin32.export_image] IModelView.SaveBitmapWithVariableSize failed ({}), "
-                        "trying IModelDoc2 path",
-                        _mv_exc,
-                    )
-
-            # Fallback: IModelDoc2.SaveBitmapWithVariableSize
+            # Try screenshot methods in order: ModelView → TargetDoc → SaveAs3
+            saved = self._save_screenshot_with_modelview(
+                target_doc, resolved, width, height
+            )
             if not saved:
-                try:
-                    success = target_doc.SaveBitmapWithVariableSize(
-                        resolved, width, height
-                    )
-                    saved = bool(success) and _os.path.exists(resolved)
-                except Exception as _doc_exc:
-                    logger.debug(
-                        "[pywin32.export_image] IModelDoc2.SaveBitmapWithVariableSize "
-                        "failed ({}), trying SaveAs3 image export",
-                        str(_doc_exc),
-                    )
-
-            # Final fallback: SaveAs3 with image extension.  SolidWorks determines
-            # export format from the file extension (.png, .jpg, .bmp, etc.).
-            # This path works on all SW versions without needing vtable access.
+                saved = self._save_screenshot_with_targetdoc(
+                    target_doc, resolved, width, height
+                )
             if not saved:
-                try:
-                    target_doc.SaveAs3(resolved, 0, 2)
-                    saved = _os.path.exists(resolved)
-                except Exception as _sa3_exc:
-                    raise RuntimeError(
-                        f"All screenshot methods failed for {resolved}: {_sa3_exc}"
-                    ) from _sa3_exc
+                self._save_screenshot_with_saveas3(target_doc, resolved)
+                saved = _os.path.exists(resolved)
 
             if not saved:
                 raise RuntimeError(
                     f"All screenshot methods produced no output for {resolved}"
                 )
+
             return {
                 "file_path": resolved,
                 "format": _os.path.splitext(resolved)[1].lstrip(".").upper() or "PNG",
@@ -1999,17 +2313,131 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("export_image", _screenshot_operation)
 
+    def _prepare_stl_export_data(self) -> Any | None:
+        """Prepare ISTLExportData for STL export with merged bodies option.
+
+        Attempts to get and configure STL export settings from swApp.
+        Returns None if swApp is unavailable or if COM operation fails.
+
+        Returns:
+            ISTLExportData object or None if unavailable/failed.
+        """
+        if self.swApp is None:
+            return None
+
+        try:
+            # swExportDataFileType_e.swExportSTL = 2
+            stl_data = self.swApp.GetExportFileData(2)
+            if stl_data is None:
+                return None
+
+            # Configure for merged single-file export (best for assemblies)
+            self._attempt(lambda: setattr(stl_data, "Merge", True))
+            # swExportBodiesAs = 0 → swExportAsOneFile
+            self._attempt(lambda: setattr(stl_data, "ExportBodiesAs", 0))
+
+            return stl_data
+        except Exception:
+            return None
+
+    def _save_stl_with_extension(
+        self, ext: Any, stl_data: Any | None, resolved_path: str
+    ) -> bool:
+        """Attempt STL export using Extension.SaveAs2 with optional ISTLExportData.
+
+        Tries SaveAs2 with stl_data first (enables body merging); falls back to
+        SaveAs2(None) if type mismatch occurs (late-bound IDispatch can't marshal
+        ISTLExportData* through IDispatch::Invoke).
+
+        Args:
+            ext: Extension object from target document
+            stl_data: Optional ISTLExportData configuration
+            resolved_path: Full path where to save STL file
+
+        Returns:
+            True if file was created, False otherwise.
+        """
+        try:
+            # Try with stl_data first
+            try:
+                # swSaveAsVersion_e.swSaveAsCurrentVersion = 0
+                # swSaveAsOptions_e.swSaveAsOptions_Silent = 2
+                ext.SaveAs2(resolved_path, 0, 2, stl_data, None, "")
+            except Exception:
+                # Fallback: try without stl_data (type mismatch on IDispatch)
+                ext.SaveAs2(resolved_path, 0, 2, None, None, "")
+
+            return os.path.exists(resolved_path)
+        except Exception as exc:
+            logger.warning(
+                "[pywin32.export_file] Extension.SaveAs2 failed: {}",
+                str(exc),
+            )
+            return False
+
+    def _save_stl_with_fallback(self, target_doc: Any, resolved_path: str) -> None:
+        """Fallback STL export using SaveAs3 if SaveAs2 didn't create file.
+
+        Args:
+            target_doc: SolidWorks model document
+            resolved_path: Full path to save file to
+
+        Raises:
+            Exception: If both SaveAs2 and SaveAs3 fail to produce file.
+        """
+        logger.warning(
+            "[pywin32.export_file] SaveAs2 did not produce {}, falling back to SaveAs3",
+            resolved_path,
+        )
+        try:
+            target_doc.SaveAs3(
+                resolved_path,
+                0,  # swSaveAsCurrentVersion
+                2,  # swSaveAsOptions_Silent
+            )
+        except Exception as exc:
+            logger.warning(
+                "[pywin32.export_file] SaveAs3 also failed: {}",
+                str(exc),
+            )
+
+        if not os.path.exists(resolved_path):
+            raise Exception(
+                f"STL export failed for {resolved_path} "
+                "(tried Extension.SaveAs2 and SaveAs3)"
+            )
+
     async def export_file(
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:
-        """Export the current model to a file."""
+        """Export the current model to a file.
+
+        Args:
+            file_path (str): Path to the target file.
+            format_type (str): The format type value.
+
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+
+        Raises:
+            Exception: If the operation cannot be completed.
+            RuntimeError: No active SolidWorks document for export.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _export_operation() -> None:
-            """Execute export operation."""
+            """Build internal export operation.
+
+            Returns:
+                None: None.
+
+            Raises:
+                Exception: If the operation cannot be completed.
+                RuntimeError: No active SolidWorks document for export.
+            """
             format_map = {
                 "step": 0,  # swSaveAsSTEP
                 "iges": 1,  # swSaveAsIGS
@@ -2048,67 +2476,17 @@ class PyWin32Adapter(SolidWorksAdapter):
             if format_lower == "stl":
                 # For assemblies, resolve lightweight components first so all
                 # geometry is available for the mesh export.
-                try:
-                    target_doc.ResolveAllLightweightComponents(True)
-                except Exception:
-                    pass  # Not an assembly doc or already resolved — safe to ignore
+                self._attempt(lambda: target_doc.ResolveAllLightweightComponents(True))
 
                 ext = getattr(target_doc, "Extension", None)
-                stl_data = None
-                if ext is not None and self.swApp is not None:
-                    try:
-                        # swExportDataFileType_e.swExportSTL = 2
-                        stl_data = self.swApp.GetExportFileData(2)
-                        if stl_data is not None:
-                            # Merge all bodies/components into a single STL
-                            try:
-                                stl_data.Merge = True
-                            except Exception:
-                                pass
-                            # swExportBodiesAs = 0 → swExportAsOneFile
-                            try:
-                                stl_data.ExportBodiesAs = 0
-                            except Exception:
-                                pass
-                    except Exception:
-                        stl_data = None
+                if ext is None:
+                    raise RuntimeError("No Extension object available for STL export")
 
-                # swSaveAsVersion_e.swSaveAsCurrentVersion = 0
-                # swSaveAsOptions_e.swSaveAsOptions_Silent = 2
-                if ext is not None:
-                    try:
-                        # Extension.SaveAs2 is a void COM method — check file
-                        # existence rather than trusting the return value.
-                        # Try with stl_data first (enables Merge for assemblies);
-                        # fall back to None if type mismatch (late-bound IDispatch
-                        # can't marshal ISTLExportData* via IDispatch::Invoke).
-                        try:
-                            ext.SaveAs2(resolved_path, 0, 2, stl_data, None, "")
-                        except Exception:
-                            ext.SaveAs2(resolved_path, 0, 2, None, None, "")
-                    except Exception as _sa2_exc:
-                        logger.warning(
-                            "[pywin32.export_file] Extension.SaveAs2 failed: {}",
-                            str(_sa2_exc),
-                        )
+                stl_data = self._prepare_stl_export_data()
+                if not self._save_stl_with_extension(ext, stl_data, resolved_path):
+                    # SaveAs2 didn't produce file — try SaveAs3 fallback
+                    self._save_stl_with_fallback(target_doc, resolved_path)
 
-                # Fall back to classic SaveAs3 only if file wasn't created above.
-                if not os.path.exists(resolved_path):
-                    logger.warning(
-                        "[pywin32.export_file] SaveAs2 did not produce {}, "
-                        "falling back to SaveAs3",
-                        resolved_path,
-                    )
-                    target_doc.SaveAs3(
-                        resolved_path,
-                        0,  # swSaveAsCurrentVersion
-                        2,  # swSaveAsOptions_Silent
-                    )
-                    if not os.path.exists(resolved_path):
-                        raise Exception(
-                            f"STL export failed for {resolved_path} "
-                            "(tried Extension.SaveAs2 and SaveAs3)"
-                        )
                 return None
 
             # ----------------------------------------------------------------
@@ -2139,18 +2517,30 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("export_file", _export_operation)
 
     async def get_dimension(self, name: str) -> AdapterResult[float]:
-        """Get the value of a dimension."""
+        """Get the value of a dimension.
+
+        Args:
+            name (str): The name value.
+
+        Returns:
+            AdapterResult[float]: The result produced by the operation.
+
+        Raises:
+            Exception: If the operation cannot be completed.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _get_dim_operation() -> float:
-            """Execute get dim operation.
+            """Build internal dim operation.
 
             Returns:
-                float: Describe the returned value.
+                float: The computed numeric result.
 
+            Raises:
+                Exception: If the operation cannot be completed.
             """
             dimension = self.currentModel.Parameter(name)
 
@@ -2163,18 +2553,31 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("get_dimension", _get_dim_operation)
 
     async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
-        """Set the value of a dimension."""
+        """Set the value of a dimension.
+
+        Args:
+            name (str): The name value.
+            value (float): The value value.
+
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+
+        Raises:
+            Exception: If the operation cannot be completed.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _set_dim_operation() -> None:
-            """Execute set dim operation.
+            """Build internal dim operation.
 
             Returns:
-                None: Describe the returned value.
+                None: None.
 
+            Raises:
+                Exception: If the operation cannot be completed.
             """
             dimension = self.currentModel.Parameter(name)
 
@@ -2195,31 +2598,42 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("set_dimension", _set_dim_operation)
 
     async def save_file(self, file_path: str | None = None) -> AdapterResult[None]:
-        """Save the current model."""
+        """Save the current model.
+
+        Args:
+            file_path (str | None): Path to the target file. Defaults to None.
+
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to save file.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _save_operation() -> None:
-            """Execute save operation.
+            """Build internal operation.
 
             Returns:
-                None: Describe the returned value.
+                None: None.
 
+            Raises:
+                Exception: Failed to save file.
             """
 
             def _is_success(value: Any) -> bool:
                 # COM save APIs may return bool OR an integer status code
                 # where 0 indicates success.
-                """Execute is success.
+                """Build internal is success.
 
                 Args:
-                    value (Any): Describe value.
+                    value (Any): The value value.
 
                 Returns:
-                    bool: Describe the returned value.
-
+                    bool: True if success, otherwise False.
                 """
                 if isinstance(value, bool):
                     return value
@@ -2279,18 +2693,27 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("save_file", _save_operation)
 
     async def rebuild_model(self) -> AdapterResult[None]:
-        """Rebuild the current model."""
+        """Rebuild the current model.
+
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to rebuild model.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _rebuild_operation() -> None:
-            """Execute rebuild operation.
+            """Build internal rebuild operation.
 
             Returns:
-                None: Describe the returned value.
+                None: None.
 
+            Raises:
+                Exception: Failed to rebuild model.
             """
             success = self.currentModel.ForceRebuild3(False)
             if not success:
@@ -2300,18 +2723,21 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("rebuild_model", _rebuild_operation)
 
     async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
-        """Get information about the current model."""
+        """Get information about the current model.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _info_operation() -> dict[str, Any]:
-            """Execute info operation.
+            """Build internal info operation.
 
             Returns:
-                dict[str, Any]: Describe the returned value.
-
+                dict[str, Any]: A dictionary containing the resulting values.
             """
             # Intermediate dispatches (Configuration, FeatureManager) are
             # freshly returned from SW — flag their methods so zero-arg
@@ -2350,7 +2776,14 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def list_features(
         self, include_suppressed: bool = False
     ) -> AdapterResult[list[dict[str, Any]]]:
-        """List features in the active model feature tree."""
+        """List features in the active model feature tree.
+
+        Args:
+            include_suppressed (bool): The include suppressed value. Defaults to False.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: The result produced by the operation.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -2358,25 +2791,23 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _list_operation() -> list[dict[str, Any]]:
-            """Execute list operation.
+            """Build internal list operation.
 
             Returns:
-                list[dict[str, Any]]: Describe the returned value.
-
+                list[dict[str, Any]]: A list containing the resulting items.
             """
             features: list[dict[str, Any]] = []
             seen: set[tuple[str, str]] = set()
 
             def _is_suppressed(feature: Any) -> bool:
                 # Prefer parameter-less calls to avoid COM optional-arg marshalling issues.
-                """Execute is suppressed.
+                """Build internal is suppressed.
 
                 Args:
-                    feature (Any): Describe feature.
+                    feature (Any): The feature value.
 
                 Returns:
-                    bool: Describe the returned value.
-
+                    bool: True if suppressed, otherwise False.
                 """
                 suppressed_direct = self._attempt(
                     lambda: feature.IsSuppressed(), default=None
@@ -2394,15 +2825,14 @@ class PyWin32Adapter(SolidWorksAdapter):
                 )
 
             def _append_feature(feature: Any, position: int) -> None:
-                """Execute append feature.
+                """Build internal append feature.
 
                 Args:
-                    feature (Any): Describe feature.
-                    position (int): Describe position.
+                    feature (Any): The feature value.
+                    position (int): The position value.
 
                 Returns:
-                    None: Describe the returned value.
-
+                    None: None.
                 """
                 if not feature:
                     return
@@ -2472,11 +2902,193 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("list_features", _list_operation)
 
+    @staticmethod
+    def _normalize_feature_name(raw_name: str | None) -> str:
+        """Normalise a raw feature/component name for case-insensitive comparison.
+
+        Args:
+            raw_name: Raw name, may be None.
+
+        Returns:
+            str: Stripped, quote-removed, casefolded string.
+        """
+        return str(raw_name or "").strip().strip('"').casefold()
+
+    def _build_feature_candidate_names(
+        self, feature_name: str, target_doc: Any
+    ) -> list[str]:
+        """Build the list of candidate names (bare + @doc-stem / @doc-title variants).
+
+        Args:
+            feature_name: Base feature name.
+            target_doc: Active SolidWorks document COM object.
+
+        Returns:
+            list[str]: One to three candidate strings, e.g. ["Boss", "Boss@MyPart",
+                "Boss@MyPart.SLDPRT"].
+        """
+        doc_title = ""
+        doc_stem = ""
+        try:
+            raw_title = str(target_doc.GetTitle() or "").strip()
+            if raw_title:
+                doc_title = raw_title
+                doc_stem = raw_title.rsplit(".", 1)[0]
+        except Exception:
+            pass
+
+        candidates: list[str] = [feature_name]
+        if doc_stem:
+            candidates.append(f"{feature_name}@{doc_stem}")
+        if doc_title and doc_title != doc_stem:
+            candidates.append(f"{feature_name}@{doc_title}")
+        return candidates
+
+    def _try_select_by_extension(
+        self,
+        target_doc: Any,
+        candidate_names: list[str],
+        feature_name: str,
+    ) -> dict[str, Any] | None:
+        """Try SelectByID2 for each candidate × entity-type pair.
+
+        Args:
+            target_doc: Active SolidWorks document COM object.
+            candidate_names: Ordered list of name candidates to attempt.
+            feature_name: Original feature name for the result payload.
+
+        Returns:
+            Result dict on first success, or None if all attempts fail.
+        """
+        entity_types = ["BODYFEATURE", "COMPONENT", "SKETCH", "PLANE", "MATE", ""]
+        for candidate in candidate_names:
+            for entity_type in entity_types:
+                try:
+                    selected = target_doc.Extension.SelectByID2(
+                        candidate, entity_type, 0, 0, 0, False, 0, None, 0
+                    )
+                    if selected:
+                        return {
+                            "selected": True,
+                            "feature_name": feature_name,
+                            "selected_name": candidate,
+                            "entity_type": entity_type or "auto",
+                        }
+                except Exception:
+                    continue
+        return None
+
+    def _try_select_by_component(
+        self,
+        target_doc: Any,
+        candidate_names: list[str],
+        feature_name: str,
+    ) -> dict[str, Any] | None:
+        """Try selecting via GetComponentByName and component Select methods.
+
+        Args:
+            target_doc: Active SolidWorks document COM object.
+            candidate_names: Ordered list of name candidates to attempt.
+            feature_name: Original feature name for the result payload.
+
+        Returns:
+            Result dict on first success, or None if unavailable or all fail.
+        """
+        get_component_by_name = getattr(target_doc, "GetComponentByName", None)
+        if not callable(get_component_by_name):
+            return None
+
+        for candidate in candidate_names:
+            component_name = candidate.split("@", 1)[0]
+            component = self._attempt(
+                lambda c=component_name: get_component_by_name(c), default=None
+            )
+            if component is None:
+                continue
+            for method_name, args in [
+                ("Select4", (False, None, False)),
+                ("Select", (False,)),
+                ("Select2", (False, 0)),
+            ]:
+                selector = getattr(component, method_name, None)
+                if not callable(selector):
+                    continue
+                try:
+                    if bool(selector(*args)):
+                        return {
+                            "selected": True,
+                            "feature_name": feature_name,
+                            "selected_name": component_name,
+                            "entity_type": f"component:{method_name}",
+                        }
+                except Exception:
+                    continue
+        return None
+
+    def _try_select_by_feature_tree(
+        self,
+        target_doc: Any,
+        feature_name: str,
+        candidate_names: list[str],
+    ) -> dict[str, Any] | None:
+        """Walk the feature tree and select the first matching feature.
+
+        Args:
+            target_doc: Active SolidWorks document COM object.
+            feature_name: Original feature name for the result payload.
+            candidate_names: Candidate name list used to derive normalised lookup sets.
+
+        Returns:
+            Result dict on first match, or None if no match is found.
+        """
+        normalized_candidates = {
+            self._normalize_feature_name(c)
+            for c in candidate_names
+            if self._normalize_feature_name(c)
+        }
+        normalized_bases = {c.split("@", 1)[0] for c in normalized_candidates if c}
+
+        def _matches(raw_name: str | None) -> bool:
+            n = self._normalize_feature_name(raw_name)
+            if not n:
+                return False
+            if n in normalized_candidates:
+                return True
+            return n.split("@", 1)[0] in normalized_bases
+
+        feature = self._attempt(lambda: target_doc.FirstFeature())
+        guard = 0
+        while feature and guard < 10000:
+            guard += 1
+            tree_name = self._attempt(lambda f=feature: str(f.Name or ""), default="")
+            if _matches(tree_name):
+                try:
+                    if feature.Select2(False, 0):
+                        return {
+                            "selected": True,
+                            "feature_name": feature_name,
+                            "selected_name": tree_name or feature_name,
+                            "entity_type": "feature-tree",
+                        }
+                except Exception:
+                    pass
+            next_feature = self._attempt(lambda f=feature: f.GetNextFeature())
+            if next_feature is None:
+                break
+            feature = next_feature
+        return None
+
     async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
         """Highlight a named feature in SolidWorks by selecting it via SelectByID2.
 
-        Tries common entity type strings in priority order and falls back to an
-        empty type string which lets SolidWorks auto-resolve the entity class.
+        Tries common entity type strings in priority order and falls back to an empty type
+        string which lets SolidWorks auto-resolve the entity class.
+
+        Args:
+            feature_name (str): The feature name value.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         if not self.currentModel:
             return AdapterResult(
@@ -2484,134 +3096,33 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _select_operation() -> dict[str, Any]:
+            """Orchestrate feature selection using three fallback strategies.
+
+            Returns:
+                dict[str, Any]: Selection result with selected, feature_name, selected_name, entity_type.
+            """
             target_doc = self.currentModel
-            doc_title = ""
-            doc_stem = ""
+            candidate_names = self._build_feature_candidate_names(
+                feature_name, target_doc
+            )
 
-            def _normalize_name(raw_name: str | None) -> str:
-                return str(raw_name or "").strip().strip('"').casefold()
+            result = self._try_select_by_extension(
+                target_doc, candidate_names, feature_name
+            )
+            if result:
+                return result
 
-            try:
-                raw_title = str(target_doc.GetTitle() or "").strip()
-                if raw_title:
-                    doc_title = raw_title
-                    doc_stem = raw_title.rsplit(".", 1)[0]
-            except Exception:
-                pass
+            result = self._try_select_by_component(
+                target_doc, candidate_names, feature_name
+            )
+            if result:
+                return result
 
-            candidate_names = [feature_name]
-            if doc_stem:
-                candidate_names.append(f"{feature_name}@{doc_stem}")
-            if doc_title and doc_title != doc_stem:
-                candidate_names.append(f"{feature_name}@{doc_title}")
-
-            normalized_candidates = {
-                _normalize_name(candidate)
-                for candidate in candidate_names
-                if _normalize_name(candidate)
-            }
-            normalized_bases = {
-                candidate.split("@", 1)[0]
-                for candidate in normalized_candidates
-                if candidate
-            }
-
-            entity_types = [
-                "BODYFEATURE",
-                "COMPONENT",
-                "SKETCH",
-                "PLANE",
-                "MATE",
-                "",  # auto-resolve
-            ]
-            for candidate in candidate_names:
-                for entity_type in entity_types:
-                    try:
-                        selected = target_doc.Extension.SelectByID2(
-                            candidate,
-                            entity_type,
-                            0,
-                            0,
-                            0,
-                            False,
-                            0,
-                            None,
-                            0,
-                        )
-                        if selected:
-                            return {
-                                "selected": True,
-                                "feature_name": feature_name,
-                                "selected_name": candidate,
-                                "entity_type": entity_type or "auto",
-                            }
-                    except Exception:
-                        continue
-
-            get_component_by_name = getattr(target_doc, "GetComponentByName", None)
-            if callable(get_component_by_name):
-                for candidate in candidate_names:
-                    component_name = candidate.split("@", 1)[0]
-                    component = self._attempt(
-                        lambda c=component_name: get_component_by_name(c),
-                        default=None,
-                    )
-                    if component is None:
-                        continue
-
-                    for method_name, args in [
-                        ("Select4", (False, None, False)),
-                        ("Select", (False,)),
-                        ("Select2", (False, 0)),
-                    ]:
-                        selector = getattr(component, method_name, None)
-                        if not callable(selector):
-                            continue
-                        try:
-                            if bool(selector(*args)):
-                                return {
-                                    "selected": True,
-                                    "feature_name": feature_name,
-                                    "selected_name": component_name,
-                                    "entity_type": f"component:{method_name}",
-                                }
-                        except Exception:
-                            continue
-
-            def _matches_tree_name(raw_name: str | None) -> bool:
-                normalized_name = _normalize_name(raw_name)
-                if not normalized_name:
-                    return False
-                if normalized_name in normalized_candidates:
-                    return True
-                return normalized_name.split("@", 1)[0] in normalized_bases
-
-            feature = self._attempt(lambda: target_doc.FirstFeature())
-            guard = 0
-            while feature and guard < 10000:
-                guard += 1
-                tree_name = self._attempt(
-                    lambda current_feature=feature: str(current_feature.Name or ""),
-                    default="",
-                )
-                if _matches_tree_name(tree_name):
-                    try:
-                        if feature.Select2(False, 0):
-                            return {
-                                "selected": True,
-                                "feature_name": feature_name,
-                                "selected_name": tree_name or feature_name,
-                                "entity_type": "feature-tree",
-                            }
-                    except Exception:
-                        pass
-
-                next_feature = self._attempt(
-                    lambda current_feature=feature: current_feature.GetNextFeature()
-                )
-                if next_feature is None:
-                    break
-                feature = next_feature
+            result = self._try_select_by_feature_tree(
+                target_doc, feature_name, candidate_names
+            )
+            if result:
+                return result
 
             return {
                 "selected": False,
@@ -2622,7 +3133,11 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("select_feature", _select_operation)
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
-        """List all configuration names in the active model."""
+        """List all configuration names in the active model.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -2630,11 +3145,10 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _list_operation() -> list[str]:
-            """Execute list operation.
+            """Build internal list operation.
 
             Returns:
-                list[str]: Describe the returned value.
-
+                list[str]: A list containing the resulting items.
             """
             raw_names = getattr(self.currentModel, "GetConfigurationNames", None)
             if callable(raw_names):
@@ -2666,7 +3180,11 @@ class PyWin32Adapter(SolidWorksAdapter):
         return self._handle_com_operation("list_configurations", _list_operation)
 
     def _get_document_type(self) -> str:
-        """Helper method to get document type."""
+        """Helper method to get document type.
+
+        Returns:
+            str: The resulting text value.
+        """
         if not self.currentModel:
             return "Unknown"
 
@@ -2677,18 +3195,30 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def create_cut_extrude(
         self, params: ExtrusionParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Create a cut extrude feature."""
+        """Create a cut extrude feature.
+
+        Args:
+            params (ExtrusionParameters): The params value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create cut extrude feature.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
         def _cut_operation() -> SolidWorksFeature:
-            """Execute cut operation.
+            """Build internal cut operation.
 
             Returns:
-                SolidWorksFeature: Describe the returned value.
+                SolidWorksFeature: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create cut extrude feature.
             """
             featureManager = self.currentModel.FeatureManager
 
@@ -2735,7 +3265,18 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_fillet(
         self, radius: float, edge_names: list[str]
     ) -> AdapterResult[SolidWorksFeature]:
-        """Add a fillet feature."""
+        """Add a fillet feature.
+
+        Args:
+            radius (float): The radius value.
+            edge_names (list[str]): The edge names value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create fillet.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -2743,11 +3284,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _fillet_operation() -> SolidWorksFeature:
             # Select edges first
-            """Execute fillet operation.
+            """Build internal fillet operation.
 
             Returns:
-                SolidWorksFeature: Describe the returned value.
+                SolidWorksFeature: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create fillet.
             """
             for edge_name in edge_names:
                 selected = self.currentModel.Extension.SelectByID2(
@@ -2800,7 +3343,18 @@ class PyWin32Adapter(SolidWorksAdapter):
     async def add_chamfer(
         self, distance: float, edge_names: list[str]
     ) -> AdapterResult[SolidWorksFeature]:
-        """Add a chamfer feature."""
+        """Add a chamfer feature.
+
+        Args:
+            distance (float): The distance value.
+            edge_names (list[str]): The edge names value.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+
+        Raises:
+            Exception: Failed to create chamfer.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -2808,11 +3362,13 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _chamfer_operation() -> SolidWorksFeature:
             # Select edges first
-            """Execute chamfer operation.
+            """Build internal chamfer operation.
 
             Returns:
-                SolidWorksFeature: Describe the returned value.
+                SolidWorksFeature: The result produced by the operation.
 
+            Raises:
+                Exception: Failed to create chamfer.
             """
             for edge_name in edge_names:
                 selected = self.currentModel.Extension.SelectByID2(
@@ -2848,10 +3404,51 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("add_chamfer", _chamfer_operation)
 
+    def _invoke_run_macro2(
+        self, macro_path: str, module_name: str, proc_name: str
+    ) -> dict[str, Any]:
+        """Call swApp.RunMacro2 and parse the result into a result dict.
+
+        Args:
+            macro_path: Absolute path to the VBA macro file.
+            module_name: VB module name (parsed from the file or stem fallback).
+            proc_name: Entry-point procedure name, typically "main".
+
+        Returns:
+            dict[str, Any]: {"macro_path", "module_name", "errors"} on success.
+
+        Raises:
+            SolidWorksMCPError: If RunMacro2 reports failure.
+        """
+        result = self.swApp.RunMacro2(macro_path, module_name, proc_name, 0, 0)
+        if isinstance(result, (list, tuple)):
+            success, errors = result[0], result[1]
+        else:
+            success, errors = bool(result), 0
+        if not success:
+            raise SolidWorksMCPError(
+                f"RunMacro2 failed for {macro_path}, module={module_name!r}, errors={errors}"
+            )
+        return {
+            "macro_path": macro_path,
+            "module_name": module_name,
+            "errors": errors,
+        }
+
     async def execute_macro(
         self, params: dict[str, Any]
     ) -> AdapterResult[dict[str, Any]]:
-        """Execute a SolidWorks macro file using RunMacro2."""
+        """Provide execute macro support for the py win32 adapter.
+
+        Args:
+            params (dict[str, Any]): The params value.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+
+        Raises:
+            SolidWorksMCPError: If the operation cannot be completed.
+        """
         macro_path = params.get("macro_path") or params.get("macro_file") or ""
         if not macro_path:
             return AdapterResult(
@@ -2864,34 +3461,26 @@ class PyWin32Adapter(SolidWorksAdapter):
             )
 
         def _run() -> dict[str, Any]:
-            # RunMacro2: (FileName, ModuleName, ProcName, Options, Errors As Long ByRef)
-            # Parse module name from "Attribute VB_Name = ..." in the macro file.
-            # Falls back to filename stem (SW recorder default) then "SolidWorksMacro".
+            """Resolve module/proc names and delegate to _invoke_run_macro2.
+
+            Returns:
+                dict[str, Any]: A dictionary containing the resulting values.
+
+            Raises:
+                SolidWorksMCPError: If the operation cannot be completed.
+            """
             module_name = _parse_vb_module_name(macro_path)
             proc_name = params.get("proc_name", "main")
-
-            # Win32com late-binding: pass 0 for the ByRef Errors param.
-            # RunMacro2 returns (bool, errors_out) as a tuple when the ByRef
-            # param is marshalled — capture both.
-            result = self.swApp.RunMacro2(macro_path, module_name, proc_name, 0, 0)
-            if isinstance(result, (list, tuple)):
-                success, errors = result[0], result[1]
-            else:
-                success, errors = bool(result), 0
-            if not success:
-                raise SolidWorksMCPError(
-                    f"RunMacro2 failed for {macro_path}, module={module_name!r}, errors={errors}"
-                )
-            return {
-                "macro_path": macro_path,
-                "module_name": module_name,
-                "errors": errors,
-            }
+            return self._invoke_run_macro2(macro_path, module_name, proc_name)
 
         return self._handle_com_operation("execute_macro", _run)
 
     async def exit_sketch(self) -> AdapterResult[None]:
-        """Exit the current sketch editing mode."""
+        """Exit the current sketch editing mode.
+
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+        """
         if not self.currentSketchManager:
             return AdapterResult(
                 status=AdapterResultStatus.WARNING, error="No active sketch to exit"
@@ -2899,11 +3488,10 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         def _exit_operation() -> None:
             # Toggle sketch mode off and clear local sketch references.
-            """Execute exit operation.
+            """Build internal exit operation.
 
             Returns:
-                None: Describe the returned value.
-
+                None: None.
             """
             self.currentSketchManager.InsertSketch(True)
             self.currentSketch = None

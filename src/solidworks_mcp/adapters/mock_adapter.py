@@ -1,8 +1,7 @@
-"""
-Mock SolidWorks adapter for testing and development.
+"""Mock SolidWorks adapter for testing and development.
 
-This adapter simulates SolidWorks operations for testing on non-Windows
-platforms or when SolidWorks is not available.
+This adapter simulates SolidWorks operations for testing on non-Windows platforms or
+when SolidWorks is not available.
 """
 
 from __future__ import annotations
@@ -31,45 +30,65 @@ from .base import (
 
 
 class _BoolCallable:
-    """Compatibility shim that behaves as both bool and callable."""
+    """Compatibility shim that behaves as both bool and callable.
+    
+    Args:
+        getter (Callable[[], bool]): The getter value.
+    
+    Attributes:
+        _getter (Any): The getter value.
+    """
 
     def __init__(self, getter: Callable[[], bool]) -> None:
-        """Initialize this object.
-
+        """Initialize the bool callable.
+        
         Args:
-            getter (Callable[[], bool]): Describe getter.
-
+            getter (Callable[[], bool]): The getter value.
+        
+        Returns:
+            None: None.
         """
         self._getter = getter
 
     def __call__(self) -> bool:
-        """Execute call.
-
+        """Build internal call.
+        
         Returns:
-            bool: Describe the returned value.
-
+            bool: True if call, otherwise False.
         """
         return bool(self._getter())
 
     def __bool__(self) -> bool:
-        """Execute bool.
-
+        """Build internal bool.
+        
         Returns:
-            bool: Describe the returned value.
-
+            bool: True if bool, otherwise False.
         """
         return bool(self._getter())
 
 
 class MockSolidWorksAdapter(SolidWorksAdapter):
-    """Mock adapter that simulates SolidWorks operations."""
+    """Mock adapter that simulates SolidWorks operations.
+    
+    Args:
+        config (object | None): Configuration values for the operation. Defaults to None.
+    
+    Attributes:
+        _connected (Any): The connected value.
+        _delays (Any): The delays value.
+        _is_connected_proxy (Any): The is connected proxy value.
+        _operation_count (Any): The operation count value.
+        _simulate_errors (Any): The simulate errors value.
+    """
 
     def __init__(self, config: object | None = None) -> None:
-        """Initialize this object.
-
+        """Initialize the mock solid works adapter.
+        
         Args:
-            config (object | None): Describe config.
-
+            config (object | None): Configuration values for the operation. Defaults to None.
+        
+        Returns:
+            None: None.
         """
         super().__init__(config)
         cfg: dict[str, Any] = dict(self.config_dict)
@@ -93,21 +112,24 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._simulate_errors = bool(cfg.get("simulate_errors", False))
 
     def __getattribute__(self, name: str) -> Any:
-        """Execute getattribute.
-
+        """Build internal getattribute.
+        
         Args:
-            name (str): Describe name.
-
+            name (str): The name value.
+        
         Returns:
-            Any: Describe the returned value.
-
+            Any: The result produced by the operation.
         """
         if name == "is_connected":
             return object.__getattribute__(self, "_is_connected_proxy")
         return object.__getattribute__(self, name)
 
     async def connect(self) -> None:
-        """Mock connection to SolidWorks."""
+        """Mock connection to SolidWorks.
+        
+        Returns:
+            None: None.
+        """
         await asyncio.sleep(self._delays["connect"])
         self._connected = True
 
@@ -119,7 +141,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         }
 
     async def disconnect(self) -> None:
-        """Mock disconnection from SolidWorks."""
+        """Mock disconnection from SolidWorks.
+        
+        Returns:
+            None: None.
+        """
         self._connected = False
         self._current_model = None
         self._models.clear()
@@ -128,11 +154,19 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._current_sketch = None
 
     def is_connected(self) -> bool:
-        """Check if mock connection is active."""
+        """Check if mock connection is active.
+        
+        Returns:
+            bool: True if connected, otherwise False.
+        """
         return self._connected
 
     async def health_check(self) -> AdapterHealth:
-        """Get mock health status."""
+        """Get mock health status.
+        
+        Returns:
+            AdapterHealth: The result produced by the operation.
+        """
         error_count = int(self._metrics["errors_count"])
         success_count = int(
             self._metrics["operations_count"] - self._metrics["errors_count"]
@@ -154,7 +188,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
-        """Mock opening a SolidWorks model."""
+        """Mock opening a SolidWorks model.
+        
+        Args:
+            file_path (str): Path to the target file.
+        
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+        
+        Raises:
+            SolidWorksOperationError: Simulated adapter failure.
+        """
         if not self._connected:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
@@ -205,7 +249,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def close_model(self, save: bool = False) -> AdapterResult[None]:
-        """Mock closing the current model."""
+        """Mock closing the current model.
+        
+        Args:
+            save (bool): The save value. Defaults to False.
+        
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.WARNING, error="No active model to close"
@@ -227,7 +278,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
-        """Mock metadata for the currently active model."""
+        """Mock metadata for the currently active model.
+        
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -258,7 +313,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def list_features(
         self, include_suppressed: bool = False
     ) -> AdapterResult[list[dict[str, Any]]]:
-        """Mock feature tree listing for the active model."""
+        """Mock feature tree listing for the active model.
+        
+        Args:
+            include_suppressed (bool): The include suppressed value. Defaults to False.
+        
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -301,7 +363,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
-        """Mock feature selection/highlight — succeeds without COM side-effects."""
+        """Mock feature selection/highlight — succeeds without COM side-effects.
+        
+        Args:
+            feature_name (str): The feature name value.
+        
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -320,7 +389,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
-        """Mock configuration listing for the active model."""
+        """Mock configuration listing for the active model.
+        
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -342,7 +415,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def create_part(
         self, name: str | None = None, units: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
-        """Mock creating a new part."""
+        """Mock creating a new part.
+        
+        Args:
+            name (str | None): The name value. Defaults to None.
+            units (str | None): The units value. Defaults to None.
+        
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+        """
         if not self._connected:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
@@ -377,7 +458,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def create_assembly(
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
-        """Mock creating a new assembly."""
+        """Mock creating a new assembly.
+        
+        Args:
+            name (str | None): The name value. Defaults to None.
+        
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+        """
         if not self._connected:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
@@ -408,7 +496,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def create_drawing(
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
-        """Mock creating a new drawing."""
+        """Mock creating a new drawing.
+        
+        Args:
+            name (str | None): The name value. Defaults to None.
+        
+        Returns:
+            AdapterResult[SolidWorksModel]: The result produced by the operation.
+        """
         if not self._connected:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
@@ -442,7 +537,16 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         depth: float | None = None,
         direction: str | None = None,
     ) -> AdapterResult[SolidWorksFeature]:
-        """Mock creating an extrusion feature."""
+        """Mock creating an extrusion feature.
+        
+        Args:
+            params (ExtrusionParameters | str): The params value.
+            depth (float | None): The depth value. Defaults to None.
+            direction (str | None): The direction value. Defaults to None.
+        
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -483,7 +587,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Mock creating a revolve feature."""
+        """Mock creating a revolve feature.
+        
+        Args:
+            params (RevolveParameters): The params value.
+        
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -519,7 +630,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def create_sweep(
         self, params: SweepParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Mock creating a sweep feature."""
+        """Mock creating a sweep feature.
+        
+        Args:
+            params (SweepParameters): The params value.
+        
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -553,7 +671,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def create_loft(
         self, params: LoftParameters
     ) -> AdapterResult[SolidWorksFeature]:
-        """Mock creating a loft feature."""
+        """Mock creating a loft feature.
+        
+        Args:
+            params (LoftParameters): The params value.
+        
+        Returns:
+            AdapterResult[SolidWorksFeature]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -586,7 +711,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def create_sketch(self, plane: str) -> AdapterResult[dict[str, Any]]:
-        """Mock creating a sketch."""
+        """Mock creating a sketch.
+        
+        Args:
+            plane (str): The plane value.
+        
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
         if not self._current_model:
             # Legacy tests start sketching immediately after connect.
             await self.create_part()
@@ -617,7 +749,18 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         y2: float,
         construction: bool = False,
     ) -> AdapterResult[dict[str, Any]]:
-        """Legacy compatibility wrapper around add_line."""
+        """Legacy compatibility wrapper around add_line.
+        
+        Args:
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
+            construction (bool): The construction value. Defaults to False.
+        
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
         result = await self.add_line(x1, y1, x2, y2)
         if not result.is_success:
             return AdapterResult(
@@ -639,7 +782,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def save_file(
         self, file_path: str | None = None
     ) -> AdapterResult[dict[str, Any]]:
-        """Legacy compatibility save operation for tests."""
+        """Legacy compatibility save operation for tests.
+        
+        Args:
+            file_path (str | None): Path to the target file. Defaults to None.
+        
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -657,7 +807,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def add_line(
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
-        """Mock adding a line to sketch."""
+        """Mock adding a line to sketch.
+        
+        Args:
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
+        
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -677,7 +837,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def add_centerline(
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
-        """Mock adding a construction centerline to sketch."""
+        """Mock adding a construction centerline to sketch.
+        
+        Args:
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
+        
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -697,7 +867,16 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def add_circle(
         self, center_x: float, center_y: float, radius: float
     ) -> AdapterResult[str]:
-        """Mock adding a circle to sketch."""
+        """Mock adding a circle to sketch.
+        
+        Args:
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            radius (float): The radius value.
+        
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -717,7 +896,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def add_rectangle(
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
-        """Mock adding a rectangle to sketch."""
+        """Mock adding a rectangle to sketch.
+        
+        Args:
+            x1 (float): The x1 value.
+            y1 (float): The y1 value.
+            x2 (float): The x2 value.
+            y2 (float): The y2 value.
+        
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
@@ -735,7 +924,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def exit_sketch(self) -> AdapterResult[None]:
-        """Mock exiting sketch mode."""
+        """Mock exiting sketch mode.
+        
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+        """
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.WARNING, error="No active sketch to exit"
@@ -751,7 +944,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def get_mass_properties(self) -> AdapterResult[MassProperties]:
-        """Mock getting mass properties."""
+        """Mock getting mass properties.
+        
+        Returns:
+            AdapterResult[MassProperties]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -787,7 +984,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def export_image(self, payload: dict) -> AdapterResult[dict]:
-        """Mock export of a PNG/JPG viewport screenshot."""
+        """Mock export of a PNG/JPG viewport screenshot.
+        
+        Args:
+            payload (dict): The payload value.
+        
+        Returns:
+            AdapterResult[dict]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -832,7 +1036,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def export_file(
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:
-        """Mock exporting a file."""
+        """Mock exporting a file.
+        
+        Args:
+            file_path (str): Path to the target file.
+            format_type (str): The format type value.
+        
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+        """
         if not self._current_model:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -890,7 +1102,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def get_dimension(self, name: str) -> AdapterResult[float]:
-        """Mock getting a dimension value."""
+        """Mock getting a dimension value.
+        
+        Args:
+            name (str): The name value.
+        
+        Returns:
+            AdapterResult[float]: The result produced by the operation.
+        """
         await asyncio.sleep(0.05)  # Very fast operation
         self._operation_count += 1
 
@@ -906,7 +1125,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             )
 
     async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
-        """Mock setting a dimension value."""
+        """Mock setting a dimension value.
+        
+        Args:
+            name (str): The name value.
+            value (float): The value value.
+        
+        Returns:
+            AdapterResult[None]: The result produced by the operation.
+        """
         await asyncio.sleep(0.1)  # Fast operation
         self._operation_count += 1
 

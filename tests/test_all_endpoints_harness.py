@@ -1,30 +1,4 @@
-"""Full endpoint integration test harness for the SolidWorks MCP Server.
-
-Provides three test levels:
-  Level A  - Schema/Contract: every registered tool is callable and returns a dict.
-             Safe to run with the mock adapter (no SolidWorks required).
-  Level B  - Execution smoke: every tool is invoked with a minimal, safe payload
-             and must NOT raise an unhandled exception.
-             Runs with mock adapter by default; real adapter when
-             SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=true.
-  Level C  - Real-COM lifecycle: create/save/export/close flows executed against a
-             live SolidWorks instance.
-             Only active when SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=true on Windows.
-
-Docs-discovery compatibility phase (pre-test):
-  Before Level-C tests the harness calls `discover_solidworks_docs` and compares
-  the discovered COM API surface to a reference snapshot.  Differences are
-  classified as Compatible / Degraded / Hard-break and written to
-  tests/.generated/solidworks_integration/api_compat_report.json.
-
-Run with:
-    # Mock-safe (CI)
-    pytest tests/test_all_endpoints_harness.py -v
-
-    # Full real integration (Windows + SolidWorks running)
-    $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION="true"
-    pytest tests/test_all_endpoints_harness.py -v
-"""
+"""Full endpoint integration test harness for the SolidWorks MCP Server."""
 
 from __future__ import annotations
 

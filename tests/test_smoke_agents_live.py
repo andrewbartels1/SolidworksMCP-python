@@ -1,15 +1,4 @@
-"""Live smoke tests for agent harness — marked `smoke`, excluded from CI.
-
-These tests make real LLM API calls via GitHub Models (GH_TOKEN) or Anthropic
-(ANTHROPIC_API_KEY). They are included in `dev-test-full` but excluded from
-CI/CD and the standard `dev-test` run.
-
-Run manually:
-    .venv/Scripts/python.exe -m pytest tests/test_smoke_agents_live.py -m smoke -v
-
-Or via dev-commands:
-    ./dev-commands.ps1 dev-test-full
-"""
+"""Live smoke tests for agent harness — marked `smoke`, excluded from CI."""
 
 from __future__ import annotations
 
@@ -27,13 +16,7 @@ from src.solidworks_mcp.agents.schemas import (
 
 
 async def _run_or_skip(**kwargs):
-    """Wrap run_validated_prompt and skip the test on 401 auth errors.
-
-    The gh-cli may return an expired or insufficiently-scoped token that passes
-    the module-level credential check but is rejected by the GitHub Models API.
-    Converting auth errors to pytest.skip keeps dev-test-full green while
-    still exercising the harness when valid credentials are present.
-    """
+    """Wrap run_validated_prompt and skip the test on 401 auth errors."""
     from pydantic_ai.exceptions import ModelHTTPError
 
     try:
@@ -52,6 +35,8 @@ async def _run_or_skip(**kwargs):
 
 
 def _resolve_github_token() -> str | None:
+    """Test resolve github token."""
+
     token = os.getenv("GITHUB_API_KEY") or os.getenv("GH_TOKEN")
     if token:
         return token
@@ -92,7 +77,7 @@ def _set_github_env() -> str:
 @_skip_no_credentials
 @pytest.mark.asyncio
 async def test_print_architect_manufacturability(tmp_path):
-    """solidworks-print-architect returns a valid ManufacturabilityReview."""
+    """Solidworks-print-architect returns a valid ManufacturabilityReview."""
     model = _set_github_env()
     db = tmp_path / "live_test.sqlite3"
 
@@ -121,7 +106,7 @@ async def test_print_architect_manufacturability(tmp_path):
 @_skip_no_credentials
 @pytest.mark.asyncio
 async def test_mcp_skill_docs_schema(tmp_path):
-    """solidworks-mcp-skill-docs returns a valid DocsPlan."""
+    """Solidworks-mcp-skill-docs returns a valid DocsPlan."""
     model = _set_github_env()
     db = tmp_path / "live_test_docs.sqlite3"
 
@@ -149,7 +134,7 @@ async def test_mcp_skill_docs_schema(tmp_path):
 @_skip_no_credentials
 @pytest.mark.asyncio
 async def test_research_validator_manufacturability(tmp_path):
-    """solidworks-research-validator returns a valid ManufacturabilityReview."""
+    """Solidworks-research-validator returns a valid ManufacturabilityReview."""
     model = _set_github_env()
     db = tmp_path / "live_test_validator.sqlite3"
 
@@ -177,7 +162,7 @@ async def test_research_validator_manufacturability(tmp_path):
 @_skip_no_credentials
 @pytest.mark.asyncio
 async def test_print_architect_docs_schema(tmp_path):
-    """solidworks-print-architect can also produce a valid DocsPlan."""
+    """Solidworks-print-architect can also produce a valid DocsPlan."""
     model = _set_github_env()
     db = tmp_path / "live_test_docs2.sqlite3"
 

@@ -1,4 +1,5 @@
-"""Caching utilities for SolidWorks MCP runtime services."""
+"""Caching utilities for SolidWorks MCP runtime services.
+"""
 
 from .response_cache import CachePolicy, ResponseCache
 

@@ -1,4 +1,4 @@
-"""Coverage tests for src/solidworks_mcp/ui/local_llm.py"""
+"""Coverage tests for src/solidworks_mcp/ui/local_llm.py."""
 
 from __future__ import annotations
 
@@ -33,6 +33,8 @@ from src.solidworks_mcp.ui.local_llm import (
 
 
 def test_local_llm_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test local llm config from env defaults."""
+
     monkeypatch.delenv("SOLIDWORKS_UI_OLLAMA_ENDPOINT", raising=False)
     monkeypatch.delenv("SOLIDWORKS_UI_MODEL", raising=False)
     monkeypatch.delenv("LOCAL_OPENAI_API_KEY", raising=False)
@@ -43,6 +45,8 @@ def test_local_llm_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_local_llm_config_from_env_custom(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test local llm config from env custom."""
+
     monkeypatch.setenv("SOLIDWORKS_UI_OLLAMA_ENDPOINT", "http://myhost:11434")
     monkeypatch.setenv("SOLIDWORKS_UI_MODEL", "local:gemma4:e4b")
     monkeypatch.setenv("LOCAL_OPENAI_API_KEY", "mykey")
@@ -55,6 +59,8 @@ def test_local_llm_config_from_env_custom(monkeypatch: pytest.MonkeyPatch) -> No
 def test_local_llm_config_from_env_unknown_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test local llm config from env unknown model."""
+
     monkeypatch.setenv("SOLIDWORKS_UI_MODEL", "local:some-unknown-model")
     cfg = LocalLLMConfig.from_env()
     assert cfg.tier == "small"  # falls back to "small" tier
@@ -66,6 +72,8 @@ def test_local_llm_config_from_env_unknown_model(
 
 
 def test_local_model_probe_result_to_config() -> None:
+    """Test local model probe result to config."""
+
     spec = GEMMA_TIERS["balanced"]
     result = LocalModelProbeResult(
         available=True,
@@ -95,14 +103,20 @@ def test_local_model_probe_result_to_config() -> None:
 
 
 def test_recommend_model_tier_small() -> None:
+    """Test recommend model tier small."""
+
     assert recommend_model_tier(vram_gb=0, ram_gb=8) == "small"
 
 
 def test_recommend_model_tier_balanced() -> None:
+    """Test recommend model tier balanced."""
+
     assert recommend_model_tier(vram_gb=8, ram_gb=16) == "balanced"
 
 
 def test_recommend_model_tier_large() -> None:
+    """Test recommend model tier large."""
+
     assert recommend_model_tier(vram_gb=24, ram_gb=64) == "large"
 
 
@@ -117,6 +131,8 @@ def test_recommend_model_tier_fallback_small() -> None:
 
 
 def test_detect_gpu_vram_gb_nvidia_smi_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test detect gpu vram gb nvidia smi success."""
+
     monkeypatch.setattr(
         local_llm_mod.subprocess,
         "check_output",
@@ -130,6 +146,8 @@ def test_detect_gpu_vram_gb_fallback_zero(monkeypatch: pytest.MonkeyPatch) -> No
     """Returns 0.0 when all detection methods fail."""
 
     def _always_raise(*a, **k) -> None:
+        """Test always raise."""
+
         raise OSError("not found")
 
     monkeypatch.setattr(local_llm_mod.subprocess, "check_output", _always_raise)
@@ -143,6 +161,8 @@ def test_detect_gpu_vram_gb_fallback_zero(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_detect_system_ram_gb_returns_float() -> None:
+    """Test detect system ram gb returns float."""
+
     result = _detect_system_ram_gb()
     assert isinstance(result, float)
     # On any modern machine (or CI) there should be some RAM
@@ -169,13 +189,21 @@ def test_detect_system_ram_gb_no_psutil(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 async def test_ollama_health_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ollama health available."""
+
     class _FakeResp:
+        """Test fake resp."""
+
         status = 200
 
         def __enter__(self) -> "_FakeResp":
+            """Test enter."""
+
             return self
 
         def __exit__(self, *a: object) -> None:
+            """Test exit."""
+
             pass
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
@@ -183,7 +211,11 @@ async def test_ollama_health_available(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_ollama_health_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ollama health unavailable."""
+
     def _raise(*a: object, **k: object) -> None:
+        """Test raise."""
+
         raise ConnectionRefusedError("no server")
 
     monkeypatch.setattr(urllib.request, "urlopen", _raise)
@@ -196,16 +228,26 @@ async def test_ollama_health_unavailable(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 async def test_ollama_list_models_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ollama list models success."""
+
     data = json.dumps({"models": [{"name": "gemma4:e2b"}, {"name": "llama3"}]}).encode()
 
     class _FakeResp:
+        """Test fake resp."""
+
         def read(self) -> bytes:
+            """Test read."""
+
             return data
 
         def __enter__(self) -> "_FakeResp":
+            """Test enter."""
+
             return self
 
         def __exit__(self, *a: object) -> None:
+            """Test exit."""
+
             pass
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
@@ -215,7 +257,11 @@ async def test_ollama_list_models_success(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 async def test_ollama_list_models_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ollama list models failure."""
+
     def _raise(*a: object, **k: object) -> None:
+        """Test raise."""
+
         raise ConnectionRefusedError()
 
     monkeypatch.setattr(urllib.request, "urlopen", _raise)
@@ -231,13 +277,19 @@ async def test_ollama_list_models_failure(monkeypatch: pytest.MonkeyPatch) -> No
 async def test_probe_local_model_available_with_model_pulled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test probe local model available with model pulled."""
+
     monkeypatch.setattr(local_llm_mod, "_detect_gpu_vram_gb", lambda: 8.0)
     monkeypatch.setattr(local_llm_mod, "_detect_system_ram_gb", lambda: 16.0)
 
     async def _health(*a: object, **k: object) -> bool:
+        """Test health."""
+
         return True
 
     async def _list_models(*a: object, **k: object) -> list[str]:
+        """Test list models."""
+
         return ["gemma4:e4b", "llama3:8b"]
 
     monkeypatch.setattr(local_llm_mod, "_ollama_health", _health)
@@ -252,13 +304,19 @@ async def test_probe_local_model_available_with_model_pulled(
 async def test_probe_local_model_available_model_not_pulled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test probe local model available model not pulled."""
+
     monkeypatch.setattr(local_llm_mod, "_detect_gpu_vram_gb", lambda: 8.0)
     monkeypatch.setattr(local_llm_mod, "_detect_system_ram_gb", lambda: 16.0)
 
     async def _health(*a: object, **k: object) -> bool:
+        """Test health."""
+
         return True
 
     async def _list_models(*a: object, **k: object) -> list[str]:
+        """Test list models."""
+
         return []  # no models pulled yet
 
     monkeypatch.setattr(local_llm_mod, "_ollama_health", _health)
@@ -271,13 +329,19 @@ async def test_probe_local_model_available_model_not_pulled(
 
 
 async def test_probe_local_model_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test probe local model unavailable."""
+
     monkeypatch.setattr(local_llm_mod, "_detect_gpu_vram_gb", lambda: 0.0)
     monkeypatch.setattr(local_llm_mod, "_detect_system_ram_gb", lambda: 8.0)
 
     async def _health(*a: object, **k: object) -> bool:
+        """Test health."""
+
         return False
 
     async def _list_models(*a: object, **k: object) -> list[str]:
+        """Test list models."""
+
         return []
 
     monkeypatch.setattr(local_llm_mod, "_ollama_health", _health)
@@ -291,13 +355,19 @@ async def test_probe_local_model_unavailable(monkeypatch: pytest.MonkeyPatch) ->
 async def test_probe_local_model_custom_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test probe local model custom endpoint."""
+
     monkeypatch.setattr(local_llm_mod, "_detect_gpu_vram_gb", lambda: 0.0)
     monkeypatch.setattr(local_llm_mod, "_detect_system_ram_gb", lambda: 8.0)
 
     async def _health(*a: object, **k: object) -> bool:
+        """Test health."""
+
         return False
 
     async def _list_models(*a: object, **k: object) -> list[str]:
+        """Test list models."""
+
         return []
 
     monkeypatch.setattr(local_llm_mod, "_ollama_health", _health)
@@ -313,16 +383,26 @@ async def test_probe_local_model_custom_endpoint(
 
 
 async def test_pull_ollama_model_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test pull ollama model success."""
+
     pull_resp = json.dumps({"status": "success"}).encode()
 
     class _FakeResp:
+        """Test fake resp."""
+
         def read(self) -> bytes:
+            """Test read."""
+
             return pull_resp
 
         def __enter__(self) -> "_FakeResp":
+            """Test enter."""
+
             return self
 
         def __exit__(self, *a: object) -> None:
+            """Test exit."""
+
             pass
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
@@ -335,7 +415,11 @@ async def test_pull_ollama_model_success(monkeypatch: pytest.MonkeyPatch) -> Non
 async def test_pull_ollama_model_connection_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test pull ollama model connection failure."""
+
     def _raise(*a: object, **k: object) -> None:
+        """Test raise."""
+
         raise ConnectionRefusedError("Ollama not running")
 
     monkeypatch.setattr(urllib.request, "urlopen", _raise)
@@ -347,16 +431,26 @@ async def test_pull_ollama_model_connection_failure(
 async def test_pull_ollama_model_custom_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test pull ollama model custom endpoint."""
+
     pull_resp = json.dumps({"status": "success"}).encode()
 
     class _FakeResp:
+        """Test fake resp."""
+
         def read(self) -> bytes:
+            """Test read."""
+
             return pull_resp
 
         def __enter__(self) -> "_FakeResp":
+            """Test enter."""
+
             return self
 
         def __exit__(self, *a: object) -> None:
+            """Test exit."""
+
             pass
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _FakeResp())
@@ -370,6 +464,8 @@ async def test_pull_ollama_model_custom_endpoint(
 
 
 async def test_run_local_agent_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test run local agent success."""
+
     from pydantic import BaseModel
 
     import pydantic_ai
@@ -377,6 +473,8 @@ async def test_run_local_agent_success(monkeypatch: pytest.MonkeyPatch) -> None:
     import pydantic_ai.providers.openai
 
     class _Out(BaseModel):
+        """Test out."""
+
         answer: str = "ok"
 
     fake_data = _Out(answer="SolidWorks is great")
@@ -410,6 +508,8 @@ async def test_run_local_agent_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_run_local_agent_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test run local agent exception."""
+
     from pydantic import BaseModel
 
     import pydantic_ai
@@ -417,6 +517,8 @@ async def test_run_local_agent_exception(monkeypatch: pytest.MonkeyPatch) -> Non
     import pydantic_ai.providers.openai
 
     class _Out(BaseModel):
+        """Test out."""
+
         text: str = ""
 
     mock_agent_instance = AsyncMock()
@@ -448,6 +550,8 @@ async def test_run_local_agent_exception(monkeypatch: pytest.MonkeyPatch) -> Non
 async def test_run_local_agent_recoverable_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Test run local agent recoverable failure."""
+
     from pydantic import BaseModel
 
     import pydantic_ai
@@ -456,6 +560,8 @@ async def test_run_local_agent_recoverable_failure(
     from src.solidworks_mcp.agents.schemas import RecoverableFailure
 
     class _Out(BaseModel):
+        """Test out."""
+
         text: str = ""
 
     fake_failure = RecoverableFailure(explanation="Could not parse response")
@@ -497,6 +603,8 @@ async def test_run_local_agent_with_rag_query(monkeypatch: pytest.MonkeyPatch) -
     import pydantic_ai.providers.openai
 
     class _Out(BaseModel):
+        """Test out."""
+
         text: str = "done"
 
     mock_result = MagicMock()
@@ -547,6 +655,8 @@ async def test_run_local_agent_rag_import_error_skipped(
     import pydantic_ai.providers.openai
 
     class _Out(BaseModel):
+        """Test out."""
+
         text: str = "done"
 
     mock_result = MagicMock()
@@ -598,6 +708,8 @@ async def test_run_local_agent_rag_other_namespace(
     import pydantic_ai.providers.openai
 
     class _Out(BaseModel):
+        """Test out."""
+
         text: str = "done"
 
     mock_result = MagicMock()

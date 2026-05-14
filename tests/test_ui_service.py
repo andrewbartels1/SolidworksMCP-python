@@ -31,7 +31,11 @@ from src.solidworks_mcp.ui.service import (
 
 
 class _DummyAdapterResult:
+    """Test dummy adapter result."""
+
     def __init__(self, *, is_success: bool = True, data=None, error: str | None = None):
+        """Test init."""
+
         self.is_success = is_success
         self.data = data
         self.error = error
@@ -39,13 +43,21 @@ class _DummyAdapterResult:
 
 
 class _DummyAdapter:
+    """Test dummy adapter."""
+
     async def connect(self) -> None:
+        """Test connect."""
+
         return None
 
     async def disconnect(self) -> None:
+        """Test disconnect."""
+
         return None
 
     async def open_model(self, file_path: str) -> _DummyAdapterResult:
+        """Test open model."""
+
         return _DummyAdapterResult(
             data={
                 "name": Path(file_path).name,
@@ -56,6 +68,8 @@ class _DummyAdapter:
         )
 
     async def get_model_info(self) -> _DummyAdapterResult:
+        """Test get model info."""
+
         return _DummyAdapterResult(
             data={"type": "Part", "configuration": "Default", "name": "part_1"}
         )
@@ -63,6 +77,8 @@ class _DummyAdapter:
     async def list_features(
         self, include_suppressed: bool = True
     ) -> _DummyAdapterResult:
+        """Test list features."""
+
         return _DummyAdapterResult(
             data=[
                 {"name": "Boss-Extrude1", "type": "Boss-Extrude", "suppressed": False},
@@ -71,6 +87,8 @@ class _DummyAdapter:
         )
 
     async def export_image(self, payload: dict[str, object]) -> _DummyAdapterResult:
+        """Test export image."""
+
         file_path = Path(str(payload["file_path"]))
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_bytes(b"preview")
@@ -78,6 +96,8 @@ class _DummyAdapter:
 
 
 def test_ensure_dashboard_session_seeds_default_checkpoints(tmp_path: Path) -> None:
+    """Test ensure dashboard session seeds default checkpoints."""
+
     db_path = tmp_path / "ui.sqlite3"
 
     state = build_dashboard_state(DEFAULT_SESSION_ID, db_path=db_path)
@@ -89,6 +109,8 @@ def test_ensure_dashboard_session_seeds_default_checkpoints(tmp_path: Path) -> N
 
 @pytest.mark.asyncio
 async def test_execute_next_checkpoint_updates_tool_log(tmp_path: Path) -> None:
+    """Test execute next checkpoint updates tool log."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -100,6 +122,8 @@ async def test_execute_next_checkpoint_updates_tool_log(tmp_path: Path) -> None:
 
 
 def test_reconcile_manual_edits_reports_changes(tmp_path: Path) -> None:
+    """Test reconcile manual edits reports changes."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -122,6 +146,8 @@ def test_reconcile_manual_edits_reports_changes(tmp_path: Path) -> None:
 
 
 def test_update_preferences_persists_model_and_assumptions(tmp_path: Path) -> None:
+    """Test update preferences persists model and assumptions."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -143,6 +169,8 @@ def test_update_preferences_persists_model_and_assumptions(tmp_path: Path) -> No
 
 
 def test_select_workflow_mode_persists_opening_branch(tmp_path: Path) -> None:
+    """Test select workflow mode persists opening branch."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -160,6 +188,8 @@ def test_select_workflow_mode_persists_opening_branch(tmp_path: Path) -> None:
 def test_build_dashboard_state_sanitizes_corrupted_ui_metadata(
     tmp_path: Path,
 ) -> None:
+    """Test build dashboard state sanitizes corrupted ui metadata."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
     session_row = get_design_session(DEFAULT_SESSION_ID, db_path=db_path)
@@ -212,6 +242,8 @@ def test_build_dashboard_state_sanitizes_corrupted_ui_metadata(
 def test_build_dashboard_trace_payload_includes_state_and_metadata(
     tmp_path: Path,
 ) -> None:
+    """Test build dashboard trace payload includes state and metadata."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -232,6 +264,8 @@ def test_build_dashboard_trace_payload_includes_state_and_metadata(
 def test_build_dashboard_state_keeps_latest_feature_target_evidence_only(
     tmp_path: Path,
 ) -> None:
+    """Test build dashboard state keeps latest feature target evidence only."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -262,6 +296,8 @@ def test_build_dashboard_state_keeps_latest_feature_target_evidence_only(
 async def test_connect_target_model_persists_active_model_context(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Test connect target model persists active model context."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
     part_path = tmp_path / "part_1.sldprt"
@@ -272,6 +308,8 @@ async def test_connect_target_model_persists_active_model_context(
     )
 
     async def _fake_create_adapter(config):
+        """Test fake create adapter."""
+
         return _DummyAdapter()
 
     monkeypatch.setattr(
@@ -299,6 +337,8 @@ async def test_connect_target_model_persists_active_model_context(
 async def test_connect_target_model_accepts_uploaded_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Test connect target model accepts uploaded file."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -307,6 +347,8 @@ async def test_connect_target_model_accepts_uploaded_file(
     )
 
     async def _fake_create_adapter(config):
+        """Test fake create adapter."""
+
         return _DummyAdapter()
 
     monkeypatch.setattr(
@@ -335,6 +377,8 @@ async def test_connect_target_model_accepts_uploaded_file(
 
 
 def test_ingest_reference_source_builds_local_index(tmp_path: Path) -> None:
+    """Test ingest reference source builds local index."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
     source_path = tmp_path / "how-to.md"
@@ -357,6 +401,8 @@ def test_ingest_reference_source_builds_local_index(tmp_path: Path) -> None:
 def test_ingest_reference_source_accepts_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Test ingest reference source accepts url."""
+
     db_path = tmp_path / "ui.sqlite3"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 

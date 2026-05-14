@@ -1,8 +1,7 @@
-"""
-SolidWorks MCP Server - Security Configuration Examples
+"""SolidWorks MCP Server - Security Configuration Examples.
 
-This file provides comprehensive security configurations for different deployment scenarios,
-from local development to production cloud environments.
+This file provides comprehensive security configurations for different deployment
+scenarios, from local development to production cloud environments.
 """
 
 import os
@@ -119,7 +118,11 @@ TOOL_SECURITY_LEVELS = {
 
 
 def get_development_config() -> dict[str, Any]:
-    """Full access configuration for local development."""
+    """Full access configuration for local development.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     return {
         "security_level": "development",
         "enabled_tools": "all",
@@ -146,7 +149,11 @@ def get_development_config() -> dict[str, Any]:
 
 
 def get_restricted_config() -> dict[str, Any]:
-    """Controlled access for supervised environments."""
+    """Controlled access for supervised environments.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     allowed_tools = (
         TOOL_SECURITY_LEVELS["safe"]
         + TOOL_SECURITY_LEVELS["moderate"]
@@ -186,7 +193,11 @@ def get_restricted_config() -> dict[str, Any]:
 
 
 def get_secure_config() -> dict[str, Any]:
-    """Secure configuration for production environments."""
+    """Secure configuration for production environments.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     allowed_tools = TOOL_SECURITY_LEVELS["safe"] + TOOL_SECURITY_LEVELS["moderate"]
 
     return {
@@ -221,7 +232,11 @@ def get_secure_config() -> dict[str, Any]:
 
 
 def get_locked_config() -> dict[str, Any]:
-    """Minimum access for public or external use."""
+    """Minimum access for public or external use.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     return {
         "security_level": "locked",
         "enabled_tools": TOOL_SECURITY_LEVELS["safe"],
@@ -250,7 +265,17 @@ def get_locked_config() -> dict[str, Any]:
 
 
 def get_config_by_level(level: str) -> dict[str, Any]:
-    """Get security configuration by level name."""
+    """Get security configuration by level name.
+    
+    Args:
+        level (str): The level value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    
+    Raises:
+        ValueError: If the operation cannot be completed.
+    """
     configs = {
         "development": get_development_config,
         "restricted": get_restricted_config,
@@ -265,7 +290,15 @@ def get_config_by_level(level: str) -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any], filepath: str):
-    """Save configuration to JSON file."""
+    """Save configuration to JSON file.
+    
+    Args:
+        config (dict[str, Any]): Configuration values for the operation.
+        filepath (str): Path to the target file.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
     with open(filepath, "w") as f:
@@ -275,13 +308,27 @@ def save_config(config: dict[str, Any], filepath: str):
 
 
 def load_config(filepath: str) -> dict[str, Any]:
-    """Load configuration from JSON file."""
+    """Load configuration from JSON file.
+    
+    Args:
+        filepath (str): Path to the target file.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     with open(filepath, "r") as f:
         return json.load(f)
 
 
 def validate_config(config: dict[str, Any]) -> list[str]:
-    """Validate configuration and return list of issues."""
+    """Validate configuration and return list of issues.
+    
+    Args:
+        config (dict[str, Any]): Configuration values for the operation.
+    
+    Returns:
+        list[str]: A list containing the resulting items.
+    """
     issues = []
 
     # Check required fields
@@ -316,7 +363,11 @@ def validate_config(config: dict[str, Any]) -> list[str]:
 
 
 def create_example_configs():
-    """Create example configuration files for all security levels."""
+    """Create example configuration files for all security levels.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     configs_dir = Path("./examples/configurations")
     configs_dir.mkdir(parents=True, exist_ok=True)
 

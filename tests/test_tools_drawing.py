@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks drawing tools.
-
-Comprehensive test suite covering drawing creation, view management,
-dimensioning, and annotation operations.
-"""
+"""Tests for SolidWorks drawing tools."""
 
 from unittest.mock import AsyncMock, Mock
 
@@ -393,7 +388,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_add_dimension_simulation_no_adapter_method(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """add_dimension falls back to simulation when adapter has no add_dimension."""
+        """Add_dimension falls back to simulation when adapter has no add_dimension."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         # Verify adapter does NOT have add_dimension; if it does, delete it.
         if hasattr(mock_adapter, "add_dimension"):
@@ -417,7 +412,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_add_dimension_adapter_error_path(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """add_dimension returns error when adapter.add_dimension returns is_success=False."""
+        """Add_dimension returns error when adapter.add_dimension returns is_success=False."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         mock_adapter.add_dimension = AsyncMock(
             return_value=Mock(is_success=False, error="dim failed", execution_time=0.1)
@@ -440,7 +435,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_create_technical_drawing_no_adapter_no_views(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """create_technical_drawing simulation path with auto_populate_views=False."""
+        """Create_technical_drawing simulation path with auto_populate_views=False."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         if hasattr(mock_adapter, "create_technical_drawing"):
             del mock_adapter.create_technical_drawing
@@ -466,7 +461,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_create_technical_drawing_adapter_success(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """create_technical_drawing uses adapter when available and succeeds."""
+        """Create_technical_drawing uses adapter when available and succeeds."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         mock_adapter.create_technical_drawing = AsyncMock(
             return_value=Mock(
@@ -496,7 +491,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_add_drawing_view_no_adapter_simulation(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """add_drawing_view simulation path when adapter lacks add_drawing_view."""
+        """Add_drawing_view simulation path when adapter lacks add_drawing_view."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         if hasattr(mock_adapter, "add_drawing_view"):
             del mock_adapter.add_drawing_view
@@ -519,7 +514,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_add_annotation_adapter_error(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """add_annotation returns error when adapter.add_annotation returns is_success=False."""
+        """Add_annotation returns error when adapter.add_annotation returns is_success=False."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         mock_adapter.add_annotation = AsyncMock(
             return_value=Mock(
@@ -542,7 +537,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_add_annotation_no_adapter_simulation(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """add_annotation falls back to simulation when adapter lacks add_annotation."""
+        """Add_annotation falls back to simulation when adapter lacks add_annotation."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         if hasattr(mock_adapter, "add_annotation"):
             del mock_adapter.add_annotation
@@ -566,7 +561,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_update_title_block_adapter_error(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """update_title_block returns error when adapter returns is_success=False."""
+        """Update_title_block returns error when adapter returns is_success=False."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         mock_adapter.update_title_block = AsyncMock(
             return_value=Mock(
@@ -586,7 +581,7 @@ class TestDrawingToolsBranchCoverage:
     async def test_update_title_block_no_adapter_simulation(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """update_title_block simulation path when adapter lacks the method."""
+        """Update_title_block simulation path when adapter lacks the method."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         if hasattr(mock_adapter, "update_title_block"):
             del mock_adapter.update_title_block

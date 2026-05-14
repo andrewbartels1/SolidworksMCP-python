@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks analysis tools.
-
-Comprehensive test suite covering mass properties, interference checking,
-and structural analysis operations.
-"""
+"""Tests for SolidWorks analysis tools."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -277,6 +272,8 @@ class TestAnalysisTools:
         assert "Unexpected error: boom" in errored["message"]
 
         class _BadGeometryInput:
+            """Test bad geometry input."""
+
             @property
             def analysis_type(self):
                 """Test helper for analysis type."""

@@ -1,3 +1,5 @@
+"""Tests for test docs discovery run."""
+
 import sys
 from pathlib import Path
 

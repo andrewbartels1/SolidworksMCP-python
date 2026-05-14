@@ -1,0 +1,94 @@
+name: Feature Request
+description: Propose a new feature or improvement
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe your feature request. Good issues include: the problem being solved, the proposed solution, and acceptance criteria.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project does this touch?
+      options:
+        - MCP Server (tools / adapters)
+        - FastAPI UI Backend (service.py / server.py)
+        - Prefab Dashboard (prefab_dashboard.py)
+        - Agent Harness (agents/)
+        - CI / Build
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: roadmap_phase
+    attributes:
+      label: Roadmap phase
+      description: Which roadmap phase does this belong to? (See docs/planning/ROADMAP_2026_2027.md)
+      options:
+        - "Q2 2026 – Foundation & Bug Fixes"
+        - "Q2 2026 – Phase 1A: GUI Visualization MVP"
+        - "Q2 2026 – Phase 1B: Database Design"
+        - "Q2 2026 – Phase 1C: PydanticAI Agent PoC"
+        - "Q3 2026 – Phase 2A: GUI Dashboard"
+        - "Q3 2026 – Phase 2B: Workflow Database"
+        - "Q3 2026 – Phase 2C: PydanticAI Core Agent"
+        - "Q4 2026 – Phase 3: Integration & Polish"
+        - "Q1 2027 – Enhanced Features"
+        - "Backlog / Unscheduled"
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What pain point does this solve? Link to planning docs where relevant.
+      placeholder: "Currently, when a user does X, they have to manually Y..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the approach. Reference specific files, classes, or COM API methods where possible.
+      placeholder: |
+        Files to change:
+        - src/solidworks_mcp/adapters/pywin32_adapter.py — add `async def create_sweep(...)`
+        - tests/test_adapters.py — add branch-coverage tests
+
+        COM/VBA API references:
+        - IFeatureManager::InsertProtrusionSweep2
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: What does "done" look like? Include test expectations.
+      placeholder: |
+        - [ ] `create_sweep` returns SUCCESS for a valid profile + path sketch
+        - [ ] Returns ERROR with descriptive message when no active model
+        - [ ] Unit test coverage ≥ 80% on new code paths
+        - [ ] Mock adapter returns a sensible stub result
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What is explicitly NOT part of this issue to keep it focused?
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I reviewed the relevant planning doc(s) in docs/planning/.
+          required: false

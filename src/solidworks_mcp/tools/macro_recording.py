@@ -1,8 +1,7 @@
-"""
-Macro Recording and Playback tools for SolidWorks MCP Server.
+"""Macro Recording and Playback tools for SolidWorks MCP Server.
 
-Provides tools for recording, managing, and executing SolidWorks macros
-for automation and workflow optimization.
+Provides tools for recording, managing, and executing SolidWorks macros for automation
+and workflow optimization.
 """
 
 import time
@@ -19,7 +18,21 @@ from .input_compat import CompatInput
 
 
 class MacroRecordingInput(CompatInput):
-    """Input schema for macro recording operations."""
+    """Input schema for macro recording operations.
+    
+    Attributes:
+        auto_cleanup (bool): The auto cleanup value.
+        auto_stop (bool): The auto stop value.
+        capture_keyboard (bool): The capture keyboard value.
+        capture_mouse (bool): The capture mouse value.
+        description (str): The description value.
+        macro_name (str | None): The macro name value.
+        output_file (str): The output file value.
+        recording_mode (str): The recording mode value.
+        recording_name (str | None): The recording name value.
+        recording_quality (str): The recording quality value.
+        timeout_seconds (int): The timeout seconds value.
+    """
 
     macro_name: str | None = Field(
         default=None, description="Name for the recorded macro"
@@ -46,21 +59,33 @@ class MacroRecordingInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        """Execute model post init.
-
+        """Provide model post init support for the macro recording input.
+        
         Args:
-            __context (Any): Describe context.
-
+            __context (Any): The context value.
+        
         Returns:
-            None: Describe the returned value.
-
+            None: None.
         """
         if self.macro_name is None:
             self.macro_name = self.recording_name or "Recorded Macro"
 
 
 class MacroPlaybackInput(CompatInput):
-    """Input schema for macro playback."""
+    """Input schema for macro playback.
+    
+    Attributes:
+        execution_mode (str | None): The execution mode value.
+        execution_parameters (dict[str, Any] | None): The execution parameters value.
+        log_execution (bool): The log execution value.
+        macro_file (str | None): The macro file value.
+        macro_path (str | None): The macro path value.
+        parameters (dict[str, Any]): The parameters value.
+        pause_between_runs (float): The pause between runs value.
+        pause_on_error (bool): The pause on error value.
+        repeat_count (int): The repeat count value.
+        target_file (str | None): The target file value.
+    """
 
     macro_path: str | None = Field(
         default=None, description="Path to macro file (.swp or .vb)"
@@ -85,7 +110,15 @@ class MacroPlaybackInput(CompatInput):
 
 
 class MacroAnalysisInput(CompatInput):
-    """Input schema for macro analysis."""
+    """Input schema for macro analysis.
+    
+    Attributes:
+        analysis_depth (str): The analysis depth value.
+        analysis_type (str): The analysis type value.
+        macro_file (str | None): The macro file value.
+        macro_path (str | None): The macro path value.
+        suggest_optimizations (bool): The suggest optimizations value.
+    """
 
     macro_path: str | None = Field(
         default=None, description="Path to macro file to analyze"
@@ -103,7 +136,16 @@ class MacroAnalysisInput(CompatInput):
 
 
 class MacroBatchInput(CompatInput):
-    """Input schema for batch macro operations."""
+    """Input schema for batch macro operations.
+    
+    Attributes:
+        execution_order (str): The execution order value.
+        file_pattern (str | None): The file pattern value.
+        macro_list (list[str]): The macro list value.
+        source_directory (str | None): The source directory value.
+        stop_on_error (bool): The stop on error value.
+        target_directory (str | None): The target directory value.
+    """
 
     macro_list: list[str] = Field(description="List of macro file paths")
     target_directory: str | None = Field(
@@ -123,35 +165,35 @@ async def register_macro_recording_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config
 ) -> int:
     """Register macro recording and playback tools with FastMCP.
-
+    
     Args:
-        mcp: FastMCP server instance
-        adapter: SolidWorks adapter for COM operations
-        config: Configuration settings
-
+        mcp (FastMCP): The mcp value.
+        adapter (SolidWorksAdapter): Adapter instance used for the operation.
+        config (Any): Configuration values for the operation.
+    
     Returns:
-        Number of tools registered
-
+        int: The computed numeric result.
+    
     Example:
-        >>> tool_count = await register_macro_recording_tools(mcp, adapter, config)
+                        >>> tool_count = await register_macro_recording_tools(mcp, adapter, config)
     """
     tool_count = 0
 
     @mcp.tool()
     async def start_macro_recording(input_data: MacroRecordingInput) -> dict[str, Any]:
         """Start recording a SolidWorks macro.
-
-        This tool initiates macro recording to capture user actions
-        for later playback and automation.
-
+        
+        This tool initiates macro recording to capture user actions for later playback and
+        automation.
+        
         Args:
-            input_data: Macro recording configuration parameters
-
+            input_data (MacroRecordingInput): The input data value.
+        
         Returns:
-            Recording session status and information
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await start_macro_recording(recording_input)
+                            >>> result = await start_macro_recording(recording_input)
         """
         try:
             if hasattr(adapter, "start_macro_recording"):
@@ -217,18 +259,18 @@ async def register_macro_recording_tools(
     @mcp.tool()
     async def stop_macro_recording(input_data: dict[str, Any]) -> dict[str, Any]:
         """Stop macro recording and save the recorded macro.
-
-        This tool stops the active recording session and saves
-        the generated macro code to a file.
-
+        
+        This tool stops the active recording session and saves the generated macro code to a
+        file.
+        
         Args:
-            input_data: Recording stop parameters
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Saved macro file path and statistics
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await stop_macro_recording(stop_input)
+                            >>> result = await stop_macro_recording(stop_input)
         """
         try:
             if hasattr(adapter, "stop_macro_recording"):
@@ -306,19 +348,19 @@ End Sub"""
 
     @mcp.tool()
     async def execute_macro(input_data: MacroPlaybackInput) -> dict[str, Any]:
-        """Execute a saved SolidWorks macro.
-
-        This tool runs a previously recorded or written macro
-        with optional parameters and repeat functionality.
-
+        """Handle execute macro.
+        
+        This tool runs a previously recorded or written macro with optional parameters and
+        repeat functionality.
+        
         Args:
-            input_data: Macro execution parameters
-
+            input_data (MacroPlaybackInput): The input data value.
+        
         Returns:
-            Execution results and operation status
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await execute_macro(playback_input)
+                            >>> result = await execute_macro(playback_input)
         """
 
         try:
@@ -399,18 +441,18 @@ End Sub"""
     @mcp.tool()
     async def analyze_macro(input_data: MacroAnalysisInput) -> dict[str, Any]:
         """Analyze a macro for complexity, dependencies, and optimization opportunities.
-
-        This tool provides insights into macro structure and performance
-        to help with optimization and maintenance.
-
+        
+        This tool provides insights into macro structure and performance to help with
+        optimization and maintenance.
+        
         Args:
-            input_data: Macro analysis parameters
-
+            input_data (MacroAnalysisInput): The input data value.
+        
         Returns:
-            Analysis results and suggestions
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await analyze_macro(analysis_input)
+                            >>> result = await analyze_macro(analysis_input)
         """
         try:
             if hasattr(adapter, "analyze_macro"):
@@ -513,19 +555,19 @@ End Sub"""
 
     @mcp.tool()
     async def batch_execute_macros(input_data: MacroBatchInput) -> dict[str, Any]:
-        """Execute multiple macros in batch mode.
-
-        This tool allows running multiple macros in sequence or parallel
-        for complex automated workflows.
-
+        """Handle batch execute macros.
+        
+        This tool allows running multiple macros in sequence or parallel for complex automated
+        workflows.
+        
         Args:
-            input_data: Batch execution parameters
-
+            input_data (MacroBatchInput): The input data value.
+        
         Returns:
-            Batch execution results and status
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await batch_execute_macros(batch_input)
+                            >>> result = await batch_execute_macros(batch_input)
         """
         try:
             payload = (
@@ -612,17 +654,17 @@ End Sub"""
     @mcp.tool()
     async def optimize_macro(input_data: dict[str, Any]) -> dict[str, Any]:
         """Optimize an existing macro for better performance and reliability.
-
+        
         This tool analyzes and suggests improvements to existing macro code.
-
+        
         Args:
-            input_data: Macro optimization parameters
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Optimized macro code and improvements
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await optimize_macro(optimization_input)
+                            >>> result = await optimize_macro(optimization_input)
         """
         try:
             payload = (
@@ -764,18 +806,18 @@ End Sub"""
     @mcp.tool()
     async def create_macro_library(input_data: dict[str, Any]) -> dict[str, Any]:
         """Create a library of organized macros for team sharing and reuse.
-
-        This tool sets up a structured macro library with categorization,
-        documentation, and version control.
-
+        
+        This tool sets up a structured macro library with categorization, documentation, and
+        version control.
+        
         Args:
-            input_data: Macro library creation parameters
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Library creation status and location
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await create_macro_library(library_input)
+                            >>> result = await create_macro_library(library_input)
         """
         try:
             payload = (

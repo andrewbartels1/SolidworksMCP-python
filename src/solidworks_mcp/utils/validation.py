@@ -1,5 +1,4 @@
-"""
-Environment validation for SolidWorks MCP Server.
+"""Environment validation for SolidWorks MCP Server.
 """
 
 import platform
@@ -13,12 +12,15 @@ from ..exceptions import SolidWorksMCPError
 
 async def validate_environment(config: SolidWorksMCPConfig) -> None:
     """Validate runtime prerequisites for the server.
-
+    
     Args:
-        config: Loaded server configuration.
-
+        config (SolidWorksMCPConfig): Configuration values for the operation.
+    
+    Returns:
+        None: None.
+    
     Raises:
-        SolidWorksMCPError: If the active Python runtime is unsupported.
+        SolidWorksMCPError: If the operation cannot be completed.
     """
     logger.info("Validating environment...")
 
@@ -51,27 +53,26 @@ async def validate_environment(config: SolidWorksMCPConfig) -> None:
 
 async def _validate_solidworks_installation(config: SolidWorksMCPConfig) -> None:
     """Validate SolidWorks availability on Windows hosts.
-
+    
     Args:
-        config: Loaded server configuration.
+        config (SolidWorksMCPConfig): Configuration values for the operation.
+    
+    Returns:
+        None: None.
     """
+    # Check if SolidWorks executable exists
+    if config.solidworks_path:
+        if not shutil.which(config.solidworks_path):
+            logger.warning(
+                f"SolidWorks executable not found at: {config.solidworks_path}"
+            )
+
+    # Try to check COM registration (basic check)
     try:
-        # Check if SolidWorks executable exists
-        if config.solidworks_path:
-            if not shutil.which(config.solidworks_path):
-                logger.warning(
-                    f"SolidWorks executable not found at: {config.solidworks_path}"
-                )
+        import win32com.client
 
-        # Try to check COM registration (basic check)
-        try:
-            import win32com.client
-
-            # Try to create SolidWorks object (without starting it)
-            win32com.client.Dispatch("SldWorks.Application", None)
-            logger.info("SolidWorks COM interface is available")
-        except Exception as e:
-            logger.warning(f"SolidWorks COM interface issue: {e}")
-
-    except ImportError:
-        logger.warning("pywin32 not available for SolidWorks validation")
+        # Try to create SolidWorks object (without starting it)
+        win32com.client.Dispatch("SldWorks.Application", None)
+        logger.info("SolidWorks COM interface is available")
+    except Exception as e:
+        logger.warning(f"SolidWorks COM interface issue: {e}")

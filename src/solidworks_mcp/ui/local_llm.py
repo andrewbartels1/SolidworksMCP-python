@@ -1,34 +1,29 @@
-"""
-Local LLM integration helpers for the SolidWorks MCP UI.
+"""Local LLM integration helpers for the SolidWorks MCP UI.
 
 Provides three layers of typed abstraction:
 
-  1. **Hardware** – detect GPU VRAM / system RAM and pick the right Gemma tier.
-  2. **Config** – ``LocalLLMConfig`` is the single source of truth for endpoint,
-     model name, and tier choice, shared by the UI, server endpoints, and the
-     pydantic-ai agent runner.
-  3. **Agent runner** – ``run_local_agent()`` mirrors ``_run_structured_agent``
-     in ``service.py`` but routes exclusively to a local Ollama server.  Both
-     accept any ``BaseModel`` subclass as ``result_type`` so callers get a fully
-     typed, validated response regardless of which backend they use.
+1. **Hardware** – detect GPU VRAM / system RAM and pick the right Gemma tier. 2.
+**Config** – ``LocalLLMConfig`` is the single source of truth for endpoint, model name,
+and tier choice, shared by the UI, server endpoints, and the pydantic-ai agent runner.
+3. **Agent runner** – ``run_local_agent()`` mirrors ``_run_structured_agent`` in
+``service.py`` but routes exclusively to a local Ollama server.  Both accept any
+``BaseModel`` subclass as ``result_type`` so callers get a fully typed, validated
+response regardless of which backend they use.
 
-Model tiers (Gemma 4 family via Ollama's OpenAI-compatible API):
-  small   : gemma4:e2b (~0-4 GB VRAM / CPU-capable) — edge and smoke tests
-  balanced: gemma4:e4b (~8 GB VRAM) — recommended default for local planning
-  large   : gemma4:26b (~18 GB VRAM) — workstation-class local evaluation
+Model tiers (Gemma 4 family via Ollama's OpenAI-compatible API): small   : gemma4:e2b
+(~0-4 GB VRAM / CPU-capable) — edge and smoke tests balanced: gemma4:e4b (~8 GB VRAM) —
+recommended default for local planning large   : gemma4:26b (~18 GB VRAM) — workstation-
+class local evaluation
 
 Usage::
 
-    from solidworks_mcp.ui.local_llm import probe_local_model, run_local_agent
-    from solidworks_mcp.agents.schemas import ClarificationResponse
+from solidworks_mcp.ui.local_llm import probe_local_model, run_local_agent from
+solidworks_mcp.agents.schemas import ClarificationResponse
 
-    probe = await probe_local_model()          # LocalModelProbeResult
-    result = await run_local_agent(
-        system_prompt="You are a SolidWorks CAD assistant.",
-        user_prompt="How many sketch constraints are needed for a slot?",
-        result_type=ClarificationResponse,
-        config=probe.to_config(),
-    )
+probe = await probe_local_model()          # LocalModelProbeResult result = await
+run_local_agent( system_prompt="You are a SolidWorks CAD assistant.", user_prompt="How
+many sketch constraints are needed for a slot?", result_type=ClarificationResponse,
+config=probe.to_config(), )
 """
 
 from __future__ import annotations
@@ -60,7 +55,15 @@ OLLAMA_OPENAI_ENDPOINT = f"{OLLAMA_DEFAULT_ENDPOINT}/v1"
 
 
 class GemmaTierSpec(BaseModel):
-    """Hardware and model metadata for a single Gemma inference tier."""
+    """Hardware and model metadata for a single Gemma inference tier.
+    
+    Attributes:
+        label (str): The label value.
+        min_ram_gb (float): The min ram gb value.
+        min_vram_gb (float): The min vram gb value.
+        ollama (str): The ollama value.
+        service (str): The service value.
+    """
 
     ollama: str = Field(description="Ollama model tag, e.g. 'gemma4:e4b'")
     service: str = Field(description="service.py model string, e.g. 'local:gemma4:e4b'")
@@ -100,12 +103,19 @@ GEMMA_TIERS: dict[str, GemmaTierSpec] = {
 
 
 class LocalLLMConfig(BaseModel):
-    """
-    Runtime configuration for a local Ollama LLM connection.
-
+    """Runtime configuration for a local Ollama LLM connection.
+    
     Passed from the probe result into ``run_local_agent()`` or directly into
-    ``_build_agent_model()`` in service.py to keep settings consistent across
-    all layers (UI state, server endpoints, pydantic-ai agent runner).
+    ``_build_agent_model()`` in service.py to keep settings consistent across all layers (UI
+    state, server endpoints, pydantic-ai agent runner).
+    
+    Attributes:
+        api_key (str): The api key value.
+        endpoint (str): The endpoint value.
+        ollama_model (str): The ollama model value.
+        openai_endpoint (str): The openai endpoint value.
+        service_model (str): The service model value.
+        tier (Literal["small", "balanced", "large"]): The tier value.
     """
 
     endpoint: str = Field(
@@ -126,7 +136,11 @@ class LocalLLMConfig(BaseModel):
 
     @classmethod
     def from_env(cls) -> LocalLLMConfig:
-        """Build config from environment variables, falling back to defaults."""
+        """Build config from environment variables, falling back to defaults.
+        
+        Returns:
+            LocalLLMConfig: The result produced by the operation.
+        """
         endpoint = os.getenv("SOLIDWORKS_UI_OLLAMA_ENDPOINT", OLLAMA_DEFAULT_ENDPOINT)
         service_model = os.getenv("SOLIDWORKS_UI_MODEL", "local:gemma4:e4b")
         tier = "small"
@@ -149,12 +163,27 @@ class LocalLLMConfig(BaseModel):
 # Probe result — typed response returned by the /api/ui/local-model/probe endpoint
 # ---------------------------------------------------------------------------
 class LocalModelProbeResult(BaseModel):
-    """
-    Full hardware-detection and Ollama availability result.
-
-    Returned by ``probe_local_model()`` and serialised as the JSON response
-    from ``GET /api/ui/local-model/probe``.  The ``to_config()`` helper
-    converts directly into a ``LocalLLMConfig`` ready for ``run_local_agent()``.
+    """Full hardware-detection and Ollama availability result.
+    
+    Returned by ``probe_local_model()`` and serialised as the JSON response from ``GET
+    /api/ui/local-model/probe``.  The ``to_config()`` helper converts directly into a
+    ``LocalLLMConfig`` ready for ``run_local_agent()``.
+    
+    Attributes:
+        all_tiers (dict[str, str]): The all tiers value.
+        available (bool): The available value.
+        endpoint (str): The endpoint value.
+        label (str): The label value.
+        ollama_model (str): The ollama model value.
+        openai_endpoint (str): The openai endpoint value.
+        pull_command (str): The pull command value.
+        pulled_models (list[str]): The pulled models value.
+        ram_gb (float): The ram gb value.
+        service_model (str): The service model value.
+        status_message (str): The status message value.
+        tier (Literal["small", "balanced", "large"]): The tier value.
+        tier_already_pulled (bool): The tier already pulled value.
+        vram_gb (float): The vram gb value.
     """
 
     available: bool = Field(description="True if Ollama responded to /api/tags")
@@ -177,7 +206,11 @@ class LocalModelProbeResult(BaseModel):
     )
 
     def to_config(self) -> LocalLLMConfig:
-        """Convert probe result into a ready-to-use ``LocalLLMConfig``."""
+        """Convert probe result into a ready-to-use ``LocalLLMConfig``.
+        
+        Returns:
+            LocalLLMConfig: The result produced by the operation.
+        """
         return LocalLLMConfig(
             endpoint=self.endpoint,
             openai_endpoint=self.openai_endpoint,
@@ -188,7 +221,14 @@ class LocalModelProbeResult(BaseModel):
 
 
 class LocalModelPullResult(BaseModel):
-    """Result from ``POST /api/ui/local-model/pull``."""
+    """Result from ``POST /api/ui/local-model/pull``.
+    
+    Attributes:
+        error (str | None): The error value.
+        model (str): The model value.
+        queued (bool): The queued value.
+        response (dict[str, Any] | None): The response value.
+    """
 
     queued: bool
     model: str
@@ -197,7 +237,12 @@ class LocalModelPullResult(BaseModel):
 
 
 class LocalModelPullRequest(BaseModel):
-    """Request body for ``POST /api/ui/local-model/pull``."""
+    """Request body for ``POST /api/ui/local-model/pull``.
+    
+    Attributes:
+        endpoint (str | None): The endpoint value.
+        model (str): The model value.
+    """
 
     model: str = Field(description="Ollama model tag to pull, e.g. 'gemma4:e4b'")
     endpoint: str | None = Field(
@@ -207,7 +252,14 @@ class LocalModelPullRequest(BaseModel):
 
 
 class LocalModelQueryRequest(BaseModel):
-    """Request body for ``POST /api/ui/local-model/query``."""
+    """Request body for ``POST /api/ui/local-model/query``.
+    
+    Attributes:
+        endpoint (str | None): The endpoint value.
+        model (str | None): The model value.
+        prompt (str): The prompt value.
+        system_prompt (str): The system prompt value.
+    """
 
     prompt: str = Field(min_length=1, description="User question or task description")
     system_prompt: str = Field(
@@ -230,13 +282,18 @@ class LocalModelQueryRequest(BaseModel):
 
 
 class LocalAgentResult(BaseModel, Generic[_T]):
-    """
-    Typed envelope wrapping a structured pydantic-ai agent response.
-
-    ``data`` holds the validated ``result_type`` instance; ``config`` echoes
-    back the ``LocalLLMConfig`` used so callers can log or audit provenance.
-    Set ``success=False`` and ``error`` when the agent returned a
-    ``RecoverableFailure`` or raised an exception.
+    """Typed envelope wrapping a structured pydantic-ai agent response.
+    
+    ``data`` holds the validated ``result_type`` instance; ``config`` echoes back the
+    ``LocalLLMConfig`` used so callers can log or audit provenance. Set ``success=False``
+    and ``error`` when the agent returned a ``RecoverableFailure`` or raised an exception.
+    
+    Attributes:
+        config (LocalLLMConfig): The config value.
+        data (Any): The data value.
+        error (str | None): The error value.
+        retry_hint (str | None): The retry hint value.
+        success (bool): The success value.
     """
 
     success: bool
@@ -252,7 +309,11 @@ class LocalAgentResult(BaseModel, Generic[_T]):
 
 
 def _detect_gpu_vram_gb() -> float:
-    """Return best-effort GPU VRAM estimate in GB, or 0.0 on failure."""
+    """Return best-effort GPU VRAM estimate in GB, or 0.0 on failure.
+    
+    Returns:
+        float: The computed numeric result.
+    """
     # Try nvidia-smi first
     try:
         out = subprocess.check_output(
@@ -291,7 +352,11 @@ def _detect_gpu_vram_gb() -> float:
 
 
 def _detect_system_ram_gb() -> float:
-    """Return total system RAM in GB."""
+    """Return total system RAM in GB.
+    
+    Returns:
+        float: The computed numeric result.
+    """
     try:
         import psutil  # optional dependency
 
@@ -318,7 +383,15 @@ def _detect_system_ram_gb() -> float:
 
 
 def recommend_model_tier(vram_gb: float = 0.0, ram_gb: float = 0.0) -> str:
-    """Return 'small' | 'balanced' | 'large' based on available hardware."""
+    """Return 'small' | 'balanced' | 'large' based on available hardware.
+    
+    Args:
+        vram_gb (float): The vram gb value. Defaults to 0.0.
+        ram_gb (float): The ram gb value. Defaults to 0.0.
+    
+    Returns:
+        str: The resulting text value.
+    """
     for tier in ("large", "balanced", "small"):
         spec = GEMMA_TIERS[tier]
         if vram_gb >= spec.min_vram_gb and ram_gb >= spec.min_ram_gb:
@@ -332,13 +405,26 @@ def recommend_model_tier(vram_gb: float = 0.0, ram_gb: float = 0.0) -> str:
 
 
 async def _ollama_health(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> bool:
-    """Return True if Ollama HTTP server is responding."""
+    """Return True if Ollama HTTP server is responding.
+    
+    Args:
+        endpoint (str): The endpoint value. Defaults to OLLAMA_DEFAULT_ENDPOINT.
+    
+    Returns:
+        bool: True if ollama health, otherwise False.
+    """
     import urllib.request
 
     loop = asyncio.get_event_loop()
     try:
 
         def _get() -> bool:
+            """Build internal get.
+            
+            Returns:
+                bool: True if get, otherwise False.
+            """
+
             try:
                 with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=3) as r:
                     return r.status == 200
@@ -351,13 +437,26 @@ async def _ollama_health(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> bool:
 
 
 async def _ollama_list_models(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> list[str]:
-    """Return list of model names currently pulled in Ollama."""
+    """Return list of model names currently pulled in Ollama.
+    
+    Args:
+        endpoint (str): The endpoint value. Defaults to OLLAMA_DEFAULT_ENDPOINT.
+    
+    Returns:
+        list[str]: A list containing the resulting items.
+    """
     import json
     import urllib.request
 
     loop = asyncio.get_event_loop()
 
     def _get() -> list[str]:
+        """Build internal get.
+        
+        Returns:
+            list[str]: A list containing the resulting items.
+        """
+
         try:
             with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=5) as r:
                 data = json.loads(r.read())
@@ -371,12 +470,17 @@ async def _ollama_list_models(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> list[s
 async def probe_local_model(
     endpoint: str | None = None,
 ) -> LocalModelProbeResult:
-    """
-    Probe Ollama for availability and return a typed recommendation result.
-
-    The returned ``LocalModelProbeResult`` can be forwarded directly as a
-    FastAPI JSON response (it is a ``BaseModel``).  Call ``.to_config()`` on
-    the result to build a ``LocalLLMConfig`` for ``run_local_agent()``.
+    """Probe Ollama for availability and return a typed recommendation result.
+    
+    The returned ``LocalModelProbeResult`` can be forwarded directly as a FastAPI JSON
+    response (it is a ``BaseModel``).  Call ``.to_config()`` on the result to build a
+    ``LocalLLMConfig`` for ``run_local_agent()``.
+    
+    Args:
+        endpoint (str | None): The endpoint value. Defaults to None.
+    
+    Returns:
+        LocalModelProbeResult: The result produced by the operation.
     """
     resolved_endpoint = endpoint or os.getenv(
         "SOLIDWORKS_UI_OLLAMA_ENDPOINT", OLLAMA_DEFAULT_ENDPOINT
@@ -430,10 +534,16 @@ async def pull_ollama_model(
     model: str,
     endpoint: str | None = None,
 ) -> LocalModelPullResult:
-    """
-    Trigger an Ollama model pull.  Runs in a thread; returns immediately.
-
+    """Trigger an Ollama model pull. Runs in a thread; returns immediately.
+    
     Returns a typed ``LocalModelPullResult`` with ``queued=True`` on success.
+    
+    Args:
+        model (str): The model value.
+        endpoint (str | None): The endpoint value. Defaults to None.
+    
+    Returns:
+        LocalModelPullResult: The result produced by the operation.
     """
     import json
     import urllib.request
@@ -444,6 +554,12 @@ async def pull_ollama_model(
     loop = asyncio.get_event_loop()
 
     def _pull() -> LocalModelPullResult:
+        """Build internal pull.
+        
+        Returns:
+            LocalModelPullResult: The result produced by the operation.
+        """
+
         payload = json.dumps({"name": model, "stream": False}).encode()
         req = urllib.request.Request(
             f"{resolved_endpoint}/api/pull",
@@ -473,40 +589,39 @@ async def run_local_agent(
     rag_query: str | None = None,
     rag_namespace: str = "solidworks-api-docs",
 ) -> LocalAgentResult[_T]:
-    """
-    Run a pydantic-ai ``Agent`` against the local Ollama server and return a
+    """Run a pydantic-ai ``Agent`` against the local Ollama server and return a.
+    
     typed ``LocalAgentResult``.
-
-    This mirrors ``_run_structured_agent`` in ``service.py`` but is self-
-    contained in this module so any layer (UI route, service function, or CLI)
-    can call local inference without importing the full service graph.
-
-    Parameters
-    ----------
-    system_prompt:
-        Instruction preamble for the LLM.
-    user_prompt:
-        The concrete question or task.
-    result_type:
-        A ``BaseModel`` subclass.  pydantic-ai validates the LLM output against
-        this schema and retries automatically on parse failures.
-    config:
-        Connection settings.  Defaults to ``LocalLLMConfig.from_env()``.
-    rag_query:
-        If provided, the FAISS ``solidworks-api-docs`` namespace is queried
-        with this string and the top results are prepended to ``system_prompt``
-        as grounded API context for the model.  Pass the same text as
-        ``user_prompt`` for a simple "augment with API docs" pattern, or a
-        more specific sub-query for targeted retrieval.
-    rag_namespace:
-        FAISS namespace to query when ``rag_query`` is set.  Defaults to
-        ``"solidworks-api-docs"`` (the COM/VBA surface index).
-
-    Returns
-    -------
-    LocalAgentResult[_T]
-        ``success=True`` with ``data`` set to a validated ``result_type``
-        instance, or ``success=False`` with an ``error`` message.
+    
+    This mirrors ``_run_structured_agent`` in ``service.py`` but is self- contained in this
+    module so any layer (UI route, service function, or CLI) can call local inference
+    without importing the full service graph.
+    
+    Parameters ---------- system_prompt: Instruction preamble for the LLM. user_prompt: The
+    concrete question or task. result_type: A ``BaseModel`` subclass.  pydantic-ai validates
+    the LLM output against this schema and retries automatically on parse failures. config:
+    Connection settings.  Defaults to ``LocalLLMConfig.from_env()``. rag_query: If provided,
+    the FAISS ``solidworks-api-docs`` namespace is queried with this string and the top
+    results are prepended to ``system_prompt`` as grounded API context for the model.  Pass
+    the same text as ``user_prompt`` for a simple "augment with API docs" pattern, or a more
+    specific sub-query for targeted retrieval. rag_namespace: FAISS namespace to query when
+    ``rag_query`` is set.  Defaults to ``"solidworks-api-docs"`` (the COM/VBA surface
+    index).
+    
+    Returns ------- LocalAgentResult[_T] ``success=True`` with ``data`` set to a validated
+    ``result_type`` instance, or ``success=False`` with an ``error`` message.
+    
+    Args:
+        system_prompt (str): The system prompt value.
+        user_prompt (str): The user prompt value.
+        result_type (type[_T]): The result type value.
+        config (LocalLLMConfig | None): Configuration values for the operation. Defaults to
+                                        None.
+        rag_query (str | None): The rag query value. Defaults to None.
+        rag_namespace (str): The rag namespace value. Defaults to "solidworks-api-docs".
+    
+    Returns:
+        LocalAgentResult[_T]: The result produced by the operation.
     """
     from ..agents.schemas import RecoverableFailure  # avoid circular at import time
 

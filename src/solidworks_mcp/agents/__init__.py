@@ -1,4 +1,5 @@
-"""Agent-testing utilities for SolidWorks MCP custom agents."""
+"""Agent-testing utilities for SolidWorks MCP custom agents.
+"""
 
 from .harness import pretty_json, run_validated_prompt
 from .history_db import (

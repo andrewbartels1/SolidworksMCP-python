@@ -1,23 +1,18 @@
-"""
-FAISS-backed vector RAG index for SolidWorks design knowledge.
+"""FAISS-backed vector RAG index for SolidWorks design knowledge.
 
 Supports local file and URL ingestion (PDF, Markdown, plain text, HTML), embedding via
 sentence-transformers (all-MiniLM-L6-v2 by default), and FAISS cosine-similarity search.
 
 Usage::
 
-    from solidworks_mcp.agents.vector_rag import VectorRAGIndex
+from solidworks_mcp.agents.vector_rag import VectorRAGIndex
 
-    # Build / update an index
-    idx = VectorRAGIndex(namespace="3d-print-design")
-    idx.ingest_text("snap-fit-guide.md content …", source="snap-fit-guide.md")
-    idx.save()
+# Build / update an index idx = VectorRAGIndex(namespace="3d-print-design")
+idx.ingest_text("snap-fit-guide.md content …", source="snap-fit-guide.md") idx.save()
 
-    # Query later
-    idx2 = VectorRAGIndex.load(namespace="3d-print-design")
-    hits = idx2.query("snap fit cantilever deflection", top_k=5)
-    for hit in hits:
-        print(hit["score"], hit["text"][:120])
+# Query later idx2 = VectorRAGIndex.load(namespace="3d-print-design") hits =
+idx2.query("snap fit cantilever deflection", top_k=5) for hit in hits:
+print(hit["score"], hit["text"][:120])
 """
 
 from __future__ import annotations
@@ -40,23 +35,43 @@ DEFAULT_OVERLAP = 150
 # ---------------------------------------------------------------------------
 
 
-def _require_faiss():  # noqa: ANN202
+def _require_faiss():  # noqa: ANN202  # pragma: no cover
+    """Return the required require faiss.
+    
+    Returns:
+        Any: The result produced by the operation.
+    
+    Raises:
+        ImportError: Faiss-cpu is required for vector RAG. Install with: pip install faiss-
+                     cpu.
+    """
+
     try:
         import faiss  # type: ignore[import]
 
         return faiss
-    except ImportError as exc:
+    except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "faiss-cpu is required for vector RAG. Install with: pip install faiss-cpu"
         ) from exc
 
 
-def _require_sentence_transformers():  # noqa: ANN202
+def _require_sentence_transformers():  # noqa: ANN202  # pragma: no cover
+    """Return the required require sentence transformers.
+    
+    Returns:
+        Any: The result produced by the operation.
+    
+    Raises:
+        ImportError: Sentence-transformers is required for vector RAG. Install with: pip
+                     install sentence-transformers.
+    """
+
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import]
 
         return SentenceTransformer
-    except ImportError as exc:
+    except ImportError as exc:  # pragma: no cover
         raise ImportError(
             "sentence-transformers is required for vector RAG. "
             "Install with: pip install sentence-transformers"
@@ -72,7 +87,14 @@ _MODEL_CACHE: dict[str, Any] = {}
 
 
 def _get_embedding_model(model_name: str = DEFAULT_MODEL) -> Any:
-    """Return a cached SentenceTransformer, loading it on first call."""
+    """Return a cached SentenceTransformer, loading it on first call.
+    
+    Args:
+        model_name (str): Embedding model name to use. Defaults to DEFAULT_MODEL.
+    
+    Returns:
+        Any: The result produced by the operation.
+    """
     if model_name not in _MODEL_CACHE:
         SentenceTransformer = _require_sentence_transformers()
         logger.info("Loading embedding model %s …", model_name)
@@ -88,6 +110,19 @@ def _get_embedding_model(model_name: str = DEFAULT_MODEL) -> Any:
 def _chunk_text(
     text: str, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_OVERLAP
 ) -> list[str]:
+    """Build internal chunk text.
+    
+    Args:
+        text (str): Input text processed by the operation.
+        chunk_size (int): Maximum number of characters to keep in each chunk. Defaults to
+                          DEFAULT_CHUNK_SIZE.
+        overlap (int): Number of overlapping characters between chunks. Defaults to
+                       DEFAULT_OVERLAP.
+    
+    Returns:
+        list[str]: A list containing the resulting items.
+    """
+
     normalized = (text or "").strip()
     if not normalized:
         return []
@@ -110,12 +145,23 @@ def _chunk_text(
 
 
 class VectorRAGIndex:
-    """
-    FAISS cosine-similarity index for a named namespace of design knowledge.
-
-    Files on disk:
-    - ``{rag_dir}/{namespace}.faiss``   – FAISS flat-IP index
-    - ``{rag_dir}/{namespace}.meta.json`` – chunk metadata (source, text, etc.)
+    """FAISS cosine-similarity index for a named namespace of design knowledge.
+    
+    Files on disk: - ``{rag_dir}/{namespace}.faiss``   – FAISS flat-IP index -
+    ``{rag_dir}/{namespace}.meta.json`` – chunk metadata (source, text, etc.)
+    
+    Args:
+        namespace (str): Namespace used to isolate stored data. Defaults to "engineering-
+                         reference".
+        model_name (str): Embedding model name to use. Defaults to DEFAULT_MODEL.
+        rag_dir (Path | None): Directory where RAG assets are stored. Defaults to None.
+    
+    Attributes:
+        _faiss_path (Any): The faiss path value.
+        _meta_path (Any): The meta path value.
+        model_name (Any): The model name value.
+        namespace (Any): The namespace value.
+        rag_dir (Any): The rag dir value.
     """
 
     def __init__(
@@ -125,6 +171,18 @@ class VectorRAGIndex:
         model_name: str = DEFAULT_MODEL,
         rag_dir: Path | None = None,
     ) -> None:
+        """Initialize the vector ragindex.
+        
+        Args:
+            namespace (str): Namespace used to isolate stored data. Defaults to "engineering-
+                             reference".
+            model_name (str): Embedding model name to use. Defaults to DEFAULT_MODEL.
+            rag_dir (Path | None): Directory where RAG assets are stored. Defaults to None.
+        
+        Returns:
+            None: None.
+        """
+
         self.namespace = namespace
         self.model_name = model_name
         self.rag_dir = rag_dir or DEFAULT_RAG_DIR
@@ -140,9 +198,24 @@ class VectorRAGIndex:
     # ------------------------------------------------------------------
 
     def _get_model(self) -> Any:
+        """Build internal model.
+        
+        Returns:
+            Any: The result produced by the operation.
+        """
+
         return _get_embedding_model(self.model_name)
 
     def _embed(self, texts: list[str]) -> Any:
+        """Build internal embed.
+        
+        Args:
+            texts (list[str]): The texts value.
+        
+        Returns:
+            Any: The result produced by the operation.
+        """
+
         import numpy as np  # type: ignore[import]
 
         model = self._get_model()
@@ -150,6 +223,15 @@ class VectorRAGIndex:
         return vecs.astype(np.float32)
 
     def _init_index(self, dim: int) -> None:
+        """Initialize the init index.
+        
+        Args:
+            dim (int): The dim value.
+        
+        Returns:
+            None: None.
+        """
+
         faiss = _require_faiss()
         self._dim = dim
         self._index = faiss.IndexFlatIP(dim)
@@ -168,10 +250,23 @@ class VectorRAGIndex:
         tags: list[str] | None = None,
         deduplicate: bool = True,
     ) -> int:
-        """
-        Chunk *text*, embed chunks, add to FAISS index.
-
+        """Chunk *text*, embed chunks, add to FAISS index.
+        
         Returns the number of new chunks added.
+        
+        Args:
+            text (str): Input text processed by the operation.
+            source (str): Source label associated with the input content. Defaults to "unknown".
+            chunk_size (int): Maximum number of characters to keep in each chunk. Defaults to
+                              DEFAULT_CHUNK_SIZE.
+            overlap (int): Number of overlapping characters between chunks. Defaults to
+                           DEFAULT_OVERLAP.
+            tags (list[str] | None): Optional tags associated with the input content. Defaults
+                                     to None.
+            deduplicate (bool): Whether duplicate content should be skipped. Defaults to True.
+        
+        Returns:
+            int: The computed numeric result.
         """
 
         chunks = _chunk_text(text, chunk_size=chunk_size, overlap=overlap)
@@ -218,9 +313,16 @@ class VectorRAGIndex:
         return len(new_chunks)
 
     def query(self, query_text: str, top_k: int = 5) -> list[dict[str, Any]]:
-        """
-        Semantic search.  Returns list of ``{score, id, source, text, tags}`` dicts
+        """Semantic search. Returns list of ``{score, id, source, text, tags}`` dicts.
+        
         sorted by cosine similarity descending.
+        
+        Args:
+            query_text (str): Query text used to search the index.
+            top_k (int): Maximum number of matches to return. Defaults to 5.
+        
+        Returns:
+            list[dict[str, Any]]: A list containing the resulting items.
         """
         if self._index is None or self._index.ntotal == 0:
             return []
@@ -239,7 +341,11 @@ class VectorRAGIndex:
         return results
 
     def save(self) -> None:
-        """Persist index and metadata to disk."""
+        """Persist index and metadata to disk.
+        
+        Returns:
+            None: None.
+        """
         if self._index is None:
             return
         faiss = _require_faiss()
@@ -265,7 +371,17 @@ class VectorRAGIndex:
         model_name: str = DEFAULT_MODEL,
         rag_dir: Path | None = None,
     ) -> VectorRAGIndex:
-        """Load an existing index from disk.  Returns an empty index if not found."""
+        """Load an existing index from disk. Returns an empty index if not found.
+        
+        Args:
+            namespace (str): Namespace used to isolate stored data. Defaults to "engineering-
+                             reference".
+            model_name (str): Embedding model name to use. Defaults to DEFAULT_MODEL.
+            rag_dir (Path | None): Directory where RAG assets are stored. Defaults to None.
+        
+        Returns:
+            VectorRAGIndex: The result produced by the operation.
+        """
         inst = cls(namespace=namespace, model_name=model_name, rag_dir=rag_dir)
         if not inst._faiss_path.exists() or not inst._meta_path.exists():
             return inst
@@ -286,10 +402,22 @@ class VectorRAGIndex:
 
     @property
     def chunk_count(self) -> int:
+        """Provide chunk count support for the vector ragindex.
+        
+        Returns:
+            int: The computed numeric result.
+        """
+
         return len(self._meta)
 
     @property
     def index_path(self) -> str:
+        """Provide index path support for the vector ragindex.
+        
+        Returns:
+            str: The resulting text value.
+        """
+
         return str(self._faiss_path)
 
 
@@ -306,10 +434,20 @@ def query_design_knowledge(
     rag_dir: Path | None = None,
     score_threshold: float = 0.25,
 ) -> str:
-    """
-    Query the FAISS index and return a formatted context string for LLM injection.
-
+    """Query the FAISS index and return a formatted context string for LLM injection.
+    
     Returns empty string if no index or no relevant results.
+    
+    Args:
+        query (str): Query text used for the operation.
+        namespace (str): Namespace used to isolate stored data. Defaults to "engineering-
+                         reference".
+        top_k (int): Maximum number of matches to return. Defaults to 5.
+        rag_dir (Path | None): Directory where RAG assets are stored. Defaults to None.
+        score_threshold (float): The score threshold value. Defaults to 0.25.
+    
+    Returns:
+        str: The resulting text value.
     """
     try:
         idx = VectorRAGIndex.load(namespace=namespace, rag_dir=rag_dir)
@@ -344,26 +482,28 @@ def build_solidworks_api_docs_index(
     rag_dir: Path | None = None,
     namespace: str = SW_API_DOCS_NAMESPACE,
 ) -> VectorRAGIndex:
-    """
-    Ingest a ``solidworks_docs_index_*.json`` file into a FAISS namespace so
+    """Ingest a ``solidworks_docs_index_*.json`` file into a FAISS namespace so.
+    
     the SolidWorks COM/VBA API surface is searchable by Gemma and other agents.
-
-    Each COM interface becomes its own chunk; the VBA TypeLib catalogue becomes
-    a single chunk.  Call ``save()`` on the returned index to persist to disk.
-
-    Parameters
-    ----------
-    docs_json_path:
-        Path to the JSON file produced by ``SolidWorksDocsDiscovery.save_index()``.
-    rag_dir:
-        Override for the FAISS storage directory.
-    namespace:
-        FAISS namespace name (default: ``"solidworks-api-docs"``).
-
-    Returns
-    -------
-    VectorRAGIndex
-        A populated (but not yet saved) index.  Call ``.save()`` after ingestion.
+    
+    Each COM interface becomes its own chunk; the VBA TypeLib catalogue becomes a single
+    chunk.  Call ``save()`` on the returned index to persist to disk.
+    
+    Parameters ---------- docs_json_path: Path to the JSON file produced by
+    ``SolidWorksDocsDiscovery.save_index()``. rag_dir: Override for the FAISS storage
+    directory. namespace: FAISS namespace name (default: ``"solidworks-api-docs"``).
+    
+    Returns ------- VectorRAGIndex A populated (but not yet saved) index.  Call ``.save()``
+    after ingestion.
+    
+    Args:
+        docs_json_path (Path): The docs json path value.
+        rag_dir (Path | None): Directory where RAG assets are stored. Defaults to None.
+        namespace (str): Namespace used to isolate stored data. Defaults to
+                         SW_API_DOCS_NAMESPACE.
+    
+    Returns:
+        VectorRAGIndex: The result produced by the operation.
     """
     raw = json.loads(docs_json_path.read_text(encoding="utf-8"))
     idx = VectorRAGIndex(namespace=namespace, rag_dir=rag_dir)
@@ -424,22 +564,23 @@ def query_solidworks_api_docs(
     rag_dir: Path | None = None,
     score_threshold: float = 0.20,
 ) -> str:
-    """
-    Semantic search over the SolidWorks COM/VBA API surface.
-
-    Returns a formatted markdown context string ready to inject into an LLM
-    system prompt, or an empty string if no relevant results are found.
-
-    Parameters
-    ----------
-    query:
-        Natural-language question or task description.
-    top_k:
-        Maximum number of chunks to return.
-    rag_dir:
-        Override for the FAISS storage directory.
-    score_threshold:
-        Minimum cosine-similarity score (0–1) to include a chunk.
+    """Semantic search over the SolidWorks COM/VBA API surface.
+    
+    Returns a formatted markdown context string ready to inject into an LLM system prompt,
+    or an empty string if no relevant results are found.
+    
+    Parameters ---------- query: Natural-language question or task description. top_k:
+    Maximum number of chunks to return. rag_dir: Override for the FAISS storage directory.
+    score_threshold: Minimum cosine-similarity score (0–1) to include a chunk.
+    
+    Args:
+        query (str): Query text used for the operation.
+        top_k (int): Maximum number of matches to return. Defaults to 5.
+        rag_dir (Path | None): Directory where RAG assets are stored. Defaults to None.
+        score_threshold (float): The score threshold value. Defaults to 0.20.
+    
+    Returns:
+        str: The resulting text value.
     """
     try:
         idx = VectorRAGIndex.load(namespace=SW_API_DOCS_NAMESPACE, rag_dir=rag_dir)

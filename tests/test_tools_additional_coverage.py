@@ -1,3 +1,5 @@
+"""Tests for test tools additional coverage."""
+
 from __future__ import annotations
 
 from datetime import datetime

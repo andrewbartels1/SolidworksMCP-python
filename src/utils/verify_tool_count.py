@@ -1,4 +1,5 @@
-"""Verify tool count and documentation completeness."""
+"""Verify tool count and documentation completeness.
+"""
 
 import ast
 from pathlib import Path
@@ -6,12 +7,12 @@ from pathlib import Path
 
 def find_tools_in_file(file_path: Path) -> list[str]:
     """Find all @mcp.tool() decorated functions in a file.
-
+    
     Args:
-        file_path: Path to the Python file to analyze
-
+        file_path (Path): Path to the target file.
+    
     Returns:
-        List of tool function names found in the file
+        list[str]: A list containing the resulting items.
     """
     try:
         with open(file_path, encoding="utf-8") as f:
@@ -52,13 +53,13 @@ def find_tools_in_file(file_path: Path) -> list[str]:
 
 def check_function_docstring(file_path: Path, function_name: str) -> bool:
     """Check if a function has a proper Google-style docstring.
-
+    
     Args:
-        file_path: Path to the Python file
-        function_name: Name of the function to check
-
+        file_path (Path): Path to the target file.
+        function_name (str): The function name value.
+    
     Returns:
-        True if function has a proper docstring, False otherwise
+        bool: True if check function docstring, otherwise False.
     """
     try:
         with open(file_path, encoding="utf-8") as f:
@@ -95,9 +96,9 @@ def check_function_docstring(file_path: Path, function_name: str) -> bool:
 
 def main():
     """Main verification function.
-
+    
     Returns:
-        tuple: (exit_code, total_tools, documented_tools)
+        Any: The result produced by the operation.
     """
     project_root = Path(__file__).resolve().parents[2]
     src_path = project_root / "src" / "solidworks_mcp" / "tools"
@@ -153,9 +154,9 @@ def main():
 
 def verify_tool_count():
     """Legacy function for backward compatibility.
-
+    
     Returns:
-        int: Total number of tools found
+        Any: The result produced by the operation.
     """
     exit_code, total_tools, documented_tools = main()
     return total_tools

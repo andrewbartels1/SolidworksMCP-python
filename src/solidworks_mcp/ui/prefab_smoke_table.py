@@ -1,3 +1,6 @@
+"""Utilities for prefab smoke table.
+"""
+
 from prefab_ui import PrefabApp
 from prefab_ui.components import (
     Card,

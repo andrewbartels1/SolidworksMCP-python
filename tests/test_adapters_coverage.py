@@ -35,6 +35,8 @@ from src.solidworks_mcp.adapters.mock_adapter import (
 
 
 class TestAdapterHealthCoverage:
+    """Test adapter health coverage."""
+
     def test_getitem_fallback_unknown_key(self):
         """Line 52 — unknown key falls through to model_dump().get(key)."""
         health = AdapterHealth(
@@ -50,6 +52,8 @@ class TestAdapterHealthCoverage:
         assert result == 5
 
     def test_getitem_fallback_missing_key_returns_none(self):
+        """Test getitem fallback missing key returns none."""
+
         health = AdapterHealth(
             healthy=True,
             last_check=datetime.now(),
@@ -74,6 +78,8 @@ class TestAdapterHealthCoverage:
         assert "nonexistent" not in health  # not in model_dump either
 
     def test_contains_legacy_keys_always_true(self):
+        """Test contains legacy keys always true."""
+
         health = AdapterHealth(
             healthy=False,
             last_check=datetime.now(),
@@ -86,6 +92,8 @@ class TestAdapterHealthCoverage:
             assert key in health
 
     def test_getitem_status_unhealthy(self):
+        """Test getitem status unhealthy."""
+
         health = AdapterHealth(
             healthy=False,
             last_check=datetime.now(),
@@ -98,6 +106,8 @@ class TestAdapterHealthCoverage:
 
 
 class TestSolidWorksFeatureCoverage:
+    """Test solid works feature coverage."""
+
     def test_getitem_returns_parameter_value(self):
         """Line 148-150 — feature["key"] checks parameters first."""
         feature = SolidWorksFeature(
@@ -116,11 +126,17 @@ class TestSolidWorksFeatureCoverage:
 
 
 class TestAdapterBaseInitCoverage:
+    """Test adapter base init coverage."""
+
     def test_init_with_model_dump_config(self):
         """Line 222 — config with model_dump() method normalized via it."""
 
         class FakeConfig:
+            """Test fake config."""
+
             def model_dump(self):
+                """Test model dump."""
+
                 return {"mock_solidworks": True, "timeout": 30}
 
         adapter = MockSolidWorksAdapter(FakeConfig())
@@ -195,12 +211,16 @@ class TestAdapterBaseInitCoverage:
 
 
 class TestBoolCallableCoverage:
+    """Test bool callable coverage."""
+
     def test_call_returns_bool(self):
         """Line 52 — __call__ returns bool(getter())."""
         bc = _BoolCallable(lambda: True)
         assert bc() is True
 
     def test_call_false(self):
+        """Test call false."""
+
         bc = _BoolCallable(lambda: False)
         assert bc() is False
 
@@ -211,6 +231,8 @@ class TestBoolCallableCoverage:
 
 
 class TestMockAdapterSuccessPaths:
+    """Test mock adapter success paths."""
+
     @pytest.mark.asyncio
     async def test_get_model_info_success(self):
         """Lines 237-255 — get_model_info with active model."""
@@ -283,7 +305,11 @@ class TestMockAdapterSuccessPaths:
 
 
 class TestCircuitBreakerCoverage:
+    """Test circuit breaker coverage."""
+
     def _make_cb(self, failure_threshold=3, recovery_timeout=60):
+        """Test make cb."""
+
         inner = MockSolidWorksAdapter({})
         cb = CircuitBreakerAdapter(
             adapter=inner,
@@ -398,6 +424,8 @@ class TestCircuitBreakerCoverage:
 
 
 class TestConnectionPoolAdapterCoverage:
+    """Test connection pool adapter coverage."""
+
     @pytest.mark.asyncio
     async def test_attempt_async_exception_returns_default(self):
         """Lines 82-83 — _attempt_async catches exception, returns default."""
@@ -406,6 +434,8 @@ class TestConnectionPoolAdapterCoverage:
         )
 
         async def _raiser():
+            """Test raiser."""
+
             raise RuntimeError("boom")
 
         result = await pool._attempt_async(_raiser, default="fallback")
@@ -419,6 +449,8 @@ class TestConnectionPoolAdapterCoverage:
         )
 
         async def _raiser():
+            """Test raiser."""
+
             raise ValueError("bad value")
 
         result, err = await pool._attempt_async_with_error(_raiser)
@@ -433,6 +465,8 @@ class TestConnectionPoolAdapterCoverage:
         )
 
         def _raiser():
+            """Test raiser."""
+
             raise RuntimeError("sync boom")
 
         result = pool._attempt_sync(_raiser, default=42)
@@ -443,7 +477,11 @@ class TestConnectionPoolAdapterCoverage:
         """Lines 110-114 — TypeError on call with args → retry without args."""
 
         class StrictAdapter:
+            """Test strict adapter."""
+
             async def strict_method(self):
+                """Test strict method."""
+
                 return "ok"
 
         adapter = StrictAdapter()
@@ -613,12 +651,16 @@ class TestConnectionPoolAdapterCoverage:
 
 
 class TestConnectionPoolLegacyCoverage:
+    """Test connection pool legacy coverage."""
+
     @pytest.mark.asyncio
     async def test_acquire_wait_loop_then_gets_connection(self):
         """Lines 621-623 — waits when all connections in use, gets one after release."""
         created = []
 
         async def create_conn():
+            """Test create conn."""
+
             obj = SimpleNamespace(id=len(created))
             created.append(obj)
             return obj
@@ -629,6 +671,8 @@ class TestConnectionPoolLegacyCoverage:
 
         # Release after short delay from background task
         async def _release_soon():
+            """Test release soon."""
+
             await asyncio.sleep(0.02)
             await pool.release(conn1)
 
@@ -642,10 +686,16 @@ class TestConnectionPoolLegacyCoverage:
         closed = []
 
         class AsyncCloseConn:
+            """Test async close conn."""
+
             async def close(self):
+                """Test close."""
+
                 closed.append(True)
 
         async def create_conn():
+            """Test create conn."""
+
             return AsyncCloseConn()
 
         pool = ConnectionPool(create_connection=create_conn, max_size=1, timeout=1.0)

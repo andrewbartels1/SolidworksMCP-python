@@ -1,8 +1,7 @@
-"""
-Automation tools for SolidWorks MCP Server.
+"""Automation tools for SolidWorks MCP Server.
 
-Provides tools for automation including VBA code generation, macro recording,
-batch processing, and workflow automation in SolidWorks.
+Provides tools for automation including VBA code generation, macro recording, batch
+processing, and workflow automation in SolidWorks.
 """
 
 from typing import Any
@@ -18,7 +17,16 @@ from .input_compat import CompatInput
 
 
 class GenerateVBAInput(CompatInput):
-    """Input schema for generating VBA code."""
+    """Input schema for generating VBA code.
+    
+    Attributes:
+        code_style (str): The code style value.
+        include_error_handling (bool): The include error handling value.
+        operation_description (str | None): The operation description value.
+        operation_type (str | None): The operation type value.
+        parameters (dict[str, Any]): The parameters value.
+        target_document (str): The target document value.
+    """
 
     operation_description: str | None = Field(
         default=None, description="Description of the operation to generate VBA for"
@@ -39,14 +47,13 @@ class GenerateVBAInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        """Execute model post init.
-
+        """Provide model post init support for the generate vbainput.
+        
         Args:
-            __context (Any): Describe context.
-
+            __context (Any): The context value.
+        
         Returns:
-            None: Describe the returned value.
-
+            None: None.
         """
         if self.operation_description is None:
             self.operation_description = self.operation_type or "SolidWorks Operation"
@@ -56,7 +63,18 @@ VBAGenerationInput = GenerateVBAInput
 
 
 class RecordMacroInput(CompatInput):
-    """Input schema for macro recording."""
+    """Input schema for macro recording.
+    
+    Attributes:
+        auto_start (bool): The auto start value.
+        capture_keyboard (bool): The capture keyboard value.
+        capture_mouse (bool): The capture mouse value.
+        description (str): The description value.
+        macro_name (str | None): The macro name value.
+        output_file (str | None): The output file value.
+        recording_mode (str | None): The recording mode value.
+        recording_name (str | None): The recording name value.
+    """
 
     macro_name: str | None = Field(
         default=None, description="Name for the recorded macro"
@@ -72,21 +90,32 @@ class RecordMacroInput(CompatInput):
     auto_start: bool = Field(default=True, description="Automatically start recording")
 
     def model_post_init(self, __context: Any) -> None:
-        """Execute model post init.
-
+        """Provide model post init support for the record macro input.
+        
         Args:
-            __context (Any): Describe context.
-
+            __context (Any): The context value.
+        
         Returns:
-            None: Describe the returned value.
-
+            None: None.
         """
         if self.macro_name is None:
             self.macro_name = self.recording_name or "Recorded Macro"
 
 
 class BatchProcessInput(CompatInput):
-    """Input schema for batch processing."""
+    """Input schema for batch processing.
+    
+    Attributes:
+        batch_operation (str | None): The batch operation value.
+        file_pattern (str | None): The file pattern value.
+        filter_patterns (list[str]): The filter patterns value.
+        operation (str | None): The operation value.
+        operation_type (str | None): The operation type value.
+        parallel_processing (bool): The parallel processing value.
+        recursive (bool): The recursive value.
+        source_directory (str): The source directory value.
+        target_format (str | None): The target format value.
+    """
 
     source_directory: str = Field(description="Directory containing SolidWorks files")
     operation_type: str | None = Field(
@@ -112,21 +141,33 @@ class BatchProcessInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        """Execute model post init.
-
+        """Provide model post init support for the batch process input.
+        
         Args:
-            __context (Any): Describe context.
-
+            __context (Any): The context value.
+        
         Returns:
-            None: Describe the returned value.
-
+            None: None.
         """
         if self.operation_type is None:
             self.operation_type = self.batch_operation or self.operation or "export"
 
 
 class DesignTableInput(CompatInput):
-    """Input schema for design table operations."""
+    """Input schema for design table operations.
+    
+    Attributes:
+        auto_create_configurations (bool): The auto create configurations value.
+        auto_update (bool): The auto update value.
+        configurations (list[str]): The configurations value.
+        create_configurations (bool): The create configurations value.
+        excel_file (str | None): The excel file value.
+        model_path (str | None): The model path value.
+        operation (str | None): The operation value.
+        parameters (list[str]): The parameters value.
+        table_file (str | None): The table file value.
+        table_type (str | None): The table type value.
+    """
 
     table_type: str | None = Field(
         default=None, description="Type of design table (create, update, import)"
@@ -150,14 +191,13 @@ class DesignTableInput(CompatInput):
     configurations: list[str] = Field(default=[], description="Configuration names")
 
     def model_post_init(self, __context: Any) -> None:
-        """Execute model post init.
-
+        """Provide model post init support for the design table input.
+        
         Args:
-            __context (Any): Describe context.
-
+            __context (Any): The context value.
+        
         Returns:
-            None: Describe the returned value.
-
+            None: None.
         """
         if self.table_type is None:
             self.table_type = self.operation or "create"
@@ -166,7 +206,14 @@ class DesignTableInput(CompatInput):
 
 
 class WorkflowInput(CompatInput):
-    """Input schema for workflow automation."""
+    """Input schema for workflow automation.
+    
+    Attributes:
+        error_handling (str): The error handling value.
+        parallel_execution (bool): The parallel execution value.
+        steps (list[dict[str, Any]]): The steps value.
+        workflow_name (str): The workflow name value.
+    """
 
     workflow_name: str = Field(description="Name of the workflow")
     steps: list[dict[str, Any]] = Field(description="List of workflow steps")
@@ -179,7 +226,19 @@ class WorkflowInput(CompatInput):
 
 
 class TemplateInput(CompatInput):
-    """Input schema for template operations."""
+    """Input schema for template operations.
+    
+    Attributes:
+        base_file (str | None): The base file value.
+        include_custom_properties (bool): The include custom properties value.
+        include_features (list[str]): The include features value.
+        include_materials (bool): The include materials value.
+        metadata (dict[str, Any]): The metadata value.
+        output_path (str | None): The output path value.
+        source_model (str | None): The source model value.
+        template_name (str): The template name value.
+        template_type (str): The template type value.
+    """
 
     template_type: str = Field(description="Type of template (part, assembly, drawing)")
     template_name: str = Field(description="Name for the template")
@@ -206,43 +265,41 @@ async def register_automation_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register automation tools with FastMCP.
-
-    Registers comprehensive automation tools for SolidWorks workflow
-    orchestration including VBA generation, macro recording, batch
-    processing, and template management.
-
+    
+    Registers comprehensive automation tools for SolidWorks workflow orchestration including
+    VBA generation, macro recording, batch processing, and template management.
+    
     Args:
-        mcp: FastMCP server instance for tool registration
-        adapter: SolidWorks adapter for COM operations
-        config: Configuration dictionary for automation settings
-
+        mcp (FastMCP): The mcp value.
+        adapter (SolidWorksAdapter): Adapter instance used for the operation.
+        config (dict[str, Any]): Configuration values for the operation.
+    
     Returns:
-        int: Number of automation tools registered (8 tools)
+        int: The computed numeric result.
     """
     tool_count = 0
 
     @mcp.tool()
     async def generate_vba_code(input_data: GenerateVBAInput) -> dict[str, Any]:
         """Generate VBA code for SolidWorks automation.
-
-        Analyzes operation description and generates appropriate VBA code
-        with SolidWorks API calls, error handling, and documentation.
-
+        
+        Analyzes operation description and generates appropriate VBA code with SolidWorks API
+        calls, error handling, and documentation.
+        
         Args:
-            input_data: Contains operation_description, target_document,
-                       include_error_handling, and code_style
-
+            input_data (GenerateVBAInput): The input data value.
+        
         Returns:
-            dict: Generated VBA code with metadata and formatting
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            ```python
-            result = await generate_vba_code({
-                "operation_description": "Create rectangular extrusion",
-                "target_document": "Part",
-                "include_error_handling": True
-            })
-            ```
+                            ```python
+                            result = await generate_vba_code({
+                                "operation_description": "Create rectangular extrusion",
+                                "target_document": "Part",
+                                "include_error_handling": True
+                            })
+                            ```
         """
         try:
             if hasattr(adapter, "generate_vba_code"):
@@ -318,15 +375,14 @@ End Sub
     @mcp.tool(name="automation_start_macro_recording")
     async def start_macro_recording(input_data: RecordMacroInput) -> dict[str, Any]:
         """Start recording a macro in SolidWorks.
-
-        Begins macro recording to capture user actions and generate
-        reusable automation scripts.
-
+        
+        Begins macro recording to capture user actions and generate reusable automation scripts.
+        
         Args:
-            input_data: Contains macro_name, description, and auto_start
-
+            input_data (RecordMacroInput): The input data value.
+        
         Returns:
-            dict: Recording status and macro metadata
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             if hasattr(adapter, "start_macro_recording"):
@@ -364,11 +420,16 @@ End Sub
 
     @mcp.tool(name="automation_stop_macro_recording")
     async def stop_macro_recording(input_data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Stop recording the current macro.
-
-        This tool stops the active macro recording and saves the
-        recorded actions as a VBA macro.
+        """Stop recording the current macro.
+        
+        This tool stops the active macro recording and saves the recorded actions as a VBA
+        macro.
+        
+        Args:
+            input_data (dict[str, Any]): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             # For now, simulate macro recording stop
@@ -393,11 +454,16 @@ End Sub
 
     @mcp.tool()
     async def batch_process_files(input_data: BatchProcessInput) -> dict[str, Any]:
-        """
-        Perform batch operations on multiple SolidWorks files.
-
-        This tool processes multiple files in a directory, performing
-        operations like rebuild, save as, export, or property updates.
+        """Handle batch process files.
+        
+        This tool processes multiple files in a directory, performing operations like rebuild,
+        save as, export, or property updates.
+        
+        Args:
+            input_data (BatchProcessInput): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             if hasattr(adapter, "batch_process_files"):
@@ -443,11 +509,16 @@ End Sub
 
     @mcp.tool()
     async def manage_design_table(input_data: DesignTableInput) -> dict[str, Any]:
-        """
-        Create or manage design tables for parametric modeling.
-
-        Design tables allow you to create multiple configurations of a part
-        or assembly by driving parameters from an Excel spreadsheet.
+        """Create or manage design tables for parametric modeling.
+        
+        Design tables allow you to create multiple configurations of a part or assembly by
+        driving parameters from an Excel spreadsheet.
+        
+        Args:
+            input_data (DesignTableInput): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             if hasattr(adapter, "manage_design_table"):
@@ -487,11 +558,16 @@ End Sub
 
     @mcp.tool()
     async def execute_workflow(input_data: WorkflowInput) -> dict[str, Any]:
-        """
-        Execute a predefined automation workflow.
-
-        This tool executes a series of automated steps in sequence,
-        with support for parallel execution and error handling.
+        """Handle execute workflow.
+        
+        This tool executes a series of automated steps in sequence, with support for parallel
+        execution and error handling.
+        
+        Args:
+            input_data (WorkflowInput): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             if hasattr(adapter, "execute_workflow"):
@@ -536,11 +612,16 @@ End Sub
 
     @mcp.tool()
     async def create_template(input_data: TemplateInput) -> dict[str, Any]:
-        """
-        Create a SolidWorks template file.
-
-        This tool creates templates for parts, assemblies, or drawings
-        with standardized settings, materials, and configurations.
+        """Create a SolidWorks template file.
+        
+        This tool creates templates for parts, assemblies, or drawings with standardized
+        settings, materials, and configurations.
+        
+        Args:
+            input_data (TemplateInput): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             if hasattr(adapter, "create_template"):
@@ -579,11 +660,16 @@ End Sub
 
     @mcp.tool()
     async def optimize_performance(input_data: dict[str, Any]) -> dict[str, Any]:
-        """
-        Optimize SolidWorks performance settings.
-
-        This tool analyzes the current SolidWorks configuration and
-        suggests or applies performance optimizations.
+        """Optimize SolidWorks performance settings.
+        
+        This tool analyzes the current SolidWorks configuration and suggests or applies
+        performance optimizations.
+        
+        Args:
+            input_data (dict[str, Any]): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             if hasattr(adapter, "optimize_performance"):
@@ -634,7 +720,13 @@ End Sub
 
 
 class PerformanceOptimizationInput(CompatInput):
-    """Input schema for performance optimization."""
+    """Input schema for performance optimization.
+    
+    Attributes:
+        optimization_type (str): The optimization type value.
+        parameters (dict[str, Any]): The parameters value.
+        target_metric (str): The target metric value.
+    """
 
     optimization_type: str = Field(description="Type of optimization to perform")
     target_metric: str = Field(default="speed", description="Target performance metric")

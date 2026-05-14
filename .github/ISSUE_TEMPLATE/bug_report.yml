@@ -1,0 +1,70 @@
+name: Bug Report
+description: Something is broken or behaving unexpectedly
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill out the sections below so we can reproduce and fix the issue.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project is affected?
+      options:
+        - MCP Server (tools / adapters)
+        - FastAPI UI Backend (service.py / server.py)
+        - Prefab Dashboard (prefab_dashboard.py)
+        - Agent Harness (agents/)
+        - CI / Build
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug. Include error messages, stack traces, or unexpected output.
+      placeholder: |
+        Steps to reproduce:
+        1. ...
+        2. ...
+
+        Expected: ...
+        Got: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Fill in relevant details.
+      value: |
+        - OS: Windows / Linux / macOS
+        - Python version:
+        - SolidWorks version (if applicable):
+        - Adapter mode: pywin32 / mock
+        - LLM provider (if applicable):
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Paste any relevant terminal output, `.solidworks_mcp/ui_logs/ui_http.log` excerpts, or test failures.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I can reproduce this consistently.
+          required: false

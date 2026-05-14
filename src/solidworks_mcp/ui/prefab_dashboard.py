@@ -1,8 +1,7 @@
 """Prefab dashboard for the interactive SolidWorks assistant.
 
-Control-to-endpoint mapping and operator guidance live in:
-- docs/getting-started/prefab-ui-dashboard.md
-- docs/getting-started/prefab-ui-controls-reference.md
+Control-to-endpoint mapping and operator guidance live in: - docs/getting-
+started/prefab-ui-dashboard.md - docs/getting-started/prefab-ui-controls-reference.md
 """
 
 from __future__ import annotations
@@ -51,6 +50,16 @@ ctx_variant = (ctx_pct > 70).then(
 
 
 def _result_state(key: str, fallback: object | None = None) -> object:
+    """Build internal result state.
+    
+    Args:
+        key (str): The key value.
+        fallback (object | None): The fallback value. Defaults to None.
+    
+    Returns:
+        object: The result produced by the operation.
+    """
+
     value = getattr(RESULT, key)
     # Keep unit-test semantics for the lightweight stubbed _Expr object.
     if (
@@ -63,11 +72,21 @@ def _result_state(key: str, fallback: object | None = None) -> object:
 
 
 def _error_toast() -> ShowToast:
+    """Build internal error toast.
+    
+    Returns:
+        ShowToast: The result produced by the operation.
+    """
+
     return ShowToast("Request failed", variant="error")
 
 
 def _refresh_state() -> Fetch:
-    """Re-hydrate from canonical session state after multi-step actions."""
+    """Re-hydrate from canonical session state after multi-step actions.
+    
+    Returns:
+        Fetch: The result produced by the operation.
+    """
     return Fetch.get(
         f"{API_ORIGIN}/api/ui/state",
         params={"session_id": SESSION_ID_EXPR},
@@ -77,7 +96,11 @@ def _refresh_state() -> Fetch:
 
 
 def _refresh_preview() -> Fetch:
-    """Refresh preview and hydrate from the POST result payload directly."""
+    """Refresh preview and hydrate from the POST result payload directly.
+    
+    Returns:
+        Fetch: The result produced by the operation.
+    """
     return Fetch.post(
         f"{API_ORIGIN}/api/ui/preview/refresh",
         body={"session_id": STATE.session_id, "orientation": "isometric"},
@@ -87,7 +110,14 @@ def _refresh_preview() -> Fetch:
 
 
 def _open_then_connect(connect_body: dict[str, object]) -> Fetch:
-    """Run full connect + preview refresh in one request for reliable attach behavior."""
+    """Run full connect + preview refresh in one request for reliable attach behavior.
+    
+    Args:
+        connect_body (dict[str, object]): The connect body value.
+    
+    Returns:
+        Fetch: The result produced by the operation.
+    """
     return Fetch.post(
         f"{API_ORIGIN}/api/ui/model/connect",
         body=connect_body,
@@ -97,7 +127,11 @@ def _open_then_connect(connect_body: dict[str, object]) -> Fetch:
 
 
 def _on_attach_success() -> list[object]:
-    """Hydrate attach results without letting the UI fall back to chooser-only state."""
+    """Hydrate attach results without letting the UI fall back to chooser-only state.
+    
+    Returns:
+        list[object]: A list containing the resulting items.
+    """
     return [
         SetState("workflow_mode", "edit_existing"),
         SetState("workflow_label", "Editing Existing Part or Assembly"),
@@ -108,6 +142,12 @@ def _on_attach_success() -> list[object]:
 
 
 def _probe_local_model() -> Fetch:
+    """Build internal probe local model.
+    
+    Returns:
+        Fetch: The result produced by the operation.
+    """
+
     return Fetch.get(
         f"{API_ORIGIN}/api/ui/local-model/probe",
         on_success=[
@@ -135,6 +175,12 @@ def _probe_local_model() -> Fetch:
 
 
 def _pull_recommended_local_model() -> Fetch:
+    """Build internal pull recommended local model.
+    
+    Returns:
+        Fetch: The result produced by the operation.
+    """
+
     return Fetch.post(
         f"{API_ORIGIN}/api/ui/local-model/pull",
         body={"model": STATE.local_model_recommended_ollama_model},
@@ -158,6 +204,12 @@ def _pull_recommended_local_model() -> Fetch:
 
 
 def _hydrate_from_result() -> list[Any]:
+    """Build internal hydrate from result.
+    
+    Returns:
+        list[Any]: A list containing the resulting items.
+    """
+
     state_keys = [
         "workflow_mode",
         "workflow_label",

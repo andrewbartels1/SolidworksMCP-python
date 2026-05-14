@@ -1,4 +1,5 @@
-"""State and backend helpers for the Prefab CAD assistant dashboard."""
+"""State and backend helpers for the Prefab CAD assistant dashboard.
+"""
 
 from __future__ import annotations
 
@@ -73,14 +74,25 @@ SUPPORTED_MODEL_UPLOAD_SUFFIXES = {".sldprt", ".sldasm", ".slddrw"}
 
 
 class ClarificationResponse(BaseModel):
-    """LLM response for goal clarification."""
+    """LLM response for goal clarification.
+    
+    Attributes:
+        normalized_brief (str): The normalized brief value.
+        questions (list[str]): The questions value.
+    """
 
     normalized_brief: str = Field(min_length=10)
     questions: list[str] = Field(default_factory=list)
 
 
 class CheckpointCandidate(BaseModel):
-    """One suggested execution checkpoint."""
+    """One suggested execution checkpoint.
+    
+    Attributes:
+        allowed_tools (list[str]): The allowed tools value.
+        rationale (str): The rationale value.
+        title (str): The title value.
+    """
 
     title: str = Field(min_length=3)
     allowed_tools: list[str] = Field(min_length=1)
@@ -88,7 +100,15 @@ class CheckpointCandidate(BaseModel):
 
 
 class FamilyInspection(BaseModel):
-    """LLM response for family classification."""
+    """LLM response for family classification.
+    
+    Attributes:
+        checkpoints (list[CheckpointCandidate]): The checkpoints value.
+        confidence (Literal["low", "medium", "high"]): The confidence value.
+        evidence (list[str]): The evidence value.
+        family (str): The family value.
+        warnings (list[str]): The warnings value.
+    """
 
     family: str = Field(min_length=3)
     confidence: Literal["low", "medium", "high"]
@@ -98,51 +118,127 @@ class FamilyInspection(BaseModel):
 
 
 class _HTMLTextExtractor(HTMLParser):
+    """Build internal htmltext extractor.
+    
+    Attributes:
+        _skip_depth (Any): The skip depth value.
+    """
+
     def __init__(self) -> None:
+        """Initialize the htmltext extractor.
+        
+        Returns:
+            None: None.
+        """
+
         super().__init__()
         self._skip_depth = 0
         self._parts: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Provide handle starttag support for the htmltext extractor.
+        
+        Args:
+            tag (str): The tag value.
+            attrs (list[tuple[str, str | None]]): The attrs value.
+        
+        Returns:
+            None: None.
+        """
+
         if tag in {"script", "style", "noscript"}:
             self._skip_depth += 1
 
     def handle_endtag(self, tag: str) -> None:
+        """Provide handle endtag support for the htmltext extractor.
+        
+        Args:
+            tag (str): The tag value.
+        
+        Returns:
+            None: None.
+        """
+
         if tag in {"script", "style", "noscript"} and self._skip_depth > 0:
             self._skip_depth -= 1
 
     def handle_data(self, data: str) -> None:
+        """Provide handle data support for the htmltext extractor.
+        
+        Args:
+            data (str): The data value.
+        
+        Returns:
+            None: None.
+        """
+
         if self._skip_depth == 0:
             normalized = " ".join(data.split())
             if normalized:
                 self._parts.append(normalized)
 
     def text(self) -> str:
+        """Provide text support for the htmltext extractor.
+        
+        Returns:
+            str: The resulting text value.
+        """
+
         return "\n".join(self._parts)
 
 
 def ensure_preview_dir(preview_dir: Path | None = None) -> Path:
-    """Create and return the preview image directory."""
+    """Create and return the preview image directory.
+    
+    Args:
+        preview_dir (Path | None): The preview dir value. Defaults to None.
+    
+    Returns:
+        Path: The result produced by the operation.
+    """
     resolved = preview_dir or DEFAULT_PREVIEW_DIR
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
 
 def ensure_uploaded_model_dir(upload_dir: Path | None = None) -> Path:
-    """Create and return the uploaded-model staging directory."""
+    """Create and return the uploaded-model staging directory.
+    
+    Args:
+        upload_dir (Path | None): The upload dir value. Defaults to None.
+    
+    Returns:
+        Path: The result produced by the operation.
+    """
     resolved = upload_dir or DEFAULT_UPLOADED_MODEL_DIR
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
 
 def ensure_context_dir(context_dir: Path | None = None) -> Path:
-    """Create and return the dashboard context snapshot directory."""
+    """Create and return the dashboard context snapshot directory.
+    
+    Args:
+        context_dir (Path | None): The context dir value. Defaults to None.
+    
+    Returns:
+        Path: The result produced by the operation.
+    """
     resolved = context_dir or DEFAULT_CONTEXT_DIR
     resolved.mkdir(parents=True, exist_ok=True)
     return resolved
 
 
 def _parse_json_blob(payload: str | None) -> dict[str, Any]:
+    """Build internal json blob.
+    
+    Args:
+        payload (str | None): The payload value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+
     if not payload:
         return {}
     try:
@@ -153,6 +249,16 @@ def _parse_json_blob(payload: str | None) -> dict[str, Any]:
 
 
 def _sanitize_ui_text(value: Any, fallback: str = "") -> str:
+    """Build internal sanitize ui text.
+    
+    Args:
+        value (Any): The value value.
+        fallback (str): The fallback value. Defaults to "".
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     if value is None:
         return fallback
     text = str(value).strip()
@@ -168,6 +274,15 @@ def _sanitize_ui_text(value: Any, fallback: str = "") -> str:
 
 
 def _sanitize_model_path_text(value: Any) -> str:
+    """Build internal sanitize model path text.
+    
+    Args:
+        value (Any): The value value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     text = _sanitize_ui_text(value, "")
     if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
         text = text[1:-1].strip()
@@ -180,6 +295,17 @@ def _sanitize_preview_viewer_url(
     session_id: str,
     api_origin: str,
 ) -> str:
+    """Build internal sanitize preview viewer url.
+    
+    Args:
+        value (Any): The value value.
+        session_id (str): The session id value.
+        api_origin (str): The api origin value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     text = _sanitize_ui_text(value, "")
     if not text:
         return ""
@@ -190,28 +316,62 @@ def _sanitize_preview_viewer_url(
         return ""
     if parsed.scheme and parsed.netloc:
         expected = urlparse(api_origin)
-        if expected.netloc and parsed.netloc and parsed.netloc != expected.netloc:
+        if parsed.netloc != expected.netloc:
             return ""
     return text
 
 
 def _trace_json_default(value: Any) -> str:
-    if isinstance(value, Path):
-        return str(value)
+    """Build internal trace json default.
+    
+    Args:
+        value (Any): The value value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     return str(value)
 
 
 def _trace_json(value: Any) -> str:
+    """Build internal trace json.
+    
+    Args:
+        value (Any): The value value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     return json.dumps(value, ensure_ascii=True, indent=2, default=_trace_json_default)
 
 
 def _trace_session_row(session_row: dict[str, Any] | None) -> dict[str, Any]:
+    """Build internal trace session row.
+    
+    Args:
+        session_row (dict[str, Any] | None): The session row value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+
     if not session_row:
         return {}
     return {key: value for key, value in session_row.items() if key != "metadata_json"}
 
 
 def _trace_tool_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build internal trace tool records.
+    
+    Args:
+        records (list[dict[str, Any]]): The records value.
+    
+    Returns:
+        list[dict[str, Any]]: A list containing the resulting items.
+    """
+
     traced: list[dict[str, Any]] = []
     for record in records[-10:]:
         traced.append(
@@ -228,6 +388,16 @@ def _trace_tool_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _safe_context_name(context_name: str | None, session_id: str) -> str:
+    """Build internal safe context name.
+    
+    Args:
+        context_name (str | None): The context name value.
+        session_id (str): The session id value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     base = (context_name or session_id or "prefab-dashboard").strip()
     allowed = [ch if (ch.isalnum() or ch in {"-", "_"}) else "-" for ch in base]
     normalized = "".join(allowed).strip("-")
@@ -240,12 +410,34 @@ def _context_file_path(
     context_name: str | None = None,
     context_dir: Path | None = None,
 ) -> Path:
+    """Build internal context file path.
+    
+    Args:
+        session_id (str): The session id value.
+        context_name (str | None): The context name value. Defaults to None.
+        context_dir (Path | None): The context dir value. Defaults to None.
+    
+    Returns:
+        Path: The result produced by the operation.
+    """
+
     target_dir = ensure_context_dir(context_dir)
     safe_name = _safe_context_name(context_name, session_id)
     return target_dir / f"{safe_name}.json"
 
 
 def _filter_docs_text(raw_text: str, docs_query: str, *, max_chars: int = 2400) -> str:
+    """Build internal filter docs text.
+    
+    Args:
+        raw_text (str): The raw text value.
+        docs_query (str): The docs query value.
+        max_chars (int): The max chars value. Defaults to 2400.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
     if not lines:
         return "No docs content extracted from the endpoint response."
@@ -271,6 +463,18 @@ def _merge_metadata(
     user_goal: str | None = None,
     **updates: Any,
 ) -> dict[str, Any]:
+    """Build internal merge metadata.
+    
+    Args:
+        session_id (str): The session id value.
+        db_path (Path | None): The db path value. Defaults to None.
+        user_goal (str | None): The user goal value. Defaults to None.
+        **updates (Any): Additional keyword arguments forwarded to the call.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+
     session_row = get_design_session(session_id, db_path=db_path)
     metadata = _parse_json_blob(session_row["metadata_json"]) if session_row else {}
     metadata.update(updates)
@@ -298,7 +502,75 @@ def _merge_metadata(
     return metadata
 
 
+def _persist_ui_action(
+    session_id: str,
+    *,
+    tool_name: str,
+    db_path: Path | None = None,
+    metadata_updates: dict[str, Any] | None = None,
+    user_goal: str | None = None,
+    input_payload: dict[str, Any] | None = None,
+    output_payload: dict[str, Any] | None = None,
+    output_metadata: bool = False,
+    success: bool = True,
+    checkpoint_id: int | None = None,
+) -> dict[str, Any]:
+    """Persist metadata updates and matching tool-call audit record in one place.
+    
+    Args:
+        session_id (str): The session id value.
+        tool_name (str): The tool name value.
+        db_path (Path | None): The db path value. Defaults to None.
+        metadata_updates (dict[str, Any] | None): The metadata updates value. Defaults to
+                                                  None.
+        user_goal (str | None): The user goal value. Defaults to None.
+        input_payload (dict[str, Any] | None): The input payload value. Defaults to None.
+        output_payload (dict[str, Any] | None): The output payload value. Defaults to None.
+        output_metadata (bool): The output metadata value. Defaults to False.
+        success (bool): The success value. Defaults to True.
+        checkpoint_id (int | None): The checkpoint id value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+    merged_metadata: dict[str, Any] = {}
+    if metadata_updates is not None or user_goal is not None:
+        merged_metadata = _merge_metadata(
+            session_id,
+            db_path=db_path,
+            user_goal=user_goal,
+            **(metadata_updates or {}),
+        )
+
+    record_output = merged_metadata if output_metadata else output_payload
+
+    insert_tool_call_record(
+        session_id=session_id,
+        checkpoint_id=checkpoint_id,
+        tool_name=tool_name,
+        input_json=(
+            json.dumps(input_payload, ensure_ascii=True)
+            if input_payload is not None
+            else None
+        ),
+        output_json=(
+            json.dumps(record_output, ensure_ascii=True)
+            if record_output is not None
+            else None
+        ),
+        success=success,
+        db_path=db_path,
+    )
+    return merged_metadata
+
+
 def _default_checkpoint_specs() -> list[dict[str, Any]]:
+    """Build internal default checkpoint specs.
+    
+    Returns:
+        list[dict[str, Any]]: A list containing the resulting items.
+    """
+
     return [
         {
             "title": "Base profile",
@@ -328,6 +600,15 @@ def _default_checkpoint_specs() -> list[dict[str, Any]]:
 
 
 def _provider_from_model_name(model_name: str) -> str:
+    """Build internal provider from model name.
+    
+    Args:
+        model_name (str): Embedding model name to use.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     if model_name.startswith("github:"):
         return "github"
     if model_name.startswith("openai:"):
@@ -345,7 +626,16 @@ def _normalize_model_name_for_provider(
     provider: str | None,
     profile: str | None = None,
 ) -> str:
-    """Normalize free-form model names into provider-qualified routing strings."""
+    """Normalize free-form model names into provider-qualified routing strings.
+    
+    Args:
+        model_name (str | None): Embedding model name to use.
+        provider (str | None): The provider value.
+        profile (str | None): The profile value. Defaults to None.
+    
+    Returns:
+        str: The resulting text value.
+    """
     normalized_provider = (provider or "github").strip().lower()
     normalized_profile = (profile or "balanced").strip().lower()
     raw_model = _sanitize_ui_text(model_name, "")
@@ -370,6 +660,16 @@ def _normalize_model_name_for_provider(
 
 
 def _default_model_for_profile(provider: str, profile: str) -> str:
+    """Build internal default model for profile.
+    
+    Args:
+        provider (str): The provider value.
+        profile (str): The profile value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     normalized_profile = (profile or "balanced").lower()
     if provider == "local":
         profile_models = {
@@ -393,6 +693,17 @@ def _feature_grounding_warning_text(
     feature_target_text: str,
     feature_tree_count: int,
 ) -> str:
+    """Build internal feature grounding warning text.
+    
+    Args:
+        active_model_path (str): The active model path value.
+        feature_target_text (str): The feature target text value.
+        feature_tree_count (int): The feature tree count value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     if not active_model_path:
         return ""
     if not str(feature_target_text or "").strip():
@@ -409,6 +720,16 @@ def _feature_grounding_warning_text(
 def _provider_has_credentials(
     model_name: str, local_endpoint: str | None = None
 ) -> bool:
+    """Build internal provider has credentials.
+    
+    Args:
+        model_name (str): Embedding model name to use.
+        local_endpoint (str | None): The local endpoint value. Defaults to None.
+    
+    Returns:
+        bool: True if provider has credentials, otherwise False.
+    """
+
     provider = _provider_from_model_name(model_name)
     if provider == "github":
         token = os.getenv("GITHUB_API_KEY") or os.getenv("GH_TOKEN")
@@ -423,6 +744,15 @@ def _provider_has_credentials(
 
 
 def _normalize_workflow_mode(workflow_mode: str | None) -> str:
+    """Build internal normalize workflow mode.
+    
+    Args:
+        workflow_mode (str | None): The workflow mode value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     normalized = (workflow_mode or DEFAULT_WORKFLOW_MODE).strip().lower()
     if normalized in {"edit_existing", "new_design"}:
         return normalized
@@ -432,6 +762,16 @@ def _normalize_workflow_mode(workflow_mode: str | None) -> str:
 def _workflow_copy(
     workflow_mode: str, active_model_path: str | None = None
 ) -> tuple[str, str, str]:
+    """Build internal workflow copy.
+    
+    Args:
+        workflow_mode (str): The workflow mode value.
+        active_model_path (str | None): The active model path value. Defaults to None.
+    
+    Returns:
+        tuple[str, str, str]: A tuple containing the resulting values.
+    """
+
     has_active_model = bool(str(active_model_path or "").strip())
     if workflow_mode == "edit_existing":
         return (
@@ -459,6 +799,15 @@ def _workflow_copy(
 
 
 def _normalize_feature_targets(feature_target_text: str | None) -> list[str]:
+    """Build internal normalize feature targets.
+    
+    Args:
+        feature_target_text (str | None): The feature target text value.
+    
+    Returns:
+        list[str]: A list containing the resulting items.
+    """
+
     targets: list[str] = []
     for raw in (feature_target_text or "").replace("\n", ",").split(","):
         normalized = raw.strip()
@@ -472,6 +821,15 @@ def _normalize_feature_targets(feature_target_text: str | None) -> list[str]:
 
 
 def _looks_like_path_token(token: str) -> bool:
+    """Build internal looks like path token.
+    
+    Args:
+        token (str): The token value.
+    
+    Returns:
+        bool: True if looks like path token, otherwise False.
+    """
+
     normalized = token.strip()
     if not normalized:
         return False
@@ -501,6 +859,16 @@ def _looks_like_path_token(token: str) -> bool:
 def _feature_target_status(
     features: list[dict[str, Any]], feature_target_text: str | None
 ) -> tuple[str, list[str], list[str]]:
+    """Build internal feature target status.
+    
+    Args:
+        features (list[dict[str, Any]]): The features value.
+        feature_target_text (str | None): The feature target text value.
+    
+    Returns:
+        tuple[str, list[str], list[str]]: A tuple containing the resulting values.
+    """
+
     requested = _normalize_feature_targets(feature_target_text)
     if not requested:
         if str(feature_target_text or "").strip():
@@ -549,6 +917,19 @@ def _feature_target_status(
 
 
 def _read_reference_source(source_path: Path) -> str:
+    """Build internal reference source.
+    
+    Args:
+        source_path (Path): The source path value.
+    
+    Returns:
+        str: The resulting text value.
+    
+    Raises:
+        RuntimeError: Install pypdf to ingest PDF sources, or provide a text/markdown file
+                      instead.
+    """
+
     suffix = source_path.suffix.lower()
     if suffix == ".pdf":
         if PdfReader is None:
@@ -562,11 +943,33 @@ def _read_reference_source(source_path: Path) -> str:
 
 
 def _is_url_reference(source_path: str) -> bool:
+    """Build internal is url reference.
+    
+    Args:
+        source_path (str): The source path value.
+    
+    Returns:
+        bool: True if url reference, otherwise False.
+    """
+
     parsed = urlparse((source_path or "").strip())
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 def _read_reference_url(source_url: str) -> tuple[str, str]:
+    """Build internal reference url.
+    
+    Args:
+        source_url (str): The source url value.
+    
+    Returns:
+        tuple[str, str]: A tuple containing the resulting values.
+    
+    Raises:
+        RuntimeError: Install pypdf to ingest PDF sources, or provide a text, markdown, or
+                      HTML source instead.
+    """
+
     request = Request(source_url, headers={"User-Agent": "SolidWorksMCP/1.0"})
     with urlopen(request, timeout=20) as response:
         content_type = response.headers.get_content_type()
@@ -596,6 +999,19 @@ def _read_reference_url(source_url: str) -> tuple[str, str]:
 
 
 def _build_agent_model(model_name: str, local_endpoint: str | None = None) -> Any:
+    """Build internal agent model.
+    
+    Args:
+        model_name (str): Embedding model name to use.
+        local_endpoint (str | None): The local endpoint value. Defaults to None.
+    
+    Returns:
+        Any: The result produced by the operation.
+    
+    Raises:
+        RuntimeError: Pydantic-ai OpenAI provider support is not installed.
+    """
+
     if model_name.startswith("local:"):
         if OpenAIChatModel is None or OpenAIProvider is None:
             raise RuntimeError("pydantic-ai OpenAI provider support is not installed.")
@@ -616,6 +1032,19 @@ def _materialize_uploaded_model(
     session_id: str,
     uploaded_files: list[dict[str, Any]] | None,
 ) -> Path:
+    """Build internal materialize uploaded model.
+    
+    Args:
+        session_id (str): The session id value.
+        uploaded_files (list[dict[str, Any]] | None): The uploaded files value.
+    
+    Returns:
+        Path: The result produced by the operation.
+    
+    Raises:
+        RuntimeError: Uploaded model payload is not valid base64 data.
+    """
+
     if not uploaded_files:
         raise RuntimeError("No uploaded model file was provided.")
 
@@ -652,6 +1081,16 @@ def _compute_readiness(
     *,
     db_ready: bool,
 ) -> dict[str, Any]:
+    """Build internal compute readiness.
+    
+    Args:
+        metadata (dict[str, Any]): The metadata value.
+        db_ready (bool): The db ready value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+
     provider = _sanitize_ui_text(
         metadata.get("model_provider"),
         "",
@@ -699,6 +1138,15 @@ def _compute_readiness(
 
 
 def _planned_tools(planned: dict[str, Any]) -> list[str]:
+    """Build internal planned tools.
+    
+    Args:
+        planned (dict[str, Any]): The planned value.
+    
+    Returns:
+        list[str]: A list containing the resulting items.
+    """
+
     tools = planned.get("tools", [])
     return [str(tool) for tool in tools] if isinstance(tools, list) else []
 
@@ -706,9 +1154,15 @@ def _planned_tools(planned: dict[str, Any]) -> list[str]:
 async def _run_checkpoint_tools(
     planned: dict[str, Any],
 ) -> dict[str, Any]:
-    """Execute supported checkpoint tools through the active adapter.
-
+    """Build internal run checkpoint tools.
+    
     Unsupported tools are marked as MOCKED and returned in the summary.
+    
+    Args:
+        planned (dict[str, Any]): The planned value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
     """
     config = load_config()
     adapter = await create_adapter(config)
@@ -836,7 +1290,16 @@ def ensure_dashboard_session(
     user_goal: str | None = None,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Ensure one dashboard session row and default checkpoints exist."""
+    """Ensure one dashboard session row and default checkpoints exist.
+    
+    Args:
+        session_id (str): The session id value. Defaults to DEFAULT_SESSION_ID.
+        user_goal (str | None): The user goal value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     session_row = get_design_session(session_id, db_path=db_path)
     requested_goal = _sanitize_ui_text(user_goal, "") if user_goal is not None else ""
     if session_row is None:
@@ -887,23 +1350,30 @@ def approve_design_brief(
     *,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Persist the accepted goal for the active dashboard session."""
+    """Persist the accepted goal for the active dashboard session.
+    
+    Args:
+        session_id (str): The session id value.
+        user_goal (str): The user goal value.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
-    metadata = _merge_metadata(
+    _persist_ui_action(
         session_id,
+        tool_name="ui.approve_brief",
         db_path=db_path,
         user_goal=user_goal,
-        normalized_brief=user_goal,
-        latest_message="Brief accepted.",
-        latest_error_text="",
-        remediation_hint="",
-    )
-    insert_tool_call_record(
-        session_id=session_id,
-        tool_name="ui.approve_brief",
-        input_json=json.dumps({"user_goal": user_goal}, ensure_ascii=True),
-        output_json=json.dumps(metadata, ensure_ascii=True),
-        db_path=db_path,
+        metadata_updates={
+            "normalized_brief": user_goal,
+            "latest_message": "Brief accepted.",
+            "latest_error_text": "",
+            "remediation_hint": "",
+        },
+        input_payload={"user_goal": user_goal},
+        output_metadata=True,
     )
     return build_dashboard_state(session_id, db_path=db_path)
 
@@ -914,7 +1384,16 @@ def accept_family_choice(
     *,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Accept the proposed family and advance the session."""
+    """Accept the proposed family and advance the session.
+    
+    Args:
+        session_id (str): The session id value.
+        family (str | None): The family value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     metadata = _parse_json_blob(session_row.get("metadata_json"))
     accepted_family = family or metadata.get("proposed_family") or "unknown"
@@ -928,20 +1407,17 @@ def accept_family_choice(
         metadata_json=session_row.get("metadata_json"),
         db_path=db_path,
     )
-    _merge_metadata(
+    _persist_ui_action(
         session_id,
-        db_path=db_path,
-        accepted_family=accepted_family,
-        latest_message=f"Family accepted: {accepted_family}.",
-        latest_error_text="",
-        remediation_hint="",
-    )
-    insert_tool_call_record(
-        session_id=session_id,
         tool_name="ui.accept_family",
-        input_json=json.dumps({"family": accepted_family}, ensure_ascii=True),
-        success=True,
         db_path=db_path,
+        metadata_updates={
+            "accepted_family": accepted_family,
+            "latest_message": f"Family accepted: {accepted_family}.",
+            "latest_error_text": "",
+            "remediation_hint": "",
+        },
+        input_payload={"family": accepted_family},
     )
     return build_dashboard_state(session_id, db_path=db_path)
 
@@ -951,7 +1427,15 @@ async def execute_next_checkpoint(
     *,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Execute the next pending checkpoint and persist detailed run status."""
+    """Handle execute next checkpoint.
+    
+    Args:
+        session_id (str): The session id value.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     checkpoints = list_plan_checkpoints(session_id, db_path=db_path)
     target = next((row for row in checkpoints if not row["executed"]), None)
@@ -1049,7 +1533,15 @@ def reconcile_manual_edits(
     *,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Compare the latest two snapshots and summarize the reconciliation step."""
+    """Compare the latest two snapshots and summarize the reconciliation step.
+    
+    Args:
+        session_id (str): The session id value.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     ensure_dashboard_session(session_id, db_path=db_path)
     snapshots = list_model_state_snapshots(session_id, db_path=db_path)
 
@@ -1070,14 +1562,13 @@ def reconcile_manual_edits(
                 "No visual/state change detected since the last accepted snapshot."
             )
 
-    insert_tool_call_record(
-        session_id=session_id,
+    _persist_ui_action(
+        session_id,
         tool_name="ui.reconcile_manual_edits",
-        output_json=json.dumps({"message": message}, ensure_ascii=True),
-        success=True,
         db_path=db_path,
+        metadata_updates={"latest_message": message},
+        output_payload={"message": message},
     )
-    _merge_metadata(session_id, db_path=db_path, latest_message=message)
     return build_dashboard_state(session_id, db_path=db_path)
 
 
@@ -1091,7 +1582,20 @@ def update_ui_preferences(
     local_endpoint: str | None = None,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Persist editable assumptions and model/provider preferences."""
+    """Persist editable assumptions and model/provider preferences.
+    
+    Args:
+        session_id (str): The session id value.
+        assumptions_text (str | None): The assumptions text value. Defaults to None.
+        model_provider (str | None): The model provider value. Defaults to None.
+        model_profile (str | None): The model profile value. Defaults to None.
+        model_name (str | None): Embedding model name to use. Defaults to None.
+        local_endpoint (str | None): The local endpoint value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     ensure_dashboard_session(session_id, db_path=db_path)
     provider = (model_provider or "github").strip().lower()
     profile = (model_profile or "balanced").strip().lower()
@@ -1104,37 +1608,31 @@ def update_ui_preferences(
         local_endpoint,
         os.getenv("SOLIDWORKS_UI_LOCAL_ENDPOINT", "http://127.0.0.1:11434/v1"),
     )
-    metadata = _merge_metadata(
+    _persist_ui_action(
         session_id,
-        db_path=db_path,
-        assumptions_text=_sanitize_ui_text(
-            assumptions_text,
-            "No assumptions provided yet.",
-        ),
-        model_provider=provider,
-        model_profile=profile,
-        model_name=resolved_model,
-        local_endpoint=resolved_endpoint,
-        latest_message="Updated assumptions and model preferences.",
-        latest_error_text="",
-        remediation_hint="",
-    )
-    insert_tool_call_record(
-        session_id=session_id,
         tool_name="ui.update_preferences",
-        input_json=json.dumps(
-            {
-                "assumptions_text": assumptions_text,
-                "model_provider": provider,
-                "model_profile": profile,
-                "model_name": resolved_model,
-                "local_endpoint": resolved_endpoint,
-            },
-            ensure_ascii=True,
-        ),
-        output_json=json.dumps(metadata, ensure_ascii=True),
-        success=True,
         db_path=db_path,
+        metadata_updates={
+            "assumptions_text": _sanitize_ui_text(
+                assumptions_text,
+                "No assumptions provided yet.",
+            ),
+            "model_provider": provider,
+            "model_profile": profile,
+            "model_name": resolved_model,
+            "local_endpoint": resolved_endpoint,
+            "latest_message": "Updated assumptions and model preferences.",
+            "latest_error_text": "",
+            "remediation_hint": "",
+        },
+        input_payload={
+            "assumptions_text": assumptions_text,
+            "model_provider": provider,
+            "model_profile": profile,
+            "model_name": resolved_model,
+            "local_endpoint": resolved_endpoint,
+        },
+        output_metadata=True,
     )
     return build_dashboard_state(session_id, db_path=db_path)
 
@@ -1145,7 +1643,16 @@ def select_workflow_mode(
     workflow_mode: str,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Persist the onboarding workflow branch for the active dashboard session."""
+    """Persist the onboarding workflow branch for the active dashboard session.
+    
+    Args:
+        session_id (str): The session id value.
+        workflow_mode (str): The workflow mode value.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     normalized_mode = _normalize_workflow_mode(workflow_mode)
     workflow_label, workflow_guidance, _ = _workflow_copy(normalized_mode)
@@ -1224,21 +1731,17 @@ def select_workflow_mode(
             latest_error_text="",
             remediation_hint="",
         )
-    insert_tool_call_record(
-        session_id=session_id,
+    _persist_ui_action(
+        session_id,
         tool_name="ui.select_workflow_mode",
-        input_json=json.dumps({"workflow_mode": normalized_mode}, ensure_ascii=True),
-        output_json=json.dumps(
-            {
-                "workflow_mode": normalized_mode,
-                "workflow_label": workflow_label,
-                "workflow_guidance_text": workflow_guidance,
-                "metadata": metadata,
-            },
-            ensure_ascii=True,
-        ),
-        success=True,
         db_path=db_path,
+        input_payload={"workflow_mode": normalized_mode},
+        output_payload={
+            "workflow_mode": normalized_mode,
+            "workflow_label": workflow_label,
+            "workflow_guidance_text": workflow_guidance,
+            "metadata": metadata,
+        },
     )
     return build_dashboard_state(session_id, db_path=db_path)
 
@@ -1252,7 +1755,19 @@ async def run_go_orchestration(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Run a single end-to-end pass that updates inputs, review, and output lanes."""
+    """Run a single end-to-end pass that updates inputs, review, and output lanes.
+    
+    Args:
+        session_id (str): The session id value.
+        user_goal (str): The user goal value.
+        assumptions_text (str | None): The assumptions text value. Defaults to None.
+        user_answer (str): The user answer value. Defaults to "".
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     try:
         goal_text = _sanitize_ui_text(user_goal, DEFAULT_USER_GOAL)
         approve_design_brief(session_id, goal_text, db_path=db_path)
@@ -1277,31 +1792,25 @@ async def run_go_orchestration(
         )
         await inspect_family(session_id, goal_text, db_path=db_path)
 
-        _merge_metadata(
+        _persist_ui_action(
             session_id,
-            db_path=db_path,
-            orchestration_status="Go run completed: inputs saved, clarifications refreshed, engineering review updated.",
-            latest_message="Go run completed across workflow, review, and model output lanes.",
-            latest_error_text="",
-            remediation_hint="",
-        )
-        insert_tool_call_record(
-            session_id=session_id,
             tool_name="ui.orchestrate_go",
-            input_json=json.dumps(
-                {
-                    "user_goal": goal_text,
-                    "assumptions_text": assumptions_text,
-                    "user_answer": user_answer,
-                },
-                ensure_ascii=True,
-            ),
-            output_json=json.dumps(
-                {"status": "success", "message": "Go orchestration completed."},
-                ensure_ascii=True,
-            ),
-            success=True,
             db_path=db_path,
+            metadata_updates={
+                "orchestration_status": "Go run completed: inputs saved, clarifications refreshed, engineering review updated.",
+                "latest_message": "Go run completed across workflow, review, and model output lanes.",
+                "latest_error_text": "",
+                "remediation_hint": "",
+            },
+            input_payload={
+                "user_goal": goal_text,
+                "assumptions_text": assumptions_text,
+                "user_answer": user_answer,
+            },
+            output_payload={
+                "status": "success",
+                "message": "Go orchestration completed.",
+            },
         )
     except Exception as exc:
         logger.exception("[ui.run_go_orchestration] failed session_id={}", session_id)
@@ -1322,21 +1831,28 @@ def update_session_notes(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Persist free-form engineering notes in session metadata."""
-    _merge_metadata(
+    """Persist free-form engineering notes in session metadata.
+    
+    Args:
+        session_id (str): The session id value.
+        notes_text (str): The notes text value.
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+    _persist_ui_action(
         session_id,
-        db_path=db_path,
-        notes_text=notes_text,
-        latest_message="Notes saved.",
-        latest_error_text="",
-        remediation_hint="",
-    )
-    insert_tool_call_record(
-        session_id=session_id,
         tool_name="ui.notes.update",
-        input_json=json.dumps({"notes_text": notes_text}, ensure_ascii=True),
-        success=True,
         db_path=db_path,
+        metadata_updates={
+            "notes_text": notes_text,
+            "latest_message": "Notes saved.",
+            "latest_error_text": "",
+            "remediation_hint": "",
+        },
+        input_payload={"notes_text": notes_text},
     )
     return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
 
@@ -1348,7 +1864,17 @@ def fetch_docs_context(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Fetch docs text from the docs endpoint and store a filtered context snippet."""
+    """Fetch docs text from the docs endpoint and store a filtered context snippet.
+    
+    Args:
+        session_id (str): The session id value.
+        docs_query (str): The docs query value. Defaults to "".
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     docs_url = f"{api_origin}/docs"
     query_text = _sanitize_ui_text(docs_query, "solidworks workflow")
     try:
@@ -1361,24 +1887,19 @@ def fetch_docs_context(
         extractor = _HTMLTextExtractor()
         extractor.feed(html)
         snippet = _filter_docs_text(extractor.text(), query_text)
-        _merge_metadata(
+        _persist_ui_action(
             session_id,
-            db_path=db_path,
-            docs_query=query_text,
-            docs_context_text=snippet,
-            latest_message="Docs context updated from MCP docs endpoint.",
-            latest_error_text="",
-            remediation_hint="",
-        )
-        insert_tool_call_record(
-            session_id=session_id,
             tool_name="ui.docs.fetch",
-            input_json=json.dumps(
-                {"query": query_text, "url": docs_url}, ensure_ascii=True
-            ),
-            output_json=json.dumps({"chars": len(snippet)}, ensure_ascii=True),
-            success=True,
             db_path=db_path,
+            metadata_updates={
+                "docs_query": query_text,
+                "docs_context_text": snippet,
+                "latest_message": "Docs context updated from MCP docs endpoint.",
+                "latest_error_text": "",
+                "remediation_hint": "",
+            },
+            input_payload={"query": query_text, "url": docs_url},
+            output_payload={"chars": len(snippet)},
         )
     except Exception as exc:
         logger.exception("[ui.fetch_docs_context] failed session_id={}", session_id)
@@ -1401,7 +1922,18 @@ def save_session_context(
     context_dir: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Persist the current dashboard state to a plain JSON file and metadata."""
+    """Persist the current dashboard state to a plain JSON file and metadata.
+    
+    Args:
+        session_id (str): The session id value.
+        context_name (str | None): The context name value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+        context_dir (Path | None): The context dir value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     state = build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
     target_path = _context_file_path(
         session_id,
@@ -1417,24 +1949,21 @@ def save_session_context(
         json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8"
     )
     message = f"Context saved to {target_path}."
-    _merge_metadata(
+    _persist_ui_action(
         session_id,
-        db_path=db_path,
-        context_save_status=message,
-        context_name_input=_safe_context_name(context_name, session_id),
-        context_file_input=str(target_path),
-        last_context_file=str(target_path),
-        latest_message=message,
-        latest_error_text="",
-        remediation_hint="",
-    )
-    insert_tool_call_record(
-        session_id=session_id,
         tool_name="ui.context.save",
-        input_json=json.dumps({"context_name": context_name}, ensure_ascii=True),
-        output_json=json.dumps({"path": str(target_path)}, ensure_ascii=True),
-        success=True,
         db_path=db_path,
+        metadata_updates={
+            "context_save_status": message,
+            "context_name_input": _safe_context_name(context_name, session_id),
+            "context_file_input": str(target_path),
+            "last_context_file": str(target_path),
+            "latest_message": message,
+            "latest_error_text": "",
+            "remediation_hint": "",
+        },
+        input_payload={"context_name": context_name},
+        output_payload={"path": str(target_path)},
     )
     return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
 
@@ -1447,7 +1976,18 @@ def load_session_context(
     context_dir: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Load a previously saved plain-file context snapshot back into session metadata."""
+    """Load a previously saved plain-file context snapshot back into session metadata.
+    
+    Args:
+        session_id (str): The session id value.
+        context_file (str | None): The context file value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+        context_dir (Path | None): The context dir value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     context_file_text = _sanitize_ui_text(context_file, "")
     source_path = (
         Path(context_file_text)
@@ -1526,23 +2066,20 @@ def load_session_context(
     )
 
     message = f"Context loaded from {source_path}."
-    _merge_metadata(
+    _persist_ui_action(
         session_id,
-        db_path=db_path,
-        context_load_status=message,
-        context_name_input=_safe_context_name(source_path.stem, session_id),
-        context_file_input=str(source_path),
-        last_context_file=str(source_path),
-        latest_message=message,
-        latest_error_text="",
-        remediation_hint="",
-    )
-    insert_tool_call_record(
-        session_id=session_id,
         tool_name="ui.context.load",
-        input_json=json.dumps({"context_file": str(source_path)}, ensure_ascii=True),
-        success=True,
         db_path=db_path,
+        metadata_updates={
+            "context_load_status": message,
+            "context_name_input": _safe_context_name(source_path.stem, session_id),
+            "context_file_input": str(source_path),
+            "last_context_file": str(source_path),
+            "latest_message": message,
+            "latest_error_text": "",
+            "remediation_hint": "",
+        },
+        input_payload={"context_file": str(source_path)},
     )
     return build_dashboard_state(session_id, db_path=db_path, api_origin=api_origin)
 
@@ -1556,7 +2093,23 @@ async def open_target_model(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Open a target model in SolidWorks and persist session state before connect/preview."""
+    """Open a target model in SolidWorks and persist session state before connect/preview.
+    
+    Args:
+        session_id (str): The session id value.
+        model_path (str | None): The model path value. Defaults to None.
+        uploaded_files (list[dict[str, Any]] | None): The uploaded files value. Defaults to
+                                                      None.
+        feature_target_text (str | None): The feature target text value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    
+    Raises:
+        RuntimeError: If the operation cannot be completed.
+    """
     ensure_dashboard_session(session_id, db_path=db_path)
     adapter = None
     resolved_path: Path | None = None
@@ -1720,7 +2273,23 @@ async def connect_target_model(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Open a target model, inspect its feature tree, and persist grounded context."""
+    """Open a target model, inspect its feature tree, and persist grounded context.
+    
+    Args:
+        session_id (str): The session id value.
+        model_path (str | None): The model path value. Defaults to None.
+        uploaded_files (list[dict[str, Any]] | None): The uploaded files value. Defaults to
+                                                      None.
+        feature_target_text (str | None): The feature target text value. Defaults to None.
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    
+    Raises:
+        RuntimeError: If the operation cannot be completed.
+    """
     ensure_dashboard_session(session_id, db_path=db_path)
     adapter = None
     resolved_path: Path | None = None
@@ -1967,7 +2536,20 @@ def ingest_reference_source(
     overlap: int = 200,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Ingest a user-provided local file or URL into a simple local retrieval index."""
+    """Ingest a user-provided local file or URL into a simple local retrieval index.
+    
+    Args:
+        session_id (str): The session id value.
+        source_path (str): The source path value.
+        namespace (str): Namespace used to isolate stored data.
+        chunk_size (int): Maximum number of characters to keep in each chunk. Defaults to
+                          1200.
+        overlap (int): Number of overlapping characters between chunks. Defaults to 200.
+        db_path (Path | None): The db path value. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     ensure_dashboard_session(session_id, db_path=db_path)
     source_reference = (source_path or "").strip()
     resolved_namespace = (
@@ -2128,12 +2710,34 @@ def ingest_reference_source(
 
 
 def _resolve_model_name(explicit_model: str | None = None) -> str:
+    """Build internal resolve model name.
+    
+    Args:
+        explicit_model (str | None): The explicit model value. Defaults to None.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     return explicit_model or os.getenv("SOLIDWORKS_UI_MODEL", "github:openai/gpt-4.1")
 
 
 def _ensure_provider_credentials(
     model_name: str, local_endpoint: str | None = None
 ) -> None:
+    """Build internal provider credentials.
+    
+    Args:
+        model_name (str): Embedding model name to use.
+        local_endpoint (str | None): The local endpoint value. Defaults to None.
+    
+    Returns:
+        None: None.
+    
+    Raises:
+        RuntimeError: Set SOLIDWORKS_UI_LOCAL_ENDPOINT before using local model routing.
+    """
+
     if model_name.startswith("github:"):
         github_token = os.getenv("GITHUB_API_KEY") or os.getenv("GH_TOKEN")
         if not github_token:
@@ -2180,6 +2784,19 @@ async def _run_structured_agent(
     model_name: str | None = None,
     local_endpoint: str | None = None,
 ) -> BaseModel | RecoverableFailure:
+    """Build internal run structured agent.
+    
+    Args:
+        system_prompt (str): The system prompt value.
+        user_prompt (str): The user prompt value.
+        result_type (type[BaseModel]): The result type value.
+        model_name (str | None): Embedding model name to use. Defaults to None.
+        local_endpoint (str | None): The local endpoint value. Defaults to None.
+    
+    Returns:
+        BaseModel | RecoverableFailure: The result produced by the operation.
+    """
+
     if Agent is None:  # pragma: no cover
         return RecoverableFailure(
             explanation="pydantic_ai is not installed in this environment.",
@@ -2221,11 +2838,7 @@ async def _run_structured_agent(
         "  - For sheet metal or advanced solid families, route to VBA-aware planning.\n"
         "  - Always include explicit tolerance/clearance values when manufacturing context is present."
     )
-    enriched_user_prompt = (
-        "## PLANNING REQUEST\n"
-        f"{user_prompt}\n\n"
-        f"{mcp_tool_catalog}"
-    )
+    enriched_user_prompt = f"## PLANNING REQUEST\n{user_prompt}\n\n{mcp_tool_catalog}"
 
     # --- MCP server toolset wiring ---
     # When SOLIDWORKS_MCP_URL is set (or defaulting to the standard local port),
@@ -2300,11 +2913,20 @@ async def request_clarifications(
     db_path: Path | None = None,
     model_name: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Generate focused follow-up questions for the current design goal using LLM.
-
-    Calls GitHub Copilot (openai/gpt-4.1) by default or a model specified in SOLIDWORKS_UI_MODEL env.
-    Requires GH_TOKEN or GITHUB_API_KEY with models:read scope.
+    """Generate focused follow-up questions for the current design goal using LLM.
+    
+    Calls GitHub Copilot (openai/gpt-4.1) by default or a model specified in
+    SOLIDWORKS_UI_MODEL env. Requires GH_TOKEN or GITHUB_API_KEY with models:read scope.
+    
+    Args:
+        session_id (str): The session id value.
+        user_goal (str): The user goal value.
+        user_answer (str): The user answer value. Defaults to "".
+        db_path (Path | None): The db path value. Defaults to None.
+        model_name (str | None): Embedding model name to use. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
     """
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
@@ -2320,9 +2942,7 @@ async def request_clarifications(
     )
     # --- Prompt: structured sections so the model sees clearly labelled inputs ---
     answer_section = (
-        f"\n## USER ANSWERS / CLARIFICATIONS\n{user_answer}"
-        if user_answer
-        else ""
+        f"\n## USER ANSWERS / CLARIFICATIONS\n{user_answer}" if user_answer else ""
     )
     assumptions_text = _sanitize_ui_text(
         metadata.get("assumptions_text"), "<none specified>"
@@ -2424,12 +3044,20 @@ async def inspect_family(
     db_path: Path | None = None,
     model_name: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Run LLM-backed family classification and suggested checkpoints.
-
-    Calls GitHub Copilot to infer the likely SolidWorks feature family
-    (e.g., "bracket", "housing", "fastener", "assembly") and suggests
-    4 conservative checkpoints with allowed MCP tools.
+    """Run LLM-backed family classification and suggested checkpoints.
+    
+    Calls GitHub Copilot to infer the likely SolidWorks feature family (e.g., "bracket",
+    "housing", "fastener", "assembly") and suggests 4 conservative checkpoints with allowed
+    MCP tools.
+    
+    Args:
+        session_id (str): The session id value.
+        user_goal (str): The user goal value.
+        db_path (Path | None): The db path value. Defaults to None.
+        model_name (str | None): Embedding model name to use. Defaults to None.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
     """
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
@@ -2602,6 +3230,16 @@ def _public_preview_url(
     *,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> str:
+    """Build internal public preview url.
+    
+    Args:
+        preview_path (Path): The preview path value.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     timestamp = (
         int(preview_path.stat().st_mtime) if preview_path.exists() else int(time.time())
     )
@@ -2619,12 +3257,25 @@ async def refresh_preview(
     active_model_path_override: str | None = None,
     reopen_active_model: bool = True,
 ) -> dict[str, Any]:
-    """
-    Export the current SolidWorks viewport to a PNG preview and STL for the 3D viewer.
-
-    Uses export_image(view_orientation=...) from the active adapter.
-    Supports orientations: "front", "top", "right", "isometric", "current".
-    Also exports an STL file to power the embedded Three.js viewer.
+    """Export the current SolidWorks viewport to a PNG preview and STL for the 3D viewer.
+    
+    Uses export_image(view_orientation=...) from the active adapter. Supports orientations:
+    "front", "top", "right", "isometric", "current". Also exports an STL file to power the
+    embedded Three.js viewer.
+    
+    Args:
+        session_id (str): The session id value.
+        orientation (str): The orientation value. Defaults to DEFAULT_PREVIEW_ORIENTATION.
+        db_path (Path | None): The db path value. Defaults to None.
+        preview_dir (Path | None): The preview dir value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+        adapter_override (Any | None): The adapter override value. Defaults to None.
+        active_model_path_override (str | None): The active model path override value.
+                                                 Defaults to None.
+        reopen_active_model (bool): The reopen active model value. Defaults to True.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
     """
     ensure_dashboard_session(session_id, db_path=db_path)
     logger.info(
@@ -2895,10 +3546,19 @@ async def highlight_feature(
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
     """Select and highlight a named feature in the active SolidWorks model.
-
-    Uses SelectByID2 via the pywin32 adapter.  In mock mode the selection is
-    acknowledged without a COM side-effect.  Returns the full dashboard state
-    so the UI can hydrate cleanly.
+    
+    Uses SelectByID2 via the pywin32 adapter.  In mock mode the selection is acknowledged
+    without a COM side-effect.  Returns the full dashboard state so the UI can hydrate
+    cleanly.
+    
+    Args:
+        session_id (str): The session id value.
+        feature_name (str): The feature name value.
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
     """
     ensure_dashboard_session(session_id, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
@@ -3008,7 +3668,16 @@ def build_dashboard_state(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
-    """Assemble the dashboard payload consumed by the Prefab UI."""
+    """Assemble the dashboard payload consumed by the Prefab UI.
+    
+    Args:
+        session_id (str): The session id value. Defaults to DEFAULT_SESSION_ID.
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     metadata = _parse_json_blob(session_row.get("metadata_json"))
     db_ready = bool(session_row)
@@ -3409,6 +4078,17 @@ def build_dashboard_trace_payload(
     db_path: Path | None = None,
     api_origin: str = DEFAULT_API_ORIGIN,
 ) -> dict[str, Any]:
+    """Build the dashboard trace payload.
+    
+    Args:
+        session_id (str): The session id value. Defaults to DEFAULT_SESSION_ID.
+        db_path (Path | None): The db path value. Defaults to None.
+        api_origin (str): The api origin value. Defaults to DEFAULT_API_ORIGIN.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
+
     ensure_dashboard_session(session_id, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
     metadata = _parse_json_blob(session_row.get("metadata_json"))

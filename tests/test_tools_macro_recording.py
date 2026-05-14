@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks macro recording tools.
-
-Comprehensive test suite covering macro recording, playback, analysis,
-batch execution, optimization, and library management.
-"""
+"""Tests for SolidWorks macro recording tools."""
 
 from unittest.mock import AsyncMock, Mock
 

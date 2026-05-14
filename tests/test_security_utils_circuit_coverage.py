@@ -1,3 +1,5 @@
+"""Tests for test security utils circuit coverage."""
+
 from __future__ import annotations
 
 import asyncio

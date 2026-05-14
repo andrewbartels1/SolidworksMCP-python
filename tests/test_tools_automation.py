@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks automation tools.
-
-Comprehensive test suite covering VBA generation, macro recording,
-batch processing, and workflow orchestration.
-"""
+"""Tests for SolidWorks automation tools."""
 
 from unittest.mock import AsyncMock, Mock
 

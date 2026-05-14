@@ -1451,6 +1451,378 @@ class TestPyWin32AdapterBranches:
         assert none_feature.is_success
         assert none_feature.data == []
 
+    @pytest.mark.asyncio
+    async def test_set_view_orientation_calls_show_named_view2(
+        self, monkeypatch
+    ) -> None:
+        """_set_view_orientation should call ShowNamedView2 with correct constant."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(ShowNamedView2=Mock())
+        adapter._set_view_orientation(target_doc, "front", 1)
+        target_doc.ShowNamedView2.assert_called_once_with("", 1)
+
+    @pytest.mark.asyncio
+    async def test_set_view_orientation_logs_on_failure(
+        self, monkeypatch, caplog
+    ) -> None:
+        """_set_view_orientation should log warning but not raise on exception."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(
+            ShowNamedView2=Mock(side_effect=RuntimeError("COM error"))
+        )
+        adapter._set_view_orientation(target_doc, "front", 1)
+        assert target_doc.ShowNamedView2.called
+
+    @pytest.mark.asyncio
+    async def test_zoom_to_fit_calls_view_zoom_to_fit2_success(
+        self, monkeypatch
+    ) -> None:
+        """_zoom_to_fit should call ViewZoomToFit2 and succeed."""
+        adapter = self._build_adapter(monkeypatch)
+        active_view = SimpleNamespace(ZoomToFit=Mock())
+        target_doc = SimpleNamespace(ViewZoomToFit2=Mock(), ActiveView=active_view)
+        adapter._zoom_to_fit(target_doc)
+        target_doc.ViewZoomToFit2.assert_called_once()
+        active_view.ZoomToFit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_zoom_to_fit_falls_back_to_active_view_zoom_to_fit(
+        self, monkeypatch
+    ) -> None:
+        """_zoom_to_fit should fall back to ActiveView.ZoomToFit on failure."""
+        adapter = self._build_adapter(monkeypatch)
+        active_view = SimpleNamespace(ZoomToFit=Mock())
+        target_doc = SimpleNamespace(
+            ViewZoomToFit2=Mock(side_effect=RuntimeError("COM error")),
+            ActiveView=active_view,
+        )
+        adapter._zoom_to_fit(target_doc)
+        assert target_doc.ViewZoomToFit2.called
+        assert active_view.ZoomToFit.called
+
+    @pytest.mark.asyncio
+    async def test_zoom_to_fit_both_fail_logs_warning(
+        self, monkeypatch, caplog
+    ) -> None:
+        """_zoom_to_fit should log warning if both zoom methods fail."""
+        adapter = self._build_adapter(monkeypatch)
+        active_view = SimpleNamespace(
+            ZoomToFit=Mock(side_effect=RuntimeError("COM error"))
+        )
+        target_doc = SimpleNamespace(
+            ViewZoomToFit2=Mock(side_effect=RuntimeError("COM error")),
+            ActiveView=active_view,
+        )
+        adapter._zoom_to_fit(target_doc)
+        assert target_doc.ViewZoomToFit2.called
+        assert active_view.ZoomToFit.called
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_modelview_success(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """_save_screenshot_with_modelview should return True when file created."""
+        adapter = self._build_adapter(monkeypatch)
+        test_file = tmp_path / "test.png"
+        test_file.touch()
+        model_view = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
+        result = adapter._save_screenshot_with_modelview(
+            model_view, str(test_file), 1280, 720
+        )
+        assert result is True
+        model_view.SaveBitmapWithVariableSize.assert_called_once_with(
+            str(test_file), 1280, 720
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_modelview_file_not_exists(
+        self, monkeypatch
+    ) -> None:
+        """_save_screenshot_with_modelview should return False if file doesn't exist."""
+        adapter = self._build_adapter(monkeypatch)
+        model_view = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
+        result = adapter._save_screenshot_with_modelview(
+            model_view, "/nonexistent/file.png", 1280, 720
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_modelview_exception(self, monkeypatch) -> None:
+        """_save_screenshot_with_modelview should return False on exception."""
+        adapter = self._build_adapter(monkeypatch)
+        model_view = SimpleNamespace(
+            SaveBitmapWithVariableSize=Mock(side_effect=RuntimeError("COM error"))
+        )
+        result = adapter._save_screenshot_with_modelview(
+            model_view, "/path/file.png", 1280, 720
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_targetdoc_success(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """_save_screenshot_with_targetdoc should return True when file created."""
+        adapter = self._build_adapter(monkeypatch)
+        test_file = tmp_path / "test.png"
+        test_file.touch()
+        target_doc = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
+        result = adapter._save_screenshot_with_targetdoc(
+            target_doc, str(test_file), 1280, 720
+        )
+        assert result is True
+        target_doc.SaveBitmapWithVariableSize.assert_called_once_with(
+            str(test_file), 1280, 720
+        )
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_targetdoc_file_not_exists(
+        self, monkeypatch
+    ) -> None:
+        """_save_screenshot_with_targetdoc should return False if file doesn't exist."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
+        result = adapter._save_screenshot_with_targetdoc(
+            target_doc, "/nonexistent/file.png", 1280, 720
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_targetdoc_exception(self, monkeypatch) -> None:
+        """_save_screenshot_with_targetdoc should return False on exception."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(
+            SaveBitmapWithVariableSize=Mock(side_effect=RuntimeError("COM error"))
+        )
+        result = adapter._save_screenshot_with_targetdoc(
+            target_doc, "/path/file.png", 1280, 720
+        )
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_saveas3_success(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """_save_screenshot_with_saveas3 should return silently when file created."""
+        adapter = self._build_adapter(monkeypatch)
+        test_file = tmp_path / "test.png"
+        test_file.touch()
+        target_doc = SimpleNamespace(SaveAs3=Mock())
+        adapter._save_screenshot_with_saveas3(target_doc, str(test_file))
+        target_doc.SaveAs3.assert_called_once_with(str(test_file), 0, 2)
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_saveas3_file_not_created(
+        self, monkeypatch
+    ) -> None:
+        """_save_screenshot_with_saveas3 should raise if SaveAs3 doesn't create file."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(SaveAs3=Mock())
+        with pytest.raises(RuntimeError) as exc_info:
+            adapter._save_screenshot_with_saveas3(target_doc, "/nonexistent/file.png")
+        assert "All screenshot methods failed" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_save_screenshot_with_saveas3_raises(self, monkeypatch) -> None:
+        """_save_screenshot_with_saveas3 should raise if SaveAs3 raises."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(
+            SaveAs3=Mock(side_effect=RuntimeError("COM SaveAs3 error"))
+        )
+        with pytest.raises(RuntimeError) as exc_info:
+            adapter._save_screenshot_with_saveas3(target_doc, "/path/file.png")
+        assert "All screenshot methods failed" in str(exc_info.value)
+
+    # ── select_feature helpers ──────────────────────────────────────────────
+
+    def test_normalize_feature_name_strips_quotes_and_casefolds(
+        self, monkeypatch
+    ) -> None:
+        """_normalize_feature_name strips whitespace, quotes, and casefolds."""
+        adapter = self._build_adapter(monkeypatch)
+        assert adapter._normalize_feature_name('"Boss-Extrude"') == "boss-extrude"
+        assert adapter._normalize_feature_name(None) == ""
+        assert adapter._normalize_feature_name("  SKETCH1  ") == "sketch1"
+
+    def test_build_feature_candidate_names_with_extension(self, monkeypatch) -> None:
+        """_build_feature_candidate_names returns bare + @stem + @title when GetTitle has extension."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(GetTitle=Mock(return_value="MyPart.SLDPRT"))
+        result = adapter._build_feature_candidate_names("Boss", target_doc)
+        assert result == ["Boss", "Boss@MyPart", "Boss@MyPart.SLDPRT"]
+
+    def test_build_feature_candidate_names_no_extension(self, monkeypatch) -> None:
+        """_build_feature_candidate_names omits duplicate when title == stem."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(GetTitle=Mock(return_value="MyPart"))
+        result = adapter._build_feature_candidate_names("Boss", target_doc)
+        assert result == ["Boss", "Boss@MyPart"]
+
+    def test_build_feature_candidate_names_get_title_raises(self, monkeypatch) -> None:
+        """_build_feature_candidate_names falls back to bare name when GetTitle raises."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(GetTitle=Mock(side_effect=RuntimeError("COM")))
+        result = adapter._build_feature_candidate_names("Boss", target_doc)
+        assert result == ["Boss"]
+
+    def test_try_select_by_extension_returns_on_first_success(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_extension returns result dict when SelectByID2 returns True."""
+        adapter = self._build_adapter(monkeypatch)
+        select_mock = Mock(return_value=True)
+        target_doc = SimpleNamespace(Extension=SimpleNamespace(SelectByID2=select_mock))
+        result = adapter._try_select_by_extension(target_doc, ["Boss"], "Boss")
+        assert result is not None
+        assert result["selected"] is True
+        assert result["feature_name"] == "Boss"
+        assert result["entity_type"] == "BODYFEATURE"  # first entity type tried
+
+    def test_try_select_by_extension_returns_none_when_all_false(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_extension returns None when SelectByID2 always returns False."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False))
+        )
+        result = adapter._try_select_by_extension(target_doc, ["Boss"], "Boss")
+        assert result is None
+
+    def test_try_select_by_extension_skips_exceptions_and_continues(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_extension swallows individual exceptions and keeps trying."""
+        adapter = self._build_adapter(monkeypatch)
+        call_count = 0
+
+        def _flaky_select(name, entity_type, *args):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise RuntimeError("COM error")
+            return True
+
+        target_doc = SimpleNamespace(
+            Extension=SimpleNamespace(SelectByID2=_flaky_select)
+        )
+        result = adapter._try_select_by_extension(target_doc, ["Boss"], "Boss")
+        assert result is not None
+        assert result["selected"] is True
+
+    def test_try_select_by_component_select4_success(self, monkeypatch) -> None:
+        """_try_select_by_component returns result when Select4 succeeds."""
+        adapter = self._build_adapter(monkeypatch)
+        component = SimpleNamespace(
+            Select4=Mock(return_value=True),
+            Select=Mock(return_value=False),
+            Select2=Mock(return_value=False),
+        )
+        target_doc = SimpleNamespace(GetComponentByName=Mock(return_value=component))
+        result = adapter._try_select_by_component(target_doc, ["Axle"], "Axle")
+        assert result is not None
+        assert result["selected"] is True
+        assert result["entity_type"] == "component:Select4"
+
+    def test_try_select_by_component_falls_back_to_select2(self, monkeypatch) -> None:
+        """_try_select_by_component falls back to Select2 when Select4/Select fail."""
+        adapter = self._build_adapter(monkeypatch)
+        component = SimpleNamespace(
+            Select4=Mock(return_value=False),
+            Select=Mock(return_value=False),
+            Select2=Mock(return_value=True),
+        )
+        target_doc = SimpleNamespace(GetComponentByName=Mock(return_value=component))
+        result = adapter._try_select_by_component(target_doc, ["Axle"], "Axle")
+        assert result is not None
+        assert result["entity_type"] == "component:Select2"
+
+    def test_try_select_by_component_no_method_returns_none(self, monkeypatch) -> None:
+        """_try_select_by_component returns None when doc has no GetComponentByName."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace()  # no GetComponentByName
+        result = adapter._try_select_by_component(target_doc, ["Axle"], "Axle")
+        assert result is None
+
+    def test_try_select_by_component_component_is_none_returns_none(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_component returns None when GetComponentByName returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(GetComponentByName=Mock(return_value=None))
+        result = adapter._try_select_by_component(target_doc, ["Axle"], "Axle")
+        assert result is None
+
+    def test_try_select_by_feature_tree_finds_matching_name(self, monkeypatch) -> None:
+        """_try_select_by_feature_tree returns result when feature.Name matches."""
+        adapter = self._build_adapter(monkeypatch)
+        feature = SimpleNamespace(
+            Name="Boss-Extrude1",
+            Select2=Mock(return_value=True),
+            GetNextFeature=Mock(return_value=None),
+        )
+        target_doc = SimpleNamespace(FirstFeature=Mock(return_value=feature))
+        result = adapter._try_select_by_feature_tree(
+            target_doc, "Boss-Extrude1", ["Boss-Extrude1"]
+        )
+        assert result is not None
+        assert result["selected"] is True
+        assert result["entity_type"] == "feature-tree"
+        assert result["selected_name"] == "Boss-Extrude1"
+
+    def test_try_select_by_feature_tree_returns_none_when_no_match(
+        self, monkeypatch
+    ) -> None:
+        """_try_select_by_feature_tree returns None when no feature matches."""
+        adapter = self._build_adapter(monkeypatch)
+        feature = SimpleNamespace(
+            Name="OtherFeature",
+            Select2=Mock(return_value=True),
+            GetNextFeature=Mock(return_value=None),
+        )
+        target_doc = SimpleNamespace(FirstFeature=Mock(return_value=feature))
+        result = adapter._try_select_by_feature_tree(target_doc, "Boss", ["Boss"])
+        assert result is None
+
+    def test_try_select_by_feature_tree_first_feature_none(self, monkeypatch) -> None:
+        """_try_select_by_feature_tree returns None immediately when FirstFeature is None."""
+        adapter = self._build_adapter(monkeypatch)
+        target_doc = SimpleNamespace(FirstFeature=Mock(return_value=None))
+        result = adapter._try_select_by_feature_tree(target_doc, "Boss", ["Boss"])
+        assert result is None
+
+    # ── execute_macro helpers ───────────────────────────────────────────────
+
+    def test_invoke_run_macro2_tuple_success(self, monkeypatch) -> None:
+        """_invoke_run_macro2 returns dict when RunMacro2 returns (True, 0) tuple."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=(True, 0)))
+        result = adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
+        assert result["macro_path"] == "/macros/test.swp"
+        assert result["module_name"] == "TestModule"
+        assert result["errors"] == 0
+
+    def test_invoke_run_macro2_bool_success(self, monkeypatch) -> None:
+        """_invoke_run_macro2 handles scalar True return (non-tuple)."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=True))
+        result = adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
+        assert result["errors"] == 0
+
+    def test_invoke_run_macro2_tuple_failure_raises(self, monkeypatch) -> None:
+        """_invoke_run_macro2 raises SolidWorksMCPError when RunMacro2 returns (False, 5)."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=(False, 5)))
+        with pytest.raises(SolidWorksMCPError):
+            adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
+
+    def test_invoke_run_macro2_bool_failure_raises(self, monkeypatch) -> None:
+        """_invoke_run_macro2 raises SolidWorksMCPError when RunMacro2 returns False."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=False))
+        with pytest.raises(SolidWorksMCPError):
+            adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
+
 
 class TestMockAdapterAdditionalCoverage:
     """Target additional edge paths for mock adapter coverage."""

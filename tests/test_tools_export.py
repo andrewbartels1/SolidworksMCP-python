@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks export tools.
-
-Comprehensive test suite covering file exports in multiple formats
-including STEP, IGES, STL, PDF, DWG, and image exports.
-"""
+"""Tests for SolidWorks export tools."""
 
 from unittest.mock import AsyncMock, Mock
 

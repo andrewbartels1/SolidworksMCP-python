@@ -1,8 +1,7 @@
-"""
-VBA Code Generation tools for SolidWorks MCP Server.
+"""VBA Code Generation tools for SolidWorks MCP Server.
 
-Provides tools for generating VBA macros for complex SolidWorks operations,
-especially useful for operations with 13+ parameters that exceed COM limits.
+Provides tools for generating VBA macros for complex SolidWorks operations, especially
+useful for operations with 13+ parameters that exceed COM limits.
 """
 
 from typing import Any
@@ -18,7 +17,34 @@ from .input_compat import CompatInput
 
 
 class VBAExtrusionInput(CompatInput):
-    """Input schema for generating VBA extrusion code."""
+    """Input schema for generating VBA extrusion code.
+    
+    Attributes:
+        advanced_options (dict[str, Any] | None): The advanced options value.
+        assembly_feature_scope (str | None): The assembly feature scope value.
+        auto_select (bool): The auto select value.
+        both_directions (bool): The both directions value.
+        cap_ends (bool): The cap ends value.
+        cap_thickness (float): The cap thickness value.
+        custom_properties (dict[str, Any] | None): The custom properties value.
+        depth (float): The depth value.
+        depth2 (float): The depth2 value.
+        direction (str | None): The direction value.
+        draft_angle (float): The draft angle value.
+        draft_outward (bool): The draft outward value.
+        end_condition (str | None): The end condition value.
+        end_condition_reference (str | None): The end condition reference value.
+        feature_scope (str | bool): The feature scope value.
+        merge_result (bool): The merge result value.
+        offset_parameters (dict[str, Any] | None): The offset parameters value.
+        sketch_name (str | None): The sketch name value.
+        start_condition (str | None): The start condition value.
+        thin_feature (bool): The thin feature value.
+        thin_thickness (float): The thin thickness value.
+        thin_thickness1 (float | None): The thin thickness1 value.
+        thin_thickness2 (float | None): The thin thickness2 value.
+        thin_type (str): The thin type value.
+    """
 
     sketch_name: str | None = Field(default=None, description="Sketch name")
     depth: float = Field(description="Extrusion depth in mm")
@@ -63,7 +89,19 @@ class VBAExtrusionInput(CompatInput):
 
 
 class VBARevolveInput(CompatInput):
-    """Input schema for generating VBA revolve code."""
+    """Input schema for generating VBA revolve code.
+    
+    Attributes:
+        angle (float | None): The angle value.
+        angle2 (float): The angle2 value.
+        angle_degrees (float | None): The angle degrees value.
+        axis_reference (str | None): The axis reference value.
+        both_directions (bool): The both directions value.
+        merge_result (bool): The merge result value.
+        sketch_name (str | None): The sketch name value.
+        thin_feature (bool): The thin feature value.
+        thin_thickness (float): The thin thickness value.
+    """
 
     angle: float | None = Field(default=None, description="Revolve angle in degrees")
     angle_degrees: float | None = Field(default=None, description="Angle alias")
@@ -80,21 +118,29 @@ class VBARevolveInput(CompatInput):
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
 
     def model_post_init(self, __context: Any) -> None:
-        """Execute model post init.
-
+        """Provide model post init support for the vbarevolve input.
+        
         Args:
-            __context (Any): Describe context.
-
+            __context (Any): The context value.
+        
         Returns:
-            None: Describe the returned value.
-
+            None: None.
         """
         if self.angle is None:
             self.angle = self.angle_degrees if self.angle_degrees is not None else 360.0
 
 
 class VBAAssemblyInput(CompatInput):
-    """Input schema for generating VBA assembly operations."""
+    """Input schema for generating VBA assembly operations.
+    
+    Attributes:
+        assembly_file (str | None): The assembly file value.
+        component_file (str | None): The component file value.
+        component_path (str | None): The component path value.
+        insertion_point (list[float]): The insertion point value.
+        operation_type (str | None): The operation type value.
+        rotation (list[float]): The rotation value.
+    """
 
     operation_type: str | None = Field(
         default=None, description="Assembly operation (insert, mate, pattern, etc.)"
@@ -113,7 +159,18 @@ class VBAAssemblyInput(CompatInput):
 
 
 class VBADrawingInput(CompatInput):
-    """Input schema for generating VBA drawing operations."""
+    """Input schema for generating VBA drawing operations.
+    
+    Attributes:
+        advanced_options (dict[str, Any] | None): The advanced options value.
+        drawing_file (str | None): The drawing file value.
+        model_path (str | None): The model path value.
+        operation_type (str | None): The operation type value.
+        scale (float): The scale value.
+        sheet_format (str): The sheet format value.
+        view_layout (str | None): The view layout value.
+        view_scale (str | None): The view scale value.
+    """
 
     operation_type: str | None = Field(
         default=None,
@@ -133,7 +190,18 @@ class VBADrawingInput(CompatInput):
 
 
 class VBABatchInput(CompatInput):
-    """Input schema for generating VBA batch operations."""
+    """Input schema for generating VBA batch operations.
+    
+    Attributes:
+        exclude_list (list[str] | None): The exclude list value.
+        export_format (str | None): The export format value.
+        file_pattern (str | None): The file pattern value.
+        operation_type (str | None): The operation type value.
+        recursive (bool): The recursive value.
+        source_directory (str | None): The source directory value.
+        source_folder (str | None): The source folder value.
+        target_folder (str | None): The target folder value.
+    """
 
     operation_type: str | None = Field(
         default=None, description="Batch operation type (export, properties, etc.)"
@@ -155,32 +223,32 @@ async def register_vba_generation_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config
 ) -> int:
     """Register VBA generation tools with FastMCP.
-
+    
     Args:
-        mcp: FastMCP server instance
-        adapter: SolidWorks adapter for COM operations
-        config: Configuration settings
-
+        mcp (FastMCP): The mcp value.
+        adapter (SolidWorksAdapter): Adapter instance used for the operation.
+        config (Any): Configuration values for the operation.
+    
     Returns:
-        Number of tools registered
-
+        int: The computed numeric result.
+    
     Example:
-        >>> tool_count = await register_vba_generation_tools(mcp, adapter, config)
+                        >>> tool_count = await register_vba_generation_tools(mcp, adapter, config)
     """
     tool_count = 0
 
     @mcp.tool()
     async def generate_vba_extrusion(input_data: VBAExtrusionInput) -> dict[str, Any]:
         """Generate VBA code for complex extrusion operations.
-
+        
         Args:
-            input_data: Extrusion parameters with 13+ options
-
+            input_data (VBAExtrusionInput): The input data value.
+        
         Returns:
-            Generated VBA code and execution status
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_extrusion(extrusion_input)
+                            >>> result = await generate_vba_extrusion(extrusion_input)
         """
         try:
             if hasattr(adapter, "generate_vba_extrusion"):
@@ -272,15 +340,15 @@ End Sub"""
     @mcp.tool()
     async def generate_vba_revolve(input_data: VBARevolveInput) -> dict[str, Any]:
         """Generate VBA code for complex revolve operations.
-
+        
         Args:
-            input_data: Revolve parameters with advanced options
-
+            input_data (VBARevolveInput): The input data value.
+        
         Returns:
-            Generated VBA code and execution results
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_revolve(revolve_input)
+                            >>> result = await generate_vba_revolve(revolve_input)
         """
         """
         Generate VBA code for complex revolve operations.
@@ -371,24 +439,21 @@ End Sub"""
     async def generate_vba_assembly_insert(
         input_data: VBAAssemblyInput,
     ) -> dict[str, Any]:
-        (
-            """Generate VBA code for assembly component insertion.
-
+        """Generate VBA code for assembly component insertion.
+        
         Args:
-            input_data: Assembly insertion parameters
-
+            input_data (VBAAssemblyInput): The input data value.
+        
         Returns:
-            Generated VBA code for component operations
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_assembly_insert(assembly_input)
+                            >>> result = await generate_vba_assembly_insert(assembly_input)
+        
+                        Generate VBA code for inserting components into assemblies.
+        
+                        Creates macro for component insertion with precise positioning.
         """
-            """
-        Generate VBA code for inserting components into assemblies.
-
-        Creates macro for component insertion with precise positioning.
-        """
-        )
         try:
             if hasattr(adapter, "generate_vba_assembly_insert"):
                 result = await adapter.generate_vba_assembly_insert(
@@ -463,15 +528,15 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_drawing_views(input_data: VBADrawingInput) -> dict[str, Any]:
         """Generate VBA code for drawing view creation.
-
+        
         Args:
-            input_data: Drawing view parameters and settings
-
+            input_data (VBADrawingInput): The input data value.
+        
         Returns:
-            Generated VBA code for drawing operations
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_drawing_views(drawing_input)
+                            >>> result = await generate_vba_drawing_views(drawing_input)
         """
         """
         Generate VBA code for creating drawing views.
@@ -578,15 +643,15 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_batch_export(input_data: VBABatchInput) -> dict[str, Any]:
         """Generate VBA code for batch file export operations.
-
+        
         Args:
-            input_data: Batch export configuration parameters
-
+            input_data (VBABatchInput): The input data value.
+        
         Returns:
-            Generated VBA batch processing code
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_batch_export(batch_input)
+                            >>> result = await generate_vba_batch_export(batch_input)
         """
         """
         Generate VBA code for batch file operations.
@@ -683,15 +748,15 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_part_modeling(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate VBA code for complex part modeling operations.
-
+        
         Args:
-            input_data: Part modeling parameters and features
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Generated VBA code for part operations
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_part_modeling(part_input)
+                            >>> result = await generate_vba_part_modeling(part_input)
         """
         """
         Generate VBA code for advanced part modeling operations.
@@ -791,15 +856,15 @@ End Sub"""
     @mcp.tool()
     async def generate_vba_assembly_mates(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate VBA code for assembly mate creation.
-
+        
         Args:
-            input_data: Assembly mate parameters and constraints
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Generated VBA code for mate operations
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_assembly_mates(mate_input)
+                            >>> result = await generate_vba_assembly_mates(mate_input)
         """
         """
         Generate VBA code for creating assembly mates.
@@ -892,10 +957,15 @@ End Sub"""
     async def generate_vba_drawing_dimensions(
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """
-        Generate VBA code for creating drawing dimensions.
-
+        """Generate VBA code for creating drawing dimensions.
+        
         Creates macro for various dimension types in drawings.
+        
+        Args:
+            input_data (dict[str, Any]): The input data value.
+        
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
             dimension_type = input_data.get("dimension_type", "linear")
@@ -979,17 +1049,17 @@ End Sub'''
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
         """Generate VBA code for file management operations.
-
+        
         Args:
-            input_data: File operation parameters and paths
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Generated VBA code for file operations
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_file_operations(file_input)
-
-        Creates macro for custom properties, PDM operations, etc.
+                            >>> result = await generate_vba_file_operations(file_input)
+        
+                        Creates macro for custom properties, PDM operations, etc.
         """
         try:
             operation = input_data.get("operation", "custom_properties")
@@ -1090,22 +1160,15 @@ End Sub'''
     @mcp.tool()
     async def generate_vba_macro_recorder(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate VBA code using macro recording patterns.
-
+        
         Args:
-            input_data: Macro recording parameters and actions
-
+            input_data (dict[str, Any]): The input data value.
+        
         Returns:
-            Generated VBA code from recorded operations
-
+            dict[str, Any]: A dictionary containing the resulting values.
+        
         Example:
-            >>> result = await generate_vba_macro_recorder(recorder_input)
-
-
-        Returns:
-            Generated VBA code from recorded operations
-
-        Example:
-            >>> result = await generate_vba_macro_recorder(recorder_input)
+                            >>> result = await generate_vba_macro_recorder(recorder_input)
         """
         try:
             operation = input_data.get("operation", "start_recording")

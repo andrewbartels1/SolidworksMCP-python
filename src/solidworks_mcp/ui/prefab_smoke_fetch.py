@@ -1,3 +1,6 @@
+"""Utilities for prefab smoke fetch.
+"""
+
 import os
 
 from prefab_ui import PrefabApp

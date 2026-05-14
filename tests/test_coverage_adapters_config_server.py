@@ -1,11 +1,4 @@
-"""
-Branch-coverage tests for:
-  - src/solidworks_mcp/adapters/base.py
-  - src/solidworks_mcp/adapters/circuit_breaker.py
-  - src/solidworks_mcp/adapters/mock_adapter.py
-  - src/solidworks_mcp/config.py
-  - src/solidworks_mcp/__init__.py
-"""
+"""Branch-coverage tests for:."""
 
 from __future__ import annotations
 
@@ -40,6 +33,8 @@ from src.solidworks_mcp.config import AdapterType, SolidWorksMCPConfig, load_con
 def _make_health(
     healthy: bool = True, connection_status: str = "connected"
 ) -> AdapterHealth:
+    """Test make health."""
+
     return AdapterHealth(
         healthy=healthy,
         last_check=datetime.now(),
@@ -122,6 +117,8 @@ class TestSolidWorksAdapterInitConfig:
         """Line 222: config has model_dump() -> normalized via model_dump()."""
 
         class _PydanticConf(BaseModel):
+            """Test pydantic conf."""
+
             mock_connect_delay: float = 0.0
             mock_model_delay: float = 0.0
             mock_feature_delay: float = 0.0
@@ -134,14 +131,16 @@ class TestSolidWorksAdapterInitConfig:
         assert "mock_connect_delay" in adapter.config_dict
 
     def test_init_with_none_config(self):
-        """config=None -> config_dict is empty dict."""
+        """Config=None -> config_dict is empty dict."""
         adapter = MockSolidWorksAdapter(None)
         assert adapter.config_dict == {}
 
     def test_init_with_unknown_object_config(self):
-        """config with no model_dump and not a Mapping -> config_dict empty."""
+        """Config with no model_dump and not a Mapping -> config_dict empty."""
 
         class _Opaque:
+            """Test opaque."""
+
             pass
 
         adapter = MockSolidWorksAdapter(_Opaque())
@@ -241,6 +240,8 @@ class TestCircuitBreakerAdapterTransitions:
     """Covers uncovered circuit breaker state transition branches."""
 
     def _make_cb(self, threshold: int = 3) -> CircuitBreakerAdapter:
+        """Test make cb."""
+
         inner = MockSolidWorksAdapter(
             {"mock_connect_delay": 0.0, "mock_model_delay": 0.0}
         )
@@ -371,6 +372,8 @@ class TestBoolCallable:
         assert bc() is True
 
     def test_call_returns_bool_false(self):
+        """Test call returns bool false."""
+
         bc = _BoolCallable(lambda: False)
         assert bc() is False
 
@@ -399,6 +402,8 @@ class TestMockAdapterModelInfo:
 
     @pytest.mark.asyncio
     async def test_get_model_info_no_active_model_returns_error(self):
+        """Test get model info no active model returns error."""
+
         adapter = MockSolidWorksAdapter({})
         await adapter.connect()
         result = await adapter.get_model_info()
@@ -507,7 +512,7 @@ class TestMockAdapterAddCenterline:
 
     @pytest.mark.asyncio
     async def test_add_centerline_no_sketch_returns_error(self):
-        """add_centerline without active sketch returns ERROR."""
+        """Add_centerline without active sketch returns ERROR."""
         adapter = MockSolidWorksAdapter({})
         await adapter.connect()
         result = await adapter.add_centerline(0.0, 0.0, 1.0, 1.0)
@@ -586,7 +591,7 @@ class TestLoadConfig:
         assert isinstance(cfg, SolidWorksMCPConfig)
 
     def test_load_config_with_json_file(self, tmp_path: Path):
-        """load_config() with a JSON file path reads and constructs config."""
+        """Load_config() with a JSON file path reads and constructs config."""
         import json
 
         config_file = tmp_path / "config.json"

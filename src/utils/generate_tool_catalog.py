@@ -1,13 +1,12 @@
 """Generate a structured tool catalog from all registered MCP tool source files.
 
-Parses every @mcp.tool() decorated function across the tools/ package,
-extracts Pydantic input schemas, docstrings, and example payloads, then
-writes per-category Markdown docs pages and a machine-readable JSON index.
+Parses every @mcp.tool() decorated function across the tools/ package, extracts Pydantic
+input schemas, docstrings, and example payloads, then writes per-category Markdown docs
+pages and a machine-readable JSON index.
 
-Usage:
-    python src/utils/generate_tool_catalog.py
-    python src/utils/generate_tool_catalog.py --output-dir docs/user-guide/tool-catalog
-    python src/utils/generate_tool_catalog.py --json-only
+Usage: python src/utils/generate_tool_catalog.py python
+src/utils/generate_tool_catalog.py --output-dir docs/user-guide/tool-catalog python
+src/utils/generate_tool_catalog.py --json-only
 """
 
 from __future__ import annotations
@@ -156,7 +155,14 @@ CATEGORY_META: dict[str, dict[str, str]] = {
 
 
 def _first_paragraph(docstring: str) -> str:
-    """Return the first paragraph of a docstring, stripped of indentation."""
+    """Return the first paragraph of a docstring, stripped of indentation.
+    
+    Args:
+        docstring (str): The docstring value.
+    
+    Returns:
+        str: The resulting text value.
+    """
     if not docstring:
         return ""
     lines = textwrap.dedent(docstring).strip().splitlines()
@@ -169,7 +175,15 @@ def _first_paragraph(docstring: str) -> str:
 
 
 def _parse_pydantic_model(tree: ast.Module, class_name: str) -> list[dict[str, Any]]:
-    """Extract field definitions from a Pydantic BaseModel class node."""
+    """Extract field definitions from a Pydantic BaseModel class node.
+    
+    Args:
+        tree (ast.Module): The tree value.
+        class_name (str): The class name value.
+    
+    Returns:
+        list[dict[str, Any]]: A list containing the resulting items.
+    """
     fields: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef) or node.name != class_name:
@@ -227,6 +241,15 @@ def _parse_pydantic_model(tree: ast.Module, class_name: str) -> list[dict[str, A
 
 
 def _simplify_type(t: str) -> str:
+    """Build internal simplify type.
+    
+    Args:
+        t (str): The t value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     return (
         t.replace("list[", "List[")
         .replace("dict[", "Dict[")
@@ -236,7 +259,15 @@ def _simplify_type(t: str) -> str:
 
 
 def _find_tool_input_class(tree: ast.Module, func_name: str) -> str | None:
-    """Return the Pydantic model class name used as the first parameter of a tool function."""
+    """Return the Pydantic model class name used as the first parameter of a tool function.
+    
+    Args:
+        tree (ast.Module): The tree value.
+        func_name (str): The func name value.
+    
+    Returns:
+        str | None: The result produced by the operation.
+    """
     for node in ast.walk(tree):
         if (
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -251,7 +282,15 @@ def _find_tool_input_class(tree: ast.Module, func_name: str) -> str | None:
 
 
 def _get_tool_docstring(tree: ast.Module, func_name: str) -> str:
-    """Extract docstring from an inner function (possibly nested in register_* fn)."""
+    """Extract docstring from an inner function (possibly nested in register_* fn).
+    
+    Args:
+        tree (ast.Module): The tree value.
+        func_name (str): The func name value.
+    
+    Returns:
+        str: The resulting text value.
+    """
     for node in ast.walk(tree):
         if (
             isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -267,6 +306,15 @@ def _get_tool_docstring(tree: ast.Module, func_name: str) -> str:
 
 
 def _is_tool_func(node: ast.AST) -> bool:
+    """Build internal is tool func.
+    
+    Args:
+        node (ast.AST): The node value.
+    
+    Returns:
+        bool: True if tool func, otherwise False.
+    """
+
     if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return False
     for dec in node.decorator_list:
@@ -286,7 +334,14 @@ def _is_tool_func(node: ast.AST) -> bool:
 def _extract_tool_name_from_decorator(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> str:
-    """Return explicit name= from @mcp.tool(name=...) or fall back to function name."""
+    """Return explicit name= from @mcp.tool(name=...) or fall back to function name.
+    
+    Args:
+        node (ast.FunctionDef | ast.AsyncFunctionDef): The node value.
+    
+    Returns:
+        str: The resulting text value.
+    """
     for dec in node.decorator_list:
         if isinstance(dec, ast.Call):
             for kw in dec.keywords:
@@ -304,7 +359,14 @@ def _extract_tool_name_from_decorator(
 
 
 def _make_sample_payload(fields: list[dict[str, Any]]) -> dict[str, Any]:
-    """Generate a plausible sample call payload from Pydantic field definitions."""
+    """Generate a plausible sample call payload from Pydantic field definitions.
+    
+    Args:
+        fields (list[dict[str, Any]]): The fields value.
+    
+    Returns:
+        dict[str, Any]: A dictionary containing the resulting values.
+    """
     sample: dict[str, Any] = {}
     synthetic: dict[str, Any] = {
         "file_path": "C:\\Temp\\mcp_demo\\part.sldprt",
@@ -427,7 +489,14 @@ PREREQUISITES: dict[str, str] = {
 
 
 def build_catalog(tools_dir: Path) -> list[dict[str, Any]]:
-    """Parse all tool source files and return a structured catalog."""
+    """Parse all tool source files and return a structured catalog.
+    
+    Args:
+        tools_dir (Path): The tools dir value.
+    
+    Returns:
+        list[dict[str, Any]]: A list containing the resulting items.
+    """
     catalog: list[dict[str, Any]] = []
 
     for py_file in sorted(tools_dir.glob("*.py")):
@@ -485,6 +554,15 @@ _PARAM_TABLE_HEADER = "| Parameter | Type | Required | Default | Description |\n
 
 
 def _render_param_row(f: dict[str, Any]) -> str:
+    """Build internal param row.
+    
+    Args:
+        f (dict[str, Any]): The f value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     req = "✅" if f["required"] else "—"
     default = "" if f["required"] else str(f["default"])
     return (
@@ -493,6 +571,15 @@ def _render_param_row(f: dict[str, Any]) -> str:
 
 
 def _render_tool_section(tool: dict[str, Any]) -> str:
+    """Build internal tool section.
+    
+    Args:
+        tool (dict[str, Any]): The tool value.
+    
+    Returns:
+        str: The resulting text value.
+    """
+
     lines: list[str] = []
     lines.append(f"### `{tool['tool_name']}`\n")
     if tool["description"]:
@@ -525,7 +612,16 @@ def generate_category_page(
     tools: list[dict[str, Any]],
     meta: dict[str, str],
 ) -> str:
-    """Generate a full Markdown page for one tool category."""
+    """Generate a full Markdown page for one tool category.
+    
+    Args:
+        category (str): The category value.
+        tools (list[dict[str, Any]]): The tools value.
+        meta (dict[str, str]): The meta value.
+    
+    Returns:
+        str: The resulting text value.
+    """
     lines: list[str] = []
     lines.append(f"# {meta['title']}\n")
     lines.append(meta["description"])
@@ -543,7 +639,14 @@ def generate_category_page(
 
 
 def generate_index_page(catalog: list[dict[str, Any]]) -> str:
-    """Generate the top-level tool catalog index page."""
+    """Generate the top-level tool catalog index page.
+    
+    Args:
+        catalog (list[dict[str, Any]]): The catalog value.
+    
+    Returns:
+        str: The resulting text value.
+    """
     from collections import Counter
 
     counts = Counter(t["category"] for t in catalog)
@@ -605,6 +708,15 @@ def generate_index_page(catalog: list[dict[str, Any]]) -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Handle main.
+    
+    Args:
+        argv (list[str] | None): The argv value. Defaults to None.
+    
+    Returns:
+        None: None.
+    """
+
     args = argv or sys.argv[1:]
     output_dir = Path("docs/user-guide/tool-catalog")
     json_only = False

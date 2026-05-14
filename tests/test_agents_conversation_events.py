@@ -29,7 +29,11 @@ def _query_all(db: Path, model_class: type) -> list:
 
 
 class TestInsertConversationEvent:
+    """Test insert conversation event."""
+
     def test_inserts_user_message(self, tmp_path: Path):
+        """Test inserts user message."""
+
         db = _db(tmp_path)
         insert_conversation_event(
             conversation_id="conv-001",
@@ -44,6 +48,8 @@ class TestInsertConversationEvent:
         assert rows[0].event_type == "user_message"
 
     def test_inserts_assistant_message(self, tmp_path: Path):
+        """Test inserts assistant message."""
+
         db = _db(tmp_path)
         insert_conversation_event(
             conversation_id="conv-002",
@@ -58,6 +64,8 @@ class TestInsertConversationEvent:
         assert rows[0].run_id == "run-001"
 
     def test_inserts_tool_call_event(self, tmp_path: Path):
+        """Test inserts tool call event."""
+
         db = _db(tmp_path)
         insert_conversation_event(
             conversation_id="conv-003",
@@ -74,6 +82,8 @@ class TestInsertConversationEvent:
         assert event.metadata_json is not None
 
     def test_multiple_events_same_conversation(self, tmp_path: Path):
+        """Test multiple events same conversation."""
+
         db = _db(tmp_path)
         for i in range(3):
             insert_conversation_event(
@@ -89,6 +99,8 @@ class TestInsertConversationEvent:
         assert all(row.conversation_id == "conv-004" for row in rows)
 
     def test_created_at_is_set(self, tmp_path: Path):
+        """Test created at is set."""
+
         db = _db(tmp_path)
         insert_conversation_event(
             conversation_id="conv-005",
@@ -103,7 +115,11 @@ class TestInsertConversationEvent:
 
 
 class TestFindConversationEvents:
+    """Test find conversation events."""
+
     def test_retrieves_events_for_conversation(self, tmp_path: Path):
+        """Test retrieves events for conversation."""
+
         db = _db(tmp_path)
         for i in range(3):
             insert_conversation_event(
@@ -117,11 +133,15 @@ class TestFindConversationEvents:
         assert len(result) == 3
 
     def test_returns_empty_for_missing_conversation(self, tmp_path: Path):
+        """Test returns empty for missing conversation."""
+
         db = _db(tmp_path)
         result = find_conversation_events("nonexistent-conv", db_path=db)
         assert result == []
 
     def test_ordered_by_creation_time(self, tmp_path: Path):
+        """Test ordered by creation time."""
+
         db = _db(tmp_path)
         conversations = ["conv-A", "conv-B", "conv-A"]  # A, B, A
         for i, conv_id in enumerate(conversations):
@@ -138,6 +158,8 @@ class TestFindConversationEvents:
         assert snippets == ["Event 0", "Event 2"]
 
     def test_returns_all_fields(self, tmp_path: Path):
+        """Test returns all fields."""
+
         db = _db(tmp_path)
         insert_conversation_event(
             conversation_id="conv-fields",
@@ -164,7 +186,11 @@ class TestFindConversationEvents:
 
 
 class TestFindRunTimeline:
+    """Test find run timeline."""
+
     def test_reconstructs_run_timeline(self, tmp_path: Path):
+        """Test reconstructs run timeline."""
+
         db = _db(tmp_path)
 
         # Insert a run
@@ -212,6 +238,8 @@ class TestFindRunTimeline:
         assert len(timeline["events"]) >= 3  # 2 tool + 1 message
 
     def test_timeline_events_sorted_chronologically(self, tmp_path: Path):
+        """Test timeline events sorted chronologically."""
+
         db = _db(tmp_path)
 
         insert_run(
@@ -257,6 +285,8 @@ class TestFindRunTimeline:
         assert timestamps == sorted(timestamps)
 
     def test_timeline_with_empty_run(self, tmp_path: Path):
+        """Test timeline with empty run."""
+
         db = _db(tmp_path)
 
         insert_run(
@@ -275,6 +305,8 @@ class TestFindRunTimeline:
         assert timeline["events"] == []
 
     def test_timeline_for_nonexistent_run(self, tmp_path: Path):
+        """Test timeline for nonexistent run."""
+
         db = _db(tmp_path)
 
         timeline = find_run_timeline("nonexistent-run", db_path=db)

@@ -1,5 +1,4 @@
-"""
-Rate limiting for API endpoints.
+"""Rate limiting for API endpoints.
 """
 
 import time
@@ -10,22 +9,40 @@ from ..config import SolidWorksMCPConfig
 
 
 class RateLimiter:
-    """Simple in-memory rate limiter."""
+    """Simple in-memory rate limiter.
+    
+    Args:
+        max_requests (int): The max requests value.
+        time_window (int): The time window value. Defaults to 60.
+    
+    Attributes:
+        max_requests (Any): The max requests value.
+        time_window (Any): The time window value.
+    """
 
     def __init__(self, max_requests: int, time_window: int = 60):
-        """Initialize this object.
-
+        """Initialize the rate limiter.
+        
         Args:
-            max_requests (int): Describe max requests.
-            time_window (int): Describe time window.
-
+            max_requests (int): The max requests value.
+            time_window (int): The time window value. Defaults to 60.
+        
+        Returns:
+            Any: The result produced by the operation.
         """
         self.max_requests = max_requests
         self.time_window = time_window
         self.requests: dict[str, list[float]] = defaultdict(list)
 
     def is_allowed(self, client_id: str) -> bool:
-        """Check if client is within rate limits."""
+        """Check if client is within rate limits.
+        
+        Args:
+            client_id (str): The client id value.
+        
+        Returns:
+            bool: True if allowed, otherwise False.
+        """
         now = time.time()
         window_start = now - self.time_window
 
@@ -48,10 +65,13 @@ _rate_limiter: RateLimiter | None = None
 
 def setup_rate_limiting(mcp: Any, config: SolidWorksMCPConfig) -> None:
     """Initialize in-memory rate limiting.
-
+    
     Args:
-        mcp: Active MCP server instance (reserved for future middleware hooks).
-        config: Loaded server configuration containing rate limit settings.
+        mcp (Any): The mcp value.
+        config (SolidWorksMCPConfig): Configuration values for the operation.
+    
+    Returns:
+        None: None.
     """
     global _rate_limiter
     _rate_limiter = RateLimiter(
@@ -61,7 +81,14 @@ def setup_rate_limiting(mcp: Any, config: SolidWorksMCPConfig) -> None:
 
 
 def check_rate_limit(client_id: str) -> bool:
-    """Check if client is within rate limits."""
+    """Check if client is within rate limits.
+    
+    Args:
+        client_id (str): The client id value.
+    
+    Returns:
+        bool: True if check rate limit, otherwise False.
+    """
     if _rate_limiter is None:
         return True
     return _rate_limiter.is_allowed(client_id)

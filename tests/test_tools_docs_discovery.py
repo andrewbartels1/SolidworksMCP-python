@@ -1,8 +1,4 @@
-"""Deterministic regression tests for docs discovery tool.
-
-These tests validate the docs discovery functionality and ensure that
-COM/VBA indexing produces consistent, expected results.
-"""
+"""Deterministic regression tests for docs discovery tool."""
 
 from __future__ import annotations
 
@@ -112,14 +108,7 @@ async def test_discover_solidworks_docs_execution(
     real_server: SolidWorksMCPServer,
     integration_output_dir: Path,
 ) -> None:
-    """Test that docs discovery tool executes successfully with real SolidWorks.
-
-    This test validates:
-    1. Tool execution completes without errors
-    2. COM object indexing produces results
-    3. VBA reference discovery completes
-    4. Output is a valid structured response
-    """
+    """Test that docs discovery tool executes successfully with real SolidWorks."""
     try:
         discover_tool = _find_tool(real_server, "discover_solidworks_docs")
     except AssertionError:
@@ -286,7 +275,7 @@ async def test_search_solidworks_api_help_with_index(
 
 
 def test_discovery_connect_fails_without_win32(monkeypatch: pytest.MonkeyPatch) -> None:
-    """connect_to_solidworks should fail fast when win32com is unavailable."""
+    """Connect_to_solidworks should fail fast when win32com is unavailable."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
@@ -300,7 +289,7 @@ def test_discovery_connect_fails_without_win32(monkeypatch: pytest.MonkeyPatch) 
 def test_discovery_connect_fails_on_non_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """connect_to_solidworks should reject non-Windows platforms."""
+    """Connect_to_solidworks should reject non-Windows platforms."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
@@ -315,12 +304,14 @@ def test_discovery_connect_fails_on_non_windows(
 def test_discovery_connect_uses_dispatch_when_getobject_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """connect_to_solidworks should fall back to gencache.EnsureDispatch when GetActiveObject raises com_error."""
+    """Connect_to_solidworks should fall back to gencache.EnsureDispatch when GetActiveObject raises com_error."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     fake_sw = object()
 
     class _FakeComError(Exception):
+        """Test fake com error."""
+
         pass
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
@@ -348,13 +339,13 @@ def test_discovery_connect_uses_dispatch_when_getobject_none(
 
 
 def test_discover_com_objects_empty_without_connection() -> None:
-    """discover_com_objects should return empty dict when disconnected."""
+    """Discover_com_objects should return empty dict when disconnected."""
     discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-empty"))
     assert discovery.discover_com_objects() == {}
 
 
 def test_discover_com_objects_and_summary_with_fake_app() -> None:
-    """discover_com_objects should index methods/properties and create summary."""
+    """Discover_com_objects should index methods/properties and create summary."""
 
     class _FakeApp:
         """Test suite for FakeApp."""
@@ -389,7 +380,7 @@ def test_discover_com_objects_and_summary_with_fake_app() -> None:
 def test_discover_vba_references_handles_available_and_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """discover_vba_references should return whatever _discover_vba_references_via_registry finds."""
+    """Discover_vba_references should return whatever _discover_vba_references_via_registry finds."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     fake_refs = {
@@ -425,7 +416,7 @@ def test_discover_vba_references_handles_available_and_error(
 def test_discover_all_returns_index_when_connect_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """discover_all should return base index when connection fails."""
+    """Discover_all should return base index when connection fails."""
     discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-all"))
     monkeypatch.setattr(discovery, "connect_to_solidworks", lambda: False)
 
@@ -437,7 +428,7 @@ def test_discover_all_returns_index_when_connect_fails(
 def test_save_index_success_and_failure(
     monkeypatch: pytest.MonkeyPatch, temp_dir: Path
 ) -> None:
-    """save_index should write JSON and return None on write errors."""
+    """Save_index should write JSON and return None on write errors."""
     discovery = SolidWorksDocsDiscovery(output_dir=temp_dir)
     saved = discovery.save_index("docs_index.json")
     assert saved is not None and saved.exists()
@@ -582,7 +573,7 @@ async def test_discover_solidworks_docs_tool_success_path(
 
 
 def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """connect_to_solidworks should return False when both GetActiveObject and EnsureDispatch raise com_error."""
+    """Connect_to_solidworks should return False when both GetActiveObject and EnsureDispatch raise com_error."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _FakeComError(Exception):
@@ -616,7 +607,7 @@ def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_discover_com_objects_handles_attribute_and_catalog_errors() -> None:
-    """discover_com_objects should tolerate both extraction and catalog-level failures."""
+    """Discover_com_objects should tolerate both extraction and catalog-level failures."""
 
     class _BrokenApp:
         """Test suite for BrokenApp."""
@@ -642,7 +633,7 @@ def test_discover_com_objects_handles_attribute_and_catalog_errors() -> None:
 def test_discover_all_success_path_with_stubbed_steps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """discover_all should stitch connect/com/vba steps into final index."""
+    """Discover_all should stitch connect/com/vba steps into final index."""
     discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-all-ok"))
 
     monkeypatch.setattr(discovery, "connect_to_solidworks", lambda: True)
@@ -861,7 +852,7 @@ async def test_discover_solidworks_docs_tool_non_windows_error(
     mock_config: SolidWorksMCPConfig,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """discover_solidworks_docs should reject non-Windows platforms."""
+    """Discover_solidworks_docs should reject non-Windows platforms."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
@@ -888,7 +879,7 @@ async def test_search_api_help_auto_discovers_when_index_missing(
     monkeypatch: pytest.MonkeyPatch,
     temp_dir: Path,
 ) -> None:
-    """search_solidworks_api_help should auto-discover index when requested."""
+    """Search_solidworks_api_help should auto-discover index when requested."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
@@ -949,7 +940,7 @@ async def test_search_api_help_exception_path(
     mock_config: SolidWorksMCPConfig,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """search_solidworks_api_help should return structured error on unexpected exceptions."""
+    """Search_solidworks_api_help should return structured error on unexpected exceptions."""
     import src.solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)

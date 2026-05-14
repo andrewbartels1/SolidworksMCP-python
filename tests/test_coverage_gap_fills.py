@@ -1,15 +1,4 @@
-"""
-Coverage gap-fill tests targeting specific missed lines across multiple modules.
-
-Targets:
-- adapters/vba_adapter.py: lines 47, 51, 55, 59-64, 102, 114, 172, 224
-- adapters/vba_macro_executor.py: lines 111-122, 142, 186, 197, 199-200
-- cache/response_cache.py: lines 81, 89-90, 102, 112, 117-123, 138-139
-- security/runtime.py: lines 56, 65, 96, 102, 105, 110
-- security/cors.py: line 23
-- adapters/circuit_breaker.py: lines 187, 226, 243, 279
-- adapters/base.py: lines 425, 438
-"""
+"""Coverage gap-fill tests targeting specific missed lines across multiple modules."""
 
 from __future__ import annotations
 
@@ -47,6 +36,8 @@ class _RaisingAdapter:
     """Backing adapter whose execute_macro raises RuntimeError (not AttributeError)."""
 
     async def execute_macro(self, macro_path: str, subroutine: str) -> None:
+        """Test execute macro."""
+
         raise RuntimeError("simulated COM failure")
 
 
@@ -54,6 +45,8 @@ class _AttrErrorAdapter:
     """Backing adapter whose execute_macro raises AttributeError."""
 
     async def execute_macro(self, macro_path: str, subroutine: str) -> None:
+        """Test execute macro."""
+
         raise AttributeError("mocked attribute error")
 
 
@@ -365,6 +358,8 @@ async def test_circuit_breaker_connect_failure_records_failure() -> None:
     mock = MockSolidWorksAdapter({})
 
     async def _raise_on_connect() -> None:
+        """Test raise on connect."""
+
         raise RuntimeError("connect failed")
 
     mock.connect = _raise_on_connect  # type: ignore[method-assign]
@@ -409,6 +404,8 @@ async def test_circuit_breaker_call_records_failure_on_exception() -> None:
     adapter = CircuitBreakerAdapter(adapter=MockSolidWorksAdapter({}))
 
     async def _bad_op() -> None:
+        """Test bad op."""
+
         raise RuntimeError("op failed")
 
     with pytest.raises(RuntimeError):

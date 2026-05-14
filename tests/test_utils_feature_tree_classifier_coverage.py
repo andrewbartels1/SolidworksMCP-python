@@ -1,9 +1,13 @@
+"""Tests for test utils feature tree classifier coverage."""
+
 from src.solidworks_mcp.utils.feature_tree_classifier import (
     classify_feature_tree_snapshot,
 )
 
 
 def test_classify_assembly_from_feature_tokens() -> None:
+    """Test classify assembly from feature tokens."""
+
     result = classify_feature_tree_snapshot(
         {"type": "Part"},
         [
@@ -18,6 +22,8 @@ def test_classify_assembly_from_feature_tokens() -> None:
 
 
 def test_classify_drawing_from_document_type() -> None:
+    """Test classify drawing from document type."""
+
     result = classify_feature_tree_snapshot(
         {"type": "Drawing"},
         [{"name": "Random", "type": "Unknown", "suppressed": False}],
@@ -29,6 +35,8 @@ def test_classify_drawing_from_document_type() -> None:
 
 
 def test_classify_advanced_solid_path() -> None:
+    """Test classify advanced solid path."""
+
     result = classify_feature_tree_snapshot(
         {"type": "Part"},
         [{"name": "BoundaryBoss1", "type": "Boundary", "suppressed": False}],
@@ -40,6 +48,8 @@ def test_classify_advanced_solid_path() -> None:
 
 
 def test_classify_extrude_path() -> None:
+    """Test classify extrude path."""
+
     result = classify_feature_tree_snapshot(
         {"type": "Part"},
         [{"name": "Boss-Extrude1", "type": "Boss-Extrude", "suppressed": False}],
@@ -50,6 +60,8 @@ def test_classify_extrude_path() -> None:
 
 
 def test_classify_unknown_path_with_non_sketch_features() -> None:
+    """Test classify unknown path with non sketch features."""
+
     result = classify_feature_tree_snapshot(
         {"type": "Part"},
         [

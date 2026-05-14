@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks file management tools.
-
-Comprehensive test suite covering file operations, format conversions,
-and property management.
-"""
+"""Tests for SolidWorks file management tools."""
 
 from unittest.mock import AsyncMock, Mock
 

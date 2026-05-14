@@ -1,9 +1,4 @@
-"""
-Tests for SolidWorks template management tools.
-
-Comprehensive test suite covering template extraction, application,
-comparison, and library management operations.
-"""
+"""Tests for SolidWorks template management tools."""
 
 from unittest.mock import AsyncMock, Mock
 

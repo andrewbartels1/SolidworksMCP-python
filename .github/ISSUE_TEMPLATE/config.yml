@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Planning docs
+    url: https://github.com/andrewbartels1/SolidworksMCP-python/tree/main/docs/planning
+    about: Roadmap, architecture alignment, and feature planning documents
+  - name: SolidWorks API reference
+    url: https://help.solidworks.com/2024/english/api/sldworksapiprogguide/Welcome.htm
+    about: Official SolidWorks COM/VBA API documentation
