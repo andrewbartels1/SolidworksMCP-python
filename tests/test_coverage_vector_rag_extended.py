@@ -27,30 +27,33 @@ def _fake_embeddings(texts: list[str], dim: int = 16) -> np.ndarray:
     return np.random.randn(len(texts), dim).astype("float32")
 
 
+@pytest.fixture
+def temp_rag_dir() -> Path:
+    """Create temporary RAG directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.fixture
+def mock_model():
+    """Mock SentenceTransformer model."""
+    model = MagicMock()
+    model.encode.side_effect = lambda texts, **kw: _fake_embeddings(texts)
+    return model
+
+
+@pytest.fixture
+def patched_embeddings(mock_model):
+    """Patch embedding model retrieval."""
+    with patch(
+        "src.solidworks_mcp.agents.vector_rag._get_embedding_model",
+        return_value=mock_model,
+    ):
+        yield mock_model
+
+
 class TestVectorRAGIndexOperations:
     """Test VectorRAGIndex FAISS operations."""
-
-    @pytest.fixture
-    def temp_rag_dir(self) -> Path:
-        """Create temporary RAG directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
-    @pytest.fixture
-    def mock_model(self):
-        """Mock SentenceTransformer model."""
-        model = MagicMock()
-        model.encode.side_effect = lambda texts, **kw: _fake_embeddings(texts)
-        return model
-
-    @pytest.fixture
-    def patched_embeddings(self, mock_model):
-        """Patch embedding model retrieval."""
-        with patch(
-            "src.solidworks_mcp.agents.vector_rag._get_embedding_model",
-            return_value=mock_model,
-        ):
-            yield mock_model
 
     def test_ingest_text_basic(self, temp_rag_dir: Path, patched_embeddings) -> None:
         """Test basic text ingestion into index."""
@@ -200,26 +203,18 @@ class TestVectorRAGIndexOperations:
         assert len(idx2._meta) > 0
 
     def test_load_nonexistent_index(self, temp_rag_dir: Path) -> None:
-        """Test loading nonexistent index raises error."""
-        with pytest.raises((FileNotFoundError, IOError)):
-            VectorRAGIndex.load(namespace="nonexistent", rag_dir=temp_rag_dir)
+        """load() returns an empty index when the files don't exist."""
+        idx = VectorRAGIndex.load(namespace="nonexistent", rag_dir=temp_rag_dir)
+        assert idx is not None
+        assert len(idx._meta) == 0
 
     def test_ingest_from_url(self, temp_rag_dir: Path, patched_embeddings) -> None:
-        """Test ingesting from URL (mocked)."""
+        """Test that ingest_text accepts a URL source string."""
         idx = VectorRAGIndex(namespace="url_test", rag_dir=temp_rag_dir)
-
-        # Mock URL fetch
-        with patch("src.solidworks_mcp.agents.vector_rag.urlopen") as mock_urlopen:
-            mock_response = MagicMock()
-            mock_response.read.return_value = b"Content from URL"
-            mock_urlopen.return_value = mock_response
-
-            # Note: actual ingest_from_url might have different signature
-            # This tests that the index can handle URL-sourced content
-            count = idx.ingest_text(
-                "Content from URL", source="https://example.com/doc.md"
-            )
-            assert count > 0
+        count = idx.ingest_text(
+            "Content from URL", source="https://example.com/doc.md"
+        )
+        assert count > 0
 
 
 class TestVectorRAGChunking:
@@ -263,51 +258,60 @@ class TestVectorRAGChunking:
         assert chunks == []
 
 
+@pytest.fixture
+def fake_docs_json(temp_rag_dir: Path) -> Path:
+    """Write a minimal solidworks_docs_index JSON for testing."""
+    data = {
+        "com_objects": {
+            "IExtrusion": {
+                "methods": ["GetDepth", "SetDepth"],
+                "properties": ["Direction"],
+            }
+        },
+        "vba_references": {
+            "SldWorks 2025 Type Library": {"version": "29.0", "status": "available"}
+        },
+    }
+    p = temp_rag_dir / "sw_docs.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    return p
+
+
 class TestBuildSolidWorksAPIDocsIndex:
     """Test building SolidWorks API docs index."""
 
-    @pytest.mark.asyncio
-    async def test_build_solidworks_api_docs_index(
-        self, temp_rag_dir: Path, patched_embeddings
+    def test_build_solidworks_api_docs_index(
+        self, fake_docs_json: Path, temp_rag_dir: Path, patched_embeddings
     ) -> None:
         """Test building SolidWorks API docs index."""
-        idx = await build_solidworks_api_docs_index(
-            namespace="api_test", rag_dir=temp_rag_dir
+        idx = build_solidworks_api_docs_index(
+            fake_docs_json, namespace="api_test", rag_dir=temp_rag_dir
         )
 
         assert isinstance(idx, VectorRAGIndex)
         assert idx.namespace == "api_test"
 
-    @pytest.mark.asyncio
-    async def test_query_solidworks_api_docs(
-        self, temp_rag_dir: Path, patched_embeddings
+    def test_query_solidworks_api_docs(
+        self, fake_docs_json: Path, temp_rag_dir: Path, patched_embeddings
     ) -> None:
         """Test querying SolidWorks API docs."""
-        # Build index first
-        await build_solidworks_api_docs_index(
-            namespace="api_query_test", rag_dir=temp_rag_dir
+        idx = build_solidworks_api_docs_index(
+            fake_docs_json, namespace="api_query_test", rag_dir=temp_rag_dir
         )
+        idx.save()
 
-        # Query
-        results = await query_solidworks_api_docs(
-            "extrusion", namespace="api_query_test", rag_dir=temp_rag_dir
-        )
+        result = query_solidworks_api_docs("extrusion", rag_dir=temp_rag_dir)
 
-        assert isinstance(results, list)
+        assert isinstance(result, str)
 
-    @pytest.mark.asyncio
-    async def test_query_design_knowledge(
+    def test_query_design_knowledge(
         self, temp_rag_dir: Path, patched_embeddings
     ) -> None:
         """Test querying design knowledge."""
-        # Create and populate index
-        idx = VectorRAGIndex(namespace="design_test", rag_dir=temp_rag_dir)
+        idx = VectorRAGIndex(namespace="engineering-reference", rag_dir=temp_rag_dir)
         idx.ingest_text("Snap fit design patterns", source="design.md")
         idx.save()
 
-        # Query
-        results = await query_design_knowledge(
-            "snap fit", namespace="design_test", rag_dir=temp_rag_dir
-        )
+        result = query_design_knowledge("snap fit", rag_dir=temp_rag_dir)
 
-        assert isinstance(results, list)
+        assert isinstance(result, str)

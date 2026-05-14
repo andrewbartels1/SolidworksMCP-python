@@ -62,7 +62,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 & $venvPython -m pip install --upgrade pip setuptools wheel
-& $venvPython -m pip install -e ".[dev,test,docs,ui]"
+& $venvPython -m pip install -e ".[dev,test,docs,ui,rag]"
 
 # Verify prefab.exe was installed (pip occasionally skips console scripts on first install)
 $venvPrefab = Join-Path (Get-Location) ".venv\Scripts\prefab.exe"

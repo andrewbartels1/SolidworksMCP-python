@@ -129,8 +129,8 @@ class TestPyWin32AdapterInitialization:
                         # Connection might fail without actual SolidWorks
                         pass
 
-                    # COM should have been initialized
-                    mock_com.CoInitialize.assert_called()
+                    # CoInitialize now runs on ComExecutor's worker thread,
+                    # not in connect() directly — no assertion here.
         except SolidWorksMCPError:
             pytest.skip("pywin32 not available")
 
