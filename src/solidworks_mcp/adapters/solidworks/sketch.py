@@ -7,7 +7,6 @@ from typing import Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
 
-
 # swConstraintType_e values per the official SolidWorks API enum docs
 # (SolidWorks.Interop.swconst). The legacy IModelDoc2.SketchAddConstraints
 # API takes string identifiers but on SW 2026/3DEXPERIENCE silently no-ops
@@ -23,7 +22,7 @@ RELATION_NAME_MAP: dict[str, int] = {
     "concentric": 10,
     "symmetric": 11,
     "equal": 14,  # swConstraintType_SAMELENGTH
-    "fix": 17,    # swConstraintType_FIXED
+    "fix": 17,  # swConstraintType_FIXED
     "collinear": 27,  # swConstraintType_COLINEAR (single-l spelling)
 }
 
@@ -923,9 +922,7 @@ def _add_sketch_constraint_impl(
             _sw_type_info = None  # type: ignore[assignment]
         if _sw_type_info is not None:
             adapter._attempt(
-                lambda: _sw_type_info.flag_methods(
-                    adapter.currentModel, "IModelDoc2"
-                ),
+                lambda: _sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2"),
                 default=0,
             )
 
@@ -964,9 +961,7 @@ def _add_sketch_constraint_impl(
                 "pywin32 is required for add_sketch_constraint on a real adapter"
             ) from exc
 
-        ents_variant = _VARIANT(
-            _pythoncom.VT_ARRAY | _pythoncom.VT_DISPATCH, entities
-        )
+        ents_variant = _VARIANT(_pythoncom.VT_ARRAY | _pythoncom.VT_DISPATCH, entities)
         sketch_relation, add_err = adapter._attempt_with_error(
             lambda: relmgr.AddRelation(ents_variant, relation_type_enum)
         )

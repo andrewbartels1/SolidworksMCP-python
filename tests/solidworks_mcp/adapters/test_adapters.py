@@ -832,6 +832,7 @@ class TestPyWin32AdapterBranches:
         )
 
         import win32com.client.dynamic as _win32_dynamic
+
         monkeypatch.setattr(_win32_dynamic, "Dispatch", Mock(return_value=fake_app))
 
         await adapter.connect()

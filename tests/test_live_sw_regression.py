@@ -55,8 +55,7 @@ pytestmark = [
     pytest.mark.skipif(
         not _REAL_ENABLED,
         reason=(
-            f"set {_REAL_FLAG}=1 to run tests that require a live "
-            "SolidWorks install"
+            f"set {_REAL_FLAG}=1 to run tests that require a live SolidWorks install"
         ),
     ),
     pytest.mark.skipif(
@@ -209,8 +208,7 @@ async def test_open_model_succeeds(connected_adapter) -> None:
     test_assy = _test_assembly_path()
     if not test_assy or not os.path.exists(test_assy):
         pytest.skip(
-            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
-            "to run this test"
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path to run this test"
         )
 
     result = await connected_adapter.open_model(test_assy)
@@ -229,8 +227,7 @@ async def test_get_model_info_fields_populate(connected_adapter) -> None:
     test_assy = _test_assembly_path()
     if not test_assy or not os.path.exists(test_assy):
         pytest.skip(
-            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
-            "to run this test"
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path to run this test"
         )
 
     await connected_adapter.open_model(test_assy)
@@ -238,9 +235,7 @@ async def test_get_model_info_fields_populate(connected_adapter) -> None:
 
     assert result.is_success, f"get_model_info failed: {result.error}"
     info = result.data
-    assert isinstance(info["title"], str) and info["title"].endswith(
-        ".SLDASM"
-    )
+    assert isinstance(info["title"], str) and info["title"].endswith(".SLDASM")
     assert isinstance(info["path"], str)
     assert info["type"] == "Assembly"
     assert isinstance(info["configuration"], str)
@@ -263,8 +258,7 @@ async def test_get_model_info_works_from_worker_thread(
     test_assy = _test_assembly_path()
     if not test_assy or not os.path.exists(test_assy):
         pytest.skip(
-            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
-            "to run this test"
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path to run this test"
         )
 
     await connected_adapter.open_model(test_assy)
@@ -288,8 +282,7 @@ async def test_get_model_info_works_from_worker_thread(
     assert not t.is_alive(), "worker thread hung"
 
     assert worker_result["error"] is None, (
-        f"cross-thread get_model_info surfaced an error: "
-        f"{worker_result['error']!r}"
+        f"cross-thread get_model_info surfaced an error: {worker_result['error']!r}"
     )
     assert worker_result.get("title", "").endswith(".SLDASM")
 
@@ -317,9 +310,7 @@ async def test_add_sketch_constraint_perpendicular_and_horizontal(
 
     try:
         sketch_result = await adapter.create_sketch("Front")
-        assert sketch_result.is_success, (
-            f"create_sketch failed: {sketch_result.error}"
-        )
+        assert sketch_result.is_success, f"create_sketch failed: {sketch_result.error}"
 
         line1 = await adapter.add_line(0.0, 0.0, 50.0, 0.0)
         line2 = await adapter.add_line(50.0, 0.0, 50.0, 50.0)
@@ -330,9 +321,7 @@ async def test_add_sketch_constraint_perpendicular_and_horizontal(
         perp = await adapter.add_sketch_constraint(
             line1.data, line2.data, "perpendicular"
         )
-        assert perp.is_success, (
-            f"perpendicular constraint failed: {perp.error}"
-        )
+        assert perp.is_success, f"perpendicular constraint failed: {perp.error}"
         assert perp.data.startswith("Constraint_"), (
             f"unexpected constraint id: {perp.data!r}"
         )

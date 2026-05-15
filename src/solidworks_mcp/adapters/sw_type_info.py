@@ -88,9 +88,7 @@ def _load_wrapper() -> None:
         for major in (35, 34, 33, 32, 31, 30):
             try:
                 gencache.EnsureModule(SW_TLB_IID, 0, major, 0)
-                _wrapper_module = gencache.GetModuleForTypelib(
-                    SW_TLB_IID, 0, major, 0
-                )
+                _wrapper_module = gencache.GetModuleForTypelib(SW_TLB_IID, 0, major, 0)
                 if _wrapper_module is not None:
                     break
             except Exception:
@@ -101,7 +99,7 @@ def _load_wrapper() -> None:
             "SolidWorks gen_py wrapper not available; method flagging "
             "disabled. Zero-arg SW methods may raise TypeError. To fix, "
             "run: python -m win32com.client.makepy "
-            "\"C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldworks.tlb\""
+            '"C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldworks.tlb"'
         )
         return
 

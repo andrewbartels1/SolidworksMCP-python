@@ -7,8 +7,8 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, cast
 
-from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
 from .. import sw_type_info as _sw_type_info
+from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
 
 try:
     import pythoncom

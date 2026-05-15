@@ -318,9 +318,7 @@ def test_add_sketch_constraint_sw_rejection_returns_error() -> None:
     adapter, *_ = _make_constraint_adapter(
         add_relation_raises=RuntimeError("incompatible geometry"),
     )
-    result = sketch._add_sketch_constraint_impl(
-        adapter, "Line_1", "Line_2", "parallel"
-    )
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", "Line_2", "parallel")
     assert result.status == AdapterResultStatus.ERROR
     msg = result.error or ""
     assert "rejected" in msg and "parallel" in msg
