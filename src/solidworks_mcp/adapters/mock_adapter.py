@@ -933,7 +933,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def add_sketch_constraint(
-        self, entity1: str, entity2: str | None, relation_type: str
+        self,
+        entity1: str,
+        entity2: str | None,
+        relation_type: str,
+        entity3: str | None = None,
     ) -> AdapterResult[str]:
         """Mock adding a geometric constraint between sketch entities.
 
@@ -942,17 +946,22 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             entity2 (str | None): Secondary sketch-entity ID, or None for
                 single-entity relations (horizontal, vertical, fix).
             relation_type (str): Constraint name (see RELATION_NAME_MAP).
+            entity3 (str | None): Third entity ID — only used by the
+                ``symmetric`` relation (the centerline of symmetry). All
+                other relation types reject a non-null ``entity3``.
 
         Returns:
             AdapterResult[str]: SUCCESS with a placeholder constraint ID, or
-                ERROR if no active sketch or the relation_type is unsupported.
+                ERROR if no active sketch, the relation_type is unsupported,
+                arity is wrong, or an entity ID is unknown.
         """
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
             )
 
-        if (relation_type or "").strip().lower() not in RELATION_NAME_MAP:
+        rt_norm = (relation_type or "").strip().lower()
+        if rt_norm not in RELATION_NAME_MAP:
             supported = ", ".join(sorted(RELATION_NAME_MAP))
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -962,25 +971,37 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 ),
             )
 
+        # Arity validation — mirror the real adapter
+        if rt_norm == "symmetric":
+            if entity2 is None or entity3 is None:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Relation '{relation_type}' requires entity1, "
+                        "entity2, and entity3 (the centerline of symmetry)"
+                    ),
+                )
+        elif entity3 is not None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Relation '{relation_type}' does not accept entity3 — "
+                    "only 'symmetric' takes a third entity (the centerline)"
+                ),
+            )
+
         # Validate entity IDs against the in-process sketch-entity registry
         # so the mock surfaces the same "Unknown sketch entity" error as the
         # real adapter (which checks adapter._sketch_entities).
-        if entity1 not in self._sketch_entity_ids:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    f"Unknown sketch entity '{entity1}'. Use IDs returned by "
-                    "add_line/add_arc/add_circle."
-                ),
-            )
-        if entity2 is not None and entity2 not in self._sketch_entity_ids:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    f"Unknown sketch entity '{entity2}'. Use IDs returned by "
-                    "add_line/add_arc/add_circle."
-                ),
-            )
+        for ent in (entity1, entity2, entity3):
+            if ent is not None and ent not in self._sketch_entity_ids:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unknown sketch entity '{ent}'. Use IDs returned by "
+                        "add_line/add_arc/add_circle."
+                    ),
+                )
 
         await asyncio.sleep(self._delays["sketch_operation"] / 2)
         self._operation_count += 1

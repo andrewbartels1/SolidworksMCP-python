@@ -265,6 +265,7 @@ Add a geometric constraint/relation between sketch entities.
 |-----------|------|----------|---------|-------------|
 | `entity1` | `str` | ✅ | `` | First entity name or ID |
 | `entity2` | `str?` | — | `None` | Second entity name or ID (for two-entity relations) |
+| `entity3` | `str?` | — | `None` | Third entity name or ID. **Required only for `symmetric`** (the centerline of symmetry, e.g. `"Centerline_5"`); must be `None` for all other relations |
 | `relation_type` | `str` | ✅ | `` | One of the supported relation names (see below) |
 
 **Supported `relation_type` values (case-insensitive):**
@@ -279,10 +280,11 @@ Add a geometric constraint/relation between sketch entities.
 | `coincident` | 2 | Two points (or point on entity) share location |
 | `concentric` | 2 | Two arcs/circles share center |
 | `equal` | 2 | Equal length (lines) or equal radius (arcs/circles) — maps to `swConstraintType_SAMELENGTH` |
+| `symmetric` | 3 | Two entities about a centerline; `entity3` must be the centerline ID returned by `add_centerline` |
 | `collinear` | 2 | Two lines on the same infinite line |
 | `fix` | 1 | Pin the entity in place |
 
-> **`symmetric` is not currently exposed.** The SolidWorks symmetric relation needs three selections (two entities + a centerline), but the `AddRelationInput` schema only accepts `entity1` and `entity2`. Tracked for a follow-up that extends the schema with a third entity slot.
+> **`entity3` is only used by `symmetric`.** All other relation types reject a non-null `entity3` with a clear error.
 
 **Sample call (two-entity perpendicular):**
 
@@ -291,6 +293,17 @@ Add a geometric constraint/relation between sketch entities.
   "entity1": "Line_1",
   "entity2": "Line_2",
   "relation_type": "perpendicular"
+}
+```
+
+**Sample call (three-entity symmetric):**
+
+```json
+{
+  "entity1": "Line_1",
+  "entity2": "Line_2",
+  "entity3": "Centerline_5",
+  "relation_type": "symmetric"
 }
 ```
 

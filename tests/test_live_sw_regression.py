@@ -333,6 +333,48 @@ async def test_add_sketch_constraint_perpendicular_and_horizontal(
         await adapter.close_model(save=False)
 
 
+async def test_add_sketch_constraint_symmetric_with_centerline(
+    connected_adapter,
+) -> None:
+    """End-to-end check that the three-entity symmetric relation works.
+
+    Creates a fresh part + sketch, draws a centerline plus two lines on
+    either side, then applies ``symmetric`` with the centerline as
+    ``entity3``. Verifies SolidWorks accepts the relation.
+    """
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success, f"create_part failed: {part_result.error}"
+
+    try:
+        sketch_result = await adapter.create_sketch("Front")
+        assert sketch_result.is_success, f"create_sketch failed: {sketch_result.error}"
+
+        # Centerline along Y axis at x=25 — the line of symmetry.
+        centerline = await adapter.add_centerline(25.0, -50.0, 25.0, 50.0)
+        # Two horizontal lines, mirrored about x=25
+        left = await adapter.add_line(0.0, 10.0, 20.0, 10.0)
+        right = await adapter.add_line(30.0, 10.0, 50.0, 10.0)
+        assert centerline.is_success and left.is_success and right.is_success, (
+            f"setup failed: {centerline.error} / {left.error} / {right.error}"
+        )
+
+        sym = await adapter.add_sketch_constraint(
+            left.data, right.data, "symmetric", centerline.data
+        )
+        assert sym.is_success, f"symmetric constraint failed: {sym.error}"
+        assert sym.data.startswith("Constraint_")
+
+        # Calling symmetric without entity3 must produce a clear arity error
+        # (no SW call should reach AddRelation).
+        bad = await adapter.add_sketch_constraint(left.data, right.data, "symmetric")
+        assert bad.is_error
+        assert "entity3" in (bad.error or "")
+    finally:
+        await adapter.close_model(save=False)
+
+
 async def test_add_sketch_constraint_unsupported_relation(connected_adapter) -> None:
     """Unsupported relation types must produce an error without touching SW."""
     adapter = connected_adapter

@@ -249,12 +249,22 @@ class AddRelationInput(BaseModel):
     Attributes:
         entity1 (str): The entity1 value.
         entity2 (str | None): The entity2 value.
+        entity3 (str | None): Third entity ID — only used by the ``symmetric``
+            relation (the centerline of symmetry). All other relation types
+            reject a non-null ``entity3``.
         relation_type (str): The relation type value.
     """
 
     entity1: str = Field(description="First entity name or ID")
     entity2: str | None = Field(
         default=None, description="Second entity name or ID (if required)"
+    )
+    entity3: str | None = Field(
+        default=None,
+        description=(
+            "Third entity ID. Required for 'symmetric' (the centerline of "
+            "symmetry); must be null for all other relations."
+        ),
     )
     relation_type: str = Field(
         description="Relation type (parallel, perpendicular, tangent, coincident, etc.)"
@@ -1101,7 +1111,10 @@ async def register_sketching_tools(
         """
         try:
             result = await adapter.add_sketch_constraint(
-                input_data.entity1, input_data.entity2, input_data.relation_type
+                input_data.entity1,
+                input_data.entity2,
+                input_data.relation_type,
+                input_data.entity3,
             )
 
             if result.is_success:
@@ -1114,6 +1127,7 @@ async def register_sketching_tools(
                         "type": input_data.relation_type,
                         "entity1": input_data.entity1,
                         "entity2": input_data.entity2,
+                        "entity3": input_data.entity3,
                     },
                     "execution_time": result.execution_time,
                 }

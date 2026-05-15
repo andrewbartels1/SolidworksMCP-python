@@ -242,7 +242,12 @@ def _make_constraint_adapter(
     adapter.currentSketchManager = object()
     line1 = SimpleNamespace()
     line2 = SimpleNamespace()
-    adapter._sketch_entities = {"Line_1": line1, "Line_2": line2}
+    centerline = SimpleNamespace()
+    adapter._sketch_entities = {
+        "Line_1": line1,
+        "Line_2": line2,
+        "Centerline_3": centerline,
+    }
 
     def _add_rel(_entities, _rt):
         if add_relation_raises is not None:
@@ -338,6 +343,65 @@ def test_add_sketch_constraint_add_relation_returns_none_is_error() -> None:
     result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "fix")
     assert result.status == AdapterResultStatus.ERROR
     assert "rejected" in (result.error or "")
+
+
+def test_add_sketch_constraint_symmetric_happy_path() -> None:
+    constraint_obj = SimpleNamespace(Name="Sym1")
+    adapter, add_relation, _sk = _make_constraint_adapter(
+        add_relation_returns=constraint_obj
+    )
+
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "symmetric", "Centerline_3"
+    )
+
+    assert result.status == AdapterResultStatus.SUCCESS
+    assert result.data.startswith("Constraint_")
+    assert adapter._sketch_entities[result.data] is constraint_obj
+    ents_arg, rt_arg = add_relation.call_args.args
+    assert rt_arg == 11  # swConstraintType_SYMMETRIC
+    # Three-element entity list, in order: entity1, entity2, entity3
+    assert len(ents_arg.value) == 3
+
+
+def test_add_sketch_constraint_symmetric_missing_entity3_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "symmetric", None
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    msg = result.error or ""
+    assert "symmetric" in msg
+    assert "entity3" in msg
+
+
+def test_add_sketch_constraint_symmetric_missing_entity2_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", None, "symmetric", "Centerline_3"
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    assert "entity2" in (result.error or "")
+
+
+def test_add_sketch_constraint_entity3_rejected_for_non_symmetric() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "perpendicular", "Centerline_3"
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    msg = result.error or ""
+    assert "does not accept entity3" in msg
+    assert "perpendicular" in msg
+
+
+def test_add_sketch_constraint_unknown_entity3_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "symmetric", "CL_99"
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unknown sketch entity 'CL_99'" in (result.error or "")
 
 
 def test_exit_sketch_warning_and_success_paths() -> None:

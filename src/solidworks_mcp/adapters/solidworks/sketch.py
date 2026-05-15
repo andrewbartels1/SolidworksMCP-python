@@ -20,14 +20,15 @@ RELATION_NAME_MAP: dict[str, int] = {
     "perpendicular": 8,
     "coincident": 9,
     "concentric": 10,
+    "symmetric": 11,  # swConstraintType_SYMMETRIC — requires entity3 (centerline)
     "equal": 14,  # swConstraintType_SAMELENGTH
     "fix": 17,  # swConstraintType_FIXED
     "collinear": 27,  # swConstraintType_COLINEAR (single-l spelling)
-    # NOTE: swConstraintType_SYMMETRIC (11) is intentionally omitted — it
-    # requires a third selection (the centerline of symmetry) and the
-    # AddRelationInput schema only carries entity1/entity2. A future API
-    # extension that accepts a centerline ID can add it back.
 }
+
+# Relations that take a third entity (the centerline of symmetry for now).
+# All other relations reject a non-null ``entity3``.
+_THREE_ENTITY_RELATIONS: frozenset[str] = frozenset({"symmetric"})
 
 
 class SolidWorksSketchMixin:
@@ -144,9 +145,15 @@ class SolidWorksSketchMixin:
         return _add_ellipse_impl(self, center_x, center_y, major_axis, minor_axis)
 
     async def add_sketch_constraint(
-        self, entity1: str, entity2: str | None, relation_type: str
+        self,
+        entity1: str,
+        entity2: str | None,
+        relation_type: str,
+        entity3: str | None = None,
     ) -> AdapterResult[str]:
-        return _add_sketch_constraint_impl(self, entity1, entity2, relation_type)
+        return _add_sketch_constraint_impl(
+            self, entity1, entity2, relation_type, entity3
+        )
 
     async def add_sketch_dimension(
         self, entity1: str, entity2: str | None, dimension_type: str, value: float
@@ -689,10 +696,13 @@ def _add_centerline_impl(
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _centerline_operation() -> str:
-        """Inner COM closure that calls CreateCenterLine.
+        """Inner COM closure that calls CreateCenterLine and registers
+        the resulting entity so it can be referenced by subsequent
+        dimension and constraint calls (e.g. as the centerline of a
+        ``symmetric`` relation).
 
         Returns:
-            str: Timestamped unique ID string.
+            str: Registered entity ID (e.g. ``"Centerline_3"``).
 
         Raises:
             Exception: If ``CreateCenterLine`` returns ``None``.
@@ -702,7 +712,7 @@ def _add_centerline_impl(
         )
         if not centerline:
             raise Exception("Failed to create centerline")
-        return f"Centerline_{int(time.time() * 1000) % 10000}"
+        return cast(str, adapter._register_sketch_entity("Centerline", centerline))
 
     return cast(
         AdapterResult[str],
@@ -851,11 +861,12 @@ def _add_sketch_constraint_impl(
     entity1: str,
     entity2: str | None,
     relation_type: str,
+    entity3: str | None = None,
 ) -> AdapterResult[str]:
     """Add a geometric relation (constraint) between sketch entities.
 
-    Resolves ``entity1`` (and ``entity2`` if provided) against the adapter's
-    sketch-entity registry, then calls
+    Resolves ``entity1`` (and ``entity2``/``entity3`` if provided) against the
+    adapter's sketch-entity registry, then calls
     ``ISketchRelationManager.AddRelation(entities, relation_type_enum)`` on
     the active sketch. Entity handles are passed as a
     ``VARIANT(VT_ARRAY | VT_DISPATCH, [...])`` — pywin32 will not marshal a
@@ -871,6 +882,10 @@ def _add_sketch_constraint_impl(
     ``"coincident"``, ``"concentric"``, ``"equal"``, ``"symmetric"``,
     ``"collinear"``, ``"fix"``.
 
+    ``"symmetric"`` is the only relation that takes a third entity
+    (``entity3`` — the centerline of symmetry). All other relations reject
+    a non-null ``entity3``.
+
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch and a valid
             ``currentModel``.
@@ -879,6 +894,10 @@ def _add_sketch_constraint_impl(
         entity2: Registered entity ID of the secondary sketch entity, or
             ``None`` for single-entity relations (horizontal, vertical, fix).
         relation_type: Constraint type string (see above).
+        entity3: Registered ID of a third entity. Only meaningful for
+            ``"symmetric"`` — pass the centerline ID (from ``add_centerline``)
+            as the line of symmetry. Must be ``None`` for every other
+            relation type.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -892,13 +911,25 @@ def _add_sketch_constraint_impl(
         if not adapter.currentModel:
             raise Exception("No active model")
 
-        relation_type_enum = RELATION_NAME_MAP.get(
-            (relation_type or "").strip().lower()
-        )
+        rt_norm = (relation_type or "").strip().lower()
+        relation_type_enum = RELATION_NAME_MAP.get(rt_norm)
         if relation_type_enum is None:
             supported = ", ".join(sorted(RELATION_NAME_MAP))
             raise Exception(
                 f"Unsupported relation type '{relation_type}'. Supported: {supported}"
+            )
+
+        # Arity validation per relation type
+        if rt_norm in _THREE_ENTITY_RELATIONS:
+            if entity2 is None or entity3 is None:
+                raise Exception(
+                    f"Relation '{relation_type}' requires entity1, entity2, "
+                    "and entity3 (the centerline of symmetry)"
+                )
+        elif entity3 is not None:
+            raise Exception(
+                f"Relation '{relation_type}' does not accept entity3 — only "
+                "'symmetric' takes a third entity (the centerline)"
             )
 
         entity1_obj = adapter._sketch_entities.get(entity1)
@@ -915,6 +946,13 @@ def _add_sketch_constraint_impl(
                     f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle."
                 )
             entities.append(entity2_obj)
+        if entity3:
+            entity3_obj = adapter._sketch_entities.get(entity3)
+            if entity3_obj is None:
+                raise Exception(
+                    f"Unknown sketch entity '{entity3}'. Use IDs returned by add_line/add_arc/add_circle."
+                )
+            entities.append(entity3_obj)
 
         # Flag IModelDoc2 + ISketch + ISketchRelationManager so late-binding
         # resolves GetActiveSketch2, RelationManager, and AddRelation as
