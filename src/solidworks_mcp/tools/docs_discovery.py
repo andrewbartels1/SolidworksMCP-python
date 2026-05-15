@@ -297,7 +297,7 @@ def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
 def _discover_vba_references_via_registry() -> dict[str, Any]:
     """Enumerate VBA/TypeLib references via the Windows Registry.
 
-    Scans HKEY_CLASSES_ROOT\TypeLib for entries whose name or GUID matches SolidWorks or
+    Scans ``HKEY_CLASSES_ROOT\\TypeLib`` for entries whose name or GUID matches SolidWorks or
     common Office/VBA libraries.
 
     Returns:
@@ -532,7 +532,7 @@ class SolidWorksDocsDiscovery:
     def discover_vba_references(self) -> dict[str, Any]:
         """Discover VBA/TypeLib references via the Windows Registry.
 
-        Scans HKEY_CLASSES_ROOT\TypeLib for SolidWorks and common Office/VBA type libraries.
+        Scans ``HKEY_CLASSES_ROOT\\TypeLib`` for SolidWorks and common Office/VBA type libraries.
 
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.

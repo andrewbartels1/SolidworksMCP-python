@@ -145,6 +145,7 @@ include = [
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
+norecursedirs = ["tests/solidworks_mcp/coverage", ".venv", ".git", "build", "dist"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

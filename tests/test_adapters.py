@@ -6,7 +6,7 @@ mock adapter, circuit breaker, and connection pooling functionality.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -491,7 +491,17 @@ class TestPyWin32AdapterBranches:
             SimpleNamespace(com_error=RuntimeError),
             raising=False,
         )
-        return PyWin32Adapter({})
+        adapter = PyWin32Adapter({})
+        # Synchronous mock ComExecutor: avoids "ComExecutor is not running"
+        # guard in _handle_com_operation for tests that set swApp/currentModel
+        # directly without going through connect().
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        mock_com = MagicMock()
+        mock_com._thread = mock_thread
+        mock_com.run = lambda fn, timeout=None: fn()
+        adapter._com = mock_com
+        return adapter
 
     @pytest.mark.asyncio
     async def test_health_check_and_model_info_branches(self, monkeypatch):
@@ -770,6 +780,10 @@ class TestPyWin32AdapterBranches:
         assert result.data == ["Default"]
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        __import__("platform").system() != "Windows",
+        reason="win32com only available on Windows",
+    )
     async def test_connect_disconnect_and_document_creation_paths(self, monkeypatch):
         """Test COM connect lifecycle plus model creation/open branches with mocks."""
         adapter = self._build_adapter(monkeypatch)
@@ -806,12 +820,15 @@ class TestPyWin32AdapterBranches:
             raising=False,
         )
 
+        import win32com.client.dynamic as _win32_dynamic
+        monkeypatch.setattr(_win32_dynamic, "Dispatch", Mock(return_value=fake_app))
+
         await adapter.connect()
         assert adapter.swApp is fake_app
         assert fake_app.Visible is True
         fake_app.SetUserPreferenceToggle.assert_any_call(150, False)
         fake_app.SetUserPreferenceToggle.assert_any_call(149, False)
-        co_initialize.assert_called_once()
+        # CoInitialize now runs on the ComExecutor thread, not in connect() directly.
 
         fake_open_model = SimpleNamespace(
             GetTitle=lambda: "OpenedAsm",
@@ -860,7 +877,7 @@ class TestPyWin32AdapterBranches:
         fake_app.SetUserPreferenceToggle.assert_any_call(149, True)
         assert adapter.swApp is None
         assert adapter.currentSketchManager is None
-        co_uninitialize.assert_called_once()
+        # CoUninitialize now runs on the ComExecutor thread, not in disconnect() directly.
 
     @pytest.mark.asyncio
     async def test_sketch_geometry_feature_and_mass_property_paths(self, monkeypatch):
@@ -1876,7 +1893,14 @@ class TestPyWin32AdapterAdditionalCoverage:
             SimpleNamespace(com_error=RuntimeError),
             raising=False,
         )
-        return PyWin32Adapter({})
+        adapter = PyWin32Adapter({})
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        mock_com = MagicMock()
+        mock_com._thread = mock_thread
+        mock_com.run = lambda fn, timeout=None: fn()
+        adapter._com = mock_com
+        return adapter
 
     def test_platform_guard_raises_on_non_windows(self, monkeypatch):
         """Test platform guard raises on non windows."""
@@ -1895,13 +1919,12 @@ class TestPyWin32AdapterAdditionalCoverage:
         """Test connect failure and com error branch."""
         adapter = self._build_adapter(monkeypatch)
 
-        monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
-            SimpleNamespace(CoInitialize=Mock(side_effect=RuntimeError("boom"))),
-            raising=False,
-        )
+        # CoInitialize now lives in ComExecutor, not connect(). Simulate a
+        # connect failure by making _com.run raise on that call.
+        adapter._com.run = MagicMock(side_effect=RuntimeError("boom"))
         with pytest.raises(SolidWorksMCPError, match="Failed to connect"):
             await adapter.connect()
+        adapter._com.run = lambda fn, timeout=None: fn()  # restore for COM-error test
 
         monkeypatch.setattr(
             "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",

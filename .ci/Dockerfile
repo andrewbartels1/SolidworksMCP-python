@@ -9,6 +9,6 @@ RUN micromamba create -y -n solidworks_mcp -f /tmp/solidworks_mcp.yml \
     && micromamba clean --all --yes
 
 COPY --chown=mambauser:mambauser . /workspace
-RUN micromamba run -n solidworks_mcp pip install -e ".[dev,docs,ui]"
+RUN micromamba run -n solidworks_mcp pip install -e ".[dev,test,docs,ui,rag]"
 
 CMD ["bash", "-lc", "micromamba run -n solidworks_mcp make test"]
