@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
+from .. import sw_type_info as _sw_type_info
 
 try:
     import pythoncom
@@ -142,6 +143,10 @@ class SolidWorksIOMixin:
             if not model:
                 raise Exception(f"Failed to open model: {resolved_path}")
 
+            adapter._attempt(
+                lambda: _sw_type_info.flag_doc(model, int(doc_type)), default=0
+            )
+
             adapter.currentModel = model
             title = self._read_model_title(model)
             active_config = adapter._attempt(lambda: model.GetActiveConfiguration())
@@ -244,6 +249,7 @@ class SolidWorksIOMixin:
             if not model:
                 raise Exception("Failed to create new part")
 
+            adapter._attempt(lambda: _sw_type_info.flag_doc(model, 1), default=0)
             adapter.currentModel = model
             title = self._read_model_title(model)
             return SolidWorksModel(
@@ -298,6 +304,7 @@ class SolidWorksIOMixin:
             if not model:
                 raise Exception("Failed to create new assembly")
 
+            adapter._attempt(lambda: _sw_type_info.flag_doc(model, 2), default=0)
             adapter.currentModel = model
             title = self._read_model_title(model)
             return SolidWorksModel(
@@ -348,6 +355,7 @@ class SolidWorksIOMixin:
             if not model:
                 raise Exception("Failed to create new drawing")
 
+            adapter._attempt(lambda: _sw_type_info.flag_doc(model, 3), default=0)
             adapter.currentModel = model
             title = self._read_model_title(model)
             return SolidWorksModel(

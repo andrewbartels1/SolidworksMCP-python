@@ -27,6 +27,7 @@ from .base import (
     SolidWorksModel,
     SweepParameters,
 )
+from .solidworks.sketch import RELATION_NAME_MAP
 
 
 class _BoolCallable:
@@ -921,6 +922,47 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data=rect_id,
             execution_time=self._delays["sketch_operation"],
+        )
+
+    async def add_sketch_constraint(
+        self, entity1: str, entity2: str | None, relation_type: str
+    ) -> AdapterResult[str]:
+        """Mock adding a geometric constraint between sketch entities.
+
+        Args:
+            entity1 (str): Primary sketch-entity ID.
+            entity2 (str | None): Secondary sketch-entity ID, or None for
+                single-entity relations (horizontal, vertical, fix).
+            relation_type (str): Constraint name (see RELATION_NAME_MAP).
+
+        Returns:
+            AdapterResult[str]: SUCCESS with a placeholder constraint ID, or
+                ERROR if no active sketch or the relation_type is unsupported.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+
+        if (relation_type or "").strip().lower() not in RELATION_NAME_MAP:
+            supported = ", ".join(sorted(RELATION_NAME_MAP))
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unsupported relation type '{relation_type}'. "
+                    f"Supported: {supported}"
+                ),
+            )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        constraint_id = f"Constraint_{relation_type}_{random.randint(1000, 9999)}"
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=constraint_id,
+            execution_time=self._delays["sketch_operation"] / 2,
         )
 
     async def exit_sketch(self) -> AdapterResult[None]:

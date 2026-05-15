@@ -619,7 +619,9 @@ class TestPyWin32AdapterBranches:
 
         adapter.currentSketchManager = SimpleNamespace(InsertSketch=Mock())
 
-        assert (await adapter.add_sketch_constraint("L1", None, "unknown")).is_success
+        # Unknown relation types now error out — the placeholder that always
+        # returned success was replaced by a real SketchAddConstraints call.
+        assert (await adapter.add_sketch_constraint("L1", None, "unknown")).is_error
         assert (
             await adapter.add_sketch_dimension("L1", None, "linear", 10.0)
         ).is_success
@@ -2435,6 +2437,14 @@ class TestPyWin32AdapterBranches:
             SimpleNamespace(client=fake_client),
             raising=False,
         )
+        # Late binding goes through win32com.client.dynamic.Dispatch — must
+        # also stub it or the call will hit the real COM (which connects on
+        # any box with SolidWorks installed).
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter._dynamic_module",
+            SimpleNamespace(Dispatch=Mock(return_value=None)),
+            raising=False,
+        )
 
         with pytest.raises(SolidWorksMCPError, match="instance is None"):
             await adapter.connect()
@@ -2658,6 +2668,13 @@ class TestPyWin32AdapterBranches:
                     Dispatch=Mock(side_effect=RuntimeError("dispatch fail")),
                 )
             ),
+            raising=False,
+        )
+        # Acquire path now routes through win32com.client.dynamic.Dispatch —
+        # stub it so the retry loop sees the same RuntimeError surface.
+        monkeypatch.setattr(
+            "src.solidworks_mcp.adapters.pywin32_adapter._dynamic_module",
+            SimpleNamespace(Dispatch=Mock(side_effect=RuntimeError("dispatch fail"))),
             raising=False,
         )
 

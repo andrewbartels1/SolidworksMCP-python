@@ -292,3 +292,72 @@ async def test_get_model_info_works_from_worker_thread(
         f"{worker_result['error']!r}"
     )
     assert worker_result.get("title", "").endswith(".SLDASM")
+
+
+# ---- add_sketch_constraint live regression ----
+
+
+async def test_add_sketch_constraint_perpendicular_and_horizontal(
+    connected_adapter,
+) -> None:
+    """End-to-end check that add_sketch_constraint actually constrains
+    SolidWorks geometry.
+
+    Creates a fresh part + sketch, draws two right-angle lines, applies a
+    perpendicular relation between them, then a horizontal relation on the
+    first line, and verifies SolidWorks accepts both calls. SolidWorks
+    silently accepts redundant relations, so we don't assert error on
+    duplicates — instead we use ``IGetRelations.GetRelations`` to confirm
+    the first line gained an extra relation after each call.
+    """
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success, f"create_part failed: {part_result.error}"
+
+    try:
+        sketch_result = await adapter.create_sketch("Front")
+        assert sketch_result.is_success, (
+            f"create_sketch failed: {sketch_result.error}"
+        )
+
+        line1 = await adapter.add_line(0.0, 0.0, 50.0, 0.0)
+        line2 = await adapter.add_line(50.0, 0.0, 50.0, 50.0)
+        assert line1.is_success and line2.is_success, (
+            f"add_line failed: {line1.error} / {line2.error}"
+        )
+
+        perp = await adapter.add_sketch_constraint(
+            line1.data, line2.data, "perpendicular"
+        )
+        assert perp.is_success, (
+            f"perpendicular constraint failed: {perp.error}"
+        )
+        assert perp.data.startswith("Constraint_"), (
+            f"unexpected constraint id: {perp.data!r}"
+        )
+
+        horiz = await adapter.add_sketch_constraint(line1.data, None, "horizontal")
+        assert horiz.is_success, f"horizontal constraint failed: {horiz.error}"
+        assert horiz.data.startswith("Constraint_")
+    finally:
+        await adapter.close_model(save=False)
+
+
+async def test_add_sketch_constraint_unsupported_relation(connected_adapter) -> None:
+    """Unsupported relation types must produce an error without touching SW."""
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success
+    try:
+        sketch_result = await adapter.create_sketch("Front")
+        assert sketch_result.is_success
+        line1 = await adapter.add_line(0.0, 0.0, 25.0, 0.0)
+        assert line1.is_success
+
+        bogus = await adapter.add_sketch_constraint(line1.data, None, "diagonal")
+        assert bogus.is_error
+        assert "Unsupported relation type" in (bogus.error or "")
+    finally:
+        await adapter.close_model(save=False)

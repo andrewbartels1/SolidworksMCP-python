@@ -8,6 +8,26 @@ from typing import Any, cast
 from ..base import AdapterResult, AdapterResultStatus
 
 
+# swConstraintType_e values per the official SolidWorks API enum docs
+# (SolidWorks.Interop.swconst). The legacy IModelDoc2.SketchAddConstraints
+# API takes string identifiers but on SW 2026/3DEXPERIENCE silently no-ops
+# without adding the relation. ISketchRelationManager.AddRelation takes
+# these integer enum values and works reliably.
+RELATION_NAME_MAP: dict[str, int] = {
+    "horizontal": 4,
+    "vertical": 5,
+    "tangent": 6,
+    "parallel": 7,
+    "perpendicular": 8,
+    "coincident": 9,
+    "concentric": 10,
+    "symmetric": 11,
+    "equal": 14,  # swConstraintType_SAMELENGTH
+    "fix": 17,    # swConstraintType_FIXED
+    "collinear": 27,  # swConstraintType_COLINEAR (single-l spelling)
+}
+
+
 class SolidWorksSketchMixin:
     """Expose sketch creation and editing methods via mixin-local implementation."""
 
@@ -832,60 +852,135 @@ def _add_sketch_constraint_impl(
 ) -> AdapterResult[str]:
     """Add a geometric relation (constraint) between sketch entities.
 
-    .. note::
-        This function currently builds the relation-type constant map but does
-        not invoke the SolidWorks ``AddConstraint`` API.  It returns a
-        placeholder ID.  Full implementation is tracked as a future work item.
+    Resolves ``entity1`` (and ``entity2`` if provided) against the adapter's
+    sketch-entity registry, then calls
+    ``ISketchRelationManager.AddRelation(entities, relation_type_enum)`` on
+    the active sketch. Entity handles are passed as a
+    ``VARIANT(VT_ARRAY | VT_DISPATCH, [...])`` — pywin32 will not marshal a
+    plain Python list of CDispatch objects to a SAFEARRAY by itself.
 
-    Supported ``relation_type`` strings (case-insensitive):
-    ``"parallel"``, ``"perpendicular"``, ``"tangent"``, ``"coincident"``,
-    ``"concentric"``, ``"horizontal"``, ``"vertical"``, ``"equal"``,
-    ``"symmetric"``, ``"collinear"``.
+    The legacy ``IModelDoc2.SketchAddConstraints`` API silently no-ops on
+    SW 2026/3DEXPERIENCE despite accepting the call, so this implementation
+    uses the modern ``ISketchRelationManager.AddRelation`` per the official
+    SolidWorks API docs.
+
+    Supported ``relation_type`` strings (case-insensitive): ``"horizontal"``,
+    ``"vertical"``, ``"parallel"``, ``"perpendicular"``, ``"tangent"``,
+    ``"coincident"``, ``"concentric"``, ``"equal"``, ``"symmetric"``,
+    ``"collinear"``, ``"fix"``.
 
     Args:
-        adapter: A ``PyWin32Adapter`` with an open sketch.
+        adapter: A ``PyWin32Adapter`` with an open sketch and a valid
+            ``currentModel``.
         entity1: Registered entity ID of the primary sketch entity (from a
             prior ``add_line`` / ``add_circle`` call).
         entity2: Registered entity ID of the secondary sketch entity, or
-            ``None`` for single-entity relations (horizontal, vertical …).
+            ``None`` for single-entity relations (horizontal, vertical, fix).
         relation_type: Constraint type string (see above).
 
     Returns:
-        AdapterResult[str]: On success, ``data`` is a descriptive placeholder
-        ID (e.g. ``"Constraint_tangent_5678"``).  On failure, ``status`` is
-        ``ERROR``.
-
-    Example::
-
-        result = pywin32_sketch_ops.add_sketch_constraint(
-            adapter, "Line_1", "Circle_2", "tangent"
-        )
-        print(result.data)  # "Constraint_tangent_5678"
+        AdapterResult[str]: On success, ``data`` is the registered entity ID
+        of the new constraint object (e.g. ``"Constraint_3"``). On failure,
+        ``status`` is ``ERROR``.
     """
-    _ = entity1, entity2
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _constraint_operation() -> str:
-        """Inner COM closure that resolves the relation constant and returns a placeholder ID.
+        if not adapter.currentModel:
+            raise Exception("No active model")
 
-        Returns:
-            str: A descriptive placeholder constraint ID.
-        """
-        relation_map = {
-            "parallel": adapter.constants.get("swConstraintType_PARALLEL", 0),
-            "perpendicular": adapter.constants.get("swConstraintType_PERPENDICULAR", 1),
-            "tangent": adapter.constants.get("swConstraintType_TANGENT", 2),
-            "coincident": adapter.constants.get("swConstraintType_COINCIDENT", 3),
-            "concentric": adapter.constants.get("swConstraintType_CONCENTRIC", 4),
-            "horizontal": adapter.constants.get("swConstraintType_HORIZONTAL", 5),
-            "vertical": adapter.constants.get("swConstraintType_VERTICAL", 6),
-            "equal": adapter.constants.get("swConstraintType_EQUAL", 7),
-            "symmetric": adapter.constants.get("swConstraintType_SYMMETRIC", 8),
-            "collinear": adapter.constants.get("swConstraintType_COLLINEAR", 9),
-        }
-        relation_map.get(relation_type.lower(), 0)
-        return f"Constraint_{relation_type}_{int(time.time() * 1000) % 10000}"
+        relation_type_enum = RELATION_NAME_MAP.get(
+            (relation_type or "").strip().lower()
+        )
+        if relation_type_enum is None:
+            supported = ", ".join(sorted(RELATION_NAME_MAP))
+            raise Exception(
+                f"Unsupported relation type '{relation_type}'. Supported: {supported}"
+            )
+
+        entity1_obj = adapter._sketch_entities.get(entity1)
+        if entity1_obj is None:
+            raise Exception(
+                f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle."
+            )
+
+        entities = [entity1_obj]
+        if entity2:
+            entity2_obj = adapter._sketch_entities.get(entity2)
+            if entity2_obj is None:
+                raise Exception(
+                    f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle."
+                )
+            entities.append(entity2_obj)
+
+        # Flag IModelDoc2 + ISketch + ISketchRelationManager so late-binding
+        # resolves GetActiveSketch2, RelationManager, and AddRelation as
+        # methods/properties correctly.
+        try:
+            from .. import sw_type_info as _sw_type_info
+        except ImportError:
+            _sw_type_info = None  # type: ignore[assignment]
+        if _sw_type_info is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(
+                    adapter.currentModel, "IModelDoc2"
+                ),
+                default=0,
+            )
+
+        active_sketch = adapter._attempt(
+            lambda: adapter.currentModel.GetActiveSketch2(), default=None
+        )
+        if active_sketch is None:
+            raise Exception(
+                "No active sketch on the model — create_sketch first or "
+                "open the existing sketch for edit."
+            )
+        if _sw_type_info is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(active_sketch, "ISketch"),
+                default=0,
+            )
+
+        relmgr = adapter._attempt(lambda: active_sketch.RelationManager, default=None)
+        if relmgr is None:
+            raise Exception("Active sketch has no RelationManager")
+        if _sw_type_info is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(relmgr, "ISketchRelationManager"),
+                default=0,
+            )
+
+        # pywin32 won't auto-marshal a Python list of CDispatch entities to a
+        # SAFEARRAY. The VT_ARRAY|VT_DISPATCH variant is the shape SolidWorks
+        # accepts. Import is lazy so the module still imports in mock/CI
+        # environments without pywin32.
+        try:
+            import pythoncom as _pythoncom
+            from win32com.client import VARIANT as _VARIANT
+        except ImportError as exc:  # pragma: no cover
+            raise Exception(
+                "pywin32 is required for add_sketch_constraint on a real adapter"
+            ) from exc
+
+        ents_variant = _VARIANT(
+            _pythoncom.VT_ARRAY | _pythoncom.VT_DISPATCH, entities
+        )
+        sketch_relation, add_err = adapter._attempt_with_error(
+            lambda: relmgr.AddRelation(ents_variant, relation_type_enum)
+        )
+        if add_err is not None or sketch_relation is None:
+            target = f"'{entity1}'" + (f" and '{entity2}'" if entity2 else "")
+            detail = f": {add_err}" if add_err else ""
+            raise Exception(
+                f"SolidWorks rejected '{relation_type}' relation on {target}{detail}"
+            )
+
+        return cast(
+            str,
+            adapter._register_sketch_entity("Constraint", sketch_relation),
+        )
 
     return cast(
         AdapterResult[str],
