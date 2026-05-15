@@ -59,6 +59,7 @@ def test_require_faiss_import_error() -> None:
 
 def test_require_sentence_transformers_success() -> None:
     """_require_sentence_transformers returns the SentenceTransformer class."""
+    pytest.importorskip("sentence_transformers")
     cls = _require_sentence_transformers()
     assert callable(cls)
 

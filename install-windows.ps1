@@ -251,29 +251,8 @@ if (-not (Test-PythonLauncher -Launcher @($venvPython))) {
     }
 }
 
-if ($script:useUv) {
-    Invoke-Uv pip install --python $venvPython --upgrade pip setuptools wheel
-    Invoke-Uv pip install --python $venvPython --editable ".[dev,test,docs,ui]"
-} else {
-    # Bootstrap pip if missing (can happen when venv is created from conda/micromamba Python)
-    $pipCheck = $null
-    $pipExitCode = 0
-    try {
-        $pipCheck = & $venvPython -m pip --version 2>&1
-        $pipExitCode = $LASTEXITCODE
-    } catch {
-        $pipCheck = $_.Exception.Message
-        $pipExitCode = 1
-    }
-
-    if ($pipExitCode -ne 0 -or -not $pipCheck -or ("$pipCheck" -match "No module named pip")) {
-        Write-Host "pip not found in venv - bootstrapping with ensurepip..." -ForegroundColor Yellow
-        & $venvPython -m ensurepip --upgrade
-    }
-
-    & $venvPython -m pip install --upgrade pip setuptools wheel
-    & $venvPython -m pip install -e ".[dev,test,docs,ui]"
-}
+& $venvPython -m pip install --upgrade pip setuptools wheel
+& $venvPython -m pip install -e ".[dev,test,docs,ui,rag]"
 
 # Verify prefab.exe was installed (pip occasionally skips console scripts on first install)
 $venvPrefab = Join-Path (Get-Location) ".venv\Scripts\prefab.exe"

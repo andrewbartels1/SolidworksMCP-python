@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -213,6 +213,14 @@ def test_pywin32_adapter_guard_and_helpers(monkeypatch):
     )
 
     adapter = _ConcretePyWin32Adapter({})
+    # Synchronous mock ComExecutor so _handle_com_operation doesn't short-circuit.
+    mock_thread = MagicMock()
+    mock_thread.is_alive.return_value = True
+    mock_com = MagicMock()
+    mock_com._thread = mock_thread
+    mock_com.run = lambda fn, timeout=None: fn()
+    adapter._com = mock_com
+
     adapter.currentModel = SimpleNamespace(GetType=lambda: 3)
     assert adapter._get_document_type() == "Drawing"
 

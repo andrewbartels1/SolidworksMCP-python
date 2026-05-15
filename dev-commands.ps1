@@ -124,7 +124,7 @@ function dev-install {
     if (-not $ready) { return }
 
     $venvPy = Get-VenvPython
-    uv pip install --python $venvPy -e ".[dev,test,docs,ui]"
+    uv pip install --python $venvPy -e ".[dev,test,docs,ui,rag]"
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Installation complete!" -ForegroundColor Green
     } else {

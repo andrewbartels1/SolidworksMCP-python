@@ -16,8 +16,8 @@ from src.solidworks_mcp.agents.schemas import (
 
 
 async def _run_or_skip(**kwargs):
-    """Wrap run_validated_prompt and skip the test on 401 auth errors."""
-    from pydantic_ai.exceptions import ModelHTTPError
+    """Wrap run_validated_prompt and skip the test on auth/connection errors."""
+    from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 
     try:
         return await run_validated_prompt(**kwargs)
@@ -27,6 +27,8 @@ async def _run_or_skip(**kwargs):
                 "LLM credentials rejected with 401 — refresh GH_TOKEN or provide ANTHROPIC_API_KEY"
             )
         raise
+    except ModelAPIError:
+        pytest.skip("LLM API connection error — check network or API availability")
 
 
 # ---------------------------------------------------------------------------

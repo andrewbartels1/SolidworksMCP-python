@@ -4,12 +4,13 @@ Computes SSIM and mean-pixel-difference between a reference image and a generate
 to validate that an LLM-generated SolidWorks part is geometrically equivalent to the
 reference sample.
 
-Usage: # Single comparison python src/utils/screenshot_compare.py \ --ref "C:\Temp
-ef.jpg" \ --gen  "C:\Temp\gen.jpg" \ --out  "C:\Temp\diff.png" \ --threshold 0.95
+Usage::
 
-# Batch from manifest JSON python src/utils/screenshot_compare.py --batch \ --manifest
-"tests/.generated/screenshot_manifest.json" \ --report
-"tests/.generated/screenshot_report.json"
+    # Single comparison
+    python src/utils/screenshot_compare.py --ref "C:\\Temp\\ref.jpg" --gen "C:\\Temp\\gen.jpg" --out "C:\\Temp\\diff.png" --threshold 0.95
+
+    # Batch from manifest JSON
+    python src/utils/screenshot_compare.py --batch --manifest "tests/.generated/screenshot_manifest.json" --report "tests/.generated/screenshot_report.json"
 
 Exit codes: 0 = PASS (SSIM >= threshold) 1 = FAIL (SSIM < threshold) 2 = Error (image
 load failure or missing dependency)
