@@ -132,6 +132,11 @@ def test_sw_type_info_loads_sw_wrapper() -> None:
     from solidworks_mcp.adapters import sw_type_info
 
     sw_type_info._ensure_loaded()
+    if sw_type_info._wrapper_module is None:
+        pytest.skip(
+            "gen_py wrapper not available — run: "
+            "python -m win32com.client.makepy sldworks.tlb"
+        )
     assert sw_type_info._wrapper_module is not None
     # These are the interfaces we rely on for every SW operation.
     for iface in ("ISldWorks", "IModelDoc2", "IAssemblyDoc", "IPartDoc"):
@@ -147,6 +152,11 @@ def test_flag_methods_is_per_interface_incremental() -> None:
     from solidworks_mcp.adapters import sw_type_info
 
     sw_type_info._ensure_loaded()
+    if sw_type_info._wrapper_module is None:
+        pytest.skip(
+            "gen_py wrapper not available — run: "
+            "python -m win32com.client.makepy sldworks.tlb"
+        )
     sw_type_info.invalidate_flag_cache()
 
     # Mock dispatch that records every _FlagAsMethod call.
