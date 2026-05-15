@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from typing import Any, cast
 
@@ -1007,7 +1008,17 @@ def _add_sketch_constraint_impl(
             ents_variant = _VARIANT(
                 _pythoncom.VT_ARRAY | _pythoncom.VT_DISPATCH, entities
             )
+        elif sys.platform == "win32":
+            # On Windows the real adapter feeds entities to a live COM method
+            # that requires the SAFEARRAY shape — fail clearly rather than let
+            # AddRelation surface a low-level "server threw an exception" COM
+            # error from an unwrappable list argument.
+            raise Exception(
+                "pywin32 is required for add_sketch_constraint on Windows"
+            )
         else:
+            # Non-Windows: this branch is exercised only by mocked unit tests
+            # whose fake AddRelation accepts any sequence.
             ents_variant = entities
         sketch_relation, add_err = adapter._attempt_with_error(
             lambda: relmgr.AddRelation(ents_variant, relation_type_enum)

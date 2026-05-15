@@ -361,8 +361,9 @@ def test_add_sketch_constraint_symmetric_happy_path() -> None:
     ents_arg, rt_arg = add_relation.call_args.args
     assert rt_arg == 11  # swConstraintType_SYMMETRIC
     # Three-element entity list, in order: entity1, entity2, entity3.
-    # On Windows the impl wraps entities in a VARIANT(value=[...]); on
-    # non-Windows CI without pywin32 it falls back to a plain list.
+    # When pywin32 is available (real Windows runs) the impl wraps
+    # entities in a VARIANT(value=[...]); when it is not (Linux CI) the
+    # non-Windows branch passes the entities through as a plain list.
     entities_seq = getattr(ents_arg, "value", ents_arg)
     assert len(entities_seq) == 3
 
