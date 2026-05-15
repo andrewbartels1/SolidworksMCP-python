@@ -32,7 +32,9 @@ Use either micromamba environment commands or local virtualenv commands.
 .\dev-commands.ps1 dev-format
 
 # Docs build/serve
-.\dev-commands.ps1 dev-make-docs-build
+.\dev-commands.ps1 dev-docs-build
+.\dev-commands.ps1 dev-docs-strict
+.\dev-commands.ps1 dev-docs-audit
 .\dev-commands.ps1 dev-docs
 ```
 
@@ -90,7 +92,8 @@ python -m venv .venv
 ## Documentation Guidance
 
 - Build docs before commit when touching docs pages:
-  - `.\dev-commands.ps1 dev-make-docs-build`
+  - `.\dev-commands.ps1 dev-docs-build`
+  - `.\dev-commands.ps1 dev-docs-strict`
 - For local preview:
   - `.\dev-commands.ps1 dev-docs`
 

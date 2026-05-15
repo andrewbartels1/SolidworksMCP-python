@@ -1,12 +1,10 @@
 """Pytest configuration and fixtures for SolidWorks MCP Server tests."""
 
 import asyncio
-import inspect
 import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 
@@ -113,83 +111,6 @@ async def mock_adapter(
 async def mcp_server(mock_config: SolidWorksMCPConfig) -> AsyncGenerator[FastMCP, None]:
     """Create FastMCP server instance."""
     mcp = FastMCP("Test SolidWorks MCP Server")
-
-    # Backward-compatible tool registry expected by existing tests.
-    mcp._tools = []
-    original_tool = mcp.tool
-
-    def compat_tool(*args, **kwargs):
-        """Test helper for compat tool."""
-        decorator = original_tool(*args, **kwargs)
-
-        def _wrap(func):
-            """Test helper for wrap."""
-            wrapped = decorator(func)
-
-            async def _compat_runner(*runner_args, **runner_kwargs):
-                """Test helper for compat runner."""
-                payload = runner_kwargs.get("input_data")
-                if payload is None and runner_args:
-                    payload = runner_args[0]
-
-                params = list(inspect.signature(func).parameters.values())
-                if len(params) == 0:
-                    result = await func()
-                elif len(params) == 1 and payload is not None:
-                    result = await func(payload)
-                else:
-                    result = await func(*runner_args, **runner_kwargs)
-
-                if isinstance(result, dict) and "data" not in result:
-                    payload_key_order = [
-                        "model",
-                        "part",
-                        "assembly",
-                        "drawing",
-                        "analysis",
-                        "export",
-                        "workflow",
-                        "template",
-                        "optimization",
-                        "recording_session",
-                        "recorded_macro",
-                    ]
-                    payload_items = {
-                        k: v
-                        for k, v in result.items()
-                        if k not in ("status", "message", "execution_time")
-                    }
-                    selected = None
-                    for key in payload_key_order:
-                        if key in payload_items:
-                            selected = payload_items[key]
-                            break
-                    if selected is None and len(payload_items) == 1:
-                        selected = next(iter(payload_items.values()))
-                    if selected is None:
-                        dict_payloads = [
-                            v for v in payload_items.values() if isinstance(v, dict)
-                        ]
-                        if len(dict_payloads) == 1:
-                            selected = dict_payloads[0]
-                    if selected is None:
-                        selected = payload_items
-                    result["data"] = selected
-
-                return result
-
-            mcp._tools.append(
-                SimpleNamespace(
-                    name=getattr(func, "__name__", "unknown"),
-                    func=_compat_runner,
-                    handler=_compat_runner,
-                )
-            )
-            return wrapped
-
-        return _wrap
-
-    mcp.tool = compat_tool
     yield mcp
 
 

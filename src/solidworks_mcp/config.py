@@ -25,7 +25,7 @@ from pydantic_core.core_schema import ValidationInfo
 
 class DeploymentMode(StrEnum):
     """Deployment mode options.
-    
+
     Attributes:
         HYBRID (Any): The hybrid value.
         LOCAL (Any): The local value.
@@ -39,7 +39,7 @@ class DeploymentMode(StrEnum):
 
 class SecurityLevel(StrEnum):
     """Security level options.
-    
+
     Attributes:
         MINIMAL (Any): The minimal value.
         STANDARD (Any): The standard value.
@@ -53,7 +53,7 @@ class SecurityLevel(StrEnum):
 
 class AdapterType(StrEnum):
     """SolidWorks adapter implementation options.
-    
+
     Attributes:
         EDGE_DOTNET (Any): The edge dotnet value.
         MOCK (Any): The mock value.
@@ -71,7 +71,7 @@ class AdapterType(StrEnum):
 
 class SolidWorksMCPConfig(BaseModel):
     """Main configuration for SolidWorks MCP Server.
-    
+
     Attributes:
         adapter_type (AdapterType): The adapter type value.
         allowed_hosts (list[str]): The allowed hosts value.
@@ -356,11 +356,11 @@ class SolidWorksMCPConfig(BaseModel):
     @model_validator(mode="after")
     def sync_legacy_alias_fields(self) -> SolidWorksMCPConfig:
         """Sync test/developer alias fields into canonical runtime fields.
-        
+
         Several fixtures and scripts still populate compatibility fields such as
         ``rate_limit_enabled`` and ``connection_pooling``. Runtime code reads the canonical
         fields, so normalize them here after validation.
-        
+
         Returns:
             SolidWorksMCPConfig: The result produced by the operation.
         """
@@ -376,11 +376,11 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def set_cache_dir(cls, v: Path | None, info: ValidationInfo) -> Path:
         """Set default cache directory.
-        
+
         Args:
             v (Path | None): The v value.
             info (ValidationInfo): The info value.
-        
+
         Returns:
             Path: The result produced by the operation.
         """
@@ -396,11 +396,11 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def set_log_file(cls, v: Path | None, info: ValidationInfo) -> Path:
         """Set default log file path.
-        
+
         Args:
             v (Path | None): The v value.
             info (ValidationInfo): The info value.
-        
+
         Returns:
             Path: The result produced by the operation.
         """
@@ -416,11 +416,11 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_adapter_type(cls, v: AdapterType, info: ValidationInfo) -> AdapterType:
         """Validate adapter type based on platform.
-        
+
         Args:
             v (AdapterType): The v value.
             info (ValidationInfo): The info value.
-        
+
         Returns:
             AdapterType: The result produced by the operation.
         """
@@ -430,13 +430,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_port(cls, v: int) -> int:
         """Validate the port.
-        
+
         Args:
             v (int): The v value.
-        
+
         Returns:
             int: The computed numeric result.
-        
+
         Raises:
             ValueError: Port must be between 1 and 65535.
         """
@@ -448,13 +448,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_timeout(cls, v: float) -> float:
         """Validate the timeout.
-        
+
         Args:
             v (float): The v value.
-        
+
         Returns:
             float: The computed numeric result.
-        
+
         Raises:
             ValueError: Timeout_seconds must be > 0.
         """
@@ -466,13 +466,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_complexity_parameter_threshold(cls, v: int) -> int:
         """Validate the complexity parameter threshold.
-        
+
         Args:
             v (int): The v value.
-        
+
         Returns:
             int: The computed numeric result.
-        
+
         Raises:
             ValueError: Complexity_parameter_threshold must be >= 1.
         """
@@ -484,13 +484,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_complexity_score_threshold(cls, v: float) -> float:
         """Validate the complexity score threshold.
-        
+
         Args:
             v (float): The v value.
-        
+
         Returns:
             float: The computed numeric result.
-        
+
         Raises:
             ValueError: Complexity_score_threshold must be in (0, 1].
         """
@@ -502,13 +502,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_response_cache_ttl_seconds(cls, v: int) -> int:
         """Validate default response cache TTL.
-        
+
         Args:
             v (int): The v value.
-        
+
         Returns:
             int: The computed numeric result.
-        
+
         Raises:
             ValueError: Response_cache_ttl_seconds must be >= 1.
         """
@@ -520,13 +520,13 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def validate_response_cache_max_entries(cls, v: int) -> int:
         """Validate response cache size.
-        
+
         Args:
             v (int): The v value.
-        
+
         Returns:
             int: The computed numeric result.
-        
+
         Raises:
             ValueError: Response_cache_max_entries must be >= 1.
         """
@@ -537,10 +537,10 @@ class SolidWorksMCPConfig(BaseModel):
     @classmethod
     def from_env(cls, env_file: str | None = None) -> SolidWorksMCPConfig:
         """Build configuration from environment variables.
-        
+
         Args:
             env_file (str | None): The env file value. Defaults to None.
-        
+
         Returns:
             SolidWorksMCPConfig: The result produced by the operation.
         """
@@ -553,11 +553,11 @@ class SolidWorksMCPConfig(BaseModel):
 
         def _coerce_env_value(key: str, value: Any) -> Any:
             """Build internal coerce env value.
-            
+
             Args:
                 key (str): The key value.
                 value (Any): The value value.
-            
+
             Returns:
                 Any: The result produced by the operation.
             """
@@ -590,10 +590,10 @@ class SolidWorksMCPConfig(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         """Post-initialization setup.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
         """
@@ -615,7 +615,7 @@ class SolidWorksMCPConfig(BaseModel):
     @property
     def is_windows(self) -> bool:
         """Check if running on Windows.
-        
+
         Returns:
             bool: True if windows, otherwise False.
         """
@@ -624,7 +624,7 @@ class SolidWorksMCPConfig(BaseModel):
     @property
     def can_use_solidworks(self) -> bool:
         """Check if SolidWorks integration is possible.
-        
+
         Returns:
             bool: True if use solidworks, otherwise False.
         """
@@ -636,7 +636,7 @@ class SolidWorksMCPConfig(BaseModel):
 
     def get_database_config(self) -> dict[str, Any]:
         """Get database configuration.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -647,7 +647,7 @@ class SolidWorksMCPConfig(BaseModel):
 
     def get_security_config(self) -> dict[str, Any]:
         """Get security configuration.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -664,10 +664,10 @@ class SolidWorksMCPConfig(BaseModel):
 
 def load_config(config_file: str | None = None) -> SolidWorksMCPConfig:
     """Load configuration from file and environment variables.
-    
+
     Args:
         config_file (str | None): The config file value. Defaults to None.
-    
+
     Returns:
         SolidWorksMCPConfig: The result produced by the operation.
     """

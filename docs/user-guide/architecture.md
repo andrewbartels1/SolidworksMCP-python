@@ -20,7 +20,7 @@ flowchart TB
     
     subgraph "Application Layer"
         Router["Intelligent Router"]
-        Tools["Tool Registry (90+)"]
+        Tools["Tool Registry (109)"]
         Cache["Response Cache"]
     end
     
@@ -181,7 +181,7 @@ flowchart TB
 
 | Feature | Development | Restricted | Secure | Locked |
 |---------|-------------|------------|--------|---------|
-| Tool Access | All 90+ | Safe/Moderate | Read-only | Analysis only |
+| Tool Access | All 109 | Safe/Moderate | Read-only | Analysis only |
 | File System | Full | Limited paths | Read-only | None |
 | VBA Execution | Enabled | Controlled | Disabled | Disabled |
 | Network Access | Enabled | Disabled | Disabled | Disabled |

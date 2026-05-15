@@ -43,6 +43,42 @@ Set `%APPDATA%\Code\User\mcp.json`:
 
 Replace the script path with your local repository location.
 
+## 2b. Configure LM Studio MCP (Optional)
+
+If you want LM Studio to call SolidWorks tools directly, use an MCP config with `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "solidworks-mcp-server": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
+      ]
+    }
+  }
+}
+```
+
+Or run the module directly:
+
+```json
+{
+  "mcpServers": {
+    "solidworks-mcp-server": {
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "solidworks_mcp.server"]
+    }
+  }
+}
+```
+
+Restart LM Studio after updating the file.
+
 ## 3. Start Server
 
 ```powershell
@@ -53,7 +89,7 @@ Expected log markers:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Registered 76 SolidWorks tools`
+- `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
 
 ## 4. First Connection Check

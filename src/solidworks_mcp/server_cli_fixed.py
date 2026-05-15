@@ -1,5 +1,4 @@
-"""Utilities for server cli fixed.
-"""
+"""Utilities for server cli fixed."""
 
 # Typer CLI setup
 import asyncio
@@ -53,7 +52,7 @@ def run(
     ),
 ) -> None:
     """Start the SolidWorks MCP Server.
-    
+
     Args:
         config (str): Configuration values for the operation. Defaults to typer.Option(
                       None,         "--config",         help="Configuration file path",
@@ -69,7 +68,7 @@ def run(
                       debug",         help="Enable debug mode",     ).
         mock (bool): The mock value. Defaults to typer.Option(         False,         "--
                      mock",         help="Use mock SolidWorks for testing",     ).
-    
+
     Returns:
         None: None.
     """

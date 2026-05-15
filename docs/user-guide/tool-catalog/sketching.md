@@ -282,6 +282,8 @@ Add a dimension to sketch entities.
 
 **Prerequisite:** Active sketch edit mode
 
+**SolidWorks automation note:** In real SolidWorks sessions, sketch dimension creation can open the interactive `Modify` approval dialog and block unattended runs. The implementation keeps the sketch-input preferences disabled for the full automation session and uses `AddRadialDimension2` or `AddDiameterDimension2` for radial and diameter dimensions so these calls stay non-interactive.
+
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
@@ -299,6 +301,12 @@ Add a dimension to sketch entities.
   "value": 50.0
 }
 ```
+
+**Why this is implemented this way:**
+
+- SolidWorks may treat sketch dimension creation like an interactive Smart Dimension workflow unless the sketch-input preferences are suppressed.
+- The adapter disables `swInputDimValOnCreate`, `swSketchAcceptNumericInput`, `swSketchCreateDimensionOnlyWhenEntered`, and `swScaleSketchOnFirstDimension` when automation connects, so the tool does not wait for a manual approve click.
+- Radial and diameter dimensions use the dedicated `IModelDoc2` APIs instead of the generic extension call because that path is more reliable for circles and arcs in live COM sessions.
 
 ---
 

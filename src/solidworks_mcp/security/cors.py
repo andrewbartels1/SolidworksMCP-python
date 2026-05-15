@@ -1,5 +1,4 @@
-"""CORS (Cross-Origin Resource Sharing) configuration for remote deployments.
-"""
+"""CORS (Cross-Origin Resource Sharing) configuration for remote deployments."""
 
 from typing import Any
 
@@ -8,11 +7,11 @@ from ..config import SolidWorksMCPConfig
 
 def setup_cors(mcp: Any, config: SolidWorksMCPConfig) -> None:
     """Configure CORS middleware for remote deployments.
-    
+
     Args:
         mcp (Any): The mcp value.
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
     """

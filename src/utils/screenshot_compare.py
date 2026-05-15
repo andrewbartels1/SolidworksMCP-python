@@ -37,10 +37,10 @@ _RESIZE_TARGET = (1280, 720)  # Normalise resolution before comparison
 
 def _load_normalised(path: Path) -> np.ndarray:
     """Load an image, resize to common resolution, convert to greyscale float array.
-    
+
     Args:
         path (Path): Filesystem path for the operation.
-    
+
     Returns:
         np.ndarray: The result produced by the operation.
     """
@@ -53,12 +53,12 @@ def _load_normalised(path: Path) -> np.ndarray:
 
 def compare(ref_path: Path, gen_path: Path, diff_path: Path | None = None) -> dict:
     """Compare two images. Returns a result dict with SSIM and mpd.
-    
+
     Args:
         ref_path (Path): The ref path value.
         gen_path (Path): The gen path value.
         diff_path (Path | None): The diff path value. Defaults to None.
-    
+
     Returns:
         dict: A dictionary containing the resulting values.
     """
@@ -92,10 +92,10 @@ def compare(ref_path: Path, gen_path: Path, diff_path: Path | None = None) -> di
 
 def _run_single(args: argparse.Namespace) -> int:
     """Build internal run single.
-    
+
     Args:
         args (argparse.Namespace): Additional positional arguments forwarded to the call.
-    
+
     Returns:
         int: The computed numeric result.
     """
@@ -126,10 +126,10 @@ def _run_single(args: argparse.Namespace) -> int:
 
 def _run_batch(args: argparse.Namespace) -> int:
     """Build internal run batch.
-    
+
     Args:
         args (argparse.Namespace): Additional positional arguments forwarded to the call.
-    
+
     Returns:
         int: The computed numeric result.
     """
@@ -188,7 +188,7 @@ def _run_batch(args: argparse.Namespace) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build internal parser.
-    
+
     Returns:
         argparse.ArgumentParser: The result produced by the operation.
     """
@@ -223,7 +223,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     # Handle --batch flag before subparser
     """Handle main.
-    
+
     Returns:
         None: None.
     """

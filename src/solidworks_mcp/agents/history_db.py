@@ -1,5 +1,4 @@
-"""SQLModel persistence for agent runs and tool-error cataloging.
-"""
+"""SQLModel persistence for agent runs and tool-error cataloging."""
 
 from __future__ import annotations
 
@@ -8,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from sqlalchemy.pool import NullPool
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 DEFAULT_DB_PATH = Path(".solidworks_mcp") / "agent_memory.sqlite3"
@@ -15,7 +15,7 @@ DEFAULT_DB_PATH = Path(".solidworks_mcp") / "agent_memory.sqlite3"
 
 class ErrorRecord(BaseModel):
     """A normalized error record from an MCP call or planning step.
-    
+
     Attributes:
         error_message (str): The error message value.
         error_type (str): The error type value.
@@ -35,7 +35,7 @@ class ErrorRecord(BaseModel):
 
 def _utc_now_iso() -> str:
     """Build internal utc now iso.
-    
+
     Returns:
         str: The resulting text value.
     """
@@ -45,7 +45,7 @@ def _utc_now_iso() -> str:
 
 class AgentRun(SQLModel, table=True):
     """One recorded agent run.
-    
+
     Attributes:
         agent_name (str): The agent name value.
         created_at (str): The created at value.
@@ -69,7 +69,7 @@ class AgentRun(SQLModel, table=True):
 
 class ToolEvent(SQLModel, table=True):
     """One tool lifecycle event linked to a run.
-    
+
     Attributes:
         created_at (str): The created at value.
         id (int | None): The id value.
@@ -89,7 +89,7 @@ class ToolEvent(SQLModel, table=True):
 
 class ErrorCatalog(SQLModel, table=True):
     """Persisted error records for recovery recommendations.
-    
+
     Attributes:
         created_at (str): The created at value.
         error_message (str): The error message value.
@@ -115,7 +115,7 @@ class ErrorCatalog(SQLModel, table=True):
 
 class ConversationEvent(SQLModel, table=True):
     """One message or system event in a conversation, linked to a run context.
-    
+
     Attributes:
         content_snippet (str): The content snippet value.
         conversation_id (str): The conversation id value.
@@ -139,7 +139,7 @@ class ConversationEvent(SQLModel, table=True):
 
 class DesignSession(SQLModel, table=True):
     """Persistent interactive design session metadata.
-    
+
     Attributes:
         accepted_family (str | None): The accepted family value.
         created_at (str): The created at value.
@@ -167,7 +167,7 @@ class DesignSession(SQLModel, table=True):
 
 class PlanCheckpoint(SQLModel, table=True):
     """One approval boundary in an interactive design session.
-    
+
     Attributes:
         approved_by_user (bool): The approved by user value.
         checkpoint_index (int): The checkpoint index value.
@@ -197,7 +197,7 @@ class PlanCheckpoint(SQLModel, table=True):
 
 class ToolCallRecord(SQLModel, table=True):
     """Execution log for tool calls scoped to session/checkpoint.
-    
+
     Attributes:
         checkpoint_id (int | None): The checkpoint id value.
         created_at (str): The created at value.
@@ -225,7 +225,7 @@ class ToolCallRecord(SQLModel, table=True):
 
 class EvidenceLink(SQLModel, table=True):
     """Evidence references used to justify planning decisions.
-    
+
     Attributes:
         checkpoint_id (int | None): The checkpoint id value.
         created_at (str): The created at value.
@@ -251,7 +251,7 @@ class EvidenceLink(SQLModel, table=True):
 
 class ModelStateSnapshot(SQLModel, table=True):
     """Rollback/diff snapshot of model state at a checkpoint.
-    
+
     Attributes:
         checkpoint_id (int | None): The checkpoint id value.
         created_at (str): The created at value.
@@ -277,7 +277,7 @@ class ModelStateSnapshot(SQLModel, table=True):
 
 class SketchGraphSnapshot(SQLModel, table=True):
     """Lightweight relational sketch graph storage (Section F).
-    
+
     Attributes:
         created_at (str): The created at value.
         edges_json (str): The edges json value.
@@ -299,32 +299,37 @@ class SketchGraphSnapshot(SQLModel, table=True):
     created_at: str
 
 
-def _build_engine(db_path: Path | None = None):
+def _build_engine(db_path: Path | None = None) -> Any:
     """Build a local SQLite engine from the configured path.
-    
+
     Args:
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
-        Any: The result produced by the operation.
+        Any: SQLAlchemy engine instance for the resolved SQLite path.
     """
     resolved = db_path or DEFAULT_DB_PATH
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{resolved}", echo=False)
+    # NullPool closes sqlite connections immediately after each session/transaction,
+    # which prevents a long-lived pool from surfacing ResourceWarning noise at process exit.
+    return create_engine(f"sqlite:///{resolved}", echo=False, poolclass=NullPool)
 
 
 def init_db(db_path: Path | None = None) -> Path:
     """Create SQLModel tables used by the lightweight agent memory system.
-    
+
     Args:
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         Path: The result produced by the operation.
     """
     resolved = db_path or DEFAULT_DB_PATH
     engine = _build_engine(resolved)
-    SQLModel.metadata.create_all(engine)
+    try:
+        SQLModel.metadata.create_all(engine)
+    finally:
+        engine.dispose()
     return resolved
 
 
@@ -339,7 +344,7 @@ def insert_run(
     db_path: Path | None = None,
 ) -> None:
     """Record one prompt run and optionally the validated output payload.
-    
+
     Args:
         run_id (str): The run id value.
         agent_name (str): The agent name value.
@@ -348,7 +353,7 @@ def insert_run(
         output_json (str | None): The output json value.
         model_name (str | None): Embedding model name to use.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -378,14 +383,14 @@ def insert_tool_event(
     db_path: Path | None = None,
 ) -> None:
     """Store lifecycle events around MCP tool usage to aid troubleshooting.
-    
+
     Args:
         run_id (str): The run id value.
         tool_name (str): The tool name value.
         phase (str): The phase value.
         payload_json (str | None): The payload json value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -408,12 +413,12 @@ def insert_error(
     record: ErrorRecord, run_id: str | None = None, db_path: Path | None = None
 ) -> None:
     """Persist an error with normalized root cause and remediation guidance.
-    
+
     Args:
         record (ErrorRecord): The record value.
         run_id (str | None): The run id value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -439,11 +444,11 @@ def find_recent_errors(
     limit: int = 20, db_path: Path | None = None
 ) -> list[dict[str, Any]]:
     """Return recent errors so agents can avoid repeated failing states.
-    
+
     Args:
         limit (int): The limit value. Defaults to 20.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -451,7 +456,7 @@ def find_recent_errors(
     engine = _build_engine(resolved)
     with Session(engine) as session:
         rows = session.exec(
-            select(ErrorCatalog).order_by(ErrorCatalog.id.desc()).limit(limit)
+            select(ErrorCatalog).order_by(ErrorCatalog.id.desc()).limit(limit)  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -480,7 +485,7 @@ def insert_conversation_event(
     db_path: Path | None = None,
 ) -> None:
     """Record a conversation event (message, system event, or tool call) linked to a run.
-    
+
     Args:
         conversation_id (str): The conversation id value.
         event_type (str): The event type value.
@@ -489,7 +494,7 @@ def insert_conversation_event(
         run_id (str | None): The run id value. Defaults to None.
         metadata_json (str | None): The metadata json value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -514,11 +519,11 @@ def find_conversation_events(
     conversation_id: str, db_path: Path | None = None
 ) -> list[dict[str, Any]]:
     """Retrieve all events for a conversation, ordered by creation time.
-    
+
     Args:
         conversation_id (str): The conversation id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -548,11 +553,11 @@ def find_conversation_events(
 
 def find_run_timeline(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
     """Reconstruct a complete timeline for one run, joining runs, tool events, and conversation events.
-    
+
     Args:
         run_id (str): The run id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
@@ -582,13 +587,13 @@ def find_run_timeline(run_id: str, db_path: Path | None = None) -> dict[str, Any
         tool_events = session.exec(
             select(ToolEvent)
             .where(ToolEvent.run_id == run_id)
-            .order_by(ToolEvent.id.asc())
+            .order_by(ToolEvent.id.asc())  # type: ignore[union-attr]
         ).all()
 
         convo_events = session.exec(
             select(ConversationEvent)
             .where(ConversationEvent.run_id == run_id)
-            .order_by(ConversationEvent.id.asc())
+            .order_by(ConversationEvent.id.asc())  # type: ignore[union-attr]
         ).all()
 
         events = []
@@ -616,7 +621,7 @@ def find_run_timeline(run_id: str, db_path: Path | None = None) -> dict[str, Any
                 }
             )
 
-        events.sort(key=lambda e: e["timestamp"])
+        events.sort(key=lambda e: e["timestamp"] or "")  # type: ignore[return-value]
         timeline["events"] = events
 
     return timeline
@@ -634,7 +639,7 @@ def upsert_design_session(
     db_path: Path | None = None,
 ) -> None:
     """Create or update one interactive design session row.
-    
+
     Args:
         session_id (str): The session id value.
         user_goal (str): The user goal value.
@@ -644,7 +649,7 @@ def upsert_design_session(
         current_checkpoint_index (int): The current checkpoint index value. Defaults to 0.
         metadata_json (str | None): The metadata json value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -685,11 +690,11 @@ def get_design_session(
     session_id: str, db_path: Path | None = None
 ) -> dict[str, Any] | None:
     """Return one session row as a dictionary.
-    
+
     Args:
         session_id (str): The session id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         dict[str, Any] | None: A dictionary containing the resulting values.
     """
@@ -728,7 +733,7 @@ def insert_plan_checkpoint(
     db_path: Path | None = None,
 ) -> int:
     """Insert a new checkpoint and return its ID.
-    
+
     Args:
         session_id (str): The session id value.
         checkpoint_index (int): The checkpoint index value.
@@ -739,7 +744,7 @@ def insert_plan_checkpoint(
         result_json (str | None): The result json value. Defaults to None.
         rollback_snapshot_id (int | None): The rollback snapshot id value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         int: The computed numeric result.
     """
@@ -775,7 +780,7 @@ def update_plan_checkpoint(
     db_path: Path | None = None,
 ) -> None:
     """Patch checkpoint approval/execution fields.
-    
+
     Args:
         checkpoint_id (int): The checkpoint id value.
         approved_by_user (bool | None): The approved by user value. Defaults to None.
@@ -783,7 +788,7 @@ def update_plan_checkpoint(
         result_json (str | None): The result json value. Defaults to None.
         rollback_snapshot_id (int | None): The rollback snapshot id value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -808,16 +813,53 @@ def update_plan_checkpoint(
         session.commit()
 
 
+def update_plan_checkpoint_planned_action(
+    checkpoint_id: int,
+    *,
+    planned_action_json: str,
+    executed: bool | None = None,
+    result_json: str | None = None,
+    db_path: Path | None = None,
+) -> None:
+    """Update checkpoint planned-action JSON and optional execution status.
+
+    Args:
+        checkpoint_id: Target checkpoint row ID.
+        planned_action_json: New planned action payload encoded as JSON string.
+        executed: Optional executed flag override.
+        result_json: Optional result payload override.
+        db_path: Optional SQLite path override.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    with Session(engine) as session:
+        row = session.exec(
+            select(PlanCheckpoint).where(PlanCheckpoint.id == checkpoint_id)
+        ).first()
+        if row is None:
+            return
+
+        row.planned_action_json = planned_action_json
+        if executed is not None:
+            row.executed = executed
+        if result_json is not None:
+            row.result_json = result_json
+        row.updated_at = _utc_now_iso()
+
+        session.add(row)
+        session.commit()
+
+
 def list_plan_checkpoints(
     session_id: str,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """List all checkpoints for a session.
-    
+
     Args:
         session_id (str): The session id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -827,7 +869,7 @@ def list_plan_checkpoints(
         rows = session.exec(
             select(PlanCheckpoint)
             .where(PlanCheckpoint.session_id == session_id)
-            .order_by(PlanCheckpoint.checkpoint_index.asc())
+            .order_by(PlanCheckpoint.checkpoint_index.asc())  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -848,6 +890,54 @@ def list_plan_checkpoints(
     ]
 
 
+def replace_plan_checkpoints(
+    *,
+    session_id: str,
+    checkpoints: list[dict[str, Any]],
+    db_path: Path | None = None,
+) -> None:
+    """Replace all session checkpoints with a new ordered checkpoint list.
+
+    Args:
+        session_id (str): The session id value.
+        checkpoints (list[dict[str, Any]]): Replacement checkpoint records.
+        db_path (Path | None): The db path value. Defaults to None.
+
+    Returns:
+        None: None.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    now = _utc_now_iso()
+
+    with Session(engine) as session:
+        existing_rows = session.exec(
+            select(PlanCheckpoint).where(PlanCheckpoint.session_id == session_id)
+        ).all()
+        for existing in existing_rows:
+            session.delete(existing)
+
+        for index, item in enumerate(checkpoints, start=1):
+            planned_action_json = str(item.get("planned_action_json") or "{}")
+            title = str(item.get("title") or f"Checkpoint {index}")
+            approved_by_user = bool(item.get("approved_by_user", index == 1))
+            row = PlanCheckpoint(
+                session_id=session_id,
+                checkpoint_index=int(item.get("checkpoint_index") or index),
+                title=title,
+                planned_action_json=planned_action_json,
+                approved_by_user=approved_by_user,
+                executed=False,
+                result_json=None,
+                rollback_snapshot_id=None,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(row)
+
+        session.commit()
+
+
 def insert_tool_call_record(
     *,
     session_id: str,
@@ -861,7 +951,7 @@ def insert_tool_call_record(
     db_path: Path | None = None,
 ) -> None:
     """Insert one tool call execution record.
-    
+
     Args:
         session_id (str): The session id value.
         tool_name (str): The tool name value.
@@ -872,7 +962,7 @@ def insert_tool_call_record(
         success (bool): The success value. Defaults to True.
         latency_ms (float | None): The latency ms value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -901,12 +991,12 @@ def list_tool_call_records(
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """List tool call records for a session and optional checkpoint.
-    
+
     Args:
         session_id (str): The session id value.
         checkpoint_id (int | None): The checkpoint id value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -916,7 +1006,7 @@ def list_tool_call_records(
         query = select(ToolCallRecord).where(ToolCallRecord.session_id == session_id)
         if checkpoint_id is not None:
             query = query.where(ToolCallRecord.checkpoint_id == checkpoint_id)
-        rows = session.exec(query.order_by(ToolCallRecord.id.asc())).all()
+        rows = session.exec(query.order_by(ToolCallRecord.id.asc())).all()  # type: ignore[union-attr]
 
     return [
         {
@@ -947,7 +1037,7 @@ def insert_evidence_link(
     db_path: Path | None = None,
 ) -> None:
     """Insert one evidence row used by planning/classification.
-    
+
     Args:
         session_id (str): The session id value.
         source_type (str): The source type value.
@@ -957,7 +1047,7 @@ def insert_evidence_link(
         rationale (str | None): The rationale value. Defaults to None.
         payload_json (str | None): The payload json value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -985,12 +1075,12 @@ def list_evidence_links(
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """List evidence rows for a session and optional checkpoint.
-    
+
     Args:
         session_id (str): The session id value.
         checkpoint_id (int | None): The checkpoint id value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -1000,7 +1090,7 @@ def list_evidence_links(
         query = select(EvidenceLink).where(EvidenceLink.session_id == session_id)
         if checkpoint_id is not None:
             query = query.where(EvidenceLink.checkpoint_id == checkpoint_id)
-        rows = session.exec(query.order_by(EvidenceLink.id.asc())).all()
+        rows = session.exec(query.order_by(EvidenceLink.id.asc())).all()  # type: ignore[union-attr]
 
     return [
         {
@@ -1030,7 +1120,7 @@ def insert_model_state_snapshot(
     db_path: Path | None = None,
 ) -> int:
     """Insert model snapshot row and return snapshot ID for rollback tracking.
-    
+
     Args:
         session_id (str): The session id value.
         checkpoint_id (int | None): The checkpoint id value. Defaults to None.
@@ -1040,7 +1130,7 @@ def insert_model_state_snapshot(
         screenshot_path (str | None): The screenshot path value. Defaults to None.
         state_fingerprint (str | None): The state fingerprint value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         int: The computed numeric result.
     """
@@ -1068,11 +1158,11 @@ def list_model_state_snapshots(
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """List snapshots for a session newest first for diff/rollback flows.
-    
+
     Args:
         session_id (str): The session id value.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -1082,7 +1172,7 @@ def list_model_state_snapshots(
         rows = session.exec(
             select(ModelStateSnapshot)
             .where(ModelStateSnapshot.session_id == session_id)
-            .order_by(ModelStateSnapshot.id.desc())
+            .order_by(ModelStateSnapshot.id.desc())  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -1112,7 +1202,7 @@ def insert_sketch_graph_snapshot(
     db_path: Path | None = None,
 ) -> None:
     """Store lightweight sketch graph snapshots in SQLite (Section F).
-    
+
     Args:
         session_id (str): The session id value.
         nodes_json (str): The nodes json value.
@@ -1121,7 +1211,7 @@ def insert_sketch_graph_snapshot(
         graph_format (str): The graph format value. Defaults to "json".
         metadata_json (str | None): The metadata json value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         None: None.
     """
@@ -1148,12 +1238,12 @@ def list_sketch_graph_snapshots(
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     """List sketch graph snapshots for a session.
-    
+
     Args:
         session_id (str): The session id value.
         model_path (str | None): The model path value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
-    
+
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
     """
@@ -1165,7 +1255,7 @@ def list_sketch_graph_snapshots(
         )
         if model_path is not None:
             query = query.where(SketchGraphSnapshot.model_path == model_path)
-        rows = session.exec(query.order_by(SketchGraphSnapshot.id.desc())).all()
+        rows = session.exec(query.order_by(SketchGraphSnapshot.id.desc())).all()  # type: ignore[union-attr]
 
     return [
         {

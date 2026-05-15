@@ -1,5 +1,4 @@
-"""Utilities for prefab smoke fetch.
-"""
+"""Utilities for prefab smoke fetch."""
 
 import os
 

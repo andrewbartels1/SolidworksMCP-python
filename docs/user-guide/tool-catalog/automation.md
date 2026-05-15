@@ -1,10 +1,28 @@
 # Automation Tools
 
-Orchestrate multi-step workflows, run batch file processing, manage design tables, generate VBA code on the fly, and tune SolidWorks performance settings. The glue that connects individual tool calls into repeatable pipelines.
+Use these when the work should be repeatable. Start with VBA generation or macro
+recording, then use batch processing, design tables, workflow execution, templates,
+and performance tuning as needed.
 
-> **Prerequisite:** Varies by operation. Batch processing requires writable source/output directories.
+> **Prerequisite:** Varies by operation. Batch processing requires writable source and output directories.
 
 **Total tools in this category: 8**
+
+## Recommended order
+
+1. `generate_vba_code` for complex or repetitive operations
+2. `automation_start_macro_recording` and `automation_stop_macro_recording` when capturing a manual workflow
+3. `batch_process_files` for many files
+4. `manage_design_table` for configuration-driven variants
+5. `execute_workflow` for ordered multi-step pipelines
+6. `create_template` for reusable part, assembly, or drawing templates
+7. `optimize_performance` for tuning the SolidWorks environment
+
+## Known limits
+
+- Mock mode simulates VBA generation and macro recording.
+- Batch processing and workflow execution still depend on the configured adapter.
+- These tools are for orchestration, not for direct geometry creation.
 
 ---
 

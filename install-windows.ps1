@@ -9,19 +9,198 @@ function Step {
     Write-Host $Message -ForegroundColor Green
 }
 
+function Test-PythonLauncher {
+    param([string[]]$Launcher)
+
+    try {
+        if ($Launcher.Count -gt 1) {
+            $probe = & $Launcher[0] @($Launcher[1..($Launcher.Count - 1)] + @("-c", "import sys; print(sys.executable)")) 2>&1
+        } else {
+            $probe = & $Launcher[0] -c "import sys; print(sys.executable)" 2>&1
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+            return $null
+        }
+
+        $exe = ($probe | Select-Object -Last 1).ToString().Trim()
+        if (-not $exe -or -not (Test-Path $exe)) {
+            return $null
+        }
+
+        return $exe
+    } catch {
+        return $null
+    }
+}
+
+function Invoke-Python {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+
+    if ($script:pythonLauncher.Count -gt 1) {
+        & $script:pythonLauncher[0] @($script:pythonLauncher[1..($script:pythonLauncher.Count - 1)] + $Args)
+    } else {
+        & $script:pythonLauncher[0] @Args
+    }
+}
+
+function Remove-JsonComments {
+    param([string]$Text)
+
+    if (-not $Text) {
+        return ""
+    }
+
+    $sb = New-Object System.Text.StringBuilder
+    $inString = $false
+    $escape = $false
+    $inLineComment = $false
+    $inBlockComment = $false
+
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        $ch = $Text[$i]
+        $next = if ($i + 1 -lt $Text.Length) { $Text[$i + 1] } else { [char]0 }
+
+        if ($inLineComment) {
+            if ($ch -eq "`n") {
+                $inLineComment = $false
+                [void]$sb.Append($ch)
+            }
+            continue
+        }
+
+        if ($inBlockComment) {
+            if ($ch -eq "*" -and $next -eq "/") {
+                $inBlockComment = $false
+                $i++
+            }
+            continue
+        }
+
+        if ($inString) {
+            [void]$sb.Append($ch)
+            if ($escape) {
+                $escape = $false
+                continue
+            }
+            if ($ch -eq "\\") {
+                $escape = $true
+                continue
+            }
+            if ($ch -eq '"') {
+                $inString = $false
+            }
+            continue
+        }
+
+        if ($ch -eq '"') {
+            $inString = $true
+            [void]$sb.Append($ch)
+            continue
+        }
+
+        if ($ch -eq "/" -and $next -eq "/") {
+            $inLineComment = $true
+            $i++
+            continue
+        }
+
+        if ($ch -eq "/" -and $next -eq "*") {
+            $inBlockComment = $true
+            $i++
+            continue
+        }
+
+        [void]$sb.Append($ch)
+    }
+
+    return $sb.ToString()
+}
+
+function Invoke-Uv {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    & uv @Args
+}
+
+function Recreate-Venv {
+    Write-Host "Recreating .venv..." -ForegroundColor Yellow
+    try { Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue } catch {}
+    if ($script:useUv) {
+        Invoke-Uv venv .venv --python $script:pythonExe
+    } else {
+        Invoke-Python -m venv .venv
+    }
+    Write-Host "Recreated .venv" -ForegroundColor Green
+}
+
 Write-Host "==============================================================" -ForegroundColor Cyan
 Write-Host "SolidWorks MCP Server - Windows Installation" -ForegroundColor Cyan
 Write-Host "==============================================================" -ForegroundColor Cyan
 
 Step "[1/6] Checking Python installation..."
-$pythonExe = python -c "import sys; print(sys.executable)" 2>&1
-if ($LASTEXITCODE -ne 0 -or -not $pythonExe) {
-    Write-Host "ERROR: Python not found in PATH." -ForegroundColor Red
-    Write-Host "Install Python 3.11+ from https://python.org and enable Add Python to PATH." -ForegroundColor Yellow
+$launcherCandidates = @(
+    @{ Name = "python"; Cmd = @("python") },
+    @{ Name = "py -3"; Cmd = @("py", "-3") },
+    @{ Name = "py"; Cmd = @("py") }
+)
+
+$wherePython = @(where.exe python 2>$null | Where-Object {
+    $_ -and $_ -notmatch "WindowsApps" -and $_ -notmatch "\\AppData\\Local\\Python\\bin\\"
+})
+foreach ($path in $wherePython) {
+    $trimmed = $path.Trim()
+    if ($trimmed) {
+        $launcherCandidates += @{ Name = $trimmed; Cmd = @($trimmed) }
+    }
+}
+
+$pythonExe = $null
+$script:pythonExe = $null
+$script:pythonLauncher = @("python")
+foreach ($candidate in $launcherCandidates) {
+    $resolved = Test-PythonLauncher -Launcher $candidate.Cmd
+    if ($resolved) {
+        $script:pythonLauncher = $candidate.Cmd
+        $pythonExe = $resolved
+        $script:pythonExe = $resolved
+        break
+    }
+}
+
+if (-not $pythonExe) {
+    Write-Host "ERROR: No working Python launcher found." -ForegroundColor Red
+    Write-Host "Install Python 3.11+ from https://python.org and ensure either 'python' or 'py -3' works." -ForegroundColor Yellow
     exit 1
 }
-$pythonVersion = python --version 2>&1
+$pythonVersion = Invoke-Python --version 2>&1
+$versionText = ($pythonVersion | Select-Object -Last 1).ToString().Trim()
+$versionMatch = [regex]::Match($versionText, "Python\s+(\d+)\.(\d+)")
+if (-not $versionMatch.Success) {
+    Write-Host "ERROR: Could not parse Python version from '$versionText'." -ForegroundColor Red
+    exit 1
+}
+
+$major = [int]$versionMatch.Groups[1].Value
+$minor = [int]$versionMatch.Groups[2].Value
+if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 11)) {
+    Write-Host "ERROR: Python 3.11+ is required. Found $versionText" -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "Found $pythonVersion at $pythonExe" -ForegroundColor Green
+
+$script:useUv = $false
+try {
+    $null = & uv --version 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $script:useUv = $true
+        Write-Host "uv detected; using uv for virtualenv and package installation." -ForegroundColor Green
+    } else {
+        Write-Host "uv not detected; using pip workflow." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "uv not detected; using pip workflow." -ForegroundColor Yellow
+}
 
 Step "[2/6] Checking repository..."
 if (-not (Test-Path "pyproject.toml")) {
@@ -36,14 +215,22 @@ if (Test-Path ".venv") {
     # Validate the existing venv has a pyvenv.cfg (it may be corrupted)
     if (-not (Test-Path ".venv\pyvenv.cfg")) {
         Write-Host "Existing .venv is missing pyvenv.cfg (corrupted). Recreating..." -ForegroundColor Yellow
-        try { Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue } catch {}
-        python -m venv .venv
-        Write-Host "Recreated .venv" -ForegroundColor Green
+        Recreate-Venv
     } else {
-        Write-Host "Using existing .venv" -ForegroundColor Yellow
+        $existingVenvPython = Join-Path (Get-Location) ".venv\Scripts\python.exe"
+        if (-not (Test-Path $existingVenvPython) -or -not (Test-PythonLauncher -Launcher @($existingVenvPython))) {
+            Write-Host "Existing .venv python is not usable. Recreating..." -ForegroundColor Yellow
+            Recreate-Venv
+        } else {
+            Write-Host "Using existing .venv" -ForegroundColor Yellow
+        }
     }
 } else {
-    python -m venv .venv
+    if ($script:useUv) {
+        Invoke-Uv venv .venv --python $script:pythonExe
+    } else {
+        Invoke-Python -m venv .venv
+    }
     Write-Host "Created .venv" -ForegroundColor Green
 }
 
@@ -54,11 +241,14 @@ if (-not (Test-Path $venvPython)) {
     exit 1
 }
 
-# Bootstrap pip if missing (can happen when venv is created from conda/micromamba Python)
-$pipCheck = & $venvPython -m pip --version 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "pip not found in venv - bootstrapping with ensurepip..." -ForegroundColor Yellow
-    & $venvPython -m ensurepip --upgrade
+if (-not (Test-PythonLauncher -Launcher @($venvPython))) {
+    Write-Host "venv python is not executable. Recreating venv..." -ForegroundColor Yellow
+    Recreate-Venv
+    $venvPython = Join-Path (Get-Location) ".venv\\Scripts\\python.exe"
+    if (-not (Test-Path $venvPython) -or -not (Test-PythonLauncher -Launcher @($venvPython))) {
+        Write-Host "ERROR: venv python is still not usable after recreation." -ForegroundColor Red
+        exit 1
+    }
 }
 
 & $venvPython -m pip install --upgrade pip setuptools wheel
@@ -68,7 +258,11 @@ if ($LASTEXITCODE -ne 0) {
 $venvPrefab = Join-Path (Get-Location) ".venv\Scripts\prefab.exe"
 if (-not (Test-Path $venvPrefab)) {
     Write-Host "prefab.exe not found after install — force-reinstalling prefab-ui..." -ForegroundColor Yellow
-    & $venvPython -m pip install --force-reinstall "prefab-ui>=0.19.0"
+    if ($script:useUv) {
+        Invoke-Uv pip install --python $venvPython --force-reinstall "prefab-ui>=0.19.0"
+    } else {
+        & $venvPython -m pip install --force-reinstall "prefab-ui>=0.19.0"
+    }
 }
 if (Test-Path $venvPrefab) {
     Write-Host "prefab.exe verified at $venvPrefab" -ForegroundColor Green
@@ -82,7 +276,8 @@ Step "[5/6] Configuring VS Code MCP settings..."
 $mcpJsonPath = Join-Path $env:APPDATA "Code\\User\\mcp.json"
 if (Test-Path $mcpJsonPath) {
     $raw = Get-Content -Raw $mcpJsonPath
-    $config = $raw | ConvertFrom-Json
+    $jsonForParse = Remove-JsonComments -Text $raw
+    $config = $jsonForParse | ConvertFrom-Json
 
     if (-not $config.servers) {
         $config | Add-Member -NotePropertyName servers -NotePropertyValue @{} -Force

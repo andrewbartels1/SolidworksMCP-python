@@ -1,5 +1,4 @@
-"""Logging configuration for SolidWorks MCP Server.
-"""
+"""Logging configuration for SolidWorks MCP Server."""
 
 import sys
 from pathlib import Path
@@ -12,10 +11,10 @@ from ..config import SolidWorksMCPConfig
 
 def setup_logging(config: SolidWorksMCPConfig) -> None:
     """Configure application and audit logging sinks.
-    
+
     Args:
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
     """
@@ -70,7 +69,7 @@ def setup_logging(config: SolidWorksMCPConfig) -> None:
 
 def get_audit_logger() -> Any:
     """Create a logger bound to audit metadata.
-    
+
     Returns:
         Any: The result produced by the operation.
     """

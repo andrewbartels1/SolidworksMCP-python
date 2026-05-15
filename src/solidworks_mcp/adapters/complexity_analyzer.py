@@ -1,5 +1,4 @@
-"""Complexity analysis for routing operations between COM and VBA paths.
-"""
+"""Complexity analysis for routing operations between COM and VBA paths."""
 
 from __future__ import annotations
 
@@ -12,7 +11,7 @@ from pydantic import BaseModel
 @dataclass(frozen=True)
 class OperationProfile:
     """Complexity profile metadata for an operation.
-    
+
     Attributes:
         base_complexity (float): The base complexity value.
         name (str): The name value.
@@ -26,7 +25,7 @@ class OperationProfile:
 
 class RoutingDecision(BaseModel):
     """Complexity-based routing decision.
-    
+
     Attributes:
         complexity_score (float): The complexity score value.
         operation (str): The operation value.
@@ -44,11 +43,11 @@ class RoutingDecision(BaseModel):
 
 class ComplexityAnalyzer:
     """Analyze operation complexity and recommend COM or VBA execution path.
-    
+
     Args:
         parameter_threshold (int): The parameter threshold value. Defaults to 12.
         score_threshold (float): The score threshold value. Defaults to 0.6.
-    
+
     Attributes:
         _parameter_threshold (Any): The parameter threshold value.
         _score_threshold (Any): The score threshold value.
@@ -60,11 +59,11 @@ class ComplexityAnalyzer:
         score_threshold: float = 0.6,
     ) -> None:
         """Initialize analyzer state.
-        
+
         Args:
             parameter_threshold (int): The parameter threshold value. Defaults to 12.
             score_threshold (float): The score threshold value. Defaults to 0.6.
-        
+
         Returns:
             None: None.
         """
@@ -75,11 +74,11 @@ class ComplexityAnalyzer:
 
     def analyze(self, operation: str, payload: object) -> RoutingDecision:
         """Produce a routing recommendation for an operation call.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
             payload (object): The payload value.
-        
+
         Returns:
             RoutingDecision: The result produced by the operation.
         """
@@ -126,12 +125,12 @@ class ComplexityAnalyzer:
 
     def record_result(self, operation: str, route: str, success: bool) -> None:
         """Record operation outcome for future routing influence.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
             route (str): The route value.
             success (bool): The success value.
-        
+
         Returns:
             None: None.
         """
@@ -150,10 +149,10 @@ class ComplexityAnalyzer:
 
     def _history_bias(self, operation: str) -> float:
         """Compute historical bias toward VBA based on COM reliability.
-        
+
         Args:
             operation (str): Callable object executed by the helper.
-        
+
         Returns:
             float: The computed numeric result.
         """
@@ -172,10 +171,10 @@ class ComplexityAnalyzer:
 
     def _count_parameters(self, payload: object) -> int:
         """Count meaningful parameters in payload recursively.
-        
+
         Args:
             payload (object): The payload value.
-        
+
         Returns:
             int: The computed numeric result.
         """
@@ -198,7 +197,7 @@ class ComplexityAnalyzer:
 
     def _default_profiles(self) -> dict[str, OperationProfile]:
         """Return default complexity profiles for high-impact operations.
-        
+
         Returns:
             dict[str, OperationProfile]: A dictionary containing the resulting values.
         """

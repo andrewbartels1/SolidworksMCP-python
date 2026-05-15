@@ -75,6 +75,9 @@ tests/.generated/
 # Runtime-generated agent / cache artifacts
 .generated/
 .solidworks_mcp/
+htmlcov/
+.playwright-mcp/
+tmp/ui_smoke/
 
 # Claude local settings
 .claude/
@@ -83,6 +86,6 @@ tests/.generated/
 mypy_*
 
 .mypy_cache/
-
+uv.lock
 .venv
 .venv/

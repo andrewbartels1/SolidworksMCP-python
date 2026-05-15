@@ -1,5 +1,4 @@
-"""Environment validation for SolidWorks MCP Server.
-"""
+"""Environment validation for SolidWorks MCP Server."""
 
 import platform
 import shutil
@@ -12,13 +11,13 @@ from ..exceptions import SolidWorksMCPError
 
 async def validate_environment(config: SolidWorksMCPConfig) -> None:
     """Validate runtime prerequisites for the server.
-    
+
     Args:
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
-    
+
     Raises:
         SolidWorksMCPError: If the operation cannot be completed.
     """
@@ -53,10 +52,10 @@ async def validate_environment(config: SolidWorksMCPConfig) -> None:
 
 async def _validate_solidworks_installation(config: SolidWorksMCPConfig) -> None:
     """Validate SolidWorks availability on Windows hosts.
-    
+
     Args:
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
     """

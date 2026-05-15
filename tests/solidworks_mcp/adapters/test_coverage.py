@@ -1,0 +1,932 @@
+"""Coverage tests for adapters: base.py, circuit_breaker.py, mock_adapter.py, connection_pool.py."""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.solidworks_mcp.adapters.base import (
+    AdapterHealth,
+    AdapterResult,
+    AdapterResultStatus,
+    ExtrusionParameters,
+    SolidWorksFeature,
+)
+from src.solidworks_mcp.adapters.circuit_breaker import (
+    CircuitBreakerAdapter,
+    CircuitState,
+)
+from src.solidworks_mcp.adapters.connection_pool import (
+    ConnectionPool,
+    ConnectionPoolAdapter,
+)
+from src.solidworks_mcp.adapters.mock_adapter import (
+    MockSolidWorksAdapter,
+    _BoolCallable,
+)
+
+# ---------------------------------------------------------------------------
+# AdapterHealth / base.py
+# ---------------------------------------------------------------------------
+
+
+class TestAdapterHealthCoverage:
+    """Test adapter health coverage."""
+
+    def test_getitem_fallback_unknown_key(self):
+        """Line 52 — unknown key falls through to model_dump().get(key)."""
+        health = AdapterHealth(
+            healthy=True,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=5,
+            average_response_time=0.1,
+            connection_status="connected",
+        )
+        # "success_count" is a real field but not one of the legacy shortcuts
+        result = health["success_count"]
+        assert result == 5
+
+    def test_getitem_fallback_missing_key_returns_none(self):
+        """Test getitem fallback missing key returns none."""
+
+        health = AdapterHealth(
+            healthy=True,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="connected",
+        )
+        assert health["nonexistent_field"] is None
+
+    def test_contains_nonlegacy_key(self):
+        """Line 67 — non-legacy key checked via model_dump()."""
+        health = AdapterHealth(
+            healthy=True,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="connected",
+        )
+        assert "healthy" in health  # real field, not in legacy_keys
+        assert "nonexistent" not in health  # not in model_dump either
+
+    def test_contains_legacy_keys_always_true(self):
+        """Test contains legacy keys always true."""
+
+        health = AdapterHealth(
+            healthy=False,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="disconnected",
+        )
+        for key in ("status", "connected", "adapter_type", "version", "uptime"):
+            assert key in health
+
+    def test_getitem_status_unhealthy(self):
+        """Test getitem status unhealthy."""
+
+        health = AdapterHealth(
+            healthy=False,
+            last_check=datetime.now(),
+            error_count=0,
+            success_count=0,
+            average_response_time=0.0,
+            connection_status="disconnected",
+        )
+        assert health["status"] == "unhealthy"
+
+
+class TestSolidWorksFeatureCoverage:
+    """Test solid works feature coverage."""
+
+    def test_getitem_returns_parameter_value(self):
+        """Line 148-150 — feature["key"] checks parameters first."""
+        feature = SolidWorksFeature(
+            id="f1",
+            name="Boss-Extrude1",
+            type="Extrusion",
+            parameters={"depth": 10.0},
+        )
+        assert feature["depth"] == 10.0
+
+    def test_getitem_fallback_to_model_dump(self):
+        """Line 150 — unknown key falls through to model_dump()."""
+        feature = SolidWorksFeature(id="f1", name="Boss1", type="Extrusion")
+        assert feature["name"] == "Boss1"
+        assert feature["nonexistent"] is None
+
+
+class TestAdapterBaseInitCoverage:
+    """Test adapter base init coverage."""
+
+    def test_init_with_model_dump_config(self):
+        """Line 222 — config with model_dump() method normalized via it."""
+
+        class FakeConfig:
+            """Test fake config."""
+
+            def model_dump(self):
+                """Test model dump."""
+
+                return {"mock_solidworks": True, "timeout": 30}
+
+        adapter = MockSolidWorksAdapter(FakeConfig())
+        assert adapter.config_dict == {"mock_solidworks": True, "timeout": 30}
+
+    @pytest.mark.asyncio
+    async def test_save_file_default_not_implemented(self):
+        """Line 269 — base save_file returns error."""
+        adapter = MockSolidWorksAdapter({})
+        # MockSolidWorksAdapter overrides save_file, so call the base directly
+        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
+        result = await SolidWorksAdapter.save_file(adapter)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "not implemented" in result.error
+
+    @pytest.mark.asyncio
+    async def test_add_arc_not_implemented(self):
+        """Line 378 — base add_arc returns error."""
+        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
+        result = await SolidWorksAdapter.add_arc(None, 0, 0, 1, 0, 0, 1)
+        assert result.status == AdapterResultStatus.ERROR
+
+    @pytest.mark.asyncio
+    async def test_add_spline_not_implemented(self):
+        """Line 385 — base add_spline returns error."""
+        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
+        result = await SolidWorksAdapter.add_spline(None, [])
+        assert result.status == AdapterResultStatus.ERROR
+
+    @pytest.mark.asyncio
+    async def test_add_centerline_not_implemented(self):
+        """Line 394 — base add_centerline returns error."""
+        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
+        result = await SolidWorksAdapter.add_centerline(None, 0, 0, 1, 1)
+        assert result.status == AdapterResultStatus.ERROR
+
+    @pytest.mark.asyncio
+    async def test_create_cut_not_implemented(self):
+        """Line 504 — base create_cut returns error."""
+        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+
+        result = await SolidWorksAdapter.create_cut(None, "Sketch1", 5.0)
+        assert result.status == AdapterResultStatus.ERROR
+
+    def test_get_metrics_returns_copy(self):
+        """Line 555 — get_metrics returns a copy."""
+        adapter = MockSolidWorksAdapter({})
+        metrics = adapter.get_metrics()
+        assert "operations_count" in metrics
+        metrics["operations_count"] = 9999
+        # Original not mutated
+        assert adapter.get_metrics()["operations_count"] != 9999
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_circle_alias(self):
+        """Line 500 — add_sketch_circle delegates to add_circle."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        result = await adapter.add_sketch_circle(0.0, 0.0, 5.0, construction=False)
+        assert result.status == AdapterResultStatus.SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# _BoolCallable — mock_adapter.py line 52
+# ---------------------------------------------------------------------------
+
+
+class TestBoolCallableCoverage:
+    """Test bool callable coverage."""
+
+    def test_call_returns_bool(self):
+        """Line 52 — __call__ returns bool(getter())."""
+        bc = _BoolCallable(lambda: True)
+        assert bc() is True
+
+    def test_call_false(self):
+        """Test call false."""
+
+        bc = _BoolCallable(lambda: False)
+        assert bc() is False
+
+
+# ---------------------------------------------------------------------------
+# MockSolidWorksAdapter success paths — lines 237-317, 662-667
+# ---------------------------------------------------------------------------
+
+
+class TestMockAdapterSuccessPaths:
+    """Test mock adapter success paths."""
+
+    @pytest.mark.asyncio
+    async def test_get_model_info_success(self):
+        """Lines 237-255 — get_model_info with active model."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part(name="TestPart")
+
+        result = await adapter.get_model_info()
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert "title" in result.data
+        assert "feature_count" in result.data
+
+    @pytest.mark.asyncio
+    async def test_list_features_with_actual_features(self):
+        """Lines 286-300 — list_features with features in the tree (non-empty)."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+
+        result = await adapter.list_features(include_suppressed=False)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert isinstance(result.data, list)
+
+    @pytest.mark.asyncio
+    async def test_list_features_seeded_when_empty(self):
+        """Lines 272-284 — list_features with no real features returns seeded list."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.list_features()
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert len(result.data) > 0
+        assert any(f["name"] == "Origin" for f in result.data)
+
+    @pytest.mark.asyncio
+    async def test_list_configurations_non_default_config(self):
+        """Lines 314-316 — non-Default active config produces [Default, active]."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        # Create a model with a non-default config name
+        await adapter.create_part()
+        # Directly set configuration to a custom name
+        adapter._current_model.configuration = "HighTolerance"
+
+        result = await adapter.list_configurations()
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert "Default" in result.data
+        assert "HighTolerance" in result.data
+
+    @pytest.mark.asyncio
+    async def test_add_centerline_success(self):
+        """Lines 662-670 — add_centerline with active sketch returns centerline id."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.add_centerline(0.0, 0.0, 1.0, 1.0)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert "Centerline" in result.data
+
+
+# ---------------------------------------------------------------------------
+# CircuitBreakerAdapter — lines 119, 137, 165-173, 187, 197-198, 235, 367+
+# ---------------------------------------------------------------------------
+
+
+class TestCircuitBreakerCoverage:
+    """Test circuit breaker coverage."""
+
+    def _make_cb(self, failure_threshold=3, recovery_timeout=60):
+        """Test make cb."""
+
+        inner = MockSolidWorksAdapter({})
+        cb = CircuitBreakerAdapter(
+            adapter=inner,
+            failure_threshold=failure_threshold,
+            recovery_timeout=recovery_timeout,
+        )
+        return cb, inner
+
+    @pytest.mark.asyncio
+    async def test_record_failure_half_open_to_open(self):
+        """Line 119 — HALF_OPEN failure → back to OPEN."""
+        cb, inner = self._make_cb(failure_threshold=1)
+        await inner.connect()
+        cb.state = CircuitState.HALF_OPEN
+        cb._record_failure()
+        assert cb.state == CircuitState.OPEN
+
+    @pytest.mark.asyncio
+    async def test_record_failure_closed_to_open_logs(self):
+        """Line 137 — CLOSED → OPEN after threshold (logging path)."""
+        cb, inner = self._make_cb(failure_threshold=2)
+        await inner.connect()
+        cb._record_failure()
+        assert cb.state == CircuitState.CLOSED
+        cb._record_failure()
+        assert cb.state == CircuitState.OPEN
+
+    @pytest.mark.asyncio
+    async def test_connect_circuit_open_raises(self):
+        """Line 165-166 — connect when OPEN raises exception."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        cb.state = CircuitState.OPEN
+        cb.last_failure_time = time.time()  # recent failure, won't recover
+
+        with pytest.raises(Exception, match="open"):
+            await cb.connect()
+
+    @pytest.mark.asyncio
+    async def test_connect_success_records_success(self):
+        """Lines 169-170 — connect succeeds → _record_success called."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        # Set to HALF_OPEN so _record_success does something visible
+        cb.state = CircuitState.HALF_OPEN
+        await cb.connect()
+        assert cb.state == CircuitState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_connect_failure_records_failure_reraises(self):
+        """Lines 171-173 — connect raises → _record_failure, re-raised."""
+        inner = MockSolidWorksAdapter({})
+        inner.connect = AsyncMock(side_effect=RuntimeError("connect failed"))
+        cb = CircuitBreakerAdapter(adapter=inner, failure_threshold=5)
+
+        with pytest.raises(RuntimeError, match="connect failed"):
+            await cb.connect()
+        assert cb.failure_count == 1
+
+    @pytest.mark.asyncio
+    async def test_health_check_open_sets_unhealthy(self):
+        """Lines 196-198 — OPEN state marks health as unhealthy."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        await inner.create_part()
+        cb.state = CircuitState.OPEN
+
+        health = await cb.health_check()
+        assert not health.healthy
+        assert health.connection_status == "circuit_breaker_open"
+
+    @pytest.mark.asyncio
+    async def test_health_check_initializes_metrics_when_missing(self):
+        """Health checks should create a metrics dict when the adapter returns None."""
+        cb, inner = self._make_cb()
+        inner.health_check = AsyncMock(
+            return_value=AdapterHealth(
+                healthy=True,
+                last_check=datetime.now(),
+                error_count=0,
+                success_count=1,
+                average_response_time=0.1,
+                connection_status="connected",
+                metrics=None,
+            )
+        )
+
+        health = await cb.health_check()
+
+        assert health.metrics is not None
+        assert health.metrics["circuit_breaker"]["state"] == cb.state.value
+
+    @pytest.mark.asyncio
+    async def test_get_model_info_via_circuit_breaker(self):
+        """Line 235 — get_model_info delegates through circuit breaker."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        await inner.create_part()
+        result = await cb.get_model_info()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_get_mass_properties_via_circuit_breaker(self):
+        """Line 367 — get_mass_properties delegates through circuit breaker."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        await inner.create_part()
+        result = await cb.get_mass_properties()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_list_features_via_circuit_breaker(self):
+        """Line 375 — list_features delegates through circuit breaker."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        await inner.create_part()
+        result = await cb.list_features()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_list_configurations_via_circuit_breaker(self):
+        """Line 382 — list_configurations delegates through circuit breaker."""
+        cb, inner = self._make_cb()
+        await inner.connect()
+        await inner.create_part()
+        result = await cb.list_configurations()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_remaining_circuit_breaker_wrappers(self):
+        """Cover remaining thin circuit-breaker wrapper methods."""
+        cb, inner = self._make_cb()
+
+        feature_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=SolidWorksFeature(id="f1", name="Fillet1", type="Fillet"),
+        )
+        string_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data="Dim1")
+        dict_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"fully_defined": True}
+        )
+        macro_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"macro": "ok"}
+        )
+        export_result = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"path": "preview.png"}
+        )
+        file_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
+        model_result = AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
+
+        inner.create_part = AsyncMock(return_value=model_result)
+        inner.create_assembly = AsyncMock(return_value=model_result)
+        inner.create_cut_extrude = AsyncMock(return_value=feature_result)
+        inner.add_fillet = AsyncMock(return_value=feature_result)
+        inner.add_arc = AsyncMock(
+            return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="Arc1")
+        )
+        inner.add_sketch_dimension = AsyncMock(return_value=string_result)
+        inner.check_sketch_fully_defined = AsyncMock(return_value=dict_result)
+        inner.execute_macro = AsyncMock(return_value=macro_result)
+        inner.export_image = AsyncMock(return_value=export_result)
+        inner.export_file = AsyncMock(return_value=file_result)
+
+        async def passthrough(operation_name, operation):
+            return await operation()
+
+        cb._execute_with_circuit_breaker = AsyncMock(side_effect=passthrough)
+        cb._invoke_with_optional_args = AsyncMock(return_value=file_result)
+
+        extrusion = ExtrusionParameters(depth=2.0)
+
+        part_result = await cb.create_part(name="MyPart", units="mm")
+        default_part_result = await cb.create_part()
+        assembly_result = await cb.create_assembly(name="MyAssembly")
+        default_assembly_result = await cb.create_assembly()
+        cut_result = await cb.create_cut_extrude(extrusion)
+        fillet_result = await cb.add_fillet(1.5, ["Edge1"])
+        macro_exec = await cb.execute_macro({"name": "macro"})
+        arc_result = await cb.add_arc(0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+        dim_result = await cb.add_sketch_dimension("Line1", None, "linear", 5.0)
+        sketch_result = await cb.check_sketch_fully_defined("Sketch1")
+        image_result = await cb.export_image({"output": "preview.png"})
+        export_file_result = await cb.export_file("model.step", "step")
+
+        assert part_result is file_result
+        assert default_part_result is model_result
+        assert assembly_result is file_result
+        assert default_assembly_result is model_result
+        assert cut_result is feature_result
+        assert fillet_result is feature_result
+        assert macro_exec is macro_result
+        assert arc_result.status == AdapterResultStatus.SUCCESS
+        assert dim_result is string_result
+        assert sketch_result is dict_result
+        assert image_result is export_result
+        assert export_file_result is file_result
+        cb._invoke_with_optional_args.assert_any_call(inner.create_part, "MyPart", "mm")
+        cb._invoke_with_optional_args.assert_any_call(
+            inner.create_assembly, "MyAssembly"
+        )
+
+
+# ---------------------------------------------------------------------------
+# ConnectionPoolAdapter — exception paths and uncovered branches
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionPoolAdapterCoverage:
+    """Test connection pool adapter coverage."""
+
+    @pytest.mark.asyncio
+    async def test_attempt_async_exception_returns_default(self):
+        """Lines 82-83 — _attempt_async catches exception, returns default."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+
+        async def _raiser():
+            """Test raiser."""
+
+            raise RuntimeError("boom")
+
+        result = await pool._attempt_async(_raiser, default="fallback")
+        assert result == "fallback"
+
+    @pytest.mark.asyncio
+    async def test_attempt_async_with_error_returns_tuple(self):
+        """Lines 91-92 — _attempt_async_with_error returns (None, exc)."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+
+        async def _raiser():
+            """Test raiser."""
+
+            raise ValueError("bad value")
+
+        result, err = await pool._attempt_async_with_error(_raiser)
+        assert result is None
+        assert isinstance(err, ValueError)
+
+    @pytest.mark.asyncio
+    async def test_attempt_sync_exception_returns_default(self):
+        """Lines 98-101 — _attempt_sync catches exception, returns default."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+
+        def _raiser():
+            """Test raiser."""
+
+            raise RuntimeError("sync boom")
+
+        result = pool._attempt_sync(_raiser, default=42)
+        assert result == 42
+
+    @pytest.mark.asyncio
+    async def test_invoke_with_optional_args_type_error_retries_without(self):
+        """Lines 110-114 — TypeError on call with args → retry without args."""
+
+        class StrictAdapter:
+            """Test strict adapter."""
+
+            async def strict_method(self):
+                """Test strict method."""
+
+                return "ok"
+
+        adapter = StrictAdapter()
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        result = await pool._invoke_with_optional_args(
+            adapter, "strict_method", "extra_arg"
+        )
+        assert result == "ok"
+
+    @pytest.mark.asyncio
+    async def test_replace_failed_adapter_exception_returns_exc(self):
+        """Lines 126-127 — _replace_failed_adapter returns the exception when connect fails."""
+        fail_adapter = MockSolidWorksAdapter({})
+        fail_adapter.connect = AsyncMock(side_effect=RuntimeError("no connection"))
+
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: fail_adapter, pool_size=1)
+        result = await pool._replace_failed_adapter()
+        assert isinstance(result, RuntimeError)
+
+    @pytest.mark.asyncio
+    async def test_acquire_delegates_to_get_adapter(self):
+        """Line 156 — acquire() wraps _get_adapter."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        adapter = await pool.acquire()
+        assert adapter is not None
+
+    @pytest.mark.asyncio
+    async def test_release_puts_adapter_back(self):
+        """Line 168 — release() wraps _return_adapter."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        adapter = await pool.acquire()
+        await pool.release(adapter)
+        assert pool.available_adapters.qsize() == 1
+
+    @pytest.mark.asyncio
+    async def test_cleanup_delegates_to_disconnect(self):
+        """Line 177 — cleanup() calls disconnect()."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        await pool.cleanup()
+        assert not pool.is_connected()
+
+    @pytest.mark.asyncio
+    async def test_is_connected_true_when_pool_has_adapters(self):
+        """Line 186 — is_connected() True when pool initialized and non-empty."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        assert pool.is_connected() is True
+
+    @pytest.mark.asyncio
+    async def test_get_adapter_timeout_raises(self):
+        """Lines 197-198 — TimeoutError when no adapter available."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1, timeout=0.01
+        )
+        await pool.connect()
+        # Drain the pool
+        _ = await pool.acquire()
+        # Now no adapters available — should timeout quickly
+        with pytest.raises(Exception, match="No adapter available"):
+            await pool._get_adapter(timeout=0.01)
+
+    @pytest.mark.asyncio
+    async def test_disconnect_logs_error_and_continues(self):
+        """Line 281 — error disconnecting adapter is logged, not raised."""
+        fail_adapter = MockSolidWorksAdapter({})
+        fail_adapter.disconnect = AsyncMock(side_effect=RuntimeError("disc error"))
+
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: fail_adapter, pool_size=1)
+        await pool.connect()
+        # Should not raise even though disconnect fails
+        await pool.disconnect()
+        assert not pool.is_connected()
+
+    @pytest.mark.asyncio
+    async def test_health_check_with_healthy_adapter(self):
+        """Line 324 — health_check accumulates response time from healthy adapters."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        health = await pool.health_check()
+        assert health.healthy
+
+    @pytest.mark.asyncio
+    async def test_create_part_with_name_and_units(self):
+        """Lines 380-385 — create_part with name and units uses _invoke_with_optional_args."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        result = await pool.create_part(name="MyPart", units="mm")
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_create_assembly_with_name(self):
+        """Lines 402-407 — create_assembly with name uses _invoke_with_optional_args."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        result = await pool.create_assembly(name="MyAssembly")
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_get_model_info_via_pool(self):
+        """Line 502 — get_model_info via pool."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        # Need active model — use pool directly after getting inner
+        adapter = pool.pool[0]
+        await adapter.create_part()
+        result = await pool.get_model_info()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_list_features_via_pool(self):
+        """Line 510 — list_features via pool."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        adapter = pool.pool[0]
+        await adapter.create_part()
+        result = await pool.list_features()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_list_configurations_via_pool(self):
+        """Line 517 — list_configurations via pool."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        adapter = pool.pool[0]
+        await adapter.create_part()
+        result = await pool.list_configurations()
+        assert result.status == AdapterResultStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_save_file_via_pool(self):
+        """Line 361 — save_file via pool."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        await pool.connect()
+        result = await pool.save_file("/tmp/test.sldprt")
+        # Mock adapter returns success or error — just check it runs
+        assert result.status in (AdapterResultStatus.SUCCESS, AdapterResultStatus.ERROR)
+
+    def test_default_adapter_factory_uses_mock_adapter(self):
+        """No explicit factory should fall back to MockSolidWorksAdapter."""
+        pool = ConnectionPoolAdapter(config={"mock_solidworks": True})
+        created = pool.adapter_factory()
+        assert isinstance(created, MockSolidWorksAdapter)
+
+    @pytest.mark.asyncio
+    async def test_initialize_pool_logs_and_skips_failed_adapter(self):
+        """Pool initialization should skip adapters that fail to connect."""
+        first = MockSolidWorksAdapter({})
+        first.connect = AsyncMock(side_effect=RuntimeError("no connect"))
+        second = MockSolidWorksAdapter({})
+        calls = [first, second]
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: calls.pop(0), pool_size=2)
+
+        await pool.connect()
+
+        assert pool.size == 1
+        assert pool.available_adapters.qsize() == 1
+
+    @pytest.mark.asyncio
+    async def test_initialize_pool_returns_when_marked_initialized_under_lock(self):
+        """The second pool_initialized guard should exit without creating adapters."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+
+        await pool._lock.acquire()
+        task = asyncio.create_task(pool._initialize_pool())
+        await asyncio.sleep(0)
+        pool.pool_initialized = True
+        pool._lock.release()
+        await task
+
+        assert pool.size == 0
+        assert pool.available_adapters.qsize() == 0
+
+    @pytest.mark.asyncio
+    async def test_health_check_skips_missing_adapter_health(self):
+        """Connection-pool health_check should continue when adapter health is unavailable."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        pool.pool_initialized = True
+        adapter = MockSolidWorksAdapter({})
+        adapter.health_check = AsyncMock(side_effect=RuntimeError("boom"))
+        pool.pool = [adapter]
+
+        health = await pool.health_check()
+
+        assert health.healthy is False
+        assert health.metrics["healthy_adapters"] == 0
+
+    @pytest.mark.asyncio
+    async def test_remaining_pool_wrappers(self):
+        """Cover remaining thin connection-pool wrapper methods."""
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+        )
+        stub = SimpleNamespace(
+            create_cut_extrude=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data=SolidWorksFeature(id="f1", name="Cut1", type="Cut"),
+                )
+            ),
+            add_fillet=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data=SolidWorksFeature(id="f2", name="Fillet1", type="Fillet"),
+                )
+            ),
+            add_arc=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data="Arc1"
+                )
+            ),
+            add_sketch_dimension=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data="Dim1"
+                )
+            ),
+            check_sketch_fully_defined=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data={"fully_defined": True},
+                )
+            ),
+            execute_macro=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data={"macro": "ok"},
+                )
+            ),
+            export_image=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS,
+                    data={"path": "preview.png"},
+                )
+            ),
+            export_file=AsyncMock(
+                return_value=AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data=None
+                )
+            ),
+        )
+
+        async def passthrough(operation_name, operation):
+            return await operation(stub)
+
+        pool._execute_with_pool = AsyncMock(side_effect=passthrough)
+
+        extrusion = ExtrusionParameters(depth=3.0)
+
+        cut_result = await pool.create_cut_extrude(extrusion)
+        fillet_result = await pool.add_fillet(2.0, ["Edge1"])
+        macro_result = await pool.execute_macro({"name": "macro"})
+        arc_result = await pool.add_arc(0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+        dim_result = await pool.add_sketch_dimension("Line1", None, "linear", 2.5)
+        sketch_result = await pool.check_sketch_fully_defined("Sketch1")
+        image_result = await pool.export_image({"output": "preview.png"})
+        export_file_result = await pool.export_file("model.step", "step")
+
+        assert cut_result.data.name == "Cut1"
+        assert fillet_result.data.name == "Fillet1"
+        assert macro_result.data["macro"] == "ok"
+        assert arc_result.data == "Arc1"
+        assert dim_result.data == "Dim1"
+        assert sketch_result.data["fully_defined"] is True
+        assert image_result.data["path"] == "preview.png"
+        assert export_file_result.status == AdapterResultStatus.SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# Legacy ConnectionPool — wait loop (621-623) and async close (653)
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionPoolLegacyCoverage:
+    """Test connection pool legacy coverage."""
+
+    @pytest.mark.asyncio
+    async def test_acquire_wait_loop_then_gets_connection(self):
+        """Lines 621-623 — waits when all connections in use, gets one after release."""
+        created = []
+
+        async def create_conn():
+            """Test create conn."""
+
+            obj = SimpleNamespace(id=len(created))
+            created.append(obj)
+            return obj
+
+        pool = ConnectionPool(create_connection=create_conn, max_size=1, timeout=1.0)
+        conn1 = await pool.acquire()
+        assert conn1 is not None
+
+        # Release after short delay from background task
+        async def _release_soon():
+            """Test release soon."""
+
+            await asyncio.sleep(0.02)
+            await pool.release(conn1)
+
+        asyncio.create_task(_release_soon())
+        conn2 = await pool.acquire()
+        assert conn2 is conn1  # same object returned from _available
+
+    @pytest.mark.asyncio
+    async def test_cleanup_with_async_close(self):
+        """Line 653 — cleanup awaits coroutine-based close()."""
+        closed = []
+
+        class AsyncCloseConn:
+            """Test async close conn."""
+
+            async def close(self):
+                """Test close."""
+
+                closed.append(True)
+
+        async def create_conn():
+            """Test create conn."""
+
+            return AsyncCloseConn()
+
+        pool = ConnectionPool(create_connection=create_conn, max_size=1, timeout=1.0)
+        conn = await pool.acquire()
+        await pool.release(conn)
+        await pool.cleanup()
+        assert closed == [True]

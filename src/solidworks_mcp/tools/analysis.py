@@ -1,7 +1,9 @@
 """Analysis tools for SolidWorks MCP Server.
 
-Provides tools for analyzing SolidWorks models including mass properties, interference
-checking, geometry analysis, and material properties.
+Use these after a model or assembly already exists. Recommended order:
+calculate_mass_properties or get_mass_properties, then check_interference, then
+analyze_geometry, then get_material_properties. These tools are for validation and
+inspection, not for creating geometry.
 """
 
 from typing import Any
@@ -18,7 +20,7 @@ from .input_compat import CompatInput
 
 class MassPropertiesInput(CompatInput):
     """Input schema for mass properties analysis.
-    
+
     Attributes:
         include_hidden (bool): The include hidden value.
         model_path (str | None): The model path value.
@@ -35,13 +37,13 @@ class MassPropertiesInput(CompatInput):
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the mass properties input.
-        
+
         Args:
             __context (Any): The context value.
-        
+
         Returns:
             None: None.
-        
+
         Raises:
             ValueError: If the operation cannot be completed.
         """
@@ -52,7 +54,7 @@ class MassPropertiesInput(CompatInput):
 
 class InterferenceCheckInput(CompatInput):
     """Input schema for interference checking.
-    
+
     Attributes:
         assembly_path (str | None): The assembly path value.
         check_all_components (bool): The check all components value.
@@ -77,7 +79,7 @@ class InterferenceCheckInput(CompatInput):
 
 class GeometryAnalysisInput(BaseModel):
     """Input schema for geometry analysis.
-    
+
     Attributes:
         analysis_type (str): The analysis type value.
         parameters (dict[str, Any] | None): The parameters value.
@@ -95,27 +97,27 @@ async def register_analysis_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register analysis tools with FastMCP.
-    
+
     Registers comprehensive analysis tools for SolidWorks model evaluation including mass
     properties, interference checking, geometry analysis, and material properties. These
     tools provide critical engineering data for design validation and optimization.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         ```python
                         from solidworks_mcp.tools.analysis import register_analysis_tools
-    
+
                         tool_count = await register_analysis_tools(mcp, adapter, config)
                         print(f"Registered {tool_count} analysis tools")
                         ```
-    
+
                     Note:
                         Analysis tools require an active SolidWorks document with geometry.
                         Some analyses may require specific material assignments for accurate results.
@@ -127,33 +129,33 @@ async def register_analysis_tools(
         input_data: MassPropertiesInput,
     ) -> dict[str, Any]:
         """Get mass properties of the current SolidWorks model.
-        
+
         Calculates and returns comprehensive mass properties for the active model including
         volume, surface area, mass, center of mass, and moments of inertia. Essential for
         engineering analysis, weight calculations, and structural design.
-        
+
         Args:
             input_data (MassPropertiesInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await get_mass_properties()
-        
+
                             if result["status"] == "success":
                                 props = result["mass_properties"]
                                 print(f"Volume: {props['volume']['value']} {props['volume']['units']}")
                                 print(f"Mass: {props['mass']['value']} {props['mass']['units']}")
-        
+
                                 com = props['center_of_mass']
                                 print(f"Center of Mass: ({com['x']}, {com['y']}, {com['z']}) mm")
-        
+
                                 moi = props['moments_of_inertia']
                                 print(f"Moment of Inertia Ixx: {moi['Ixx']} kg·mm²")
                             ```
-        
+
                         Note:
                             - Requires active SolidWorks model with geometry
                             - Material assignment affects mass calculations
@@ -225,11 +227,11 @@ async def register_analysis_tools(
         input_data: MassPropertiesInput | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Backward-compatible alias for calculate_mass_properties.
-        
+
         Args:
             input_data (MassPropertiesInput | dict[str, Any] | None): The input data value.
                                                                       Defaults to None.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -244,17 +246,17 @@ async def register_analysis_tools(
     @mcp.tool()
     async def check_interference(input_data: InterferenceCheckInput) -> dict[str, Any]:
         """Check for interference between components in an assembly.
-        
+
         Analyzes specified components for geometric interference (overlapping volumes) and
         provides detailed interference detection results. Critical for assembly validation and
         identifying design conflicts before manufacturing.
-        
+
         Args:
             input_data (InterferenceCheckInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Check specific components
@@ -262,17 +264,17 @@ async def register_analysis_tools(
                                 "components": ["Bracket-1", "Shaft-1", "Bearing-1"],
                                 "tolerance": 0.01
                             })
-        
+
                             # Check all components with default tolerance
                             result = await check_interference({
                                 "components": [],
                                 "tolerance": 0.001
                             })
-        
+
                             if result["status"] == "success":
                                 results = result["interference_results"]
                                 print(f"Found {results['total_interferences']} interferences")
-        
+
                                 for interference in results["interference_details"]:
                                     print(f"Interference between {interference['component_1']} and {interference['component_2']}")
                                     print(f"Volume: {interference['volume']} mm³")
@@ -313,13 +315,13 @@ async def register_analysis_tools(
     @mcp.tool()
     async def analyze_geometry(input_data: GeometryAnalysisInput) -> dict[str, Any]:
         """Handle analyze geometry.
-        
+
         This tool provides various geometry analysis capabilities like curvature analysis, draft
         analysis, thickness analysis, etc.
-        
+
         Args:
             input_data (GeometryAnalysisInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -346,35 +348,27 @@ async def register_analysis_tools(
     @mcp.tool()
     async def get_material_properties() -> dict[str, Any]:
         """Get material properties of the current model.
-        
+
         This tool retrieves the material properties assigned to the model including density,
         elastic modulus, yield strength, etc.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            # Simulated material properties
-            return {
-                "status": "success",
-                "material": {
-                    "name": "Steel, Plain Carbon",
-                    "density": {"value": 7850, "units": "kg/m³"},
-                    "elastic_modulus": {"value": 200000, "units": "MPa"},
-                    "yield_strength": {"value": 250, "units": "MPa"},
-                    "ultimate_tensile_strength": {"value": 400, "units": "MPa"},
-                    "poissons_ratio": 0.29,
-                    "thermal_conductivity": {"value": 50, "units": "W/(m·K)"},
-                    "specific_heat": {"value": 460, "units": "J/(kg·K)"},
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error in get_material_properties tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        # Simulated material properties
+        return {
+            "status": "success",
+            "material": {
+                "name": "Steel, Plain Carbon",
+                "density": {"value": 7850, "units": "kg/m³"},
+                "elastic_modulus": {"value": 200000, "units": "MPa"},
+                "yield_strength": {"value": 250, "units": "MPa"},
+                "ultimate_tensile_strength": {"value": 400, "units": "MPa"},
+                "poissons_ratio": 0.29,
+                "thermal_conductivity": {"value": 50, "units": "W/(m·K)"},
+                "specific_heat": {"value": 460, "units": "J/(kg·K)"},
+            },
+        }
 
     # Future analysis tools:
     # - perform_fea_analysis (if FEA capabilities are available)

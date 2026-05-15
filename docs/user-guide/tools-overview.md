@@ -1,6 +1,15 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD automation. Each tool is designed with enterprise-grade reliability, extensive error handling, and intelligent parameter validation.
+The SolidWorks MCP Server provides 109 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+
+## Read this first
+
+- Start with the tool catalog page for the task you are solving.
+- Use analysis tools after you already have a model or assembly.
+- Use automation tools when you want a repeatable sequence, macro, or batch run.
+- Treat mock-mode results as simulated outputs from the mock adapter, which is the
+    test/dev stand-in for SolidWorks COM. It keeps the suite runnable without SolidWorks,
+    but it does not prove the CAD result is physically correct.
 
 ## Tool Categories
 
@@ -12,7 +21,7 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 
     Core 3D modeling operations including part creation, features, assemblies, and configurations.
 
-    [**9 tools available** :octicons-arrow-right-24:](#modeling-tools)
+    [**11 tools available** :octicons-arrow-right-24:](#modeling-tools)
 
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
@@ -20,7 +29,7 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 
     Complete 2D sketching toolkit with geometry creation, constraints, and dimensions.
 
-    [**17 tools available** :octicons-arrow-right-24:](#sketching-tools)
+    [**19 tools available** :octicons-arrow-right-24:](#sketching-tools)
 
 - :material-technical-draw:{ .lg .middle } **Drawing Tools**
 
@@ -28,7 +37,7 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 
     Technical drawing creation, view management, dimensions, and annotations.
 
-    [**8 tools available** :octicons-arrow-right-24:](#drawing-tools)
+    [**12 tools available** :octicons-arrow-right-24:](#drawing-tools)
 
 - :material-chart-line:{ .lg .middle } **Analysis Tools**
 
@@ -36,7 +45,7 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 
     Mass properties, interference checking, structural analysis, and validation.
 
-    [**4 tools available** :octicons-arrow-right-24:](#analysis-tools)
+    [**5 tools available** :octicons-arrow-right-24:](#analysis-tools)
 
 - :material-export:{ .lg .middle } **Export Tools**
 
@@ -68,7 +77,7 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 
     Macro recording, playback, analysis, optimization, and library creation.
 
-    [**8 tools available** :octicons-arrow-right-24:](#macro-recording)
+    [**7 tools available** :octicons-arrow-right-24:](#macro-recording)
 
 - :material-magnify:{ .lg .middle } **Drawing Analysis**
 
@@ -76,7 +85,7 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 
     Quality analysis, dimension checking, compliance verification, and reporting.
 
-    [**10 tools available** :octicons-arrow-right-24:](#drawing-analysis)
+    [**8 tools available** :octicons-arrow-right-24:](#drawing-analysis)
 
 - :material-cog:{ .lg .middle } **Automation Tools**
 
@@ -93,24 +102,26 @@ The SolidWorks MCP Server provides 90+ specialized tools for comprehensive CAD a
 | Category | Tool Count | Complexity Level | Primary Use Case |
 |----------|------------|------------------|------------------|
 | **Modeling** | 9 | High | Part/assembly creation and modification |
-| **Sketching** | 17 | Medium | 2D geometry and constraint management |
-| **Drawing** | 8 | Medium | Technical documentation creation |
-| **Drawing Analysis** | 10 | Medium | Quality assurance and compliance |
-| **Analysis** | 4 | High | Engineering validation and analysis |
+| **Modeling** | 11 | High | Part/assembly creation and modification |
+| **Sketching** | 19 | Medium | 2D geometry and constraint management |
+| **Drawing** | 12 | Medium | Technical documentation creation |
+| **Drawing Analysis** | 8 | Medium | Quality assurance and compliance |
+| **Analysis** | 5 | High | Engineering validation and analysis |
 | **Export** | 7 | Low | File format conversion and sharing |
 | **Automation** | 8 | High | Workflow orchestration and batch processing |
-| **File Management** | 3 | Low | File operations and organization |
+| **File Management** | 14 | Low | File operations and organization |
 | **VBA Generation** | 10 | Very High | Complex operation automation |
 | **Template Management** | 6 | Medium | Standardization and reuse |
-| **Macro Recording** | 8 | High | Workflow capture and optimization |
+| **Macro Recording** | 7 | High | Workflow capture and optimization |
+| **Docs Discovery** | 2 | Medium | API and COM discovery workflows |
 
-**Total: 90+ Tools**
+**Total: 109 Tools**
 
 ## Tool Design Principles
 
 ### 1. Intelligent Parameter Handling
 
-Each tool automatically determines the optimal execution strategy:
+Each tool chooses the simplest compatible execution path:
 
 ```python
 @mcp.tool()
@@ -129,7 +140,7 @@ async def create_extrusion(
 
 ### 2. Comprehensive Error Handling
 
-All tools include robust error handling with detailed feedback:
+Tools return structured errors instead of silent failures:
 
 - **Parameter Validation**: Pydantic models ensure type safety
 - **SolidWorks Integration**: Graceful handling of COM failures
@@ -138,7 +149,7 @@ All tools include robust error handling with detailed feedback:
 
 ### 3. Security-First Design
 
-Tools respect the configured security level:
+Tools respect the configured security level and omit unsafe actions when locked down:
 
 ```python
 # Example security enforcement
@@ -206,27 +217,27 @@ result = await batch_process_files(
 
 #### Getting Started
 
-- **Simple modeling**: `create_part()`, `create_sketch()`, `create_extrusion()`
-- **Basic analysis**: `calculate_mass_properties()`, `measure_distance()`
-- **File operations**: `save_document()`, `export_step()`
+- Simple modeling: `create_part()`, `create_sketch()`, `create_extrusion()`
+- Basic analysis: `calculate_mass_properties()`, `check_interference()`
+- File operations: `save_document()`, `export_step()`
 
-#### Intermediate Usage  
+#### Intermediate Usage
 
-- **Complex features**: `create_sweep()`, `create_loft()`, `create_pattern()`
-- **Drawing creation**: `create_technical_drawing()`, `add_drawing_view()`
-- **Batch operations**: `batch_export()`, `batch_process_files()`
+- Complex features: `create_sweep()`, `create_loft()`, `create_pattern()`
+- Drawing creation: `create_technical_drawing()`, `add_drawing_view()`
+- Batch operations: `batch_export()`, `batch_process_files()`
 
 #### Advanced Automation
 
-- **Workflow orchestration**: `execute_workflow()`, `generate_vba_code()`
-- **Template management**: `extract_template()`, `apply_template()`
-- **Macro optimization**: `optimize_macro()`, `analyze_macro()`
+- Workflow orchestration: `execute_workflow()`, `generate_vba_code()`
+- Template management: `extract_template()`, `apply_template()`
+- Macro optimization: `optimize_macro()`, `analyze_macro()`
 
 ### By Security Level
 
 #### Development (All Tools)
 
-Full access to all 90+ tools for maximum functionality.
+Full access to all 109 tools for local development.
 
 #### Restricted (74 Tools)
 
@@ -282,7 +293,7 @@ Minimal analysis tools for public interfaces:
 
 ## Modeling Tools {#modeling-tools}
 
-:material-cube-outline: **9 Tools** | 3D modeling and part creation
+:material-cube-outline: **11 Tools** | 3D modeling and part creation
 
 ### Core Tools
 
@@ -318,7 +329,7 @@ extrude = await create_extrude(
 
 ## Sketching Tools {#sketching-tools}
 
-:material-pencil: **17 Tools** | 2D geometry and constraints
+:material-pencil: **19 Tools** | 2D geometry and constraints
 
 ### Geometry Creation
 
@@ -364,7 +375,7 @@ await add_dimension(
 
 ## Drawing Tools {#drawing-tools}
 
-:material-technical-draw: **8 Tools** | Technical documentation
+:material-technical-draw: **12 Tools** | Technical documentation
 
 ### View Management
 
@@ -400,7 +411,7 @@ await insert_model_view(
 
 ## Analysis Tools {#analysis-tools}
 
-:material-chart-line: **4 Tools** | Engineering analysis and validation
+:material-chart-line: **5 Tools** | Engineering analysis and validation
 
 | Tool Name | Description | Complexity | Use Case |
 |-----------|-------------|------------|----------|
@@ -478,7 +489,7 @@ await export_stl(
 
 ## Macro Recording {#macro-recording}
 
-:material-record: **8 Tools** | Macro automation
+:material-record: **7 Tools** | Macro automation
 
 | Tool Name | Description | Complexity | Use Case |
 |-----------|-------------|------------|----------|
@@ -493,7 +504,7 @@ await export_stl(
 
 ## Drawing Analysis {#drawing-analysis}
 
-:material-magnify: **10 Tools** | Quality assurance
+:material-magnify: **8 Tools** | Quality assurance
 
 | Tool Name | Description | Complexity | Use Case |
 |-----------|-------------|------------|----------|
@@ -554,4 +565,4 @@ await export_stl(
     Ready to explore? Jump to any tool category above or check out the [Quick Start Guide](../getting-started/quickstart.md) for hands-on examples.
 
 !!! info "Development Status"
-    All 90+ tools are implemented and ready for use. Documentation and examples are continuously being expanded.
+    All 109 tools are implemented and ready for use. Documentation and examples are continuously being expanded.

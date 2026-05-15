@@ -18,7 +18,7 @@ from .input_compat import CompatInput
 
 class DrawingAnalysisInput(CompatInput):
     """Input schema for drawing analysis operations.
-    
+
     Attributes:
         analysis_depth (str): The analysis depth value.
         analysis_type (str): The analysis type value.
@@ -41,7 +41,7 @@ class DrawingAnalysisInput(CompatInput):
 
 class DimensionAnalysisInput(CompatInput):
     """Input schema for dimension analysis.
-    
+
     Attributes:
         check_completeness (bool): The check completeness value.
         check_precision (bool): The check precision value.
@@ -63,7 +63,7 @@ class DimensionAnalysisInput(CompatInput):
 
 class AnnotationAnalysisInput(CompatInput):
     """Input schema for annotation analysis.
-    
+
     Attributes:
         check_annotations (bool): The check annotations value.
         check_notes (bool): The check notes value.
@@ -87,7 +87,7 @@ class AnnotationAnalysisInput(CompatInput):
 
 class ComplianceCheckInput(CompatInput):
     """Input schema for standards compliance checking.
-    
+
     Attributes:
         check_sheet_format (bool): The check sheet format value.
         check_title_block (bool): The check title block value.
@@ -115,15 +115,15 @@ async def register_drawing_analysis_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config
 ) -> int:
     """Register advanced drawing analysis tools with FastMCP.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (Any): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         >>> tool_count = await register_drawing_analysis_tools(mcp, adapter, config)
     """
@@ -134,13 +134,13 @@ async def register_drawing_analysis_tools(
         input_data: DrawingAnalysisInput,
     ) -> dict[str, Any]:
         """Handle analyze drawing comprehensive.
-        
+
         Args:
             input_data (DrawingAnalysisInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await analyze_drawing_comprehensive(analysis_input)
         """
@@ -294,16 +294,16 @@ async def register_drawing_analysis_tools(
         input_data: DimensionAnalysisInput,
     ) -> dict[str, Any]:
         """Analyze dimensions in a SolidWorks drawing for consistency and completeness.
-        
+
         This tool performs detailed dimensional analysis including precision, tolerances, and
         completeness checking.
-        
+
         Args:
             input_data (DimensionAnalysisInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await analyze_drawing_dimensions(dimension_input)
         """
@@ -414,13 +414,13 @@ async def register_drawing_analysis_tools(
         input_data: AnnotationAnalysisInput,
     ) -> dict[str, Any]:
         """Analyze drawing annotations and notes quality.
-        
+
         Args:
             input_data (AnnotationAnalysisInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await analyze_drawing_annotations(annotation_input)
         """
@@ -550,13 +550,13 @@ async def register_drawing_analysis_tools(
         input_data: ComplianceCheckInput,
     ) -> dict[str, Any]:
         """Check drawing compliance with company standards.
-        
+
         Args:
             input_data (ComplianceCheckInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await check_drawing_compliance(compliance_input)
         """
@@ -739,13 +739,13 @@ async def register_drawing_analysis_tools(
     @mcp.tool()
     async def analyze_drawing_views(input_data: dict[str, Any]) -> dict[str, Any]:
         """Analyze drawing views arrangement and quality.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await analyze_drawing_views(view_input)
         """
@@ -903,13 +903,13 @@ async def register_drawing_analysis_tools(
     @mcp.tool()
     async def generate_drawing_report(input_data: dict[str, Any]) -> dict[str, Any]:
         """Generate comprehensive drawing analysis report.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await generate_drawing_report(report_input)
         """
@@ -1044,13 +1044,13 @@ async def register_drawing_analysis_tools(
     @mcp.tool()
     async def compare_drawing_versions(input_data: dict[str, Any]) -> dict[str, Any]:
         """Compare different versions of drawing files.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await compare_drawing_versions(version_input)
         """
@@ -1185,13 +1185,13 @@ async def register_drawing_analysis_tools(
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
         """Validate drawing completeness for production readiness.
-        
+
         Args:
             input_data (dict[str, Any]): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             >>> result = await validate_drawing_completeness(validation_input)
         """

@@ -26,13 +26,13 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Build internal getattr.
-    
+
     Args:
         name (str): The name value.
-    
+
     Returns:
         Any: The result produced by the operation.
-    
+
     Raises:
         AttributeError: If the operation cannot be completed.
     """
@@ -50,7 +50,7 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     """Build internal dir.
-    
+
     Returns:
         list[str]: A list containing the resulting items.
     """

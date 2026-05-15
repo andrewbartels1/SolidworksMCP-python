@@ -20,7 +20,7 @@ T = TypeVar("T")
 
 class AdapterHealth(BaseModel):
     """Health status information for adapters.
-    
+
     Attributes:
         average_response_time (float): The average response time value.
         connection_status (str): The connection status value.
@@ -41,10 +41,10 @@ class AdapterHealth(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """Build internal getitem.
-        
+
         Args:
             key (str): The key value.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -62,10 +62,10 @@ class AdapterHealth(BaseModel):
 
     def __contains__(self, key: str) -> bool:
         """Build internal contains.
-        
+
         Args:
             key (str): The key value.
-        
+
         Returns:
             bool: True if contains, otherwise False.
         """
@@ -77,7 +77,7 @@ class AdapterHealth(BaseModel):
 
 class AdapterResultStatus(StrEnum):
     """Result status for adapter operations.
-    
+
     Attributes:
         ERROR (Any): The error value.
         SUCCESS (Any): The success value.
@@ -94,7 +94,7 @@ class AdapterResultStatus(StrEnum):
 @dataclass
 class AdapterResult(Generic[T]):
     """Result wrapper for adapter operations.
-    
+
     Attributes:
         data (T | None): The data value.
         error (str | None): The error value.
@@ -112,7 +112,7 @@ class AdapterResult(Generic[T]):
     @property
     def is_success(self) -> bool:
         """Check if operation was successful.
-        
+
         Returns:
             bool: True if success, otherwise False.
         """
@@ -121,7 +121,7 @@ class AdapterResult(Generic[T]):
     @property
     def is_error(self) -> bool:
         """Check if operation had an error.
-        
+
         Returns:
             bool: True if error, otherwise False.
         """
@@ -131,7 +131,7 @@ class AdapterResult(Generic[T]):
 # SolidWorks data models
 class SolidWorksModel(BaseModel):
     """SolidWorks model information.
-    
+
     Attributes:
         configuration (str | None): The configuration value.
         is_active (bool): The is active value.
@@ -150,10 +150,10 @@ class SolidWorksModel(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """Build internal getitem.
-        
+
         Args:
             key (str): The key value.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -166,7 +166,7 @@ class SolidWorksModel(BaseModel):
 
 class SolidWorksFeature(BaseModel):
     """SolidWorks feature information.
-    
+
     Attributes:
         id (str | None): The id value.
         name (str): The name value.
@@ -185,10 +185,10 @@ class SolidWorksFeature(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """Build internal getitem.
-        
+
         Args:
             key (str): The key value.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -199,7 +199,7 @@ class SolidWorksFeature(BaseModel):
 
 class ExtrusionParameters(BaseModel):
     """Parameters for extrusion operations.
-    
+
     Attributes:
         auto_select (bool): The auto select value.
         both_directions (bool): The both directions value.
@@ -220,6 +220,8 @@ class ExtrusionParameters(BaseModel):
     both_directions: bool = False
     thin_feature: bool = False
     thin_thickness: float | None = None
+    auto_fillet_corners: bool = False
+    fillet_corners_radius: float = 0.0
     end_condition: str = "Blind"
     up_to_surface: str | None = None
     merge_result: bool = True
@@ -229,7 +231,7 @@ class ExtrusionParameters(BaseModel):
 
 class RevolveParameters(BaseModel):
     """Parameters for revolve operations.
-    
+
     Attributes:
         angle (float): The angle value.
         both_directions (bool): The both directions value.
@@ -249,7 +251,7 @@ class RevolveParameters(BaseModel):
 
 class SweepParameters(BaseModel):
     """Parameters for sweep operations.
-    
+
     Attributes:
         merge_result (bool): The merge result value.
         path (str): The path value.
@@ -265,7 +267,7 @@ class SweepParameters(BaseModel):
 
 class LoftParameters(BaseModel):
     """Parameters for loft operations.
-    
+
     Attributes:
         end_tangent (str | None): The end tangent value.
         guide_curves (list[str] | None): The guide curves value.
@@ -283,7 +285,7 @@ class LoftParameters(BaseModel):
 
 class MassProperties(BaseModel):
     """Mass properties information.
-    
+
     Attributes:
         center_of_mass (list[float]): The center of mass value.
         mass (float): The mass value.
@@ -303,10 +305,10 @@ class MassProperties(BaseModel):
 
 class SolidWorksAdapter(ABC):
     """Base adapter interface for SolidWorks integration.
-    
+
     Args:
         config (object | None): Configuration values for the operation. Defaults to None.
-    
+
     Attributes:
         _metrics (Any): The metrics value.
         config (Any): The config value.
@@ -315,12 +317,9 @@ class SolidWorksAdapter(ABC):
 
     def __init__(self, config: object | None = None):
         """Initialize adapter with configuration.
-        
+
         Args:
             config (object | None): Configuration values for the operation. Defaults to None.
-        
-        Returns:
-            Any: The result produced by the operation.
         """
         if config is None:
             normalized_config: dict[str, Any] = {}
@@ -346,7 +345,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def connect(self) -> None:
         """Connect to SolidWorks application.
-        
+
         Returns:
             None: None.
         """
@@ -355,7 +354,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def disconnect(self) -> None:
         """Disconnect from SolidWorks application.
-        
+
         Returns:
             None: None.
         """
@@ -364,7 +363,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     def is_connected(self) -> bool:
         """Check if connected to SolidWorks.
-        
+
         Returns:
             bool: True if connected, otherwise False.
         """
@@ -373,7 +372,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def health_check(self) -> AdapterHealth:
         """Get adapter health status.
-        
+
         Returns:
             AdapterHealth: The result produced by the operation.
         """
@@ -383,10 +382,10 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Open a SolidWorks model (part, assembly, or drawing).
-        
+
         Args:
             file_path (str): Path to the target file.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
@@ -395,10 +394,10 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def close_model(self, save: bool = False) -> AdapterResult[None]:
         """Close the current model.
-        
+
         Args:
             save (bool): The save value. Defaults to False.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -406,10 +405,10 @@ class SolidWorksAdapter(ABC):
 
     async def save_file(self, file_path: str | None = None) -> AdapterResult[Any]:
         """Save the active model to the existing path or the provided path.
-        
+
         Args:
             file_path (str | None): Path to the target file. Defaults to None.
-        
+
         Returns:
             AdapterResult[Any]: The result produced by the operation.
         """
@@ -421,7 +420,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
         """Get metadata for the active model.
-        
+
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
@@ -432,10 +431,10 @@ class SolidWorksAdapter(ABC):
         self, include_suppressed: bool = False
     ) -> AdapterResult[list[dict[str, Any]]]:
         """List model features from the feature tree.
-        
+
         Args:
             include_suppressed (bool): The include suppressed value. Defaults to False.
-        
+
         Returns:
             AdapterResult[list[dict[str, Any]]]: The result produced by the operation.
         """
@@ -444,7 +443,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """List configuration names for the active model.
-        
+
         Returns:
             AdapterResult[list[str]]: The result produced by the operation.
         """
@@ -455,11 +454,11 @@ class SolidWorksAdapter(ABC):
         self, name: str | None = None, units: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new part document.
-        
+
         Args:
             name (str | None): The name value. Defaults to None.
             units (str | None): The units value. Defaults to None.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
@@ -470,10 +469,10 @@ class SolidWorksAdapter(ABC):
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new assembly document.
-        
+
         Args:
             name (str | None): The name value. Defaults to None.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
@@ -484,10 +483,10 @@ class SolidWorksAdapter(ABC):
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new drawing document.
-        
+
         Args:
             name (str | None): The name value. Defaults to None.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
@@ -499,10 +498,10 @@ class SolidWorksAdapter(ABC):
         self, params: ExtrusionParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create an extrusion feature.
-        
+
         Args:
             params (ExtrusionParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -513,10 +512,10 @@ class SolidWorksAdapter(ABC):
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create a revolve feature.
-        
+
         Args:
             params (RevolveParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -527,10 +526,10 @@ class SolidWorksAdapter(ABC):
         self, params: SweepParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create a sweep feature.
-        
+
         Args:
             params (SweepParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -541,10 +540,10 @@ class SolidWorksAdapter(ABC):
         self, params: LoftParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create a loft feature.
-        
+
         Args:
             params (LoftParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -554,10 +553,10 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def create_sketch(self, plane: str) -> AdapterResult[str]:
         """Create a new sketch on the specified plane.
-        
+
         Args:
             plane (str): The plane value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -568,13 +567,13 @@ class SolidWorksAdapter(ABC):
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
         """Add a line to the current sketch.
-        
+
         Args:
             x1 (float): The x1 value.
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -585,12 +584,12 @@ class SolidWorksAdapter(ABC):
         self, center_x: float, center_y: float, radius: float
     ) -> AdapterResult[str]:
         """Add a circle to the current sketch.
-        
+
         Args:
             center_x (float): The center x value.
             center_y (float): The center y value.
             radius (float): The radius value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -601,13 +600,13 @@ class SolidWorksAdapter(ABC):
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
         """Add a rectangle to the current sketch.
-        
+
         Args:
             x1 (float): The x1 value.
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -623,7 +622,7 @@ class SolidWorksAdapter(ABC):
         end_y: float,
     ) -> AdapterResult[str]:
         """Add an arc to the current sketch.
-        
+
         Args:
             center_x (float): The center x value.
             center_y (float): The center y value.
@@ -631,7 +630,7 @@ class SolidWorksAdapter(ABC):
             start_y (float): The start y value.
             end_x (float): The end x value.
             end_y (float): The end y value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -642,10 +641,10 @@ class SolidWorksAdapter(ABC):
 
     async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
         """Add a spline through the provided points.
-        
+
         Args:
             points (list[dict[str, float]]): The points value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -658,13 +657,13 @@ class SolidWorksAdapter(ABC):
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
         """Add a centerline to the current sketch.
-        
+
         Args:
             x1 (float): The x1 value.
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -677,13 +676,13 @@ class SolidWorksAdapter(ABC):
         self, center_x: float, center_y: float, radius: float, sides: int
     ) -> AdapterResult[str]:
         """Add a regular polygon to the current sketch.
-        
+
         Args:
             center_x (float): The center x value.
             center_y (float): The center y value.
             radius (float): The radius value.
             sides (int): The sides value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -700,13 +699,13 @@ class SolidWorksAdapter(ABC):
         minor_axis: float,
     ) -> AdapterResult[str]:
         """Add an ellipse to the current sketch.
-        
+
         Args:
             center_x (float): The center x value.
             center_y (float): The center y value.
             major_axis (float): The major axis value.
             minor_axis (float): The minor axis value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -719,12 +718,12 @@ class SolidWorksAdapter(ABC):
         self, entity1: str, entity2: str | None, relation_type: str
     ) -> AdapterResult[str]:
         """Apply a geometric constraint between sketch entities.
-        
+
         Args:
             entity1 (str): The entity1 value.
             entity2 (str | None): The entity2 value.
             relation_type (str): The relation type value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -741,19 +740,35 @@ class SolidWorksAdapter(ABC):
         value: float,
     ) -> AdapterResult[str]:
         """Add a sketch dimension.
-        
+
         Args:
             entity1 (str): The entity1 value.
             entity2 (str | None): The entity2 value.
             dimension_type (str): The dimension type value.
             value (float): The value value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="add_sketch_dimension is not implemented by this adapter",
+        )
+
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check whether a sketch is fully defined.
+
+        Args:
+            sketch_name (str | None): Optional sketch name to inspect. Defaults to None.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Definition status payload.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="check_sketch_fully_defined is not implemented by this adapter",
         )
 
     async def sketch_linear_pattern(
@@ -765,14 +780,14 @@ class SolidWorksAdapter(ABC):
         count: int,
     ) -> AdapterResult[str]:
         """Create a linear pattern of sketch entities.
-        
+
         Args:
             entities (list[str]): The entities value.
             direction_x (float): The direction x value.
             direction_y (float): The direction y value.
             spacing (float): The spacing value.
             count (int): The count value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -790,14 +805,14 @@ class SolidWorksAdapter(ABC):
         count: int,
     ) -> AdapterResult[str]:
         """Create a circular pattern of sketch entities.
-        
+
         Args:
             entities (list[str]): The entities value.
             center_x (float): The center x value.
             center_y (float): The center y value.
             angle (float): The angle value.
             count (int): The count value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -810,11 +825,11 @@ class SolidWorksAdapter(ABC):
         self, entities: list[str], mirror_line: str
     ) -> AdapterResult[str]:
         """Mirror sketch entities about a mirror line.
-        
+
         Args:
             entities (list[str]): The entities value.
             mirror_line (str): The mirror line value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -830,12 +845,12 @@ class SolidWorksAdapter(ABC):
         reverse_direction: bool,
     ) -> AdapterResult[str]:
         """Offset sketch entities.
-        
+
         Args:
             entities (list[str]): The entities value.
             offset_distance (float): The offset distance value.
             reverse_direction (bool): The reverse direction value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -852,13 +867,13 @@ class SolidWorksAdapter(ABC):
         construction: bool = False,
     ) -> AdapterResult[str]:
         """Alias for add_circle used by some tool flows.
-        
+
         Args:
             center_x (float): The center x value.
             center_y (float): The center y value.
             radius (float): The radius value.
             construction (bool): The construction value. Defaults to False.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -866,11 +881,11 @@ class SolidWorksAdapter(ABC):
 
     async def create_cut(self, sketch_name: str, depth: float) -> AdapterResult[str]:
         """Create a cut feature from an existing sketch.
-        
+
         Args:
             sketch_name (str): The sketch name value.
             depth (float): The depth value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -879,10 +894,48 @@ class SolidWorksAdapter(ABC):
             error="create_cut is not implemented by this adapter",
         )
 
+    async def create_cut_extrude(
+        self, params: "ExtrusionParameters"
+    ) -> "AdapterResult[Any]":
+        """Create a cut-extrude feature from the active sketch.
+
+        Cuts material from the current solid body using the active sketch profile.
+        Equivalent to SolidWorks Insert > Cut > Extrude.
+
+        Args:
+            params (ExtrusionParameters): Depth and direction parameters.
+
+        Returns:
+            AdapterResult: Feature result or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_cut_extrude is not implemented by this adapter",
+        )
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> "AdapterResult[Any]":
+        """Add a fillet feature to selected edges.
+
+        Rounds the selected edges of the current solid body with the given radius.
+
+        Args:
+            radius (float): Fillet radius in millimeters.
+            edge_names (list[str]): List of edge names to fillet.
+
+        Returns:
+            AdapterResult: Feature result or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_fillet is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch editing mode.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -892,7 +945,7 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def get_mass_properties(self) -> AdapterResult[MassProperties]:
         """Get mass properties of the current model.
-        
+
         Returns:
             AdapterResult[MassProperties]: The result produced by the operation.
         """
@@ -902,14 +955,14 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def export_image(self, payload: dict) -> AdapterResult[dict]:
         """Export a viewport screenshot (PNG/JPG) of the current model.
-        
+
         Payload keys: file_path (str): Absolute output path. width (int): Image width in pixels.
         height (int): Image height in pixels. view_orientation (str): One of "isometric",
         "front", "top", "right", "back", "bottom", "current".
-        
+
         Args:
             payload (dict): The payload value.
-        
+
         Returns:
             AdapterResult[dict]: The result produced by the operation.
         """
@@ -920,11 +973,11 @@ class SolidWorksAdapter(ABC):
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:
         """Export the current model to a file.
-        
+
         Args:
             file_path (str): Path to the target file.
             format_type (str): The format type value.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -934,10 +987,10 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def get_dimension(self, name: str) -> AdapterResult[float]:
         """Get the value of a dimension.
-        
+
         Args:
             name (str): The name value.
-        
+
         Returns:
             AdapterResult[float]: The result produced by the operation.
         """
@@ -946,11 +999,11 @@ class SolidWorksAdapter(ABC):
     @abstractmethod
     async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
         """Set the value of a dimension.
-        
+
         Args:
             name (str): The name value.
             value (float): The value value.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -959,11 +1012,11 @@ class SolidWorksAdapter(ABC):
     # Utility Methods
     def update_metrics(self, operation_time: float, success: bool) -> None:
         """Update adapter metrics.
-        
+
         Args:
             operation_time (float): The operation time value.
             success (bool): The success value.
-        
+
         Returns:
             None: None.
         """
@@ -980,7 +1033,7 @@ class SolidWorksAdapter(ABC):
 
     def get_metrics(self) -> dict[str, Any]:
         """Get adapter metrics.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """

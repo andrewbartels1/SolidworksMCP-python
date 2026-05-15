@@ -31,7 +31,7 @@ T = TypeVar("T")
 
 class ConnectionPoolAdapter(SolidWorksAdapter):
     """Connection pool wrapper for SolidWorks adapters.
-    
+
     Args:
         adapter_factory (Callable[[], SolidWorksAdapter] | None): Factory callable used to
                                                                   create adapter instances.
@@ -46,7 +46,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         timeout (float | None): Maximum time to wait in seconds. Defaults to None.
         config (dict[str, object] | None): Configuration values for the operation. Defaults
                                            to None.
-    
+
     Attributes:
         _lock (Any): The lock value.
         adapter_factory (Any): The adapter factory value.
@@ -67,7 +67,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         config: dict[str, object] | None = None,
     ) -> None:
         """Initialize the connection pool adapter.
-        
+
         Args:
             adapter_factory (Callable[[], SolidWorksAdapter] | None): Factory callable used to
                                                                       create adapter instances.
@@ -82,7 +82,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             timeout (float | None): Maximum time to wait in seconds. Defaults to None.
             config (dict[str, object] | None): Configuration values for the operation. Defaults
                                                to None.
-        
+
         Returns:
             None: None.
         """
@@ -93,11 +93,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         if adapter_factory is None:
             from .mock_adapter import MockSolidWorksAdapter
 
-            def adapter_factory():
+            def adapter_factory() -> MockSolidWorksAdapter:
                 """Provide adapter factory support for the connection pool adapter.
-                
+
                 Returns:
-                    Any: The result produced by the operation.
+                    MockSolidWorksAdapter: The result produced by the operation.
                 """
 
                 return MockSolidWorksAdapter(config or {})
@@ -117,12 +117,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, operation: Callable[[], Awaitable[T]], default: T | None = None
     ) -> T | None:
         """Run an async operation and return default on failure.
-        
+
         Args:
             operation (Callable[[], Awaitable[T]]): Callable object executed by the helper.
             default (T | None): Fallback value returned when the operation fails. Defaults to
                                 None.
-        
+
         Returns:
             T | None: The result produced by the operation.
         """
@@ -135,10 +135,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, operation: Callable[[], Awaitable[T]]
     ) -> tuple[T | None, Exception | None]:
         """Run an async operation and return (result, error).
-        
+
         Args:
             operation (Callable[[], Awaitable[T]]): Callable object executed by the helper.
-        
+
         Returns:
             tuple[T | None, Exception | None]: A tuple containing the resulting values.
         """
@@ -151,12 +151,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, operation: Callable[[], T], default: T | None = None
     ) -> T | None:
         """Run a sync operation and return default on failure.
-        
+
         Args:
             operation (Callable[[], T]): Callable object executed by the helper.
             default (T | None): Fallback value returned when the operation fails. Defaults to
                                 None.
-        
+
         Returns:
             T | None: The result produced by the operation.
         """
@@ -172,12 +172,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         *args: object,
     ) -> object:
         """Invoke adapter method with args, retrying without args on signature mismatch.
-        
+
         Args:
             adapter (SolidWorksAdapter): Adapter instance used for the operation.
             method_name (str): Name of the method to invoke.
             *args (object): Additional positional arguments forwarded to the call.
-        
+
         Returns:
             object: The result produced by the operation.
         """
@@ -189,9 +189,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def _replace_failed_adapter(self) -> Exception | None:
         """Create, connect, and return a replacement adapter.
-        
+
         Returns None on success, or the captured exception on failure.
-        
+
         Returns:
             Exception | None: The result produced by the operation.
         """
@@ -206,7 +206,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
     @property
     def size(self) -> int:
         """Provide size support for the connection pool adapter.
-        
+
         Returns:
             int: The computed numeric result.
         """
@@ -215,7 +215,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
     @property
     def active_connections(self) -> int:
         """Provide active connections support for the connection pool adapter.
-        
+
         Returns:
             int: The computed numeric result.
         """
@@ -223,7 +223,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def acquire(self) -> SolidWorksAdapter:
         """Provide acquire support for the connection pool adapter.
-        
+
         Returns:
             SolidWorksAdapter: The result produced by the operation.
         """
@@ -231,10 +231,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def release(self, adapter: SolidWorksAdapter) -> None:
         """Provide release support for the connection pool adapter.
-        
+
         Args:
             adapter (SolidWorksAdapter): Adapter instance used for the operation.
-        
+
         Returns:
             None: None.
         """
@@ -242,7 +242,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def cleanup(self) -> None:
         """Provide cleanup support for the connection pool adapter.
-        
+
         Returns:
             None: None.
         """
@@ -250,7 +250,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def _initialize_pool(self) -> None:
         """Initialize the connection pool.
-        
+
         Returns:
             None: None.
         """
@@ -278,13 +278,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def _get_adapter(self, timeout: float = 30.0) -> SolidWorksAdapter:
         """Get an available adapter from the pool.
-        
+
         Args:
             timeout (float): Maximum time to wait in seconds. Defaults to 30.0.
-        
+
         Returns:
             SolidWorksAdapter: The result produced by the operation.
-        
+
         Raises:
             Exception: If the operation cannot be completed.
         """
@@ -300,10 +300,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def _return_adapter(self, adapter: SolidWorksAdapter) -> None:
         """Return an adapter to the pool.
-        
+
         Args:
             adapter (SolidWorksAdapter): Adapter instance used for the operation.
-        
+
         Returns:
             None: None.
         """
@@ -315,14 +315,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         operation: Callable[[SolidWorksAdapter], Awaitable[AdapterResult[T]]],
     ) -> AdapterResult[T]:
         """Build internal execute with pool.
-        
+
         Args:
             operation_name (str): The operation name value.
             operation (Callable[[SolidWorksAdapter], Awaitable[AdapterResult[T]]]): Callable
                                                                                     object
                                                                                     executed by
                                                                                     the helper.
-        
+
         Returns:
             AdapterResult[T]: The result produced by the operation.
         """
@@ -350,7 +350,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
                 if adapter:
                     # Don't return failed adapter to pool, create a new one
-                    await self._attempt_async(lambda a=adapter: a.disconnect())
+                    from .base import SolidWorksAdapter
+
+                    typed_adapter: SolidWorksAdapter = adapter
+                    await self._attempt_async(lambda a=typed_adapter: a.disconnect())
 
                     replacement_error = await self._attempt_async(
                         self._replace_failed_adapter
@@ -373,7 +376,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def connect(self) -> None:
         """Initialize the connection pool.
-        
+
         Returns:
             None: None.
         """
@@ -381,13 +384,16 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def disconnect(self) -> None:
         """Disconnect all adapters in the pool.
-        
+
         Returns:
             None: None.
         """
         for adapter in self.pool:
+            from .base import SolidWorksAdapter
+
+            typed_adapter: SolidWorksAdapter = adapter
             _, error = await self._attempt_async_with_error(
-                lambda current_adapter=adapter: current_adapter.disconnect()
+                lambda a=typed_adapter: a.disconnect()
             )
             if error is not None:
                 logger.warning(f"Error disconnecting adapter: {error}")
@@ -405,7 +411,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     def is_connected(self) -> bool:
         """Check if pool is initialized.
-        
+
         Returns:
             bool: True if connected, otherwise False.
         """
@@ -413,7 +419,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def health_check(self) -> AdapterHealth:
         """Get health status of the connection pool.
-        
+
         Returns:
             AdapterHealth: The result produced by the operation.
         """
@@ -437,9 +443,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         # Check health of all adapters
         for adapter in self.pool:
-            health = await self._attempt_async(
-                lambda current_adapter=adapter: current_adapter.health_check()
-            )
+            from .base import SolidWorksAdapter
+
+            typed_adapter: SolidWorksAdapter = adapter
+            health = await self._attempt_async(lambda a=typed_adapter: a.health_check())
             if not health:
                 continue
             if health.healthy:
@@ -466,10 +473,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Open model using pool.
-        
+
         Args:
             file_path (str): Path to the target file.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
@@ -479,10 +486,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def close_model(self, save: bool = False) -> AdapterResult[None]:
         """Close model using pool.
-        
+
         Args:
             save (bool): The save value. Defaults to False.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -492,10 +499,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def save_file(self, file_path: str | None = None) -> AdapterResult[None]:
         """Save model using pool.
-        
+
         Args:
             file_path (str | None): Path to the target file. Defaults to None.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -507,21 +514,21 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, name: str | None = None, units: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create part using pool.
-        
+
         Args:
             name (str | None): The name value. Defaults to None.
             units (str | None): The units value. Defaults to None.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
 
         async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
             """Build internal op.
-            
+
             Args:
                 adapter (SolidWorksAdapter): Adapter instance used for the operation.
-            
+
             Returns:
                 AdapterResult[SolidWorksModel]: The result produced by the operation.
             """
@@ -538,20 +545,20 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, name: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create assembly using pool.
-        
+
         Args:
             name (str | None): The name value. Defaults to None.
-        
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
 
         async def _op(adapter: SolidWorksAdapter) -> AdapterResult[SolidWorksModel]:
             """Build internal op.
-            
+
             Args:
                 adapter (SolidWorksAdapter): Adapter instance used for the operation.
-            
+
             Returns:
                 AdapterResult[SolidWorksModel]: The result produced by the operation.
             """
@@ -564,14 +571,19 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         return await self._execute_with_pool("create_assembly", _op)
 
-    async def create_drawing(self) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create drawing using pool.
-        
+
+        Args:
+            name (str | None): The name value. Defaults to None.
+
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_pool(
-            "create_drawing", lambda adapter: adapter.create_drawing()
+            "create_drawing", lambda adapter: adapter.create_drawing(name)
         )
 
     # Feature operations
@@ -580,10 +592,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, params: ExtrusionParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create extrusion using pool.
-        
+
         Args:
             params (ExtrusionParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -591,14 +603,30 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "create_extrusion", lambda adapter: adapter.create_extrusion(params)
         )
 
+    async def create_cut_extrude(
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Create cut-extrude using pool."""
+        return await self._execute_with_pool(
+            "create_cut_extrude", lambda adapter: adapter.create_cut_extrude(params)
+        )
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Add fillet using pool."""
+        return await self._execute_with_pool(
+            "add_fillet", lambda adapter: adapter.add_fillet(radius, edge_names)
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create revolve using pool.
-        
+
         Args:
             params (RevolveParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -610,10 +638,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, params: SweepParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create sweep using pool.
-        
+
         Args:
             params (SweepParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -625,10 +653,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, params: LoftParameters
     ) -> AdapterResult[SolidWorksFeature]:
         """Create loft using pool.
-        
+
         Args:
             params (LoftParameters): The params value.
-        
+
         Returns:
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
@@ -640,10 +668,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def create_sketch(self, plane: str) -> AdapterResult[str]:
         """Create sketch using pool.
-        
+
         Args:
             plane (str): The plane value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -655,13 +683,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
         """Add line using pool.
-        
+
         Args:
             x1 (float): The x1 value.
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -673,13 +701,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
         """Add centerline using pool.
-        
+
         Args:
             x1 (float): The x1 value.
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -692,12 +720,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, center_x: float, center_y: float, radius: float
     ) -> AdapterResult[str]:
         """Add circle using pool.
-        
+
         Args:
             center_x (float): The center x value.
             center_y (float): The center y value.
             radius (float): The radius value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -709,13 +737,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
         """Add rectangle using pool.
-        
+
         Args:
             x1 (float): The x1 value.
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
-        
+
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
@@ -723,9 +751,70 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "add_rectangle", lambda adapter: adapter.add_rectangle(x1, y1, x2, y2)
         )
 
+    async def add_arc(
+        self,
+        center_x: float,
+        center_y: float,
+        start_x: float,
+        start_y: float,
+        end_x: float,
+        end_y: float,
+    ) -> AdapterResult[str]:
+        """Add arc using pool.
+
+        Args:
+            center_x (float): Arc center X coordinate.
+            center_y (float): Arc center Y coordinate.
+            start_x (float): Arc start X coordinate.
+            start_y (float): Arc start Y coordinate.
+            end_x (float): Arc end X coordinate.
+            end_y (float): Arc end Y coordinate.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_arc",
+            lambda adapter: adapter.add_arc(
+                center_x,
+                center_y,
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+            ),
+        )
+
+    async def add_sketch_dimension(
+        self,
+        entity1: str,
+        entity2: str | None,
+        dimension_type: str,
+        value: float,
+    ) -> AdapterResult[str]:
+        """Add sketch dimension using pool."""
+        return await self._execute_with_pool(
+            "add_sketch_dimension",
+            lambda adapter: adapter.add_sketch_dimension(
+                entity1,
+                entity2,
+                dimension_type,
+                value,
+            ),
+        )
+
+    async def check_sketch_fully_defined(
+        self, sketch_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check sketch definition status using pool."""
+        return await self._execute_with_pool(
+            "check_sketch_fully_defined",
+            lambda adapter: adapter.check_sketch_fully_defined(sketch_name),
+        )
+
     async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch using pool.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -737,7 +826,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def get_mass_properties(self) -> AdapterResult[MassProperties]:
         """Get mass properties using pool.
-        
+
         Returns:
             AdapterResult[MassProperties]: The result produced by the operation.
         """
@@ -747,7 +836,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def get_model_info(self) -> AdapterResult[dict[str, object]]:
         """Get active model metadata using pool.
-        
+
         Returns:
             AdapterResult[dict[str, object]]: The result produced by the operation.
         """
@@ -759,10 +848,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, include_suppressed: bool = False
     ) -> AdapterResult[list[dict[str, object]]]:
         """List model features using pool.
-        
+
         Args:
             include_suppressed (bool): The include suppressed value. Defaults to False.
-        
+
         Returns:
             AdapterResult[list[dict[str, object]]]: The result produced by the operation.
         """
@@ -773,7 +862,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """List model configurations using pool.
-        
+
         Returns:
             AdapterResult[list[str]]: The result produced by the operation.
         """
@@ -785,25 +874,26 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, params: dict[str, Any]
     ) -> AdapterResult[dict[str, Any]]:
         """Provide execute macro support for the connection pool adapter.
-        
+
         Args:
             params (dict[str, Any]): The params value.
-        
+
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         return await self._execute_with_pool(
-            "execute_macro", lambda adapter: adapter.execute_macro(params)
+            "execute_macro",
+            lambda adapter: adapter.execute_macro(params),  # type: ignore[attr-defined]
         )
 
     # Export operations
 
     async def export_image(self, payload: dict) -> AdapterResult[dict]:
         """Export viewport image using pool.
-        
+
         Args:
             payload (dict): The payload value.
-        
+
         Returns:
             AdapterResult[dict]: The result produced by the operation.
         """
@@ -815,11 +905,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:
         """Export file using pool.
-        
+
         Args:
             file_path (str): Path to the target file.
             format_type (str): The format type value.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -831,10 +921,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def get_dimension(self, name: str) -> AdapterResult[float]:
         """Get dimension using pool.
-        
+
         Args:
             name (str): The name value.
-        
+
         Returns:
             AdapterResult[float]: The result produced by the operation.
         """
@@ -844,11 +934,11 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
         """Set dimension using pool.
-        
+
         Args:
             name (str): The name value.
             value (float): The value value.
-        
+
         Returns:
             AdapterResult[None]: The result produced by the operation.
         """
@@ -859,14 +949,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
 class ConnectionPool:
     """Legacy alias class expected by tests.
-    
+
     Args:
         create_connection (Callable[[], object | Awaitable[object]]): Factory callable used
                                                                       to create a
                                                                       connection.
         max_size (int): Maximum number of items allowed in the pool. Defaults to 3.
         timeout (float): Maximum time to wait in seconds. Defaults to 30.0.
-    
+
     Attributes:
         _create_connection (Any): The create connection value.
         _max_size (Any): The max size value.
@@ -880,14 +970,14 @@ class ConnectionPool:
         timeout: float = 30.0,
     ) -> None:
         """Initialize the connection pool.
-        
+
         Args:
             create_connection (Callable[[], object | Awaitable[object]]): Factory callable used
                                                                           to create a
                                                                           connection.
             max_size (int): Maximum number of items allowed in the pool. Defaults to 3.
             timeout (float): Maximum time to wait in seconds. Defaults to 30.0.
-        
+
         Returns:
             None: None.
         """
@@ -901,7 +991,7 @@ class ConnectionPool:
     @property
     def size(self) -> int:
         """Provide size support for the connection pool.
-        
+
         Returns:
             int: The computed numeric result.
         """
@@ -910,7 +1000,7 @@ class ConnectionPool:
     @property
     def active_connections(self) -> int:
         """Provide active connections support for the connection pool.
-        
+
         Returns:
             int: The computed numeric result.
         """
@@ -918,7 +1008,7 @@ class ConnectionPool:
 
     async def _new_connection(self) -> object:
         """Build internal new connection.
-        
+
         Returns:
             object: The result produced by the operation.
         """
@@ -930,10 +1020,10 @@ class ConnectionPool:
 
     async def acquire(self) -> object:
         """Provide acquire support for the connection pool.
-        
+
         Returns:
             object: The result produced by the operation.
-        
+
         Raises:
             TimeoutError: No connection available within timeout.
         """
@@ -959,10 +1049,10 @@ class ConnectionPool:
 
     async def release(self, conn: object) -> None:
         """Provide release support for the connection pool.
-        
+
         Args:
             conn (object): The conn value.
-        
+
         Returns:
             None: None.
         """
@@ -973,7 +1063,7 @@ class ConnectionPool:
 
     async def cleanup(self) -> None:
         """Provide cleanup support for the connection pool.
-        
+
         Returns:
             None: None.
         """

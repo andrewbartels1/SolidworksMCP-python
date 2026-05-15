@@ -17,7 +17,7 @@ _security_enforcer: SecurityEnforcer | None = None
 
 def get_security_enforcer() -> SecurityEnforcer | None:
     """Return the active runtime security enforcer, if configured.
-    
+
     Returns:
         SecurityEnforcer | None: The result produced by the operation.
     """
@@ -26,11 +26,11 @@ def get_security_enforcer() -> SecurityEnforcer | None:
 
 async def setup_security(mcp: Any, config: SolidWorksMCPConfig) -> None:
     """Configure security middleware based on selected security level.
-    
+
     Args:
         mcp (Any): The mcp value.
         config (SolidWorksMCPConfig): Configuration values for the operation.
-    
+
     Returns:
         None: None.
     """

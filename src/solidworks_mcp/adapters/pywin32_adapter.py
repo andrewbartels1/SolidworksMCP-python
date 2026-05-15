@@ -4,6 +4,7 @@ This adapter uses pywin32 to communicate with SolidWorks via COM, providing real
 SolidWorks automation capabilities on Windows platforms.
 """
 
+import asyncio
 import os
 import platform
 import time
@@ -13,21 +14,18 @@ from types import SimpleNamespace
 from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
-from . import sw_type_info
 from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
-    ExtrusionParameters,
-    LoftParameters,
-    MassProperties,
-    RevolveParameters,
     SolidWorksAdapter,
-    SolidWorksFeature,
-    SolidWorksModel,
-    SweepParameters,
 )
-from .com_executor import ComExecutor
+from .solidworks import (
+    SolidWorksFeaturesMixin,
+    SolidWorksIOMixin,
+    SolidWorksSelectionMixin,
+    SolidWorksSketchMixin,
+)
 
 try:
     import pythoncom
@@ -76,7 +74,1227 @@ def _parse_vb_module_name(macro_path: str) -> str:
     return "SolidWorksMacro"
 
 
-class PyWin32Adapter(SolidWorksAdapter):
+class _ComSessionCoordinator:
+    """Coordinate COM apartment initialisation and SolidWorks application lifecycle.
+
+    This collaborator is responsible for the low-level mechanics of connecting
+    to the SolidWorks COM server: initialising the COM apartment, acquiring the
+    ``SldWorks.Application`` object (with retries), waiting for the server to
+    become ready, toggling automation preferences, and tearing everything down
+    cleanly on disconnect.
+
+    It is instantiated once inside ``PyWin32Adapter.__init__`` and accessed
+    via ``self._com_coordinator``.
+
+    Attributes:
+        _adapter: Back-reference to the owning ``PyWin32Adapter`` instance.
+    """
+
+    def __init__(self, adapter: "PyWin32Adapter") -> None:
+        """Store a back-reference to the owning adapter.
+
+        Args:
+            adapter: The ``PyWin32Adapter`` instance that created this
+                coordinator.  Must remain alive for the full lifetime of the
+                coordinator.
+        """
+        self._adapter = adapter
+
+    def initialize_com_apartment(self) -> None:
+        """Initialise the COM apartment via ``pythoncom.CoInitialize``.
+
+        Safe to call multiple times; subsequent calls are no-ops if the
+        apartment is already initialised (tracked via
+        ``adapter._com_initialized``).
+
+        Side Effects:
+            Sets ``adapter._com_initialized`` to ``True`` on first call.
+        """
+        if self._adapter._com_initialized:
+            return
+        pythoncom.CoInitialize()
+        self._adapter._com_initialized = True
+
+    def uninitialize_com_apartment(self) -> None:
+        """Release the COM apartment via ``pythoncom.CoUninitialize``.
+
+        Only called when this coordinator was the one that initialised the
+        apartment (``adapter._com_initialized`` is ``True``).  Resets the
+        flag afterwards so reconnect attempts work correctly.
+
+        Side Effects:
+            Sets ``adapter._com_initialized`` to ``False``.
+        """
+        if not self._adapter._com_initialized:
+            return
+        pythoncom.CoUninitialize()
+        self._adapter._com_initialized = False
+
+    async def acquire_solidworks_application(self) -> Any:
+        """Acquire a live SolidWorks COM application object with retries.
+
+        Attempts up to 8 connect-cycles.  Each cycle first tries
+        ``win32com.client.GetActiveObject("SldWorks.Application")`` to bind to
+        a running instance, then falls back to
+        ``win32com.client.Dispatch("SldWorks.Application")`` to start one.
+        Between cycles the coroutine sleeps 1 second so that a slow
+        SolidWorks launch has time to register its COM class.
+
+        Returns:
+            Any: The live ``SldWorks.Application`` COM object.
+
+        Raises:
+            SolidWorksMCPError: After all retries are exhausted, wraps the
+                last ``pywintypes.com_error`` or raises a generic message
+                when the returned object is ``None``.
+
+        Side Effects:
+            Sets ``adapter.swApp`` to the acquired COM object.
+        """
+        self._adapter.swApp = None
+        last_error: Exception | None = None
+        for _ in range(8):
+            try:
+                app = win32com.client.GetActiveObject("SldWorks.Application")
+                if app is not None:
+                    self._adapter.swApp = app
+                    return app
+            except pywintypes.com_error as active_error:
+                last_error = active_error
+
+            try:
+                app = win32com.client.Dispatch("SldWorks.Application")
+                if app is not None:
+                    self._adapter.swApp = app
+                    return app
+            except pywintypes.com_error as dispatch_error:
+                last_error = dispatch_error
+
+            await asyncio.sleep(1.0)
+
+        if last_error is not None:
+            raise SolidWorksMCPError(str(last_error))
+        raise SolidWorksMCPError("SolidWorks COM application instance is None")
+
+    async def wait_for_server_ready(self, app: Any) -> None:
+        """Poll until the SolidWorks COM server is responsive.
+
+        Reads ``app.RevisionNumber`` up to 10 times with 0.5-second pauses
+        between attempts.  This guards against race conditions when SolidWorks
+        is still loading after the COM object is first obtained.
+
+        Args:
+            app: The ``SldWorks.Application`` COM object returned by
+                :meth:`acquire_solidworks_application`.
+
+        Raises:
+            SolidWorksMCPError: If the server does not respond within
+                10 × 0.5 s = 5 seconds.
+        """
+        if not hasattr(app, "RevisionNumber"):
+            return
+
+        for _ in range(10):
+            revision = self._adapter._attempt(
+                lambda: self._adapter._get_attr_or_call(app, "RevisionNumber"),
+                default=None,
+            )
+            if revision is not None:
+                return
+            await asyncio.sleep(0.5)
+
+        raise SolidWorksMCPError(
+            "SolidWorks COM server did not become ready in time. "
+            "Confirm SolidWorks is fully launched and dismiss any startup dialogs."
+        )
+
+    @staticmethod
+    def set_automation_preferences(app: Any, *, interactive: bool) -> None:
+        """Toggle the SolidWorks warning and question dialog preferences.
+
+        Sets user preference toggles 150 and 149 to suppress (or restore)
+        popup dialogs during automated workflows. Also manages the
+        sketch-dimension input toggles so sketch dimensions do not require the
+        interactive Modify confirmation while automation is active.
+
+        Verified against the SolidWorks 2026 constants type library, the
+        relevant sketch-dimension toggles are:
+
+        * ``swInputDimValOnCreate`` = 10
+        * ``swSketchAcceptNumericInput`` = 372
+        * ``swSketchCreateDimensionOnlyWhenEntered`` = 520
+        * ``swScaleSketchOnFirstDimension`` = 642
+
+        These stay disabled for the full automation session instead of being
+        toggled around individual dimension calls, because once SolidWorks
+        enters the modal approval flow, extra COM cleanup chatter tends to make
+        recovery less reliable.
+
+        Should be called with ``interactive=False`` immediately after
+        connecting and ``interactive=True`` before disconnecting.
+
+        Args:
+            app: The live ``SldWorks.Application`` COM object.
+            interactive: When ``False``, dialogs are suppressed for
+                unattended operation.  When ``True``, normal interactive
+                behaviour is restored.
+        """
+        app.SetUserPreferenceToggle(150, interactive)
+        app.SetUserPreferenceToggle(149, interactive)
+        if not interactive:
+            app.SetUserPreferenceToggle(10, False)
+            app.SetUserPreferenceToggle(372, False)
+            app.SetUserPreferenceToggle(520, False)
+            app.SetUserPreferenceToggle(642, False)
+
+    async def connect(self) -> None:
+        """Orchestrate the full SolidWorks connection sequence.
+
+        Performs in order:
+
+        1. Initialise the COM apartment.
+        2. Acquire the ``SldWorks.Application`` COM object (with retries).
+        3. Wait for the server to become ready.
+        4. Make the application window visible.
+        5. Suppress interactive dialogs for automation.
+
+        On any failure the adapter state is cleaned up (``swApp`` set to
+        ``None``, COM apartment uninitialised) before re-raising.
+
+        Raises:
+            SolidWorksMCPError: Wraps any underlying COM or timeout error.
+        """
+        try:
+            self.initialize_com_apartment()
+            app = await self.acquire_solidworks_application()
+            await self.wait_for_server_ready(app)
+            app.Visible = True
+            self.set_automation_preferences(app, interactive=False)
+        except Exception as exc:
+            self._adapter.swApp = None
+            self.uninitialize_com_apartment()
+            raise SolidWorksMCPError(f"Failed to connect to SolidWorks: {exc}") from exc
+
+    async def disconnect(self) -> None:
+        """Clear session state and release the COM apartment.
+
+        Resets all adapter model/sketch references to ``None`` and always
+        uninitialises the COM apartment via ``finally`` so the apartment is
+        freed even if the SolidWorks process is already unstable.
+
+        Disconnect deliberately avoids additional UI preference COM calls.
+        Real SolidWorks sessions can hit RPC teardown failures when toggles are
+        restored during shutdown, so automation-safe preferences are applied on
+        connect and left untouched during disconnect.
+
+        Side Effects:
+            Sets ``adapter.currentModel``, ``adapter.currentSketch``,
+            ``adapter.currentSketchManager``, and ``adapter.swApp`` to
+            ``None``.  Clears the sketch entity registry.  Calls
+            ``CoUninitialize``.
+        """
+        try:
+            self._adapter.currentModel = None
+            self._adapter.currentSketch = None
+            self._adapter.currentSketchManager = None
+            self._adapter._reset_sketch_entity_registry()
+            self._adapter.swApp = None
+        finally:
+            self.uninitialize_com_apartment()
+
+
+class _SketchGeometryService:
+    """Manage transient sketch-entity storage and provide geometry helpers.
+
+    Maintains a per-sketch registry that maps stable string IDs (e.g.
+    ``"Line_1"``, ``"Circle_3"``) to live SolidWorks COM entity objects.  The
+    registry is reset each time a new sketch is opened or closed.
+
+    Also provides geometry primitives used by the sketch-dimension pipeline:
+    coordinate extraction, segment endpoint reading, shared-vertex detection,
+    and smart-dimension placement-point calculation.
+
+    Attributes:
+        _adapter: Back-reference to the owning ``PyWin32Adapter`` instance.
+    """
+
+    def __init__(self, adapter: "PyWin32Adapter") -> None:
+        """Store a back-reference to the owning adapter.
+
+        Args:
+            adapter: The ``PyWin32Adapter`` instance that created this
+                service.  Provides access to ``_sketch_entities`` and
+                ``_sketch_entity_counter``.
+        """
+        self._adapter = adapter
+
+    def reset_registry(self) -> None:
+        """Clear the sketch entity registry and reset the ID counter.
+
+        Should be called at the start of every new sketch (via
+        ``adapter._reset_sketch_entity_registry``) so that entity IDs from a
+        previous sketch do not bleed into the current session.
+
+        Side Effects:
+            Clears ``adapter._sketch_entities`` and sets
+            ``adapter._sketch_entity_counter`` to ``0``.
+        """
+        self._adapter._sketch_entities.clear()
+        self._adapter._sketch_entity_counter = 0
+
+    def register_entity(self, prefix: str, entity: Any) -> str:
+        """Store a COM entity handle and return a stable string identifier.
+
+        Increments the counter, derives an ID of the form
+        ``"<prefix>_<counter>"`` (e.g. ``"Line_3"``), stores the entity in
+        ``adapter._sketch_entities``, and returns the ID so callers can
+        reference the entity in later dimension or constraint calls.
+
+        Args:
+            prefix: Descriptor for the entity type, e.g. ``"Line"``,
+                ``"Circle"``, ``"Arc"``, ``"Rectangle"``.
+            entity: Live SolidWorks COM entity object returned by the
+                ``SketchManager`` create call.
+
+        Returns:
+            str: Stable entity ID, e.g. ``"Circle_2"``.
+
+        Example::
+
+            line_id = service.register_entity("Line", sw_line_obj)
+            # line_id == "Line_1"
+        """
+        self._adapter._sketch_entity_counter += 1
+        entity_id = f"{prefix}_{self._adapter._sketch_entity_counter}"
+        self._adapter._sketch_entities[entity_id] = entity
+        return entity_id
+
+    def select_entity(self, entity: Any, append: bool) -> bool:
+        """Select a COM entity in the SolidWorks selection manager.
+
+        Tries three COM selection methods in decreasing API version order:
+        ``Select4`` (modern), ``Select2`` (legacy), ``Select`` (oldest).  The
+        first call that returns a truthy value terminates the search.
+
+        Args:
+            entity: Live SolidWorks COM sketch entity object (line, arc,
+                circle, etc.).
+            append: When ``True``, the entity is added to the existing
+                selection set.  When ``False``, existing selections are
+                cleared first.
+
+        Returns:
+            bool: ``True`` if any of the three select methods succeeded;
+            ``False`` if all failed or raised.
+        """
+        selected = self._adapter._attempt(
+            lambda: bool(entity.Select4(append, None)),
+            default=False,
+        )
+        if selected:
+            return True
+
+        selected = self._adapter._attempt(
+            lambda: bool(entity.Select2(append, 0)),
+            default=False,
+        )
+        if selected:
+            return True
+
+        return bool(
+            self._adapter._attempt(
+                lambda: bool(entity.Select(append)),
+                default=False,
+            )
+        )
+
+    def set_display_dimension_value(self, display_dim: Any, value_mm: float) -> None:
+        """Set the numeric value of a display-dimension object.
+
+        Converts the value from millimetres to metres and tries three COM
+        paths in order:
+
+        1. ``GetDimension2(0).SetSystemValue3(value_m, 1, None)`` — modern.
+        2. ``GetDimension().SetSystemValue2(value_m, 1)`` — legacy.
+        3. Direct ``SystemValue`` property assignment — oldest.
+
+        Args:
+            display_dim: SolidWorks display-dimension COM object returned by
+                ``Extension.AddDimension``.
+            value_mm: Desired dimension value in **millimetres**.  Converted
+                to metres internally.
+        """
+        value_m = value_mm / 1000.0
+        dimension_obj = self._adapter._attempt(
+            lambda: display_dim.GetDimension2(0), default=None
+        )
+        if dimension_obj is None:
+            dimension_obj = self._adapter._attempt(
+                lambda: display_dim.GetDimension(), default=None
+            )
+        if dimension_obj is None:
+            dimension_obj = display_dim
+
+        if (
+            self._adapter._attempt(
+                lambda: dimension_obj.SetSystemValue3(value_m, 1, None), default=None
+            )
+            is not None
+        ):
+            return
+        if (
+            self._adapter._attempt(
+                lambda: dimension_obj.SetSystemValue2(value_m, 1), default=None
+            )
+            is not None
+        ):
+            return
+
+        if hasattr(dimension_obj, "SystemValue"):
+            dimension_obj.SystemValue = value_m
+
+    def point_xyz(self, point_obj: Any) -> tuple[float, float, float] | None:
+        """Extract the XYZ coordinates from a SolidWorks point-like COM object.
+
+        Tries two access patterns:
+
+        1. Direct attribute access — ``point_obj.X``, ``point_obj.Y``,
+           ``point_obj.Z`` (``IMathPoint``, ``IVertex``).
+        2. Method call — ``point_obj.GetCoords()`` returning a sequence of
+           at least three numbers.
+
+        All values are in **metres** (SolidWorks internal units).
+
+        Args:
+            point_obj: Any COM object that might expose XYZ coordinates.
+                ``None`` is accepted and returns ``None`` immediately.
+
+        Returns:
+            tuple[float, float, float] | None: ``(x, y, z)`` in metres, or
+            ``None`` when no coordinate pattern matches.
+        """
+        if point_obj is None:
+            return None
+
+        if (
+            hasattr(point_obj, "X")
+            and hasattr(point_obj, "Y")
+            and hasattr(point_obj, "Z")
+        ):
+            x = self._adapter._attempt(lambda: float(point_obj.X), default=None)
+            y = self._adapter._attempt(lambda: float(point_obj.Y), default=None)
+            z = self._adapter._attempt(lambda: float(point_obj.Z), default=None)
+            if x is not None and y is not None and z is not None:
+                return (x, y, z)
+
+        coords = self._adapter._attempt(lambda: point_obj.GetCoords(), default=None)
+        if isinstance(coords, (list, tuple)) and len(coords) >= 3:
+            return (float(coords[0]), float(coords[1]), float(coords[2]))
+
+        return None
+
+    def set_point_xyz(self, point_obj: Any, x: float, y: float, z: float) -> bool:
+        """Set coordinates on a SolidWorks point-like COM object.
+
+        Tries ``SetCoords(x, y, z)`` first (modern API), then
+        ``SetCoords2(x, y, z)`` (older variant).  All values should be in
+        **metres**.
+
+        Args:
+            point_obj: COM point object to update, or ``None``.
+            x: New X coordinate in metres.
+            y: New Y coordinate in metres.
+            z: New Z coordinate in metres.
+
+        Returns:
+            bool: ``True`` when a setter call succeeded; ``False`` otherwise
+            (including when ``point_obj`` is ``None``).
+        """
+        if point_obj is None:
+            return False
+        if (
+            self._adapter._attempt(lambda: point_obj.SetCoords(x, y, z), default=None)
+            is not None
+        ):
+            return True
+        if (
+            self._adapter._attempt(lambda: point_obj.SetCoords2(x, y, z), default=None)
+            is not None
+        ):
+            return True
+        return False
+
+    def read_segment_endpoints(
+        self, entity: Any
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+        """Read the start and end coordinates of a sketch line or arc segment.
+
+        Accesses ``entity.GetStartPoint`` and ``entity.GetEndPoint`` (as
+        properties, not method calls).  Both must return sequences of at least
+        three numeric values.
+
+        Args:
+            entity: SolidWorks ``ISketchLine`` or ``ISketchArc`` COM object.
+
+        Returns:
+            tuple[tuple, tuple] | None: ``((x1, y1, z1), (x2, y2, z2))`` in
+            metres, or ``None`` when the attributes are absent or empty.
+        """
+        start = self._adapter._attempt(lambda: entity.GetStartPoint, default=None)
+        end = self._adapter._attempt(lambda: entity.GetEndPoint, default=None)
+        if (
+            isinstance(start, tuple)
+            and len(start) >= 3
+            and isinstance(end, tuple)
+            and len(end) >= 3
+        ):
+            return (
+                (float(start[0]), float(start[1]), float(start[2])),
+                (float(end[0]), float(end[1]), float(end[2])),
+            )
+        return None
+
+    def segment_point_objects(self, entity: Any) -> tuple[Any | None, Any | None]:
+        """Return the COM point objects at the start and end of a segment.
+
+        Unlike :meth:`read_segment_endpoints`, this returns the raw COM
+        objects (``ISketchPoint``) rather than coordinate tuples, so they can
+        be used in selection calls for angular dimensioning.
+
+        Args:
+            entity: SolidWorks sketch segment COM object.
+
+        Returns:
+            tuple[Any | None, Any | None]: ``(start_point_obj, end_point_obj)``;
+            either element may be ``None`` if the attribute is absent.
+        """
+        start = self._adapter._attempt(lambda: entity.GetStartPoint2, default=None)
+        end = self._adapter._attempt(lambda: entity.GetEndPoint2, default=None)
+        return (start, end)
+
+    def shared_segment_vertex(
+        self, entity1: Any, entity2: Any
+    ) -> tuple[Any, Any, Any] | None:
+        """Find a vertex point shared by two sketch segments.
+
+        Compares all four endpoint-object pairs (2 from each segment) using a
+        coordinate tolerance of 1e-6 m.  Used by the angular-dimension
+        pipeline to locate the pivot vertex between two lines.
+
+        Args:
+            entity1: First SolidWorks sketch segment COM object.
+            entity2: Second SolidWorks sketch segment COM object.
+
+        Returns:
+            tuple[Any, Any, Any] | None: ``(shared_point_obj, point1_obj,
+            point2_obj)`` where ``shared_point_obj`` is the common vertex
+            (same object as ``point1_obj`` in current implementation), or
+            ``None`` when no shared vertex is found.
+        """
+        points1 = self.segment_point_objects(entity1)
+        points2 = self.segment_point_objects(entity2)
+        tol = 1e-6
+        for point1 in points1:
+            xyz1 = self.point_xyz(point1)
+            if xyz1 is None:
+                continue
+            for point2 in points2:
+                xyz2 = self.point_xyz(point2)
+                if xyz2 is None:
+                    continue
+                if (
+                    abs(xyz1[0] - xyz2[0]) <= tol
+                    and abs(xyz1[1] - xyz2[1]) <= tol
+                    and abs(xyz1[2] - xyz2[2]) <= tol
+                ):
+                    return (point1, point1, point2)
+        return None
+
+    def smart_dimension_direction(self, dx: float, dy: float) -> int:
+        """Map a 2-D direction vector to a SolidWorks dimension-direction constant.
+
+        The dominant axis determines horizontal vs vertical; within each axis
+        the sign selects left/right or up/down.
+
+        Args:
+            dx: Horizontal component of the dimension normal vector.
+            dy: Vertical component of the dimension normal vector.
+
+        Returns:
+            int: One of the four ``swSmartDimensionDirection*`` constants
+            from ``adapter.constants``:
+            ``swSmartDimensionDirectionRight``,
+            ``swSmartDimensionDirectionLeft``,
+            ``swSmartDimensionDirectionUp``, or
+            ``swSmartDimensionDirectionDown``.
+        """
+        if abs(dx) >= abs(dy):
+            return (
+                self._adapter.constants["swSmartDimensionDirectionRight"]
+                if dx >= 0.0
+                else self._adapter.constants["swSmartDimensionDirectionLeft"]
+            )
+        return (
+            self._adapter.constants["swSmartDimensionDirectionUp"]
+            if dy >= 0.0
+            else self._adapter.constants["swSmartDimensionDirectionDown"]
+        )
+
+    def single_line_dimension_placement(
+        self, entity: Any
+    ) -> tuple[float, float, float, int] | None:
+        """Compute the text-placement point and direction for a linear dimension.
+
+        Reads the segment midpoint, computes the outward normal (perpendicular
+        to the segment direction), offsets the placement point by 35 % of the
+        segment length (clamped to 10–20 mm), and converts the normal to a
+        SolidWorks dimension-direction constant.
+
+        Args:
+            entity: SolidWorks ``ISketchLine`` or ``ISketchArc`` COM object.
+
+        Returns:
+            tuple[float, float, float, int] | None:
+            ``(text_x, text_y, text_z, direction)`` in metres, or ``None``
+            when endpoint data is unavailable.
+
+        Example::
+
+            placement = service.single_line_dimension_placement(line_obj)
+            if placement:
+                text_x, text_y, text_z, direction = placement
+        """
+        endpoints = self.read_segment_endpoints(entity)
+        if endpoints is None:
+            return None
+
+        (x1, y1, z1), (x2, y2, z2) = endpoints
+        dx = x2 - x1
+        dy = y2 - y1
+        length = (dx * dx + dy * dy) ** 0.5
+        if length <= 1e-9:
+            return None
+
+        mid_x = (x1 + x2) / 2.0
+        mid_y = (y1 + y2) / 2.0
+        mid_z = (z1 + z2) / 2.0
+
+        normal_x = -dy / length
+        normal_y = dx / length
+        offset = max(0.01, min(0.02, length * 0.35))
+        text_x = mid_x + normal_x * offset
+        text_y = mid_y + normal_y * offset
+        direction = self.smart_dimension_direction(normal_x, normal_y)
+        return (text_x, text_y, mid_z, direction)
+
+    def angular_dimension_placement(
+        self, entity1: Any, entity2: Any
+    ) -> tuple[float, float, float, int] | None:
+        """Compute the text-placement point for an angular dimension between two lines.
+
+        Detects the shared vertex, derives the two ray directions, bisects
+        the angle, offsets the placement point by 15–30 mm along the bisector
+        (clamped to 60 % of the shorter leg), and converts the bisector to a
+        dimension-direction constant.
+
+        Args:
+            entity1: First SolidWorks sketch-line COM object.
+            entity2: Second SolidWorks sketch-line COM object (must share a
+                vertex with ``entity1``).
+
+        Returns:
+            tuple[float, float, float, int] | None:
+            ``(text_x, text_y, text_z, direction)`` in metres, or ``None``
+            when no shared vertex is found or segment data is unavailable.
+        """
+        endpoints1 = self.read_segment_endpoints(entity1)
+        endpoints2 = self.read_segment_endpoints(entity2)
+        if endpoints1 is None or endpoints2 is None:
+            return None
+
+        pts1 = endpoints1
+        pts2 = endpoints2
+        tol = 1e-6
+        vertex = None
+        ray1 = None
+        ray2 = None
+        for p1 in pts1:
+            for p2 in pts2:
+                if (
+                    abs(p1[0] - p2[0]) <= tol
+                    and abs(p1[1] - p2[1]) <= tol
+                    and abs(p1[2] - p2[2]) <= tol
+                ):
+                    vertex = p1
+                    ray1 = pts1[1] if pts1[0] == p1 else pts1[0]
+                    ray2 = pts2[1] if pts2[0] == p2 else pts2[0]
+                    break
+            if vertex is not None:
+                break
+
+        if vertex is None or ray1 is None or ray2 is None:
+            return None
+
+        v1x = ray1[0] - vertex[0]
+        v1y = ray1[1] - vertex[1]
+        v2x = ray2[0] - vertex[0]
+        v2y = ray2[1] - vertex[1]
+        l1 = (v1x * v1x + v1y * v1y) ** 0.5
+        l2 = (v2x * v2x + v2y * v2y) ** 0.5
+        if l1 <= 1e-9 or l2 <= 1e-9:
+            return None
+
+        b1x = v1x / l1
+        b1y = v1y / l1
+        b2x = v2x / l2
+        b2y = v2y / l2
+        bis_x = b1x + b2x
+        bis_y = b1y + b2y
+        if abs(bis_x) <= 1e-9 and abs(bis_y) <= 1e-9:
+            bis_x = -b1y
+            bis_y = b1x
+
+        bis_len = (bis_x * bis_x + bis_y * bis_y) ** 0.5
+        bis_x /= bis_len
+        bis_y /= bis_len
+        offset = max(0.015, min(0.03, min(l1, l2) * 0.6))
+        text_x = vertex[0] + bis_x * offset
+        text_y = vertex[1] + bis_y * offset
+        direction = self.smart_dimension_direction(bis_x, bis_y)
+        return (text_x, text_y, vertex[2], direction)
+
+
+class _DocumentRoutingService:
+    """Resolve document identity and select the export-target document.
+
+    Provides two helpers that isolate the policy for identifying which COM
+    document object to use during export operations.  The service prefers the
+    SolidWorks ``ActiveDoc`` when it matches the adapter\'s current model, and
+    falls back gracefully when path or title data is unavailable.
+
+    Attributes:
+        _adapter: Back-reference to the owning ``PyWin32Adapter`` instance.
+    """
+
+    def __init__(self, adapter: "PyWin32Adapter") -> None:
+        """Store a back-reference to the owning adapter.
+
+        Args:
+            adapter: The ``PyWin32Adapter`` instance that created this
+                service.
+        """
+        self._adapter = adapter
+
+    def document_identity(self, document: Any) -> tuple[str | None, str | None]:
+        """Return the normalised absolute path and display title for a COM document.
+
+        Tries ``document.GetPathName()`` first; falls back to
+        ``getattr(document, 'GetPathName', None)`` for COM objects that expose
+        the path as a property rather than a method.  Applies the same
+        two-step pattern for ``GetTitle``.
+
+        Args:
+            document: A SolidWorks ``IModelDoc2`` COM object, or ``None``.
+
+        Returns:
+            tuple[str | None, str | None]: ``(absolute_path, title)`` where
+            ``absolute_path`` is ``os.path.abspath`` normalised and
+            ``title`` is the raw display title.  Either element is ``None``
+            when the corresponding attribute is absent or empty.
+        """
+        if document is None:
+            return None, None
+
+        raw_path = self._adapter._attempt(lambda: document.GetPathName(), default=None)
+        if raw_path is None:
+            raw_path = self._adapter._attempt(
+                lambda: getattr(document, "GetPathName", None), default=None
+            )
+        path_value = str(raw_path).strip() if raw_path else ""
+        normalized_path = os.path.abspath(path_value) if path_value else None
+
+        raw_title = self._adapter._attempt(lambda: document.GetTitle(), default=None)
+        if raw_title is None:
+            raw_title = self._adapter._attempt(
+                lambda: getattr(document, "GetTitle", None), default=None
+            )
+        title_value = str(raw_title).strip() if raw_title else ""
+
+        return normalized_path, title_value or None
+
+    def resolve_export_target_doc(self) -> Any:
+        """Resolve the safest document to use for export operations.
+
+        Policy (in order):
+
+        1. If ``adapter.currentModel`` is ``None``, use ``swApp.ActiveDoc``.
+        2. If ``swApp.ActiveDoc`` is ``None``, use ``adapter.currentModel``.
+        3. If both have path strings and the paths match, prefer
+           ``swApp.ActiveDoc`` (it may have a more up-to-date state).
+        4. If both have title strings that match, prefer ``swApp.ActiveDoc``.
+        5. Otherwise fall back to ``adapter.currentModel``.
+
+        Returns:
+            Any: The SolidWorks ``IModelDoc2`` COM object to use for export,
+            or ``None`` when neither ``swApp`` nor ``currentModel`` is set.
+        """
+        active_doc = (
+            getattr(self._adapter.swApp, "ActiveDoc", None)
+            if self._adapter.swApp
+            else None
+        )
+        if self._adapter.currentModel is None:
+            return active_doc
+        if active_doc is None:
+            return self._adapter.currentModel
+
+        current_path, current_title = self.document_identity(self._adapter.currentModel)
+        active_path, active_title = self.document_identity(active_doc)
+
+        if current_path and active_path:
+            return (
+                active_doc
+                if current_path == active_path
+                else self._adapter.currentModel
+            )
+        if current_title and active_title and current_title == active_title:
+            return active_doc
+        return self._adapter.currentModel
+
+
+class _FeatureSelectionService:
+    """Encapsulate feature-selection strategies and name-candidate expansion.
+
+    SolidWorks allows features to be selected by bare name or by the
+    ``<name>@<document>`` qualified syntax.  Several selection APIs also
+    exist with different levels of support across SolidWorks versions.
+    This service centralises all of that complexity so the main adapter
+    methods stay thin.
+
+    Attributes:
+        _adapter: Back-reference to the owning ``PyWin32Adapter`` instance.
+    """
+
+    def __init__(self, adapter: "PyWin32Adapter") -> None:
+        """Store a back-reference to the owning adapter.
+
+        Args:
+            adapter: The ``PyWin32Adapter`` instance that created this
+                service.
+        """
+        self._adapter = adapter
+
+    @staticmethod
+    def normalize_feature_name(raw_name: str | None) -> str:
+        """Normalise a feature name for case-insensitive comparison.
+
+        Strips surrounding whitespace and quotes then converts to
+        ``casefold``-lowercase so that mixed-case names such as
+        ``'Boss-Extrude1'``, ``" boss-extrude1 "`` and ``'"Boss-Extrude1"'``
+        all compare equal.
+
+        Args:
+            raw_name: Raw feature name string, or ``None``.
+
+        Returns:
+            str: Normalised name.  Empty string when ``raw_name`` is
+            ``None`` or blank.
+
+        Example::
+
+            svc.normalize_feature_name('"Boss-Extrude1"') == 'boss-extrude1'
+        """
+        return str(raw_name or "").strip().strip('"').casefold()
+
+    def build_feature_candidate_names(
+        self, feature_name: str, target_doc: Any
+    ) -> list[str]:
+        """Build a list of bare and document-qualified selection candidates.
+
+        SolidWorks requires the ``"<name>@<document>"`` syntax for
+        ``SelectByID2`` on assembly contexts.  This method tries to read the
+        document title and produces both bare and qualified variants so that
+        callers do not need to duplicate that logic.
+
+        Args:
+            feature_name: The bare feature name as supplied by the caller
+                (e.g. ``"Boss-Extrude1"``).
+            target_doc: SolidWorks ``IModelDoc2`` COM object whose title is
+                used to form the qualified name.  Errors reading the title
+                are silently swallowed.
+
+        Returns:
+            list[str]: Candidate list, always including ``feature_name`` as
+            the first element.  Qualified variants are appended when a non-
+            empty title is available.  Example::
+
+                ["Boss-Extrude1", "Boss-Extrude1@Part1", "Boss-Extrude1@Part1.SLDPRT"]
+        """
+        doc_title = ""
+        doc_stem = ""
+        try:
+            raw_title = str(target_doc.GetTitle() or "").strip()
+            if raw_title:
+                doc_title = raw_title
+                doc_stem = raw_title.rsplit(".", 1)[0]
+        except Exception:
+            pass
+
+        candidates: list[str] = [feature_name]
+        if doc_stem:
+            candidates.append(f"{feature_name}@{doc_stem}")
+        if doc_title and doc_title != doc_stem:
+            candidates.append(f"{feature_name}@{doc_title}")
+        return candidates
+
+    def try_select_by_extension(
+        self,
+        target_doc: Any,
+        candidate_names: list[str],
+        feature_name: str,
+    ) -> dict[str, Any] | None:
+        """Attempt feature selection via ``Extension.SelectByID2``.
+
+        Iterates the Cartesian product of ``candidate_names`` × entity-type
+        strings.  Entity types tried (in order): ``"BODYFEATURE"``,
+        ``"COMPONENT"``, ``"SKETCH"``, ``"PLANE"``, ``"MATE"``, ``""`` (auto).
+        Returns on the first successful selection.
+
+        Args:
+            target_doc: SolidWorks ``IModelDoc2`` COM object.
+            candidate_names: Ordered list of name strings to try (bare and
+                qualified variants from :meth:`build_feature_candidate_names`).
+            feature_name: The original caller-supplied name, included in the
+                result payload for traceability.
+
+        Returns:
+            dict[str, Any] | None: On success, a result dict with keys
+            ``selected``, ``feature_name``, ``selected_name``,
+            ``entity_type``.  ``None`` when all attempts fail.
+        """
+        entity_types = ["BODYFEATURE", "COMPONENT", "SKETCH", "PLANE", "MATE", ""]
+        for candidate in candidate_names:
+            for entity_type in entity_types:
+                try:
+                    selected = target_doc.Extension.SelectByID2(
+                        candidate, entity_type, 0, 0, 0, False, 0, None, 0
+                    )
+                    if selected:
+                        return {
+                            "selected": True,
+                            "feature_name": feature_name,
+                            "selected_name": candidate,
+                            "entity_type": entity_type or "auto",
+                        }
+                except Exception:
+                    continue
+        return None
+
+    def try_select_by_component(
+        self,
+        target_doc: Any,
+        candidate_names: list[str],
+        feature_name: str,
+    ) -> dict[str, Any] | None:
+        """Attempt component selection for assembly-context features.
+
+        Calls ``target_doc.GetComponentByName`` (when available) and then
+        tries three selector methods on the resulting component object:
+        ``Select4(False, None, False)``, ``Select(False,)``, and
+        ``Select2(False, 0)``.
+
+        This path handles assembly components that are not reachable through
+        ``SelectByID2`` alone.
+
+        Args:
+            target_doc: SolidWorks ``IAssemblyDoc`` or ``IModelDoc2`` COM
+                object.
+            candidate_names: List of candidate name strings.  Only the part
+                before the first ``@`` is used as the component name.
+            feature_name: Original caller-supplied name for the result
+                payload.
+
+        Returns:
+            dict[str, Any] | None: Success dict (same schema as
+            :meth:`try_select_by_extension`) or ``None`` when not applicable
+            or all attempts fail.
+        """
+        get_component_by_name = getattr(target_doc, "GetComponentByName", None)
+        if not callable(get_component_by_name):
+            return None
+
+        for candidate in candidate_names:
+            component_name = candidate.split("@", 1)[0]
+            component = self._adapter._attempt(
+                lambda name=component_name: get_component_by_name(name),
+                default=None,
+            )
+            if component is None:
+                continue
+            for method_name, args in [
+                ("Select4", (False, None, False)),
+                ("Select", (False,)),
+                ("Select2", (False, 0)),
+            ]:
+                selector = getattr(component, method_name, None)
+                if not callable(selector):
+                    continue
+                try:
+                    if bool(selector(*args)):
+                        return {
+                            "selected": True,
+                            "feature_name": feature_name,
+                            "selected_name": component_name,
+                            "entity_type": f"component:{method_name}",
+                        }
+                except Exception:
+                    continue
+        return None
+
+    def try_select_by_feature_tree(
+        self,
+        target_doc: Any,
+        feature_name: str,
+        candidate_names: list[str],
+    ) -> dict[str, Any] | None:
+        """Walk the SolidWorks feature tree and select the first matching feature.
+
+        Iterates via ``FirstFeature`` / ``GetNextFeature`` (up to 10 000
+        features as a runaway guard) and compares each feature\'s ``Name``
+        attribute against the normalised candidate set.  Matching is
+        case-insensitive and also strips the ``@document`` qualifier.
+
+        This is the most expensive selection strategy and is only attempted
+        after :meth:`try_select_by_extension` and
+        :meth:`try_select_by_component` have both failed.
+
+        Args:
+            target_doc: SolidWorks ``IModelDoc2`` COM object.
+            feature_name: Original caller-supplied name for the result
+                payload.
+            candidate_names: Candidate names used to build the normalised
+                match set.
+
+        Returns:
+            dict[str, Any] | None: Success dict (same schema as
+            :meth:`try_select_by_extension`) with ``entity_type`` set to
+            ``"feature-tree"``, or ``None`` when no match is found.
+        """
+        normalized_candidates = {
+            self.normalize_feature_name(c)
+            for c in candidate_names
+            if self.normalize_feature_name(c)
+        }
+        normalized_bases = {c.split("@", 1)[0] for c in normalized_candidates if c}
+
+        feature = self._adapter._attempt(lambda: target_doc.FirstFeature())
+        guard = 0
+        while feature and guard < 10000:
+            guard += 1
+            feature_ref = feature
+            tree_name = self._adapter._attempt(
+                lambda current_feature=feature_ref: str(current_feature.Name or ""),
+                default="",
+            )
+            if self._matches_candidate_name(
+                tree_name, normalized_candidates, normalized_bases
+            ):
+                try:
+                    if feature.Select2(False, 0):
+                        return {
+                            "selected": True,
+                            "feature_name": feature_name,
+                            "selected_name": tree_name or feature_name,
+                            "entity_type": "feature-tree",
+                        }
+                except Exception:
+                    pass
+            next_feature = self._adapter._attempt(
+                lambda current_feature=feature_ref: current_feature.GetNextFeature()
+            )
+            if next_feature is None:
+                break
+            feature = next_feature
+        return None
+
+    @classmethod
+    def _matches_candidate_name(
+        cls,
+        raw_name: str | None,
+        normalized_candidates: set[str],
+        normalized_bases: set[str],
+    ) -> bool:
+        """Check whether a raw feature name matches candidate name sets.
+
+        Args:
+            raw_name: Name read from the feature tree.
+            normalized_candidates: Full normalized candidate names.
+            normalized_bases: Candidate names with any ``@doc`` suffix removed.
+
+        Returns:
+            bool: ``True`` when name matches either full or base candidate sets.
+        """
+        normalized_name = cls.normalize_feature_name(raw_name)
+        if not normalized_name:
+            return False
+        if normalized_name in normalized_candidates:
+            return True
+        return normalized_name.split("@", 1)[0] in normalized_bases
+
+    def select_feature(self, feature_name: str) -> dict[str, Any]:
+        """Run all feature-selection strategies and return best-effort payload.
+
+        Args:
+            feature_name: Feature name requested by caller.
+
+        Returns:
+            dict[str, Any]: Selection result payload.
+        """
+        target_doc = self._adapter.currentModel
+        candidate_names = self.build_feature_candidate_names(feature_name, target_doc)
+
+        result = self.try_select_by_extension(target_doc, candidate_names, feature_name)
+        if result:
+            return result
+
+        result = self.try_select_by_component(target_doc, candidate_names, feature_name)
+        if result:
+            return result
+
+        result = self.try_select_by_feature_tree(
+            target_doc, feature_name, candidate_names
+        )
+        if result:
+            return result
+
+        return {
+            "selected": False,
+            "feature_name": feature_name,
+            "selected_name": feature_name,
+        }
+
+    def list_features(self, include_suppressed: bool = False) -> list[dict[str, Any]]:
+        """Enumerate model features using primary and fallback traversal paths.
+
+        Args:
+            include_suppressed: Include suppressed features when ``True``.
+
+        Returns:
+            list[dict[str, Any]]: Ordered feature descriptors.
+        """
+        features: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+
+        feature = self._adapter._attempt(
+            lambda: self._adapter.currentModel.FirstFeature()
+        )
+        pos = 0
+        guard = 0
+        while feature and guard < 10000:
+            self._append_feature_to(features, seen, feature, pos, include_suppressed)
+            pos += 1
+            guard += 1
+            next_feature = self._adapter._attempt(
+                lambda current_feature=feature: current_feature.GetNextFeature()
+            )
+            if next_feature is None:
+                break
+            feature = next_feature
+
+        if features:
+            return features
+
+        feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
+        count = self._adapter._attempt(
+            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0
+        )
+        for reverse_pos in range(1, count + 1):
+            feature = self._adapter._attempt(
+                lambda pos=reverse_pos: (
+                    self._adapter.currentModel.FeatureByPositionReverse(pos)
+                )
+            )
+            if feature is None:
+                continue
+            self._append_feature_to(
+                features,
+                seen,
+                feature,
+                count - reverse_pos,
+                include_suppressed,
+            )
+
+        return features
+
+    def _append_feature_to(
+        self,
+        features: list[dict[str, Any]],
+        seen: set[tuple[str, str]],
+        feature: Any,
+        position: int,
+        include_suppressed: bool,
+    ) -> None:
+        """Append one feature descriptor when dedupe and suppression rules allow.
+
+        Args:
+            features: Output list being populated.
+            seen: Dedupe set of ``(name, type)`` keys.
+            feature: Feature COM object.
+            position: Display position index.
+            include_suppressed: Include suppressed entries when ``True``.
+        """
+        name = str(getattr(feature, "Name", ""))
+        feature_type = str(
+            self._adapter._attempt(lambda: feature.GetTypeName2(), default="Unknown")
+        )
+        dedupe_key = (name, feature_type)
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+
+        suppressed = self._is_feature_suppressed(feature)
+        if not include_suppressed and suppressed:
+            return
+
+        features.append(
+            {
+                "name": name,
+                "type": feature_type,
+                "suppressed": suppressed,
+                "position": position,
+            }
+        )
+
+    def _is_feature_suppressed(self, feature: Any) -> bool:
+        """Determine feature suppression state across COM API variants.
+
+        Args:
+            feature: Feature COM object.
+
+        Returns:
+            bool: ``True`` when feature is suppressed.
+        """
+        suppressed_direct = self._adapter._attempt(
+            lambda: feature.IsSuppressed(), default=None
+        )
+        if suppressed_direct is not None:
+            return bool(suppressed_direct)
+
+        suppressed_result = self._adapter._attempt(
+            lambda: feature.IsSuppressed2(0, []), default=None
+        )
+        if isinstance(suppressed_result, (tuple, list)):
+            return bool(suppressed_result[0]) if suppressed_result else False
+        return bool(suppressed_result) if suppressed_result is not None else False
+
+
+class PyWin32Adapter(
+    SolidWorksSketchMixin,
+    SolidWorksFeaturesMixin,
+    SolidWorksIOMixin,
+    SolidWorksSelectionMixin,
+    SolidWorksAdapter,
+):
     """SolidWorks adapter using pywin32 COM integration.
 
     This adapter provides direct COM integration with SolidWorks using pywin32, enabling
@@ -138,21 +1356,11 @@ class PyWin32Adapter(SolidWorksAdapter):
         self.currentModel: Any | None = None
         self.currentSketch: Any | None = None
         self.currentSketchManager: Any | None = None
-
-        # Single dedicated STA worker thread that owns ALL COM work.
-        #
-        # Background: SolidWorks COM is STA. An ``IDispatch`` proxy obtained
-        # on thread A cannot be invoked from thread B — pywin32 surfaces this
-        # as ``AttributeError: SldWorks.Application.<method>`` at call time.
-        # FastMCP dispatches async tool handlers on worker threads distinct
-        # from the thread where ``connect()`` ran.
-        #
-        # By funneling all COM calls through a single thread owned by this
-        # adapter, we sidestep the entire cross-thread proxy problem. Instance
-        # attributes like ``self.swApp`` and ``self.currentModel`` remain
-        # valid as long as they're only *touched* from inside executor jobs
-        # (which ``_handle_com_operation`` enforces).
-        self._com = ComExecutor(name=f"sw-com-{id(self):x}")
+        self._last_sketch_name: str | None = None
+        self._sketch_count: int = 0  # incremented each time a sketch is created
+        self._sketch_entities: dict[str, Any] = {}
+        self._sketch_entity_counter = 0
+        self._com_initialized = False
 
         # COM constants (equivalent to SolidWorks API constants)
         self.constants = {
@@ -175,82 +1383,74 @@ class PyWin32Adapter(SolidWorksAdapter):
             "swEndCondOffset": 4,
             "swEndCondUpToVertex": 5,
             "swEndCondMidPlane": 6,
+            # Dimension preferences / directions
+            "swInputDimValOnCreate": 10,
+            "swSketchAcceptNumericInput": 372,
+            "swSketchCreateDimensionOnlyWhenEntered": 520,
+            "swScaleSketchOnFirstDimension": 642,
+            "swSmartDimensionDirectionRight": 0,
+            "swSmartDimensionDirectionUp": 1,
+            "swSmartDimensionDirectionLeft": 2,
+            "swSmartDimensionDirectionDown": 3,
         }
 
-    async def connect(self) -> None:
-        """Connect to SolidWorks application via COM.
+        self._session_coordinator = _ComSessionCoordinator(self)
+        self._sketch_geometry = _SketchGeometryService(self)
+        self._document_routing = _DocumentRoutingService(self)
+        self._feature_selector = _FeatureSelectionService(self)
 
-        Establishes connection to SolidWorks application through COM interface. Attempts to
-        connect to existing instance first, creates new instance if needed.
+    def _initialize_com_apartment(self) -> None:
+        """Initialize COM apartment once per adapter lifetime until disconnect.
+
+        This helper keeps COM initialization balanced and explicit so failure paths can
+        deterministically release COM resources.
+        """
+        self._session_coordinator.initialize_com_apartment()
+
+    def _uninitialize_com_apartment(self) -> None:
+        """Uninitialize COM apartment when it was initialized by this adapter."""
+        self._session_coordinator.uninitialize_com_apartment()
+
+    async def _acquire_solidworks_application(self) -> Any:
+        """Acquire a running SolidWorks COM server or start one with retries.
 
         Returns:
-            None: None.
+            Any: SolidWorks application COM object.
 
         Raises:
-            SolidWorksMCPError: If the operation cannot be completed.
-
-        Example:
-                            ```python
-                            adapter = PyWin32Adapter()
-                            await adapter.connect()
-                            print("Connected to SolidWorks successfully")
-                            ```
+            SolidWorksMCPError: If no application instance can be obtained.
         """
-        # Start the dedicated COM thread (idempotent). CoInitialize runs on
-        # that thread; the main thread never touches COM directly.
-        self._com.start()
+        return await self._session_coordinator.acquire_solidworks_application()
 
-        def _do_connect() -> Any:
-            """Acquire SolidWorks on the COM worker thread.
+    async def _wait_for_server_ready(self, app: Any) -> None:
+        """Wait until the SolidWorks COM server reports readiness.
 
-            Forces **late binding** (``dynamic.Dispatch``) even when the
-            makepy-generated wrapper is loaded. Rationale: this adapter's
-            OpenDoc6 / Save / etc. calls pass ``win32com.client.VARIANT``
-            out-parameters, which only work with late-bound dispatches.
-            Early-bound wrappers require ``pythoncom.Missing`` instead, a
-            much larger migration.
+        Args:
+            app: SolidWorks application COM object.
 
-            Late binding + ``sw_type_info.flag_methods`` gives us:
-              - VARIANT out-params keep working (legacy-compatible)
-              - Zero-arg methods (``GetType``, ``GetTitle``, …) resolve as
-                methods, not properties (fixes TypeError class of bugs)
-            """
-            from win32com.client import dynamic
+        Raises:
+            SolidWorksMCPError: If readiness probe times out.
+        """
+        await self._session_coordinator.wait_for_server_ready(app)
 
-            try:
-                # GetActiveObject by default returns an early-bound wrapper
-                # if one exists; wrap in dynamic.Dispatch to force late.
-                raw = win32com.client.GetActiveObject("SldWorks.Application")
-                app = dynamic.Dispatch(raw._oleobj_)
-            except pywintypes.com_error:
-                app = dynamic.Dispatch("SldWorks.Application")
+    def _set_automation_preferences(self, app: Any, *, interactive: bool) -> None:
+        """Toggle SolidWorks warning/question prompts for automation safety.
 
-            if app is None:
-                raise SolidWorksMCPError(
-                    "SolidWorks COM application instance is None"
-                )
+        Args:
+            app: SolidWorks application COM object.
+            interactive: ``True`` restores dialogs, ``False`` suppresses them.
+        """
+        self._session_coordinator.set_automation_preferences(
+            app, interactive=interactive
+        )
 
-            # Flag ISldWorks methods so ``app.RevisionNumber()``,
-            # ``app.ActiveDoc``, etc. dispatch as methods, not properties.
-            sw_type_info.flag_methods(app, "ISldWorks")
+    async def connect(self) -> None:
+        """Connect to SolidWorks COM and prepare automation-safe session state.
 
-            # Make SolidWorks visible for automation.
-            app.Visible = True
-
-            # Disable confirmation dialogs for batch processing.
-            app.SetUserPreferenceToggle(150, False)  # Hide warnings
-            app.SetUserPreferenceToggle(149, False)  # Hide questions
-
-            return app
-
-        try:
-            self.swApp = self._com.run(_do_connect, timeout=30.0)
-        except Exception as e:
-            # If connect failed, stop the executor so we don't leak the thread.
-            self._com.stop()
-            raise SolidWorksMCPError(
-                f"Failed to connect to SolidWorks: {e}"
-            ) from e
+        Raises:
+            SolidWorksMCPError: If connection or readiness checks fail.
+        """
+        await self._session_coordinator.connect()
 
     async def disconnect(self) -> None:
         """Disconnect from SolidWorks application.
@@ -273,34 +1473,7 @@ class PyWin32Adapter(SolidWorksAdapter):
                                 await adapter.disconnect()
                             ```
         """
-        def _do_disconnect() -> None:
-            """Release COM state on the COM worker thread."""
-            if self.swApp is not None:
-                try:
-                    # Re-enable user preferences so the SW GUI is usable
-                    # after automation stops.
-                    self.swApp.SetUserPreferenceToggle(150, True)
-                    self.swApp.SetUserPreferenceToggle(149, True)
-                except Exception:
-                    pass
-            # Clear cached dispatches so their ID-based flag-cache entries
-            # are re-flagged fresh on the next connect.
-            sw_type_info.invalidate_flag_cache()
-            self.swApp = None
-            self.currentModel = None
-            self.currentSketch = None
-            self.currentSketchManager = None
-
-        try:
-            if self._com._thread is not None and self._com._thread.is_alive():
-                # Run the COM-touching cleanup on the owning thread, then
-                # stop that thread so it can CoUninitialize cleanly.
-                try:
-                    self._com.run(_do_disconnect, timeout=5.0)
-                except Exception as e:
-                    logger.warning(f"disconnect() run error: {e!r}")
-        finally:
-            self._com.stop()
+        await self._session_coordinator.disconnect()
 
     def is_connected(self) -> bool:
         """Check if connected to SolidWorks.
@@ -368,7 +1541,11 @@ class PyWin32Adapter(SolidWorksAdapter):
         )
 
     def _handle_com_operation(
-        self, operation_name: str, operation_func: Callable[[], T]
+        self,
+        operation_name: str,
+        operation_func: Callable[..., T],
+        *operation_args: Any,
+        **operation_kwargs: Any,
     ) -> AdapterResult[T]:
         """Helper to handle COM operations with error handling and timing.
 
@@ -394,24 +1571,8 @@ class PyWin32Adapter(SolidWorksAdapter):
         """
         start_time = time.time()
 
-        # Route the operation to the dedicated COM thread. The closure runs
-        # with the correct apartment and never sees a cross-thread IDispatch.
-        if self._com._thread is None or not self._com._thread.is_alive():
-            execution_time = time.time() - start_time
-            self.update_metrics(execution_time, False)
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    f"Error in {operation_name}: ComExecutor is not "
-                    "running (call connect() first)"
-                ),
-                execution_time=execution_time,
-            )
-
         try:
-            # Timeout is generous — some SW ops (imports, rebuilds of large
-            # assemblies) legitimately take a minute+.
-            result = self._com.run(operation_func, timeout=120.0)
+            result = operation_func(*operation_args, **operation_kwargs)
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, True)
             return AdapterResult(
@@ -430,15 +1591,9 @@ class PyWin32Adapter(SolidWorksAdapter):
         except Exception as e:
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, False)
-            # Include exception class so post-mortem diagnostics can tell
-            # AttributeError (cross-thread — would indicate a regression in
-            # ComExecutor routing) from generic failures.
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=(
-                    f"Error in {operation_name}: "
-                    f"{type(e).__name__}: {e}"
-                ),
+                error=f"Error in {operation_name}: {e}",
                 execution_time=execution_time,
             )
 
@@ -511,1567 +1666,21 @@ class PyWin32Adapter(SolidWorksAdapter):
         to_string = getattr(feature_id_value, "ToString", None)
         return str(to_string() if callable(to_string) else feature_id_value)
 
-    async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
-        """Open a SolidWorks model file.
-
-        Opens a SolidWorks document and sets it as the current active model. Supports Part
-        (.sldprt), Assembly (.sldasm), and Drawing (.slddrw) files.
-
-        Args:
-            file_path (str): Path to the target file.
-
-        Returns:
-            AdapterResult[SolidWorksModel]: The result produced by the operation.
-
-        Raises:
-            Exception: If the operation cannot be completed.
-            ValueError: If the operation cannot be completed.
-
-        Example:
-                            ```python
-                            result = await adapter.open_model("C:/Models/bracket.sldprt")
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                model = result.data
-                                print(f"Opened {model.name} ({model.type})")
-                            ```
-        """
-        if not self.is_connected():
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-            )
-
-        def _open_operation() -> SolidWorksModel:
-            """Build internal operation.
-
-            Returns:
-                SolidWorksModel: The result produced by the operation.
-
-            Raises:
-                Exception: If the operation cannot be completed.
-                ValueError: If the operation cannot be completed.
-            """
-            resolved_path = os.path.abspath(file_path)
-
-            # Determine document type from extension
-            file_path_lower = resolved_path.lower()
-            if file_path_lower.endswith(".sldprt"):
-                doc_type = self.constants["swDocPART"]
-                model_type = "Part"
-            elif file_path_lower.endswith(".sldasm"):
-                doc_type = self.constants["swDocASSEMBLY"]
-                model_type = "Assembly"
-            elif file_path_lower.endswith(".slddrw"):
-                doc_type = self.constants["swDocDRAWING"]
-                model_type = "Drawing"
-            else:
-                raise ValueError(f"Unsupported file type: {resolved_path}")
-
-            # Open the document
-            errors = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-            warnings = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
-
-            # Note: swApp is guaranteed non-None by is_connected() check above.
-            # No need to guard here; if swApp somehow becomes None, OpenDoc6 will fail
-            # naturally with COM error, which is caught by _handle_com_operation.
-            app = self.swApp
-            model = app.OpenDoc6(
-                resolved_path,
-                doc_type,
-                1,  # swOpenDocOptions_Silent
-                "",
-                errors,
-                warnings,
-            )
-
-            if not model:
-                raise Exception(f"Failed to open model: {resolved_path}")
-
-            # Flag doc-specific methods so zero-arg calls like GetTitle(),
-            # GetPathName(), GetActiveConfiguration() dispatch as methods,
-            # not properties. ``doc_type`` is already resolved above from
-            # the file extension; use it directly to pick the right SW
-            # interface (IModelDoc2 + IAssemblyDoc / IPartDoc / IDrawingDoc).
-            sw_type_info.flag_doc(model, doc_type)
-
-            # Set as current model
-            self.currentModel = model
-
-            # Get model info (COM may expose methods as values on some setups)
-            title = self._read_model_title(model)
-
-            active_config = self._attempt(lambda: model.GetActiveConfiguration())
-            config = (
-                self._attempt(lambda: active_config.GetName(), default="Default")
-                if active_config
-                else "Default"
-            )
-
-            return SolidWorksModel(
-                path=resolved_path,
-                name=title,
-                type=model_type,
-                is_active=True,
-                configuration=config,
-                properties={
-                    "last_modified": (
-                        model.GetSaveTime()
-                        if callable(getattr(model, "GetSaveTime", None))
-                        else None
-                    ),
-                },
-            )
-
-        return self._handle_com_operation("open_model", _open_operation)
-
-    async def close_model(self, save: bool = False) -> AdapterResult[None]:
-        """Close the current model.
-
-        Closes the currently active SolidWorks model with optional saving.
-
-        Args:
-            save (bool): The save value. Defaults to False.
-
-        Returns:
-            AdapterResult[None]: The result produced by the operation.
-
-        Example:
-                            ```python
-                            # Close without saving
-                            await adapter.close_model()
-
-                            # Close with saving
-                            await adapter.close_model(save=True)
-                            ```
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.WARNING, error="No active model to close"
-            )
-
-        model = self.currentModel
-        app = self.swApp
-        if model is None or app is None:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error="SolidWorks application is not connected",
-            )
-
-        def _close_operation() -> None:
-            """Build internal operation.
-
-            Returns:
-                None: None.
-            """
-            if save:
-                model.Save()
-
-            app.CloseDoc(model.GetTitle())
-            self.currentModel = None
-            return None
-
-        return self._handle_com_operation("close_model", _close_operation)
-
-    def _resolve_template_path(
-        self, preferred_indices: list[int], extension: str
-    ) -> str | None:
-        """Resolve a SolidWorks template path from user preferences.
-
-        Installations vary by where template paths are stored; this probes multiple slots and
-        prefers existing files with the expected extension.
-
-        Args:
-            preferred_indices (list[int]): The preferred indices value.
-            extension (str): The extension value.
-
-        Returns:
-            str | None: The result produced by the operation.
-        """
-        existing_match: str | None = None
-        first_non_empty: str | None = None
-
-        app = self.swApp
-        if app is None:
-            return None
-
-        for index in preferred_indices:
-            template = self._attempt(
-                lambda idx=index: app.GetUserPreferenceStringValue(idx)
-            )
-
-            if not template or not isinstance(template, str):
-                continue
-
-            if first_non_empty is None:
-                first_non_empty = template
-
-            if template.lower().endswith(extension.lower()) and os.path.exists(
-                template
-            ):
-                existing_match = template
-                break
-
-        return existing_match or first_non_empty
-
-    def _read_model_title(self, model: Any) -> str:
-        """Read model title regardless of COM exposing method or value.
-
-        Args:
-            model (Any): The model value.
-
-        Returns:
-            str: The resulting text value.
-        """
-        title = self._attempt(lambda: self._get_attr_or_call(model, "GetTitle"))
-        if isinstance(title, str) and title:
-            return title
-
-        title_value = getattr(model, "Title", None)
-        if isinstance(title_value, str) and title_value:
-            return title_value
-
-        return "Untitled"
-
-    async def create_part(
-        self, name: str | None = None, units: str | None = None
-    ) -> AdapterResult[SolidWorksModel]:
-        """Create a new part document.
-
-        Args:
-            name (str | None): The name value. Defaults to None.
-            units (str | None): The units value. Defaults to None.
-
-        Returns:
-            AdapterResult[SolidWorksModel]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create new part.
-        """
-        if not self.is_connected():
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-            )
-
-        def _create_operation() -> SolidWorksModel:
-            """Build internal operation.
-
-            Returns:
-                SolidWorksModel: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create new part.
-            """
-            model = None
-            app = self.swApp
-            if app is None:
-                raise Exception("SolidWorks application is not connected")
-
-            # Prefer native helper if available on this installation.
-            new_part = getattr(app, "NewPart", None)
-            if callable(new_part):
-                model = self._attempt(new_part)
-
-            if not model:
-                part_template = self._resolve_template_path([8, 0, 1, 2, 3], ".prtdot")
-                if not part_template:
-                    raise Exception("No part template configured in SolidWorks")
-
-                model = app.NewDocument(
-                    part_template,
-                    0,  # Paper size (not used for parts)
-                    0,  # Width (not used for parts)
-                    0,  # Height (not used for parts)
-                )
-
-            if not model:
-                raise Exception("Failed to create new part")
-
-            self.currentModel = model
-            title = self._read_model_title(model)
-
-            return SolidWorksModel(
-                path="",  # New document, no path yet
-                name=title,
-                type="Part",
-                is_active=True,
-                configuration="Default",
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("create_part", _create_operation)
-
-    async def create_assembly(
-        self, name: str | None = None
-    ) -> AdapterResult[SolidWorksModel]:
-        """Create a new assembly document.
-
-        Args:
-            name (str | None): The name value. Defaults to None.
-
-        Returns:
-            AdapterResult[SolidWorksModel]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create new assembly.
-        """
-        if not self.is_connected():
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-            )
-
-        def _create_operation() -> SolidWorksModel:
-            """Build internal operation.
-
-            Returns:
-                SolidWorksModel: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create new assembly.
-            """
-            model = None
-            app = self.swApp
-            if app is None:
-                raise Exception("SolidWorks application is not connected")
-
-            new_assembly = getattr(app, "NewAssembly", None)
-            if callable(new_assembly):
-                model = self._attempt(new_assembly)
-
-            if not model:
-                asm_template = self._resolve_template_path([9, 2, 3, 1, 0], ".asmdot")
-                if not asm_template:
-                    raise Exception("No assembly template configured in SolidWorks")
-
-                model = app.NewDocument(asm_template, 0, 0, 0)
-
-            if not model:
-                raise Exception("Failed to create new assembly")
-
-            self.currentModel = model
-            title = self._read_model_title(model)
-
-            return SolidWorksModel(
-                path="",
-                name=title,
-                type="Assembly",
-                is_active=True,
-                configuration="Default",
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("create_assembly", _create_operation)
-
-    async def create_drawing(
-        self, name: str | None = None
-    ) -> AdapterResult[SolidWorksModel]:
-        """Create a new drawing document.
-
-        Args:
-            name (str | None): The name value. Defaults to None.
-
-        Returns:
-            AdapterResult[SolidWorksModel]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create new drawing.
-        """
-        if not self.is_connected():
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
-            )
-
-        def _create_operation() -> SolidWorksModel:
-            """Build internal operation.
-
-            Returns:
-                SolidWorksModel: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create new drawing.
-            """
-            app = self.swApp
-            if app is None:
-                raise Exception("SolidWorks application is not connected")
-
-            # Get drawing template
-            drw_template = app.GetUserPreferenceStringValue(1)  # Drawing template
-            if not drw_template:
-                drw_template = app.GetUserPreferenceStringValue(0).replace(
-                    "Part", "Drawing"
-                )
-
-            model = app.NewDocument(drw_template, 12, 0.2794, 0.2159)  # A4 size
-
-            if not model:
-                raise Exception("Failed to create new drawing")
-
-            self.currentModel = model
-            title = model.GetTitle()
-
-            return SolidWorksModel(
-                path="",
-                name=title,
-                type="Drawing",
-                is_active=True,
-                configuration="Default",
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("create_drawing", _create_operation)
-
-    async def create_extrusion(
-        self, params: ExtrusionParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Create an extrusion feature.
-
-        Args:
-            params (ExtrusionParameters): The params value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create extrusion feature.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _extrusion_operation() -> SolidWorksFeature:
-            # Get feature manager
-            """Build internal extrusion operation.
-
-            Returns:
-                SolidWorksFeature: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create extrusion feature.
-            """
-            featureManager = self.currentModel.FeatureManager
-
-            # Create extrusion - use simplified approach first
-            # This handles up to the pywin32 parameter limit better
-            if params.thin_feature and params.thin_thickness:
-                # Thin wall extrusion
-                feature = featureManager.FeatureExtruThin2(
-                    params.depth / 1000.0,  # Convert mm to meters
-                    0,  # Depth2 (for both directions)
-                    params.reverse_direction,
-                    params.draft_angle * 3.14159 / 180.0,  # Convert to radians
-                    0,  # Draft angle 2
-                    False,  # Draft outward
-                    False,  # Draft outward 2
-                    True,  # Merge result
-                    False,  # Use feature scope
-                    True,  # Auto select
-                    params.thin_thickness / 1000.0,  # Wall thickness
-                    0,  # Thickness 2
-                    False,  # Reverse offset
-                    False,  # Both directions thin
-                    False,  # Cap ends
-                    self.constants["swEndCondBlind"],  # End condition
-                    self.constants["swEndCondBlind"],  # End condition 2
-                )
-            else:
-                # Standard boss extrusion.
-                # API docs (SW 2026) define a 23-parameter signature for both
-                # FeatureExtrusion3 and FeatureExtrusion2.
-                # Keep the same argument shape/order for both methods.
-                t0 = self.constants.get("swStartSketchPlane", 0)
-                try:
-                    feature = featureManager.FeatureExtrusion3(
-                        True,  # Sd (single-ended)
-                        False,  # Flip (side to cut)
-                        params.reverse_direction,  # Dir
-                        self.constants["swEndCondBlind"],  # T1
-                        self.constants["swEndCondBlind"],  # T2
-                        params.depth / 1000.0,  # D1 (m)
-                        0.0,  # D2
-                        False,  # Dchk1
-                        False,  # Dchk2
-                        False,  # Ddir1
-                        False,  # Ddir2
-                        params.draft_angle * 3.14159 / 180.0,  # Dang1 (rad)
-                        0.0,  # Dang2
-                        False,  # OffsetReverse1
-                        False,  # OffsetReverse2
-                        False,  # TranslateSurface1
-                        False,  # TranslateSurface2
-                        params.merge_result,  # Merge
-                        False,  # UseFeatScope
-                        True,  # UseAutoSelect
-                        t0,  # T0 (start condition)
-                        0.0,  # StartOffset
-                        False,  # FlipStartOffset
-                    )
-                except Exception:
-                    # Fallback to v2 for older SolidWorks installs.
-                    feature = featureManager.FeatureExtrusion2(
-                        True,  # Sd
-                        False,  # Flip
-                        params.reverse_direction,  # Dir
-                        self.constants["swEndCondBlind"],  # T1
-                        self.constants["swEndCondBlind"],  # T2
-                        params.depth / 1000.0,  # D1 (m)
-                        0.0,  # D2
-                        False,  # Dchk1
-                        False,  # Dchk2
-                        False,  # Ddir1
-                        False,  # Ddir2
-                        params.draft_angle * 3.14159 / 180.0,  # Dang1 (rad)
-                        0.0,  # Dang2
-                        False,  # OffsetReverse1
-                        False,  # OffsetReverse2
-                        False,  # TranslateSurface1
-                        False,  # TranslateSurface2
-                        params.merge_result,  # Merge
-                        False,  # UseFeatScope
-                        True,  # UseAutoSelect
-                        t0,  # T0
-                        0.0,  # StartOffset
-                        False,  # FlipStartOffset
-                    )
-
-            if not feature:
-                raise Exception("Failed to create extrusion feature")
-
-            return SolidWorksFeature(
-                name=feature.Name,
-                type="Extrusion",
-                id=self._get_feature_id(feature),
-                parameters={
-                    "depth": params.depth,
-                    "draft_angle": params.draft_angle,
-                    "reverse_direction": params.reverse_direction,
-                    "thin_feature": params.thin_feature,
-                    "thin_thickness": params.thin_thickness,
-                },
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("create_extrusion", _extrusion_operation)
-
-    async def create_revolve(
-        self, params: RevolveParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Create a revolve feature.
-
-        Args:
-            params (RevolveParameters): The params value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create revolve feature.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _revolve_operation() -> SolidWorksFeature:
-            """Build internal revolve operation.
-
-            Returns:
-                SolidWorksFeature: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create revolve feature.
-            """
-            featureManager = self.currentModel.FeatureManager
-
-            # Create revolve feature
-            feature = featureManager.FeatureRevolve2(
-                not params.both_directions,  # SingleDir
-                True,  # IsSolid
-                params.thin_feature,  # IsThin
-                False,  # IsCut
-                params.reverse_direction,  # ReverseDir
-                False,  # BothDirectionUpToSameEntity
-                self.constants["swEndCondBlind"],  # Dir1Type
-                self.constants["swEndCondBlind"],  # Dir2Type
-                params.angle * 3.14159 / 180.0,  # Dir1Angle (rad)
-                (params.angle * 3.14159 / 180.0)
-                if params.both_directions
-                else 0.0,  # Dir2Angle (rad)
-                False,  # OffsetReverse1
-                False,  # OffsetReverse2
-                0.0,  # OffsetDistance1
-                0.0,  # OffsetDistance2
-                0,  # ThinType (ignored when IsThin=False)
-                (params.thin_thickness or 0.0) / 1000.0,  # ThinThickness1 (m)
-                0.0,  # ThinThickness2 (m)
-                params.merge_result,  # Merge
-                False,  # UseFeatScope
-                True,  # UseAutoSelect
-            )
-
-            if not feature:
-                raise Exception("Failed to create revolve feature")
-
-            return SolidWorksFeature(
-                name=feature.Name,
-                type="Revolve",
-                id=self._get_feature_id(feature),
-                parameters={
-                    "angle": params.angle,
-                    "reverse_direction": params.reverse_direction,
-                    "both_directions": params.both_directions,
-                    "thin_feature": params.thin_feature,
-                    "thin_thickness": params.thin_thickness,
-                },
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("create_revolve", _revolve_operation)
-
-    async def create_sweep(
-        self, params: SweepParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Create a sweep feature.
-
-        Args:
-            params (SweepParameters): The params value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-        """
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR,
-            error="Sweep feature not implemented in basic pywin32 adapter",
-        )
-
-    async def create_loft(
-        self, params: LoftParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Create a loft feature.
-
-        Args:
-            params (LoftParameters): The params value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-        """
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR,
-            error="Loft feature not implemented in basic pywin32 adapter",
-        )
-
-    async def create_sketch(self, plane: str) -> AdapterResult[str]:
-        """Create a new sketch on the specified plane.
-
-        Creates a new sketch on the specified reference plane and sets it as active. The sketch
-        is ready for adding geometry (lines, circles, etc.).
-
-        Args:
-            plane (str): The plane value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: If the operation cannot be completed.
-
-        Example:
-                            ```python
-                            # Create sketch on top plane
-                            result = await adapter.create_sketch("Top")
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                sketch_name = result.data
-                                print(f"Created sketch: {sketch_name}")
-                                # Now ready to add geometry
-                            ```
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _sketch_operation() -> str:
-            # Select the plane first
-            """Build internal sketch operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: If the operation cannot be completed.
-            """
-            plane_name_map = {
-                "Top": "Top Plane",
-                "Front": "Front Plane",
-                "Right": "Right Plane",
-                "XY": "Top Plane",
-                "XZ": "Front Plane",
-                "YZ": "Right Plane",
-            }
-
-            # Spanish-UI SolidWorks names default planes "Alzado"/"Planta"/
-            # "Vista lateral". Map each semantic name to its locale variants
-            # so the feature lookup below finds the right plane regardless
-            # of install language.
-            semantic_plane_aliases = {
-                "Top": ["Top Plane", "Planta"],
-                "Front": ["Front Plane", "Alzado"],
-                "Right": ["Right Plane", "Vista lateral"],
-                "XY": ["Top Plane", "Planta"],
-                "XZ": ["Front Plane", "Alzado"],
-                "YZ": ["Right Plane", "Vista lateral"],
-            }
-
-            actual_plane = plane_name_map.get(plane, plane)
-
-            selected = False
-            selection_error = None
-
-            # Prefer direct feature lookup to avoid SelectByID2 variant mismatch.
-            plane_candidates = [
-                *semantic_plane_aliases.get(plane, []),
-                actual_plane,
-                plane,
-                "Top Plane",
-                "Front Plane",
-                "Right Plane",
-                "Planta",
-                "Alzado",
-                "Vista lateral",
-            ]
-            for candidate in plane_candidates:
-                if not candidate:
-                    continue
-                plane_feature, selection_error_candidate = self._attempt_with_error(
-                    lambda c=candidate: self.currentModel.FeatureByName(c)
-                )
-                if selection_error_candidate:
-                    selection_error = selection_error_candidate
-                    continue
-                selected = bool(
-                    plane_feature
-                    and self._attempt(
-                        lambda pf=plane_feature: pf.Select2(False, 0), default=False
-                    )
-                )
-                if selected:
-                    break
-
-            # Fallback to SelectByID2 with callout variants for compatibility.
-            if not selected:
-                for callout in ("", None, 0):
-                    selected, selection_error_candidate = self._attempt_with_error(
-                        lambda co=callout: self.currentModel.Extension.SelectByID2(
-                            actual_plane,
-                            "PLANE",
-                            0,
-                            0,
-                            0,
-                            False,
-                            0,
-                            co,
-                            0,
-                        )
-                    )
-                    if selection_error_candidate:
-                        selection_error = selection_error_candidate
-                        continue
-                    if selected:
-                        break
-
-            if not selected:
-                if selection_error:
-                    raise Exception(
-                        f"Failed to select plane: {actual_plane} ({selection_error})"
-                    )
-                raise Exception(f"Failed to select plane: {actual_plane}")
-
-            # Insert sketch
-            self.currentSketchManager = self.currentModel.SketchManager
-            try:
-                self.currentSketch = self.currentSketchManager.InsertSketch(True)
-            except pywintypes.com_error:
-                # Some SolidWorks installs expose InsertSketch() without the boolean arg.
-                self.currentSketch = self.currentSketchManager.InsertSketch()
-
-            if not self.currentSketch:
-                self.currentSketch = self._attempt(
-                    lambda: self.currentModel.GetActiveSketch2()
-                )
-
-            if self.currentSketch and hasattr(self.currentSketch, "Name"):
-                return self.currentSketch.Name
-
-            # Some COM bindings do not return a sketch object even when the
-            # sketch mode was entered successfully.
-            return f"Sketch_{int(time.time() * 1000) % 100000}"
-
-        return self._handle_com_operation("create_sketch", _sketch_operation)
-
-    async def add_line(
-        self, x1: float, y1: float, x2: float, y2: float
-    ) -> AdapterResult[str]:
-        """Add a line to the current sketch.
-
-        Creates a line segment in the active sketch between two points. Coordinates are
-        automatically converted from millimeters to meters.
-
-        Args:
-            x1 (float): The x1 value.
-            y1 (float): The y1 value.
-            x2 (float): The x2 value.
-            y2 (float): The y2 value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create line.
-
-        Example:
-                            ```python
-                            # Create horizontal line 50mm long starting at origin
-                            result = await adapter.add_line(0, 0, 50, 0)
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                line_id = result.data
-                                print(f"Created line: {line_id}")
-                            ```
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _line_operation() -> str:
-            # Convert mm to meters
-            """Build internal line operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create line.
-            """
-            line = self.currentSketchManager.CreateLine(
-                x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
-            )
-
-            if not line:
-                raise Exception("Failed to create line")
-
-            return f"Line_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_line", _line_operation)
-
-    async def add_circle(
-        self, center_x: float, center_y: float, radius: float
-    ) -> AdapterResult[str]:
-        """Add a circle to the current sketch.
-
-        Creates a circle in the active sketch with specified center point and radius.
-        Coordinates are automatically converted from millimeters to meters.
-
-        Args:
-            center_x (float): The center x value.
-            center_y (float): The center y value.
-            radius (float): The radius value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create circle.
-
-        Example:
-                            ```python
-                            # Create 25mm diameter circle centered at (10, 20)
-                            result = await adapter.add_circle(10, 20, 12.5)
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                circle_id = result.data
-                                print(f"Created circle: {circle_id}")
-                            ```
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _circle_operation() -> str:
-            # Convert mm to meters
-            """Build internal circle operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create circle.
-            """
-            circle = self.currentSketchManager.CreateCircleByRadius(
-                center_x / 1000.0, center_y / 1000.0, 0, radius / 1000.0
-            )
-
-            if not circle:
-                raise Exception("Failed to create circle")
-
-            return f"Circle_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_circle", _circle_operation)
-
-    async def add_rectangle(
-        self, x1: float, y1: float, x2: float, y2: float
-    ) -> AdapterResult[str]:
-        """Add a rectangle to the current sketch.
-
-        Creates a rectangle in the active sketch defined by two corner points. The rectangle is
-        created as four connected lines with automatic constraints.
-
-        Args:
-            x1 (float): The x1 value.
-            y1 (float): The y1 value.
-            x2 (float): The x2 value.
-            y2 (float): The y2 value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create rectangle.
-
-        Example:
-                            ```python
-                            # Create 50x30mm rectangle from origin
-                            result = await adapter.add_rectangle(0, 0, 50, 30)
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                rect_id = result.data
-                                print(f"Created rectangle: {rect_id}")
-                            ```
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _rectangle_operation() -> str:
-            # Convert mm to meters
-            """Build internal rectangle operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create rectangle.
-            """
-            lines = self.currentSketchManager.CreateCornerRectangle(
-                x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
-            )
-
-            if not lines:
-                raise Exception("Failed to create rectangle")
-
-            return f"Rectangle_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_rectangle", _rectangle_operation)
-
-    async def add_arc(
-        self,
-        center_x: float,
-        center_y: float,
-        start_x: float,
-        start_y: float,
-        end_x: float,
-        end_y: float,
-    ) -> AdapterResult[str]:
-        """Add an arc to the current sketch.
-
-        Creates a circular arc in the active sketch defined by center point, start point, and
-        end point. Arc is drawn counterclockwise from start to end.
-
-        Args:
-            center_x (float): The center x value.
-            center_y (float): The center y value.
-            start_x (float): The start x value.
-            start_y (float): The start y value.
-            end_x (float): The end x value.
-            end_y (float): The end y value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create arc.
-
-        Example:
-                            ```python
-                            # Create 90-degree arc from (20,0) to (0,20) centered at origin
-                            result = await adapter.add_arc(0, 0, 20, 0, 0, 20)
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                arc_id = result.data
-                                print(f"Created arc: {arc_id}")
-                            ```
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _arc_operation() -> str:
-            # Convert mm to meters
-            """Build internal arc operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create arc.
-            """
-            arc = self.currentSketchManager.CreateArc(
-                center_x / 1000.0,
-                center_y / 1000.0,
-                0,  # Center point
-                start_x / 1000.0,
-                start_y / 1000.0,
-                0,  # Start point
-                end_x / 1000.0,
-                end_y / 1000.0,
-                0,  # End point
-            )
-
-            if not arc:
-                raise Exception("Failed to create arc")
-
-            return f"Arc_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_arc", _arc_operation)
-
-    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
-        """Add a spline to the current sketch.
-
-        Creates a smooth spline curve through the specified control points. The spline
-        automatically generates smooth transitions between points.
-
-        Args:
-            points (list[dict[str, float]]): The points value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create spline.
-
-        Example:
-                            ```python
-                            # Create curved spline through 4 points
-                            spline_points = [
-                                {'x': 0, 'y': 0},
-                                {'x': 20, 'y': 10},
-                                {'x': 40, 'y': -5},
-                                {'x': 60, 'y': 0}
-                            ]
-                            result = await adapter.add_spline(spline_points)
-                            if result.status == AdapterResultStatus.SUCCESS:
-                                spline_id = result.data
-                                print(f"Created spline: {spline_id}")
-                            ```
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _spline_operation() -> str:
-            # Convert points to SolidWorks format (mm to meters)
-            """Build internal spline operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create spline.
-            """
-            spline_points = []
-            for point in points:
-                spline_points.extend([point["x"] / 1000.0, point["y"] / 1000.0, 0])
-
-            spline = self.currentSketchManager.CreateSpline2(
-                spline_points,
-                True,
-                None,  # Points, periodic, tangency
-            )
-
-            if not spline:
-                raise Exception("Failed to create spline")
-
-            return f"Spline_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_spline", _spline_operation)
-
-    async def add_centerline(
-        self, x1: float, y1: float, x2: float, y2: float
-    ) -> AdapterResult[str]:
-        """Add a centerline to the current sketch.
-
-        Args:
-            x1 (float): The x1 value.
-            y1 (float): The y1 value.
-            x2 (float): The x2 value.
-            y2 (float): The y2 value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create centerline.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _centerline_operation() -> str:
-            # Convert mm to meters and create centerline
-            """Build internal centerline operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create centerline.
-            """
-            centerline = self.currentSketchManager.CreateCenterLine(
-                x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
-            )
-
-            if not centerline:
-                raise Exception("Failed to create centerline")
-
-            return f"Centerline_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_centerline", _centerline_operation)
-
-    async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
-    ) -> AdapterResult[str]:
-        """Add a polygon to the current sketch.
-
-        Args:
-            center_x (float): The center x value.
-            center_y (float): The center y value.
-            radius (float): The radius value.
-            sides (int): The sides value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create polygon.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _polygon_operation() -> str:
-            # Convert mm to meters
-            """Build internal polygon operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create polygon.
-            """
-            polygon = self.currentSketchManager.CreatePolygon(
-                center_x / 1000.0,
-                center_y / 1000.0,
-                0,  # Center
-                radius / 1000.0,  # Radius
-                sides,  # Number of sides
-                0,  # Rotation angle
-            )
-
-            if not polygon:
-                raise Exception("Failed to create polygon")
-
-            return f"Polygon_{sides}sided_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_polygon", _polygon_operation)
-
-    async def add_ellipse(
-        self, center_x: float, center_y: float, major_axis: float, minor_axis: float
-    ) -> AdapterResult[str]:
-        """Add an ellipse to the current sketch.
-
-        Args:
-            center_x (float): The center x value.
-            center_y (float): The center y value.
-            major_axis (float): The major axis value.
-            minor_axis (float): The minor axis value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create ellipse.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _ellipse_operation() -> str:
-            # Convert mm to meters
-            """Build internal ellipse operation.
-
-            Returns:
-                str: The resulting text value.
-
-            Raises:
-                Exception: Failed to create ellipse.
-            """
-            ellipse = self.currentSketchManager.CreateEllipse(
-                center_x / 1000.0,
-                center_y / 1000.0,
-                0,  # Center
-                (center_x + major_axis / 2) / 1000.0,
-                center_y / 1000.0,
-                0,  # Major axis end
-                (center_x) / 1000.0,
-                (center_y + minor_axis / 2) / 1000.0,
-                0,  # Minor axis end
-            )
-
-            if not ellipse:
-                raise Exception("Failed to create ellipse")
-
-            return f"Ellipse_{int(time.time() * 1000) % 10000}"
-
-        return self._handle_com_operation("add_ellipse", _ellipse_operation)
-
-    async def add_sketch_constraint(
-        self, entity1: str, entity2: str | None, relation_type: str
-    ) -> AdapterResult[str]:
-        """Add a geometric constraint between sketch entities.
-
-        Args:
-            entity1 (str): The entity1 value.
-            entity2 (str | None): The entity2 value.
-            relation_type (str): The relation type value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _constraint_operation() -> str:
-            # Map relation types to SolidWorks constants
-            """Build internal constraint operation.
-
-            Returns:
-                str: The resulting text value.
-            """
-            relation_map = {
-                "parallel": self.constants.get("swConstraintType_PARALLEL", 0),
-                "perpendicular": self.constants.get(
-                    "swConstraintType_PERPENDICULAR", 1
-                ),
-                "tangent": self.constants.get("swConstraintType_TANGENT", 2),
-                "coincident": self.constants.get("swConstraintType_COINCIDENT", 3),
-                "concentric": self.constants.get("swConstraintType_CONCENTRIC", 4),
-                "horizontal": self.constants.get("swConstraintType_HORIZONTAL", 5),
-                "vertical": self.constants.get("swConstraintType_VERTICAL", 6),
-                "equal": self.constants.get("swConstraintType_EQUAL", 7),
-                "symmetric": self.constants.get("swConstraintType_SYMMETRIC", 8),
-                "collinear": self.constants.get("swConstraintType_COLLINEAR", 9),
-            }
-
-            relation_map.get(relation_type.lower(), 0)
-
-            # For now, return a success without actual constraint - this requires entity selection
-            # which is complex in the basic adapter
-            constraint_id = (
-                f"Constraint_{relation_type}_{int(time.time() * 1000) % 10000}"
-            )
-
-            return constraint_id
-
-        return self._handle_com_operation(
-            "add_sketch_constraint", _constraint_operation
-        )
-
-    async def add_sketch_dimension(
-        self, entity1: str, entity2: str | None, dimension_type: str, value: float
-    ) -> AdapterResult[str]:
-        """Add a dimension to sketch entities.
-
-        Args:
-            entity1 (str): The entity1 value.
-            entity2 (str | None): The entity2 value.
-            dimension_type (str): The dimension type value.
-            value (float): The value value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _dimension_operation() -> str:
-            # For now, return a success without actual dimension - this requires entity selection
-            # which is complex in the basic adapter
-            """Build internal dimension operation.
-
-            Returns:
-                str: The resulting text value.
-            """
-            dimension_id = (
-                f"Dimension_{dimension_type}_{value}_{int(time.time() * 1000) % 10000}"
-            )
-
-            return dimension_id
-
-        return self._handle_com_operation("add_sketch_dimension", _dimension_operation)
-
-    async def sketch_linear_pattern(
-        self,
-        entities: list[str],
-        direction_x: float,
-        direction_y: float,
-        spacing: float,
-        count: int,
-    ) -> AdapterResult[str]:
-        """Create a linear pattern of sketch entities.
-
-        Args:
-            entities (list[str]): The entities value.
-            direction_x (float): The direction x value.
-            direction_y (float): The direction y value.
-            spacing (float): The spacing value.
-            count (int): The count value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _linear_pattern_operation() -> str:
-            # For now, return a success placeholder - linear patterns require entity selection
-            """Build internal linear pattern operation.
-
-            Returns:
-                str: The resulting text value.
-            """
-            pattern_id = (
-                f"LinearPattern_{count}x{spacing}_{int(time.time() * 1000) % 10000}"
-            )
-
-            return pattern_id
-
-        return self._handle_com_operation(
-            "sketch_linear_pattern", _linear_pattern_operation
-        )
-
-    async def sketch_circular_pattern(
-        self,
-        entities: list[str],
-        center_x: float,
-        center_y: float,
-        angle: float,
-        count: int,
-    ) -> AdapterResult[str]:
-        """Create a circular pattern of sketch entities.
-
-        Args:
-            entities (list[str]): The entities value.
-            center_x (float): The center x value.
-            center_y (float): The center y value.
-            angle (float): The angle value.
-            count (int): The count value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _circular_pattern_operation() -> str:
-            # For now, return a success placeholder - circular patterns require entity selection
-            """Build internal circular pattern operation.
-
-            Returns:
-                str: The resulting text value.
-            """
-            pattern_id = (
-                f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
-            )
-
-            return pattern_id
-
-        return self._handle_com_operation(
-            "sketch_circular_pattern", _circular_pattern_operation
-        )
-
-    async def sketch_mirror(
-        self, entities: list[str], mirror_line: str
-    ) -> AdapterResult[str]:
-        """Mirror sketch entities about a centerline.
-
-        Args:
-            entities (list[str]): The entities value.
-            mirror_line (str): The mirror line value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _mirror_operation() -> str:
-            # For now, return a success placeholder - mirroring requires entity selection
-            """Build internal mirror operation.
-
-            Returns:
-                str: The resulting text value.
-            """
-            mirror_id = f"Mirror_{mirror_line}_{int(time.time() * 1000) % 10000}"
-
-            return mirror_id
-
-        return self._handle_com_operation("sketch_mirror", _mirror_operation)
-
-    async def sketch_offset(
-        self, entities: list[str], offset_distance: float, reverse_direction: bool
-    ) -> AdapterResult[str]:
-        """Create an offset of sketch entities.
-
-        Args:
-            entities (list[str]): The entities value.
-            offset_distance (float): The offset distance value.
-            reverse_direction (bool): The reverse direction value.
-
-        Returns:
-            AdapterResult[str]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-
-        def _offset_operation() -> str:
-            # For now, return a success placeholder - offsetting requires entity selection
-            """Build internal offset operation.
-
-            Returns:
-                str: The resulting text value.
-            """
-            direction = "inward" if reverse_direction else "outward"
-            offset_id = f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
-
-            return offset_id
-
-        return self._handle_com_operation("sketch_offset", _offset_operation)
-
-    async def get_mass_properties(self) -> AdapterResult[MassProperties]:
-        """Get mass properties of the current model.
-
-        Returns:
-            AdapterResult[MassProperties]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to get mass properties.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _mass_props_operation() -> MassProperties:
-            # Get mass properties
-            """Build internal mass props operation.
-
-            Returns:
-                MassProperties: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to get mass properties.
-            """
-            # Force a rebuild first — otherwise the IMassProperty reflects
-            # the geometry from the last rebuild checkpoint, which can be
-            # stale after a sequence of feature-creation calls within a
-            # single MCP session.
-            self._attempt(
-                lambda: self.currentModel.ForceRebuild3(False), default=None
-            )
-            mass_props = self._attempt(
-                lambda: self.currentModel.Extension.CreateMassProperty(), default=None
-            )
-
-            if mass_props:
-                # Preferred path: IMassProperty object
-                volume = mass_props.Volume * 1e9  # Convert m³ to mm³
-                surface_area = mass_props.SurfaceArea * 1e6  # Convert m² to mm²
-                mass = mass_props.Mass  # Already in kg
-
-                # Center of mass and inertia members vary across COM versions.
-                center_of_mass = [0.0, 0.0, 0.0]
-                com = self._attempt(lambda: mass_props.CenterOfMass, default=None)
-                if isinstance(com, (list, tuple)) and len(com) >= 3:
-                    center_of_mass = [com[0] * 1000, com[1] * 1000, com[2] * 1000]
-
-                moi = self._attempt(
-                    lambda: mass_props.GetMomentOfInertia(0), default=None
-                )
-                if not isinstance(moi, (list, tuple)) or len(moi) < 9:
-                    moi = [0.0] * 9
-            else:
-                # Fallback path: IModelDoc2.GetMassProperties tuple property
-                raw = self._attempt(
-                    lambda: self.currentModel.GetMassProperties, default=None
-                )
-                if not isinstance(raw, (list, tuple)) or len(raw) < 6:
-                    raise Exception("Failed to get mass properties")
-
-                center_of_mass = [raw[0] * 1000.0, raw[1] * 1000.0, raw[2] * 1000.0]
-                volume = raw[3] * 1e9  # m³ -> mm³
-                surface_area = raw[4] * 1e6  # m² -> mm²
-                mass = raw[5]
-
-                moi = [0.0] * 9
-                if len(raw) >= 12:
-                    # Mapping from documented SW tuple order:
-                    # [6]=Ixx, [7]=Iyy, [8]=Izz, [9]=Lxy, [10]=Lyz, [11]=Lzx
-                    moi[0] = raw[6]
-                    moi[4] = raw[7]
-                    moi[8] = raw[8]
-                    moi[1] = raw[9]
-                    moi[5] = raw[10]
-                    moi[2] = raw[11]
-
-            return MassProperties(
-                volume=volume,
-                surface_area=surface_area,
-                mass=mass,
-                center_of_mass=center_of_mass,
-                moments_of_inertia={
-                    "Ixx": moi[0],
-                    "Iyy": moi[4],
-                    "Izz": moi[8],
-                    "Ixy": moi[1],
-                    "Ixz": moi[2],
-                    "Iyz": moi[5],
-                },
-            )
-
-        return self._handle_com_operation("get_mass_properties", _mass_props_operation)
+    def _reset_sketch_entity_registry(self) -> None:
+        """Clear transient sketch entity handles tracked for dimensioning."""
+        self._sketch_geometry.reset_registry()
+
+    def _register_sketch_entity(self, prefix: str, entity: Any) -> str:
+        """Store sketch entity COM handle and return a stable entity identifier."""
+        return self._sketch_geometry.register_entity(prefix, entity)
+
+    def _select_sketch_entity(self, entity: Any, append: bool) -> bool:
+        """Select a sketch entity using compatible COM select methods."""
+        return self._sketch_geometry.select_entity(entity, append)
+
+    def _set_display_dimension_value(self, display_dim: Any, value_mm: float) -> None:
+        """Set created display dimension to the requested value in meters."""
+        self._sketch_geometry.set_display_dimension_value(display_dim, value_mm)
 
     def _set_view_orientation(
         self, target_doc: Any, orientation: str, view_const: int
@@ -2208,6 +1817,26 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         raise RuntimeError(f"All screenshot methods failed for {resolved_path}")
 
+    def _document_identity(self, document: Any) -> tuple[str | None, str | None]:
+        """Return normalized path and title for a SolidWorks document.
+
+        Args:
+            document: SolidWorks document COM object.
+
+        Returns:
+            Tuple of normalized absolute path and title, either may be ``None``.
+        """
+        return self._document_routing.document_identity(document)
+
+    def _resolve_export_target_doc(self) -> Any:
+        """Choose the document that export operations should target.
+
+        Prefer the adapter's tracked model. Use ``ActiveDoc`` only when it is the same
+        document, which preserves the typed COM surface without exporting a different
+        SolidWorks window that happens to be active.
+        """
+        return self._document_routing.resolve_export_target_doc()
+
     async def export_image(self, payload: dict) -> AdapterResult[dict]:
         """Export a screenshot of the current model to a PNG/JPG file.
 
@@ -2267,13 +1896,7 @@ class PyWin32Adapter(SolidWorksAdapter):
             resolved = _os.path.abspath(file_path)
             _os.makedirs(_os.path.dirname(resolved), exist_ok=True)
 
-            # Prefer swApp.ActiveDoc for screenshot — more reliably typed than
-            # the IDispatch reference stored in self.currentModel after OpenDoc6.
-            target_doc = (
-                self.swApp.ActiveDoc if self.swApp else None
-            ) or self.currentModel
-            if not target_doc:
-                raise RuntimeError("No active SolidWorks document for screenshot")
+            target_doc = self._resolve_export_target_doc()
 
             # Ensure SolidWorks window is focused so the viewport is rendered.
             # Required for both view changes and bitmap capture.
@@ -2465,8 +2088,6 @@ class PyWin32Adapter(SolidWorksAdapter):
             target_doc = (
                 getattr(self.swApp, "ActiveDoc", None) if self.swApp else None
             ) or self.currentModel
-            if not target_doc:
-                raise RuntimeError("No active SolidWorks document for export")
 
             # ----------------------------------------------------------------
             # STL export: use Extension.SaveAs2 + ISTLExportData
@@ -2516,669 +2137,6 @@ class PyWin32Adapter(SolidWorksAdapter):
 
         return self._handle_com_operation("export_file", _export_operation)
 
-    async def get_dimension(self, name: str) -> AdapterResult[float]:
-        """Get the value of a dimension.
-
-        Args:
-            name (str): The name value.
-
-        Returns:
-            AdapterResult[float]: The result produced by the operation.
-
-        Raises:
-            Exception: If the operation cannot be completed.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _get_dim_operation() -> float:
-            """Build internal dim operation.
-
-            Returns:
-                float: The computed numeric result.
-
-            Raises:
-                Exception: If the operation cannot be completed.
-            """
-            dimension = self.currentModel.Parameter(name)
-
-            if not dimension:
-                raise Exception(f"Dimension '{name}' not found")
-
-            value = dimension.GetValue3(8, None)  # Get system value
-            return value * 1000  # Convert meters to mm
-
-        return self._handle_com_operation("get_dimension", _get_dim_operation)
-
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
-        """Set the value of a dimension.
-
-        Args:
-            name (str): The name value.
-            value (float): The value value.
-
-        Returns:
-            AdapterResult[None]: The result produced by the operation.
-
-        Raises:
-            Exception: If the operation cannot be completed.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _set_dim_operation() -> None:
-            """Build internal dim operation.
-
-            Returns:
-                None: None.
-
-            Raises:
-                Exception: If the operation cannot be completed.
-            """
-            dimension = self.currentModel.Parameter(name)
-
-            if not dimension:
-                raise Exception(f"Dimension '{name}' not found")
-
-            # Convert mm to meters and set value
-            success = dimension.SetValue3(value / 1000.0, 8, None)
-
-            if not success:
-                raise Exception(f"Failed to set dimension '{name}'")
-
-            # Rebuild the model
-            self.currentModel.ForceRebuild3(False)
-
-            return None
-
-        return self._handle_com_operation("set_dimension", _set_dim_operation)
-
-    async def save_file(self, file_path: str | None = None) -> AdapterResult[None]:
-        """Save the current model.
-
-        Args:
-            file_path (str | None): Path to the target file. Defaults to None.
-
-        Returns:
-            AdapterResult[None]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to save file.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _save_operation() -> None:
-            """Build internal operation.
-
-            Returns:
-                None: None.
-
-            Raises:
-                Exception: Failed to save file.
-            """
-
-            def _is_success(value: Any) -> bool:
-                # COM save APIs may return bool OR an integer status code
-                # where 0 indicates success.
-                """Build internal is success.
-
-                Args:
-                    value (Any): The value value.
-
-                Returns:
-                    bool: True if success, otherwise False.
-                """
-                if isinstance(value, bool):
-                    return value
-                if isinstance(value, (int, float)):
-                    return value == 0
-                return bool(value)
-
-            if file_path:
-                resolved_path = os.path.abspath(file_path)
-                os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
-
-                # If another SolidWorks document has this path open (for example
-                # from a previous run), close it so SaveAs can overwrite.
-                if self.swApp:
-                    self._attempt(lambda: self.swApp.CloseDoc(resolved_path))
-
-                # Remove stale copy when possible (may fail if still locked).
-                if os.path.exists(resolved_path):
-                    self._attempt(lambda: os.remove(resolved_path))
-
-                # Save as new file.
-                save_as3_result = self.currentModel.SaveAs3(resolved_path, 0, 0)
-                if not _is_success(save_as3_result):
-                    save_as = getattr(self.currentModel, "SaveAs", None)
-                    if callable(save_as):
-                        fallback_result = save_as(resolved_path)
-                        if not _is_success(fallback_result):
-                            raise Exception(f"Failed to save as: {resolved_path}")
-                    else:
-                        raise Exception(f"Failed to save as: {resolved_path}")
-
-                if not os.path.exists(resolved_path):
-                    raise Exception(f"File not written after save: {resolved_path}")
-            else:
-                # Save current file
-                save_result = self._attempt(
-                    lambda: self.currentModel.Save3(1, None, None)
-                )
-                if save_result is None:
-                    save_fn = getattr(self.currentModel, "Save", None)
-                    if callable(save_fn):
-                        save_result = save_fn()
-                    else:
-                        raise Exception("Failed to save file")
-                if not _is_success(save_result):
-                    # Some SolidWorks versions return a non-success value when the
-                    # document is already clean; if a valid file still exists,
-                    # treat this as a successful no-op save.
-                    path_attr = getattr(self.currentModel, "GetPathName", "")
-                    model_path = path_attr() if callable(path_attr) else path_attr
-                    if model_path and os.path.exists(model_path):
-                        return None
-                    raise Exception("Failed to save file")
-
-            return None
-
-        return self._handle_com_operation("save_file", _save_operation)
-
-    async def rebuild_model(self) -> AdapterResult[None]:
-        """Rebuild the current model.
-
-        Returns:
-            AdapterResult[None]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to rebuild model.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _rebuild_operation() -> None:
-            """Build internal rebuild operation.
-
-            Returns:
-                None: None.
-
-            Raises:
-                Exception: Failed to rebuild model.
-            """
-            success = self.currentModel.ForceRebuild3(False)
-            if not success:
-                raise Exception("Failed to rebuild model")
-            return None
-
-        return self._handle_com_operation("rebuild_model", _rebuild_operation)
-
-    async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
-        """Get information about the current model.
-
-        Returns:
-            AdapterResult[dict[str, Any]]: The result produced by the operation.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _info_operation() -> dict[str, Any]:
-            """Build internal info operation.
-
-            Returns:
-                dict[str, Any]: A dictionary containing the resulting values.
-            """
-            # Intermediate dispatches (Configuration, FeatureManager) are
-            # freshly returned from SW — flag their methods so zero-arg
-            # accessors like ``.GetName()``, ``.GetFeatureCount()``
-            # dispatch as methods, not properties.
-            config = sw_type_info.flagged(
-                self.currentModel.GetActiveConfiguration(), "IConfiguration"
-            )
-            feat_mgr = sw_type_info.flagged(
-                self.currentModel.FeatureManager, "IFeatureManager"
-            )
-
-            info = {
-                "title": self.currentModel.GetTitle(),
-                "path": self.currentModel.GetPathName(),
-                "type": self._get_document_type(),
-                # IConfiguration.Name is a property, not a method.
-                "configuration": config.Name if config else "Default",
-                "is_dirty": self.currentModel.GetSaveFlag(),
-                "feature_count": feat_mgr.GetFeatureCount(True)
-                if feat_mgr
-                else 0,
-                # GetRebuildStatus isn't in the SW 2025 TLB. IsTessellationValid
-                # is the modern proxy: false => rebuild needed.
-                "needs_rebuild": not bool(
-                    self._attempt(
-                        lambda: self.currentModel.IsTessellationValid(),
-                        default=True,
-                    )
-                ),
-            }
-            return info
-
-        return self._handle_com_operation("get_model_info", _info_operation)
-
-    async def list_features(
-        self, include_suppressed: bool = False
-    ) -> AdapterResult[list[dict[str, Any]]]:
-        """List features in the active model feature tree.
-
-        Args:
-            include_suppressed (bool): The include suppressed value. Defaults to False.
-
-        Returns:
-            AdapterResult[list[dict[str, Any]]]: The result produced by the operation.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error="No active model",
-            )
-
-        def _list_operation() -> list[dict[str, Any]]:
-            """Build internal list operation.
-
-            Returns:
-                list[dict[str, Any]]: A list containing the resulting items.
-            """
-            features: list[dict[str, Any]] = []
-            seen: set[tuple[str, str]] = set()
-
-            def _is_suppressed(feature: Any) -> bool:
-                # Prefer parameter-less calls to avoid COM optional-arg marshalling issues.
-                """Build internal is suppressed.
-
-                Args:
-                    feature (Any): The feature value.
-
-                Returns:
-                    bool: True if suppressed, otherwise False.
-                """
-                suppressed_direct = self._attempt(
-                    lambda: feature.IsSuppressed(), default=None
-                )
-                if suppressed_direct is not None:
-                    return bool(suppressed_direct)
-
-                suppressed_result = self._attempt(
-                    lambda: feature.IsSuppressed2(0, []), default=None
-                )
-                if isinstance(suppressed_result, (tuple, list)):
-                    return bool(suppressed_result[0]) if suppressed_result else False
-                return (
-                    bool(suppressed_result) if suppressed_result is not None else False
-                )
-
-            def _append_feature(feature: Any, position: int) -> None:
-                """Build internal append feature.
-
-                Args:
-                    feature (Any): The feature value.
-                    position (int): The position value.
-
-                Returns:
-                    None: None.
-                """
-                if not feature:
-                    return
-
-                name = str(getattr(feature, "Name", ""))
-                feature_type = str(
-                    self._attempt(lambda: feature.GetTypeName2(), default="Unknown")
-                )
-
-                dedupe_key = (name, feature_type)
-                if dedupe_key in seen:
-                    return
-                seen.add(dedupe_key)
-
-                suppressed = _is_suppressed(feature)
-                if not include_suppressed and suppressed:
-                    return
-
-                features.append(
-                    {
-                        "name": name,
-                        "type": feature_type,
-                        "suppressed": suppressed,
-                        "position": position,
-                    }
-                )
-
-            # Primary path: feature-tree traversal from model root.
-            feature = self._attempt(lambda: self.currentModel.FirstFeature())
-
-            pos = 0
-            guard = 0
-            while feature and guard < 10000:
-                _append_feature(feature, pos)
-                pos += 1
-                guard += 1
-                next_feature = self._attempt(
-                    lambda current_feature=feature: current_feature.GetNextFeature()
-                )
-                if next_feature is None:
-                    break
-                feature = next_feature
-
-            if features:
-                return features
-
-            # Fallback path: reverse position traversal via model API.
-            feature_manager = getattr(self.currentModel, "FeatureManager", None)
-            count = self._attempt(
-                lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0
-            )
-
-            for reverse_pos in range(1, count + 1):
-                feature = self._attempt(
-                    lambda pos=reverse_pos: self.currentModel.FeatureByPositionReverse(
-                        pos
-                    )
-                )
-                if feature is None:
-                    continue
-
-                # Convert reverse order to stable forward-ish index.
-                position = count - reverse_pos
-                _append_feature(feature, position)
-
-            return features
-
-        return self._handle_com_operation("list_features", _list_operation)
-
-    @staticmethod
-    def _normalize_feature_name(raw_name: str | None) -> str:
-        """Normalise a raw feature/component name for case-insensitive comparison.
-
-        Args:
-            raw_name: Raw name, may be None.
-
-        Returns:
-            str: Stripped, quote-removed, casefolded string.
-        """
-        return str(raw_name or "").strip().strip('"').casefold()
-
-    def _build_feature_candidate_names(
-        self, feature_name: str, target_doc: Any
-    ) -> list[str]:
-        """Build the list of candidate names (bare + @doc-stem / @doc-title variants).
-
-        Args:
-            feature_name: Base feature name.
-            target_doc: Active SolidWorks document COM object.
-
-        Returns:
-            list[str]: One to three candidate strings, e.g. ["Boss", "Boss@MyPart",
-                "Boss@MyPart.SLDPRT"].
-        """
-        doc_title = ""
-        doc_stem = ""
-        try:
-            raw_title = str(target_doc.GetTitle() or "").strip()
-            if raw_title:
-                doc_title = raw_title
-                doc_stem = raw_title.rsplit(".", 1)[0]
-        except Exception:
-            pass
-
-        candidates: list[str] = [feature_name]
-        if doc_stem:
-            candidates.append(f"{feature_name}@{doc_stem}")
-        if doc_title and doc_title != doc_stem:
-            candidates.append(f"{feature_name}@{doc_title}")
-        return candidates
-
-    def _try_select_by_extension(
-        self,
-        target_doc: Any,
-        candidate_names: list[str],
-        feature_name: str,
-    ) -> dict[str, Any] | None:
-        """Try SelectByID2 for each candidate × entity-type pair.
-
-        Args:
-            target_doc: Active SolidWorks document COM object.
-            candidate_names: Ordered list of name candidates to attempt.
-            feature_name: Original feature name for the result payload.
-
-        Returns:
-            Result dict on first success, or None if all attempts fail.
-        """
-        entity_types = ["BODYFEATURE", "COMPONENT", "SKETCH", "PLANE", "MATE", ""]
-        for candidate in candidate_names:
-            for entity_type in entity_types:
-                try:
-                    selected = target_doc.Extension.SelectByID2(
-                        candidate, entity_type, 0, 0, 0, False, 0, None, 0
-                    )
-                    if selected:
-                        return {
-                            "selected": True,
-                            "feature_name": feature_name,
-                            "selected_name": candidate,
-                            "entity_type": entity_type or "auto",
-                        }
-                except Exception:
-                    continue
-        return None
-
-    def _try_select_by_component(
-        self,
-        target_doc: Any,
-        candidate_names: list[str],
-        feature_name: str,
-    ) -> dict[str, Any] | None:
-        """Try selecting via GetComponentByName and component Select methods.
-
-        Args:
-            target_doc: Active SolidWorks document COM object.
-            candidate_names: Ordered list of name candidates to attempt.
-            feature_name: Original feature name for the result payload.
-
-        Returns:
-            Result dict on first success, or None if unavailable or all fail.
-        """
-        get_component_by_name = getattr(target_doc, "GetComponentByName", None)
-        if not callable(get_component_by_name):
-            return None
-
-        for candidate in candidate_names:
-            component_name = candidate.split("@", 1)[0]
-            component = self._attempt(
-                lambda c=component_name: get_component_by_name(c), default=None
-            )
-            if component is None:
-                continue
-            for method_name, args in [
-                ("Select4", (False, None, False)),
-                ("Select", (False,)),
-                ("Select2", (False, 0)),
-            ]:
-                selector = getattr(component, method_name, None)
-                if not callable(selector):
-                    continue
-                try:
-                    if bool(selector(*args)):
-                        return {
-                            "selected": True,
-                            "feature_name": feature_name,
-                            "selected_name": component_name,
-                            "entity_type": f"component:{method_name}",
-                        }
-                except Exception:
-                    continue
-        return None
-
-    def _try_select_by_feature_tree(
-        self,
-        target_doc: Any,
-        feature_name: str,
-        candidate_names: list[str],
-    ) -> dict[str, Any] | None:
-        """Walk the feature tree and select the first matching feature.
-
-        Args:
-            target_doc: Active SolidWorks document COM object.
-            feature_name: Original feature name for the result payload.
-            candidate_names: Candidate name list used to derive normalised lookup sets.
-
-        Returns:
-            Result dict on first match, or None if no match is found.
-        """
-        normalized_candidates = {
-            self._normalize_feature_name(c)
-            for c in candidate_names
-            if self._normalize_feature_name(c)
-        }
-        normalized_bases = {c.split("@", 1)[0] for c in normalized_candidates if c}
-
-        def _matches(raw_name: str | None) -> bool:
-            n = self._normalize_feature_name(raw_name)
-            if not n:
-                return False
-            if n in normalized_candidates:
-                return True
-            return n.split("@", 1)[0] in normalized_bases
-
-        feature = self._attempt(lambda: target_doc.FirstFeature())
-        guard = 0
-        while feature and guard < 10000:
-            guard += 1
-            tree_name = self._attempt(lambda f=feature: str(f.Name or ""), default="")
-            if _matches(tree_name):
-                try:
-                    if feature.Select2(False, 0):
-                        return {
-                            "selected": True,
-                            "feature_name": feature_name,
-                            "selected_name": tree_name or feature_name,
-                            "entity_type": "feature-tree",
-                        }
-                except Exception:
-                    pass
-            next_feature = self._attempt(lambda f=feature: f.GetNextFeature())
-            if next_feature is None:
-                break
-            feature = next_feature
-        return None
-
-    async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
-        """Highlight a named feature in SolidWorks by selecting it via SelectByID2.
-
-        Tries common entity type strings in priority order and falls back to an empty type
-        string which lets SolidWorks auto-resolve the entity class.
-
-        Args:
-            feature_name (str): The feature name value.
-
-        Returns:
-            AdapterResult[dict[str, Any]]: The result produced by the operation.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _select_operation() -> dict[str, Any]:
-            """Orchestrate feature selection using three fallback strategies.
-
-            Returns:
-                dict[str, Any]: Selection result with selected, feature_name, selected_name, entity_type.
-            """
-            target_doc = self.currentModel
-            candidate_names = self._build_feature_candidate_names(
-                feature_name, target_doc
-            )
-
-            result = self._try_select_by_extension(
-                target_doc, candidate_names, feature_name
-            )
-            if result:
-                return result
-
-            result = self._try_select_by_component(
-                target_doc, candidate_names, feature_name
-            )
-            if result:
-                return result
-
-            result = self._try_select_by_feature_tree(
-                target_doc, feature_name, candidate_names
-            )
-            if result:
-                return result
-
-            return {
-                "selected": False,
-                "feature_name": feature_name,
-                "selected_name": feature_name,
-            }
-
-        return self._handle_com_operation("select_feature", _select_operation)
-
-    async def list_configurations(self) -> AdapterResult[list[str]]:
-        """List all configuration names in the active model.
-
-        Returns:
-            AdapterResult[list[str]]: The result produced by the operation.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error="No active model",
-            )
-
-        def _list_operation() -> list[str]:
-            """Build internal list operation.
-
-            Returns:
-                list[str]: A list containing the resulting items.
-            """
-            raw_names = getattr(self.currentModel, "GetConfigurationNames", None)
-            if callable(raw_names):
-                names = raw_names()
-            else:
-                names = raw_names
-
-            if names is None:
-                names = []
-            if isinstance(names, str):
-                return [names]
-            if isinstance(names, tuple):
-                normalized_names = [str(name) for name in names]
-            else:
-                normalized_names = [str(name) for name in names]
-
-            if normalized_names:
-                return normalized_names
-
-            active_config = self._attempt(
-                lambda: self.currentModel.GetActiveConfiguration(), default=None
-            )
-            active_name = self._attempt(lambda: active_config.GetName(), default=None)
-            if active_name:
-                return [str(active_name)]
-
-            return []
-
-        return self._handle_com_operation("list_configurations", _list_operation)
-
     def _get_document_type(self) -> str:
         """Helper method to get document type.
 
@@ -3191,218 +2149,6 @@ class PyWin32Adapter(SolidWorksAdapter):
         doc_type = self.currentModel.GetType()
         type_map = {1: "Part", 2: "Assembly", 3: "Drawing"}
         return type_map.get(doc_type, "Unknown")
-
-    async def create_cut_extrude(
-        self, params: ExtrusionParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Create a cut extrude feature.
-
-        Args:
-            params (ExtrusionParameters): The params value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create cut extrude feature.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _cut_operation() -> SolidWorksFeature:
-            """Build internal cut operation.
-
-            Returns:
-                SolidWorksFeature: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create cut extrude feature.
-            """
-            featureManager = self.currentModel.FeatureManager
-
-            # Create cut extrusion (similar to regular extrude but cuts material)
-            feature = featureManager.FeatureCut3(
-                True,  # Single ended
-                False,  # Use feature scope
-                params.reverse_direction,
-                self.constants["swEndCondBlind"],
-                self.constants["swEndCondBlind"],
-                params.depth / 1000.0,  # Depth in meters
-                0,  # Depth2
-                False,  # Feature scope
-                True,  # Auto select
-                False,  # Assembly feature scope
-                False,  # Auto select components
-                params.draft_angle * 3.14159 / 180.0,  # Draft angle
-                0,  # Draft angle 2
-                True,  # Draft outward
-                True,  # Draft outward 2
-                False,  # Optimize geometry
-                0,  # Start offset
-                False,  # Flip side to cut
-                False,  # Direction reversed
-            )
-
-            if not feature:
-                raise Exception("Failed to create cut extrude feature")
-
-            return SolidWorksFeature(
-                name=feature.Name,
-                type="Cut-Extrude",
-                id=self._get_feature_id(feature),
-                parameters={
-                    "depth": params.depth,
-                    "draft_angle": params.draft_angle,
-                    "reverse_direction": params.reverse_direction,
-                },
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("create_cut_extrude", _cut_operation)
-
-    async def add_fillet(
-        self, radius: float, edge_names: list[str]
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Add a fillet feature.
-
-        Args:
-            radius (float): The radius value.
-            edge_names (list[str]): The edge names value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create fillet.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _fillet_operation() -> SolidWorksFeature:
-            # Select edges first
-            """Build internal fillet operation.
-
-            Returns:
-                SolidWorksFeature: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create fillet.
-            """
-            for edge_name in edge_names:
-                selected = self.currentModel.Extension.SelectByID2(
-                    edge_name,
-                    "EDGE",
-                    0,
-                    0,
-                    0,
-                    True,
-                    0,
-                    None,
-                    0,  # True for multi-select
-                )
-                if not selected:
-                    raise Exception(f"Failed to select edge: {edge_name}")
-
-            # Create fillet
-            featureManager = self.currentModel.FeatureManager
-            feature = featureManager.FeatureFillet3(
-                radius / 1000.0,  # Convert mm to meters
-                0,  # Setback radius
-                0,  # Setback distance
-                0,  # Variable radius type
-                0,  # Fillet type
-                False,  # Overflow type
-                False,  # Rho value
-                False,  # Rolling ball radius
-                False,  # Help point
-                False,  # Conic type
-                False,  # Keep features
-                False,  # Keep abrupt edges
-                False,  # Optimize geometry
-                0,  # Smooth transition
-                False,  # Vertex fillet
-            )
-
-            if not feature:
-                raise Exception("Failed to create fillet")
-
-            return SolidWorksFeature(
-                name=feature.Name,
-                type="Fillet",
-                id=self._get_feature_id(feature),
-                parameters={"radius": radius, "edges": edge_names},
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("add_fillet", _fillet_operation)
-
-    async def add_chamfer(
-        self, distance: float, edge_names: list[str]
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Add a chamfer feature.
-
-        Args:
-            distance (float): The distance value.
-            edge_names (list[str]): The edge names value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-
-        Raises:
-            Exception: Failed to create chamfer.
-        """
-        if not self.currentModel:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        def _chamfer_operation() -> SolidWorksFeature:
-            # Select edges first
-            """Build internal chamfer operation.
-
-            Returns:
-                SolidWorksFeature: The result produced by the operation.
-
-            Raises:
-                Exception: Failed to create chamfer.
-            """
-            for edge_name in edge_names:
-                selected = self.currentModel.Extension.SelectByID2(
-                    edge_name, "EDGE", 0, 0, 0, True, 0, None, 0
-                )
-                if not selected:
-                    raise Exception(f"Failed to select edge: {edge_name}")
-
-            # Create chamfer
-            featureManager = self.currentModel.FeatureManager
-            feature = featureManager.FeatureChamfer(
-                1,  # Chamfer type (distance-distance)
-                distance / 1000.0,  # Distance 1 (convert mm to meters)
-                distance / 1000.0,  # Distance 2
-                0,  # Angle
-                0,  # Vertex chamfer type
-                False,  # Flip direction
-                False,  # Keep features
-                False,  # Optimize geometry
-                False,  # Use tangent propagation
-            )
-
-            if not feature:
-                raise Exception("Failed to create chamfer")
-
-            return SolidWorksFeature(
-                name=feature.Name,
-                type="Chamfer",
-                id=self._get_feature_id(feature),
-                parameters={"distance": distance, "edges": edge_names},
-                properties={"created": datetime.now().isoformat()},
-            )
-
-        return self._handle_com_operation("add_chamfer", _chamfer_operation)
 
     def _invoke_run_macro2(
         self, macro_path: str, module_name: str, proc_name: str
@@ -3474,28 +2220,3 @@ class PyWin32Adapter(SolidWorksAdapter):
             return self._invoke_run_macro2(macro_path, module_name, proc_name)
 
         return self._handle_com_operation("execute_macro", _run)
-
-    async def exit_sketch(self) -> AdapterResult[None]:
-        """Exit the current sketch editing mode.
-
-        Returns:
-            AdapterResult[None]: The result produced by the operation.
-        """
-        if not self.currentSketchManager:
-            return AdapterResult(
-                status=AdapterResultStatus.WARNING, error="No active sketch to exit"
-            )
-
-        def _exit_operation() -> None:
-            # Toggle sketch mode off and clear local sketch references.
-            """Build internal exit operation.
-
-            Returns:
-                None: None.
-            """
-            self.currentSketchManager.InsertSketch(True)
-            self.currentSketch = None
-            self.currentSketchManager = None
-            return None
-
-        return self._handle_com_operation("exit_sketch", _exit_operation)

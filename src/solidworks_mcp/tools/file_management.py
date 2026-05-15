@@ -19,7 +19,7 @@ from .input_compat import CompatInput
 
 class SaveFileInput(CompatInput):
     """Input schema for saving a file.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         force_save (bool): The force save value.
@@ -34,7 +34,7 @@ class SaveFileInput(CompatInput):
 
 class SaveAsInput(CompatInput):
     """Input schema for save as operation.
-    
+
     Attributes:
         file_path (str): The file path value.
         format_type (str): The format type value.
@@ -50,7 +50,7 @@ class SaveAsInput(CompatInput):
 
 class FileOperationInput(CompatInput):
     """Input schema for file operations.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         include_system (bool): The include system value.
@@ -80,7 +80,7 @@ class FileOperationInput(CompatInput):
 
 class FormatConversionInput(CompatInput):
     """Input schema for format conversion.
-    
+
     Attributes:
         conversion_options (dict[str, Any] | None): The conversion options value.
         invalid_format (str | None): The invalid format value.
@@ -110,7 +110,7 @@ class FormatConversionInput(CompatInput):
 
 class LoadPartInput(CompatInput):
     """Input schema for loading a part file.
-    
+
     Attributes:
         file_path (str): The file path value.
     """
@@ -120,7 +120,7 @@ class LoadPartInput(CompatInput):
 
 class LoadAssemblyInput(CompatInput):
     """Input schema for loading an assembly file.
-    
+
     Attributes:
         file_path (str): The file path value.
     """
@@ -130,7 +130,7 @@ class LoadAssemblyInput(CompatInput):
 
 class SavePartInput(CompatInput):
     """Input schema for saving a part file.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         overwrite (bool): The overwrite value.
@@ -145,7 +145,7 @@ class SavePartInput(CompatInput):
 
 class SaveAssemblyInput(CompatInput):
     """Input schema for saving an assembly file.
-    
+
     Attributes:
         file_path (str | None): The file path value.
         overwrite (bool): The overwrite value.
@@ -160,7 +160,7 @@ class SaveAssemblyInput(CompatInput):
 
 class ListFeaturesInput(CompatInput):
     """Input schema for feature tree listing.
-    
+
     Attributes:
         include_suppressed (bool): The include suppressed value.
     """
@@ -173,7 +173,7 @@ class ListFeaturesInput(CompatInput):
 
 class ClassifyFeatureTreeInput(CompatInput):
     """Input schema for feature-family classification.
-    
+
     Attributes:
         features (list[dict[str, Any]] | None): The features value.
         include_suppressed (bool): The include suppressed value.
@@ -198,27 +198,27 @@ async def register_file_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
     """Register file management tools with FastMCP.
-    
+
     Registers essential file operations for SolidWorks document management including save
     operations, file format conversions, and file property access. These tools provide
     fundamental document lifecycle management capabilities.
-    
+
     Args:
         mcp (FastMCP): The mcp value.
         adapter (SolidWorksAdapter): Adapter instance used for the operation.
         config (dict[str, Any]): Configuration values for the operation.
-    
+
     Returns:
         int: The computed numeric result.
-    
+
     Example:
                         ```python
                         from solidworks_mcp.tools.file_management import register_file_management_tools
-    
+
                         tool_count = await register_file_management_tools(mcp, adapter, config)
                         print(f"Registered {tool_count} file management tools")
                         ```
-    
+
                     Note:
                         File management tools require an active SolidWorks document.
                         Save operations preserve the current document state and metadata.
@@ -227,11 +227,11 @@ async def register_file_management_tools(
 
     def _coerce_input(model_cls, payload):
         """Accept legacy dict payloads from compatibility wrapper as well as model instances.
-        
+
         Args:
             model_cls (Any): The model cls value.
             payload (Any): The payload value.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -243,12 +243,12 @@ async def register_file_management_tools(
 
     def _result_value(payload: Any, *keys: str, default: Any = None) -> Any:
         """Read a value from adapter result payloads that may be dicts or model objects.
-        
+
         Args:
             payload (Any): The payload value.
             *keys (str): Additional positional arguments forwarded to the call.
             default (Any): Fallback value returned when the operation fails. Defaults to None.
-        
+
         Returns:
             Any: The result produced by the operation.
         """
@@ -270,29 +270,29 @@ async def register_file_management_tools(
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
         """Save the current SolidWorks model.
-        
+
         Saves the currently active SolidWorks document to its existing file location. Essential
         for preserving work and maintaining document version control. Handles both modified and
         unmodified documents based on force_save setting.
-        
+
         Args:
             input_data (SaveFileInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Force save current model
                             result = await save_file({"force_save": True})
-        
+
                             # Save only if modified
                             result = await save_file({"force_save": False})
-        
+
                             if result["status"] == "success":
                                 print(f"File saved at {result['timestamp']}")
                             ```
-        
+
                         Note:
                             - Requires an open SolidWorks document
                             - Preserves original file location and format
@@ -331,17 +331,17 @@ async def register_file_management_tools(
     @mcp.tool()
     async def save_as(input_data: SaveAsInput) -> dict[str, Any]:
         """Save the current model to a new location or format.
-        
+
         Saves the currently active SolidWorks document with a new filename, location, or file
         format. Supports multiple export formats for interoperability with other CAD systems and
         manufacturing workflows.
-        
+
         Args:
             input_data (SaveAsInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Save as new SolidWorks file
@@ -350,14 +350,14 @@ async def register_file_management_tools(
                                 "format_type": "solidworks",
                                 "overwrite": False
                             })
-        
+
                             # Export to STEP format
                             result = await save_as({
                                 "file_path": "C:/Exports/bracket.step",
                                 "format_type": "step",
                                 "overwrite": True
                             })
-        
+
                             # Export for 3D printing
                             result = await save_as({
                                 "file_path": "C:/3DPrint/bracket.stl",
@@ -423,38 +423,38 @@ async def register_file_management_tools(
     @mcp.tool()
     async def get_file_properties() -> dict[str, Any]:
         """Get properties of the current SolidWorks file.
-        
+
         Retrieves comprehensive metadata and properties of the currently active SolidWorks
         document. Provides essential file information for document management, version control,
         and project organization.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await get_file_properties()
-        
+
                             if result["status"] == "success":
                                 props = result["properties"]
-        
+
                                 # Basic file info
                                 file_info = props["file_info"]
                                 print(f"File: {file_info['file_name']}")
                                 print(f"Size: {file_info['file_size']}")
                                 print(f"Type: {file_info['file_type']}")
-        
+
                                 # Technical properties
                                 tech = props["technical_properties"]
                                 print(f"Material: {tech['material']}")
                                 print(f"Units: {tech['units']}")
-        
+
                                 # Document info
                                 doc = props["document_info"]
                                 print(f"Author: {doc['author']}")
                                 print(f"Description: {doc['description']}")
                             ```
-        
+
                         Note:
                             - Requires an active SolidWorks document
                             - Properties may vary based on document type
@@ -479,10 +479,10 @@ async def register_file_management_tools(
     @mcp.tool()
     async def get_model_info() -> dict[str, Any]:
         """Get metadata for the active SolidWorks document.
-        
+
         Returns a compact summary of the current model context that is useful for read-before-
         write LLM flows (document type, active configuration, and feature count).
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -514,13 +514,13 @@ async def register_file_management_tools(
     @mcp.tool()
     async def list_features(input_data: ListFeaturesInput) -> dict[str, Any]:
         """List feature-tree entries for the active SolidWorks document.
-        
+
         Useful for read-before-write workflows where the agent must inspect existing model
         structure before adding or editing downstream features.
-        
+
         Args:
             input_data (ListFeaturesInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -558,14 +558,14 @@ async def register_file_management_tools(
         input_data: ClassifyFeatureTreeInput,
     ) -> dict[str, Any]:
         """Classify the active model into a feature family from model-info and tree data.
-        
+
         This is a read-before-write helper for delegation. It summarizes whether the current
         document looks like a direct-MCP solid, sheet metal workflow, advanced VBA-backed part,
         assembly, drawing, or an insufficient-evidence case.
-        
+
         Args:
             input_data (ClassifyFeatureTreeInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -623,10 +623,10 @@ async def register_file_management_tools(
     @mcp.tool()
     async def list_configurations() -> dict[str, Any]:
         """List configuration names for the active SolidWorks document.
-        
+
         Returns all available configuration names so callers can select a stable target before
         invoking feature or export operations.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -659,13 +659,13 @@ async def register_file_management_tools(
     @mcp.tool()
     async def manage_file_properties(input_data: FileOperationInput) -> dict[str, Any]:
         """Read, update, copy, move, rename, or delete file-related properties.
-        
+
         Uses the requested operation and file paths to manage SolidWorks file metadata or
         related file lifecycle tasks through the active adapter.
-        
+
         Args:
             input_data (FileOperationInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -699,13 +699,13 @@ async def register_file_management_tools(
     @mcp.tool()
     async def convert_file_format(input_data: FormatConversionInput) -> dict[str, Any]:
         """Convert a SolidWorks file from one format to another.
-        
+
         Supports exporting source files to target formats such as STEP, IGES, STL, PDF, or other
         adapter-supported conversion outputs.
-        
+
         Args:
             input_data (FormatConversionInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -740,13 +740,13 @@ async def register_file_management_tools(
     @mcp.tool()
     async def batch_file_operations(input_data: FileOperationInput) -> dict[str, Any]:
         """Run a file operation across multiple files as a batch workflow.
-        
+
         Intended for repetitive file management tasks such as copying, moving, renaming, or
         deleting groups of SolidWorks documents.
-        
+
         Args:
             input_data (FileOperationInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
@@ -780,26 +780,26 @@ async def register_file_management_tools(
     @mcp.tool()
     async def load_part(input_data: LoadPartInput) -> dict[str, Any]:
         """Load (open) a SolidWorks part file.
-        
+
         Convenience wrapper that opens a .sldprt file and makes it the active document. Provides
         a simpler alternative to open_model for parts.
-        
+
         Args:
             input_data (LoadPartInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await load_part({
                                 "file_path": "C:/Projects/bracket.sldprt"
                             })
-        
+
                             if result["status"] == "success":
                                 print(f"Loaded: {result['model']['name']}")
                             ```
-        
+
                         Note:
                             - File must be a valid .sldprt (part) file
                             - Path must be absolute and accessible
@@ -845,26 +845,26 @@ async def register_file_management_tools(
     @mcp.tool()
     async def load_assembly(input_data: LoadAssemblyInput) -> dict[str, Any]:
         """Load (open) a SolidWorks assembly file.
-        
+
         Convenience wrapper that opens a .sldasm file and makes it the active document. Provides
         a simpler alternative to open_model for assemblies.
-        
+
         Args:
             input_data (LoadAssemblyInput): The input data value.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             result = await load_assembly({
                                 "file_path": "C:/Projects/machine_assembly.sldasm"
                             })
-        
+
                             if result["status"] == "success":
                                 print(f"Loaded: {result['model']['name']}")
                             ```
-        
+
                         Note:
                             - File must be a valid .sldasm (assembly) file
                             - Path must be absolute and accessible
@@ -910,31 +910,31 @@ async def register_file_management_tools(
     @mcp.tool()
     async def save_part(input_data: SavePartInput | None = None) -> dict[str, Any]:
         """Save the active SolidWorks part document.
-        
+
         Convenience wrapper that saves the currently active part. If no file_path is provided,
         saves to the existing location. Otherwise, saves as a new file.
-        
+
         Args:
             input_data (SavePartInput | None): The input data value. Defaults to None.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Save to current location
                             result = await save_part()
-        
+
                             # Save as new file
                             result = await save_part({
                                 "file_path": "C:/Projects/bracket_v2.sldprt",
                                 "overwrite": False
                             })
-        
+
                             if result["status"] == "success":
                                 print(f"Part saved to {result['file_path']}")
                             ```
-        
+
                         Note:
                             - Active document must be a part file
                             - When saving to new location, ensure path ends with .sldprt
@@ -1006,31 +1006,31 @@ async def register_file_management_tools(
         input_data: SaveAssemblyInput | None = None,
     ) -> dict[str, Any]:
         """Save the active SolidWorks assembly document.
-        
+
         Convenience wrapper that saves the currently active assembly. If no file_path is
         provided, saves to the existing location. Otherwise, saves as a new file.
-        
+
         Args:
             input_data (SaveAssemblyInput | None): The input data value. Defaults to None.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
-        
+
         Example:
                             ```python
                             # Save to current location
                             result = await save_assembly()
-        
+
                             # Save as new file
                             result = await save_assembly({
                                 "file_path": "C:/Projects/machine_v2.sldasm",
                                 "overwrite": False
                             })
-        
+
                             if result["status"] == "success":
                                 print(f"Assembly saved to {result['file_path']}")
                             ```
-        
+
                         Note:
                             - Active document must be an assembly file
                             - When saving to new location, ensure path ends with .sldasm

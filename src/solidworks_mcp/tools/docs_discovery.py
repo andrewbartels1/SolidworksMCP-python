@@ -229,7 +229,7 @@ def _enumerate_typeinfo_members(typeinfo: Any) -> tuple[list[str], list[str]]:
     return sorted(methods), sorted(properties)
 
 
-def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
+def _discover_com_via_typeinfo(sw_app: Any) -> tuple[dict[str, Any], int, int]:
     """Enumerate ISldWorks methods/properties via ITypeInfo.
 
     Returns a COM index dict keyed by interface name, with the same shape as the rest of the
@@ -239,7 +239,7 @@ def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
         sw_app (Any): The sw app value.
 
     Returns:
-        dict[str, Any]: A dictionary containing the resulting values.
+        tuple[dict[str, Any], int, int]: com_index, total_methods, total_properties.
     """
     if not HAS_WIN32COM:
         return {}
@@ -297,7 +297,7 @@ def _discover_com_via_typeinfo(sw_app: Any) -> dict[str, Any]:
 def _discover_vba_references_via_registry() -> dict[str, Any]:
     """Enumerate VBA/TypeLib references via the Windows Registry.
 
-    Scans ``HKEY_CLASSES_ROOT\\TypeLib`` for entries whose name or GUID matches SolidWorks or
+    Scans HKEY_CLASSES_ROOT\\TypeLib for entries whose name or GUID matches SolidWorks or
     common Office/VBA libraries.
 
     Returns:
@@ -389,13 +389,10 @@ class SolidWorksDocsDiscovery:
 
         Args:
             output_dir (Path | None): The output dir value. Defaults to None.
-
-        Returns:
-            Any: The result produced by the operation.
         """
         self.output_dir = output_dir or Path(".generated/docs-index")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.sw_app = None
+        self.sw_app: Any = None
         self.index: dict[str, Any] = {
             "version": "1.0",
             "solidworks_version": None,
@@ -532,7 +529,7 @@ class SolidWorksDocsDiscovery:
     def discover_vba_references(self) -> dict[str, Any]:
         """Discover VBA/TypeLib references via the Windows Registry.
 
-        Scans ``HKEY_CLASSES_ROOT\\TypeLib`` for SolidWorks and common Office/VBA type libraries.
+        Scans HKEY_CLASSES_ROOT\\TypeLib for SolidWorks and common Office/VBA type libraries.
 
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.

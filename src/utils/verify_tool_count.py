@@ -1,5 +1,4 @@
-"""Verify tool count and documentation completeness.
-"""
+"""Verify tool count and documentation completeness."""
 
 import ast
 from pathlib import Path
@@ -7,10 +6,10 @@ from pathlib import Path
 
 def find_tools_in_file(file_path: Path) -> list[str]:
     """Find all @mcp.tool() decorated functions in a file.
-    
+
     Args:
         file_path (Path): Path to the target file.
-    
+
     Returns:
         list[str]: A list containing the resulting items.
     """
@@ -53,11 +52,11 @@ def find_tools_in_file(file_path: Path) -> list[str]:
 
 def check_function_docstring(file_path: Path, function_name: str) -> bool:
     """Check if a function has a proper Google-style docstring.
-    
+
     Args:
         file_path (Path): Path to the target file.
         function_name (str): The function name value.
-    
+
     Returns:
         bool: True if check function docstring, otherwise False.
     """
@@ -96,7 +95,7 @@ def check_function_docstring(file_path: Path, function_name: str) -> bool:
 
 def main():
     """Main verification function.
-    
+
     Returns:
         Any: The result produced by the operation.
     """
@@ -154,7 +153,7 @@ def main():
 
 def verify_tool_count():
     """Legacy function for backward compatibility.
-    
+
     Returns:
         Any: The result produced by the operation.
     """
