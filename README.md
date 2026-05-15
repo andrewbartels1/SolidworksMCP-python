@@ -8,19 +8,6 @@
 
 Python MCP server for SolidWorks automation with 109 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
-## Featured Tutorial: Build a U-Joint Assembly from Scratch
-
-Learn the MCP + Prefab UI workflow by building a complete 8-part mechanical assembly step-by-step.
-
-![U-bracket UI prompt flow demo](docs/assets/images/tutorials/u_bracket_ui_prompt_flow.gif)
-
-**[→ Start the U-Joint Assembly Tutorial](docs/getting-started/tutorials/u-joint-assembly-build.md)**
-
-Choose your learning path:
-- **UI-Assisted (recommended for learning):** Interactive Prefab dashboard with real-time 3D feedback
-- **Prompt-only (fastest):** Script-driven part generation with Python
-- **Hybrid:** Combine both approaches for flexibility
-
 ## Overview
 
 > ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python and UI implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
