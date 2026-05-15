@@ -2,11 +2,48 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import Mock
+import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock, patch
+
+import pytest
 
 from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from src.solidworks_mcp.adapters.solidworks import sketch
+
+
+class _MockVARIANT:
+    """Duck-typed stand-in for win32com.client.VARIANT used in constraint tests."""
+
+    def __init__(self, vt: int, entities: list) -> None:
+        self.value = entities
+
+
+@pytest.fixture()
+def mock_pywin32():
+    """Patch sys.modules so the lazy pywin32 import in _constraint_operation succeeds.
+
+    The real COM VARIANT marshalling only matters on Windows with SolidWorks.
+    Tests use a fake AddRelation that accepts any first argument, so the only
+    requirement is that ents_arg.value exposes the entity list.
+    """
+    pythoncom_mod = ModuleType("pythoncom")
+    pythoncom_mod.VT_ARRAY = 0x2000  # type: ignore[attr-defined]
+    pythoncom_mod.VT_DISPATCH = 9  # type: ignore[attr-defined]
+
+    win32com_client_mod = ModuleType("win32com.client")
+    win32com_client_mod.VARIANT = _MockVARIANT  # type: ignore[attr-defined]
+
+    win32com_mod = ModuleType("win32com")
+    win32com_mod.client = win32com_client_mod  # type: ignore[attr-defined]
+
+    patches = {
+        "pythoncom": pythoncom_mod,
+        "win32com": win32com_mod,
+        "win32com.client": win32com_client_mod,
+    }
+    with patch.dict(sys.modules, patches):
+        yield
 
 
 class _FakeSketchAdapter:
@@ -292,7 +329,7 @@ def test_add_sketch_constraint_unknown_entity_returns_error() -> None:
     assert "Unknown sketch entity 'L99'" in (result.error or "")
 
 
-def test_add_sketch_constraint_two_entity_happy_path() -> None:
+def test_add_sketch_constraint_two_entity_happy_path(mock_pywin32) -> None:
     constraint_obj = SimpleNamespace(Name="Perp1")
     adapter, add_relation, _sk = _make_constraint_adapter(
         add_relation_returns=constraint_obj
@@ -311,7 +348,7 @@ def test_add_sketch_constraint_two_entity_happy_path() -> None:
     assert rt_arg == 8
 
 
-def test_add_sketch_constraint_single_entity_horizontal() -> None:
+def test_add_sketch_constraint_single_entity_horizontal(mock_pywin32) -> None:
     adapter, add_relation, _sk = _make_constraint_adapter()
     result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "Horizontal")
     assert result.status == AdapterResultStatus.SUCCESS
@@ -319,7 +356,7 @@ def test_add_sketch_constraint_single_entity_horizontal() -> None:
     assert rt_arg == 4  # swConstraintType_HORIZONTAL
 
 
-def test_add_sketch_constraint_sw_rejection_returns_error() -> None:
+def test_add_sketch_constraint_sw_rejection_returns_error(mock_pywin32) -> None:
     adapter, *_ = _make_constraint_adapter(
         add_relation_raises=RuntimeError("incompatible geometry"),
     )
@@ -338,14 +375,14 @@ def test_add_sketch_constraint_no_active_sketch_returns_error() -> None:
     assert "No active sketch" in (result.error or "")
 
 
-def test_add_sketch_constraint_add_relation_returns_none_is_error() -> None:
+def test_add_sketch_constraint_add_relation_returns_none_is_error(mock_pywin32) -> None:
     adapter, *_ = _make_constraint_adapter(add_relation_returns=None)
     result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "fix")
     assert result.status == AdapterResultStatus.ERROR
     assert "rejected" in (result.error or "")
 
 
-def test_add_sketch_constraint_symmetric_happy_path() -> None:
+def test_add_sketch_constraint_symmetric_happy_path(mock_pywin32) -> None:
     constraint_obj = SimpleNamespace(Name="Sym1")
     adapter, add_relation, _sk = _make_constraint_adapter(
         add_relation_returns=constraint_obj
