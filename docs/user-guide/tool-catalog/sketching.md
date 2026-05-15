@@ -257,20 +257,76 @@ Add a geometric constraint/relation between sketch entities.
 
 **Prerequisite:** Active sketch edit mode with named entities
 
+**SolidWorks automation note:** Implemented via `ISketchRelationManager.AddRelation(entities, swConstraintType_e)`. Entities must be IDs returned from a previous `add_line` / `add_circle` / `add_arc` call (e.g. `"Line_1"`).
+
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `entity1` | `str` | ✅ | `` | First entity name or ID |
-| `entity2` | `str?` | — | `None` | Second entity name or ID (if required) |
-| `relation_type` | `str` | ✅ | `` | Relation type (parallel, perpendicular, tangent, coincident, etc.) |
+| `entity2` | `str?` | — | `None` | Second entity name or ID (for two-entity relations) |
+| `entity3` | `str?` | — | `None` | Third entity name or ID. **Required only for `symmetric`** (the centerline of symmetry, e.g. `"Centerline_5"`); must be `None` for all other relations |
+| `relation_type` | `str` | ✅ | `` | One of the supported relation names (see below) |
 
-**Sample call:**
+**Supported `relation_type` values (case-insensitive):**
+
+| Name | Entity arity | Notes |
+|------|--------------|-------|
+| `horizontal` | 1 or 2 | Line(s) horizontal; with 2 endpoints aligns them horizontally |
+| `vertical` | 1 or 2 | Line(s) vertical; with 2 endpoints aligns them vertically |
+| `parallel` | 2 | Two lines parallel |
+| `perpendicular` | 2 | Two lines at 90° |
+| `tangent` | 2 | Line ↔ arc/circle, or arc ↔ arc |
+| `coincident` | 2 | Two points (or point on entity) share location |
+| `concentric` | 2 | Two arcs/circles share center |
+| `equal` | 2 | Equal length (lines) or equal radius (arcs/circles) — maps to `swConstraintType_SAMELENGTH` |
+| `symmetric` | 3 | Two entities about a centerline; `entity3` must be the centerline ID returned by `add_centerline` |
+| `collinear` | 2 | Two lines on the same infinite line |
+| `fix` | 1 | Pin the entity in place |
+
+> **`entity3` is only used by `symmetric`.** All other relation types reject a non-null `entity3` with a clear error.
+
+**Sample call (two-entity perpendicular):**
 
 ```json
 {
-  "entity1": "Line1",
+  "entity1": "Line_1",
+  "entity2": "Line_2",
   "relation_type": "perpendicular"
+}
+```
+
+**Sample call (three-entity symmetric):**
+
+```json
+{
+  "entity1": "Line_1",
+  "entity2": "Line_2",
+  "entity3": "Centerline_5",
+  "relation_type": "symmetric"
+}
+```
+
+**Sample call (single-entity horizontal):**
+
+```json
+{
+  "entity1": "Line_1",
+  "relation_type": "horizontal"
+}
+```
+
+**Response shape on success:**
+
+```json
+{
+  "status": "success",
+  "constraint": {
+    "id": "Constraint_3",
+    "type": "perpendicular",
+    "entity1": "Line_1",
+    "entity2": "Line_2"
+  }
 }
 ```
 

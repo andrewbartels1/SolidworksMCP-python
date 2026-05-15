@@ -20,6 +20,7 @@ from .base import (
     AdapterResultStatus,
     SolidWorksAdapter,
 )
+from . import sw_type_info
 from .solidworks import (
     SolidWorksFeaturesMixin,
     SolidWorksIOMixin,
@@ -31,6 +32,7 @@ try:
     import pythoncom
     import pywintypes
     import win32com.client
+    from win32com.client import dynamic as _dynamic_module
 
     PYWIN32_AVAILABLE = True
 except ImportError:  # pragma: no cover
@@ -38,7 +40,22 @@ except ImportError:  # pragma: no cover
     pythoncom = SimpleNamespace()
     pywintypes = SimpleNamespace(com_error=Exception)
     win32com = SimpleNamespace(client=SimpleNamespace())
+    _dynamic_module = SimpleNamespace(Dispatch=lambda *_a, **_kw: None)
     PYWIN32_AVAILABLE = False
+
+
+def _dynamic_dispatch(arg: Any) -> Any:
+    """Forward to ``win32com.client.dynamic.Dispatch`` via the imported
+    module reference. Forces late binding so VARIANT pass-by-ref params
+    used by ``OpenDoc6`` keep working even when the makepy ``gen_py``
+    wrapper is loaded.
+
+    Tests that need to stub dispatch should monkeypatch
+    ``win32com.client.dynamic.Dispatch`` directly — the monkeypatch
+    propagates through this module reference because Python modules
+    are singletons.
+    """
+    return _dynamic_module.Dispatch(arg)
 
 
 from loguru import logger  # noqa: E402
@@ -153,9 +170,13 @@ class _ComSessionCoordinator:
         """
         self._adapter.swApp = None
         last_error: Exception | None = None
+        # Force late binding (dynamic.Dispatch) — the gen_py wrapper provides
+        # method-name lookup for flag_methods but early-bound dispatches
+        # reject VARIANT pass-by-ref params used by OpenDoc6 and friends.
         for _ in range(8):
             try:
-                app = win32com.client.GetActiveObject("SldWorks.Application")
+                raw = win32com.client.GetActiveObject("SldWorks.Application")
+                app = _dynamic_dispatch(raw) if raw is not None else None
                 if app is not None:
                     self._adapter.swApp = app
                     return app
@@ -163,7 +184,7 @@ class _ComSessionCoordinator:
                 last_error = active_error
 
             try:
-                app = win32com.client.Dispatch("SldWorks.Application")
+                app = _dynamic_dispatch("SldWorks.Application")
                 if app is not None:
                     self._adapter.swApp = app
                     return app
@@ -267,6 +288,9 @@ class _ComSessionCoordinator:
         try:
             self.initialize_com_apartment()
             app = await self.acquire_solidworks_application()
+            self._adapter._attempt(
+                lambda: sw_type_info.flag_methods(app, "ISldWorks"), default=0
+            )
             await self.wait_for_server_ready(app)
             app.Visible = True
             self.set_automation_preferences(app, interactive=False)

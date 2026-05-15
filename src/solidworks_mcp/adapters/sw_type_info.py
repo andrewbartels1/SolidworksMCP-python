@@ -72,9 +72,9 @@ def _load_wrapper() -> None:
     if not PYWIN32_AVAILABLE:
         return
 
-    # Try version numbers from newest to oldest. SW 2025 reports as 33,
-    # SW 2024 = 32, SW 2023 = 31, SW 2022 = 30.
-    for major in (33, 32, 31, 30):
+    # Try version numbers from newest to oldest. SW 3DEXPERIENCE R2026x = 34,
+    # SW 2025 = 33, SW 2024 = 32, SW 2023 = 31, SW 2022 = 30.
+    for major in (35, 34, 33, 32, 31, 30):
         try:
             mod = gencache.GetModuleForTypelib(SW_TLB_IID, 0, major, 0)
         except Exception:
@@ -85,12 +85,10 @@ def _load_wrapper() -> None:
 
     if _wrapper_module is None:
         # Gen_py wrapper not generated yet — try to generate now.
-        for major in (33, 32, 31, 30):
+        for major in (35, 34, 33, 32, 31, 30):
             try:
                 gencache.EnsureModule(SW_TLB_IID, 0, major, 0)
-                _wrapper_module = gencache.GetModuleForTypelib(
-                    SW_TLB_IID, 0, major, 0
-                )
+                _wrapper_module = gencache.GetModuleForTypelib(SW_TLB_IID, 0, major, 0)
                 if _wrapper_module is not None:
                     break
             except Exception:
@@ -101,7 +99,7 @@ def _load_wrapper() -> None:
             "SolidWorks gen_py wrapper not available; method flagging "
             "disabled. Zero-arg SW methods may raise TypeError. To fix, "
             "run: python -m win32com.client.makepy "
-            "\"C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldworks.tlb\""
+            '"C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldworks.tlb"'
         )
         return
 

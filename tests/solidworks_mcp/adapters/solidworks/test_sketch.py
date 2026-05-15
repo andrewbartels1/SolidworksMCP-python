@@ -203,11 +203,10 @@ def test_spline_error_when_create_returns_none() -> None:
     assert "Failed to create spline" in (result.error or "")
 
 
-def test_constraint_and_pattern_placeholders() -> None:
+def test_pattern_placeholders() -> None:
     adapter = _FakeSketchAdapter()
     adapter.currentSketchManager = object()
 
-    constraint = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "unknown")
     linear_pattern = sketch._sketch_linear_pattern_impl(
         adapter, ["Line_1"], 1, 0, 5.0, 3
     )
@@ -217,7 +216,6 @@ def test_constraint_and_pattern_placeholders() -> None:
     mirror = sketch._sketch_mirror_impl(adapter, ["Line_1"], "Centerline_1")
     offset = sketch._sketch_offset_impl(adapter, ["Line_1"], 2.5, True)
 
-    assert constraint.is_success and constraint.data.startswith("Constraint_unknown_")
     assert linear_pattern.is_success and linear_pattern.data.startswith(
         "LinearPattern_3x5.0_"
     )
@@ -226,6 +224,184 @@ def test_constraint_and_pattern_placeholders() -> None:
     )
     assert mirror.is_success and mirror.data.startswith("Mirror_Centerline_1_")
     assert offset.is_success and "_inward_" in offset.data
+
+
+def _make_constraint_adapter(
+    *,
+    add_relation_raises: Exception | None = None,
+    add_relation_returns: object = "sentinel-relation-obj",
+    no_active_sketch: bool = False,
+) -> tuple[_FakeSketchAdapter, Mock, Mock]:
+    """Build a fake adapter wired for the constraint code path.
+
+    The rewritten impl uses
+    ``ISketchRelationManager.AddRelation([entities], relation_type_enum)``
+    so the fake exposes ``currentModel.GetActiveSketch2().RelationManager``.
+    """
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    line1 = SimpleNamespace()
+    line2 = SimpleNamespace()
+    centerline = SimpleNamespace()
+    adapter._sketch_entities = {
+        "Line_1": line1,
+        "Line_2": line2,
+        "Centerline_3": centerline,
+    }
+
+    def _add_rel(_entities, _rt):
+        if add_relation_raises is not None:
+            raise add_relation_raises
+        return add_relation_returns
+
+    add_relation = Mock(side_effect=_add_rel)
+    relmgr = SimpleNamespace(AddRelation=add_relation)
+    sketch_obj = SimpleNamespace(RelationManager=relmgr)
+    adapter.currentModel = SimpleNamespace(
+        GetActiveSketch2=lambda: None if no_active_sketch else sketch_obj,
+    )
+    return adapter, add_relation, sketch_obj
+
+
+def test_add_sketch_constraint_requires_active_sketch() -> None:
+    adapter = _FakeSketchAdapter()
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "parallel")
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active sketch" in (result.error or "")
+
+
+def test_add_sketch_constraint_requires_active_model() -> None:
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "parallel")
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active model" in (result.error or "")
+
+
+def test_add_sketch_constraint_unsupported_relation_type() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", "Line_2", "unknown")
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unsupported relation type 'unknown'" in (result.error or "")
+
+
+def test_add_sketch_constraint_unknown_entity_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(adapter, "L99", None, "horizontal")
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unknown sketch entity 'L99'" in (result.error or "")
+
+
+def test_add_sketch_constraint_two_entity_happy_path() -> None:
+    constraint_obj = SimpleNamespace(Name="Perp1")
+    adapter, add_relation, _sk = _make_constraint_adapter(
+        add_relation_returns=constraint_obj
+    )
+
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "perpendicular"
+    )
+
+    assert result.status == AdapterResultStatus.SUCCESS
+    assert result.data.startswith("Constraint_")
+    assert adapter._sketch_entities[result.data] is constraint_obj
+    # AddRelation is called with the VARIANT entity array and PERPENDICULAR=8
+    assert add_relation.call_count == 1
+    _ents_arg, rt_arg = add_relation.call_args.args
+    assert rt_arg == 8
+
+
+def test_add_sketch_constraint_single_entity_horizontal() -> None:
+    adapter, add_relation, _sk = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "Horizontal")
+    assert result.status == AdapterResultStatus.SUCCESS
+    _ents_arg, rt_arg = add_relation.call_args.args
+    assert rt_arg == 4  # swConstraintType_HORIZONTAL
+
+
+def test_add_sketch_constraint_sw_rejection_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter(
+        add_relation_raises=RuntimeError("incompatible geometry"),
+    )
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", "Line_2", "parallel")
+    assert result.status == AdapterResultStatus.ERROR
+    msg = result.error or ""
+    assert "rejected" in msg and "parallel" in msg
+    assert "Line_1" in msg and "Line_2" in msg
+    assert "incompatible geometry" in msg
+
+
+def test_add_sketch_constraint_no_active_sketch_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter(no_active_sketch=True)
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "fix")
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active sketch" in (result.error or "")
+
+
+def test_add_sketch_constraint_add_relation_returns_none_is_error() -> None:
+    adapter, *_ = _make_constraint_adapter(add_relation_returns=None)
+    result = sketch._add_sketch_constraint_impl(adapter, "Line_1", None, "fix")
+    assert result.status == AdapterResultStatus.ERROR
+    assert "rejected" in (result.error or "")
+
+
+def test_add_sketch_constraint_symmetric_happy_path() -> None:
+    constraint_obj = SimpleNamespace(Name="Sym1")
+    adapter, add_relation, _sk = _make_constraint_adapter(
+        add_relation_returns=constraint_obj
+    )
+
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "symmetric", "Centerline_3"
+    )
+
+    assert result.status == AdapterResultStatus.SUCCESS
+    assert result.data.startswith("Constraint_")
+    assert adapter._sketch_entities[result.data] is constraint_obj
+    ents_arg, rt_arg = add_relation.call_args.args
+    assert rt_arg == 11  # swConstraintType_SYMMETRIC
+    # Three-element entity list, in order: entity1, entity2, entity3
+    assert len(ents_arg.value) == 3
+
+
+def test_add_sketch_constraint_symmetric_missing_entity3_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "symmetric", None
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    msg = result.error or ""
+    assert "symmetric" in msg
+    assert "entity3" in msg
+
+
+def test_add_sketch_constraint_symmetric_missing_entity2_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", None, "symmetric", "Centerline_3"
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    assert "entity2" in (result.error or "")
+
+
+def test_add_sketch_constraint_entity3_rejected_for_non_symmetric() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "perpendicular", "Centerline_3"
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    msg = result.error or ""
+    assert "does not accept entity3" in msg
+    assert "perpendicular" in msg
+
+
+def test_add_sketch_constraint_unknown_entity3_returns_error() -> None:
+    adapter, *_ = _make_constraint_adapter()
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "symmetric", "CL_99"
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unknown sketch entity 'CL_99'" in (result.error or "")
 
 
 def test_exit_sketch_warning_and_success_paths() -> None:

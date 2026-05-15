@@ -715,7 +715,11 @@ class SolidWorksAdapter(ABC):
         )
 
     async def add_sketch_constraint(
-        self, entity1: str, entity2: str | None, relation_type: str
+        self,
+        entity1: str,
+        entity2: str | None,
+        relation_type: str,
+        entity3: str | None = None,
     ) -> AdapterResult[str]:
         """Apply a geometric constraint between sketch entities.
 
@@ -723,6 +727,9 @@ class SolidWorksAdapter(ABC):
             entity1 (str): The entity1 value.
             entity2 (str | None): The entity2 value.
             relation_type (str): The relation type value.
+            entity3 (str | None): Third entity ID — only used by the
+                ``symmetric`` relation (the centerline of symmetry). All
+                other relation types reject a non-null ``entity3``.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

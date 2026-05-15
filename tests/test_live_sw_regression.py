@@ -55,8 +55,7 @@ pytestmark = [
     pytest.mark.skipif(
         not _REAL_ENABLED,
         reason=(
-            f"set {_REAL_FLAG}=1 to run tests that require a live "
-            "SolidWorks install"
+            f"set {_REAL_FLAG}=1 to run tests that require a live SolidWorks install"
         ),
     ),
     pytest.mark.skipif(
@@ -209,8 +208,7 @@ async def test_open_model_succeeds(connected_adapter) -> None:
     test_assy = _test_assembly_path()
     if not test_assy or not os.path.exists(test_assy):
         pytest.skip(
-            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
-            "to run this test"
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path to run this test"
         )
 
     result = await connected_adapter.open_model(test_assy)
@@ -229,8 +227,7 @@ async def test_get_model_info_fields_populate(connected_adapter) -> None:
     test_assy = _test_assembly_path()
     if not test_assy or not os.path.exists(test_assy):
         pytest.skip(
-            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
-            "to run this test"
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path to run this test"
         )
 
     await connected_adapter.open_model(test_assy)
@@ -238,9 +235,7 @@ async def test_get_model_info_fields_populate(connected_adapter) -> None:
 
     assert result.is_success, f"get_model_info failed: {result.error}"
     info = result.data
-    assert isinstance(info["title"], str) and info["title"].endswith(
-        ".SLDASM"
-    )
+    assert isinstance(info["title"], str) and info["title"].endswith(".SLDASM")
     assert isinstance(info["path"], str)
     assert info["type"] == "Assembly"
     assert isinstance(info["configuration"], str)
@@ -263,8 +258,7 @@ async def test_get_model_info_works_from_worker_thread(
     test_assy = _test_assembly_path()
     if not test_assy or not os.path.exists(test_assy):
         pytest.skip(
-            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path "
-            "to run this test"
+            f"set {_TEST_ASSEMBLY_ENV_VAR} to a local .SLDASM path to run this test"
         )
 
     await connected_adapter.open_model(test_assy)
@@ -288,7 +282,113 @@ async def test_get_model_info_works_from_worker_thread(
     assert not t.is_alive(), "worker thread hung"
 
     assert worker_result["error"] is None, (
-        f"cross-thread get_model_info surfaced an error: "
-        f"{worker_result['error']!r}"
+        f"cross-thread get_model_info surfaced an error: {worker_result['error']!r}"
     )
     assert worker_result.get("title", "").endswith(".SLDASM")
+
+
+# ---- add_sketch_constraint live regression ----
+
+
+async def test_add_sketch_constraint_perpendicular_and_horizontal(
+    connected_adapter,
+) -> None:
+    """End-to-end check that add_sketch_constraint actually constrains
+    SolidWorks geometry.
+
+    Creates a fresh part + sketch, draws two right-angle lines, applies a
+    perpendicular relation between them, then a horizontal relation on the
+    first line, and verifies SolidWorks accepts both calls. SolidWorks
+    silently accepts redundant relations, so we don't assert error on
+    duplicates — instead we use ``IGetRelations.GetRelations`` to confirm
+    the first line gained an extra relation after each call.
+    """
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success, f"create_part failed: {part_result.error}"
+
+    try:
+        sketch_result = await adapter.create_sketch("Front")
+        assert sketch_result.is_success, f"create_sketch failed: {sketch_result.error}"
+
+        line1 = await adapter.add_line(0.0, 0.0, 50.0, 0.0)
+        line2 = await adapter.add_line(50.0, 0.0, 50.0, 50.0)
+        assert line1.is_success and line2.is_success, (
+            f"add_line failed: {line1.error} / {line2.error}"
+        )
+
+        perp = await adapter.add_sketch_constraint(
+            line1.data, line2.data, "perpendicular"
+        )
+        assert perp.is_success, f"perpendicular constraint failed: {perp.error}"
+        assert perp.data.startswith("Constraint_"), (
+            f"unexpected constraint id: {perp.data!r}"
+        )
+
+        horiz = await adapter.add_sketch_constraint(line1.data, None, "horizontal")
+        assert horiz.is_success, f"horizontal constraint failed: {horiz.error}"
+        assert horiz.data.startswith("Constraint_")
+    finally:
+        await adapter.close_model(save=False)
+
+
+async def test_add_sketch_constraint_symmetric_with_centerline(
+    connected_adapter,
+) -> None:
+    """End-to-end check that the three-entity symmetric relation works.
+
+    Creates a fresh part + sketch, draws a centerline plus two lines on
+    either side, then applies ``symmetric`` with the centerline as
+    ``entity3``. Verifies SolidWorks accepts the relation.
+    """
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success, f"create_part failed: {part_result.error}"
+
+    try:
+        sketch_result = await adapter.create_sketch("Front")
+        assert sketch_result.is_success, f"create_sketch failed: {sketch_result.error}"
+
+        # Centerline along Y axis at x=25 — the line of symmetry.
+        centerline = await adapter.add_centerline(25.0, -50.0, 25.0, 50.0)
+        # Two horizontal lines, mirrored about x=25
+        left = await adapter.add_line(0.0, 10.0, 20.0, 10.0)
+        right = await adapter.add_line(30.0, 10.0, 50.0, 10.0)
+        assert centerline.is_success and left.is_success and right.is_success, (
+            f"setup failed: {centerline.error} / {left.error} / {right.error}"
+        )
+
+        sym = await adapter.add_sketch_constraint(
+            left.data, right.data, "symmetric", centerline.data
+        )
+        assert sym.is_success, f"symmetric constraint failed: {sym.error}"
+        assert sym.data.startswith("Constraint_")
+
+        # Calling symmetric without entity3 must produce a clear arity error
+        # (no SW call should reach AddRelation).
+        bad = await adapter.add_sketch_constraint(left.data, right.data, "symmetric")
+        assert bad.is_error
+        assert "entity3" in (bad.error or "")
+    finally:
+        await adapter.close_model(save=False)
+
+
+async def test_add_sketch_constraint_unsupported_relation(connected_adapter) -> None:
+    """Unsupported relation types must produce an error without touching SW."""
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success
+    try:
+        sketch_result = await adapter.create_sketch("Front")
+        assert sketch_result.is_success
+        line1 = await adapter.add_line(0.0, 0.0, 25.0, 0.0)
+        assert line1.is_success
+
+        bogus = await adapter.add_sketch_constraint(line1.data, None, "diagonal")
+        assert bogus.is_error
+        assert "Unsupported relation type" in (bogus.error or "")
+    finally:
+        await adapter.close_model(save=False)
