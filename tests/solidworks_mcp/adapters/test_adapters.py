@@ -2999,12 +2999,15 @@ class TestPyWin32AdapterAdditionalCoverage:
         """Test connect failure and com error branch."""
         adapter = self._build_adapter(monkeypatch)
 
-        # CoInitialize now lives in ComExecutor, not connect(). Simulate a
-        # connect failure by making _com.run raise on that call.
-        adapter._com.run = MagicMock(side_effect=RuntimeError("boom"))
+        # connect() delegates to _session_coordinator.connect(), which wraps
+        # any exception from initialize_com_apartment as SolidWorksMCPError.
+        adapter._session_coordinator.initialize_com_apartment = MagicMock(
+            side_effect=RuntimeError("boom")
+        )
         with pytest.raises(SolidWorksMCPError, match="Failed to connect"):
             await adapter.connect()
-        adapter._com.run = lambda fn, timeout=None: fn()  # restore for COM-error test
+        # Restore so the adapter is usable for the COM-error branch test below.
+        adapter._session_coordinator.initialize_com_apartment = MagicMock()
 
         monkeypatch.setattr(
             "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
