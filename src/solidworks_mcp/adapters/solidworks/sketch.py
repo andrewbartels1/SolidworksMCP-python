@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from typing import Any, cast
 
@@ -991,18 +992,34 @@ def _add_sketch_constraint_impl(
             )
 
         # pywin32 won't auto-marshal a Python list of CDispatch entities to a
-        # SAFEARRAY. The VT_ARRAY|VT_DISPATCH variant is the shape SolidWorks
-        # accepts. Import is lazy so the module still imports in mock/CI
-        # environments without pywin32.
+        # SAFEARRAY — the VT_ARRAY|VT_DISPATCH variant is the shape SolidWorks
+        # accepts. Mirror the lazy-import dance used for sw_type_info above so
+        # non-Windows CI (where pywin32 isn't installed) still exercises this
+        # call path; fake adapters used in unit tests accept any sequence.
         try:
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
-        except ImportError as exc:  # pragma: no cover
-            raise Exception(
-                "pywin32 is required for add_sketch_constraint on a real adapter"
-            ) from exc
+        except ImportError:
+            _pythoncom = None  # type: ignore[assignment]
+            _VARIANT = None  # type: ignore[assignment]
 
-        ents_variant = _VARIANT(_pythoncom.VT_ARRAY | _pythoncom.VT_DISPATCH, entities)
+        ents_variant: Any
+        if _pythoncom is not None and _VARIANT is not None:
+            ents_variant = _VARIANT(
+                _pythoncom.VT_ARRAY | _pythoncom.VT_DISPATCH, entities
+            )
+        elif sys.platform == "win32":
+            # On Windows the real adapter feeds entities to a live COM method
+            # that requires the SAFEARRAY shape — fail clearly rather than let
+            # AddRelation surface a low-level "server threw an exception" COM
+            # error from an unwrappable list argument.
+            raise Exception(
+                "pywin32 is required for add_sketch_constraint on Windows"
+            )
+        else:
+            # Non-Windows: this branch is exercised only by mocked unit tests
+            # whose fake AddRelation accepts any sequence.
+            ents_variant = entities
         sketch_relation, add_err = adapter._attempt_with_error(
             lambda: relmgr.AddRelation(ents_variant, relation_type_enum)
         )
