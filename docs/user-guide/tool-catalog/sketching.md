@@ -279,9 +279,10 @@ Add a geometric constraint/relation between sketch entities.
 | `coincident` | 2 | Two points (or point on entity) share location |
 | `concentric` | 2 | Two arcs/circles share center |
 | `equal` | 2 | Equal length (lines) or equal radius (arcs/circles) — maps to `swConstraintType_SAMELENGTH` |
-| `symmetric` | 3 | Two entities about a centerline (selection order: ent, ent, centerline) |
 | `collinear` | 2 | Two lines on the same infinite line |
 | `fix` | 1 | Pin the entity in place |
+
+> **`symmetric` is not currently exposed.** The SolidWorks symmetric relation needs three selections (two entities + a centerline), but the `AddRelationInput` schema only accepts `entity1` and `entity2`. Tracked for a follow-up that extends the schema with a third entity slot.
 
 **Sample call (two-entity perpendicular):**
 

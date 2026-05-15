@@ -99,6 +99,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._features: dict[str, SolidWorksFeature] = {}
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
+        # Tracks IDs returned by add_line/add_circle/add_centerline/add_rectangle
+        # so add_sketch_constraint can validate entity1/entity2 the same way
+        # the real adapter validates against its sketch-entity registry.
+        self._sketch_entity_ids: set[str] = set()
         self._dimensions: dict[str, float] = {}
         self._operation_count = 0
 
@@ -828,6 +832,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._operation_count += 1
 
         line_id = f"Line{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(line_id)
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -858,6 +863,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._operation_count += 1
 
         centerline_id = f"Centerline{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(centerline_id)
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -887,6 +893,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._operation_count += 1
 
         circle_id = f"Circle{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(circle_id)
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -917,6 +924,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._operation_count += 1
 
         rect_id = f"Rectangle{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(rect_id)
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -951,6 +959,26 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 error=(
                     f"Unsupported relation type '{relation_type}'. "
                     f"Supported: {supported}"
+                ),
+            )
+
+        # Validate entity IDs against the in-process sketch-entity registry
+        # so the mock surfaces the same "Unknown sketch entity" error as the
+        # real adapter (which checks adapter._sketch_entities).
+        if entity1 not in self._sketch_entity_ids:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown sketch entity '{entity1}'. Use IDs returned by "
+                    "add_line/add_arc/add_circle."
+                ),
+            )
+        if entity2 is not None and entity2 not in self._sketch_entity_ids:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown sketch entity '{entity2}'. Use IDs returned by "
+                    "add_line/add_arc/add_circle."
                 ),
             )
 

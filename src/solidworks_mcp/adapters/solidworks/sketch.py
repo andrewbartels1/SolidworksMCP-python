@@ -20,10 +20,13 @@ RELATION_NAME_MAP: dict[str, int] = {
     "perpendicular": 8,
     "coincident": 9,
     "concentric": 10,
-    "symmetric": 11,
     "equal": 14,  # swConstraintType_SAMELENGTH
     "fix": 17,  # swConstraintType_FIXED
     "collinear": 27,  # swConstraintType_COLINEAR (single-l spelling)
+    # NOTE: swConstraintType_SYMMETRIC (11) is intentionally omitted — it
+    # requires a third selection (the centerline of symmetry) and the
+    # AddRelationInput schema only carries entity1/entity2. A future API
+    # extension that accepts a centerline ID can add it back.
 }
 
 
