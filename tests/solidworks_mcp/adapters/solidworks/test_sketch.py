@@ -360,8 +360,11 @@ def test_add_sketch_constraint_symmetric_happy_path() -> None:
     assert adapter._sketch_entities[result.data] is constraint_obj
     ents_arg, rt_arg = add_relation.call_args.args
     assert rt_arg == 11  # swConstraintType_SYMMETRIC
-    # Three-element entity list, in order: entity1, entity2, entity3
-    assert len(ents_arg.value) == 3
+    # Three-element entity list, in order: entity1, entity2, entity3.
+    # On Windows the impl wraps entities in a VARIANT(value=[...]); on
+    # non-Windows CI without pywin32 it falls back to a plain list.
+    entities_seq = getattr(ents_arg, "value", ents_arg)
+    assert len(entities_seq) == 3
 
 
 def test_add_sketch_constraint_symmetric_missing_entity3_returns_error() -> None:
