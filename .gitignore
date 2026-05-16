@@ -89,3 +89,6 @@ mypy_*
 uv.lock
 .venv
 .venv/
+
+# Live-demo artefacts produced by scripts/demo_phase0_sketches.py
+out/

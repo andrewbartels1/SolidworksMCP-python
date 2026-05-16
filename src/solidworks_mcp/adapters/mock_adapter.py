@@ -99,9 +99,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._features: dict[str, SolidWorksFeature] = {}
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
-        # Tracks IDs returned by add_line/add_circle/add_centerline/add_rectangle
-        # so add_sketch_constraint can validate entity1/entity2 the same way
-        # the real adapter validates against its sketch-entity registry.
+        # Tracks IDs returned by add_line/add_arc/add_circle/add_centerline/
+        # add_rectangle/add_spline so add_sketch_constraint can validate
+        # entity1/entity2 the same way the real adapter validates against
+        # its sketch-entity registry.
         self._sketch_entity_ids: set[str] = set()
         self._dimensions: dict[str, float] = {}
         self._operation_count = 0
@@ -862,12 +863,57 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["sketch_operation"] / 2)
         self._operation_count += 1
 
-        centerline_id = f"Centerline{random.randint(1000, 9999)}"
+        centerline_id = f"Centerline_{random.randint(1000, 9999)}"
         self._sketch_entity_ids.add(centerline_id)
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=centerline_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
+        """Mock adding a NURBS spline through the supplied points.
+
+        Args:
+            points (list[dict[str, float]]): Ordered control points with
+                ``"x"`` / ``"y"`` keys. Minimum 2 points.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        if len(points) < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="add_spline requires at least 2 points",
+            )
+        # Match the real adapter's point contract: each dict must carry
+        # both ``x`` and ``y`` keys, or the live impl raises KeyError on
+        # ``point["x"]``. Validating here keeps mock/live parity so tests
+        # that pass against the mock won't fail live on malformed input.
+        for index, point in enumerate(points):
+            if not isinstance(point, dict) or "x" not in point or "y" not in point:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"add_spline point at index {index} is missing "
+                        "required 'x' and/or 'y' keys"
+                    ),
+                )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        spline_id = f"Spline{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(spline_id)
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=spline_id,
             execution_time=self._delays["sketch_operation"] / 2,
         )
 
@@ -901,6 +947,45 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["sketch_operation"] / 2,
         )
 
+    async def add_arc(
+        self,
+        center_x: float,
+        center_y: float,
+        start_x: float,
+        start_y: float,
+        end_x: float,
+        end_y: float,
+    ) -> AdapterResult[str]:
+        """Mock adding a circular arc to sketch.
+
+        Args:
+            center_x (float): Arc centre X.
+            center_y (float): Arc centre Y.
+            start_x (float): Arc start point X.
+            start_y (float): Arc start point Y.
+            end_x (float): Arc end point X.
+            end_y (float): Arc end point Y.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        arc_id = f"Arc{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(arc_id)
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=arc_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
     async def add_rectangle(
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:
@@ -930,6 +1015,344 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data=rect_id,
             execution_time=self._delays["sketch_operation"],
+        )
+
+    async def add_ellipse(
+        self,
+        center_x: float,
+        center_y: float,
+        major_axis: float,
+        minor_axis: float,
+    ) -> AdapterResult[str]:
+        """Mock adding an axis-aligned ellipse to sketch.
+
+        Args:
+            center_x (float): Ellipse centre X in millimetres.
+            center_y (float): Ellipse centre Y in millimetres.
+            major_axis (float): Full major-axis length in millimetres.
+            minor_axis (float): Full minor-axis length in millimetres.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        ellipse_id = f"Ellipse_{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(ellipse_id)
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=ellipse_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def add_polygon(
+        self, center_x: float, center_y: float, radius: float, sides: int
+    ) -> AdapterResult[str]:
+        """Mock adding a regular polygon to sketch.
+
+        Args:
+            center_x (float): Polygon centre X in millimetres.
+            center_y (float): Polygon centre Y in millimetres.
+            radius (float): Circumradius in millimetres (distance from centre
+                to each vertex; matches the real adapter's
+                ``CreatePolygon(..., Inscribed=True)`` semantics).
+            sides (int): Number of polygon sides.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        # ID format mirrors the real PyWin32 adapter, which uses
+        # ``_register_sketch_entity("Polygon", ...)`` (counter-based) so the
+        # returned ID is a valid input to downstream sketch_linear_pattern /
+        # sketch_circular_pattern / sketch_mirror / sketch_offset calls.
+        polygon_id = f"Polygon_{len(self._sketch_entity_ids) + 1}"
+        self._sketch_entity_ids.add(polygon_id)
+        _ = sides  # informational only; the sides count is no longer part of the ID
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=polygon_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def sketch_linear_pattern(
+        self,
+        entities: list[str],
+        direction_x: float,
+        direction_y: float,
+        spacing: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Mock creating a linear sketch pattern.
+
+        Mirrors the real adapter's validation rules — empty entities,
+        count < 2, non-positive spacing, and a zero direction vector each
+        produce a clear error without "creating" a pattern.
+
+        Args:
+            entities (list[str]): Seed entity IDs.
+            direction_x (float): Pattern direction X component.
+            direction_y (float): Pattern direction Y component.
+            spacing (float): Distance between instances in millimetres.
+            count (int): Total number of instances (including the seed).
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        if not entities:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_linear_pattern requires at least one entity",
+            )
+        if count < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_linear_pattern requires count >= 2",
+            )
+        if spacing <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_linear_pattern requires spacing > 0",
+            )
+        if direction_x == 0 and direction_y == 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "sketch_linear_pattern requires a non-zero direction vector"
+                ),
+            )
+        for ent in entities:
+            if ent not in self._sketch_entity_ids:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unknown sketch entity '{ent}'. Use IDs returned by "
+                        "add_line/add_arc/add_circle/add_spline/add_centerline."
+                    ),
+                )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        pattern_id = f"LinearPattern_{count}x{spacing}_{random.randint(1000, 9999)}"
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=pattern_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def sketch_circular_pattern(
+        self,
+        entities: list[str],
+        center_x: float,
+        center_y: float,
+        angle: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Mock creating a circular sketch pattern.
+
+        Args:
+            entities (list[str]): Seed entity IDs.
+            center_x (float): Pattern centre X in millimetres.
+            center_y (float): Pattern centre Y in millimetres.
+            angle (float): Total swept angle in degrees.
+            count (int): Total number of instances (including the seed).
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        if not entities:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_circular_pattern requires at least one entity",
+            )
+        if count < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_circular_pattern requires count >= 2",
+            )
+        if angle <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_circular_pattern requires angle > 0",
+            )
+        # Mirror the real adapter — CreateCircularSketchStepAndRepeat
+        # cannot honour a non-origin pattern centre without selecting a
+        # separate sketch point as the rotation axis.
+        if center_x != 0.0 or center_y != 0.0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "circular pattern center must be (0, 0) — non-origin "
+                    "centers not yet supported by SW API"
+                ),
+            )
+        for ent in entities:
+            if ent not in self._sketch_entity_ids:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unknown sketch entity '{ent}'. Use IDs returned by "
+                        "add_line/add_arc/add_circle/add_spline/add_centerline."
+                    ),
+                )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        pattern_id = (
+            f"CircularPattern_{count}x{angle}deg_{random.randint(1000, 9999)}"
+        )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=pattern_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def sketch_mirror(
+        self, entities: list[str], mirror_line: str
+    ) -> AdapterResult[str]:
+        """Mock mirroring sketch entities about a centerline.
+
+        Args:
+            entities (list[str]): IDs of segments to mirror.
+            mirror_line (str): ID of the centerline to mirror across.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        if not entities:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_mirror requires at least one entity",
+            )
+        if not mirror_line:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "sketch_mirror requires a mirror_line entity ID "
+                    "(add_centerline)"
+                ),
+            )
+        if mirror_line not in self._sketch_entity_ids:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown mirror_line entity '{mirror_line}'. Use the "
+                    "ID returned by add_centerline."
+                ),
+            )
+        # Mirror the real adapter — IModelDoc2::SketchMirror needs a
+        # centreline as the mirror axis; other segments silently no-op.
+        if not mirror_line.startswith("Centerline_"):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"mirror_line must be a centerline (from add_centerline), "
+                    f"got '{mirror_line}'"
+                ),
+            )
+        for ent in entities:
+            if ent not in self._sketch_entity_ids:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unknown sketch entity '{ent}'. Use IDs returned by "
+                        "add_line/add_arc/add_circle/add_spline/add_centerline."
+                    ),
+                )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        mirror_id = f"Mirror_{mirror_line}_{random.randint(1000, 9999)}"
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=mirror_id,
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def sketch_offset(
+        self,
+        entities: list[str],
+        offset_distance: float,
+        reverse_direction: bool,
+    ) -> AdapterResult[str]:
+        """Mock offsetting sketch entities by a fixed distance.
+
+        Args:
+            entities (list[str]): IDs of segments to offset.
+            offset_distance (float): Distance in millimetres. Must be > 0.
+            reverse_direction (bool): Flip the offset direction.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        if not entities:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="sketch_offset requires at least one entity",
+            )
+        if offset_distance <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "sketch_offset requires offset_distance > 0 — use "
+                    "reverse_direction to flip the side"
+                ),
+            )
+        for ent in entities:
+            if ent not in self._sketch_entity_ids:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unknown sketch entity '{ent}'. Use IDs returned by "
+                        "add_line/add_arc/add_circle/add_spline/add_centerline."
+                    ),
+                )
+
+        await asyncio.sleep(self._delays["sketch_operation"] / 2)
+        self._operation_count += 1
+
+        direction = "inward" if reverse_direction else "outward"
+        offset_id = (
+            f"Offset_{offset_distance}_{direction}_{random.randint(1000, 9999)}"
+        )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=offset_id,
+            execution_time=self._delays["sketch_operation"] / 2,
         )
 
     async def add_sketch_constraint(
@@ -999,7 +1422,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     status=AdapterResultStatus.ERROR,
                     error=(
                         f"Unknown sketch entity '{ent}'. Use IDs returned by "
-                        "add_line/add_arc/add_circle."
+                        "add_line/add_arc/add_circle/add_spline/add_centerline."
                     ),
                 )
 
