@@ -90,5 +90,5 @@ uv.lock
 .venv
 .venv/
 
-# Live-demo artefacts produced by scripts/demo_phase0_sketches.py
+# Live-demo artefacts produced by scripts/demo_sketches.py
 out/

@@ -962,7 +962,7 @@ class TestRealCircularPatternImpl:
         Regression: ``CreateCircularSketchStepAndRepeat`` silently returns
         ``False`` on negative angle values — both the live
         ``test_sketch_circular_pattern_creates_real_pattern`` regression
-        and the Phase-0 live demo failed without this normalisation.
+        and the live demo failed without this normalisation.
         """
         from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 

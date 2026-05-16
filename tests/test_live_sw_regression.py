@@ -1397,7 +1397,7 @@ async def test_add_centerline_no_active_sketch_returns_error(
 #
 # These tests pipe the ID returned by each ``add_*`` op into a downstream
 # consumer (``sketch_*_pattern`` / ``sketch_mirror`` / ``sketch_offset``).
-# The whole shape of every Phase-0 bug I fixed in PR #22 was "creator's
+# The whole shape of every bug fixed in PR #22 was "creator's
 # isolated test passed, consumer's isolated test passed, but the
 # combination failed".  These tests pin the contract on the live adapter
 # so a future regression in either side breaks here, not in a user demo.
@@ -1723,7 +1723,7 @@ async def test_arc_id_flows_into_mirror_and_offset_live(
     connected_adapter,
 ) -> None:
     """``add_arc`` ID -> ``sketch_mirror`` AND ``sketch_offset`` from the
-    same arc (the bottom-band shape from the Phase-0 live demo)."""
+    same arc (the bottom-band shape from the live demo)."""
     adapter = connected_adapter
 
     part_result = await adapter.create_part()

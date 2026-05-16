@@ -1,4 +1,4 @@
-r"""Live end-to-end demo for all nine Phase-0 sketch operations.
+r"""Live end-to-end demo for all nine sketch operations.
 
 Builds a single decorative-plate part that exercises every method delivered
 under upstream issue #5 / fork issue #1:
@@ -26,7 +26,7 @@ On success the script saves the resulting part and an isometric PNG to
 ``out/`` and exits 0.  Run with the project virtualenv on a Windows box that
 already has SolidWorks open::
 
-    .\.venv\Scripts\python.exe scripts\demo_phase0_sketches.py
+    .\.venv\Scripts\python.exe scripts\demo_sketches.py
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ async def build_demo_part(out_dir: Path) -> dict[str, str]:
 
         # ------------------------------------------------------------------
         # Feature 2: single decorative sketch on the same Front plane that
-        # exercises every one of the nine Phase-0 sketch operations.  Kept
+        # exercises every one of the nine sketch operations.  Kept
         # un-extruded so the wireframe shows up cleanly against the base
         # body in the screenshot.
         # ------------------------------------------------------------------
@@ -176,10 +176,10 @@ async def build_demo_part(out_dir: Path) -> dict[str, str]:
         # a warning.  ``_check`` raises which propagates back to ``main()``
         # and returns a non-zero exit code.
         # ------------------------------------------------------------------
-        part_path = (out_dir / "phase0_demo.SLDPRT").resolve()
+        part_path = (out_dir / "sketch_demo.SLDPRT").resolve()
         _check(f"save_file -> {part_path}", await adapter.save_file(str(part_path)))
 
-        img_path = (out_dir / "phase0_demo.png").resolve()
+        img_path = (out_dir / "sketch_demo.png").resolve()
         _check(
             f"export_image -> {img_path}",
             await adapter.export_image(
