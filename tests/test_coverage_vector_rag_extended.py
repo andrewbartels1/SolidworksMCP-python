@@ -211,9 +211,7 @@ class TestVectorRAGIndexOperations:
     def test_ingest_from_url(self, temp_rag_dir: Path, patched_embeddings) -> None:
         """Test that ingest_text accepts a URL source string."""
         idx = VectorRAGIndex(namespace="url_test", rag_dir=temp_rag_dir)
-        count = idx.ingest_text(
-            "Content from URL", source="https://example.com/doc.md"
-        )
+        count = idx.ingest_text("Content from URL", source="https://example.com/doc.md")
         assert count > 0
 
 
