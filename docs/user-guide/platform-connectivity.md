@@ -24,12 +24,17 @@ This guide explains how to run SolidWorks MCP when your day-to-day workflow is L
     .\.venv\Scripts\python.exe -m solidworks_mcp.server --mode remote --host 0.0.0.0 --port 8000
     ```
 
-Equivalent local stdio start:
+Equivalent local stdio start (open SolidWorks first):
 
 === "Windows (PowerShell)"
     ```powershell
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
     ```
+
+!!! warning "Mock mode"
+    Running `run-mcp.ps1` **without** `--real` starts the server in mock mode —
+    all tool responses are simulated and nothing touches SolidWorks.
+    Always pass `--real --year <year>` for live COM automation.
 
 ## Connect From Linux / WSL Client
 

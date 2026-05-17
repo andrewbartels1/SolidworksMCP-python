@@ -81,11 +81,15 @@ Start server manually:
 .\.venv\Scripts\python.exe -m solidworks_mcp.server
 ```
 
-Or use the helper script:
+Or use the helper script (open SolidWorks first):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
 ```
+
+> **Mock mode warning** — running `run-mcp.ps1` without `--real` starts the
+> server in mock mode.  All tool responses are simulated; nothing touches
+> SolidWorks.  Always pass `--real --year <year>` for live automation.
 
 ## Development Commands
 

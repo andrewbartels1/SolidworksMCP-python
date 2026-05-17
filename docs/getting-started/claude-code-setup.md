@@ -56,16 +56,18 @@ claude --version
 
 Use this when Claude Code, the MCP server, and SolidWorks all run on the same Windows machine.
 
+!!! danger "Always pass `--real` — omitting it silently runs in mock mode"
+    Without `--real`, every tool response is simulated: blank images, nonsense
+    mass properties, no SolidWorks activity.  Open SolidWorks **before**
+    restarting the server after any config change.
+
 Run this from the project root:
 
 ```powershell
-claude mcp add --transport stdio --scope project solidworks-mcp -- powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
+claude mcp add --transport stdio --scope project solidworks-mcp -- powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
 ```
 
-Why this command uses `cmd /c`:
-
-- On Windows, this is the safest beginner-friendly way to launch the local command through Claude Code.
-- It avoids common command resolution problems in terminal environments.
+Change `2026` to match your installed SolidWorks year if different.
 
 ### Option B: Linux / WSL only
 
@@ -179,12 +181,20 @@ For beginners, `--scope project` is the easiest to understand because the config
 
 Claude Code is not installed correctly or is not on your `PATH` yet.
 
+### Tools return blank images or simulated data
+
+The server is running in **mock mode** — `--real` is missing from the args.
+Remove and re-add the server with the corrected command from Option A above,
+or edit `.mcp.json` directly to add `"--real", "--year", "2026"` after the
+`.ps1` path, then restart Claude Code.
+
 ### The MCP server was added, but it does not start
 
 Common causes:
 
 - The `.venv` environment is missing or incomplete.
 - The project dependencies are not installed.
+- SolidWorks is not open (required when `--real` is set).
 - `make` is not installed on Linux / WSL.
 - The Windows host server is not actually running for the HTTP setup.
 
@@ -209,28 +219,32 @@ Then re-run the correct `claude mcp add ...` command.
 
 ## Optional: What the Project `.mcp.json` File Looks Like
 
-If you use `--scope project`, Claude Code may create a `.mcp.json` file in the repository root.
-
-A typical `stdio` example looks like this:
+If you use `--scope project`, Claude Code creates a `.mcp.json` file in the
+repository root.  A correct `stdio` example for real SolidWorks automation:
 
 ```json
 {
   "mcpServers": {
     "solidworks-mcp": {
-      "command": "cmd",
+      "command": "powershell",
       "args": [
-        "/c",
-        "powershell",
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        ".\\run-mcp.ps1"
+        ".\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
       ]
     }
   }
 }
 ```
+
+`--real` switches from mock mode to live COM automation.
+`--year 2026` tells the adapter which SolidWorks TLB to prefer — change it to
+match your installed version.
 
 A typical remote HTTP example looks like this:
 

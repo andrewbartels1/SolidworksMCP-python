@@ -42,15 +42,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
 ```
 
-### Option B: Core + Prefab UI dashboard (recommended)
+### Option B: Core + all dev/test/docs extras
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs,ui]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
 ```
-
-The `ui` extra installs `prefab-ui` and `fastapi` which are needed for `dev-ui-probe` and `dev-ui`.
 
 !!! note "venv created from conda/micromamba Python"
     If you use `micromamba` (recommended for dev workflows), create the venv from the micromamba Python to ensure compatible binaries. After creating the venv, bootstrap pip if it is missing:
@@ -73,6 +71,11 @@ This installs both `solidworks_mcp` and runtime dependencies such as `fastmcp` i
 
 ## 4. Configure VS Code MCP
 
+!!! danger "Always pass `--real` — omitting it silently runs in mock mode"
+    Without `--real`, every tool call returns simulated data: blank images,
+    nonsense mass properties, and no SolidWorks activity whatsoever.
+    Open SolidWorks **before** restarting the server.
+
 Open `%APPDATA%\Code\User\mcp.json` and configure:
 
 ```json
@@ -86,7 +89,10 @@ Open `%APPDATA%\Code\User\mcp.json` and configure:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
       ]
     }
   }
@@ -94,21 +100,26 @@ Open `%APPDATA%\Code\User\mcp.json` and configure:
 ```
 
 Set the script path to your local repository location.
+Change `2026` to match your installed SolidWorks year if different.
 
 ## 5. Start and Verify
 
-Start server:
+Open SolidWorks first, then start the server:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
 ```
 
 Healthy startup logs include:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
+- `Adapter Mode: Real SolidWorks`
 - `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
+
+If you see `Adapter Mode: Mock`, the `--real` flag was not received — verify it
+appears in the `args` list after the `.ps1` path.
 
 ## Troubleshooting
 
@@ -124,9 +135,15 @@ Healthy startup logs include:
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
+### Tools return blank images or simulated data
+
+The server is in mock mode.  Add `--real --year 2026` to the `args` list in
+your `mcp.json` after the `.ps1` path, then restart the server.
+
 ### SolidWorks connection problems
 
-- Launch SolidWorks before starting MCP.
+- Open SolidWorks **before** starting the MCP server.
+- Confirm `--real` is in the server args.
 - Confirm you are running on Windows, not WSL for COM usage.
 - Verify COM import:
 

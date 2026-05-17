@@ -284,11 +284,15 @@ if (Test-Path $mcpJsonPath) {
     }
 
     $projectPath = (Get-Location).Path
+    $runMcpScript = Join-Path $projectPath "run-mcp.ps1"
+    # NOTE: --real switches from mock mode (simulated responses) to live SolidWorks
+    # COM automation.  Without it every tool call returns fake data.
+    # Open SolidWorks before restarting the MCP server after any config change.
     $serverConfig = [ordered]@{
-        type = "stdio"
-        command = "$venvPython"
-        args = @("-m", "solidworks_mcp.server")
-        cwd = "$projectPath"
+        type    = "stdio"
+        command = "powershell"
+        args    = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runMcpScript, "--real", "--year", "2026")
+        cwd     = "$projectPath"
     }
 
     # Convert PSCustomObject -> hashtable for safe assignment
@@ -300,10 +304,12 @@ if (Test-Path $mcpJsonPath) {
     $config.servers = $serversHash
 
     $config | ConvertTo-Json -Depth 20 | Set-Content -Path $mcpJsonPath -Encoding UTF8
-    Write-Host "Updated $mcpJsonPath" -ForegroundColor Green
+    Write-Host "Updated $mcpJsonPath (real SolidWorks mode, year 2026)" -ForegroundColor Green
+    Write-Host "  -> Open SolidWorks before restarting the VS Code MCP server." -ForegroundColor Cyan
+    Write-Host "  -> Change '--year 2026' to match your SolidWorks version if needed." -ForegroundColor Cyan
 } else {
     Write-Host "WARNING: mcp.json not found at $mcpJsonPath" -ForegroundColor Yellow
-    Write-Host "Create it manually if needed." -ForegroundColor Yellow
+    Write-Host "Create it manually — see docs/getting-started/vscode-mcp-setup.md" -ForegroundColor Yellow
 }
 
 Step "[6/6] Verifying installation..."

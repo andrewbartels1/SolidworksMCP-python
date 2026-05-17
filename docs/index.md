@@ -98,13 +98,22 @@ cd SolidworksMCP-python
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
 .\.venv\Scripts\python.exe -m pip install -e .
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
 ```
+
+Open SolidWorks, then start the server:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+```
+
+> **`--real` is required.** Without it the server runs in mock mode — all tool
+> responses are simulated and nothing touches SolidWorks.
 
 Healthy startup logs include:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
+- `Adapter Mode: Real SolidWorks`
 - `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
 

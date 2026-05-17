@@ -2,11 +2,19 @@
 # This is a thin wrapper around start_local_server.py to provide a single entry point.
 #
 # Usage:
-#   .\run-mcp.ps1              -- mock mode (no SolidWorks required, for testing)
-#   .\run-mcp.ps1 --real       -- real SolidWorks COM adapter (SolidWorks must be open)
+#   .\run-mcp.ps1 --real --year 2026        -- RECOMMENDED: real SolidWorks COM adapter
 #   .\run-mcp.ps1 --real --year 2026 --log-level DEBUG  -- real mode with verbose logging
+#   .\run-mcp.ps1                           -- mock mode (simulated responses, no SolidWorks)
 #
-# VS Code mcp.json should pass --real --year <year> --log-level DEBUG for live design work.
+# WARNING: Without --real the server runs in MOCK MODE.  Every tool call returns simulated
+#          data (blank images, nonsense mass properties).  Nothing touches SolidWorks at all.
+#
+# PREREQUISITE: Open SolidWorks BEFORE restarting the server.  The adapter connects to an
+#               already-running SLDWORKS.exe at startup and will not launch it for you.
+#
+# mcp.json example (Claude Code / VS Code):
+#   "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\\run-mcp.ps1",
+#            "--real", "--year", "2026"]
 $ErrorActionPreference = "Stop"
 
 # Get the directory where this script is located
