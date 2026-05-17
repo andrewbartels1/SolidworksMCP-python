@@ -941,8 +941,6 @@ async def test_sketch_circular_pattern_creates_real_pattern(
 
         pattern = await adapter.sketch_circular_pattern(
             entities=[circle.data],
-            center_x=0.0,
-            center_y=0.0,
             angle=360.0,
             count=6,
         )
@@ -993,7 +991,7 @@ async def test_sketch_circular_pattern_no_active_sketch_returns_error(
     assert part_result.is_success
 
     try:
-        bad = await adapter.sketch_circular_pattern(["Circle_1"], 0.0, 0.0, 360.0, 6)
+        bad = await adapter.sketch_circular_pattern(["Circle_1"], 360.0, 6)
         assert bad.is_error
         assert "No active sketch" in (bad.error or "")
     finally:
@@ -1015,8 +1013,6 @@ async def test_sketch_circular_pattern_rejects_unknown_entity(
 
         bad = await adapter.sketch_circular_pattern(
             entities=["NotAnEntity_777"],
-            center_x=0.0,
-            center_y=0.0,
             angle=360.0,
             count=6,
         )
@@ -1549,8 +1545,6 @@ async def test_polygon_id_flows_into_circular_pattern_live(
 
         pattern = await adapter.sketch_circular_pattern(
             entities=[seed.data],
-            center_x=0.0,
-            center_y=0.0,
             angle=360.0,
             count=6,
         )
@@ -1613,8 +1607,6 @@ async def test_rectangle_id_flows_into_circular_pattern_live(
 
         pattern = await adapter.sketch_circular_pattern(
             entities=[seed.data],
-            center_x=0.0,
-            center_y=0.0,
             angle=360.0,
             count=4,
         )
@@ -1663,8 +1655,6 @@ async def test_line_seed_in_circular_pattern_errors_clearly_live(
 
         pattern = await adapter.sketch_circular_pattern(
             entities=[line.data],
-            center_x=0.0,
-            center_y=0.0,
             angle=360.0,
             count=4,
         )
@@ -1707,8 +1697,6 @@ async def test_ellipse_id_flows_into_circular_pattern_live(
 
         pattern = await adapter.sketch_circular_pattern(
             entities=[seed.data],
-            center_x=0.0,
-            center_y=0.0,
             angle=360.0,
             count=6,
         )

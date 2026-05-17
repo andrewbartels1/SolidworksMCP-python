@@ -496,9 +496,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.create_sketch("Front")
         circle = await adapter.add_circle(30.0, 0.0, 3.0)
 
-        result = await adapter.sketch_circular_pattern(
-            [circle.data], 0.0, 0.0, 360.0, 6
-        )
+        result = await adapter.sketch_circular_pattern([circle.data], 360.0, 6)
         assert result.status == AdapterResultStatus.SUCCESS
         assert result.data.startswith("CircularPattern_6x360.0deg_")
 
@@ -509,9 +507,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.connect()
         await adapter.create_part()
 
-        result = await adapter.sketch_circular_pattern(
-            ["Circle1"], 0.0, 0.0, 360.0, 6
-        )
+        result = await adapter.sketch_circular_pattern(["Circle1"], 360.0, 6)
         assert result.status == AdapterResultStatus.ERROR
         assert "No active sketch" in (result.error or "")
 
@@ -523,9 +519,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.create_part()
         await adapter.create_sketch("Front")
 
-        result = await adapter.sketch_circular_pattern(
-            ["Bogus_999"], 0.0, 0.0, 360.0, 6
-        )
+        result = await adapter.sketch_circular_pattern(["Bogus_999"], 360.0, 6)
         assert result.status == AdapterResultStatus.ERROR
         assert "Unknown sketch entity" in (result.error or "")
 
@@ -538,36 +532,17 @@ class TestMockAdapterSuccessPaths:
         await adapter.create_sketch("Front")
         circle = await adapter.add_circle(30.0, 0.0, 3.0)
 
-        result = await adapter.sketch_circular_pattern([], 0.0, 0.0, 360.0, 6)
+        result = await adapter.sketch_circular_pattern([], 360.0, 6)
         assert result.status == AdapterResultStatus.ERROR
         assert "at least one entity" in (result.error or "")
 
-        result = await adapter.sketch_circular_pattern(
-            [circle.data], 0.0, 0.0, 360.0, 1
-        )
+        result = await adapter.sketch_circular_pattern([circle.data], 360.0, 1)
         assert result.status == AdapterResultStatus.ERROR
         assert "count >= 2" in (result.error or "")
 
-        result = await adapter.sketch_circular_pattern(
-            [circle.data], 0.0, 0.0, 0.0, 6
-        )
+        result = await adapter.sketch_circular_pattern([circle.data], 0.0, 6)
         assert result.status == AdapterResultStatus.ERROR
         assert "angle > 0" in (result.error or "")
-
-    @pytest.mark.asyncio
-    async def test_sketch_circular_pattern_rejects_non_origin_center(self):
-        """Mock matches the real adapter: only (0, 0) centres are honoured."""
-        adapter = MockSolidWorksAdapter({})
-        await adapter.connect()
-        await adapter.create_part()
-        await adapter.create_sketch("Front")
-        circle = await adapter.add_circle(30.0, 0.0, 3.0)
-
-        result = await adapter.sketch_circular_pattern(
-            [circle.data], 5.0, 0.0, 360.0, 6
-        )
-        assert result.status == AdapterResultStatus.ERROR
-        assert "(0, 0)" in (result.error or "")
 
     @pytest.mark.asyncio
     async def test_sketch_circular_pattern_partial_sweep(self):
@@ -582,9 +557,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.create_sketch("Front")
         circle = await adapter.add_circle(30.0, 0.0, 3.0)
 
-        result = await adapter.sketch_circular_pattern(
-            [circle.data], 0.0, 0.0, 180.0, 3
-        )
+        result = await adapter.sketch_circular_pattern([circle.data], 180.0, 3)
         assert result.status == AdapterResultStatus.SUCCESS
         assert result.data.startswith("CircularPattern_3x180.0deg_")
 
@@ -791,7 +764,7 @@ class TestRealCircularPatternImpl:
         adapter, create_pattern, _ = self._build_adapter()
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Circle_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Circle_1"], 360.0, 6
         )
 
         assert result.status == AdapterResultStatus.SUCCESS
@@ -813,27 +786,13 @@ class TestRealCircularPatternImpl:
         adapter, create_pattern, _ = self._build_adapter()
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Circle_1"], 0.0, 0.0, 180.0, 3
+            adapter, ["Circle_1"], 180.0, 3
         )
 
         assert result.status == AdapterResultStatus.SUCCESS
         args = create_pattern.call_args.args
         assert args[2] == 3
         assert args[3] == pytest.approx(math.radians(180.0) / 2)
-
-    def test_non_origin_center_is_rejected(self):
-        """The real impl rejects non-zero (center_x, center_y) up front."""
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
-
-        adapter, create_pattern, _ = self._build_adapter()
-
-        result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Circle_1"], 5.0, 0.0, 360.0, 6
-        )
-
-        assert result.status == AdapterResultStatus.ERROR
-        assert "(0, 0)" in (result.error or "")
-        create_pattern.assert_not_called()
 
     def test_clear_selection_runs_on_com_failure(self):
         """``CreateCircularSketchStepAndRepeat`` returning False must
@@ -845,7 +804,7 @@ class TestRealCircularPatternImpl:
         clear_selection = adapter.currentModel.ClearSelection2
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Circle_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Circle_1"], 360.0, 6
         )
 
         assert result.status == AdapterResultStatus.ERROR
@@ -865,7 +824,7 @@ class TestRealCircularPatternImpl:
         adapter._sketch_entity_centers["Polygon_1"] = (30.0, 40.0)
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Polygon_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Polygon_1"], 360.0, 6
         )
 
         assert result.status == AdapterResultStatus.SUCCESS
@@ -890,7 +849,7 @@ class TestRealCircularPatternImpl:
         adapter._sketch_entity_centers["Rectangle_1"] = (60.0, 80.0)
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Rectangle_1"], 0.0, 0.0, 360.0, 4
+            adapter, ["Rectangle_1"], 360.0, 4
         )
 
         assert result.status == AdapterResultStatus.SUCCESS
@@ -921,7 +880,7 @@ class TestRealCircularPatternImpl:
         adapter._sketch_entities["Line_1"] = bare_seed
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Line_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Line_1"], 360.0, 6
         )
 
         assert result.status == AdapterResultStatus.ERROR
@@ -932,27 +891,31 @@ class TestRealCircularPatternImpl:
         create_pattern.assert_not_called()
 
     def test_tuple_seed_without_cached_center_raises_clear_error(self):
-        """Rectangles also register as a tuple of segment handles (from
-        ``CreateCornerRectangle``) but ``_add_rectangle_impl`` doesn't
-        populate ``_sketch_entity_centers``. Without a safety net the
-        direct subscript lookup would raise ``KeyError`` and surface as a
-        confusing bare key string. Surface a clear, actionable error
-        instead."""
+        """Group-registering primitives (polygons, rectangles) cache their
+        centre at register time so circular_pattern can derive the
+        seed-to-axis radius from the tuple seed. Any *other* tuple seed
+        without a cached centre — e.g. a future ``add_slot`` — would
+        otherwise fall through to a misleading 1 mm placeholder radius.
+        Surface a clear, actionable error that names only the
+        always-works primitives instead.
+        """
         from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
-        # Stand in for a rectangle: tuple of segment-like Mocks, no entry
-        # in ``_sketch_entity_centers``.
-        adapter._sketch_entities["Rectangle_1"] = (Mock(), Mock(), Mock(), Mock())
+        # Stand in for a hypothetical tuple-registering primitive whose
+        # ``add_*`` writer never stashed a centre.
+        adapter._sketch_entities["Slot_1"] = (Mock(), Mock(), Mock(), Mock())
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Rectangle_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Slot_1"], 360.0, 6
         )
 
         assert result.status == AdapterResultStatus.ERROR
         # Error must name the offending entity and the accepted seed types.
-        assert "Rectangle_1" in (result.error or "")
-        assert "circle, arc, ellipse, or polygon" in (result.error or "")
+        # Polygons and rectangles always reach the cached branch, so the
+        # message lists only the always-works primitives.
+        assert "Slot_1" in (result.error or "")
+        assert "circle, arc, or ellipse" in (result.error or "")
         create_pattern.assert_not_called()
 
     def test_arc_angle_normalized_to_positive_when_seed_on_plus_x_axis(self):
@@ -973,7 +936,7 @@ class TestRealCircularPatternImpl:
         seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
 
         result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Circle_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Circle_1"], 360.0, 6
         )
 
         assert result.status == AdapterResultStatus.SUCCESS

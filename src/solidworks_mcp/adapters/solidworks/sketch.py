@@ -177,14 +177,10 @@ class SolidWorksSketchMixin:
     async def sketch_circular_pattern(
         self,
         entities: list[str],
-        center_x: float,
-        center_y: float,
         angle: float,
         count: int,
     ) -> AdapterResult[str]:
-        return _sketch_circular_pattern_impl(
-            self, entities, center_x, center_y, angle, count
-        )
+        return _sketch_circular_pattern_impl(self, entities, angle, count)
 
     async def sketch_mirror(
         self, entities: list[str], mirror_line: str
@@ -899,9 +895,7 @@ def _add_ellipse_impl(
         )
         if not ellipse:
             raise Exception("Failed to create ellipse")
-        return cast(
-            AdapterResult[str], adapter._register_sketch_entity("Ellipse", ellipse)
-        )
+        return cast(str, adapter._register_sketch_entity("Ellipse", ellipse))
 
     return cast(
         AdapterResult[str],
@@ -1479,7 +1473,7 @@ def _sketch_linear_pattern_impl(
             raise Exception("sketch_linear_pattern requires count >= 2")
         if spacing <= 0:
             raise Exception("sketch_linear_pattern requires spacing > 0")
-        if direction_x == 0 and direction_y == 0:
+        if math.hypot(direction_x, direction_y) < 1e-9:
             raise Exception(
                 "sketch_linear_pattern requires a non-zero direction vector"
             )
@@ -1537,8 +1531,6 @@ def _sketch_linear_pattern_impl(
 def _sketch_circular_pattern_impl(
     adapter: Any,
     entities: list[str],
-    center_x: float,
-    center_y: float,
     angle: float,
     count: int,
 ) -> AdapterResult[str]:
@@ -1555,10 +1547,11 @@ def _sketch_circular_pattern_impl(
     registered entity's centre (via ``ISketchArc.GetCenterPoint`` once
     the dispatch is flagged) relative to the sketch origin.  The COM
     API has no pattern-centre parameter — the rotation axis is implied
-    by ``(ArcRadius, ArcAngle)`` relative to the seed, so honouring a
-    non-origin pattern centre would require selecting a separate sketch
-    point as the rotation axis.  This impl does not yet do that, so
-    non-zero ``center_x`` / ``center_y`` is rejected with a clear error.
+    by ``(ArcRadius, ArcAngle)`` relative to the seed, so the rotation
+    axis is always the **sketch origin**.  Callers who want a different
+    pattern centre must position the seed relative to the desired
+    centre (then translate the sketch as a whole, or use a sketch
+    plane offset).
 
     ``PatternSpacing`` is the per-instance angle in radians.  For a
     full 360° pattern we use ``angle / count`` so the last instance
@@ -1569,10 +1562,6 @@ def _sketch_circular_pattern_impl(
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
         entities: Registered entity IDs to pattern.  Must be non-empty.
-        center_x: Pattern centre X in **millimetres**.  Must be ``0`` —
-            non-origin centres are rejected.
-        center_y: Pattern centre Y in **millimetres**.  Must be ``0`` —
-            non-origin centres are rejected.
         angle: Total swept angle in **degrees** (e.g. ``360`` for a full
             ring or ``180`` for a half-circle).  Must be > 0.
         count: Total number of instances (including the seed).  Must be
@@ -1592,7 +1581,7 @@ def _sketch_circular_pattern_impl(
 
         # 6 evenly-spaced copies of Circle_1 around the origin
         result = pywin32_sketch_ops.sketch_circular_pattern(
-            adapter, ["Circle_1"], 0.0, 0.0, 360.0, 6
+            adapter, ["Circle_1"], 360.0, 6
         )
         print(result.data)  # "CircularPattern_6x360.0deg_4321"
     """
@@ -1606,16 +1595,6 @@ def _sketch_circular_pattern_impl(
             raise Exception("sketch_circular_pattern requires count >= 2")
         if angle <= 0:
             raise Exception("sketch_circular_pattern requires angle > 0")
-        # CreateCircularSketchStepAndRepeat has no pattern-centre parameter
-        # — the centre is derived from (seed + ArcRadius * <unit vector at
-        # ArcAngle>). Honouring a caller-supplied non-origin centre would
-        # require selecting a separate sketch point as the rotation axis,
-        # which this impl does not yet do.
-        if center_x != 0.0 or center_y != 0.0:
-            raise Exception(
-                "circular pattern center must be (0, 0) — non-origin "
-                "centers not yet supported by SW API"
-            )
 
         # Validate every entity ID exists before mutating selection state.
         for ent_id in entities:
@@ -1663,19 +1642,24 @@ def _sketch_circular_pattern_impl(
             # ``CreateCornerRectangle``) register as a SAFEARRAY of segments
             # — a tuple, not a single dispatch — so the ``GetCenterPoint``
             # path below would silently fall back to a 1 mm placeholder
-            # radius. ``_add_polygon_impl`` stashes the seed centre in
-            # ``_sketch_entity_centers`` at register time; use that.
-            # Rectangle seeds don't populate the cache (yet), so reject them
-            # with a clear message rather than KeyError or build a bogus
-            # pattern at the wrong radius.
+            # radius. ``_add_polygon_impl`` / ``_add_rectangle_impl`` stash
+            # the seed centre in ``_sketch_entity_centers`` at register time;
+            # use that. Any future tuple-registering primitive that forgets
+            # to populate the cache falls through to the clear-error branch
+            # below.
             if isinstance(first_entity, (list, tuple)):
                 seed_xy = adapter._sketch_entity_centers.get(entities[0])
                 if seed_xy is None:
+                    # Polygons and rectangles always reach the cached branch
+                    # above, so naming them here would be misleading — the
+                    # caller is hitting this with a group seed whose
+                    # ``add_*`` writer never stashed a centre. List only the
+                    # always-works primitive types.
                     raise Exception(
                         f"sketch_circular_pattern can't derive the seed centre "
                         f"for '{entities[0]}' — this entity type registers as "
                         f"a group (tuple of segments) with no cached centre. "
-                        f"Use a circle, arc, ellipse, or polygon seed."
+                        f"Use a circle, arc, or ellipse seed."
                     )
 
             if seed_xy is None and first_entity is not None and _sw_type_info is not None:
@@ -1716,9 +1700,9 @@ def _sketch_circular_pattern_impl(
                     f"Use a circle, arc, ellipse, or polygon seed."
                 )
 
-            # Rotation axis is at the sketch origin (0, 0) — the
-            # ``center_x != 0 or center_y != 0`` guard above forces this — so
-            # dx/dy from seed to axis is just ``-seed``.
+            # Rotation axis is always the sketch origin (0, 0) — SW's
+            # ``CreateCircularSketchStepAndRepeat`` has no pattern-centre
+            # parameter, so dx/dy from seed to axis is just ``-seed``.
             dx_mm = -seed_xy[0]
             dy_mm = -seed_xy[1]
             arc_radius_mm = math.hypot(dx_mm, dy_mm)
@@ -1995,7 +1979,8 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         AdapterResult[None]: On success, ``status`` is ``SUCCESS``.
         When neither SW nor the adapter has an active sketch,
         ``status`` is ``WARNING`` (already-exited is not a failure).
-        When ``currentModel`` is ``None``, returns ``ERROR``.
+        When ``currentModel`` is ``None``, also returns ``WARNING`` so
+        defensive cleanup callers don't see spurious errors.
 
     Raises:
         Exception: Propagated through ``_handle_com_operation`` when the

@@ -7,6 +7,7 @@ when SolidWorks is not available.
 from __future__ import annotations
 
 import asyncio
+import math
 import random
 import uuid
 from collections.abc import Callable
@@ -908,7 +909,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["sketch_operation"] / 2)
         self._operation_count += 1
 
-        spline_id = f"Spline{random.randint(1000, 9999)}"
+        spline_id = f"Spline_{random.randint(1000, 9999)}"
         self._sketch_entity_ids.add(spline_id)
 
         return AdapterResult(
@@ -977,7 +978,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["sketch_operation"] / 2)
         self._operation_count += 1
 
-        arc_id = f"Arc{random.randint(1000, 9999)}"
+        arc_id = f"Arc_{random.randint(1000, 9999)}"
         self._sketch_entity_ids.add(arc_id)
 
         return AdapterResult(
@@ -1133,7 +1134,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR,
                 error="sketch_linear_pattern requires spacing > 0",
             )
-        if direction_x == 0 and direction_y == 0:
+        if math.hypot(direction_x, direction_y) < 1e-9:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=(
@@ -1163,17 +1164,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def sketch_circular_pattern(
         self,
         entities: list[str],
-        center_x: float,
-        center_y: float,
         angle: float,
         count: int,
     ) -> AdapterResult[str]:
-        """Mock creating a circular sketch pattern.
+        """Mock creating a circular sketch pattern around the sketch origin.
 
         Args:
             entities (list[str]): Seed entity IDs.
-            center_x (float): Pattern centre X in millimetres.
-            center_y (float): Pattern centre Y in millimetres.
             angle (float): Total swept angle in degrees.
             count (int): Total number of instances (including the seed).
 
@@ -1198,17 +1195,6 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error="sketch_circular_pattern requires angle > 0",
-            )
-        # Mirror the real adapter — CreateCircularSketchStepAndRepeat
-        # cannot honour a non-origin pattern centre without selecting a
-        # separate sketch point as the rotation axis.
-        if center_x != 0.0 or center_y != 0.0:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    "circular pattern center must be (0, 0) — non-origin "
-                    "centers not yet supported by SW API"
-                ),
             )
         for ent in entities:
             if ent not in self._sketch_entity_ids:

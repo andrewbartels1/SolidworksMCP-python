@@ -147,8 +147,6 @@ async def test_ellipse_flows_into_circular_pattern(
     assert seed.is_success
     pattern = await sketch_adapter.sketch_circular_pattern(
         entities=[seed.data],
-        center_x=0.0,
-        center_y=0.0,
         angle=360.0,
         count=6,
     )
@@ -209,8 +207,6 @@ async def test_spline_flows_into_mirror(
             "count": 3,
         }),
         ("sketch_circular_pattern", {
-            "center_x": 0.0,
-            "center_y": 0.0,
             "angle": 360.0,
             "count": 6,
         }),

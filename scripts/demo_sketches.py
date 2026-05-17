@@ -119,8 +119,6 @@ async def build_demo_part(out_dir: Path) -> dict[str, str]:
             "sketch_circular_pattern (8x360 around origin)",
             await adapter.sketch_circular_pattern(
                 entities=[ell_seed.data],
-                center_x=0.0,
-                center_y=0.0,
                 angle=360.0,
                 count=8,
             ),

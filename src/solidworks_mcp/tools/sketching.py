@@ -1300,11 +1300,17 @@ async def register_sketching_tools(
 
     @mcp.tool()
     async def sketch_circular_pattern(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Create a circular pattern of sketch entities.
+        """Create a circular pattern of sketch entities around the sketch origin.
 
-        Generates a circular array of selected sketch entities around a center point with
-        specified angular spacing. Essential for creating bolt circles, gear teeth, and other
-        radially symmetric features.
+        Generates a circular array of selected sketch entities. The
+        rotation axis is always the **sketch origin** — SOLIDWORKS'
+        ``CreateCircularSketchStepAndRepeat`` does not expose a
+        pattern-centre parameter. Position the seed entity at the
+        desired radius from the origin; the pattern derives its radius
+        from the seed's centre.
+
+        Essential for creating bolt circles, gear teeth, and other
+        radially symmetric features around the sketch origin.
 
         Args:
             input_data (dict[str, Any]): The input data value.
@@ -1314,10 +1320,9 @@ async def register_sketching_tools(
 
         Example:
                             ```python
-                            # Create 6-bolt circle pattern for flange
+                            # Create 6-bolt circle pattern (seed circle at radius 50 mm on +X)
                             result = await sketch_circular_pattern({
                                 "entities": ["Circle1"],
-                                "center_x": 0.0, "center_y": 0.0,
                                 "angle": 360.0,  # Full circle
                                 "count": 6       # 6 bolt holes
                             })
@@ -1330,32 +1335,31 @@ async def register_sketching_tools(
 
                         Note:
                             - Requires an active sketch with existing entities
-                            - Center point determines rotation axis
+                            - Rotation axis is always the sketch origin (0, 0)
                             - Angle < 360° creates partial circular patterns
                             - Essential for mechanical fastener patterns and gear design
         """
         try:
             entities = input_data.get("entities", [])
-            center_x = input_data.get("center_x", 0.0)
-            center_y = input_data.get("center_y", 0.0)
             angle = input_data.get("angle", 360.0)
             count = input_data.get("count", 6)
 
-            result = await adapter.sketch_circular_pattern(
-                entities, center_x, center_y, angle, count
-            )
+            result = await adapter.sketch_circular_pattern(entities, angle, count)
 
             if result.is_success:
                 pattern_id = result.data
                 return {
                     "status": "success",
-                    "message": f"Created circular pattern with {count} instances around ({center_x}, {center_y})",
+                    "message": (
+                        f"Created circular pattern with {count} instances "
+                        "around the sketch origin"
+                    ),
                     "pattern": {
                         "id": pattern_id,
                         "type": "circular",
                         "entities": entities,
                         "count": count,
-                        "center": {"x": center_x, "y": center_y},
+                        "center": {"x": 0.0, "y": 0.0},
                         "angle": angle,
                     },
                     "execution_time": result.execution_time,
