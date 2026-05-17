@@ -1814,6 +1814,13 @@ def _sketch_mirror_impl(
         # a centreline; selecting any other segment under mark=2 silently
         # no-ops on SW. ``add_centerline`` returns IDs prefixed with
         # ``Centerline_``, so reject anything else up front.
+        # TODO(#24-followup): replace the prefix-string parse with a
+        # proper introspection of the entity's ``ConstructionGeometry``
+        # property on the real adapter (still keep the prefix check on
+        # the mock, where there's no real dispatch to inspect). The
+        # prefix parse is brittle if either side renames its ID scheme;
+        # the SW invariant we're really enforcing is "this segment has
+        # construction-geometry flagged".
         if not mirror_line.startswith("Centerline_"):
             raise Exception(
                 f"mirror_line must be a centerline (from add_centerline), "
