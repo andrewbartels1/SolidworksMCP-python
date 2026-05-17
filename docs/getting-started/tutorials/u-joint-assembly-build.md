@@ -19,7 +19,7 @@ Build a complete mechanical U-joint assembly using the Prefab UI and MCP server.
 
 - SolidWorks 2019+ installed and launched at least once
 - MCP server running: `.\.venv\Scripts\python.exe -m solidworks_mcp.server`
-- Prefab UI running in two terminals (see [Prefab UI Dashboard](../prefab-ui-dashboard.md))
+- MCP server connected (see [SolidWorks as Code](../solidworks-as-code.md) for session setup)
 - **No pre-made parts** — you will create everything from scratch
 
 ## Phase 1: Setup and Part Planning
@@ -496,6 +496,6 @@ After completing this tutorial:
 
 **Related docs:**
 
-- [Prefab UI Dashboard](../prefab-ui-dashboard.md)
+- [SolidWorks as Code](../solidworks-as-code.md)
 - [Tool Catalog](../../user-guide/tool-catalog/index.md)
 - [Integration Testing](../../user-guide/integration-testing.md)

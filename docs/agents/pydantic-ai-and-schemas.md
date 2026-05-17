@@ -32,4 +32,4 @@ Use planning docs for proposals that are not shipped yet.
 - [Agents and Prompt Testing](agents-and-testing.md)
 - [Agent Memory and Recovery](agent-memory-and-recovery.md)
 - [Logging and Agent Invocation](logging-and-agent-invocation.md)
-- [Pydantic AI Integration Plan](../planning/PLAN_PYDANTIC_AI_INTEGRATION.md)
+- [Agents and Testing](agents-and-testing.md)

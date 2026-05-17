@@ -430,4 +430,4 @@ Rules:
 
 ### Planned: Automated Reverse-Engineering Loop
 
-A future workflow will close the loop completely: open an existing part programmatically, read its full feature tree and mass properties, feed that structured data to the `solidworks-part-reconstructor` agent to generate a typed `ReconstructionPlan`, execute the plan on a fresh document, and compare results via pixel diff and mass property matching. This is tracked in the [Roadmap](../planning/ROADMAP_2026_2027.md).
+A future workflow will close the loop completely: open an existing part programmatically, read its full feature tree and mass properties, feed that structured data to the `solidworks-part-reconstructor` agent to generate a typed `ReconstructionPlan`, execute the plan on a fresh document, and compare results via pixel diff and mass property matching. This is tracked in the [SolidWorks as Code](../getting-started/solidworks-as-code.md) docs and open GitHub issues.

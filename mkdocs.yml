@@ -22,26 +22,21 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Tutorial Tracks: getting-started/tutorial-tracks.md
+      - SolidWorks as Code: getting-started/solidworks-as-code.md
       - U-Joint Assembly Build (From Scratch): getting-started/tutorials/u-joint-assembly-build.md
       - U-Joint Rebuild Prompts (Reference): getting-started/tutorial-parts/u_joint_rebuild_prompt.md
       - VS Code MCP Setup: getting-started/vscode-mcp-setup.md
       - Claude Code MCP Setup: getting-started/claude-code-setup.md
-      - Prefab UI Dashboard: getting-started/prefab-ui-dashboard.md
-      - Prefab UI Controls Reference: getting-started/prefab-ui-controls-reference.md
-      - Prefab UI Validation Matrix: getting-started/prefab-ui-validation-matrix.md
-      - Prefab UI U-Joint Runbook: getting-started/prefab-ui-u-joint-bracket-runbook.md
       - Local LLM (Ollama / Gemma): getting-started/local-llm.md
   - MCP Server Guide:
       - Architecture: user-guide/architecture.md
       - Tools Overview: user-guide/tools-overview.md
       - Platform and Connectivity: user-guide/platform-connectivity.md
-      - Docs Discovery Tool Design: user-guide/docs-discovery-tool-design.md
-      - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md
       - Prompting Best Practices: user-guide/prompting-best-practices.md
       - Integration Testing: user-guide/integration-testing.md
       - Real Tool Validation Matrix: user-guide/real-tool-validation-matrix.md
   - Tool Catalog:
-      - All 109 Tools: user-guide/tool-catalog/index.md
+      - All Tools: user-guide/tool-catalog/index.md
       - Modeling: user-guide/tool-catalog/modeling.md
       - Sketching: user-guide/tool-catalog/sketching.md
       - Drawing: user-guide/tool-catalog/drawing.md
@@ -54,37 +49,17 @@ nav:
       - Template Management: user-guide/tool-catalog/template-management.md
       - Macro Recording: user-guide/tool-catalog/macro-recording.md
       - Docs Discovery: user-guide/tool-catalog/docs-discovery.md
-      - Agents and Skills:
-          - Agents and Prompt Testing: agents/agents-and-testing.md
-          - Family-Gated Tool Routing: agents/family-gated-tool-routing.md
-          - PydanticAI and Schemas: agents/pydantic-ai-and-schemas.md
-          - Agent UI Workflows: agents/agent-ui-workflows.md
-          - Agent Memory and Recovery: agents/agent-memory-and-recovery.md
-          - Logging and Agent Invocation: agents/logging-and-agent-invocation.md
-          - Agent Invocation Reference: agents/agent-invocation-reference.md
-          - AI-Assisted Design Workflow: agents/ai-assisted-design-workflow.md
-          - Prompt-Driven Design: agents/prompt-driven-design.md
-          - Prompting Tutorials: agents/prompting-tutorials.md
-          - Reverse-Engineering Workflow: agents/reverse-engineering-workflow.md
-          - Sample Models Guide: agents/sample-models-guide.md
-          - Worked Examples: agents/worked-examples.md
-      - Tutorials:
-          - Screenshot Equivalence: user-guide/screenshot-equivalence.md
+  - Agents and Skills:
+      - Agents and Prompt Testing: agents/agents-and-testing.md
+      - Family-Gated Tool Routing: agents/family-gated-tool-routing.md
+      - PydanticAI and Schemas: agents/pydantic-ai-and-schemas.md
+      - Logging and Agent Invocation: agents/logging-and-agent-invocation.md
+      - Reverse-Engineering Workflow: agents/reverse-engineering-workflow.md
+      - Sample Models Guide: agents/sample-models-guide.md
+      - Worked Examples: agents/worked-examples.md
+      - Prompt-Driven Design: agents/prompt-driven-design.md
+      - Prompting Tutorials: agents/prompting-tutorials.md
   - API Reference: api/
-  - Planning:
-      - Legacy Interactive Design Foundation (Root): PLAN_INTERACTIVE_DESIGN_FOUNDATION.md
-      - GUI Visualization Plan: planning/PLAN_GUI_VISUALIZATION.md
-      - Database Workflows Plan: planning/PLAN_DATABASE_WORKFLOWS.md
-      - Interactive Design Foundation Plan: planning/PLAN_INTERACTIVE_DESIGN_FOUNDATION.md
-      - Interactive Design Foundation Tracker: planning/INTERACTIVE_DESIGN_FOUNDATION_TRACKER.md
-      - Pydantic AI Integration Plan: planning/PLAN_PYDANTIC_AI_INTEGRATION.md
-      - UI Refactor Assessment: planning/REFACTOR_UI_ASSESSMENT.md
-      - Runtime Operations and Observability Plan: planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md
-      - Tree Read Tools Plan: planning/PLAN_TREE_READ_TOOLS.md
-      - Architecture Analysis (Snapshot): planning/ARCHITECTURE_ANALYSIS.md
-      - Architecture Alignment Report (Snapshot): planning/ARCHITECTURE_ALIGNMENT_REPORT.md
-      - Documentation Assessment (2026-05-11): planning/DOCUMENTATION_ASSESSMENT_2026-05-11.md
-      - Roadmap 2026-2027: planning/ROADMAP_2026_2027.md
 
 # Theme configuration
 theme:

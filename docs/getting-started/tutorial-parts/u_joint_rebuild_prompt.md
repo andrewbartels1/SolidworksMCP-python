@@ -205,5 +205,5 @@ Generate final pass/fail report with images (isometric view from 3 angles).
 ## Related
 
 - [U-Joint Assembly Tutorial (From Scratch)](../tutorials/u-joint-assembly-build.md)
-- [Prefab UI Dashboard](../prefab-ui-dashboard.md)
+- [SolidWorks as Code](../solidworks-as-code.md)
 - [Tool Catalog](../../user-guide/tool-catalog/index.md)
