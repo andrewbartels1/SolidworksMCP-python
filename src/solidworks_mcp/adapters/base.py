@@ -806,17 +806,18 @@ class SolidWorksAdapter(ABC):
     async def sketch_circular_pattern(
         self,
         entities: list[str],
-        center_x: float,
-        center_y: float,
         angle: float,
         count: int,
     ) -> AdapterResult[str]:
-        """Create a circular pattern of sketch entities.
+        """Create a circular pattern of sketch entities around the sketch origin.
+
+        The rotation axis is always the sketch origin — SW's
+        ``CreateCircularSketchStepAndRepeat`` has no pattern-centre
+        parameter and derives the axis from the seed's geometry. Place
+        the seed entity at the desired radius from the origin.
 
         Args:
             entities (list[str]): The entities value.
-            center_x (float): The center x value.
-            center_y (float): The center y value.
             angle (float): The angle value.
             count (int): The count value.
 

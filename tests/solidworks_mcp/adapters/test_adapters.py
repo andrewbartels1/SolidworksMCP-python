@@ -14,7 +14,6 @@ from src.solidworks_mcp.adapters import (
     AdapterFactory,
     create_adapter,
 )
-from src.solidworks_mcp.adapters.factory import _register_default_adapters
 from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from src.solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreaker,
@@ -25,6 +24,7 @@ from src.solidworks_mcp.adapters.connection_pool import (
     ConnectionPool,
     ConnectionPoolAdapter,
 )
+from src.solidworks_mcp.adapters.factory import _register_default_adapters
 from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 from src.solidworks_mcp.config import AdapterType
@@ -611,7 +611,14 @@ class TestPyWin32AdapterBranches:
 
     @pytest.mark.asyncio
     async def test_sketch_placeholder_and_exit_paths(self, monkeypatch):
-        """Test sketch placeholder helpers and exit-sketch branches."""
+        """Test sketch operation helpers and exit-sketch branches.
+
+        The linear pattern call is wired with a fake SketchManager so the
+        real impl (``CreateLinearSketchStepAndRepeat`` via the executor)
+        succeeds. Circular pattern, mirror, and offset are still
+        placeholders at this point in the stack — they don't touch COM
+        and so only need ``currentSketchManager`` to be truthy.
+        """
         adapter = self._build_adapter(monkeypatch)
 
         no_sketch = await adapter.exit_sketch()
@@ -622,16 +629,58 @@ class TestPyWin32AdapterBranches:
         # Unknown relation types now error out — the placeholder that always
         # returned success was replaced by a real SketchAddConstraints call.
         assert (await adapter.add_sketch_constraint("L1", None, "unknown")).is_error
+        # add_sketch_dimension's no-model fast path returns a synthesised ID
+        # when ``adapter.currentModel`` is ``None``.
         assert (
             await adapter.add_sketch_dimension("L1", None, "linear", 10.0)
         ).is_success
+
+        # Linear, circular, and mirror are real COM-touching impls now
+        # (placeholders only before #16/#17/#18). Wire the minimum:
+        #   currentSketchManager.CreateLinearSketchStepAndRepeat(...)
+        #   currentSketchManager.CreateCircularSketchStepAndRepeat(...)
+        #   currentModel.SketchMirror() (mirror)
+        #   currentModel.ClearSelection2 and SelectionManager.CreateSelectData
+        #   adapter._sketch_entities[entity_id].Select4(...)
+        #   The mirror_line entity must use a ``Centerline_*`` ID since
+        #   the real impl rejects anything else.
+        seed_entity = Mock()
+        seed_entity.Select4 = Mock(return_value=True)
+        # Circular pattern now requires a resolvable seed centre — either via
+        # GetCenterPoint (single dispatch) or via _sketch_entity_centers
+        # (group entities). Wire GetCenterPoint so this test's seed stands in
+        # for a circle/arc/ellipse rather than a line.
+        seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
+        centerline = Mock()
+        centerline.Select4 = Mock(return_value=True)
+        adapter._sketch_entities = {
+            "L1": seed_entity,
+            "Centerline_42": centerline,
+        }
+
+        adapter.currentSketchManager = SimpleNamespace(
+            InsertSketch=Mock(),
+            CreateLinearSketchStepAndRepeat=Mock(return_value=True),
+            CreateCircularSketchStepAndRepeat=Mock(return_value=True),
+            SketchOffset2=Mock(return_value=True),
+        )
+
+        select_data = Mock()
+        selection_mgr = Mock()
+        selection_mgr.CreateSelectData = Mock(return_value=select_data)
+        adapter.currentModel = SimpleNamespace(
+            ClearSelection2=Mock(return_value=True),
+            SelectionManager=selection_mgr,
+            SketchMirror=Mock(return_value=None),
+        )
+
         assert (
             await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)
         ).is_success
         assert (
-            await adapter.sketch_circular_pattern(["L1"], 0.0, 0.0, 180.0, 4)
+            await adapter.sketch_circular_pattern(["L1"], 180.0, 4)
         ).is_success
-        assert (await adapter.sketch_mirror(["L1"], "CL1")).is_success
+        assert (await adapter.sketch_mirror(["L1"], "Centerline_42")).is_success
         assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_success
 
         exited = await adapter.exit_sketch()
@@ -2522,7 +2571,7 @@ class TestPyWin32AdapterBranches:
         assert (await adapter.add_sketch_dimension("L1", None, "linear", 10.0)).is_error
         assert (await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)).is_error
         assert (
-            await adapter.sketch_circular_pattern(["L1"], 0.0, 0.0, 180.0, 4)
+            await adapter.sketch_circular_pattern(["L1"], 180.0, 4)
         ).is_error
         assert (await adapter.sketch_mirror(["L1"], "CL1")).is_error
         assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_error

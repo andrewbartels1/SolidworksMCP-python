@@ -17,6 +17,7 @@ class _FakeSketchAdapter:
         self._sketch_count = 0
         self._last_sketch_name = None
         self._sketch_entities: dict[str, object] = {}
+        self._sketch_entity_centers: dict[str, tuple[float, float]] = {}
         self._next_id = 1
         self.constants = {
             "swSmartDimensionDirectionRight": 0,
@@ -172,8 +173,19 @@ def test_basic_entity_success_paths_register_entities() -> None:
 
 def test_spline_centerline_polygon_and_ellipse_paths() -> None:
     adapter = _FakeSketchAdapter()
+    spline_calls: list[tuple[object, bool]] = []
+
+    def _create_spline(points: object, simulate_natural_ends: bool) -> object:
+        # Store the raw points argument (a VARIANT on Windows, a list on
+        # other platforms) so the assertion below can unwrap it via the
+        # ``.value`` attribute when present. The second arg name matches
+        # the SolidWorks API parameter ``SimulateNaturalEnds`` (passed
+        # as False by add_spline), not an open/closed-spline flag.
+        spline_calls.append((points, simulate_natural_ends))
+        return object()
+
     adapter.currentSketchManager = SimpleNamespace(
-        CreateSpline2=lambda points, _closed, _opts: points,
+        CreateSpline2=_create_spline,
         CreateCenterLine=lambda *args: object(),
         CreatePolygon=lambda *args: object(),
         CreateEllipse=lambda *args: object(),
@@ -184,12 +196,22 @@ def test_spline_centerline_polygon_and_ellipse_paths() -> None:
     )
     assert spline_ok.is_success
     assert spline_ok.data.startswith("Spline_")
+    # CreateSpline2 must be called with the SW-spec 2-arg signature:
+    # (flattened XYZ doubles, simulateNaturalEnds=False). On Windows the
+    # impl wraps the doubles in VARIANT(VT_ARRAY|VT_R8) so pywin32 marshals
+    # them as a single SAFEARRAY argument instead of unpacking the list.
+    # On non-Windows CI a bare list is passed through.
+    assert len(spline_calls) == 1
+    points_arg, simulate_natural_ends = spline_calls[0]
+    assert simulate_natural_ends is False
+    flat_points = getattr(points_arg, "value", points_arg)
+    assert list(flat_points) == [0.0, 0.0, 0.0, 0.002, 0.001, 0.0]
 
     center_ok = sketch._add_centerline_impl(adapter, 0, 0, 10, 0)
     polygon_ok = sketch._add_polygon_impl(adapter, 0, 0, 10, 6)
     ellipse_ok = sketch._add_ellipse_impl(adapter, 0, 0, 10, 4)
     assert center_ok.is_success and center_ok.data.startswith("Centerline_")
-    assert polygon_ok.is_success and polygon_ok.data.startswith("Polygon_6sided_")
+    assert polygon_ok.is_success and polygon_ok.data.startswith("Polygon_")
     assert ellipse_ok.is_success and ellipse_ok.data.startswith("Ellipse_")
 
 
@@ -203,27 +225,222 @@ def test_spline_error_when_create_returns_none() -> None:
     assert "Failed to create spline" in (result.error or "")
 
 
-def test_pattern_placeholders() -> None:
+def test_spline_error_when_no_sketch_manager() -> None:
     adapter = _FakeSketchAdapter()
-    adapter.currentSketchManager = object()
+    result = sketch._add_spline_impl(
+        adapter, [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active sketch" in (result.error or "")
 
-    linear_pattern = sketch._sketch_linear_pattern_impl(
+
+def test_spline_error_when_too_few_points() -> None:
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = SimpleNamespace(
+        CreateSpline2=lambda *args: object()
+    )
+    result = sketch._add_spline_impl(adapter, [{"x": 0.0, "y": 0.0}])
+    assert result.status == AdapterResultStatus.ERROR
+    assert "at least 2 points" in (result.error or "")
+
+
+def _make_pattern_adapter() -> tuple[_FakeSketchAdapter, Mock, Mock, Mock, Mock]:
+    """Build a fake adapter wired for the real sketch_linear_pattern impl.
+
+    The impl resolves entity IDs against ``adapter._sketch_entities``,
+    calls ``adapter.currentModel.ClearSelection2`` before/after,
+    invokes ``adapter.currentModel.SelectionManager.CreateSelectData``
+    to obtain an ``ISelectData`` with the mark, calls ``Select4(True,
+    select_data)`` on each entity, and finally calls
+    ``adapter.currentSketchManager.CreateLinearSketchStepAndRepeat(...)``.
+    The returned mocks let assertions verify each call.
+    """
+    adapter = _FakeSketchAdapter()
+    seed_entity = Mock()
+    seed_entity.Select4 = Mock(return_value=True)
+    adapter._sketch_entities = {"Line_1": seed_entity}
+
+    create_pattern = Mock(return_value=True)
+    sketch_manager = Mock()
+    sketch_manager.CreateLinearSketchStepAndRepeat = create_pattern
+    adapter.currentSketchManager = sketch_manager
+
+    select_data = Mock()
+    selection_mgr = Mock()
+    selection_mgr.CreateSelectData = Mock(return_value=select_data)
+
+    clear_selection = Mock(return_value=True)
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=clear_selection,
+        SelectionManager=selection_mgr,
+    )
+    return adapter, create_pattern, clear_selection, seed_entity, selection_mgr
+
+
+def test_sketch_linear_pattern_calls_com_with_converted_args() -> None:
+    """Real ``_sketch_linear_pattern_impl`` selects the seed entities and
+    calls ``CreateLinearSketchStepAndRepeat`` with mm-to-m and
+    direction-vector-to-radian conversions.
+    """
+    adapter, create_pattern, clear_selection, seed_entity, _ = (
+        _make_pattern_adapter()
+    )
+
+    result = sketch._sketch_linear_pattern_impl(
         adapter, ["Line_1"], 1, 0, 5.0, 3
     )
-    circular_pattern = sketch._sketch_circular_pattern_impl(
-        adapter, ["Line_1"], 0, 0, 45.0, 8
-    )
-    mirror = sketch._sketch_mirror_impl(adapter, ["Line_1"], "Centerline_1")
-    offset = sketch._sketch_offset_impl(adapter, ["Line_1"], 2.5, True)
 
-    assert linear_pattern.is_success and linear_pattern.data.startswith(
-        "LinearPattern_3x5.0_"
+    assert result.is_success
+    assert result.data.startswith("LinearPattern_3x5.0_")
+    # ClearSelection2 is called twice (before + finally after).
+    assert clear_selection.call_count == 2
+    # The seed entity was selected with the mark-0 select data.
+    assert seed_entity.Select4.call_count == 1
+    create_pattern.assert_called_once()
+    call_args = create_pattern.call_args.args
+    # Signature: NumX, NumY, SpacingX(m), SpacingY, AngleX(rad), AngleY,
+    # DeleteInstances, XSpacingDim, YSpacingDim, AngleDim,
+    # CreateNumOfInstancesDimInXDir, CreateNumOfInstancesDimInYDir
+    assert call_args[0] == 3  # NumX == count
+    assert call_args[1] == 1  # NumY == 1 (single row)
+    assert call_args[2] == 5.0 / 1000.0  # SpacingX in metres
+    # AngleX == atan2(0, 1) == 0 for direction (1, 0)
+    assert call_args[4] == 0.0
+
+
+def test_sketch_linear_pattern_validates_inputs() -> None:
+    adapter, _, _, _, _ = _make_pattern_adapter()
+
+    assert (
+        sketch._sketch_linear_pattern_impl(adapter, [], 1, 0, 5.0, 3).status
+        == AdapterResultStatus.ERROR
     )
-    assert circular_pattern.is_success and circular_pattern.data.startswith(
-        "CircularPattern_8x45.0deg_"
+    assert (
+        sketch._sketch_linear_pattern_impl(
+            adapter, ["Line_1"], 1, 0, 5.0, 1
+        ).status
+        == AdapterResultStatus.ERROR
     )
-    assert mirror.is_success and mirror.data.startswith("Mirror_Centerline_1_")
-    assert offset.is_success and "_inward_" in offset.data
+    assert (
+        sketch._sketch_linear_pattern_impl(
+            adapter, ["Line_1"], 1, 0, 0.0, 3
+        ).status
+        == AdapterResultStatus.ERROR
+    )
+    assert (
+        sketch._sketch_linear_pattern_impl(
+            adapter, ["Line_1"], 0, 0, 5.0, 3
+        ).status
+        == AdapterResultStatus.ERROR
+    )
+
+
+def test_sketch_linear_pattern_unknown_entity_does_not_mutate_selection() -> None:
+    """Validating IDs happens before ``ClearSelection2`` so an unknown ID
+    does not leave SW with a half-built selection state."""
+    adapter, _, clear_selection, _, _ = _make_pattern_adapter()
+
+    result = sketch._sketch_linear_pattern_impl(
+        adapter, ["Line_NOPE"], 1, 0, 5.0, 3
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unknown sketch entity 'Line_NOPE'" in (result.error or "")
+    clear_selection.assert_not_called()
+
+
+def test_sketch_linear_pattern_clears_selection_on_com_failure() -> None:
+    """``CreateLinearSketchStepAndRepeat`` returning ``False`` must still
+    leave selection state cleaned up (try/finally invariant)."""
+    adapter, create_pattern, clear_selection, _, _ = _make_pattern_adapter()
+    create_pattern.return_value = False
+
+    result = sketch._sketch_linear_pattern_impl(
+        adapter, ["Line_1"], 1, 0, 5.0, 3
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    # ClearSelection2 must run both before selecting and after the failure.
+    assert clear_selection.call_count == 2
+
+
+def _make_offset_adapter() -> tuple[_FakeSketchAdapter, Mock, Mock]:
+    """Build a fake adapter wired for the real sketch_offset impl.
+
+    Mirrors ``_make_pattern_adapter`` — entity registered, SketchOffset2
+    on the sketch manager, ClearSelection2 + CreateSelectData on the
+    model. Returns the adapter + key mocks for assertions.
+    """
+    adapter = _FakeSketchAdapter()
+    seed_entity = Mock()
+    seed_entity.Select4 = Mock(return_value=True)
+    adapter._sketch_entities = {"Line_1": seed_entity}
+
+    sketch_offset2 = Mock(return_value=True)
+    sketch_manager = Mock()
+    sketch_manager.SketchOffset2 = sketch_offset2
+    adapter.currentSketchManager = sketch_manager
+
+    select_data = Mock()
+    selection_mgr = Mock()
+    selection_mgr.CreateSelectData = Mock(return_value=select_data)
+
+    clear_selection = Mock(return_value=True)
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=clear_selection,
+        SelectionManager=selection_mgr,
+    )
+    return adapter, sketch_offset2, clear_selection
+
+
+def test_sketch_offset_outward_calls_com_with_positive_offset() -> None:
+    """``reverse_direction=False`` passes a positive metre value to
+    ``SketchOffset2`` and synthesises an ``_outward_`` ID."""
+    adapter, sketch_offset2, clear_selection = _make_offset_adapter()
+
+    result = sketch._sketch_offset_impl(adapter, ["Line_1"], 5.0, False)
+
+    assert result.is_success
+    assert "_outward_" in result.data
+    sketch_offset2.assert_called_once()
+    args = sketch_offset2.call_args.args
+    assert args[0] == 5.0 / 1000.0  # mm → m
+    # ClearSelection2 runs once before selecting and once in the finally.
+    assert clear_selection.call_count == 2
+
+
+def test_sketch_offset_inward_flips_sign() -> None:
+    """``reverse_direction=True`` negates ``Offset`` per SketchOffset2 docs."""
+    adapter, sketch_offset2, _ = _make_offset_adapter()
+
+    result = sketch._sketch_offset_impl(adapter, ["Line_1"], 2.5, True)
+
+    assert result.is_success
+    assert "_inward_" in result.data
+    args = sketch_offset2.call_args.args
+    assert args[0] == -2.5 / 1000.0
+
+
+def test_sketch_offset_unknown_entity_does_not_mutate_selection() -> None:
+    adapter, _, clear_selection = _make_offset_adapter()
+
+    result = sketch._sketch_offset_impl(adapter, ["Line_NOPE"], 5.0, False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unknown sketch entity 'Line_NOPE'" in (result.error or "")
+    clear_selection.assert_not_called()
+
+
+def test_sketch_offset_clears_selection_on_com_failure() -> None:
+    """``SketchOffset2`` returning False must still leave selection
+    state cleaned up (try/finally invariant)."""
+    adapter, sketch_offset2, clear_selection = _make_offset_adapter()
+    sketch_offset2.return_value = False
+
+    result = sketch._sketch_offset_impl(adapter, ["Line_1"], 5.0, False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert clear_selection.call_count == 2
 
 
 def _make_constraint_adapter(
@@ -408,13 +625,37 @@ def test_add_sketch_constraint_unknown_entity3_returns_error() -> None:
     assert "Unknown sketch entity 'CL_99'" in (result.error or "")
 
 
-def test_exit_sketch_warning_and_success_paths() -> None:
+def test_exit_sketch_no_model_returns_warning() -> None:
+    """Without a ``currentModel`` nothing can be in sketch-edit mode; return
+    WARNING so defensive-cleanup callers don't see spurious errors."""
     adapter = _FakeSketchAdapter()
+    result = sketch._exit_sketch_impl(adapter)
+    assert result.status == AdapterResultStatus.WARNING
+    assert "No active sketch to exit" in (result.error or "")
+
+
+def test_exit_sketch_warning_and_success_paths() -> None:
+    """Cover both branches of the SW-state-aware exit:
+
+    - SW reports no active sketch AND adapter has no manager -> WARNING
+      (already-exited is not a failure).
+    - SW reports an active sketch -> InsertSketch toggled and adapter
+      state cleared.
+    """
+    adapter = _FakeSketchAdapter()
+    # Model present but nothing is in sketch-edit mode anywhere.
+    inactive_manager = SimpleNamespace(InsertSketch=Mock())
+    adapter.currentModel = SimpleNamespace(
+        GetActiveSketch2=lambda: None,
+        SketchManager=inactive_manager,
+    )
     warning = sketch._exit_sketch_impl(adapter)
     assert warning.status == AdapterResultStatus.WARNING
+    inactive_manager.InsertSketch.assert_not_called()
 
-    manager = SimpleNamespace(InsertSketch=Mock())
-    adapter.currentSketchManager = manager
+    # Adapter-side state populated (the original-fixture happy path).
+    active_manager = SimpleNamespace(InsertSketch=Mock())
+    adapter.currentSketchManager = active_manager
     adapter.currentSketch = object()
     adapter._sketch_entities = {"Line_1": object()}
 
@@ -422,6 +663,37 @@ def test_exit_sketch_warning_and_success_paths() -> None:
     assert success.status == AdapterResultStatus.SUCCESS
     assert adapter.currentSketch is None
     assert adapter.currentSketchManager is None
+    assert adapter._sketch_entities == {}
+    active_manager.InsertSketch.assert_called_once_with(True)
+
+
+def test_exit_sketch_sw_active_but_adapter_state_empty() -> None:
+    """Regression for the bug: SW has a sketch open (e.g. from a prior
+    aborted run) but ``adapter.currentSketchManager`` is ``None``.
+
+    The fix must still toggle SW out of sketch-edit mode using
+    ``currentModel.SketchManager`` rather than reporting "no active
+    sketch" — otherwise every subsequent ``create_sketch("Front")``
+    fails with ``Failed to select plane: Front Plane`` because SW
+    cannot open a new sketch while one is already active.
+    """
+    adapter = _FakeSketchAdapter()
+    sketch_manager = SimpleNamespace(InsertSketch=Mock())
+    sw_active_sketch = object()
+    adapter.currentModel = SimpleNamespace(
+        GetActiveSketch2=lambda: sw_active_sketch,
+        SketchManager=sketch_manager,
+    )
+    assert adapter.currentSketchManager is None  # the divergent state
+
+    result = sketch._exit_sketch_impl(adapter)
+    assert result.status == AdapterResultStatus.SUCCESS, (
+        f"unexpected: {result.error}"
+    )
+    sketch_manager.InsertSketch.assert_called_once_with(True)
+    # Adapter state stays clean afterwards.
+    assert adapter.currentSketchManager is None
+    assert adapter.currentSketch is None
     assert adapter._sketch_entities == {}
 
 

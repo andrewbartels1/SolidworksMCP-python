@@ -14,13 +14,13 @@ from types import SimpleNamespace
 from typing import Any, TypeVar
 
 from ..exceptions import SolidWorksMCPError
+from . import sw_type_info
 from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
     SolidWorksAdapter,
 )
-from . import sw_type_info
 from .solidworks import (
     SolidWorksFeaturesMixin,
     SolidWorksIOMixin,
@@ -364,6 +364,7 @@ class _SketchGeometryService:
             ``adapter._sketch_entity_counter`` to ``0``.
         """
         self._adapter._sketch_entities.clear()
+        self._adapter._sketch_entity_centers.clear()
         self._adapter._sketch_entity_counter = 0
 
     def register_entity(self, prefix: str, entity: Any) -> str:
@@ -1383,6 +1384,12 @@ class PyWin32Adapter(
         self._last_sketch_name: str | None = None
         self._sketch_count: int = 0  # incremented each time a sketch is created
         self._sketch_entities: dict[str, Any] = {}
+        # Cached (center_x_mm, center_y_mm) for entities whose center can't be
+        # recovered via ``GetCenterPoint`` — currently polygons, which register
+        # as a SAFEARRAY of segment handles (no single dispatch to read from).
+        # ``sketch_circular_pattern`` reads this to derive the seed-to-axis
+        # offset for polygon seeds.
+        self._sketch_entity_centers: dict[str, tuple[float, float]] = {}
         self._sketch_entity_counter = 0
         self._com_initialized = False
 

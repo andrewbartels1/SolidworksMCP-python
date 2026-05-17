@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -298,6 +299,654 @@ class TestMockAdapterSuccessPaths:
         result = await adapter.add_centerline(0.0, 0.0, 1.0, 1.0)
         assert result.status == AdapterResultStatus.SUCCESS
         assert "Centerline" in result.data
+
+    @pytest.mark.asyncio
+    async def test_add_arc_success(self):
+        """Mock add_arc returns an Arc* id with an active sketch."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.add_arc(0.0, 0.0, 5.0, 0.0, 0.0, 5.0)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("Arc")
+        assert result.data in adapter._sketch_entity_ids
+
+    @pytest.mark.asyncio
+    async def test_add_arc_error_when_no_sketch(self):
+        """Mock add_arc returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.add_arc(0.0, 0.0, 5.0, 0.0, 0.0, 5.0)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_spline_success(self):
+        """Mock add_spline returns a Spline* id with an active sketch."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.add_spline(
+            [{"x": 0.0, "y": 0.0}, {"x": 5.0, "y": 2.5}, {"x": 10.0, "y": 0.0}]
+        )
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("Spline")
+        assert result.data in adapter._sketch_entity_ids
+
+    @pytest.mark.asyncio
+    async def test_add_spline_error_when_no_sketch(self):
+        """Mock add_spline returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.add_spline(
+            [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
+        )
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_spline_error_when_too_few_points(self):
+        """Mock add_spline rejects single-point input."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.add_spline([{"x": 0.0, "y": 0.0}])
+        assert result.status == AdapterResultStatus.ERROR
+        assert "at least 2 points" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_ellipse_success(self):
+        """Mock add_ellipse returns an Ellipse_* id with an active sketch."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.add_ellipse(0.0, 0.0, 60.0, 30.0)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("Ellipse_")
+        assert result.data in adapter._sketch_entity_ids
+
+    @pytest.mark.asyncio
+    async def test_add_ellipse_error_when_no_sketch(self):
+        """Mock add_ellipse returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.add_ellipse(0.0, 0.0, 60.0, 30.0)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_polygon_success(self):
+        """Mock add_polygon returns a Polygon_<sides>sided_* id with an active sketch."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.add_polygon(0.0, 0.0, 15.0, 6)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("Polygon_")
+        assert result.data in adapter._sketch_entity_ids
+
+    @pytest.mark.asyncio
+    async def test_add_polygon_error_when_no_sketch(self):
+        """Mock add_polygon returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.add_polygon(0.0, 0.0, 15.0, 6)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_linear_pattern_success(self):
+        """Mock sketch_linear_pattern returns a LinearPattern_* id."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        circle = await adapter.add_circle(0.0, 0.0, 3.0)
+
+        result = await adapter.sketch_linear_pattern(
+            [circle.data], 1.0, 0.0, 10.0, 4
+        )
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("LinearPattern_4x10.0_")
+
+    @pytest.mark.asyncio
+    async def test_sketch_linear_pattern_error_when_no_sketch(self):
+        """Mock sketch_linear_pattern returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.sketch_linear_pattern(["Line1"], 1.0, 0.0, 10.0, 3)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_linear_pattern_rejects_unknown_entity(self):
+        """Mock sketch_linear_pattern surfaces a clear error for missing IDs."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.sketch_linear_pattern(
+            ["Bogus_123"], 1.0, 0.0, 10.0, 3
+        )
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Unknown sketch entity" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_linear_pattern_input_validation(self):
+        """Empty entities / count<2 / spacing<=0 / zero direction → ERROR."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        circle = await adapter.add_circle(0.0, 0.0, 3.0)
+
+        # Empty entities
+        result = await adapter.sketch_linear_pattern([], 1.0, 0.0, 10.0, 3)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "at least one entity" in (result.error or "")
+
+        # count < 2
+        result = await adapter.sketch_linear_pattern(
+            [circle.data], 1.0, 0.0, 10.0, 1
+        )
+        assert result.status == AdapterResultStatus.ERROR
+        assert "count >= 2" in (result.error or "")
+
+        # spacing <= 0
+        result = await adapter.sketch_linear_pattern(
+            [circle.data], 1.0, 0.0, 0.0, 3
+        )
+        assert result.status == AdapterResultStatus.ERROR
+        assert "spacing > 0" in (result.error or "")
+
+        # zero direction vector
+        result = await adapter.sketch_linear_pattern(
+            [circle.data], 0.0, 0.0, 10.0, 3
+        )
+        assert result.status == AdapterResultStatus.ERROR
+        assert "non-zero direction" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_circular_pattern_success(self):
+        """Mock sketch_circular_pattern returns a CircularPattern_* id."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        circle = await adapter.add_circle(30.0, 0.0, 3.0)
+
+        result = await adapter.sketch_circular_pattern([circle.data], 360.0, 6)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("CircularPattern_6x360.0deg_")
+
+    @pytest.mark.asyncio
+    async def test_sketch_circular_pattern_error_when_no_sketch(self):
+        """Mock sketch_circular_pattern returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.sketch_circular_pattern(["Circle1"], 360.0, 6)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_circular_pattern_rejects_unknown_entity(self):
+        """Mock sketch_circular_pattern surfaces error for missing IDs."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+
+        result = await adapter.sketch_circular_pattern(["Bogus_999"], 360.0, 6)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Unknown sketch entity" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_circular_pattern_input_validation(self):
+        """Empty entities / count<2 / angle<=0 → ERROR with descriptive message."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        circle = await adapter.add_circle(30.0, 0.0, 3.0)
+
+        result = await adapter.sketch_circular_pattern([], 360.0, 6)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "at least one entity" in (result.error or "")
+
+        result = await adapter.sketch_circular_pattern([circle.data], 360.0, 1)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "count >= 2" in (result.error or "")
+
+        result = await adapter.sketch_circular_pattern([circle.data], 0.0, 6)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "angle > 0" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_circular_pattern_partial_sweep(self):
+        """Mock handles partial sweeps (e.g. 180° with 3 instances) the
+        same way as a full pattern — the mock only synthesises an ID, but
+        the real impl uses ``angle / (count - 1)`` for partial sweeps so
+        the last instance lands at the requested total angle.
+        """
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        circle = await adapter.add_circle(30.0, 0.0, 3.0)
+
+        result = await adapter.sketch_circular_pattern([circle.data], 180.0, 3)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("CircularPattern_3x180.0deg_")
+
+    @pytest.mark.asyncio
+    async def test_sketch_mirror_success(self):
+        """Mock sketch_mirror returns a Mirror_* id with valid inputs."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        cl = await adapter.add_centerline(0.0, -30.0, 0.0, 30.0)
+        line = await adapter.add_line(5.0, 0.0, 25.0, 0.0)
+
+        result = await adapter.sketch_mirror([line.data], cl.data)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith(f"Mirror_{cl.data}_")
+
+    @pytest.mark.asyncio
+    async def test_sketch_mirror_error_when_no_sketch(self):
+        """Mock sketch_mirror returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.sketch_mirror(["Line1"], "Centerline1")
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_mirror_rejects_unknown_entity(self):
+        """Mock sketch_mirror surfaces error for unknown source entities."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        cl = await adapter.add_centerline(0.0, -30.0, 0.0, 30.0)
+
+        result = await adapter.sketch_mirror(["Bogus_999"], cl.data)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Unknown sketch entity" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_mirror_input_validation(self):
+        """Empty entities and missing/unknown mirror_line each error."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        cl = await adapter.add_centerline(0.0, -30.0, 0.0, 30.0)
+        line = await adapter.add_line(5.0, 0.0, 25.0, 0.0)
+
+        result = await adapter.sketch_mirror([], cl.data)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "at least one entity" in (result.error or "")
+
+        result = await adapter.sketch_mirror([line.data], "")
+        assert result.status == AdapterResultStatus.ERROR
+        assert "mirror_line entity ID" in (result.error or "")
+
+        result = await adapter.sketch_mirror([line.data], "NotACenterline_42")
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Unknown mirror_line entity" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_offset_outward_success(self):
+        """Mock sketch_offset returns Offset_*_outward_* with reverse=False."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        line = await adapter.add_line(0.0, 0.0, 50.0, 0.0)
+
+        result = await adapter.sketch_offset([line.data], 5.0, False)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("Offset_5.0_outward_")
+
+    @pytest.mark.asyncio
+    async def test_sketch_offset_inward_success(self):
+        """Mock sketch_offset returns Offset_*_inward_* with reverse=True."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        line = await adapter.add_line(0.0, 20.0, 50.0, 20.0)
+
+        result = await adapter.sketch_offset([line.data], 3.0, True)
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("Offset_3.0_inward_")
+
+    @pytest.mark.asyncio
+    async def test_sketch_offset_error_when_no_sketch(self):
+        """Mock sketch_offset returns ERROR when no sketch is open."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.sketch_offset(["Line1"], 5.0, False)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_offset_input_validation(self):
+        """Empty entities / non-positive distance / unknown entity each error."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Front")
+        line = await adapter.add_line(0.0, 0.0, 50.0, 0.0)
+
+        result = await adapter.sketch_offset([], 5.0, False)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "at least one entity" in (result.error or "")
+
+        result = await adapter.sketch_offset([line.data], 0.0, False)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "offset_distance > 0" in (result.error or "")
+
+        result = await adapter.sketch_offset([line.data], -1.0, False)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "offset_distance > 0" in (result.error or "")
+
+        result = await adapter.sketch_offset(["Bogus_42"], 5.0, False)
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Unknown sketch entity" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# Real (PyWin32) circular pattern impl — fake SketchManager unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestRealCircularPatternImpl:
+    """Direct tests for ``_sketch_circular_pattern_impl`` against a fake
+    SketchManager. Verifies the COM-call argument shape so partial sweeps
+    and full circles use the right ``PatternSpacing`` formula.
+    """
+
+    @staticmethod
+    def _build_adapter() -> tuple[SimpleNamespace, Mock, Mock]:
+        """Build the minimum object graph the real impl reads from.
+
+        The impl needs:
+          * ``adapter._sketch_entities`` — registered seed entities
+          * ``adapter.currentSketchManager.CreateCircularSketchStepAndRepeat``
+          * ``adapter.currentModel.ClearSelection2`` and
+            ``adapter.currentModel.SelectionManager.CreateSelectData``
+          * ``adapter._handle_com_operation(name, fn)`` — invoked
+            synchronously
+          * ``adapter._attempt(fn, default=...)`` — synchronous
+        """
+        seed_entity = Mock()
+        seed_entity.Select4 = Mock(return_value=True)
+        # GetCenterPoint must resolve to a length-2 tuple of metres for the
+        # impl's seed-centre lookup to succeed; without this the impl would
+        # raise the "can't derive the seed centre" error and tests that
+        # don't care about the seed position would break. (30, 0) mm puts
+        # the seed on +X — a sensible default for circular-pattern tests.
+        seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
+        sketch_entities = {"Circle_1": seed_entity}
+
+        create_pattern = Mock(return_value=True)
+        sketch_manager = Mock()
+        sketch_manager.CreateCircularSketchStepAndRepeat = create_pattern
+
+        select_data = Mock()
+        selection_mgr = Mock()
+        selection_mgr.CreateSelectData = Mock(return_value=select_data)
+        current_model = SimpleNamespace(
+            ClearSelection2=Mock(return_value=True),
+            SelectionManager=selection_mgr,
+        )
+
+        def _handle(_name, fn):
+            try:
+                return AdapterResult(
+                    status=AdapterResultStatus.SUCCESS, data=fn()
+                )
+            except Exception as exc:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR, error=str(exc)
+                )
+
+        def _attempt(fn, default=None):
+            try:
+                return fn()
+            except Exception:
+                return default
+
+        adapter = SimpleNamespace(
+            _sketch_entities=sketch_entities,
+            _sketch_entity_centers={},
+            currentSketchManager=sketch_manager,
+            currentModel=current_model,
+            _handle_com_operation=_handle,
+            _attempt=_attempt,
+        )
+        return adapter, create_pattern, seed_entity
+
+    def test_full_circle_uses_angle_over_count(self):
+        """A 360° pattern with count=6 should hand the COM call a
+        ``PatternSpacing`` of ``2π / 6`` so adjacent instances tile."""
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("CircularPattern_6x360.0deg_")
+        create_pattern.assert_called_once()
+        args = create_pattern.call_args.args
+        # Signature: ArcRadius, ArcAngle, PatternNum, PatternSpacing,
+        # PatternRotate, DeleteInstances, RadiusDim, AngleDim,
+        # CreateNumOfInstancesDim
+        assert args[2] == 6  # PatternNum
+        assert args[3] == pytest.approx(math.radians(360.0) / 6)
+        assert args[4] is True  # PatternRotate
+
+    def test_partial_sweep_uses_angle_over_count_minus_one(self):
+        """For ``angle=180, count=3`` the partial-sweep formula puts the
+        last instance at 180°, so spacing must be ``π / (3 - 1)`` rad."""
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 180.0, 3
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        args = create_pattern.call_args.args
+        assert args[2] == 3
+        assert args[3] == pytest.approx(math.radians(180.0) / 2)
+
+    def test_clear_selection_runs_on_com_failure(self):
+        """``CreateCircularSketchStepAndRepeat`` returning False must
+        still leave selection state cleaned up (try/finally)."""
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        create_pattern.return_value = False
+        clear_selection = adapter.currentModel.ClearSelection2
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.ERROR
+        # ClearSelection2 runs before selecting and again in the finally
+        # block after the COM failure.
+        assert clear_selection.call_count == 2
+
+    def test_polygon_seed_with_cached_center_drives_arc_radius(self):
+        """When ``_add_polygon_impl`` cached the polygon center at register
+        time, circular_pattern must use that cached center to derive the
+        seed-to-axis distance instead of rejecting the seed."""
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        adapter._sketch_entities["Polygon_1"] = (Mock(), Mock(), Mock())
+        # Polygon at (30, 40) mm → seed-to-origin distance is 50 mm.
+        adapter._sketch_entity_centers["Polygon_1"] = (30.0, 40.0)
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Polygon_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        create_pattern.assert_called_once()
+        args = create_pattern.call_args.args
+        # ArcRadius is in metres: hypot(30, 40) / 1000 = 0.05.
+        assert args[0] == pytest.approx(0.05)
+        assert args[2] == 6
+
+    def test_rectangle_seed_with_cached_center_drives_arc_radius(self):
+        """Rectangles register as a SAFEARRAY tuple of line segments — same
+        shape as polygons. ``_add_rectangle_impl`` now caches the geometric
+        centre at register time, so a rectangle seed must flow through
+        circular_pattern the same as a polygon seed, deriving ArcRadius
+        from the cached centre.
+        """
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        adapter._sketch_entities["Rectangle_1"] = (Mock(), Mock(), Mock(), Mock())
+        # Rectangle centred at (60, 80) mm → seed-to-origin distance is 100 mm.
+        adapter._sketch_entity_centers["Rectangle_1"] = (60.0, 80.0)
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Rectangle_1"], 360.0, 4
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        create_pattern.assert_called_once()
+        args = create_pattern.call_args.args
+        # ArcRadius is in metres: hypot(60, 80) / 1000 = 0.100.
+        assert args[0] == pytest.approx(0.100)
+        assert args[2] == 4
+
+    def test_single_dispatch_seed_without_get_center_point_raises(self):
+        """Lines, splines, and centerlines register as a single dispatch but
+        none of them expose ``GetCenterPoint`` on the flagged interfaces
+        (``ISketchArc``/``ISketchEllipse``). The previous impl let this fall
+        through to a 1 mm placeholder radius, silently producing a tightly
+        clustered pattern instead of the intended one. Surface a clear
+        error pointing the caller at the supported seed types instead."""
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        # Stand-in for a line/spline/centerline: single dispatch whose
+        # GetCenterPoint returns a non-iterable value (the real impl swallows
+        # the AttributeError via ``_attempt`` and ``point`` stays as a Mock
+        # that fails the ``len(point) >= 2`` check). Use return_value=None to
+        # be explicit.
+        bare_seed = Mock()
+        bare_seed.Select4 = Mock(return_value=True)
+        bare_seed.GetCenterPoint = Mock(return_value=None)
+        adapter._sketch_entities["Line_1"] = bare_seed
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Line_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Line_1" in (result.error or "")
+        assert "GetCenterPoint" in (result.error or "")
+        # COM call must NOT have fired — silent 1 mm placeholder pattern
+        # was the bug.
+        create_pattern.assert_not_called()
+
+    def test_tuple_seed_without_cached_center_raises_clear_error(self):
+        """Group-registering primitives (polygons, rectangles) cache their
+        centre at register time so circular_pattern can derive the
+        seed-to-axis radius from the tuple seed. Any *other* tuple seed
+        without a cached centre — e.g. a future ``add_slot`` — would
+        otherwise fall through to a misleading 1 mm placeholder radius.
+        Surface a clear, actionable error that names only the
+        always-works primitives instead.
+        """
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        # Stand in for a hypothetical tuple-registering primitive whose
+        # ``add_*`` writer never stashed a centre.
+        adapter._sketch_entities["Slot_1"] = (Mock(), Mock(), Mock(), Mock())
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Slot_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.ERROR
+        # Error must name the offending entity and the accepted seed types.
+        # Polygons and rectangles always reach the cached branch, so the
+        # message lists only the always-works primitives.
+        assert "Slot_1" in (result.error or "")
+        assert "circle, arc, or ellipse" in (result.error or "")
+        create_pattern.assert_not_called()
+
+    def test_arc_angle_normalized_to_positive_when_seed_on_plus_x_axis(self):
+        """A seed at (+X, 0) must hand SW a positive ``ArcAngle`` (+π), not
+        the ``-π`` that Python's ``math.atan2(-0.0, -seed_x)`` produces.
+
+        Regression: ``CreateCircularSketchStepAndRepeat`` silently returns
+        ``False`` on negative angle values — both the live
+        ``test_sketch_circular_pattern_creates_real_pattern`` regression
+        and the live demo failed without this normalisation.
+        """
+        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, seed_entity = self._build_adapter()
+        # Seed at (+30 mm, 0): GetCenterPoint returns metres on the SW side,
+        # so the impl multiplies by 1000 to get mm.  Length-2 tuple suffices
+        # for the ``len(point) >= 2`` check.
+        seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        # Signature: ArcRadius, ArcAngle, PatternNum, ...
+        args = create_pattern.call_args.args
+        assert args[0] == pytest.approx(0.030)  # radius in metres
+        # The angle must be ~+π (positive), not -π.  Without normalisation
+        # ``math.atan2(-0.0, -0.030)`` returns ``-π`` and SW silently rejects
+        # the call.
+        assert args[1] == pytest.approx(math.pi)
 
 
 # ---------------------------------------------------------------------------

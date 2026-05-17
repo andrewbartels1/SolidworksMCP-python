@@ -392,8 +392,6 @@ _SMOKE_PAYLOADS: dict[str, dict[str, Any]] = {
         "entity": "Line1",
         "count": 4,
         "angle": 90.0,
-        "center_x": 0.0,
-        "center_y": 0.0,
     },
     "sketch_mirror": {"entity": "Line1", "mirror_line": "Line2"},
     "sketch_offset": {"entity": "Line1", "distance": 5.0},

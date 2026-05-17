@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 import time
 from typing import Any, cast
@@ -176,14 +177,10 @@ class SolidWorksSketchMixin:
     async def sketch_circular_pattern(
         self,
         entities: list[str],
-        center_x: float,
-        center_y: float,
         angle: float,
         count: int,
     ) -> AdapterResult[str]:
-        return _sketch_circular_pattern_impl(
-            self, entities, center_x, center_y, angle, count
-        )
+        return _sketch_circular_pattern_impl(self, entities, angle, count)
 
     async def sketch_mirror(
         self, entities: list[str], mirror_line: str
@@ -516,9 +513,16 @@ def _add_rectangle_impl(
         )
         if not lines:
             raise Exception("Failed to create rectangle")
-        return cast(
-            AdapterResult[str], adapter._register_sketch_entity("Rectangle", lines)
+        entity_id = cast(str, adapter._register_sketch_entity("Rectangle", lines))
+        # Like polygons, rectangles register as a SAFEARRAY tuple of segment
+        # handles — no single dispatch ``GetCenterPoint`` to recover the
+        # geometric centre from later. Stash it now so the rectangle ID is a
+        # valid seed for ``sketch_circular_pattern``.
+        adapter._sketch_entity_centers[entity_id] = (
+            (x1 + x2) / 2.0,
+            (y1 + y2) / 2.0,
         )
+        return entity_id
 
     return cast(
         AdapterResult[str],
@@ -606,55 +610,71 @@ def _add_spline_impl(
 ) -> AdapterResult[str]:
     """Add a NURBS spline through the supplied control points.
 
-    Calls ``SketchManager.CreateSpline2`` with the flattened XYZ coordinate
-    list.  Each point dict must contain ``"x"`` and ``"y"`` keys; the Z
-    component is forced to ``0``.
+    Calls ``SketchManager.CreateSpline2(points, simulateNaturalEnds=False)``
+    with a flattened XYZ coordinate list. Each point dict must contain
+    ``"x"`` and ``"y"`` keys; the Z component is forced to ``0``.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
         points: Ordered list of control-point dicts with keys ``"x"`` and
-            ``"y"`` (in **millimetres**).  Minimum 2 points required by
-            SolidWorks.  Example::
+            ``"y"`` (in **millimetres**). Minimum 2 points required by
+            SolidWorks. Example::
 
                 [{"x": 0, "y": 0}, {"x": 25, "y": 10}, {"x": 50, "y": 0}]
 
     Returns:
-        AdapterResult[str]: On success, ``data`` is a timestamped entity ID
-        string (e.g. ``"Spline_7832"``).  On failure, ``status`` is
+        AdapterResult[str]: On success, ``data`` is the registered entity
+        ID string (e.g. ``"Spline_5"``). On failure, ``status`` is
         ``ERROR``.
 
     Raises:
-        Exception: Propagated through ``_handle_com_operation`` when
-            ``CreateSpline2`` returns ``None``.
+        Exception: Propagated through ``_handle_com_operation`` when fewer
+            than two points are supplied or ``CreateSpline2`` returns
+            ``None``.
 
     Example::
 
         pts = [{"x": 0, "y": 0}, {"x": 20, "y": 15}, {"x": 40, "y": 0}]
         result = pywin32_sketch_ops.add_spline(adapter, pts)
-        print(result.data)  # "Spline_5412"
+        print(result.data)  # "Spline_1"
     """
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _spline_operation() -> str:
-        """Inner COM closure that flattens the point list and calls CreateSpline2.
+        if len(points) < 2:
+            raise Exception("add_spline requires at least 2 points")
 
-        Returns:
-            str: A timestamped unique spline ID (not registered in entity
-            registry because splines do not support individual selection by
-            the current dimension API).
-
-        Raises:
-            Exception: If ``CreateSpline2`` returns ``None``.
-        """
-        spline_points = []
+        spline_points: list[float] = []
         for point in points:
-            spline_points.extend([point["x"] / 1000.0, point["y"] / 1000.0, 0])
+            spline_points.extend([point["x"] / 1000.0, point["y"] / 1000.0, 0.0])
 
-        spline = adapter.currentSketchManager.CreateSpline2(spline_points, True, None)
+        # pywin32 late binding unpacks a bare list into N positional
+        # VARIANTs, so SolidWorks sees 3*N+1 arguments instead of 2 and
+        # rejects the call with DISP_E_BADPARAMCOUNT. Wrap the doubles in a
+        # SAFEARRAY VARIANT (VT_ARRAY|VT_R8) — the same lazy-import dance as
+        # add_sketch_constraint so non-Windows CI still exercises this path.
+        try:
+            import pythoncom as _pythoncom
+            from win32com.client import VARIANT as _VARIANT
+        except ImportError:
+            _pythoncom = None  # type: ignore[assignment]
+            _VARIANT = None  # type: ignore[assignment]
+
+        points_arg: Any
+        if _pythoncom is not None and _VARIANT is not None:
+            points_arg = _VARIANT(
+                _pythoncom.VT_ARRAY | _pythoncom.VT_R8, spline_points
+            )
+        elif sys.platform == "win32":
+            raise Exception("pywin32 is required for add_spline on Windows")
+        else:
+            points_arg = spline_points
+
+        spline = adapter.currentSketchManager.CreateSpline2(points_arg, False)
         if not spline:
             raise Exception("Failed to create spline")
-        return f"Spline_{int(time.time() * 1000) % 10000}"
+        return cast(str, adapter._register_sketch_entity("Spline", spline))
 
     return cast(
         AdapterResult[str],
@@ -730,19 +750,28 @@ def _add_polygon_impl(
 ) -> AdapterResult[str]:
     """Add a regular polygon inscribed in a circle to the active sketch.
 
-    Calls ``SketchManager.CreatePolygon``.  The polygon is inscribed so that
-    all vertices lie on a circle of the given ``radius``.
+    Calls ``SketchManager.CreatePolygon(XC, YC, Zc, Xp, Yp, Zp, Sides,
+    Inscribed)``.  All eight arguments are required by the COM API — passing
+    fewer arguments surfaces a pywin32 ``"Parameter not optional."`` error at
+    the SOLIDWORKS boundary.  The vertex point ``(Xp, Yp, Zp)`` is placed on
+    the positive X axis at ``radius`` from centre, which fixes the polygon's
+    rotation reproducibly.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
         center_x: Polygon centre X in **millimetres**.
         center_y: Polygon centre Y in **millimetres**.
-        radius: Circumscribed circle radius in **millimetres**.
+        radius: Circumradius in **millimetres** (distance from centre to each
+            vertex). Corresponds to ``CreatePolygon(..., Inscribed=True)``,
+            i.e. the polygon is inscribed in a circle of this radius.
         sides: Number of polygon sides.  SolidWorks accepts 3–40.
 
     Returns:
-        AdapterResult[str]: On success, ``data`` is a descriptive timestamped
-        ID (e.g. ``"Polygon_6sided_1234"``).  On failure, ``status`` is
+        AdapterResult[str]: On success, ``data`` is the registered entity ID
+        (e.g. ``"Polygon_3"``).  The ID is stored in
+        ``adapter._sketch_entities`` so it can be passed back to
+        ``sketch_linear_pattern`` / ``sketch_circular_pattern`` /
+        ``sketch_mirror`` / ``sketch_offset``.  On failure, ``status`` is
         ``ERROR``.
 
     Raises:
@@ -754,7 +783,7 @@ def _add_polygon_impl(
         result = pywin32_sketch_ops.add_polygon(
             adapter, center_x=0, center_y=0, radius=15.0, sides=6
         )
-        print(result.data)  # "Polygon_6sided_4321"
+        print(result.data)  # "Polygon_3"
     """
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
@@ -763,7 +792,7 @@ def _add_polygon_impl(
         """Inner COM closure that calls CreatePolygon.
 
         Returns:
-            str: Descriptive timestamped ID for the polygon.
+            str: Registered entity ID for the polygon (e.g. ``"Polygon_3"``).
 
         Raises:
             Exception: If ``CreatePolygon`` returns ``None``.
@@ -772,13 +801,25 @@ def _add_polygon_impl(
             center_x / 1000.0,
             center_y / 1000.0,
             0,
-            radius / 1000.0,
-            sides,
+            (center_x + radius) / 1000.0,
+            center_y / 1000.0,
             0,
+            sides,
+            True,
         )
         if not polygon:
             raise Exception("Failed to create polygon")
-        return f"Polygon_{sides}sided_{int(time.time() * 1000) % 10000}"
+        # Register so the returned ID is usable by sketch_linear_pattern,
+        # sketch_circular_pattern, sketch_mirror, and sketch_offset — without
+        # this the polygon string is opaque and every downstream op fails
+        # with "Unknown sketch entity 'Polygon_*'".
+        entity_id = cast(str, adapter._register_sketch_entity("Polygon", polygon))
+        # Polygons register as a SAFEARRAY tuple of segments — there's no
+        # single dispatch ``GetCenterPoint`` to recover the center from later.
+        # Stash the known center so ``sketch_circular_pattern`` can derive the
+        # seed-to-axis offset for polygon seeds.
+        adapter._sketch_entity_centers[entity_id] = (center_x, center_y)
+        return entity_id
 
     return cast(
         AdapterResult[str],
@@ -800,6 +841,11 @@ def _add_ellipse_impl(
     positive Y direction.  The ellipse is therefore axis-aligned and cannot
     be rotated via this function.
 
+    The created ellipse is registered in the adapter's sketch-entity
+    registry so subsequent constraint and dimension calls can reference it
+    by ID, matching the behaviour of ``add_line`` / ``add_circle`` /
+    ``add_arc`` and the mock adapter.
+
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
         center_x: Ellipse centre X in **millimetres**.
@@ -810,8 +856,8 @@ def _add_ellipse_impl(
             as the offset from centre).
 
     Returns:
-        AdapterResult[str]: On success, ``data`` is a timestamped ID string
-        (e.g. ``"Ellipse_6789"``).  On failure, ``status`` is ``ERROR``.
+        AdapterResult[str]: On success, ``data`` is the registered entity ID
+        (e.g. ``"Ellipse_4"``).  On failure, ``status`` is ``ERROR``.
 
     Raises:
         Exception: Propagated through ``_handle_com_operation`` when
@@ -822,16 +868,16 @@ def _add_ellipse_impl(
         result = pywin32_sketch_ops.add_ellipse(
             adapter, center_x=0, center_y=0, major_axis=30.0, minor_axis=15.0
         )
-        print(result.data)  # "Ellipse_2345"
+        print(result.data)  # "Ellipse_4"
     """
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _ellipse_operation() -> str:
-        """Inner COM closure that calls CreateEllipse.
+        """Inner COM closure that calls CreateEllipse and registers the entity.
 
         Returns:
-            str: Timestamped unique ID for the ellipse.
+            str: Registered entity ID for the new ellipse.
 
         Raises:
             Exception: If ``CreateEllipse`` returns ``None``.
@@ -849,7 +895,7 @@ def _add_ellipse_impl(
         )
         if not ellipse:
             raise Exception("Failed to create ellipse")
-        return f"Ellipse_{int(time.time() * 1000) % 10000}"
+        return cast(str, adapter._register_sketch_entity("Ellipse", ellipse))
 
     return cast(
         AdapterResult[str],
@@ -936,7 +982,7 @@ def _add_sketch_constraint_impl(
         entity1_obj = adapter._sketch_entities.get(entity1)
         if entity1_obj is None:
             raise Exception(
-                f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle."
+                f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
             )
 
         entities = [entity1_obj]
@@ -944,14 +990,14 @@ def _add_sketch_constraint_impl(
             entity2_obj = adapter._sketch_entities.get(entity2)
             if entity2_obj is None:
                 raise Exception(
-                    f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle."
+                    f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
                 )
             entities.append(entity2_obj)
         if entity3:
             entity3_obj = adapter._sketch_entities.get(entity3)
             if entity3_obj is None:
                 raise Exception(
-                    f"Unknown sketch entity '{entity3}'. Use IDs returned by add_line/add_arc/add_circle."
+                    f"Unknown sketch entity '{entity3}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
                 )
             entities.append(entity3_obj)
 
@@ -1145,7 +1191,7 @@ def _add_sketch_dimension_impl(
         entity1_obj = adapter._sketch_entities.get(entity1)
         if entity1_obj is None:
             raise Exception(
-                f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle."
+                f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
             )
 
         entity2_obj = None
@@ -1153,7 +1199,7 @@ def _add_sketch_dimension_impl(
             entity2_obj = adapter._sketch_entities.get(entity2)
             if entity2_obj is None:
                 raise Exception(
-                    f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle."
+                    f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
                 )
 
         dim_type = (dimension_type or "linear").strip().lower()
@@ -1295,6 +1341,77 @@ def _add_sketch_dimension_impl(
     )
 
 
+def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> None:
+    """Select sketch entities from the registry under a specific mark.
+
+    Resolves each ID against ``adapter._sketch_entities`` and calls
+    ``ISketchSegment.Select4(Append=True, Data)`` on each — with ``Data``
+    being a configured ``ISelectData`` carrying the requested ``mark`` so
+    SolidWorks knows how to interpret the selection (e.g. mark=1 sketch
+    segments + mark=2 centerline for ``SketchMirror``).
+
+    The ``ISelectionMgr`` dispatch needs ``sw_type_info.flag_methods``
+    flagging or pywin32 late binding cannot resolve ``CreateSelectData``
+    and surfaces ``"Member not found."`` from the COM boundary.  This
+    matches the lazy-import dance used by ``add_sketch_constraint``;
+    when ``sw_type_info`` cannot be imported the flagging step is skipped
+    but ``ISelectionMgr.CreateSelectData`` and ``ISketchSegment.Select4``
+    are still invoked.  Callers must therefore not invoke this helper
+    without a live ``ISelectionMgr`` on ``adapter.currentModel``.
+
+    Args:
+        adapter: A ``PyWin32Adapter``.  ``adapter.currentModel`` must be a
+            live ``IModelDoc2`` dispatch.
+        entity_ids: Registry IDs returned by ``add_line`` / ``add_arc`` /
+            etc.  Must be non-empty; resolution failure raises.
+        mark: ``ISelectData.Mark`` value applied to every selection.
+
+    Raises:
+        Exception: If an entity ID is not in the registry or a Select4
+            call returns ``False``.
+    """
+    try:
+        from .. import sw_type_info as _sw_type_info
+    except ImportError:
+        _sw_type_info = None  # type: ignore[assignment]
+
+    sel_mgr = adapter.currentModel.SelectionManager
+    if _sw_type_info is not None:
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(sel_mgr, "ISelectionMgr"),
+            default=0,
+        )
+    select_data = sel_mgr.CreateSelectData()
+    select_data.Mark = mark
+    for ent_id in entity_ids:
+        entity = adapter._sketch_entities.get(ent_id)
+        if entity is None:
+            raise Exception(
+                f"Unknown sketch entity '{ent_id}'. Use IDs returned by "
+                "add_line/add_arc/add_circle/add_spline/add_centerline."
+            )
+        # ``ISketchManager::CreatePolygon`` returns the polygon's edges as
+        # a SAFEARRAY, which pywin32 unmarshals to a tuple of
+        # ``ISketchSegment`` handles — there is no single COM object to
+        # ``Select4`` on.  Treat any iterable (tuple/list) as a group of
+        # segments and select each, so a polygon ID can flow into
+        # sketch_linear_pattern / sketch_circular_pattern / sketch_mirror /
+        # sketch_offset the same as any other entity.  Single-segment
+        # entities (lines, arcs, splines, ellipses, centerlines) keep the
+        # original Select4 path.
+        if isinstance(entity, (list, tuple)):
+            for segment in entity:
+                ok = segment.Select4(True, select_data)
+                if not ok:
+                    raise Exception(
+                        f"Failed to select segment of sketch entity '{ent_id}'"
+                    )
+        else:
+            ok = entity.Select4(True, select_data)
+            if not ok:
+                raise Exception(f"Failed to select sketch entity '{ent_id}'")
+
+
 def _sketch_linear_pattern_impl(
     adapter: Any,
     entities: list[str],
@@ -1303,36 +1420,104 @@ def _sketch_linear_pattern_impl(
     spacing: float,
     count: int,
 ) -> AdapterResult[str]:
-    """Create a linear sketch pattern — placeholder, not yet fully implemented.
+    """Create a linear sketch pattern from the registered seed entities.
 
-    Retained for interface compatibility.  Currently returns a descriptive
-    placeholder ID without invoking SolidWorks.  Full implementation will call
-    ``SketchManager.CreateLinearSketchStepAndRepeat``.
+    Selects ``entities`` then calls
+    ``ISketchManager::CreateLinearSketchStepAndRepeat(NumX, NumY, SpacingX,
+    SpacingY, AngleX, AngleY, DeleteInstances, XSpacingDim, YSpacingDim,
+    AngleDim, CreateNumOfInstancesDimInXDir, CreateNumOfInstancesDimInYDir)``.
+    The COM API expects spacing in metres and angles in radians; this
+    function does both conversions internally.
+
+    The ``(direction_x, direction_y)`` vector defines pattern direction 1
+    (``AngleX``).  Direction 2 (``AngleY``) is set perpendicular so the SW
+    UI shows a clean axis frame, but ``NumY`` stays at 1 so no second-axis
+    instances are produced.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
-        entities: List of registered entity IDs to pattern (currently unused).
-        direction_x: Pattern direction X component (currently unused).
-        direction_y: Pattern direction Y component (currently unused).
+        entities: Registered entity IDs to pattern.  Must be non-empty.
+        direction_x: Pattern direction X component (unit-less, any non-zero
+            vector is normalised internally via ``atan2``).
+        direction_y: Pattern direction Y component.
         spacing: Distance between instances in **millimetres**.
-        count: Number of instances (including the seed).
+        count: Total number of instances (including the seed).  Must be at
+            least 2.
 
     Returns:
-        AdapterResult[str]: ``data`` is a placeholder ID string such as
-        ``"LinearPattern_4x10.0_1234"``.
+        AdapterResult[str]: On success, ``data`` is a synthesised
+        ``"LinearPattern_<count>x<spacing>_<rand>"`` ID — the COM method
+        only returns a boolean, so no usable SW handle exists.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation`` when
+            inputs are invalid, an entity isn't registered, or
+            ``CreateLinearSketchStepAndRepeat`` returns ``False``.
 
     Example::
 
+        # 5 copies of Line_1 along +X, 15 mm apart
         result = pywin32_sketch_ops.sketch_linear_pattern(
-            adapter, ["Line_1"], 1, 0, 10.0, 4
+            adapter, ["Line_1"], direction_x=1.0, direction_y=0.0,
+            spacing=15.0, count=5
         )
-        print(result.data)  # "LinearPattern_4x10.0_8765"
+        print(result.data)  # "LinearPattern_5x15.0_8765"
     """
-    _ = entities, direction_x, direction_y
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _linear_pattern_operation() -> str:
+        if not entities:
+            raise Exception("sketch_linear_pattern requires at least one entity")
+        if count < 2:
+            raise Exception("sketch_linear_pattern requires count >= 2")
+        if spacing <= 0:
+            raise Exception("sketch_linear_pattern requires spacing > 0")
+        if math.hypot(direction_x, direction_y) < 1e-9:
+            raise Exception(
+                "sketch_linear_pattern requires a non-zero direction vector"
+            )
+
+        # Validate every entity ID exists in the registry before mutating
+        # selection state, so an unknown ID doesn't leave SW with a
+        # half-built selection.
+        for ent_id in entities:
+            if ent_id not in adapter._sketch_entities:
+                raise Exception(
+                    f"Unknown sketch entity '{ent_id}'. Use IDs returned by "
+                    "add_line/add_arc/add_circle/add_spline/add_centerline."
+                )
+
+        # Clear any pre-existing selection so SW only sees the seed entities.
+        adapter.currentModel.ClearSelection2(True)
+        try:
+            _select_sketch_entities(adapter, entities, mark=0)
+
+            angle_x = math.atan2(direction_y, direction_x)
+            # Direction 2 (Y) goes 90° from direction 1; NumY=1 keeps it
+            # single-row so the second-axis spacing/angle aren't actually
+            # consumed, but SW still wants well-formed values.
+            angle_y = angle_x + math.pi / 2.0
+
+            ok = adapter.currentSketchManager.CreateLinearSketchStepAndRepeat(
+                count,  # NumX
+                1,  # NumY
+                spacing / 1000.0,  # SpacingX (metres)
+                0.0,  # SpacingY
+                angle_x,  # AngleX (radians)
+                angle_y,  # AngleY (radians)
+                "",  # DeleteInstances
+                False,  # XSpacingDim
+                False,  # YSpacingDim
+                False,  # AngleDim
+                False,  # CreateNumOfInstancesDimInXDir
+                False,  # CreateNumOfInstancesDimInYDir
+            )
+            if not ok:
+                raise Exception("Failed to create linear sketch pattern")
+        finally:
+            adapter.currentModel.ClearSelection2(True)
+
         return f"LinearPattern_{count}x{spacing}_{int(time.time() * 1000) % 10000}"
 
     return cast(
@@ -1346,42 +1531,226 @@ def _sketch_linear_pattern_impl(
 def _sketch_circular_pattern_impl(
     adapter: Any,
     entities: list[str],
-    center_x: float,
-    center_y: float,
     angle: float,
     count: int,
 ) -> AdapterResult[str]:
-    """Create a circular sketch pattern — placeholder, not yet fully implemented.
+    """Create a circular sketch pattern from the registered seed entities.
 
-    Retained for interface compatibility.  Currently returns a descriptive
-    placeholder ID.  Full implementation will call
-    ``SketchManager.CreateCircularSketchStepAndRepeat``.
+    Selects ``entities`` then calls
+    ``ISketchManager::CreateCircularSketchStepAndRepeat(ArcRadius, ArcAngle,
+    PatternNum, PatternSpacing, PatternRotate, DeleteInstances, RadiusDim,
+    AngleDim, CreateNumOfInstancesDim)``.
+
+    ``ArcRadius`` is the radius at which SW places the pattern instances
+    — getting it wrong puts every copy on a tight cluster around the
+    seed rather than the intended ring.  We derive it from the first
+    registered entity's centre (via ``ISketchArc.GetCenterPoint`` once
+    the dispatch is flagged) relative to the sketch origin.  The COM
+    API has no pattern-centre parameter — the rotation axis is implied
+    by ``(ArcRadius, ArcAngle)`` relative to the seed, so the rotation
+    axis is always the **sketch origin**.  Callers who want a different
+    pattern centre must position the seed relative to the desired
+    centre (then translate the sketch as a whole, or use a sketch
+    plane offset).
+
+    ``PatternSpacing`` is the per-instance angle in radians.  For a
+    full 360° pattern we use ``angle / count`` so the last instance
+    lands one slot before the seed (tiles cleanly).  For partial sweeps
+    (< 360°) we use ``angle / (count - 1)`` so the last instance lands
+    at the full requested angle.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
-        entities: List of registered entity IDs to pattern (currently unused).
-        center_x: Pattern centre X in **millimetres** (currently unused).
-        center_y: Pattern centre Y in **millimetres** (currently unused).
-        angle: Angular spacing between instances in **degrees**.
-        count: Number of instances (including the seed).
+        entities: Registered entity IDs to pattern.  Must be non-empty.
+        angle: Total swept angle in **degrees** (e.g. ``360`` for a full
+            ring or ``180`` for a half-circle).  Must be > 0.
+        count: Total number of instances (including the seed).  Must be
+            at least 2.
 
     Returns:
-        AdapterResult[str]: ``data`` is a placeholder ID such as
-        ``"CircularPattern_6x60.0deg_2345"``.
+        AdapterResult[str]: On success, ``data`` is a synthesised
+        ``"CircularPattern_<count>x<angle>deg_<rand>"`` ID — the COM
+        method only returns a boolean.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation`` when
+            inputs are invalid, an entity isn't registered, or the COM
+            call returns ``False``.
 
     Example::
 
+        # 6 evenly-spaced copies of Circle_1 around the origin
         result = pywin32_sketch_ops.sketch_circular_pattern(
-            adapter, ["Circle_2"], 0, 0, 60.0, 6
+            adapter, ["Circle_1"], 360.0, 6
         )
-        print(result.data)  # "CircularPattern_6x60.0deg_2345"
+        print(result.data)  # "CircularPattern_6x360.0deg_4321"
     """
-    _ = entities, center_x, center_y
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _circular_pattern_operation() -> str:
-        return f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
+        if not entities:
+            raise Exception("sketch_circular_pattern requires at least one entity")
+        if count < 2:
+            raise Exception("sketch_circular_pattern requires count >= 2")
+        if angle <= 0:
+            raise Exception("sketch_circular_pattern requires angle > 0")
+
+        # Validate every entity ID exists before mutating selection state.
+        for ent_id in entities:
+            if ent_id not in adapter._sketch_entities:
+                raise Exception(
+                    f"Unknown sketch entity '{ent_id}'. Use IDs returned by "
+                    "add_line/add_arc/add_circle/add_spline/add_centerline."
+                )
+
+        adapter.currentModel.ClearSelection2(True)
+        try:
+            _select_sketch_entities(adapter, entities, mark=0)
+
+            # The COM API doesn't take pattern-centre coordinates directly.
+            # Instead:
+            #   ``ArcRadius`` = distance from the seed to the rotation axis.
+            #   ``ArcAngle``  = angle (radians) **from the seed toward the
+            #                   rotation axis**, NOT a starting angle. With
+            #                   ArcAngle=0 SW puts the axis at +X relative
+            #                   to the seed.
+            # We recover both by reading the seed's centre via
+            # ``ISketchArc.GetCenterPoint`` (after flagging the dispatch
+            # with sw_type_info — pywin32 late binding otherwise resolves
+            # the method as a tuple-valued property) and computing the
+            # offset to the rotation-axis origin.  Caller-supplied
+            # ``(center_x, center_y)`` is rejected above when non-zero, so
+            # the rotation axis is always at the sketch origin here.
+            #
+            # Without this fix, ArcAngle=0 + ArcRadius=1 mm puts every
+            # instance on a tiny ring beside the seed instead of the
+            # intended pattern (caught by the #17 live screenshot). Falls
+            # back to placing the axis at angle π from the seed if
+            # GetCenterPoint isn't available; that still works when the
+            # user positions the seed on the +X side of the origin.
+            try:
+                from .. import sw_type_info as _sw_type_info
+            except ImportError:
+                _sw_type_info = None  # type: ignore[assignment]
+
+            first_entity = adapter._sketch_entities.get(entities[0])
+
+            seed_xy: tuple[float, float] | None = None
+
+            # Group entities (polygons via ``CreatePolygon``, rectangles via
+            # ``CreateCornerRectangle``) register as a SAFEARRAY of segments
+            # — a tuple, not a single dispatch — so the ``GetCenterPoint``
+            # path below would silently fall back to a 1 mm placeholder
+            # radius. ``_add_polygon_impl`` / ``_add_rectangle_impl`` stash
+            # the seed centre in ``_sketch_entity_centers`` at register time;
+            # use that. Any future tuple-registering primitive that forgets
+            # to populate the cache falls through to the clear-error branch
+            # below.
+            if isinstance(first_entity, (list, tuple)):
+                seed_xy = adapter._sketch_entity_centers.get(entities[0])
+                if seed_xy is None:
+                    # Polygons and rectangles always reach the cached branch
+                    # above, so naming them here would be misleading — the
+                    # caller is hitting this with a group seed whose
+                    # ``add_*`` writer never stashed a centre. List only the
+                    # always-works primitive types.
+                    raise Exception(
+                        f"sketch_circular_pattern can't derive the seed centre "
+                        f"for '{entities[0]}' — this entity type registers as "
+                        f"a group (tuple of segments) with no cached centre. "
+                        f"Use a circle, arc, or ellipse seed."
+                    )
+
+            if seed_xy is None and first_entity is not None and _sw_type_info is not None:
+                # GetCenterPoint lives on multiple sketch-entity interfaces
+                # (ISketchArc for arcs/circles, ISketchEllipse for ellipses),
+                # all with the same zero-arg signature. Flag every interface
+                # we might encounter so the lookup works regardless of seed
+                # type — without this, an ellipse seed silently resolves
+                # GetCenterPoint as a property and the pattern is laid out
+                # at a bogus 1 mm radius.
+                adapter._attempt(
+                    lambda: _sw_type_info.flag_methods(
+                        first_entity,
+                        "ISketchArc",
+                        "ISketchEllipse",
+                    ),
+                    default=0,
+                )
+                point = adapter._attempt(lambda: first_entity.GetCenterPoint())
+                if (
+                    point is not None
+                    and hasattr(point, "__len__")
+                    and len(point) >= 2
+                ):
+                    seed_xy = (float(point[0]) * 1000.0, float(point[1]) * 1000.0)
+
+            # Single-dispatch seeds without ``GetCenterPoint`` (line, spline,
+            # centerline) used to fall through here with ``seed_xy is None``
+            # and silently produce a 1 mm placeholder pattern at the wrong
+            # radius — same bug class as the polygon/rectangle tuple case,
+            # but quieter because no exception fires. Surface a clear error
+            # naming the offending seed instead.
+            if seed_xy is None:
+                raise Exception(
+                    f"sketch_circular_pattern can't derive the seed centre "
+                    f"for '{entities[0]}' — this seed type has no "
+                    f"GetCenterPoint dispatch on ISketchArc/ISketchEllipse. "
+                    f"Use a circle, arc, ellipse, or polygon seed."
+                )
+
+            # Rotation axis is always the sketch origin (0, 0) — SW's
+            # ``CreateCircularSketchStepAndRepeat`` has no pattern-centre
+            # parameter, so dx/dy from seed to axis is just ``-seed``.
+            dx_mm = -seed_xy[0]
+            dy_mm = -seed_xy[1]
+            arc_radius_mm = math.hypot(dx_mm, dy_mm)
+            arc_angle_rad = math.atan2(dy_mm, dx_mm) if arc_radius_mm > 0 else 0.0
+
+            # ``CreateCircularSketchStepAndRepeat`` silently returns False on
+            # negative ``ArcAngle`` values — the bundled VBA/C# examples all
+            # pass positive radians (e.g. ``4.732863934409`` ≈ 271°).  Python's
+            # ``atan2`` produces ``-π`` for a seed on the +X axis (because
+            # ``-seed_xy[1]`` is ``-0.0``), which is geometrically equivalent
+            # to ``+π`` but fails the COM call.  Normalise to ``[0, 2π)``.
+            if arc_angle_rad < 0:
+                arc_angle_rad += 2.0 * math.pi
+
+            # 1 mm minimum keeps SW from silently rejecting the call when
+            # the seed sits right on the pattern centre.
+            arc_radius_m = max(arc_radius_mm / 1000.0, 0.001)
+            # For a full 360° pattern, ``angle / count`` keeps adjacent
+            # instances evenly spaced (instance ``count`` would coincide
+            # with the seed). For partial sweeps the last instance should
+            # land at the full requested angle, so divide by ``count - 1``
+            # instead — otherwise ``angle=180, count=3`` would reach only
+            # 120°.
+            angle_rad = math.radians(angle)
+            if abs(angle - 360.0) < 1e-9:
+                pattern_spacing = angle_rad / count
+            else:
+                pattern_spacing = angle_rad / (count - 1)
+
+            ok = adapter.currentSketchManager.CreateCircularSketchStepAndRepeat(
+                arc_radius_m,  # ArcRadius — seed-to-axis distance (metres)
+                arc_angle_rad,  # ArcAngle — direction from seed to axis (radians)
+                count,  # PatternNum
+                pattern_spacing,  # PatternSpacing (radians)
+                True,  # PatternRotate
+                "",  # DeleteInstances
+                False,  # RadiusDim
+                False,  # AngleDim
+                False,  # CreateNumOfInstancesDim
+            )
+            if not ok:
+                raise Exception("Failed to create circular sketch pattern")
+        finally:
+            adapter.currentModel.ClearSelection2(True)
+
+        return (
+            f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
+        )
 
     return cast(
         AdapterResult[str],
@@ -1394,20 +1763,30 @@ def _sketch_circular_pattern_impl(
 def _sketch_mirror_impl(
     adapter: Any, entities: list[str], mirror_line: str
 ) -> AdapterResult[str]:
-    """Mirror sketch entities across a centre-line — placeholder, not yet fully implemented.
+    """Mirror sketch entities about a registered centreline.
 
-    Retained for interface compatibility.  Full implementation will select the
-    mirror line entity, append the source entities, and call
-    ``SketchManager.SketchMirror``.
+    Selects the ``entities`` under mark **1** and the ``mirror_line``
+    centreline under mark **2** — those are the marks SOLIDWORKS expects
+    per the ``IModelDoc2::SketchMirror`` documentation — then invokes the
+    method with no arguments.  ``SketchMirror`` returns ``void``, so
+    success is reported by the absence of a COM error and the resulting
+    ID is a synthesised ``"Mirror_<mirror_line_id>_<rand>"`` string.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
-        entities: List of registered entity IDs to mirror (currently unused).
-        mirror_line: Registered entity ID of the centre-line to mirror across.
+        entities: Registered entity IDs to mirror.  Must be non-empty.
+        mirror_line: Registered entity ID of the centreline.  Must be a
+            value previously returned by ``add_centerline``.
 
     Returns:
-        AdapterResult[str]: ``data`` is a placeholder ID such as
-        ``"Mirror_Centerline_1_3456"``.
+        AdapterResult[str]: On success, ``data`` is a synthesised mirror
+        ID.  On failure, ``status`` is ``ERROR`` with the COM error or a
+        validation message describing the problem.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation`` when the
+            inputs are invalid, an entity isn't in the registry, or the
+            COM call raises.
 
     Example::
 
@@ -1416,11 +1795,60 @@ def _sketch_mirror_impl(
         )
         print(result.data)  # "Mirror_Centerline_1_3456"
     """
-    _ = entities
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _mirror_operation() -> str:
+        if not entities:
+            raise Exception("sketch_mirror requires at least one entity")
+        if not mirror_line:
+            raise Exception(
+                "sketch_mirror requires a mirror_line entity ID (add_centerline)"
+            )
+        if mirror_line not in adapter._sketch_entities:
+            raise Exception(
+                f"Unknown mirror_line entity '{mirror_line}'. Use the ID "
+                "returned by add_centerline."
+            )
+        # IModelDoc2::SketchMirror specifies that the mirror axis must be
+        # a centreline; selecting any other segment under mark=2 silently
+        # no-ops on SW. ``add_centerline`` returns IDs prefixed with
+        # ``Centerline_``, so reject anything else up front.
+        # TODO(#24-followup): replace the prefix-string parse with a
+        # proper introspection of the entity's ``ConstructionGeometry``
+        # property on the real adapter (still keep the prefix check on
+        # the mock, where there's no real dispatch to inspect). The
+        # prefix parse is brittle if either side renames its ID scheme;
+        # the SW invariant we're really enforcing is "this segment has
+        # construction-geometry flagged".
+        if not mirror_line.startswith("Centerline_"):
+            raise Exception(
+                f"mirror_line must be a centerline (from add_centerline), "
+                f"got '{mirror_line}'"
+            )
+
+        # Validate every source entity ID up front so an unknown ID does
+        # not leave SW with a half-built selection state.
+        for ent_id in entities:
+            if ent_id not in adapter._sketch_entities:
+                raise Exception(
+                    f"Unknown sketch entity '{ent_id}'. Use IDs returned by "
+                    "add_line/add_arc/add_circle/add_spline/add_centerline."
+                )
+
+        adapter.currentModel.ClearSelection2(True)
+        try:
+            # Mark 1 for the source segments per IModelDoc2::SketchMirror docs.
+            _select_sketch_entities(adapter, entities, mark=1)
+            # Mark 2 for the centreline.
+            _select_sketch_entities(adapter, [mirror_line], mark=2)
+
+            # IModelDoc2::SketchMirror is VT_VOID — no return value, so a
+            # successful invocation is its own success signal.
+            adapter.currentModel.SketchMirror()
+        finally:
+            adapter.currentModel.ClearSelection2(True)
+
         return f"Mirror_{mirror_line}_{int(time.time() * 1000) % 10000}"
 
     return cast(
@@ -1435,21 +1863,39 @@ def _sketch_offset_impl(
     offset_distance: float,
     reverse_direction: bool,
 ) -> AdapterResult[str]:
-    """Offset sketch entities by a fixed distance — placeholder, not yet fully implemented.
+    """Offset selected sketch entities by a fixed distance.
 
-    Retained for interface compatibility.  Full implementation will select the
-    source entities and call ``SketchManager.SketchOffset``.
+    Selects ``entities`` then calls
+    ``ISketchManager::SketchOffset2(Offset, BothDirections, Chain, CapEnds,
+    MakeConstruction, AddDimensions)``.
+
+    ``Offset`` is in metres; a negative value flips the offset direction
+    per the COM docs, so ``reverse_direction=True`` is implemented by
+    negating the value rather than relying on ``BothDirections``.
+
+    The remaining flags are pinned to predictable defaults so the call is
+    deterministic for automation: no caps, no auto-conversion to
+    construction geometry, no on-canvas dimension, and ``Chain=False`` so
+    only the supplied entities are offset (rather than the entire
+    contour they belong to).
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
-        entities: List of registered entity IDs to offset (currently unused).
-        offset_distance: Offset distance in **millimetres**.
-        reverse_direction: When ``True``, offset inwards; when ``False``,
-            offset outwards.
+        entities: Registered entity IDs to offset.  Must be non-empty.
+        offset_distance: Offset distance in **millimetres**.  Must be > 0
+            — the direction is controlled by ``reverse_direction``, not
+            the sign.
+        reverse_direction: When ``True``, offset in the opposite of SW's
+            default direction (effectively a negated ``Offset`` argument).
 
     Returns:
-        AdapterResult[str]: ``data`` is a placeholder ID such as
-        ``"Offset_5.0_inward_9876"``.
+        AdapterResult[str]: On success, ``data`` is a synthesised
+        ``"Offset_<distance>_<direction>_<rand>"`` ID.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation`` when
+            inputs are invalid, an entity isn't registered, or the COM
+            call returns ``False``.
 
     Example::
 
@@ -1458,13 +1904,56 @@ def _sketch_offset_impl(
         )
         print(result.data)  # "Offset_5.0_outward_9876"
     """
-    _ = entities
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
     def _offset_operation() -> str:
+        if not entities:
+            raise Exception("sketch_offset requires at least one entity")
+        if offset_distance <= 0:
+            raise Exception(
+                "sketch_offset requires offset_distance > 0 — use "
+                "reverse_direction to flip the side"
+            )
+
+        # Validate every entity ID up front so an unknown ID does not
+        # leave SW with a half-built selection.
+        for ent_id in entities:
+            if ent_id not in adapter._sketch_entities:
+                raise Exception(
+                    f"Unknown sketch entity '{ent_id}'. Use IDs returned by "
+                    "add_line/add_arc/add_circle/add_spline/add_centerline."
+                )
+
+        adapter.currentModel.ClearSelection2(True)
+        try:
+            _select_sketch_entities(adapter, entities, mark=0)
+
+            # Negative Offset flips the side per SketchOffset2 docs.
+            offset_m = (
+                -offset_distance / 1000.0
+                if reverse_direction
+                else offset_distance / 1000.0
+            )
+
+            ok = adapter.currentSketchManager.SketchOffset2(
+                offset_m,  # Offset (metres)
+                False,  # BothDirections
+                False,  # Chain
+                0,  # CapEnds (swSkOffsetCapEndType_e: 0 = no caps)
+                0,  # MakeConstruction (swSkOffsetMakeConstructionType_e: 0 = none)
+                False,  # AddDimensions
+            )
+            if not ok:
+                raise Exception("Failed to offset sketch entities")
+        finally:
+            adapter.currentModel.ClearSelection2(True)
+
         direction = "inward" if reverse_direction else "outward"
-        return f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
+        return (
+            f"Offset_{offset_distance}_{direction}_"
+            f"{int(time.time() * 1000) % 10000}"
+        )
 
     return cast(
         AdapterResult[str],
@@ -1473,53 +1962,121 @@ def _sketch_offset_impl(
 
 
 def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
-    """Exit the current sketch editing mode and return to the part/assembly context.
+    """Exit any sketch-edit mode the active model is in and reset adapter state.
 
-    Calls ``SketchManager.InsertSketch(True)`` which toggles the sketch editor
-    off.  After the call succeeds, ``adapter.currentSketch``,
-    ``adapter.currentSketchManager``, and the sketch entity registry are all
-    cleared.
+    The previous implementation trusted ``adapter.currentSketchManager`` —
+    a Python-side handle populated only by ``create_sketch`` on **this**
+    adapter instance.  A fresh adapter pointing at a SolidWorks process
+    that already has a sketch open (from a crashed prior run, an
+    aborted automation, or a manual user edit) would report
+    ``WARNING: "No active sketch to exit"`` while SW was still sitting
+    in sketch-edit mode — and every subsequent ``create_sketch`` then
+    failed with ``Failed to select plane: Front Plane`` because SW
+    can't open a new sketch while one is already active.
+
+    Now queries ``IModelDoc2.GetActiveSketch2`` to find out what SW
+    actually has open, and toggles ``SketchManager.InsertSketch(True)``
+    when either SW or the adapter thinks a sketch is in edit mode.
+    Adapter-side state is always cleared on success.
 
     Args:
-        adapter: A ``PyWin32Adapter`` that is currently in sketch-edit mode
-            (``currentSketchManager`` must be non-``None``).
+        adapter: A ``PyWin32Adapter`` with a non-``None`` ``currentModel``.
 
     Returns:
-        AdapterResult[None]: On success, ``status`` is ``SUCCESS`` and
-        ``data`` is ``None``.  When no sketch is active, ``status`` is
-        ``WARNING`` (not an error, already exited).
+        AdapterResult[None]: On success, ``status`` is ``SUCCESS``.
+        When neither SW nor the adapter has an active sketch,
+        ``status`` is ``WARNING`` (already-exited is not a failure).
+        When ``currentModel`` is ``None``, also returns ``WARNING`` so
+        defensive cleanup callers don't see spurious errors.
 
     Raises:
-        Exception: Propagated through ``_handle_com_operation`` when the COM
-            call raises unexpectedly.
+        Exception: Propagated through ``_handle_com_operation`` when the
+            ``InsertSketch`` call itself raises.
 
     Example::
 
         pywin32_sketch_ops.add_line(adapter, 0, 0, 50, 0)
         pywin32_sketch_ops.exit_sketch(adapter)
-        # adapter.currentSketch is now None
+        # adapter.currentSketch is now None and SW is out of sketch-edit mode
     """
-    if not adapter.currentSketchManager:
+    if adapter.currentModel is None:
+        # No document means nothing can be in sketch-edit mode either.
+        # Match the legacy "already exited" semantics so cleanup callers
+        # that fire exit_sketch defensively don't see spurious errors.
         return AdapterResult(
-            status=AdapterResultStatus.WARNING, error="No active sketch to exit"
+            status=AdapterResultStatus.WARNING,
+            error="No active sketch to exit",
         )
 
-    def _exit_operation() -> None:
-        """Inner COM closure that toggles the sketch editor off and clears state.
+    def _exit_operation() -> str:
+        try:
+            from .. import sw_type_info as _sw_type_info
+        except ImportError:
+            _sw_type_info = None  # type: ignore[assignment]
 
-        Returns:
-            None: Always returns ``None`` on success.
-        """
-        adapter.currentSketchManager.InsertSketch(True)
+        # ``GetActiveSketch2`` is a real zero-arg method on IModelDoc2.
+        # Without flagging, pywin32 late binding resolves it as a property
+        # and SW returns ``Member not found`` — the same root cause as
+        # the cross-thread bugs in runbook #5.
+        if _sw_type_info is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(
+                    adapter.currentModel, "IModelDoc2"
+                ),
+                default=0,
+            )
+
+        sw_active = adapter._attempt(
+            lambda: adapter.currentModel.GetActiveSketch2()
+        )
+        adapter_active = adapter.currentSketchManager
+
+        # Already out of sketch-edit mode — clean up adapter state so a
+        # future create_sketch starts from a known-good baseline, then
+        # warn.  Using ``data`` to signal "no_op" lets callers tell the
+        # difference between "I exited a sketch" and "nothing was open".
+        if sw_active is None and adapter_active is None:
+            return "no_active_sketch"
+
+        # Prefer the adapter's SketchManager handle when available (it was
+        # captured at create_sketch time on the executor thread, so it's
+        # apartment-safe); fall back to a fresh ``currentModel.SketchManager``
+        # for the SW-only state case.
+        sketch_manager = adapter_active or adapter.currentModel.SketchManager
+        if _sw_type_info is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(
+                    sketch_manager, "ISketchManager"
+                ),
+                default=0,
+            )
+        sketch_manager.InsertSketch(True)
         adapter.currentSketch = None
         adapter.currentSketchManager = None
         adapter._reset_sketch_entity_registry()
-        return None
+        return "exited"
 
-    return cast(
+    result = cast(
         AdapterResult[str],
         adapter._handle_com_operation("exit_sketch", _exit_operation),
     )
+    # Translate "no sketch was open" into a WARNING so callers that branch
+    # on ``is_error`` still treat already-exited as benign.  ``data`` is
+    # the operation tag; ``error`` carries the human message.
+    if result.is_success and result.data == "no_active_sketch":
+        return cast(
+            AdapterResult[None],
+            AdapterResult(
+                status=AdapterResultStatus.WARNING,
+                error="No active sketch to exit",
+            ),
+        )
+    if result.is_success:
+        return cast(
+            AdapterResult[None],
+            AdapterResult(status=AdapterResultStatus.SUCCESS, data=None),
+        )
+    return cast(AdapterResult[None], result)
 
 
 def _check_sketch_fully_defined_impl(
