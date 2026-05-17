@@ -666,7 +666,11 @@ async def _execute_tool(
     if tool == "create_assembly":
         name = str(ctx.get("assembly_name", "untitled_assembly"))
         _ok(await adapter.create_assembly(name=name), "create_assembly")
-        return {"tool": tool, "status": "success", "message": f"Created assembly '{name}'"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": f"Created assembly '{name}'",
+        }
 
     if tool == "open_model":
         path = str(ctx.get("model_path", ""))
@@ -681,7 +685,11 @@ async def _execute_tool(
         for payload in payloads:
             plane = str({**ctx, **payload}.get("sketch_plane", "Front"))
             _ok(await adapter.create_sketch(plane), "create_sketch")
-        return {"tool": tool, "status": "success", "message": f"Created sketch on '{plane}'"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": f"Created sketch on '{plane}'",
+        }
 
     if tool == "exit_sketch":
         _ok(await adapter.exit_sketch(), "exit_sketch")
@@ -750,14 +758,25 @@ async def _execute_tool(
             both_directions=bool(merged.get("both_directions", False)),
         )
         _ok(await adapter.create_extrusion(params), "create_extrusion")
-        return {"tool": tool, "status": "success", "message": f"Extrusion depth={depth}mm"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": f"Extrusion depth={depth}mm",
+        }
 
     if tool == "create_cut_extrude":
         payload = (tool_payloads or [{}])[0]
         merged = {**ctx, **payload}
         depth = _pf(merged, "depth_mm", "depth", default=10.0)
-        _ok(await adapter.create_cut_extrude(ExtrusionParameters(depth=depth)), "create_cut_extrude")
-        return {"tool": tool, "status": "success", "message": f"Cut-extrude depth={depth}mm"}
+        _ok(
+            await adapter.create_cut_extrude(ExtrusionParameters(depth=depth)),
+            "create_cut_extrude",
+        )
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": f"Cut-extrude depth={depth}mm",
+        }
 
     if tool == "create_cut":
         payload = (tool_payloads or [{}])[0]
@@ -766,9 +785,20 @@ async def _execute_tool(
         sketch_name = str(merged.get("sketch_name", ""))
         if sketch_name:
             _ok(await adapter.create_cut(sketch_name, depth), "create_cut")
-            return {"tool": tool, "status": "success", "message": f"Cut from {sketch_name} depth={depth}mm"}
-        _ok(await adapter.create_cut_extrude(ExtrusionParameters(depth=depth)), "create_cut")
-        return {"tool": tool, "status": "success", "message": f"Cut-extrude depth={depth}mm"}
+            return {
+                "tool": tool,
+                "status": "success",
+                "message": f"Cut from {sketch_name} depth={depth}mm",
+            }
+        _ok(
+            await adapter.create_cut_extrude(ExtrusionParameters(depth=depth)),
+            "create_cut",
+        )
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": f"Cut-extrude depth={depth}mm",
+        }
 
     if tool == "add_fillet":
         payload = (tool_payloads or [{}])[0]
@@ -777,16 +807,26 @@ async def _execute_tool(
         raw = merged.get("edge_names", [])
         edge_names = [str(e) for e in raw] if isinstance(raw, list) else []
         _ok(await adapter.add_fillet(radius, edge_names), "add_fillet")
-        return {"tool": tool, "status": "success", "message": f"Fillet radius={radius}mm"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": f"Fillet radius={radius}mm",
+        }
 
     if tool == "check_sketch_fully_defined":
         payload = (tool_payloads or [{}])[0]
         sketch_name = {**ctx, **payload}.get("sketch_name")
         _ok(
-            await adapter.check_sketch_fully_defined(str(sketch_name) if sketch_name else None),
+            await adapter.check_sketch_fully_defined(
+                str(sketch_name) if sketch_name else None
+            ),
             "check_sketch_fully_defined",
         )
-        return {"tool": tool, "status": "success", "message": "Checked sketch definition"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": "Checked sketch definition",
+        }
 
     if tool == "save_file":
         payload = (tool_payloads or [{}])[0]
@@ -806,13 +846,21 @@ async def _execute_tool(
 
     if tool == "get_mass_properties":
         _ok(await adapter.get_mass_properties(), "get_mass_properties")
-        return {"tool": tool, "status": "success", "message": "Retrieved mass properties"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": "Retrieved mass properties",
+        }
 
     if tool == "analyze_geometry":
         _ok(await adapter.get_model_info(), "get_model_info")
         _ok(await adapter.list_features(include_suppressed=True), "list_features")
         _ok(await adapter.get_mass_properties(), "get_mass_properties")
-        return {"tool": tool, "status": "success", "message": "Geometry analysis completed"}
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": "Geometry analysis completed",
+        }
 
     if tool == "export_image":
         payloads = tool_payloads

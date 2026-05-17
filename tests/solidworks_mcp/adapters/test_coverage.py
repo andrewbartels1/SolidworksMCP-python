@@ -1123,7 +1123,7 @@ class TestCircuitBreakerCoverage:
         inner.export_image = AsyncMock(return_value=export_result)
         inner.export_file = AsyncMock(return_value=file_result)
 
-        async def passthrough(operation_name, operation):
+        async def passthrough(operation_name, operation, **kwargs):
             return await operation()
 
         cb._execute_with_circuit_breaker = AsyncMock(side_effect=passthrough)

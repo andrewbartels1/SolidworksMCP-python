@@ -275,6 +275,36 @@ class ModelStateSnapshot(SQLModel, table=True):
     created_at: str
 
 
+class SoCCheckpoint(SQLModel, table=True):
+    """Named save point in a SolidWorks-as-Code session.
+
+    A checkpoint ties together a human label, the saved .sldprt file that
+    represents the model state at that point, and the range of ToolCallRecord
+    rows that produced it.  The exporter uses this to emit structured comment
+    blocks; soc_rewind uses the file_path to restore the model; soc_pickup
+    uses snapshot_id to diff against the current feature tree.
+
+    Attributes:
+        file_path (str): Path to the .sldprt saved at this checkpoint.
+        first_record_id (int | None): First ToolCallRecord.id in this block.
+        id (int | None): Primary key.
+        label (str): Short human name for this checkpoint.
+        last_record_id (int | None): Last ToolCallRecord.id in this block.
+        session_id (str): Owning SoC session.
+        snapshot_id (int | None): FK to ModelStateSnapshot (feature tree, mass props).
+        created_at (str): ISO timestamp.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: str
+    label: str
+    file_path: str
+    first_record_id: int | None = None
+    last_record_id: int | None = None
+    snapshot_id: int | None = None
+    created_at: str
+
+
 class SketchGraphSnapshot(SQLModel, table=True):
     """Lightweight relational sketch graph storage (Section F).
 
@@ -1189,6 +1219,122 @@ def list_model_state_snapshots(
         }
         for row in rows
     ]
+
+
+def create_soc_checkpoint(
+    *,
+    session_id: str,
+    label: str,
+    file_path: str,
+    first_record_id: int | None = None,
+    last_record_id: int | None = None,
+    snapshot_id: int | None = None,
+    db_path: Path | None = None,
+) -> int:
+    """Insert a SoCCheckpoint and return its id.
+
+    Args:
+        session_id (str): Owning SoC session.
+        label (str): Short human name (e.g. "base-extrude").
+        file_path (str): Path to the .sldprt saved at this checkpoint.
+        first_record_id (int | None): First ToolCallRecord.id in this block.
+        last_record_id (int | None): Last ToolCallRecord.id in this block.
+        snapshot_id (int | None): FK to ModelStateSnapshot.
+        db_path (Path | None): Override default SQLite path.
+
+    Returns:
+        int: The new SoCCheckpoint.id.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    with Session(engine) as session:
+        row = SoCCheckpoint(
+            session_id=session_id,
+            label=label,
+            file_path=file_path,
+            first_record_id=first_record_id,
+            last_record_id=last_record_id,
+            snapshot_id=snapshot_id,
+            created_at=_utc_now_iso(),
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return int(row.id)  # type: ignore[arg-type]
+
+
+def list_soc_checkpoints(
+    session_id: str,
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """List SoCCheckpoints for a session in creation order.
+
+    Args:
+        session_id (str): Owning SoC session.
+        db_path (Path | None): Override default SQLite path.
+
+    Returns:
+        list[dict[str, Any]]: Ordered list of checkpoint dicts.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    with Session(engine) as session:
+        rows = session.exec(
+            select(SoCCheckpoint)
+            .where(SoCCheckpoint.session_id == session_id)
+            .order_by(SoCCheckpoint.id.asc())  # type: ignore[union-attr]
+        ).all()
+    return [
+        {
+            "id": row.id,
+            "session_id": row.session_id,
+            "label": row.label,
+            "file_path": row.file_path,
+            "first_record_id": row.first_record_id,
+            "last_record_id": row.last_record_id,
+            "snapshot_id": row.snapshot_id,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
+def get_soc_checkpoint(
+    session_id: str,
+    label: str,
+    db_path: Path | None = None,
+) -> dict[str, Any] | None:
+    """Fetch a single SoCCheckpoint by session + label.
+
+    Args:
+        session_id (str): Owning SoC session.
+        label (str): Checkpoint label to look up.
+        db_path (Path | None): Override default SQLite path.
+
+    Returns:
+        dict[str, Any] | None: Checkpoint dict or None if not found.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    with Session(engine) as session:
+        row = session.exec(
+            select(SoCCheckpoint)
+            .where(SoCCheckpoint.session_id == session_id)
+            .where(SoCCheckpoint.label == label)
+            .order_by(SoCCheckpoint.id.desc())  # type: ignore[union-attr]
+        ).first()
+    if row is None:
+        return None
+    return {
+        "id": row.id,
+        "session_id": row.session_id,
+        "label": row.label,
+        "file_path": row.file_path,
+        "first_record_id": row.first_record_id,
+        "last_record_id": row.last_record_id,
+        "snapshot_id": row.snapshot_id,
+        "created_at": row.created_at,
+    }
 
 
 def insert_sketch_graph_snapshot(

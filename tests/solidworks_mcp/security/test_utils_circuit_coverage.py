@@ -393,7 +393,7 @@ async def test_circuit_breaker_adapter_passthrough_methods(monkeypatch):
     """Test circuit breaker adapter passthrough methods."""
     cb = CircuitBreakerAdapter(adapter=_DummyAdapter({}), config={})
 
-    async def _fake_exec(name, operation):
+    async def _fake_exec(name, operation, **kwargs):
         """Test helper for fake exec."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"name": name})
 

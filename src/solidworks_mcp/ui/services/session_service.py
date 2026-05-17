@@ -92,13 +92,25 @@ _UJOINT_CHECKPOINT_SPECS: list[dict[str, Any]] = [
     {
         "title": "Reference mode selection",
         "goal": "Choose target mode (reference reproduction or print variant) and inspect constraints",
-        "tools": ["open_model", "list_features", "create_sketch", "create_extrusion", "create_cut"],
+        "tools": [
+            "open_model",
+            "list_features",
+            "create_sketch",
+            "create_extrusion",
+            "create_cut",
+        ],
         "rationale": "Locks feature-order and dimension guardrails before generating the rest of the set.",
     },
     {
         "title": "Part set planning",
         "goal": "Generate the remaining U-joint part plans (yokes, spider, pin, crank family)",
-        "tools": ["classify_feature_tree", "create_part", "create_sketch", "create_extrusion", "create_revolve"],
+        "tools": [
+            "classify_feature_tree",
+            "create_part",
+            "create_sketch",
+            "create_extrusion",
+            "create_revolve",
+        ],
         "rationale": "Decomposes U-joint into deterministic part-level steps with print-aware constraints.",
     },
     {
@@ -191,8 +203,12 @@ def ensure_dashboard_session(
 
     checkpoints = list_plan_checkpoints(session_id, db_path=db_path)
     if not checkpoints:
-        base_goal = requested_goal or session_row.get("user_goal") if session_row else ""
-        for index, spec in enumerate(_checkpoint_specs_for_goal(str(base_goal)), start=1):
+        base_goal = (
+            requested_goal or session_row.get("user_goal") if session_row else ""
+        )
+        for index, spec in enumerate(
+            _checkpoint_specs_for_goal(str(base_goal)), start=1
+        ):
             insert_plan_checkpoint(
                 session_id=session_id,
                 checkpoint_index=index,

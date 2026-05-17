@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
@@ -340,6 +341,10 @@ class SolidWorksAdapter(ABC):
             "errors_count": 0,
             "average_response_time": 0.0,
         }
+        # SolidWorks-as-Code session logging. Set soc_session_id to enable
+        # automatic ToolCallRecord writes for every adapter operation.
+        self.soc_session_id: str | None = None
+        self.soc_db_path: Path | None = None
 
     # Connection Management
     @abstractmethod

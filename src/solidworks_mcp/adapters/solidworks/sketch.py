@@ -1059,9 +1059,7 @@ def _add_sketch_constraint_impl(
             # that requires the SAFEARRAY shape — fail clearly rather than let
             # AddRelation surface a low-level "server threw an exception" COM
             # error from an unwrappable list argument.
-            raise Exception(
-                "pywin32 is required for add_sketch_constraint on Windows"
-            )
+            raise Exception("pywin32 is required for add_sketch_constraint on Windows")
         else:
             # Non-Windows: this branch is exercised only by mocked unit tests
             # whose fake AddRelation accepts any sequence.

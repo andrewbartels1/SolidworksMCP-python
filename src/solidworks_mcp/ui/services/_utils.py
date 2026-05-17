@@ -36,9 +36,7 @@ from ...agents.history_db import (
 # that utility helpers can be used in isolation during testing).
 # ---------------------------------------------------------------------------
 DEFAULT_SESSION_ID = "prefab-dashboard"
-DEFAULT_USER_GOAL = (
-    "Design a printable mounting component with documented constraints and fastener strategy."
-)
+DEFAULT_USER_GOAL = "Design a printable mounting component with documented constraints and fastener strategy."
 DEFAULT_SOURCE_MODE = "prompt"
 DEFAULT_API_ORIGIN = os.getenv("SOLIDWORKS_UI_API_ORIGIN", "http://127.0.0.1:8766")
 DEFAULT_PREVIEW_ORIENTATION = "current"

@@ -5,6 +5,7 @@ operations fail repeatedly.
 """
 
 import asyncio
+import json
 import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
@@ -27,6 +28,13 @@ from .base import (
 )
 
 T = TypeVar("T")
+
+
+def _to_input_dict(params: Any) -> dict[str, Any]:
+    """Convert a Pydantic model or plain dict to a flat dict for SoC logging."""
+    if hasattr(params, "model_dump"):
+        return params.model_dump()
+    return params if isinstance(params, dict) else {}
 
 
 class CircuitState(Enum):
@@ -180,6 +188,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         self,
         operation_name: str,
         operation: Callable[[], Awaitable[AdapterResult[T]]],
+        input_dict: dict[str, Any] | None = None,
     ) -> AdapterResult[T]:
         """Build internal execute with circuit breaker.
 
@@ -187,6 +196,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             operation_name (str): The operation name value.
             operation (Callable[[], Awaitable[AdapterResult[T]]]): Callable object executed by
                                                                    the helper.
+            input_dict (dict | None): Input parameters for SoC logging. Defaults to None.
 
         Returns:
             AdapterResult[T]: The result produced by the operation.
@@ -201,19 +211,59 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         if self.state == CircuitState.HALF_OPEN:
             self.half_open_calls += 1
 
+        t0 = time.time()
         try:
             result = await operation()
+            latency_ms = (time.time() - t0) * 1000.0
             if result.is_success:
                 self._record_success()
             else:
                 self._record_failure()
+            self._soc_log(operation_name, input_dict, result, latency_ms)
             return result
         except Exception as e:
+            latency_ms = (time.time() - t0) * 1000.0
             self._record_failure()
-            return AdapterResult(
+            err_result: AdapterResult[T] = AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"Circuit breaker caught exception in {operation_name}: {e}",
                 metadata={"circuit_state": self.state.value},
+            )
+            self._soc_log(operation_name, input_dict, err_result, latency_ms)
+            return err_result
+
+    def _soc_log(
+        self,
+        tool_name: str,
+        input_dict: dict[str, Any] | None,
+        result: AdapterResult[Any],
+        latency_ms: float,
+    ) -> None:
+        """Write a ToolCallRecord if soc_session_id is set."""
+        if not self.soc_session_id or input_dict is None:
+            return
+        try:
+            from solidworks_mcp.agents.history_db import insert_tool_call_record
+
+            output_data: dict[str, Any] = {}
+            if result.data is not None:
+                try:
+                    output_data = {"data": result.data}
+                except Exception:
+                    output_data = {"data": str(result.data)}
+
+            insert_tool_call_record(
+                session_id=self.soc_session_id,
+                tool_name=tool_name,
+                input_json=json.dumps(input_dict, default=str),
+                output_json=json.dumps(output_data, default=str),
+                success=result.is_success,
+                latency_ms=latency_ms,
+                db_path=self.soc_db_path,
+            )
+        except Exception as exc:
+            logger.debug(
+                f"[soc_log] failed to write ToolCallRecord for {tool_name}: {exc}"
             )
 
     # Adapter interface implementation
@@ -288,7 +338,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "open_model", lambda: self.adapter.open_model(file_path)
+            "open_model",
+            lambda: self.adapter.open_model(file_path),
+            input_dict={"file_path": file_path},
         )
 
     async def close_model(self, save: bool = False) -> AdapterResult[None]:
@@ -301,7 +353,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[None]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "close_model", lambda: self.adapter.close_model(save)
+            "close_model",
+            lambda: self.adapter.close_model(save),
+            input_dict={"save": save},
         )
 
     async def save_file(self, file_path: str | None = None) -> AdapterResult[None]:
@@ -314,7 +368,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[None]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "save_file", lambda: self.adapter.save_file(file_path)
+            "save_file",
+            lambda: self.adapter.save_file(file_path),
+            input_dict={"file_path": file_path},
         )
 
     async def execute_macro(
@@ -329,7 +385,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "execute_macro", lambda: self.adapter.execute_macro(params)  # type: ignore[attr-defined]
+            "execute_macro",
+            lambda: self.adapter.execute_macro(params),  # type: ignore[attr-defined]
+            input_dict=params,
         )
 
     async def create_part(
@@ -359,7 +417,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 units,
             )
 
-        return await self._execute_with_circuit_breaker("create_part", _op)
+        return await self._execute_with_circuit_breaker(
+            "create_part", _op, input_dict={"name": name, "units": units}
+        )
 
     async def call(self, operation: Callable[[], object | Awaitable[object]]) -> object:
         """Legacy call API used by tests.
@@ -412,9 +472,13 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 name,
             )
 
-        return await self._execute_with_circuit_breaker("create_assembly", _op)
+        return await self._execute_with_circuit_breaker(
+            "create_assembly", _op, input_dict={"name": name}
+        )
 
-    async def create_drawing(self, name: str | None = None) -> AdapterResult[SolidWorksModel]:
+    async def create_drawing(
+        self, name: str | None = None
+    ) -> AdapterResult[SolidWorksModel]:
         """Create drawing through circuit breaker.
 
         Args:
@@ -424,7 +488,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_drawing", lambda: self.adapter.create_drawing(name)
+            "create_drawing",
+            lambda: self.adapter.create_drawing(name),
+            input_dict={"name": name},
         )
 
     # Feature operations
@@ -441,7 +507,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_extrusion", lambda: self.adapter.create_extrusion(params)
+            "create_extrusion",
+            lambda: self.adapter.create_extrusion(params),
+            input_dict=_to_input_dict(params),
         )
 
     async def create_cut_extrude(
@@ -449,7 +517,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
     ) -> AdapterResult[SolidWorksFeature]:
         """Create cut-extrude through circuit breaker."""
         return await self._execute_with_circuit_breaker(
-            "create_cut_extrude", lambda: self.adapter.create_cut_extrude(params)
+            "create_cut_extrude",
+            lambda: self.adapter.create_cut_extrude(params),
+            input_dict=_to_input_dict(params),
         )
 
     async def add_fillet(
@@ -457,7 +527,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
     ) -> AdapterResult[SolidWorksFeature]:
         """Add fillet through circuit breaker."""
         return await self._execute_with_circuit_breaker(
-            "add_fillet", lambda: self.adapter.add_fillet(radius, edge_names)
+            "add_fillet",
+            lambda: self.adapter.add_fillet(radius, edge_names),
+            input_dict={"radius": radius, "edge_names": edge_names},
         )
 
     async def create_revolve(
@@ -472,7 +544,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_revolve", lambda: self.adapter.create_revolve(params)
+            "create_revolve",
+            lambda: self.adapter.create_revolve(params),
+            input_dict=_to_input_dict(params),
         )
 
     async def create_sweep(
@@ -487,7 +561,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_sweep", lambda: self.adapter.create_sweep(params)
+            "create_sweep",
+            lambda: self.adapter.create_sweep(params),
+            input_dict=_to_input_dict(params),
         )
 
     async def create_loft(
@@ -502,7 +578,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_loft", lambda: self.adapter.create_loft(params)
+            "create_loft",
+            lambda: self.adapter.create_loft(params),
+            input_dict=_to_input_dict(params),
         )
 
     # Sketch operations
@@ -517,7 +595,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "create_sketch", lambda: self.adapter.create_sketch(plane)
+            "create_sketch",
+            lambda: self.adapter.create_sketch(plane),
+            input_dict={"plane": plane},
         )
 
     async def add_line(
@@ -535,7 +615,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "add_line", lambda: self.adapter.add_line(x1, y1, x2, y2)
+            "add_line",
+            lambda: self.adapter.add_line(x1, y1, x2, y2),
+            input_dict={"x1": x1, "y1": y1, "x2": x2, "y2": y2},
         )
 
     async def add_centerline(
@@ -553,7 +635,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "add_centerline", lambda: self.adapter.add_centerline(x1, y1, x2, y2)
+            "add_centerline",
+            lambda: self.adapter.add_centerline(x1, y1, x2, y2),
+            input_dict={"x1": x1, "y1": y1, "x2": x2, "y2": y2},
         )
 
     async def add_circle(
@@ -570,7 +654,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "add_circle", lambda: self.adapter.add_circle(center_x, center_y, radius)
+            "add_circle",
+            lambda: self.adapter.add_circle(center_x, center_y, radius),
+            input_dict={"center_x": center_x, "center_y": center_y, "radius": radius},
         )
 
     async def add_rectangle(
@@ -588,7 +674,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "add_rectangle", lambda: self.adapter.add_rectangle(x1, y1, x2, y2)
+            "add_rectangle",
+            lambda: self.adapter.add_rectangle(x1, y1, x2, y2),
+            input_dict={"x1": x1, "y1": y1, "x2": x2, "y2": y2},
         )
 
     async def add_arc(
@@ -623,6 +711,149 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 end_x,
                 end_y,
             ),
+            input_dict={
+                "center_x": center_x,
+                "center_y": center_y,
+                "start_x": start_x,
+                "start_y": start_y,
+                "end_x": end_x,
+                "end_y": end_y,
+            },
+        )
+
+    async def add_spline(
+        self, points: list[dict[str, float]]
+    ) -> AdapterResult[str]:
+        """Add spline through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_spline",
+            lambda: self.adapter.add_spline(points),
+            input_dict={"points": points},
+        )
+
+    async def add_polygon(
+        self, center_x: float, center_y: float, radius: float, sides: int
+    ) -> AdapterResult[str]:
+        """Add polygon through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_polygon",
+            lambda: self.adapter.add_polygon(center_x, center_y, radius, sides),
+            input_dict={
+                "center_x": center_x,
+                "center_y": center_y,
+                "radius": radius,
+                "sides": sides,
+            },
+        )
+
+    async def add_ellipse(
+        self,
+        center_x: float,
+        center_y: float,
+        major_axis: float,
+        minor_axis: float,
+    ) -> AdapterResult[str]:
+        """Add ellipse through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_ellipse",
+            lambda: self.adapter.add_ellipse(
+                center_x, center_y, major_axis, minor_axis
+            ),
+            input_dict={
+                "center_x": center_x,
+                "center_y": center_y,
+                "major_axis": major_axis,
+                "minor_axis": minor_axis,
+            },
+        )
+
+    async def sketch_linear_pattern(
+        self,
+        entities: list[str],
+        direction_x: float,
+        direction_y: float,
+        spacing: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Sketch linear pattern through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_linear_pattern",
+            lambda: self.adapter.sketch_linear_pattern(
+                entities, direction_x, direction_y, spacing, count
+            ),
+            input_dict={
+                "entities": entities,
+                "direction_x": direction_x,
+                "direction_y": direction_y,
+                "spacing": spacing,
+                "count": count,
+            },
+        )
+
+    async def sketch_circular_pattern(
+        self,
+        entities: list[str],
+        angle: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Sketch circular pattern through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_circular_pattern",
+            lambda: self.adapter.sketch_circular_pattern(entities, angle, count),
+            input_dict={"entities": entities, "angle": angle, "count": count},
+        )
+
+    async def sketch_mirror(
+        self, entities: list[str], mirror_line: str
+    ) -> AdapterResult[str]:
+        """Sketch mirror through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_mirror",
+            lambda: self.adapter.sketch_mirror(entities, mirror_line),
+            input_dict={"entities": entities, "mirror_line": mirror_line},
+        )
+
+    async def sketch_offset(
+        self,
+        entities: list[str],
+        offset_distance: float,
+        reverse_direction: bool,
+    ) -> AdapterResult[str]:
+        """Sketch offset through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_offset",
+            lambda: self.adapter.sketch_offset(
+                entities, offset_distance, reverse_direction
+            ),
+            input_dict={
+                "entities": entities,
+                "offset_distance": offset_distance,
+                "reverse_direction": reverse_direction,
+            },
+        )
+
+    async def add_sketch_constraint(
+        self,
+        entity1: str,
+        entity2: str | None,
+        relation_type: str,
+        entity3: str | None = None,
+    ) -> AdapterResult[str]:
+        """Add sketch constraint through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_sketch_constraint",
+            lambda: self.adapter.add_sketch_constraint(
+                entity1,
+                entity2,
+                relation_type,
+                entity3,
+            ),
+            input_dict={
+                "entity1": entity1,
+                "entity2": entity2,
+                "relation_type": relation_type,
+                "entity3": entity3,
+            },
         )
 
     async def add_sketch_dimension(
@@ -641,6 +872,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 dimension_type,
                 value,
             ),
+            input_dict={
+                "entity1": entity1,
+                "entity2": entity2,
+                "dimension_type": dimension_type,
+                "value": value,
+            },
         )
 
     async def check_sketch_fully_defined(
@@ -650,6 +887,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "check_sketch_fully_defined",
             lambda: self.adapter.check_sketch_fully_defined(sketch_name),
+            input_dict={"sketch_name": sketch_name},
         )
 
     async def exit_sketch(self) -> AdapterResult[None]:
@@ -659,7 +897,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[None]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "exit_sketch", lambda: self.adapter.exit_sketch()
+            "exit_sketch",
+            lambda: self.adapter.exit_sketch(),
+            input_dict={},
         )
 
     # Analysis operations
@@ -671,7 +911,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[MassProperties]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "get_mass_properties", lambda: self.adapter.get_mass_properties()
+            "get_mass_properties",
+            lambda: self.adapter.get_mass_properties(),
+            input_dict={},
         )
 
     async def get_model_info(self) -> AdapterResult[dict[str, object]]:
@@ -681,7 +923,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[dict[str, object]]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "get_model_info", lambda: self.adapter.get_model_info()
+            "get_model_info",
+            lambda: self.adapter.get_model_info(),
+            input_dict={},
         )
 
     async def list_features(
@@ -698,6 +942,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "list_features",
             lambda: self.adapter.list_features(include_suppressed),
+            input_dict={"include_suppressed": include_suppressed},
         )
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
@@ -709,6 +954,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "list_configurations",
             lambda: self.adapter.list_configurations(),
+            input_dict={},
         )
 
     # Export operations
@@ -723,7 +969,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[dict]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "export_image", lambda: self.adapter.export_image(payload)
+            "export_image",
+            lambda: self.adapter.export_image(payload),
+            input_dict=payload,
         )
 
     async def export_file(
@@ -739,7 +987,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[None]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "export_file", lambda: self.adapter.export_file(file_path, format_type)
+            "export_file",
+            lambda: self.adapter.export_file(file_path, format_type),
+            input_dict={"file_path": file_path, "format_type": format_type},
         )
 
     # Dimension operations
@@ -754,7 +1004,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[float]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "get_dimension", lambda: self.adapter.get_dimension(name)
+            "get_dimension",
+            lambda: self.adapter.get_dimension(name),
+            input_dict={"name": name},
         )
 
     async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
@@ -768,8 +1020,74 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             AdapterResult[None]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
-            "set_dimension", lambda: self.adapter.set_dimension(name, value)
+            "set_dimension",
+            lambda: self.adapter.set_dimension(name, value),
+            input_dict={"name": name, "value": value},
         )
+
+    # SolidWorks-as-Code checkpoint
+
+    async def soc_create_checkpoint(
+        self,
+        label: str,
+        file_path: str,
+        *,
+        feature_tree: list[dict[str, Any]] | None = None,
+    ) -> int | None:
+        """Create a named SoC checkpoint after saving the model.
+
+        Records a SoCCheckpoint row and a ModelStateSnapshot.  Call this
+        immediately after ``save_file`` to mark a stable rollback point.
+
+        Args:
+            label (str): Short human name (e.g. "base-extrude").
+            file_path (str): Path of the .sldprt that was just saved.
+            feature_tree (list | None): Optional feature list from list_features().
+
+        Returns:
+            int | None: The new SoCCheckpoint.id, or None if soc_session_id is unset.
+        """
+        if not self.soc_session_id:
+            return None
+        try:
+            from solidworks_mcp.agents.history_db import (
+                create_soc_checkpoint,
+                insert_model_state_snapshot,
+                list_tool_call_records,
+            )
+
+            records = list_tool_call_records(self.soc_session_id, db_path=self.soc_db_path)
+            last_id = records[-1]["id"] if records else None
+
+            snapshot_id: int | None = None
+            if feature_tree is not None:
+                import json as _json
+
+                insert_model_state_snapshot(
+                    session_id=self.soc_session_id,
+                    model_path=file_path,
+                    feature_tree_json=_json.dumps(feature_tree, default=str),
+                    db_path=self.soc_db_path,
+                )
+                from solidworks_mcp.agents.history_db import list_model_state_snapshots
+
+                snaps = list_model_state_snapshots(
+                    self.soc_session_id, db_path=self.soc_db_path
+                )
+                if snaps:
+                    snapshot_id = snaps[0]["id"]
+
+            return create_soc_checkpoint(
+                session_id=self.soc_session_id,
+                label=label,
+                file_path=file_path,
+                last_record_id=last_id,
+                snapshot_id=snapshot_id,
+                db_path=self.soc_db_path,
+            )
+        except Exception as exc:
+            logger.debug(f"[soc_checkpoint] failed to create checkpoint {label!r}: {exc}")
+            return None
 
 
 class CircuitBreaker:

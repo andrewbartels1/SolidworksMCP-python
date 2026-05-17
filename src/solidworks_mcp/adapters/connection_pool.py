@@ -785,6 +785,24 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    async def add_sketch_constraint(
+        self,
+        entity1: str,
+        entity2: str | None,
+        relation_type: str,
+        entity3: str | None = None,
+    ) -> AdapterResult[str]:
+        """Add sketch constraint using pool."""
+        return await self._execute_with_pool(
+            "add_sketch_constraint",
+            lambda adapter: adapter.add_sketch_constraint(
+                entity1,
+                entity2,
+                relation_type,
+                entity3,
+            ),
+        )
+
     async def add_sketch_dimension(
         self,
         entity1: str,
