@@ -547,7 +547,7 @@ def _create_cut_extrude_impl(
             ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
                 sel_result = adapter._attempt(
                     lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
-                        c, "SKETCH", 0.0, 0.0, 0.0, False, 0, "", 0
+                        c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
                     ),
                     default=False,
                 )
@@ -558,7 +558,9 @@ def _create_cut_extrude_impl(
 
         feature = None
         fallback_errors: list[str] = []
+        is_through = end_condition in {"throughall", "through all", "through_all"}
 
+        # 1. FeatureCut4 (SW 2015+, 27 params)
         feature, cut4_error = adapter._attempt_with_error(
             lambda: feature_manager.FeatureCut4(
                 True,
@@ -594,15 +596,21 @@ def _create_cut_extrude_impl(
             fallback_errors.append(f"FeatureCut4: {cut4_error}")
 
         if not feature:
+            # 2. FeatureCut3 modern (SW 2010+, 26 params, corrected for SW 2022)
+            # Signature: Sd, Flip, Dir, T1, T2, D1, D2, Dchk1, Dchk2, Ddir1, Ddir2,
+            #   Dang1, Dang2, OffsetReverse1, OffsetReverse2, TranslateSurface1,
+            #   TranslateSurface2, NormalCut, UseFeatScope, UseAutoSelect,
+            #   AssemblyFeatureScope, AutoSelectComponents, PropagateFeatureToParts,
+            #   T0, StartOffset, FlipStartOffset
             feature, cut3_modern_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut3(
-                    True,
-                    False,
+                    is_through,
                     normalized.reverse_direction,
+                    False,
                     t1,
-                    adapter.constants["swEndCondBlind"],
-                    depth_m,
-                    0.0,
+                    0,
+                    normalized.depth / 1000.0,
+                    normalized.depth / 1000.0,
                     False,
                     False,
                     False,
@@ -628,6 +636,7 @@ def _create_cut_extrude_impl(
                 fallback_errors.append(f"FeatureCut3 modern: {cut3_modern_error}")
 
         if not feature:
+            # 3. FeatureCut3 legacy (older installs, alternate arg order)
             feature, cut3_legacy_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut3(
                     True,

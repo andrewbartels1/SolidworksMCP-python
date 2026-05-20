@@ -1213,6 +1213,11 @@ class _FeatureSelectionService:
         feature = self._adapter._attempt(
             lambda: self._adapter.currentModel.FirstFeature()
         )
+        # Flag the feature dispatch so methods like GetNextFeature work
+        if feature is not None:
+            self._adapter._attempt(
+                lambda f=feature: sw_type_info.flag_methods(f, "IFeature"), default=0
+            )
         pos = 0
         guard = 0
         while feature and guard < 10000:
@@ -1225,6 +1230,11 @@ class _FeatureSelectionService:
             if next_feature is None:
                 break
             feature = next_feature
+            # Flag each new feature dispatch
+            if feature is not None:
+                self._adapter._attempt(
+                    lambda f=feature: sw_type_info.flag_methods(f, "IFeature"), default=0
+                )
 
         if features:
             return features

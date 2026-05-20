@@ -263,12 +263,12 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
         }
 
         semantic_plane_aliases = {
-            "Top": ["Top Plane", "Planta"],
-            "Front": ["Front Plane", "Alzado"],
-            "Right": ["Right Plane", "Vista lateral"],
-            "XY": ["Top Plane", "Planta"],
-            "XZ": ["Front Plane", "Alzado"],
-            "YZ": ["Right Plane", "Vista lateral"],
+            "Top": ["Top Plane", "Planta", "上视基准面", "上視基準面"],
+            "Front": ["Front Plane", "Alzado", "前视基准面", "前視基準面"],
+            "Right": ["Right Plane", "Vista lateral", "右视基准面", "右視基準面"],
+            "XY": ["Top Plane", "Planta", "上视基准面"],
+            "XZ": ["Front Plane", "Alzado", "前视基准面"],
+            "YZ": ["Right Plane", "Vista lateral", "右视基准面"],
         }
 
         actual_plane = plane_name_map.get(plane, plane)
@@ -285,6 +285,12 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             "Planta",
             "Alzado",
             "Vista lateral",
+            "上视基准面",
+            "前视基准面",
+            "右视基准面",
+            "上視基準面",
+            "前視基準面",
+            "右視基準面",
         ]
         for candidate in plane_candidates:
             if not candidate:
@@ -305,25 +311,24 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
                 break
 
         if not selected:
-            for callout in ("", None, 0):
-                selected, selection_error_candidate = adapter._attempt_with_error(
-                    lambda co=callout: adapter.currentModel.Extension.SelectByID2(
-                        actual_plane,
-                        "PLANE",
-                        0,
-                        0,
-                        0,
-                        False,
-                        0,
-                        co,
-                        0,
-                    )
+            # SW 2022: callout must be None (empty string causes type mismatch)
+            selected, selection_error_candidate = adapter._attempt_with_error(
+                lambda: adapter.currentModel.Extension.SelectByID2(
+                    actual_plane,
+                    "PLANE",
+                    0,
+                    0,
+                    0,
+                    False,
+                    0,
+                    None,
+                    0,
                 )
-                if selection_error_candidate:
-                    selection_error = selection_error_candidate
-                    continue
-                if selected:
-                    break
+            )
+            if selection_error_candidate:
+                selection_error = selection_error_candidate
+            elif selected:
+                pass
 
         if not selected:
             if selection_error:
