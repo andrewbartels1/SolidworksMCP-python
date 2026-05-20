@@ -622,26 +622,76 @@ class SolidWorksIOMixin:
 
         def _get() -> MassProperties:
             """Get mass properties."""
-            # Primary: GetMassProperties (array API, always works)
-            raw = adapter._attempt(
-                lambda: adapter.currentModel.GetMassProperties(), default=None
+            adapter._attempt(
+                lambda: adapter.currentModel.ForceRebuild3(False), default=None
             )
-            if isinstance(raw, (list, tuple)) and len(raw) >= 6:
-                return MassProperties(
-                    volume=raw[3] * 1e9,
-                    surface_area=raw[4] * 1e6,
-                    mass=raw[5],
-                    center_of_mass=[raw[0] * 1000.0, raw[1] * 1000.0, raw[2] * 1000.0],
-                    moments_of_inertia={
-                        "Ixx": raw[6] if len(raw) > 6 else 0.0,
-                        "Iyy": raw[7] if len(raw) > 7 else 0.0,
-                        "Izz": raw[8] if len(raw) > 8 else 0.0,
-                        "Ixy": raw[9] if len(raw) > 9 else 0.0,
-                        "Ixz": raw[11] if len(raw) > 11 else 0.0,
-                        "Iyz": raw[10] if len(raw) > 10 else 0.0,
-                    },
+
+            # Primary: Extension.CreateMassProperty() object API (most detailed)
+            mass_props = adapter._attempt(
+                lambda: adapter.currentModel.Extension.CreateMassProperty(),
+                default=None,
+            )
+
+            if mass_props:
+                volume = mass_props.Volume * 1e9
+                surface_area = mass_props.SurfaceArea * 1e6
+                mass = mass_props.Mass
+
+                center_of_mass = [0.0, 0.0, 0.0]
+                com = adapter._attempt(lambda: mass_props.CenterOfMass, default=None)
+                if isinstance(com, (list, tuple)) and len(com) >= 3:
+                    center_of_mass = [com[0] * 1000, com[1] * 1000, com[2] * 1000]
+
+                moi = adapter._attempt(
+                    lambda: mass_props.GetMomentOfInertia(0), default=None
                 )
-            raise Exception("Failed to get mass properties")
+                if not isinstance(moi, (list, tuple)) or len(moi) < 9:
+                    moi = [0.0] * 9
+            else:
+                # Fallback: GetMassProperties as attribute (tuple) or callable (SW 2022)
+                gmp = getattr(adapter.currentModel, "GetMassProperties", None)
+                if callable(gmp):
+                    raw = adapter._attempt(gmp, default=None)
+                elif isinstance(gmp, (list, tuple)):
+                    raw = gmp
+                else:
+                    raw = None
+
+                if not isinstance(raw, (list, tuple)) or len(raw) < 6:
+                    raise Exception("Failed to get mass properties")
+
+                center_of_mass = [
+                    raw[0] * 1000.0,
+                    raw[1] * 1000.0,
+                    raw[2] * 1000.0,
+                ]
+                volume = raw[3] * 1e9
+                surface_area = raw[4] * 1e6
+                mass = raw[5]
+
+                moi = [0.0] * 9
+                if len(raw) >= 12:
+                    moi[0] = raw[6]
+                    moi[4] = raw[7]
+                    moi[8] = raw[8]
+                    moi[1] = raw[9]
+                    moi[5] = raw[10]
+                    moi[2] = raw[11]
+
+            return MassProperties(
+                volume=volume,
+                surface_area=surface_area,
+                mass=mass,
+                center_of_mass=center_of_mass,
+                moments_of_inertia={
+                    "Ixx": moi[0],
+                    "Iyy": moi[4],
+                    "Izz": moi[8],
+                    "Ixy": moi[1],
+                    "Ixz": moi[2],
+                    "Iyz": moi[5],
+                },
+            )
 
         return cast(
             AdapterResult[MassProperties],

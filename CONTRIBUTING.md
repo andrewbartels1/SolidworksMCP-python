@@ -9,7 +9,8 @@ This repository is Python-first and centered on SolidWorks MCP tooling plus opti
 1. Fork the repo and create a branch from `main`.
 2. Make focused changes with tests/docs updates where relevant.
 3. Run lint/tests/docs build locally.
-4. Open a pull request with a concise summary.
+4. **Run the local CI check** (see below) and confirm it passes before opening a PR.
+5. Open a pull request with a concise summary.
 
 ## Local Setup
 
@@ -20,6 +21,34 @@ cd SolidworksMCP-python
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
+```
+
+## Local CI Check (required before PRs)
+
+Before opening a pull request, run the local CI script to reproduce the same test environment used in GitHub Actions:
+
+```powershell
+.\run-ci-local.ps1
+```
+
+This builds a Docker image from `.ci/Dockerfile` and runs `make test` inside it — the exact command GitHub CI executes. A clean pass here means your PR will not fail CI on test issues.
+
+If Docker is not available, run the full local test suite instead and confirm it passes:
+
+```powershell
+.\dev-commands.ps1 dev-test
+```
+
+### First run
+
+The first invocation builds the Docker image (a few minutes). Subsequent runs reuse the cached image unless you pass `-NoBuild`:
+
+```powershell
+# Force image rebuild
+.\run-ci-local.ps1
+
+# Skip rebuild (faster after first run)
+.\run-ci-local.ps1 -NoBuild
 ```
 
 ## Recommended Commands
@@ -61,6 +90,7 @@ Current docs structure:
 
 ## Pull Request Guidelines
 
+- Run `.\run-ci-local.ps1` and confirm it passes before opening a PR (see above).
 - Use concise commit messages that describe intent.
 - Keep unrelated generated/local artifacts out of commits.
 - Include validation notes (tests/docs build) in the PR description.
