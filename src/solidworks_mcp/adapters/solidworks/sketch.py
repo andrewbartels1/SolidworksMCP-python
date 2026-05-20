@@ -263,12 +263,12 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
         }
 
         semantic_plane_aliases = {
-            "Top": ["Top Plane", "Planta"],
-            "Front": ["Front Plane", "Alzado"],
-            "Right": ["Right Plane", "Vista lateral"],
-            "XY": ["Top Plane", "Planta"],
-            "XZ": ["Front Plane", "Alzado"],
-            "YZ": ["Right Plane", "Vista lateral"],
+            "Top": ["Top Plane", "Planta", "上视基准面", "上視基準面"],
+            "Front": ["Front Plane", "Alzado", "前视基准面", "前視基準面"],
+            "Right": ["Right Plane", "Vista lateral", "右视基准面", "右視基準面"],
+            "XY": ["Top Plane", "Planta", "上视基准面"],
+            "XZ": ["Front Plane", "Alzado", "前视基准面"],
+            "YZ": ["Right Plane", "Vista lateral", "右视基准面"],
         }
 
         actual_plane = plane_name_map.get(plane, plane)
@@ -285,6 +285,12 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             "Planta",
             "Alzado",
             "Vista lateral",
+            "上视基准面",
+            "前视基准面",
+            "右视基准面",
+            "上視基準面",
+            "前視基準面",
+            "右視基準面",
         ]
         for candidate in plane_candidates:
             if not candidate:

@@ -559,101 +559,45 @@ def _create_cut_extrude_impl(
         feature = None
         fallback_errors: list[str] = []
 
-        feature, cut4_error = adapter._attempt_with_error(
-            lambda: feature_manager.FeatureCut4(
-                True,
-                False,
-                normalized.reverse_direction,
-                t1,
-                adapter.constants["swEndCondBlind"],
-                depth_m,
-                0.0,
-                False,
-                False,
-                False,
-                False,
-                normalized.draft_angle * 3.14159 / 180.0,
-                0.0,
-                False,
-                False,
-                False,
-                False,
-                False,
-                normalized.feature_scope,
-                normalized.auto_select,
-                False,
-                False,
-                False,
-                t0,
-                0.0,
-                False,
-                False,
+        # FeatureCut3 via IFeatureManager (SW2010+, 27 params).
+        # Signature: Sd, Flip, Dir, T1, T2, D1, D2, Dchk1, Dchk2, Ddir1, Ddir2,
+        #   Dang1, Dang2, OffsetReverse1, OffsetReverse2, TranslateSurface1,
+        #   TranslateSurface2, NormalCut, UseFeatScope, UseAutoSelect,
+        #   AssemblyFeatureScope, AutoSelectComponents, PropagateFeatureToParts,
+        #   T0, StartOffset, FlipStartOffset
+        is_through = end_condition in {"throughall", "through all", "through_all"}
+        feature, cut3_error = adapter._attempt_with_error(
+            lambda: feature_manager.FeatureCut3(
+                is_through,                      # Sd: True=through-all
+                normalized.reverse_direction,     # Flip
+                False,                            # Dir
+                t1,                               # T1
+                0,                                # T2 (ignored when Sd=True)
+                normalized.depth / 1000.0,        # D1 (meters)
+                normalized.depth / 1000.0,        # D2 (meters)
+                False,                            # Dchk1
+                False,                            # Dchk2
+                False,                            # Ddir1
+                False,                            # Ddir2
+                normalized.draft_angle * 3.14159 / 180.0,  # Dang1
+                0.0,                              # Dang2
+                False,                            # OffsetReverse1
+                False,                            # OffsetReverse2
+                False,                            # TranslateSurface1
+                False,                            # TranslateSurface2
+                False,                            # NormalCut
+                normalized.feature_scope,         # UseFeatScope
+                normalized.auto_select,           # UseAutoSelect
+                False,                            # AssemblyFeatureScope
+                False,                            # AutoSelectComponents
+                False,                            # PropagateFeatureToParts
+                t0,                               # T0
+                0.0,                              # StartOffset
+                False,                            # FlipStartOffset
             )
         )
-        if cut4_error is not None:
-            fallback_errors.append(f"FeatureCut4: {cut4_error}")
-
-        if not feature:
-            feature, cut3_modern_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut3(
-                    True,
-                    False,
-                    normalized.reverse_direction,
-                    t1,
-                    adapter.constants["swEndCondBlind"],
-                    depth_m,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.draft_angle * 3.14159 / 180.0,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.feature_scope,
-                    normalized.auto_select,
-                    False,
-                    False,
-                    False,
-                    t0,
-                    0.0,
-                    False,
-                )
-            )
-            if cut3_modern_error is not None:
-                fallback_errors.append(f"FeatureCut3 modern: {cut3_modern_error}")
-
-        if not feature:
-            feature, cut3_legacy_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut3(
-                    True,
-                    False,
-                    normalized.reverse_direction,
-                    adapter.constants["swEndCondBlind"],
-                    adapter.constants["swEndCondBlind"],
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.draft_angle * 3.14159 / 180.0,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.feature_scope,
-                    normalized.auto_select,
-                    normalized.depth / 1000.0,
-                    0.0,
-                )
-            )
-            if cut3_legacy_error is not None:
-                fallback_errors.append(f"FeatureCut3 legacy: {cut3_legacy_error}")
+        if cut3_error is not None:
+            fallback_errors.append(f"FeatureCut3: {cut3_error}")
 
         if not feature:
             if fallback_errors:
