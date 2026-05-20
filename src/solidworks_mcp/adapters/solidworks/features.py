@@ -547,7 +547,7 @@ def _create_cut_extrude_impl(
             ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
                 sel_result = adapter._attempt(
                     lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
-                        c, "SKETCH", 0.0, 0.0, 0.0, False, 0, "", 0
+                        c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
                     ),
                     default=False,
                 )

@@ -305,25 +305,24 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
                 break
 
         if not selected:
-            for callout in ("", None, 0):
-                selected, selection_error_candidate = adapter._attempt_with_error(
-                    lambda co=callout: adapter.currentModel.Extension.SelectByID2(
-                        actual_plane,
-                        "PLANE",
-                        0,
-                        0,
-                        0,
-                        False,
-                        0,
-                        co,
-                        0,
-                    )
+            # SW 2022: callout must be None (empty string causes type mismatch)
+            selected, selection_error_candidate = adapter._attempt_with_error(
+                lambda: adapter.currentModel.Extension.SelectByID2(
+                    actual_plane,
+                    "PLANE",
+                    0,
+                    0,
+                    0,
+                    False,
+                    0,
+                    None,
+                    0,
                 )
-                if selection_error_candidate:
-                    selection_error = selection_error_candidate
-                    continue
-                if selected:
-                    break
+            )
+            if selection_error_candidate:
+                selection_error = selection_error_candidate
+            elif selected:
+                pass
 
         if not selected:
             if selection_error:
