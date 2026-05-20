@@ -254,7 +254,7 @@ class _CodeGen:
         eid = _entity_id_from_output(out)
         var = self._var_for(eid, "spline")
         self._emit(
-            f"{var} = require(await adapter.add_spline({_r(points)}), \"add_spline\")"
+            f'{var} = require(await adapter.add_spline({_r(points)}), "add_spline")'
         )
 
     def emit_add_polygon(self, inp: dict[str, Any], out: dict[str, Any]) -> None:
@@ -265,9 +265,7 @@ class _CodeGen:
         eid = _entity_id_from_output(out)
         var = self._var_for(eid, "polygon")
         args = f"{_fmt_num(cx)}, {_fmt_num(cy)}, {_fmt_num(r)}, {sides}"
-        self._emit(
-            f'{var} = require(await adapter.add_polygon({args}), "add_polygon")'
-        )
+        self._emit(f'{var} = require(await adapter.add_polygon({args}), "add_polygon")')
 
     def emit_add_ellipse(self, inp: dict[str, Any], out: dict[str, Any]) -> None:
         cx = inp.get("center_x", 0.0)
@@ -277,9 +275,7 @@ class _CodeGen:
         eid = _entity_id_from_output(out)
         var = self._var_for(eid, "ellipse")
         args = f"{_fmt_num(cx)}, {_fmt_num(cy)}, {_fmt_num(major)}, {_fmt_num(minor)}"
-        self._emit(
-            f'{var} = require(await adapter.add_ellipse({args}), "add_ellipse")'
-        )
+        self._emit(f'{var} = require(await adapter.add_ellipse({args}), "add_ellipse")')
 
     def emit_add_sketch_constraint(
         self, inp: dict[str, Any], _out: dict[str, Any]
@@ -410,9 +406,7 @@ class _CodeGen:
             self._blank()
             self._emit(f'require(await adapter.{bare_name}(), "{bare_name}")')
         else:
-            kwargs = ", ".join(
-                f"{k}={_r(v)}" for k, v in inp.items() if v is not None
-            )
+            kwargs = ", ".join(f"{k}={_r(v)}" for k, v in inp.items() if v is not None)
             self._blank()
             self._emit(f'require(await adapter.{bare_name}({kwargs}), "{bare_name}")')
 
@@ -500,7 +494,9 @@ def _checkpoint_comment(cp: dict[str, Any]) -> str:
     file_path = cp.get("file_path", "")
     first_id = cp.get("first_record_id")
     last_id = cp.get("last_record_id")
-    records_range = f"{first_id}-{last_id}" if first_id and last_id else str(last_id or "")
+    records_range = (
+        f"{first_id}-{last_id}" if first_id and last_id else str(last_id or "")
+    )
     lines = [
         f"        # -- checkpoint {_CHECKPOINT_RULE}",
         f"        # label:    {label}",

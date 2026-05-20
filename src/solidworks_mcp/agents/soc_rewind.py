@@ -106,8 +106,7 @@ def truncate_script_at(script_text: str, label: str) -> str:
     if match is None:
         available = [c["label"] for c in checkpoints]
         raise KeyError(
-            f"Checkpoint {label!r} not found in script. "
-            f"Available: {available}"
+            f"Checkpoint {label!r} not found in script. Available: {available}"
         )
     lines = script_text.splitlines(keepends=True)
     # Include everything up through the closing rule line of the checkpoint block
@@ -115,13 +114,16 @@ def truncate_script_at(script_text: str, label: str) -> str:
     truncated_lines = lines[:end_line]
     # Append the script footer so the truncated version is still runnable
     if not any("await adapter.disconnect()" in l for l in truncated_lines):
-        truncated_lines.append("\n    finally:\n        await adapter.disconnect()\n\n\nif __name__ == \"__main__\":\n    asyncio.run(build_part())\n")
+        truncated_lines.append(
+            '\n    finally:\n        await adapter.disconnect()\n\n\nif __name__ == "__main__":\n    asyncio.run(build_part())\n'
+        )
     return "".join(truncated_lines)
 
 
 # ---------------------------------------------------------------------------
 # Model-side rewind (requires adapter)
 # ---------------------------------------------------------------------------
+
 
 async def rewind_to_checkpoint(
     adapter: Any,
@@ -198,11 +200,10 @@ def list_checkpoints(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _cli() -> None:
     if len(sys.argv) < 3:
-        print(
-            "Usage: python -m solidworks_mcp.agents.soc_rewind <session_id> <label>"
-        )
+        print("Usage: python -m solidworks_mcp.agents.soc_rewind <session_id> <label>")
         sys.exit(1)
     session_id = sys.argv[1]
     label = sys.argv[2]

@@ -54,6 +54,7 @@ if TYPE_CHECKING:
 # Feature diff
 # ---------------------------------------------------------------------------
 
+
 def _feature_names(feature_tree: list[dict[str, Any]]) -> list[str]:
     return [f.get("name", "") for f in feature_tree if f.get("name")]
 
@@ -82,6 +83,7 @@ def diff_feature_trees(
 # ---------------------------------------------------------------------------
 # Code emission for detected features
 # ---------------------------------------------------------------------------
+
 
 def _feature_type(feature: dict[str, Any]) -> str:
     return (feature.get("type") or feature.get("feature_type") or "").lower()
@@ -162,7 +164,7 @@ def emit_feature_lines(feature: dict[str, Any]) -> list[str]:
     elif kind == "fillet":
         lines += [
             "        require(",
-            f'            await adapter.add_fillet(radius=?, edge_names=[]),  # TODO: radius + edges for {name}',
+            f"            await adapter.add_fillet(radius=?, edge_names=[]),  # TODO: radius + edges for {name}",
             f'            "add_fillet {name}",',
             "        )",
         ]
@@ -174,8 +176,7 @@ def emit_feature_lines(feature: dict[str, Any]) -> list[str]:
         ]
     elif kind in ("chamfer", "plane", "mirror", "pattern"):
         lines.append(
-            f"        # TODO: reconstruct {name!r} ({kind}) — "
-            f"no automatic emitter yet"
+            f"        # TODO: reconstruct {name!r} ({kind}) — no automatic emitter yet"
         )
     else:
         lines.append(
@@ -215,6 +216,7 @@ def generate_pickup_lines(new_features: list[dict[str, Any]]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Main async entry point
 # ---------------------------------------------------------------------------
+
 
 async def pickup_changes(
     adapter: Any,
@@ -302,6 +304,7 @@ async def pickup_changes(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _cli() -> None:
     if len(sys.argv) < 2:

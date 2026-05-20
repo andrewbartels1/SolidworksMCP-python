@@ -668,9 +668,7 @@ def _add_spline_impl(
 
         points_arg: Any
         if _pythoncom is not None and _VARIANT is not None:
-            points_arg = _VARIANT(
-                _pythoncom.VT_ARRAY | _pythoncom.VT_R8, spline_points
-            )
+            points_arg = _VARIANT(_pythoncom.VT_ARRAY | _pythoncom.VT_R8, spline_points)
         elif sys.platform == "win32":
             raise Exception("pywin32 is required for add_spline on Windows")
         else:
@@ -1175,6 +1173,15 @@ def _add_sketch_dimension_impl(
         """
         import math as _math_dim
 
+        # Re-assert per-call: SolidWorks resets swInputDimValOnCreate (10)
+        # when entering a new sketch, so the global connect-time suppression
+        # is not sufficient. Setting it to False here prevents the Modify
+        # dialog from blocking unattended automation.
+        if adapter.swApp:
+            adapter._attempt(lambda: adapter.swApp.SetUserPreferenceToggle(10, False))
+            adapter._attempt(lambda: adapter.swApp.SetUserPreferenceToggle(372, False))
+            adapter._attempt(lambda: adapter.swApp.SetUserPreferenceToggle(520, False))
+
         def _radial_dimension_placement() -> tuple[float, float, float, int]:
             """Compute a deterministic placement for radial/diameter dimensions.
 
@@ -1665,7 +1672,11 @@ def _sketch_circular_pattern_impl(
                         f"Use a circle, arc, or ellipse seed."
                     )
 
-            if seed_xy is None and first_entity is not None and _sw_type_info is not None:
+            if (
+                seed_xy is None
+                and first_entity is not None
+                and _sw_type_info is not None
+            ):
                 # GetCenterPoint lives on multiple sketch-entity interfaces
                 # (ISketchArc for arcs/circles, ISketchEllipse for ellipses),
                 # all with the same zero-arg signature. Flag every interface
@@ -1682,11 +1693,7 @@ def _sketch_circular_pattern_impl(
                     default=0,
                 )
                 point = adapter._attempt(lambda: first_entity.GetCenterPoint())
-                if (
-                    point is not None
-                    and hasattr(point, "__len__")
-                    and len(point) >= 2
-                ):
+                if point is not None and hasattr(point, "__len__") and len(point) >= 2:
                     seed_xy = (float(point[0]) * 1000.0, float(point[1]) * 1000.0)
 
             # Single-dispatch seeds without ``GetCenterPoint`` (line, spline,
@@ -1751,9 +1758,7 @@ def _sketch_circular_pattern_impl(
         finally:
             adapter.currentModel.ClearSelection2(True)
 
-        return (
-            f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
-        )
+        return f"CircularPattern_{count}x{angle}deg_{int(time.time() * 1000) % 10000}"
 
     return cast(
         AdapterResult[str],
@@ -1953,10 +1958,7 @@ def _sketch_offset_impl(
             adapter.currentModel.ClearSelection2(True)
 
         direction = "inward" if reverse_direction else "outward"
-        return (
-            f"Offset_{offset_distance}_{direction}_"
-            f"{int(time.time() * 1000) % 10000}"
-        )
+        return f"Offset_{offset_distance}_{direction}_{int(time.time() * 1000) % 10000}"
 
     return cast(
         AdapterResult[str],
@@ -2023,15 +2025,11 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         # the cross-thread bugs in runbook #5.
         if _sw_type_info is not None:
             adapter._attempt(
-                lambda: _sw_type_info.flag_methods(
-                    adapter.currentModel, "IModelDoc2"
-                ),
+                lambda: _sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2"),
                 default=0,
             )
 
-        sw_active = adapter._attempt(
-            lambda: adapter.currentModel.GetActiveSketch2()
-        )
+        sw_active = adapter._attempt(lambda: adapter.currentModel.GetActiveSketch2())
         adapter_active = adapter.currentSketchManager
 
         # Already out of sketch-edit mode — clean up adapter state so a
@@ -2048,9 +2046,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         sketch_manager = adapter_active or adapter.currentModel.SketchManager
         if _sw_type_info is not None:
             adapter._attempt(
-                lambda: _sw_type_info.flag_methods(
-                    sketch_manager, "ISketchManager"
-                ),
+                lambda: _sw_type_info.flag_methods(sketch_manager, "ISketchManager"),
                 default=0,
             )
         sketch_manager.InsertSketch(True)

@@ -1,6 +1,10 @@
 # U-Joint Assembly: Build from Scratch Tutorial
 
-Build a complete mechanical U-joint assembly using the Prefab UI and MCP server. This tutorial walks through creating each part from empty files, validating geometry, and assembling components into a fully functional joint.
+⚠️ **UNDER CONSTRUCTION** ⚠️
+This tutorial is still in development and will be updated with new information and changes. Please check back regularly for updates.
+
+
+Build a complete mechanical U-joint assembly using Claude Code and the SolidWorks MCP server. This tutorial walks through creating each part from empty files, validating geometry, and assembling components into a fully functional joint.
 
 **Target:** `C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\UJoint.SLDASM`
 
@@ -24,33 +28,44 @@ Build a complete mechanical U-joint assembly using the Prefab UI and MCP server.
 
 ## Phase 1: Setup and Part Planning
 
-### Step 1: Start New Design
+### Step 1: Start the MCP Server
 
-1. Open the Prefab UI dashboard.
-2. Click **New Design** to start a blank session.
-3. Enter the design goal:
+Run the MCP server with the `--real` flag to connect to your running SolidWorks instance:
 
-```
-Build a complete U-joint mechanical assembly from scratch. 
-Assembly must include: Yoke_male, Yoke_female, Spider, Pin, 
-Crank_shaft, Crank_arm, Crank_knob, Bracket. 
-All parts must allow smooth rotation around the drive axis.
+```powershell
+.\run-mcp.ps1 --real --year 2026
 ```
 
-1. Enter manufacturing assumptions:
+Or configure `.mcp.json` to launch it automatically — see [SolidWorks as Code](../solidworks-as-code.md) for session setup details.
+
+### Step 2: Verify Connection
+
+Ask Claude Code to confirm the server is live:
 
 ```
-Steel/aluminum parts: 0.1mm nominal tolerances where mating.
-Yokes and spider: rotational symmetry required.
-Pin: ∅6mm (nominal) with ±0.05mm fit tolerance.
-Assembly constraint: fully defined, no over-constraint.
+What is the currently active SolidWorks model?
 ```
 
-1. Click **Approve Brief**.
+Expected: model info for the active document, or `No active model` if SolidWorks is open without a file.
 
-### Step 2: Get Part Specifications
+### Step 3: Plan Build Order
 
-**Prompt (in Prefab UI design-goal or your LLM):**
+The U-joint has 8 parts. Build in this order to respect mate dependencies:
+
+| # | Part | Role |
+| --- | --- | --- |
+| 1 | Bracket | Fixed base — all others mount to it |
+| 2 | Yoke_male | Drive shaft end |
+| 3 | Yoke_female | Output shaft end |
+| 4 | Spider | Cross hub linking both yokes |
+| 5 | Pin ×4 | Spider-to-yoke arm connectors |
+| 6 | Crank_shaft | Main drive shaft |
+| 7 | Crank_arm | Lever arm |
+| 8 | Crank_knob | Grip handle |
+
+### Step 4: Get Part Specifications
+
+**Prompt Claude Code to get part specifications:**
 
 ```
 Analyze the U-joint assembly structure and provide a build order 
@@ -78,7 +93,7 @@ Focus on:
 
 ### Prompt Template for Each Part
 
-For each part, use this template in the Prefab UI or direct MCP call:
+For each part, use this template with Claude Code:
 
 ```
 **Part: [NAME]**
@@ -109,7 +124,9 @@ Rules:
 
 ### Part 1: Bracket (Exact Sample Match)
 
-**Prompt:**
+**SolidWorks-as-Code script:** `docs/getting-started/tutorial-parts/build_u_bracket_artifact.py`
+
+**Prompt Claude Code:**
 
 ```
 Build Bracket.SLDPRT from scratch and match the U-Joint sample bracket exactly.
@@ -159,85 +176,116 @@ Export isometric PNG to validate geometry before proceeding.
 
 ### Part 2: Yoke_male
 
-**Prompt:**
+![Yoke_male isometric](../tutorial-parts/yoke_male_from_prompt_isometric.png)
+
+**SolidWorks-as-Code script:** `docs/getting-started/tutorial-parts/build_yoke_male_artifact.py`
+
+Run it directly against a live SolidWorks session:
+
+```powershell
+.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_yoke_male_artifact.py
+```
+
+**Checkpoint script (base + U-slot only):** `docs/getting-started/tutorial-parts/build_yoke_male_checkpoint2.py`
+
+**Prompt Claude Code:**
 
 ```
-Build Yoke_male.SLDPRT from scratch.
+Build Yoke_male.SLDPRT to match the SW 2026 sample at
+C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_male.sldprt
 
-Geometry:
-- Main body: rectangular profile 80mm x 40mm, extruded 8mm
-- Two parallel arms extending upward: each 60mm tall, 15mm wide, 8mm thick
-- Center bore between arms: ∅8mm diameter, full height
-- Flange mount on bottom: ∅60mm circular pad, 3mm tall
-- Four corner fillets on arms: 1mm radius
-- Four clearance holes on flange (M4): arranged in ∅50mm circle
+Geometry (all dims in mm):
+- Base cylinder: ∅38.10 (r=19.050), height=47.625, extruded from Top plane upward
+- U-slot cut: closed profile on Front plane — 5 lines + 3 arcs (R=9.525 each)
+    outer rect X=±19.050, Y=-1.366 to 29.210; inner walls at X=±9.525
+    arm tip arcs centred at (±19.050, 19.685); U-bottom arc centred at (0, 9.525)
+    through-all in both Z directions
+- Arm gap: rectangular slot on Right plane — Z=±10.160, Y=-7.455 to 29.145
+    through-all in X (creates the two fork arms)
+- Pin bore: ∅9.525 (r=4.7625) circle on Front plane at (0, 9.525), through-all in Z
+- Stub shaft: ∅12.70 (r=6.350) circle on Top plane, extruded 66.675mm total
+- Stub bore: ∅12.70 circle on Top plane, through-all cut (removes core of stub shaft)
 
 Feature sequence:
-1. Sketch1: main body rectangle (80x40mm)
-2. BaseExtrude: extrude 8mm up
-3. Sketch2: upper arms profile (two 60x15mm boxes)
-4. ArmsExtrude: extrude 52mm up (total arm height 60mm)
-5. Sketch3: ∅8mm center bore
-6. CenterBore: cut extrude through arms
-7. Sketch4: ∅60mm flange circle on bottom
-8. FlangeExtrude: extrude 3mm down
-9. Sketch5: four ∅4.2mm holes on ∅50mm circle
-10. FlangeHoles: cut extrude through flange
-11. FilletCorners: 1mm fillet on arm edges
+1. Sketch1 → Top plane: circle r=19.050
+2. Boss-Extrude1: 47.625mm
+3. Sketch2 → Front plane: 5-line + 3-arc closed U-slot profile (add radial dims R=9.525)
+4. Cut-Extrude1: through-all both directions
+5. Sketch8 → Right plane: rectangle Z=±10.160, Y=-7.455..29.145
+6. Cut-Extrude2: through-all both directions
+7. Sketch11 → Front plane: circle r=4.7625 at (0, 9.525)
+8. Cut-Extrude3: through-all both directions
+9. Sketch12 → Top plane: circle r=6.350
+10. Boss-Extrude2: 66.675mm
+11. Sketch13 → Top plane: circle r=6.350
+12. Cut-Extrude4: through-all
 
-Export isometric PNG.
+Export isometric PNG to docs/getting-started/tutorial-parts/yoke_male_from_prompt_isometric.png
 ```
 
 **Validation checklist:**
 
-- [ ] Main body 80 x 40 x 8 mm
-- [ ] Two arms 60mm tall, 15mm wide
-- [ ] Center bore ∅8mm full height
-- [ ] Flange ∅60mm x 3mm on bottom
-- [ ] Four M4 holes on flange (∅50mm circle)
-- [ ] All corners filleted 1mm
-- [ ] Feature tree in correct sequence
+- [ ] Base cylinder ∅38.10mm × 47.625mm tall
+- [ ] U-slot cut: arm inner width = 19.050mm, arm tip radius = 9.525mm
+- [ ] Arm gap: 20.320mm wide (Z=±10.160), exposes both fork arms
+- [ ] Pin bore ∅9.525mm centred at Y=9.525mm (arm mid-height)
+- [ ] Stub shaft ∅12.70mm extending to Y=66.675mm
+- [ ] Stub bore ∅12.70mm cut through stub
+- [ ] Isometric PNG visually matches answer key
 
 ### Part 3: Yoke_female
 
-**Prompt:**
+**SolidWorks-as-Code script:** `docs/getting-started/tutorial-parts/build_yoke_female_artifact.py`
+
+Run it directly against a live SolidWorks session:
+
+```powershell
+.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_yoke_female_artifact.py
+```
+
+**Prompt Claude Code:**
 
 ```
-Build Yoke_female.SLDPRT from scratch. Geometry is identical to Yoke_male.
+Build Yoke_female.SLDPRT to match the SW 2026 sample at
+C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_female.sldprt
 
-Geometry:
-- Main body: rectangular profile 80mm x 40mm, extruded 8mm
-- Two parallel arms extending upward: each 60mm tall, 15mm wide, 8mm thick
-- Center bore between arms: ∅8mm diameter, full height
-- Flange mount on bottom: ∅60mm circular pad, 3mm tall
-- Four corner fillets on arms: 1mm radius
-- Four clearance holes on flange (M4): arranged in ∅50mm circle
+Yoke_female shares the same cylinder+fork body as Yoke_male but has a
+through-bore (no stub shaft) so it slides onto the driven shaft.
 
-Feature sequence: (identical to Yoke_male)
-1. Sketch1: main body rectangle (80x40mm)
-2. BaseExtrude: extrude 8mm up
-3. Sketch2: upper arms profile
-4. ArmsExtrude: extrude 52mm up
-5. Sketch3: ∅8mm center bore
-6. CenterBore: cut extrude
-7. Sketch4: ∅60mm flange
-8. FlangeExtrude: extrude 3mm down
-9. Sketch5: four ∅4.2mm holes
-10. FlangeHoles: cut extrude
-11. FilletCorners: 1mm fillet
+Geometry (all dims in mm):
+- Base cylinder: ∅38.10 (r=19.050), height=47.625, extruded from Top plane upward
+- U-slot cut: identical profile to Yoke_male (Front plane, 5 lines + 3 arcs R=9.525)
+    outer rect X=±19.050, Y=-1.366 to 29.210; inner walls X=±9.525; through-all Z
+- Arm gap: Right plane, Z=±10.160, Y=-7.455 to 29.145, through-all X
+- Pin bore: ∅9.525 (r=4.7625) on Front plane at (0, 9.525), through-all Z
+- Shaft through-bore: ∅12.70 circle on Top plane, through-all (no stub shaft added)
 
-Export isometric PNG.
+Feature sequence:
+1. Sketch1 → Top plane: circle r=19.050
+2. Boss-Extrude1: 47.625mm
+3. Sketch2 → Front plane: 5-line + 3-arc U-slot (radial dims R=9.525)
+4. Cut-Extrude1: through-all both directions
+5. Sketch8 → Right plane: rectangle Z=±10.160, Y=-7.455..29.145
+6. Cut-Extrude2: through-all both directions
+7. Sketch11 → Front plane: circle r=4.7625 at (0, 9.525)
+8. Cut-Extrude3: through-all both directions
+9. Sketch12 → Top plane: circle r=6.350
+10. Cut-Extrude4: through-all (shaft through-bore, no extrusion)
+
+Export isometric PNG to docs/getting-started/tutorial-parts/yoke_female_from_prompt_isometric.png
 ```
 
 **Validation checklist:**
 
-- [ ] Geometry matches Yoke_male
-- [ ] Both parts have identical arm heights and bore sizes
-- [ ] Both flanges have same hole pattern
+- [ ] Base cylinder ∅38.10mm × 47.625mm tall
+- [ ] U-slot cut matches Yoke_male (arm tip R=9.525mm)
+- [ ] Arm gap 20.320mm wide (Z=±10.160)
+- [ ] Pin bore ∅9.525mm at Y=9.525mm
+- [ ] Shaft through-bore ∅12.70mm (no stub shaft protrusion)
 
 ### Part 4: Spider (Cross Hub)
 
-**Prompt:**
+**Prompt Claude Code:**
 
 ```
 Build Spider.SLDPRT from scratch.
@@ -273,7 +321,7 @@ Export isometric PNG.
 
 ### Part 5: Pin
 
-**Prompt:**
+**Prompt Claude Code:**
 
 ```
 Build Pin.SLDPRT from scratch.
@@ -302,7 +350,7 @@ Export isometric PNG.
 
 ### Part 6: Crank_shaft
 
-**Prompt:**
+**Prompt Claude Code:**
 
 ```
 Build Crank_shaft.SLDPRT from scratch.
@@ -335,7 +383,7 @@ Export isometric PNG.
 
 ### Part 7: Crank_arm
 
-**Prompt:**
+**Prompt Claude Code:**
 
 ```
 Build Crank_arm.SLDPRT from scratch.
@@ -366,7 +414,7 @@ Export isometric PNG.
 
 ### Part 8: Crank_knob
 
-**Prompt:**
+**Prompt Claude Code:**
 
 ```
 Build Crank_knob.SLDPRT from scratch.
