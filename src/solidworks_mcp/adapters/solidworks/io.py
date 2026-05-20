@@ -536,18 +536,30 @@ class SolidWorksIOMixin:
         def _get_info() -> dict[str, Any]:
             """Get model information."""
             active_config = adapter.currentModel.GetActiveConfiguration()
+            # 'Name' on Configuration is a property, not a method.
+            config_name = getattr(active_config, "Name", "Default") if active_config else "Default"
+            # Try GetSaveFlag (method) first, fallback to property
+            is_dirty_raw = adapter._attempt(
+                lambda: adapter.currentModel.GetSaveFlag(), default=None
+            )
+            is_dirty = bool(is_dirty_raw) if is_dirty_raw is not None else None
+            feature_count = adapter._attempt(
+                lambda: int(adapter.currentModel.FeatureManager.GetFeatureCount(True) or 0),
+                default=0,
+            )
+            rebuild_status_raw = adapter._attempt(
+                lambda: adapter.currentModel.GetRebuildStatus(), default=None
+            )
+            # GetRebuildStatus returns 0=ok, 1=needs rebuild, or None=failed
+            rebuild_status = rebuild_status_raw if rebuild_status_raw is not None else None
             return {
                 "title": adapter.currentModel.GetTitle(),
                 "path": adapter.currentModel.GetPathName(),
                 "type": adapter._get_document_type(),
-                "configuration": active_config.GetName()
-                if active_config
-                else "Default",
-                "is_dirty": adapter.currentModel.GetSaveFlag(),
-                "feature_count": adapter.currentModel.FeatureManager.GetFeatureCount(
-                    True
-                ),
-                "rebuild_status": adapter.currentModel.GetRebuildStatus(),
+                "configuration": config_name,
+                "is_dirty": is_dirty,
+                "feature_count": feature_count,
+                "rebuild_status": rebuild_status,
             }
 
         return cast(
@@ -610,68 +622,26 @@ class SolidWorksIOMixin:
 
         def _get() -> MassProperties:
             """Get mass properties."""
-            adapter._attempt(
-                lambda: adapter.currentModel.ForceRebuild3(False), default=None
+            # Primary: GetMassProperties (array API, always works)
+            raw = adapter._attempt(
+                lambda: adapter.currentModel.GetMassProperties(), default=None
             )
-            mass_props = adapter._attempt(
-                lambda: adapter.currentModel.Extension.CreateMassProperty(),
-                default=None,
-            )
-
-            if mass_props:
-                volume = mass_props.Volume * 1e9
-                surface_area = mass_props.SurfaceArea * 1e6
-                mass = mass_props.Mass
-
-                center_of_mass = [0.0, 0.0, 0.0]
-                com = adapter._attempt(lambda: mass_props.CenterOfMass, default=None)
-                if isinstance(com, (list, tuple)) and len(com) >= 3:
-                    center_of_mass = [com[0] * 1000, com[1] * 1000, com[2] * 1000]
-
-                moi = adapter._attempt(
-                    lambda: mass_props.GetMomentOfInertia(0), default=None
+            if isinstance(raw, (list, tuple)) and len(raw) >= 6:
+                return MassProperties(
+                    volume=raw[3] * 1e9,
+                    surface_area=raw[4] * 1e6,
+                    mass=raw[5],
+                    center_of_mass=[raw[0] * 1000.0, raw[1] * 1000.0, raw[2] * 1000.0],
+                    moments_of_inertia={
+                        "Ixx": raw[6] if len(raw) > 6 else 0.0,
+                        "Iyy": raw[7] if len(raw) > 7 else 0.0,
+                        "Izz": raw[8] if len(raw) > 8 else 0.0,
+                        "Ixy": raw[9] if len(raw) > 9 else 0.0,
+                        "Ixz": raw[11] if len(raw) > 11 else 0.0,
+                        "Iyz": raw[10] if len(raw) > 10 else 0.0,
+                    },
                 )
-                if not isinstance(moi, (list, tuple)) or len(moi) < 9:
-                    moi = [0.0] * 9
-            else:
-                raw = adapter._attempt(
-                    lambda: adapter.currentModel.GetMassProperties, default=None
-                )
-                if not isinstance(raw, (list, tuple)) or len(raw) < 6:
-                    raise Exception("Failed to get mass properties")
-
-                center_of_mass = [
-                    raw[0] * 1000.0,
-                    raw[1] * 1000.0,
-                    raw[2] * 1000.0,
-                ]
-                volume = raw[3] * 1e9
-                surface_area = raw[4] * 1e6
-                mass = raw[5]
-
-                moi = [0.0] * 9
-                if len(raw) >= 12:
-                    moi[0] = raw[6]
-                    moi[4] = raw[7]
-                    moi[8] = raw[8]
-                    moi[1] = raw[9]
-                    moi[5] = raw[10]
-                    moi[2] = raw[11]
-
-            return MassProperties(
-                volume=volume,
-                surface_area=surface_area,
-                mass=mass,
-                center_of_mass=center_of_mass,
-                moments_of_inertia={
-                    "Ixx": moi[0],
-                    "Iyy": moi[4],
-                    "Izz": moi[8],
-                    "Ixy": moi[1],
-                    "Ixz": moi[2],
-                    "Iyz": moi[5],
-                },
-            )
+            raise Exception("Failed to get mass properties")
 
         return cast(
             AdapterResult[MassProperties],
