@@ -777,6 +777,18 @@ def _add_fillet_impl(
         Raises:
             Exception: If any edge selection fails or the feature is ``None``.
         """
+        # Detect SW major version for FeatureFillet3 parameter count
+        fillet_sw_major = 0
+        if adapter.swApp:
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
+            )
+            try:
+                fillet_sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                fillet_sw_major = 0
+
         for edge_name in edge_names:
             selected = adapter.currentModel.Extension.SelectByID2(
                 edge_name,
@@ -793,23 +805,34 @@ def _add_fillet_impl(
                 raise Exception(f"Failed to select edge: {edge_name}")
 
         feature_manager = adapter.currentModel.FeatureManager
-        feature = feature_manager.FeatureFillet3(
-            radius / 1000.0,
-            0,
-            0,
-            0,
-            0,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            0,
-            False,
-        )
+        # SW 2025 (major=33): gen_py expects 14 params. Other versions: 16 params.
+        if fillet_sw_major == 33:
+            feature = feature_manager.FeatureFillet3(
+                0,          # Options: 0=constant radius
+                radius / 1000.0,  # R1 in meters
+                0, 0,       # R2, Rho
+                0, 0, 0,    # Ftyp, OverflowType, ConicRhoType
+                None, None, None, None,  # Radii, Dist2Arr, RhoArr, SetBackDistances
+                None, None, None,  # PointRadiusArray, PointDist2Array, PointRhoArray
+            )
+        else:
+            feature = feature_manager.FeatureFillet3(
+                radius / 1000.0,
+                0,
+                0,
+                0,
+                0,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                0,
+                False,
+            )
 
         if not feature:
             raise Exception("Failed to create fillet")
