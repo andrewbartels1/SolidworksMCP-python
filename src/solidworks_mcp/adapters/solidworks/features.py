@@ -804,37 +804,29 @@ def _add_fillet_impl(
             if not selected:
                 raise Exception(f"Failed to select edge: {edge_name}")
 
-        feature_manager = adapter.currentModel.FeatureManager
-        # SW 2025 (major=33): gen_py expects 14 params. Other versions: 16 params.
+        # SW 2025 (major=33): IModelDoc2.FeatureFillet3 (9 params) verified.
+        # Other versions: IFeatureManager.FeatureFillet3 (16 params, original code).
         if fillet_sw_major == 33:
-            feature = feature_manager.FeatureFillet3(
-                0,          # Options: 0=constant radius
-                radius / 1000.0,  # R1 in meters
-                0, 0,       # R2, Rho
-                0, 0, 0,    # Ftyp, OverflowType, ConicRhoType
-                None, None, None, None,  # Radii, Dist2Arr, RhoArr, SetBackDistances
-                None, None, None,  # PointRadiusArray, PointDist2Array, PointRhoArray
+            feature = adapter.currentModel.FeatureFillet3(
+                radius / 1000.0,   # R1 in meters
+                True,               # Propagate
+                0,                  # Ftyp
+                0, 0,              # VarRadTyp, OverflowType
+                0, None,           # NRadii, Radii
+                False, False,      # UseHelpPoint, UseTangentHoldLine
             )
         else:
+            feature_manager = adapter.currentModel.FeatureManager
             feature = feature_manager.FeatureFillet3(
                 radius / 1000.0,
-                0,
-                0,
-                0,
-                0,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                0,
-                False,
+                0, 0, 0, 0,
+                False, False, False, False,
+                False, False, False, False,
+                0, False,
             )
 
-        if not feature:
+        # IModelDoc2.FeatureFillet3 returns int on SW 2025, not IFeature
+        if not feature and fillet_sw_major != 33:
             raise Exception("Failed to create fillet")
 
         return SolidWorksFeature(
