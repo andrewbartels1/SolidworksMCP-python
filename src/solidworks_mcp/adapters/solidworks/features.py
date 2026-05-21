@@ -325,29 +325,52 @@ def _create_revolve_impl(
         Raises:
             Exception: If ``FeatureRevolve2`` returns ``None``.
         """
-        feature_manager = adapter.currentModel.FeatureManager
-        feature = feature_manager.FeatureRevolve2(
-            not params.both_directions,
-            True,
-            params.thin_feature,
-            False,
-            params.reverse_direction,
-            False,
-            adapter.constants["swEndCondBlind"],
-            adapter.constants["swEndCondBlind"],
-            params.angle * 3.14159 / 180.0,
-            (params.angle * 3.14159 / 180.0) if params.both_directions else 0.0,
-            False,
-            False,
-            0.0,
-            0.0,
-            0,
-            (params.thin_thickness or 0.0) / 1000.0,
-            0.0,
-            params.merge_result,
-            False,
-            True,
-        )
+        # Detect SW major version for FeatureRevolve2 API choice
+        revolve_sw_major = 0
+        if adapter.swApp:
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
+            )
+            try:
+                revolve_sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                revolve_sw_major = 0
+
+        if revolve_sw_major == 33:
+            # IModelDoc2.FeatureRevolve2 (5 params) verified on SW 2025
+            import math
+            feature = adapter.currentModel.FeatureRevolve2(
+                params.angle * math.pi / 180.0,   # Angle in radians
+                params.reverse_direction,          # ReverseDir
+                0.0,                               # Angle2
+                0,                                 # RevType
+                0,                                 # Options
+            )
+        else:
+            feature_manager = adapter.currentModel.FeatureManager
+            feature = feature_manager.FeatureRevolve2(
+                not params.both_directions,
+                True,
+                params.thin_feature,
+                False,
+                params.reverse_direction,
+                False,
+                adapter.constants["swEndCondBlind"],
+                adapter.constants["swEndCondBlind"],
+                params.angle * 3.14159 / 180.0,
+                (params.angle * 3.14159 / 180.0) if params.both_directions else 0.0,
+                False,
+                False,
+                0.0,
+                0.0,
+                0,
+                (params.thin_thickness or 0.0) / 1000.0,
+                0.0,
+                params.merge_result,
+                False,
+                True,
+            )
 
         if not feature:
             raise Exception("Failed to create revolve feature")
