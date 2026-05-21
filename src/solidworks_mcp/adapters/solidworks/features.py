@@ -372,13 +372,14 @@ def _create_revolve_impl(
                 True,
             )
 
-        if not feature:
+        # IModelDoc2.FeatureRevolve2 returns None (void) on SW 2025
+        if not feature and revolve_sw_major != 33:
             raise Exception("Failed to create revolve feature")
 
         return SolidWorksFeature(
-            name=feature.Name,
+            name=feature.Name if feature else "Revolve-Auto",
             type="Revolve",
-            id=adapter._get_feature_id(feature),
+            id=adapter._get_feature_id(feature) if feature else "revolve_auto",
             parameters={
                 "angle": params.angle,
                 "reverse_direction": params.reverse_direction,
