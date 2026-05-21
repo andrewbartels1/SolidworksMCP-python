@@ -337,15 +337,29 @@ def _create_revolve_impl(
             except (ValueError, IndexError):
                 revolve_sw_major = 0
 
+        import math
         if revolve_sw_major == 33:
-            # IModelDoc2.FeatureRevolve2 (5 params) verified on SW 2025
-            import math
-            feature = adapter.currentModel.FeatureRevolve2(
-                params.angle * math.pi / 180.0,   # Angle in radians
-                params.reverse_direction,          # ReverseDir
-                0.0,                               # Angle2
-                0,                                 # RevType
-                0,                                 # Options
+            # IFeatureManager.FeatureRevolve2 (20 params) per gen_py SW 2025
+            # SingleDir, IsSolid, IsThin, IsCut, ReverseDir, BothDirUpToSame,
+            # Dir1Type, Dir2Type, Dir1Angle(rad), Dir2Angle(rad),
+            # OffsetRev1/2, OffsetDist1/2, Merge, ThinThick1/2(m), AutoSelect, Propagate
+            feature_manager = adapter.currentModel.FeatureManager
+            feature = feature_manager.FeatureRevolve2(
+                True,                                              # SingleDir
+                True,                                              # IsSolid
+                False,                                             # IsThin
+                False,                                             # IsCut
+                params.reverse_direction,                          # ReverseDir
+                params.both_directions,                            # BothDirUpToSame
+                0, 0,                                             # Dir1Type, Dir2Type
+                params.angle * math.pi / 180.0,                    # Dir1Angle (rad)
+                (params.angle * math.pi / 180.0) if params.both_directions else 0.0,  # Dir2Angle
+                False, False,                                     # OffsetRev1/2
+                0.0, 0.0,                                         # OffsetDist1/2
+                params.merge_result,                               # Merge
+                (params.thin_thickness or 0.0) / 1000.0, 0.0,    # ThinThick1/2
+                True,                                              # AutoSelect
+                False,                                             # Propagate
             )
         else:
             feature_manager = adapter.currentModel.FeatureManager
