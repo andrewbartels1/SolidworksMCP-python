@@ -392,14 +392,10 @@ class SolidWorksIOMixin:
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
-            # Try GetValue3 first, then fallback to SystemValue property
+            # SystemValue is reliable on SW 2025 (in meters, convert to mm)
             value = adapter._attempt(
-                lambda: dimension.GetValue3(8, None), default=None
+                lambda: dimension.SystemValue, default=None
             )
-            if value is None:
-                value = adapter._attempt(
-                    lambda: dimension.SystemValue, default=None
-                )
             if value is None:
                 raise Exception(f"Failed to read dimension '{name}'")
             return cast(float, float(value) * 1000)
@@ -431,16 +427,13 @@ class SolidWorksIOMixin:
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
 
-            # Try SetValue3 first, then SystemValue property
-            success = adapter._attempt(
-                lambda: dimension.SetValue3(value / 1000.0, 8, None),
+            # SetValue3 has gen_py parameter mapping issues on SW 2025.
+            # SystemValue (in meters) is reliable.
+            value_m = value / 1000.0
+            adapter._attempt(
+                lambda: setattr(dimension, "SystemValue", value_m),
                 default=None,
             )
-            if success is None:
-                adapter._attempt(
-                    lambda: setattr(dimension, "SystemValue", value / 1000.0),
-                    default=None,
-                )
 
             adapter.currentModel.EditRebuild3()
 
