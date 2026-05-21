@@ -397,6 +397,11 @@ class SolidWorksIOMixin:
                 lambda: dimension.SystemValue, default=None
             )
             if value is None:
+                # Fall back to GetValue3 for older SW versions
+                value = adapter._attempt(
+                    lambda: dimension.GetValue3(0, 0), default=None
+                )
+            if value is None:
                 raise Exception(f"Failed to read dimension '{name}'")
             return cast(float, float(value) * 1000)
 
@@ -435,7 +440,16 @@ class SolidWorksIOMixin:
                 default=None,
             )
 
-            adapter.currentModel.EditRebuild3()
+            # Rebuild: try EditRebuild3 first, fall back to ForceRebuild3
+            rebuilt = adapter._attempt(
+                lambda: adapter.currentModel.EditRebuild3(), default=None
+            )
+            if rebuilt is None:
+                rebuilt = adapter._attempt(
+                    lambda: adapter.currentModel.ForceRebuild3(True), default=None
+                )
+            if rebuilt is None:
+                raise Exception("Failed to set dimension")
 
         return cast(
             AdapterResult[None],

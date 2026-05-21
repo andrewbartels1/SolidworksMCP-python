@@ -327,7 +327,7 @@ def _create_revolve_impl(
         """
         # Detect SW major version for FeatureRevolve2 API choice
         revolve_sw_major = 0
-        if adapter.swApp:
+        if getattr(adapter, 'swApp', None):
             rev = adapter._attempt(
                 lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
                 default="0",
@@ -601,7 +601,7 @@ def _create_cut_extrude_impl(
         # Detect SW major version for FeatureCut4 parameter count
         # SW 2025 (major=33) verified with 27 params; other versions use 28.
         sw_major = 0
-        if adapter.swApp:
+        if getattr(adapter, 'swApp', None):
             rev = adapter._attempt(
                 lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
                 default="0",
@@ -817,7 +817,7 @@ def _add_fillet_impl(
         """
         # Detect SW major version for FeatureFillet3 parameter count
         fillet_sw_major = 0
-        if adapter.swApp:
+        if getattr(adapter, 'swApp', None):
             rev = adapter._attempt(
                 lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
                 default="0",
