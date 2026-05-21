@@ -560,38 +560,79 @@ def _create_cut_extrude_impl(
         fallback_errors: list[str] = []
         is_through = end_condition in {"throughall", "through all", "through_all"}
 
-        # 1. FeatureCut4 (SW 2015+, 27 params)
-        feature, cut4_error = adapter._attempt_with_error(
-            lambda: feature_manager.FeatureCut4(
-                True,
-                False,
-                normalized.reverse_direction,
-                t1,
-                adapter.constants["swEndCondBlind"],
-                depth_m,
-                0.0,
-                False,
-                False,
-                False,
-                False,
-                normalized.draft_angle * 3.14159 / 180.0,
-                0.0,
-                False,
-                False,
-                False,
-                False,
-                False,
-                normalized.feature_scope,
-                normalized.auto_select,
-                False,
-                False,
-                False,
-                t0,
-                0.0,
-                False,
-                False,
+        # Detect SW major version for FeatureCut4 parameter count
+        # SW 2025 (major=33) verified with 27 params; other versions use 28.
+        sw_major = 0
+        if adapter.swApp:
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
             )
-        )
+            try:
+                sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                sw_major = 0
+
+        # 1. FeatureCut4 (SW 2015+)
+        # Note: SW 2025 (major=33) verified with 27 params by VBA macro.
+        # Other versions use 28 params (original code).
+        if sw_major == 33:
+            feature, cut4_error = adapter._attempt_with_error(
+                lambda: feature_manager.FeatureCut4(
+                    is_through,                    # Sd
+                    False,                          # Flip
+                    normalized.reverse_direction,   # Dir
+                    t1,                             # T1
+                    adapter.constants["swEndCondBlind"],  # T2
+                    depth_m,                        # D1
+                    0.0,                            # D2
+                    False, False, False, False,     # Dchk1/2, Ddir1/2
+                    normalized.draft_angle * 3.14159 / 180.0,  # Dang1
+                    0.0,                            # Dang2
+                    False, False, False, False,     # OffsetRev1/2, TranslateSurf1/2
+                    False,                          # NormalCut
+                    normalized.feature_scope,       # UseFeatScope
+                    normalized.auto_select,         # UseAutoSelect
+                    False,                          # AssemblyFeatureScope
+                    False,                          # AutoSelectComponents
+                    False,                          # PropagateFeatureToParts
+                    t0,                             # T0
+                    0.0,                            # StartOffset
+                    False,                          # FlipStartOffset
+                )
+            )
+        else:
+            feature, cut4_error = adapter._attempt_with_error(
+                lambda: feature_manager.FeatureCut4(
+                    True,
+                    False,
+                    normalized.reverse_direction,
+                    t1,
+                    adapter.constants["swEndCondBlind"],
+                    depth_m,
+                    0.0,
+                    False,
+                    False,
+                    False,
+                    False,
+                    normalized.draft_angle * 3.14159 / 180.0,
+                    0.0,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    normalized.feature_scope,
+                    normalized.auto_select,
+                    False,
+                    False,
+                    False,
+                    t0,
+                    0.0,
+                    False,
+                    False,
+                )
+            )
         if cut4_error is not None:
             fallback_errors.append(f"FeatureCut4: {cut4_error}")
 
