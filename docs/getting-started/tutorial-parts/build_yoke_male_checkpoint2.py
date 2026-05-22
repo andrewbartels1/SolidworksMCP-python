@@ -7,6 +7,7 @@ Sketch2 profile on Front(XY) plane — closed loop of 5 lines + 3 arcs:
                left arm=(-19.050,19.685) r=9.525
 All arcs use CreateArc Dir=1 (CCW). Radial dimensions added to fully define sketch.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,43 +28,6 @@ def require(result: Any, label: str) -> Any:
     if not result.is_success:
         raise RuntimeError(f"{label} failed: {result.error}")
     return result
-
-
-def unwrap_for_method(adapter: Any, method_name: str) -> Any | None:
-    current: Any | None = adapter
-    visited: set[int] = set()
-    while current is not None and id(current) not in visited:
-        visited.add(id(current))
-        if hasattr(current, method_name):
-            return current
-        current = getattr(current, "adapter", None)
-    return None
-
-
-def create_through_all_cut(adapter: Any) -> None:
-    raw = unwrap_for_method(adapter, "currentModel")
-    if raw is None or raw.currentModel is None:
-        raise RuntimeError("No active model for cut extrude")
-    fm = raw.currentModel.FeatureManager
-    feature = fm.FeatureCut3(
-        True, False, True,
-        1, 1,
-        0.0, 0.0,
-        False, False, False, False, 0.0, 0.0,
-        False, False, False, False, False, False,
-        True, False, False, False, 0, 0.0, False,
-    )
-    if not feature:
-        feature = fm.FeatureCut3(
-            True, True, True,
-            1, 1,
-            0.0, 0.0,
-            False, False, False, False, 0.0, 0.0,
-            False, False, False, False, False, False,
-            True, False, False, False, 0, 0.0, False,
-        )
-    if not feature:
-        raise RuntimeError("FeatureCut3 through-all returned no feature")
 
 
 async def build_part() -> None:
@@ -95,25 +59,41 @@ async def build_part() -> None:
         require(await adapter.create_sketch("Front"), "create_sketch USlot")
 
         # Draw the closed profile
-        require(await adapter.add_line(-19.050, -1.366, 19.050, -1.366), "bottom edge")
-        require(await adapter.add_line(19.050, -1.366, 19.050, 29.210), "right outer")
+        bottom_edge = require(
+            await adapter.add_line(-19.050, -1.366, 19.050, -1.366), "bottom edge"
+        )
+        right_outer = require(
+            await adapter.add_line(19.050, -1.366, 19.050, 29.210), "right outer"
+        )
         arc1 = require(
             await adapter.add_arc(19.050, 19.685, 19.050, 29.210, 9.525, 19.685),
             "right arm tip arc",
         )
-        require(await adapter.add_line(9.525, 19.685, 9.525, 9.525), "right inner wall")
+        right_inner = require(
+            await adapter.add_line(9.525, 19.685, 9.525, 9.525), "right inner wall"
+        )
         arc2 = require(
             await adapter.add_arc(0, 9.525, -9.525, 9.525, 9.525, 9.525),
             "U-slot bottom arc",
         )
-        require(await adapter.add_line(-9.525, 9.525, -9.525, 19.685), "left inner wall")
+        left_inner = require(
+            await adapter.add_line(-9.525, 9.525, -9.525, 19.685), "left inner wall"
+        )
         arc3 = require(
             await adapter.add_arc(-19.050, 19.685, -9.525, 19.685, -19.050, 29.210),
             "left arm tip arc",
         )
-        require(await adapter.add_line(-19.050, 29.210, -19.050, -1.366), "left outer")
+        left_outer = require(
+            await adapter.add_line(-19.050, 29.210, -19.050, -1.366), "left outer"
+        )
 
-        # Add radial dimensions to fully define each arc (R=9.525mm)
+        # Construction centerline at Y=0 (X-axis). arc2 made tangent to this line
+        # enforces the bottom of the U-circle is coincident with the origin (0,0).
+        xaxis = require(
+            await adapter.add_centerline(-19.050, 0, 19.050, 0), "X-axis centerline"
+        )
+
+        # Radial dimensions on arcs + fix outer walls to fully define sketch
         require(
             await adapter.add_sketch_dimension(arc1.data, None, "radial", 9.525),
             "dim R9.525 right arm arc",
@@ -126,9 +106,44 @@ async def build_part() -> None:
             await adapter.add_sketch_dimension(arc3.data, None, "radial", 9.525),
             "dim R9.525 left arm arc",
         )
+        require(
+            await adapter.add_sketch_constraint(right_outer.data, None, "fix"),
+            "fix right outer wall",
+        )
+        require(
+            await adapter.add_sketch_constraint(left_outer.data, None, "fix"),
+            "fix left outer wall",
+        )
+
+        # Tangent arc2 → X-axis centerline: bottom of U-circle touches origin
+        require(
+            await adapter.add_sketch_constraint(arc2.data, xaxis.data, "tangent"),
+            "arc2 tangent to X-axis (bottom at origin)",
+        )
+
+        # Dimensions on bottom edge (width), inner walls (height), and slot depth
+        require(
+            await adapter.add_sketch_dimension(bottom_edge.data, None, "linear", 38.100),
+            "dim bottom edge width 38.100mm",
+        )
+        require(
+            await adapter.add_sketch_dimension(right_inner.data, None, "linear", 10.160),
+            "dim right inner wall height 10.160mm",
+        )
+        require(
+            await adapter.add_sketch_dimension(left_inner.data, None, "linear", 10.160),
+            "dim left inner wall height 10.160mm",
+        )
 
         require(await adapter.exit_sketch(), "exit_sketch USlot")
-        create_through_all_cut(adapter)
+        require(
+            await adapter.create_cut_extrude(
+                ExtrusionParameters(
+                    depth=0.0, end_condition="ThroughAll", both_directions=True
+                )
+            ),
+            "USlot cut through-all-both",
+        )
 
         # ── Save and export ────────────────────────────────────────────────────────
         require(await adapter.save_file(str(OUTPUT_PART)), "save_file")

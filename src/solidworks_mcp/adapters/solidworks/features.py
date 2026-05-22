@@ -500,74 +500,68 @@ def _create_cut_extrude_impl(
             draft_angle=float(getattr(params, "draft_angle", 0.0)),
             reverse_direction=bool(getattr(params, "reverse_direction", False)),
             end_condition=str(getattr(params, "end_condition", "Blind")),
+            both_directions=bool(getattr(params, "both_directions", False)),
             feature_scope=bool(getattr(params, "feature_scope", False)),
             auto_select=bool(getattr(params, "auto_select", True)),
         )
         feature_manager = adapter.currentModel.FeatureManager
 
         end_condition = (normalized.end_condition or "Blind").strip().lower()
-        t1 = adapter.constants["swEndCondBlind"]
         depth_m = normalized.depth / 1000.0
-        if end_condition in {"throughall", "through all", "through_all"}:
+        is_through = end_condition in {"throughall", "through all", "through_all"}
+
+        # Sd=True = single end condition; Sd=False = enable separate Dir2 end condition.
+        # "Through All - Both" is a single UI dropdown item → swEndCondThroughAllBoth(9)
+        # with Sd=True. Using Sd=False + T1=T2=swEndCondThroughAll does NOT reliably
+        # produce a bidirectional cut; SolidWorks treats the combined enum as one op.
+        if is_through and normalized.both_directions:
+            sd_flag = True
+            t1 = adapter.constants.get("swEndCondThroughAllBoth", 9)
+            t2 = adapter.constants["swEndCondBlind"]
+            use_dir2 = False
+        elif is_through:
+            sd_flag = True
             t1 = adapter.constants["swEndCondThroughAll"]
+            t2 = adapter.constants["swEndCondBlind"]
+            use_dir2 = False
+        else:
+            sd_flag = not normalized.both_directions
+            t1 = adapter.constants["swEndCondBlind"]
+            t2 = adapter.constants["swEndCondBlind"]
+            use_dir2 = normalized.both_directions
 
         t0 = adapter.constants.get("swStartSketchPlane", 0)
-        adapter._attempt(
-            lambda: adapter.currentModel.ClearSelection2(True), default=None
-        )
+
+        # Do NOT call ClearSelection2 here — it wipes the "pending sketch" context
+        # that SolidWorks holds after exit_sketch. Select the sketch explicitly by
+        # name using SKETCH entity type (not the feature node via Select2, which
+        # is the wrong entity type for FeatureCut to accept as a profile).
         sketch_selected = False
-
-        try:
-            feat_iter = adapter.currentModel.FirstFeature
-            last_profile_feature = None
-            while feat_iter:
-                try:
-                    type_name = feat_iter.GetTypeName2
-                    if type_name == "ProfileFeature":
-                        last_profile_feature = feat_iter
-                except Exception:
-                    pass
-                try:
-                    feat_iter = feat_iter.GetNextFeature
-                except Exception:
-                    break
-            if last_profile_feature:
-                sketch_selected = bool(
-                    adapter._attempt(
-                        lambda pf=last_profile_feature: pf.Select2(False, 0),
-                        default=False,
-                    )
-                )
-        except Exception:
-            pass
-
-        if not sketch_selected:
-            for candidate in (
-                [adapter._last_sketch_name] if adapter._last_sketch_name else []
-            ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
-                sel_result = adapter._attempt(
-                    lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
-                        c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
-                    ),
-                    default=False,
-                )
-                sketch_selected = bool(sel_result)
-                if sketch_selected:
-                    adapter._last_sketch_name = candidate
-                    break
+        for candidate in (
+            [adapter._last_sketch_name] if adapter._last_sketch_name else []
+        ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
+            sel_result = adapter._attempt(
+                lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
+                    c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
+                ),
+                default=False,
+            )
+            sketch_selected = bool(sel_result)
+            if sketch_selected:
+                adapter._last_sketch_name = candidate
+                break
 
         feature = None
         fallback_errors: list[str] = []
-        is_through = end_condition in {"throughall", "through all", "through_all"}
 
         # 1. FeatureCut4 (SW 2015+, 27 params)
         feature, cut4_error = adapter._attempt_with_error(
             lambda: feature_manager.FeatureCut4(
-                True,
+                sd_flag,
                 False,
-                normalized.reverse_direction,
+                use_dir2,
                 t1,
-                adapter.constants["swEndCondBlind"],
+                t2,
                 depth_m,
                 0.0,
                 False,
@@ -604,11 +598,11 @@ def _create_cut_extrude_impl(
             #   T0, StartOffset, FlipStartOffset
             feature, cut3_modern_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut3(
-                    is_through,
+                    sd_flag,
                     normalized.reverse_direction,
-                    False,
+                    use_dir2,
                     t1,
-                    0,
+                    t2,
                     normalized.depth / 1000.0,
                     normalized.depth / 1000.0,
                     False,
