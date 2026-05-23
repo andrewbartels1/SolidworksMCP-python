@@ -1,549 +1,565 @@
-# U-Joint Assembly: Build from Scratch Tutorial
+# Getting Started: Building SolidWorks Parts with Python
 
-⚠️ **UNDER CONSTRUCTION** ⚠️
-This tutorial is still in development and will be updated with new information and changes. Please check back regularly for updates.
+This tutorial takes you from zero to three completed SolidWorks parts — no prior Python or CAD automation experience required. By the end you will understand how the MCP adapter talks to SolidWorks, how to run and read build scripts, how to interpret errors, and how the checkpoint-and-restore workflow lets you recover from mistakes without undoing 20 mouse clicks.
 
+**What you'll build** (from the SolidWorks 2026 U-Joint sample assembly):
 
-Build a complete mechanical U-joint assembly using Claude Code and the SolidWorks MCP server. This tutorial walks through creating each part from empty files, validating geometry, and assembling components into a fully functional joint.
-
-**Target:** `C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\UJoint.SLDASM`
-
-**Parts to build:**
-
-- Yoke_male
-- Yoke_female  
-- Spider (cross)
-- Pin
-- Crank_shaft
-- Crank_arm
-- Crank_knob
-- Bracket (mounting)
-
-## Prerequisites
-
-- SolidWorks 2019+ installed and launched at least once
-- MCP server running: `.\.venv\Scripts\python.exe -m solidworks_mcp.server`
-- MCP server connected (see [SolidWorks as Code](../solidworks-as-code.md) for session setup)
-- **No pre-made parts** — you will create everything from scratch
-
-## Phase 1: Setup and Part Planning
-
-### Step 1: Start the MCP Server
-
-Run the MCP server with the `--real` flag to connect to your running SolidWorks instance:
-
-```powershell
-.\run-mcp.ps1 --real --year 2026
-```
-
-Or configure `.mcp.json` to launch it automatically — see [SolidWorks as Code](../solidworks-as-code.md) for session setup details.
-
-### Step 2: Verify Connection
-
-Ask Claude Code to confirm the server is live:
-
-```
-What is the currently active SolidWorks model?
-```
-
-Expected: model info for the active document, or `No active model` if SolidWorks is open without a file.
-
-### Step 3: Plan Build Order
-
-The U-joint has 8 parts. Build in this order to respect mate dependencies:
-
-| # | Part | Role |
-| --- | --- | --- |
-| 1 | Bracket | Fixed base — all others mount to it |
-| 2 | Yoke_male | Drive shaft end |
-| 3 | Yoke_female | Output shaft end |
-| 4 | Spider | Cross hub linking both yokes |
-| 5 | Pin ×4 | Spider-to-yoke arm connectors |
-| 6 | Crank_shaft | Main drive shaft |
-| 7 | Crank_arm | Lever arm |
-| 8 | Crank_knob | Grip handle |
-
-### Step 4: Get Part Specifications
-
-**Prompt Claude Code to get part specifications:**
-
-```
-Analyze the U-joint assembly structure and provide a build order 
-and critical dimensions for each part:
-- Part name
-- Feature plan (sketch → extrude → refinements)
-- Critical dimensions
-- Mating interfaces (holes, bores, surfaces)
-- Print orientation preference (if 3D-printed variant)
-
-Focus on:
-1. Yoke_male: rectangular outer profile, center bore for pin, drive flange connection
-2. Yoke_female: same profile, accepts male yoke and spider
-3. Spider: cross-shaped central hub, four bores for pins
-4. Pin: ∅6mm shaft, length to bridge yoke pair
-5. Crank_shaft: long drive shaft with yoke flange at one end
-6. Crank_arm: lever arm for manual actuation
-7. Crank_knob: grip handle at end of arm
-8. Bracket: mounting base to attach assembly to frame
-```
-
-**Expected output:** Ordered build sequence and part-by-part geometry rules.
-
-## Phase 2: Build Individual Parts
-
-### Prompt Template for Each Part
-
-For each part, use this template with Claude Code:
-
-```
-**Part: [NAME]**
-
-Create a new SolidWorks part named [NAME].SLDPRT with:
-
-Feature plan:
-- [Sketch1]: [profile description]
-- [BaseExtrude]: [extrusion depth and direction]
-- [Sketch2]: [holes/refinements]
-- [RefineFeature]: [any additional details]
-
-Critical dimensions:
-- [DIM1]: [value with tolerance]
-- [DIM2]: [value with tolerance]
-- [DIM3]: [value with tolerance]
-
-Mating interfaces:
-- [HOLE/BORE]: diameter [value], location [reference]
-- [SURFACE]: face reference for assembly mate
-
-Rules:
-- Save to docs/getting-started/tutorials/parts/[NAME].SLDPRT
-- Validate geometry before export
-- Export isometric PNG as [NAME]_isometric.png
-- Report final feature tree order
-```
-
-### Part 1: Bracket (Exact Sample Match)
-
-**SolidWorks-as-Code script:** `docs/getting-started/tutorial-parts/build_u_bracket_artifact.py`
-
-**Prompt Claude Code:**
-
-```
-Build Bracket.SLDPRT from scratch and match the U-Joint sample bracket exactly.
-
-Ensure all sketches are properly dimensioned using the 
-Reference model:
-- C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\bracket.sldprt
-
-Use mm units and keep this exact feature order:
-1. Sketch1
-2. Base-Extrude-Thin
-3. Sketch2
-4. Cut-Extrude1
-
-Sketch1 on Front Plane (connected lines in this order):
-- (0.00, 0.00) -> (0.00, 82.55)
-- (0.00, 82.55) -> (-57.15, 82.55)
-- (-57.15, 82.55) -> (-77.216, 27.494)
-- (-77.216, 27.494) -> (-44.45, 0.00)
-
-Base-Extrude-Thin settings:
-- Mid-plane depth: 38.10
-- Thin-wall thickness: 6.35
-- Auto-fillet corners: ON
-- Corner radius: 3.175
-
-Sketch2 on top planar face (offset from Top Plane at 88.90 if face selection is unstable):
-- Centerline: (0.00, 0.00) -> (-57.15, 0.00)
-- Hole circle center: (-44.45, 0.00)
-- Hole diameter: 12.70
-
-Cut-Extrude1:
-- Blind depth: 10.00
-
-Export isometric PNG to validate geometry before proceeding.
-```
-
-**Validation checklist:**
-
-- [ ] Sketch1 coordinates match the listed points
-- [ ] Base-Extrude-Thin uses 38.10 depth and 6.35 wall thickness
-- [ ] Sketch2 hole center and diameter match exactly
-- [ ] Cut-Extrude1 depth is 10.00
-- [ ] Feature tree is exactly Sketch1 -> Base-Extrude-Thin -> Sketch2 -> Cut-Extrude1
-- [ ] Isometric PNG captured and saved
-- [ ] Isometric PNG visually matches the sample bracket
-
-### Part 2: Yoke_male
-
-![Yoke_male isometric](../tutorial-parts/yoke_male_from_prompt_isometric.png)
-
-**SolidWorks-as-Code script:** `docs/getting-started/tutorial-parts/build_yoke_male_artifact.py`
-
-Run it directly against a live SolidWorks session:
-
-```powershell
-.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_yoke_male_artifact.py
-```
-
-**Checkpoint script (base + U-slot only):** `docs/getting-started/tutorial-parts/build_yoke_male_checkpoint2.py`
-
-**Prompt Claude Code:**
-
-```
-Build Yoke_male.SLDPRT to match the SW 2026 sample at
-C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_male.sldprt
-
-Geometry (all dims in mm):
-- Base cylinder: ∅38.10 (r=19.050), height=47.625, extruded from Top plane upward
-- U-slot cut: closed profile on Front plane — 5 lines + 3 arcs (R=9.525 each)
-    outer rect X=±19.050, Y=-1.366 to 29.210; inner walls at X=±9.525
-    arm tip arcs centred at (±19.050, 19.685); U-bottom arc centred at (0, 9.525)
-    through-all in both Z directions
-- Arm gap: rectangular slot on Right plane — Z=±10.160, Y=-7.455 to 29.145
-    through-all in X (creates the two fork arms)
-- Pin bore: ∅9.525 (r=4.7625) circle on Front plane at (0, 9.525), through-all in Z
-- Stub shaft: ∅12.70 (r=6.350) circle on Top plane, extruded 66.675mm total
-- Stub bore: ∅12.70 circle on Top plane, through-all cut (removes core of stub shaft)
-
-Feature sequence:
-1. Sketch1 → Top plane: circle r=19.050
-2. Boss-Extrude1: 47.625mm
-3. Sketch2 → Front plane: 5-line + 3-arc closed U-slot profile (add radial dims R=9.525)
-4. Cut-Extrude1: through-all both directions
-5. Sketch8 → Right plane: rectangle Z=±10.160, Y=-7.455..29.145
-6. Cut-Extrude2: through-all both directions
-7. Sketch11 → Front plane: circle r=4.7625 at (0, 9.525)
-8. Cut-Extrude3: through-all both directions
-9. Sketch12 → Top plane: circle r=6.350
-10. Boss-Extrude2: 66.675mm
-11. Sketch13 → Top plane: circle r=6.350
-12. Cut-Extrude4: through-all
-
-Export isometric PNG to docs/getting-started/tutorial-parts/yoke_male_from_prompt_isometric.png
-```
-
-**Validation checklist:**
-
-- [ ] Base cylinder ∅38.10mm × 47.625mm tall
-- [ ] U-slot cut: arm inner width = 19.050mm, arm tip radius = 9.525mm
-- [ ] Arm gap: 20.320mm wide (Z=±10.160), exposes both fork arms
-- [ ] Pin bore ∅9.525mm centred at Y=9.525mm (arm mid-height)
-- [ ] Stub shaft ∅12.70mm extending to Y=66.675mm
-- [ ] Stub bore ∅12.70mm cut through stub
-- [ ] Isometric PNG visually matches answer key
-
-### Part 3: Yoke_female
-
-**SolidWorks-as-Code script:** `docs/getting-started/tutorial-parts/build_yoke_female_artifact.py`
-
-Run it directly against a live SolidWorks session:
-
-```powershell
-.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_yoke_female_artifact.py
-```
-
-**Prompt Claude Code:**
-
-```
-Build Yoke_female.SLDPRT to match the SW 2026 sample at
-C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_female.sldprt
-
-Yoke_female shares the same cylinder+fork body as Yoke_male but has a
-through-bore (no stub shaft) so it slides onto the driven shaft.
-
-Geometry (all dims in mm):
-- Base cylinder: ∅38.10 (r=19.050), height=47.625, extruded from Top plane upward
-- U-slot cut: identical profile to Yoke_male (Front plane, 5 lines + 3 arcs R=9.525)
-    outer rect X=±19.050, Y=-1.366 to 29.210; inner walls X=±9.525; through-all Z
-- Arm gap: Right plane, Z=±10.160, Y=-7.455 to 29.145, through-all X
-- Pin bore: ∅9.525 (r=4.7625) on Front plane at (0, 9.525), through-all Z
-- Shaft through-bore: ∅12.70 circle on Top plane, through-all (no stub shaft added)
-
-Feature sequence:
-1. Sketch1 → Top plane: circle r=19.050
-2. Boss-Extrude1: 47.625mm
-3. Sketch2 → Front plane: 5-line + 3-arc U-slot (radial dims R=9.525)
-4. Cut-Extrude1: through-all both directions
-5. Sketch8 → Right plane: rectangle Z=±10.160, Y=-7.455..29.145
-6. Cut-Extrude2: through-all both directions
-7. Sketch11 → Front plane: circle r=4.7625 at (0, 9.525)
-8. Cut-Extrude3: through-all both directions
-9. Sketch12 → Top plane: circle r=6.350
-10. Cut-Extrude4: through-all (shaft through-bore, no extrusion)
-
-Export isometric PNG to docs/getting-started/tutorial-parts/yoke_female_from_prompt_isometric.png
-```
-
-**Validation checklist:**
-
-- [ ] Base cylinder ∅38.10mm × 47.625mm tall
-- [ ] U-slot cut matches Yoke_male (arm tip R=9.525mm)
-- [ ] Arm gap 20.320mm wide (Z=±10.160)
-- [ ] Pin bore ∅9.525mm at Y=9.525mm
-- [ ] Shaft through-bore ∅12.70mm (no stub shaft protrusion)
-
-### Part 4: Spider (Cross Hub)
-
-**Prompt Claude Code:**
-
-```
-Build Spider.SLDPRT from scratch.
-
-Geometry:
-- Center cube: 12mm x 12mm x 12mm
-- Four radial arms extending from cube faces: each 50mm long, 8mm x 8mm cross-section
-- Four clearance bores: ∅6.2mm diameter, one at end of each arm
-- Center boss: ∅6mm + 2mm height, on cube top for pin alignment
-
-Feature sequence:
-1. Sketch1: center cube 12x12x12mm
-2. BaseExtrude: extrude 12mm
-3. Sketch2: four arm profiles (cross profile 8x8mm at four faces)
-4. ArmExtrudes: extrude each 50mm radially
-5. Sketch3: four ∅6.2mm bore locations on arm ends
-6. ArmBores: cut extrude 6mm depth on each arm
-7. Sketch4: ∅6mm center boss top
-8. CenterBoss: extrude 2mm up on cube top
-9. FilletEdges: 0.5mm fillet on arm transitions
-
-Export isometric PNG.
-```
-
-**Validation checklist:**
-
-- [ ] Center cube 12 x 12 x 12 mm
-- [ ] Four arms 50mm long, 8mm x 8mm
-- [ ] Four bores ∅6.2mm at arm ends
-- [ ] Center boss ∅6mm x 2mm on top
-- [ ] All fillets applied
-- [ ] Feature tree matches sequence
-
-### Part 5: Pin
-
-**Prompt Claude Code:**
-
-```
-Build Pin.SLDPRT from scratch.
-
-Geometry:
-- Cylindrical shaft: ∅6mm diameter, 40mm length
-- Head flange: ∅12mm diameter, 2mm thick, at one end
-- Retaining groove (optional): 0.5mm deep around shaft at 5mm from head
-
-Feature sequence:
-1. Sketch1: ∅6mm circle on XY plane
-2. ShaftExtrude: extrude 40mm along Z
-3. Sketch2: ∅12mm circle at one end
-4. HeadExtrude: extrude 2mm (head flange)
-5. FilletShaft: 0.5mm fillet where head meets shaft
-
-Export isometric PNG.
-```
-
-**Validation checklist:**
-
-- [ ] Shaft ∅6mm x 40mm length
-- [ ] Head flange ∅12mm x 2mm
-- [ ] Fillet at shaft-head junction
-- [ ] Feature tree correct
-
-### Part 6: Crank_shaft
-
-**Prompt Claude Code:**
-
-```
-Build Crank_shaft.SLDPRT from scratch.
-
-Geometry:
-- Main drive shaft: ∅10mm diameter, 120mm length
-- Yoke mounting flange at one end: ∅40mm diameter, 5mm thick
-- Four clearance holes on flange (M4): arranged in ∅30mm circle
-- Center bore through flange: ∅10mm (for main shaft)
-
-Feature sequence:
-1. Sketch1: ∅10mm circle
-2. ShaftExtrude: extrude 120mm
-3. Sketch2: ∅40mm circle at one end
-4. FlangeExtrude: extrude 5mm
-5. Sketch3: center ∅10mm bore on flange
-6. CenterBore: cut extrude through flange
-7. Sketch4: four ∅4.2mm holes on ∅30mm circle
-8. FlangeHoles: cut extrude through flange
-
-Export isometric PNG.
-```
-
-**Validation checklist:**
-
-- [ ] Shaft ∅10mm x 120mm
-- [ ] Flange ∅40mm x 5mm
-- [ ] Center bore ∅10mm through flange
-- [ ] Four M4 holes on flange
-
-### Part 7: Crank_arm
-
-**Prompt Claude Code:**
-
-```
-Build Crank_arm.SLDPRT from scratch.
-
-Geometry:
-- Base pad: 60mm long, 12mm wide, 8mm tall
-- Connection to crank_shaft: top end has ∅10mm bore
-- Grip section at bottom: 30mm x 12mm x 20mm tall
-- Two corner fillets: 2mm radius on grip edges
-
-Feature sequence:
-1. Sketch1: 60mm x 12mm rectangle
-2. BaseExtrude: extrude 8mm
-3. Sketch2: ∅10mm bore at top end
-4. ShaftBore: cut extrude through thickness
-5. Sketch3: grip section 30x12x20mm on base
-6. GripExtrude: extrude 20mm up
-7. FilletGrip: 2mm fillet on grip edges
-
-Export isometric PNG.
-```
-
-**Validation checklist:**
-
-- [ ] Arm 60mm long, 12mm wide
-- [ ] Shaft bore ∅10mm at connection end
-- [ ] Grip section 30 x 12 x 20 mm
-
-### Part 8: Crank_knob
-
-**Prompt Claude Code:**
-
-```
-Build Crank_knob.SLDPRT from scratch.
-
-Geometry:
-- Main knob: ∅25mm sphere or rounded cube (choose sphere for simplicity)
-- Connection post: ∅6mm diameter, 15mm height
-- Base flange: ∅10mm diameter, 3mm thick (on connection post bottom)
-
-Feature sequence:
-1. Sketch1: ∅25mm circle on XY plane (if using sphere)
-2. KnobRevolved: revolve 180° around XY to create sphere
-   OR KnobExtrude: extrude ∅25mm cylinder 25mm if using rounded cube
-3. Sketch2: ∅6mm circle on bottom face
-4. PostExtrude: extrude 15mm down
-5. Sketch3: ∅10mm circle at post bottom
-6. FlangeExtrude: extrude 3mm down
-7. FilletAll: 1mm fillet on all edges
-
-Export isometric PNG.
-```
-
-**Validation checklist:**
-
-- [ ] Knob ∅25mm round shape
-- [ ] Connection post ∅6mm x 15mm
-- [ ] Flange ∅10mm x 3mm at base
-- [ ] All edges filleted
-
-## Phase 3: Assembly Build
-
-### Prompt: Build UJoint Assembly
-
-```
-Create assembly UJoint.SLDASM from scratch.
-
-Parts to insert:
-1. Bracket.SLDPRT - fixed/grounded base
-2. Crank_shaft.SLDPRT - insert into Bracket boss
-3. Yoke_male.SLDPRT - attach to crank_shaft flange
-4. Yoke_female.SLDPRT - position parallel to yoke_male
-5. Spider.SLDPRT - insert between yokes
-6. Pin.SLDPRT (qty 4) - connect spider to yokes
-7. Crank_arm.SLDPRT - attach to crank_shaft free end
-8. Crank_knob.SLDPRT - attach to crank_arm grip
-
-Assembly rules:
-- Ground Bracket to origin
-- Concentric mate: crank_shaft bore to bracket M8 boss
-- Coincident mate: yoke_male flange to crank_shaft flange (coplanar)
-- Concentric mate: spider center bore to yoke_male center bore
-- Concentric mate: spider to yoke_female center bore
-- Pin mates: four pins bridge yoke arms to spider arm bores (concentric)
-- Concentric mate: crank_arm bore to crank_shaft free end
-- Concentric mate: crank_knob to crank_arm grip section
-
-Validation:
-- Report total mate count
-- Confirm assembly is fully defined (all DOFs constrained)
-- No interference detected between parts
-- Joints rotate smoothly (simulated or inspected)
-- Export isometric PNG of full assembly
-
-Export:
-- Save as UJoint.SLDASM
-- Export assembly isometric PNG
-```
-
-**Validation checklist:**
-
-- [ ] All 8 parts inserted
-- [ ] Assembly fully defined
-- [ ] No interference warnings
-- [ ] Rotational joints move freely
-- [ ] Final assembly PNG captured
-
-## Phase 4: Validation and Export
-
-### Prompt: Final Assembly Validation
-
-```
-Perform final validation of UJoint.SLDASM:
-
-Checklist:
-- [ ] All 8 parts present in assembly tree
-- [ ] All mates are coincident/concentric (no over-constraints)
-- [ ] Assembly rebuild succeeds without errors
-- [ ] No interference between components
-- [ ] Crank_shaft rotates 360° freely
-- [ ] Spider rotates 360° between yokes
-- [ ] Pin connections are rigid
-- [ ] Bracket is fixed to origin
-- [ ] All parts have correct feature trees (no extra/missing features)
-
-Generate report:
-- Assembly statistics (part count, mate count)
-- Feature tree for each part
-- Mass properties if material assignments available
-- Export images: isometric view from three angles (0°, 45°, 90°)
-- Final pass/fail verdict with any corrective actions needed
-```
-
-## Troubleshooting
-
-**Issue:** Part bore diameter too large, pin moves freely
-
-→ Re-run Prompt for that part, specify bore tolerance -0.1mm (tight fit)
-
-**Issue:** Assembly fully constrained but components don't articulate
-
-→ Check mate types; replace coincident with concentric on rotation axes
-
-**Issue:** Feature tree has extra sketches or features
-
-→ Re-run part build prompt, emphasize "only use features in this exact sequence"
-
-## Next Steps
-
-After completing this tutorial:
-
-- Export each part and assembly to STL for 3D printing (if needed)
-- Modify dimensions for your application (bearing sizes, flange spacing, etc.)
-- Add material properties and compute mass
-- Use the assembly as a template for other drive mechanisms
+| Part | Script | What you learn |
+|---|---|---|
+| U-bracket | `build_u_bracket_artifact.py` | Run a script, verify output |
+| Yoke Male (tutorial) | `build_yoke_male_tutorial.py` | Checkpoint, intentional mistake, restore |
+| Yoke Female | `build_yoke_female_artifact.py` | Full build, answer-key comparison |
 
 ---
 
-**Related docs:**
+## How it works
 
-- [SolidWorks as Code](../solidworks-as-code.md)
-- [Tool Catalog](../../user-guide/tool-catalog/index.md)
-- [Integration Testing](../../user-guide/integration-testing.md)
+Before touching any code, build this mental model:
+
+```
+Your Python script
+      |
+      v
+solidworks_mcp adapter      (translates Python calls into COM operations)
+      |
+      v
+Windows COM / pywin32       (talks to the running SolidWorks.exe process)
+      |
+      v
+SolidWorks                  (opens files, creates sketches, extrudes, saves)
+```
+
+When your script calls `await adapter.create_sketch("Front")`, the adapter tells SolidWorks to open a new sketch on the Front plane — exactly as if you had clicked **Insert > Sketch** in the UI. The rest of the script sequences those calls so they execute in order.
+
+**Why `await` everywhere?** Every adapter method is an async coroutine. If you forget `await`, Python silently does nothing — no error, no SolidWorks action. Always `await` every adapter call.
+
+---
+
+## Prerequisites
+
+- SolidWorks is installed and you have opened it at least once (so COM registration is complete).
+- You have cloned the repo and run the install:
+
+```powershell
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
+cd SolidworksMCP-python
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+- A PowerShell window open inside the `SolidworksMCP-python` folder.
+
+---
+
+## Step 0 — Verify the connection
+
+**Open SolidWorks first.** Then run:
+
+```powershell
+.\.venv\Scripts\python.exe -c "
+import asyncio
+from solidworks_mcp.config import load_config
+from solidworks_mcp.adapters import create_adapter
+
+async def check():
+    config = load_config()
+    adapter = await create_adapter(config)
+    await adapter.connect()
+    result = await adapter.get_model_info()
+    print('Connected OK')
+    print('Active model:', result.data if result.is_success else 'none (no file open)')
+    await adapter.disconnect()
+
+asyncio.run(check())
+"
+```
+
+**Good output:**
+
+```
+2026-05-22 18:44:12 | INFO | SolidWorks type info loaded: 418 interfaces, ...
+Connected OK
+Active model: none (no file open)
+```
+
+The INFO line is normal startup noise — the adapter is loading the SolidWorks type library. `Active model: none` is fine; it just means SolidWorks is open but no `.sldprt` is active yet.
+
+**If you see this instead:**
+
+```
+pywintypes.com_error: (-2147221005, 'Invalid class string', None, None)
+```
+
+SolidWorks is not running. Open it and try again. If SolidWorks was open but you restarted it after starting the server, you may need to restart the Python process too (stale COM handle — see [Troubleshooting](#troubleshooting-checklist) below).
+
+---
+
+## Part 1 — The U-bracket
+
+### Run the script
+
+```powershell
+.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\build_u_bracket_artifact.py
+```
+
+**While this runs**, switch to SolidWorks. You will watch the part build live:
+
+1. A new part file opens.
+2. A profile sketch appears on the Front plane — four connected line segments forming an open U-shape.
+3. The profile extrudes as a thin-walled shell (the U-bracket body).
+4. A sketch appears on the top flange.
+5. A circle is cut through to form the mounting hole.
+6. The file saves and a PNG exports.
+
+**Successful terminal output:**
+
+```
+2026-05-22 18:45:01 | INFO | SolidWorks type info loaded: 418 interfaces, ...
+C:\...\docs\getting-started\tutorial-parts\u_bracket_from_prompt.SLDPRT
+C:\...\docs\getting-started\tutorial-parts\u_bracket_from_prompt_isometric.png
+C:\...\docs\getting-started\tutorial-parts\answer_key_bracket_isometric.png
+```
+
+The three file paths confirm: part saved, isometric image exported, answer key image exported.
+
+### View and compare the output
+
+Open `docs/getting-started/tutorial-parts/u_bracket_from_prompt_isometric.png` — the generated result:
+
+![Generated U-bracket — isometric view](../tutorial-parts/u_bracket_from_prompt_isometric.png)
+
+Then compare against `answer_key_bracket_isometric.png` (exported from the SolidWorks 2026 sample):
+
+![Answer key U-bracket — isometric view](../tutorial-parts/answer_key_bracket_isometric.png)
+
+The shapes match: same C-profile with the angled lower lip and mounting hole on the top flange. The color difference (white vs teal) is a SolidWorks appearance property on the sample — it does not affect geometry.
+
+Side-by-side comparison showing **EXACT MATCH**:
+
+![Generated vs answer key, side by side](../../assets/images/tutorials/u_bracket_generated_vs_answer.png)
+
+---
+
+## Anatomy of a build script
+
+Open `docs/getting-started/tutorial-parts/build_u_bracket_artifact.py`. Every build script follows this pattern:
+
+```python
+async def build_part() -> None:
+    config = load_config()
+    adapter = await create_adapter(config)
+    await adapter.connect()
+    try:
+        # 1. Create a new part file in SolidWorks
+        require(await adapter.create_part(name="u_bracket_from_prompt"), "create_part")
+
+        # 2. Open a sketch on a named plane
+        require(await adapter.create_sketch("Front"), "create_sketch profile")
+
+        # 3. Draw geometry — lines, arcs, circles
+        require(await adapter.add_line(0, 0, 0, 82.55), "line 1")
+        require(await adapter.add_line(0, 82.55, -57.15, 82.55), "line 2")
+        # ...
+
+        # 4. Exit the sketch — SolidWorks requires this before creating a feature
+        require(await adapter.exit_sketch(), "exit_sketch")
+
+        # 5. Create a feature from the closed sketch profile
+        require(
+            await adapter.create_extrusion(
+                ExtrusionParameters(depth=38.10, thin_feature=True, thin_thickness=6.35)
+            ),
+            "base extrude",
+        )
+
+        # 6. Repeat for additional sketches and features ...
+
+        # 7. Save and export evidence
+        require(await adapter.save_file(str(OUTPUT_PART)), "save_file")
+        require(await adapter.export_image({"file_path": str(OUTPUT_IMAGE), ...}), "export")
+
+    finally:
+        await adapter.disconnect()  # always runs, even after an error
+```
+
+The `require()` helper stops the script the moment any step fails:
+
+```python
+def require(result: Any, label: str) -> Any:
+    if not result.is_success:
+        raise RuntimeError(f"{label} failed: {result.error}")
+    return result
+```
+
+Without this, a failed extrusion would let the script continue, applying the next sketch to a broken solid — and you would get a confusing error five steps later with no indication where things went wrong.
+
+---
+
+## Reading errors
+
+Errors fall into a small set of recognizable patterns.
+
+### Profile rejected — cut returns None
+
+```
+RuntimeError: USlot cut through-all-both failed: Error in create_cut_extrude:
+Failed to create cut extrude feature.
+FeatureCut4: None | FeatureCut3 modern: None | FeatureCut3 legacy:
+(-2147352561, 'Parameter not optional.')
+```
+
+**What it means:** SolidWorks received the cut command but rejected the sketch profile. Three `FeatureCut` API variants are tried in order; all returned `None` or threw a COM error.
+
+**Most common causes:**
+
+- The profile has an open endpoint — two segments don't share a vertex.
+- An arc passes through a point that also lies on a line in the same sketch (self-intersection).
+- The sketch was not properly exited before the cut call.
+
+**What to do:** Open the part in SolidWorks, right-click the failed sketch in the feature tree, choose **Edit Sketch**, and look for dangling (red) endpoints or an open-contour warning in the status bar.
+
+### No active model
+
+```
+RuntimeError: create_sketch BaseCircle failed: No active model
+```
+
+**What it means:** `create_part()` failed or was skipped, so there is no open document to sketch into.
+
+**What to do:** Scroll up — there will be a `create_part` failure earlier in the output. Usually the cause is a SolidWorks dialog box (template chooser, license warning) blocking automation. Click through it once manually, then re-run.
+
+### SolidWorks not running
+
+```
+pywintypes.com_error: (-2147221005, 'Invalid class string', None, None)
+```
+
+**Fix:** Open SolidWorks, then re-run the script.
+
+### Circuit breaker open
+
+```
+RuntimeError: create_sketch failed: Circuit breaker is open for create_sketch
+```
+
+**What it means:** Multiple consecutive failures triggered a safety valve. The adapter stops accepting calls for that operation for ~60 seconds.
+
+**Fix:** Wait 60 seconds and re-run. The breaker resets automatically.
+
+### Stale COM handle
+
+If you restart SolidWorks while a Python process is running (or was recently running), the Python process holds a dead COM pointer. Calls fail or throw COM errors.
+
+**Fix:** Kill the Python process (`Ctrl+C`), re-open SolidWorks, re-run the script.
+
+---
+
+## Part 2 — Checkpoint and restore: fixing a mistake
+
+This is the most important workflow to practice. In a real design session you will make mistakes. Checkpoint-and-restore lets you recover without losing all prior work.
+
+### Run the tutorial script
+
+```powershell
+.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\build_yoke_male_tutorial.py
+```
+
+The script prints a banner before each act:
+
+```
+--------------------------------------
+Act 1: Build base features to checkpoint
+--------------------------------------
+  [1] Base cylinder - dia38.10mm x 47.625mm
+  [2] U-slot cut - Front plane, through-all-both
+  [3] Arm gap cut - Right plane, through-all-both
+  [4] Pin bore - Front plane, through-all-both
+  [5] Saving checkpoint to yoke_male_checkpoint_preStub.SLDPRT
+
+-------------------------------------------
+Act 2: Apply WRONG stub shaft (19.050mm from Top)
+-------------------------------------------
+  [6] WRONG: stub shaft 19.050mm from Top - buried inside base cylinder!
+  [7] Saving wrong version to yoke_male_wrong_stub.SLDPRT
+
+-----------------------------------------------
+Act 3: Restore from checkpoint, apply correct stub
+-----------------------------------------------
+  [8] Restoring from checkpoint: yoke_male_checkpoint_preStub.SLDPRT
+  [9] CORRECT: stub shaft 66.675mm from Top (net 19.050mm above base)
+ [10] D-bore (keyway) cut on stub shaft top face
+ [11] Saving final to yoke_male_v2_from_prompt.SLDPRT
+```
+
+### Act 1 — Build to checkpoint
+
+The first four steps build the yoke body. Watch SolidWorks as each feature appears:
+
+1. **Base cylinder** — a dia 38.10mm circle on the Top plane extrudes 47.625mm upward.
+2. **U-slot cut** — a U-shaped profile on the Front plane cuts through both sides in Z, leaving the two arm sections.
+3. **Arm gap cut** — a rectangle on the Right plane cuts through in X, opening the gap between the front and back arms.
+4. **Pin bore** — a circle on the Front plane cuts through both arms in Z at Y = 9.525mm (the pin hole).
+
+At step 5 the script calls `adapter.save_file(CHECKPOINT_PART)`, creating `yoke_male_checkpoint_preStub.SLDPRT`. This is the restore point.
+
+**What you see in SolidWorks after the checkpoint save** — the base features complete, with the pin bore sketch still visible as the last active sketch:
+
+![Yoke male at the checkpoint — base features complete](../tutorial-parts/yoke_male_checkpoint2.png)
+
+### Act 2 — The intentional mistake
+
+Act 2 extrudes a stub shaft of only 19.050mm from the Top plane. The base cylinder is already 47.625mm tall, so the stub is completely buried — it never protrudes. The script saves `yoke_male_wrong_stub.SLDPRT`. If you open it in SolidWorks you will see: no stub shaft anywhere on the part.
+
+### Act 3 — Restore and fix
+
+Act 3 runs one line to undo everything since the checkpoint:
+
+```python
+await adapter.open_model(str(CHECKPOINT_PART))
+```
+
+SolidWorks opens `yoke_male_checkpoint_preStub.SLDPRT` — exactly as it was after Act 1. The wrong Act 2 extrusion never happened in this document.
+
+The correct stub shaft uses a depth of **66.675mm** from the Top plane. Here is the geometry reasoning:
+
+```
+Base cylinder height:  47.625mm
+Total extrusion depth: 66.675mm
+                       --------
+Net protrusion:        19.050mm  (the visible stub shaft)
+```
+
+The 6.35mm-radius stub circle is smaller than the base cylinder radius (19.050mm). For the first 47.625mm the stub merges invisibly into the base solid. Only the top 19.050mm protrudes as the shaft. This avoids selecting the top face of the base cylinder by coordinate — which is unreliable after parametric cuts have changed the part topology.
+
+**Final output after Act 3:**
+
+![Yoke male v2 — correct stub shaft and D-bore visible](../tutorial-parts/yoke_male_v2_from_prompt_isometric.png)
+
+### The checkpoint pattern in your own scripts
+
+```python
+CHECKPOINT = Path("my_part_checkpoint.SLDPRT")
+
+# Build solid features
+require(await adapter.create_extrusion(...), "base extrude")
+
+# Save a checkpoint before the risky step
+require(await adapter.save_file(str(CHECKPOINT)), "checkpoint save")
+
+# Attempt the risky step
+result = await adapter.create_cut_extrude(...)
+
+if not result.is_success:
+    # Restore and try differently
+    require(await adapter.open_model(str(CHECKPOINT)), "restore")
+    # ... corrected approach ...
+```
+
+**When to create a checkpoint:**
+
+| Trigger | Why |
+|---|---|
+| Main body mass looks correct | Cuts can create topology that makes faces impossible to select by coordinate |
+| Before any face-selection step | The most fragile operation in programmatic CAD |
+| Before a risky or experimental feature | Costs one save; saves all prior work |
+
+---
+
+## Part 3 — Build the complete Yoke Male
+
+The artifact script builds the Yoke Male in one uninterrupted run:
+
+```powershell
+.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\build_yoke_male_artifact.py
+```
+
+**Terminal output:**
+
+```
+2026-05-22 18:48:33 | INFO | SolidWorks type info loaded: 418 interfaces, ...
+C:\...\docs\getting-started\tutorial-parts\yoke_male_from_prompt.SLDPRT
+C:\...\docs\getting-started\tutorial-parts\yoke_male_from_prompt_isometric.png
+C:\...\docs\getting-started\tutorial-parts\answer_key_yoke_male_isometric.png
+```
+
+The script builds six features in sequence:
+
+| Step | Feature | SolidWorks operation |
+|---|---|---|
+| 1 | Base cylinder dia 38.10mm × 47.625mm | Sketch circle on Top → Extrude |
+| 2 | U-slot cut | Sketch arcs + lines on Front → Cut through-all-both |
+| 3 | Arm gap cut | Sketch rectangle on Right → Cut through-all-both |
+| 4 | Pin bore | Sketch circle on Front → Cut through-all-both |
+| 5 | Stub shaft | Sketch circle on Top → Extrude 66.675mm |
+| 6 | D-bore (keyway) | Sketch D-profile on stub top face → Cut through-all |
+
+---
+
+## Part 4 — Build the Yoke Female
+
+```powershell
+.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\build_yoke_female_artifact.py
+```
+
+**Terminal output:**
+
+```
+2026-05-22 18:50:24 | INFO | SolidWorks type info loaded: 418 interfaces, ...
+C:\...\docs\getting-started\tutorial-parts\yoke_female_from_prompt.SLDPRT
+C:\...\docs\getting-started\tutorial-parts\yoke_female_from_prompt_isometric.png
+C:\...\docs\getting-started\tutorial-parts\answer_key_yoke_female_isometric.png
+```
+
+**Verify the result** — generated (left) vs answer key (right):
+
+| Generated | Answer key |
+|---|---|
+| ![Yoke female — generated](../tutorial-parts/yoke_female_from_prompt_isometric.png) | ![Yoke female — answer key](../tutorial-parts/answer_key_yoke_female_isometric.png) |
+
+The shapes are identical: cylindrical base, U-fork arms, pin bore through both arms, and bolt holes on the top face.
+
+### Key differences from the Yoke Male
+
+The female yoke shares most geometry with the male but differs in two places:
+
+| Feature | Yoke Male | Yoke Female |
+|---|---|---|
+| U-slot outer wall bottom | Y = -1.366mm | Y = -0.5mm |
+| Arm gap starting Y | -7.455mm | 0mm |
+| Top feature | Stub shaft + D-bore | 4x bolt holes (dia 6.35mm) |
+
+**Why the bottom edge is not at Y = 0.0** — the U-bottom arc has its centre at Y = 9.525mm and radius 9.525mm, so it reaches exactly Y = 0 at its lowest point. If the closing line were also at Y = 0, the arc and line would share the interior point (0, 0) — a self-intersecting sketch that SolidWorks silently rejects. Placing the line at Y = -0.5 keeps it below where the arc reaches; the final cut geometry is identical because anything below Y = 0 is outside the solid anyway.
+
+This self-intersection is caught automatically in the interactive SolidWorks UI (the sketch solver splits the line at the tangent point). Through the COM API you must handle it yourself by keeping the closing line slightly below the arc's minimum.
+
+---
+
+## Sketch coordinate system reference
+
+| Sketch plane | Sketch X axis | Sketch Y axis | Extrude/cut direction |
+|---|---|---|---|
+| Top | World X | World Z | World +Y (upward) |
+| Front | World X | World Y | World ±Z |
+| Right | World Z | World Y | World ±X |
+
+All dimensions in scripts are millimeters. The adapter converts to metres for the SolidWorks COM API.
+
+---
+
+## Writing your own build script
+
+Start from this minimal template:
+
+```python
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+from typing import Any
+
+from solidworks_mcp.adapters import create_adapter
+from solidworks_mcp.adapters.base import ExtrusionParameters
+from solidworks_mcp.config import load_config
+
+OUTPUT = Path("my_cylinder.SLDPRT")
+
+
+def require(result: Any, label: str) -> Any:
+    if not result.is_success:
+        raise RuntimeError(f"{label} failed: {result.error}")
+    return result
+
+
+async def build() -> None:
+    config = load_config()
+    adapter = await create_adapter(config)
+    await adapter.connect()
+    try:
+        require(await adapter.create_part(name="my_cylinder"), "create_part")
+
+        # Sketch a circle on the Top plane
+        # Top plane coords: sketch_x = world X, sketch_y = world Z
+        require(await adapter.create_sketch("Top"), "sketch")
+        require(await adapter.add_circle(0, 0, 25.0), "circle r=25mm")
+        require(await adapter.exit_sketch(), "exit sketch")
+
+        # Extrude 50mm upward (+Y)
+        require(
+            await adapter.create_extrusion(ExtrusionParameters(depth=50.0)),
+            "extrude 50mm",
+        )
+
+        require(await adapter.save_file(str(OUTPUT)), "save")
+        print(OUTPUT)
+    finally:
+        await adapter.disconnect()
+
+
+if __name__ == "__main__":
+    asyncio.run(build())
+```
+
+Save it anywhere inside the repo and run it:
+
+```powershell
+.\.venv\Scripts\python.exe my_cylinder.py
+```
+
+A 50mm-tall, 50mm-diameter cylinder will appear in SolidWorks.
+
+### Adding a cut
+
+```python
+# After the extrude, bore a 10mm-radius hole through the top
+require(await adapter.create_sketch("Top"), "bore sketch")
+require(await adapter.add_circle(0, 0, 10.0), "bore circle r=10mm")
+require(await adapter.exit_sketch(), "exit bore sketch")
+require(
+    await adapter.create_cut_extrude(
+        ExtrusionParameters(depth=0.0, end_condition="ThroughAll")
+    ),
+    "bore cut",
+)
+```
+
+Use `both_directions=True` to cut through both sides from the sketch plane.
+
+### Saving a checkpoint mid-script
+
+```python
+CHECKPOINT = Path("my_cylinder_cp.SLDPRT")
+
+# ... build solid body ...
+
+require(await adapter.save_file(str(CHECKPOINT)), "checkpoint")
+
+# ... attempt risky step ...
+# If wrong, restore and redo:
+require(await adapter.open_model(str(CHECKPOINT)), "restore checkpoint")
+```
+
+---
+
+## Troubleshooting checklist
+
+Work through this list in order before filing a bug:
+
+1. **Is SolidWorks open?** — The adapter needs a running process. Open it, then re-run.
+2. **Did you restart SolidWorks after starting Python?** — Stale COM handle. Kill Python (`Ctrl+C`) and re-run.
+3. **Circuit breaker tripping repeatedly?** — Wait 60 seconds, re-run. If it keeps tripping, look at the underlying error in the line above the circuit breaker message.
+4. **Profile not closed?** — Open the part in SolidWorks, right-click the sketch in the feature tree, **Edit Sketch**, look for dangling endpoints or the open-contour status bar warning.
+5. **Is the sketch self-intersecting?** — Arcs that reach the boundary of another sketch entity at a non-vertex point are rejected. Move the boundary line slightly outside the arc's reach.
+6. **Running in mock mode?** — Without `--real` in your MCP server args, all operations return fake data. Check your `mcp.json` configuration.
+
+---
+
+## What's next
+
+| Resource | What it covers |
+|---|---|
+| [SolidWorks as Code](../solidworks-as-code.md) | Session logging, checkpoint export, rewind/pickup cycle |
+| [Prompting Best Practices](../../user-guide/prompting-best-practices.md) | How to prompt Claude Code to generate build scripts |
+| [Tool Catalog: Modeling](../../user-guide/tool-catalog/modeling.md) | Full reference for all modeling tools |
+| [Tool Catalog: Sketching](../../user-guide/tool-catalog/sketching.md) | All sketch entity and constraint tools |
+| [U-Joint Rebuild Prompts](../tutorial-parts/u_joint_rebuild_prompt.md) | Ready-to-use prompts for Spider, Pin, Crank parts |
