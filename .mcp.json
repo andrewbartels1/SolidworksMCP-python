@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "solidworks-mcp": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        ".\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
+      ]
+    }
+  }
+}
