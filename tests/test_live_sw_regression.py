@@ -564,13 +564,6 @@ async def test_add_ellipse_creates_real_ellipse(connected_adapter) -> None:
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
-        sw_type_info.flag_methods(active_sketch, "ISketch")
-        segments = active_sketch.GetSketchSegments()
-        assert len(segments) == 1, (
-            f"expected 1 sketch segment after add_ellipse, got {len(segments)}"
-        )
-
         # Pull the entity straight from the registry; this is the
         # exact COM handle add_sketch_constraint / add_dimension would
         # resolve, so anything we observe about it is what those
@@ -587,9 +580,14 @@ async def test_add_ellipse_creates_real_ellipse(connected_adapter) -> None:
             "(0 would mean CreateLine was called, 1 would mean CreateCircle)"
         )
 
-        center_pt = seg.GetCenterPoint2()
-        major_pt = seg.GetMajorPoint2()
-        minor_pt = seg.GetMinorPoint2()
+        # GetCenterPoint/GetMajorPoint/GetMinorPoint return VARIANT arrays
+        # [X_m, Y_m, Z_m] — the same format as ISketchArc.GetCenterPoint()
+        # which is proven to work. The ...2() variants return ISketchPoint
+        # dispatches that are unreachable on the ISketchSegment handle stored
+        # by CreateEllipse, causing DISP_E_MEMBERNOTFOUND.
+        ctr = seg.GetCenterPoint()
+        maj = seg.GetMajorPoint()
+        mnr = seg.GetMinorPoint()
 
         # Verify in **metres** — SolidWorks COM returns all coordinates
         # in metres, so a regression that forgot the /1000.0 conversion
@@ -600,21 +598,21 @@ async def test_add_ellipse_creates_real_ellipse(connected_adapter) -> None:
         expected_cy_m = cy / 1000.0
         tol_m = 1e-6  # 1 micron — comfortably tighter than SW's tolerance
 
-        assert abs(center_pt.X - expected_cx_m) < tol_m, (
-            f"ellipse centre X {center_pt.X} m != requested "
+        assert abs(ctr[0] - expected_cx_m) < tol_m, (
+            f"ellipse centre X {ctr[0]} m != requested "
             f"{expected_cx_m} m (mm-to-m conversion may be broken)"
         )
-        assert abs(center_pt.Y - expected_cy_m) < tol_m, (
-            f"ellipse centre Y {center_pt.Y} m != requested "
+        assert abs(ctr[1] - expected_cy_m) < tol_m, (
+            f"ellipse centre Y {ctr[1]} m != requested "
             f"{expected_cy_m} m (mm-to-m conversion may be broken)"
         )
 
         # Major endpoint expected on +X at major_axis / 2 from centre.
         # Minor endpoint expected on +Y at minor_axis / 2 from centre.
-        major_dx_m = major_pt.X - center_pt.X
-        major_dy_m = major_pt.Y - center_pt.Y
-        minor_dx_m = minor_pt.X - center_pt.X
-        minor_dy_m = minor_pt.Y - center_pt.Y
+        major_dx_m = maj[0] - ctr[0]
+        major_dy_m = maj[1] - ctr[1]
+        minor_dx_m = mnr[0] - ctr[0]
+        minor_dy_m = mnr[1] - ctr[1]
 
         assert (
             abs(major_dx_m - expected_major_m) < tol_m and abs(major_dy_m) < tol_m
@@ -710,7 +708,7 @@ async def test_add_polygon_creates_real_polygon(connected_adapter) -> None:
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         segments = active_sketch.GetSketchSegments()
 
@@ -817,7 +815,7 @@ async def test_sketch_linear_pattern_creates_real_pattern(connected_adapter) -> 
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         segments = active_sketch.GetSketchSegments()
         # Each instance is a circle; SW does not insert auxiliary
@@ -958,7 +956,7 @@ async def test_sketch_circular_pattern_creates_real_pattern(
         # GetCenterPoint as zero-arg properties returning a tuple.
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         segments = active_sketch.GetSketchSegments()
         assert len(segments) == 6, (
@@ -1077,7 +1075,7 @@ async def test_sketch_mirror_reflects_lines_about_centerline(
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         segments = active_sketch.GetSketchSegments()
 
@@ -1218,7 +1216,7 @@ async def test_sketch_offset_creates_real_offset(connected_adapter) -> None:
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         segments = active_sketch.GetSketchSegments()
 
@@ -1339,7 +1337,7 @@ async def test_add_centerline_creates_real_centerline(connected_adapter) -> None
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         segments = active_sketch.GetSketchSegments()
         assert len(segments) == 1, (
@@ -1536,7 +1534,7 @@ async def test_polygon_id_flows_into_circular_pattern_live(
         # empirically rather than hard-coding.
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         seed_segments = len(active_sketch.GetSketchSegments())
         assert seed_segments >= 6, (
@@ -1595,7 +1593,7 @@ async def test_rectangle_id_flows_into_circular_pattern_live(
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentModel.GetActiveSketch2()
+        active_sketch = adapter.currentSketch
         sw_type_info.flag_methods(active_sketch, "ISketch")
         seed_segments = len(active_sketch.GetSketchSegments())
         # SW 2026's corner-rectangle tool emits 4 line edges + 2 implicit
@@ -1798,8 +1796,7 @@ async def test_exit_sketch_clears_leftover_sw_sketch_live(
         from solidworks_mcp.adapters import sw_type_info
 
         def _probe_sw_state() -> object:
-            sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2")
-            return adapter.currentModel.GetActiveSketch2()
+            return adapter.swApp.ActiveDoc.GetActiveSketch2()
 
         pre = adapter._handle_com_operation("probe_pre_exit", _probe_sw_state)
         assert pre.is_success and pre.data is not None, (

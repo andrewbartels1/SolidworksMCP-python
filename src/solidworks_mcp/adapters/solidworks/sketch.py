@@ -346,7 +346,7 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
 
         if not adapter.currentSketch:
             adapter.currentSketch = adapter._attempt(
-                lambda: adapter.currentModel.GetActiveSketch2()
+                lambda: adapter.swApp.ActiveDoc.GetActiveSketch2()
             )
 
         adapter._sketch_count += 1
@@ -1018,7 +1018,7 @@ def _add_sketch_constraint_impl(
             )
 
         active_sketch = adapter._attempt(
-            lambda: adapter.currentModel.GetActiveSketch2(), default=None
+            lambda: adapter.swApp.ActiveDoc.GetActiveSketch2(), default=None
         )
         if active_sketch is None:
             raise Exception(
@@ -2030,7 +2030,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
                 default=0,
             )
 
-        sw_active = adapter._attempt(lambda: adapter.currentModel.GetActiveSketch2())
+        sw_active = adapter._attempt(lambda: adapter.swApp.ActiveDoc.GetActiveSketch2())
         adapter_active = adapter.currentSketchManager
 
         # Already out of sketch-edit mode — clean up adapter state so a
@@ -2281,7 +2281,7 @@ def _check_sketch_fully_defined_impl(
             )
         else:
             sketch_obj = adapter.currentSketch or adapter._attempt(
-                lambda: adapter.currentModel.GetActiveSketch2(), default=None
+                lambda: adapter.swApp.ActiveDoc.GetActiveSketch2(), default=None
             )
             if sketch_obj is None and adapter._last_sketch_name:
                 sketch_feature = adapter._attempt(

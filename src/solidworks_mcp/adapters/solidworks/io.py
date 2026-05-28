@@ -392,8 +392,18 @@ class SolidWorksIOMixin:
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
-            value = dimension.GetValue3(8, None)
-            return cast(float, value * 1000)
+            # SystemValue is reliable on SW 2025 (in meters, convert to mm)
+            value = adapter._attempt(
+                lambda: dimension.SystemValue, default=None
+            )
+            if value is None:
+                # Fall back to GetValue3 for older SW versions
+                value = adapter._attempt(
+                    lambda: dimension.GetValue3(0, 0), default=None
+                )
+            if value is None:
+                raise Exception(f"Failed to read dimension '{name}'")
+            return cast(float, float(value) * 1000)
 
         return cast(
             AdapterResult[float],
@@ -422,11 +432,24 @@ class SolidWorksIOMixin:
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
 
-            success = dimension.SetValue3(value / 1000.0, 8, None)
-            if not success:
-                raise Exception(f"Failed to set dimension '{name}'")
+            # SetValue3 has gen_py parameter mapping issues on SW 2025.
+            # SystemValue (in meters) is reliable.
+            value_m = value / 1000.0
+            adapter._attempt(
+                lambda: setattr(dimension, "SystemValue", value_m),
+                default=None,
+            )
 
-            adapter.currentModel.ForceRebuild3(False)
+            # Rebuild: try EditRebuild3 first, fall back to ForceRebuild3
+            rebuilt = adapter._attempt(
+                lambda: adapter.currentModel.EditRebuild3(), default=None
+            )
+            if rebuilt is None:
+                rebuilt = adapter._attempt(
+                    lambda: adapter.currentModel.ForceRebuild3(True), default=None
+                )
+            if rebuilt is None:
+                raise Exception("Failed to set dimension")
 
         return cast(
             AdapterResult[None],

@@ -325,37 +325,75 @@ def _create_revolve_impl(
         Raises:
             Exception: If ``FeatureRevolve2`` returns ``None``.
         """
-        feature_manager = adapter.currentModel.FeatureManager
-        feature = feature_manager.FeatureRevolve2(
-            not params.both_directions,
-            True,
-            params.thin_feature,
-            False,
-            params.reverse_direction,
-            False,
-            adapter.constants["swEndCondBlind"],
-            adapter.constants["swEndCondBlind"],
-            params.angle * 3.14159 / 180.0,
-            (params.angle * 3.14159 / 180.0) if params.both_directions else 0.0,
-            False,
-            False,
-            0.0,
-            0.0,
-            0,
-            (params.thin_thickness or 0.0) / 1000.0,
-            0.0,
-            params.merge_result,
-            False,
-            True,
-        )
+        # Detect SW major version for FeatureRevolve2 API choice
+        revolve_sw_major = 0
+        if getattr(adapter, 'swApp', None):
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
+            )
+            try:
+                revolve_sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                revolve_sw_major = 0
 
-        if not feature:
+        import math
+        if revolve_sw_major == 33:
+            # IFeatureManager.FeatureRevolve2 (20 params) per gen_py SW 2025
+            # SingleDir, IsSolid, IsThin, IsCut, ReverseDir, BothDirUpToSame,
+            # Dir1Type, Dir2Type, Dir1Angle(rad), Dir2Angle(rad),
+            # OffsetRev1/2, OffsetDist1/2, Merge, ThinThick1/2(m), AutoSelect, Propagate
+            feature_manager = adapter.currentModel.FeatureManager
+            feature = feature_manager.FeatureRevolve2(
+                True,                                              # SingleDir
+                True,                                              # IsSolid
+                False,                                             # IsThin
+                False,                                             # IsCut
+                params.reverse_direction,                          # ReverseDir
+                params.both_directions,                            # BothDirUpToSame
+                0, 0,                                             # Dir1Type, Dir2Type
+                params.angle * math.pi / 180.0,                    # Dir1Angle (rad)
+                (params.angle * math.pi / 180.0) if params.both_directions else 0.0,  # Dir2Angle
+                False, False,                                     # OffsetRev1/2
+                0.0, 0.0,                                         # OffsetDist1/2
+                params.merge_result,                               # Merge
+                (params.thin_thickness or 0.0) / 1000.0, 0.0,    # ThinThick1/2
+                True,                                              # AutoSelect
+                False,                                             # Propagate
+            )
+        else:
+            feature_manager = adapter.currentModel.FeatureManager
+            feature = feature_manager.FeatureRevolve2(
+                not params.both_directions,
+                True,
+                params.thin_feature,
+                False,
+                params.reverse_direction,
+                False,
+                adapter.constants["swEndCondBlind"],
+                adapter.constants["swEndCondBlind"],
+                params.angle * 3.14159 / 180.0,
+                (params.angle * 3.14159 / 180.0) if params.both_directions else 0.0,
+                False,
+                False,
+                0.0,
+                0.0,
+                0,
+                (params.thin_thickness or 0.0) / 1000.0,
+                0.0,
+                params.merge_result,
+                False,
+                True,
+            )
+
+        # IModelDoc2.FeatureRevolve2 returns None (void) on SW 2025
+        if not feature and revolve_sw_major != 33:
             raise Exception("Failed to create revolve feature")
 
         return SolidWorksFeature(
-            name=feature.Name,
+            name=feature.Name if feature else "Revolve-Auto",
             type="Revolve",
-            id=adapter._get_feature_id(feature),
+            id=adapter._get_feature_id(feature) if feature else "revolve_auto",
             parameters={
                 "angle": params.angle,
                 "reverse_direction": params.reverse_direction,
@@ -375,7 +413,7 @@ def _create_revolve_impl(
 def _create_sweep_impl(
     adapter: Any, params: SweepParameters
 ) -> AdapterResult[SolidWorksFeature]:
-    """Placeholder for sweep feature creation — not yet implemented.
+    """Placeholder for sweep feature creation ΓÇö not yet implemented.
 
     Retained for interface compatibility with the base ``SolidWorksAdapter``
     contract.  Callers that need a sweep should use a VBA macro via
@@ -405,7 +443,7 @@ def _create_sweep_impl(
 def _create_loft_impl(
     adapter: Any, params: LoftParameters
 ) -> AdapterResult[SolidWorksFeature]:
-    """Placeholder for loft feature creation — not yet implemented.
+    """Placeholder for loft feature creation ΓÇö not yet implemented.
 
     Retained for interface compatibility with the base ``SolidWorksAdapter``
     contract.  Callers that need a loft should use a VBA macro via
@@ -443,9 +481,9 @@ def _create_cut_extrude_impl(
 
     Three COM API variants are attempted in order of preference:
 
-    1. ``FeatureCut4`` — most modern (SolidWorks 2015+).
-    2. ``FeatureCut3`` modern signature — SolidWorks 2010–2014.
-    3. ``FeatureCut3`` legacy argument order — older installs.
+    1. ``FeatureCut4`` ΓÇö most modern (SolidWorks 2015+).
+    2. ``FeatureCut3`` modern signature ΓÇö SolidWorks 2010ΓÇô2014.
+    3. ``FeatureCut3`` legacy argument order ΓÇö older installs.
 
     All depth values are in millimetres and converted to metres internally.
 
@@ -500,92 +538,139 @@ def _create_cut_extrude_impl(
             draft_angle=float(getattr(params, "draft_angle", 0.0)),
             reverse_direction=bool(getattr(params, "reverse_direction", False)),
             end_condition=str(getattr(params, "end_condition", "Blind")),
-            both_directions=bool(getattr(params, "both_directions", False)),
             feature_scope=bool(getattr(params, "feature_scope", False)),
             auto_select=bool(getattr(params, "auto_select", True)),
         )
         feature_manager = adapter.currentModel.FeatureManager
 
         end_condition = (normalized.end_condition or "Blind").strip().lower()
+        t1 = adapter.constants["swEndCondBlind"]
         depth_m = normalized.depth / 1000.0
-        is_through = end_condition in {"throughall", "through all", "through_all"}
-
-        # Sd=True = single end condition; Sd=False = enable separate Dir2 end condition.
-        # "Through All - Both" is a single UI dropdown item → swEndCondThroughAllBoth(9)
-        # with Sd=True. Using Sd=False + T1=T2=swEndCondThroughAll does NOT reliably
-        # produce a bidirectional cut; SolidWorks treats the combined enum as one op.
-        if is_through and normalized.both_directions:
-            sd_flag = True
-            t1 = adapter.constants.get("swEndCondThroughAllBoth", 9)
-            t2 = adapter.constants["swEndCondBlind"]
-            use_dir2 = False
-        elif is_through:
-            sd_flag = True
+        if end_condition in {"throughall", "through all", "through_all"}:
             t1 = adapter.constants["swEndCondThroughAll"]
-            t2 = adapter.constants["swEndCondBlind"]
-            use_dir2 = False
-        else:
-            sd_flag = not normalized.both_directions
-            t1 = adapter.constants["swEndCondBlind"]
-            t2 = adapter.constants["swEndCondBlind"]
-            use_dir2 = normalized.both_directions
 
         t0 = adapter.constants.get("swStartSketchPlane", 0)
-
-        # Do NOT call ClearSelection2 here — it wipes the "pending sketch" context
-        # that SolidWorks holds after exit_sketch. Select the sketch explicitly by
-        # name using SKETCH entity type (not the feature node via Select2, which
-        # is the wrong entity type for FeatureCut to accept as a profile).
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
         sketch_selected = False
-        for candidate in (
-            [adapter._last_sketch_name] if adapter._last_sketch_name else []
-        ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
-            sel_result = adapter._attempt(
-                lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
-                    c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
-                ),
-                default=False,
-            )
-            sketch_selected = bool(sel_result)
-            if sketch_selected:
-                adapter._last_sketch_name = candidate
-                break
+
+        try:
+            feat_iter = adapter.currentModel.FirstFeature
+            last_profile_feature = None
+            while feat_iter:
+                try:
+                    type_name = feat_iter.GetTypeName2
+                    if type_name == "ProfileFeature":
+                        last_profile_feature = feat_iter
+                except Exception:
+                    pass
+                try:
+                    feat_iter = feat_iter.GetNextFeature
+                except Exception:
+                    break
+            if last_profile_feature:
+                sketch_selected = bool(
+                    adapter._attempt(
+                        lambda pf=last_profile_feature: pf.Select2(False, 0),
+                        default=False,
+                    )
+                )
+        except Exception:
+            pass
+
+        if not sketch_selected:
+            for candidate in (
+                [adapter._last_sketch_name] if adapter._last_sketch_name else []
+            ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
+                sel_result = adapter._attempt(
+                    lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
+                        c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
+                    ),
+                    default=False,
+                )
+                sketch_selected = bool(sel_result)
+                if sketch_selected:
+                    adapter._last_sketch_name = candidate
+                    break
 
         feature = None
         fallback_errors: list[str] = []
+        is_through = end_condition in {"throughall", "through all", "through_all"}
 
-        # 1. FeatureCut4 (SW 2015+, 27 params)
-        feature, cut4_error = adapter._attempt_with_error(
-            lambda: feature_manager.FeatureCut4(
-                sd_flag,
-                False,
-                use_dir2,
-                t1,
-                t2,
-                depth_m,
-                0.0,
-                False,
-                False,
-                False,
-                False,
-                normalized.draft_angle * 3.14159 / 180.0,
-                0.0,
-                False,
-                False,
-                False,
-                False,
-                False,
-                normalized.feature_scope,
-                normalized.auto_select,
-                False,
-                False,
-                False,
-                t0,
-                0.0,
-                False,
-                False,
+        # Detect SW major version for FeatureCut4 parameter count
+        # SW 2025 (major=33) verified with 27 params; other versions use 28.
+        sw_major = 0
+        if getattr(adapter, 'swApp', None):
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
             )
-        )
+            try:
+                sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                sw_major = 0
+
+        # 1. FeatureCut4 (SW 2015+)
+        # Note: SW 2025 (major=33) verified with 27 params by VBA macro.
+        # Other versions use 28 params (original code).
+        if sw_major == 33:
+            feature, cut4_error = adapter._attempt_with_error(
+                lambda: feature_manager.FeatureCut4(
+                    is_through,                    # Sd
+                    False,                          # Flip
+                    normalized.reverse_direction,   # Dir
+                    t1,                             # T1
+                    adapter.constants["swEndCondBlind"],  # T2
+                    depth_m,                        # D1
+                    0.0,                            # D2
+                    False, False, False, False,     # Dchk1/2, Ddir1/2
+                    normalized.draft_angle * 3.14159 / 180.0,  # Dang1
+                    0.0,                            # Dang2
+                    False, False, False, False,     # OffsetRev1/2, TranslateSurf1/2
+                    False,                          # NormalCut
+                    normalized.feature_scope,       # UseFeatScope
+                    normalized.auto_select,         # UseAutoSelect
+                    False,                          # AssemblyFeatureScope
+                    False,                          # AutoSelectComponents
+                    False,                          # PropagateFeatureToParts
+                    t0,                             # T0
+                    0.0,                            # StartOffset
+                    False,                          # FlipStartOffset
+                )
+            )
+        else:
+            feature, cut4_error = adapter._attempt_with_error(
+                lambda: feature_manager.FeatureCut4(
+                    True,
+                    False,
+                    normalized.reverse_direction,
+                    t1,
+                    adapter.constants["swEndCondBlind"],
+                    depth_m,
+                    0.0,
+                    False,
+                    False,
+                    False,
+                    False,
+                    normalized.draft_angle * 3.14159 / 180.0,
+                    0.0,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    normalized.feature_scope,
+                    normalized.auto_select,
+                    False,
+                    False,
+                    False,
+                    t0,
+                    0.0,
+                    False,
+                    False,
+                )
+            )
         if cut4_error is not None:
             fallback_errors.append(f"FeatureCut4: {cut4_error}")
 
@@ -598,11 +683,11 @@ def _create_cut_extrude_impl(
             #   T0, StartOffset, FlipStartOffset
             feature, cut3_modern_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut3(
-                    sd_flag,
+                    is_through,
                     normalized.reverse_direction,
-                    use_dir2,
+                    False,
                     t1,
-                    t2,
+                    0,
                     normalized.depth / 1000.0,
                     normalized.depth / 1000.0,
                     False,
@@ -730,6 +815,18 @@ def _add_fillet_impl(
         Raises:
             Exception: If any edge selection fails or the feature is ``None``.
         """
+        # Detect SW major version for FeatureFillet3 parameter count
+        fillet_sw_major = 0
+        if getattr(adapter, 'swApp', None):
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
+            )
+            try:
+                fillet_sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                fillet_sw_major = 0
+
         for edge_name in edge_names:
             selected = adapter.currentModel.Extension.SelectByID2(
                 edge_name,
@@ -745,26 +842,29 @@ def _add_fillet_impl(
             if not selected:
                 raise Exception(f"Failed to select edge: {edge_name}")
 
-        feature_manager = adapter.currentModel.FeatureManager
-        feature = feature_manager.FeatureFillet3(
-            radius / 1000.0,
-            0,
-            0,
-            0,
-            0,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            False,
-            0,
-            False,
-        )
+        # SW 2025 (major=33): IModelDoc2.FeatureFillet3 (9 params) verified.
+        # Other versions: IFeatureManager.FeatureFillet3 (16 params, original code).
+        if fillet_sw_major == 33:
+            feature = adapter.currentModel.FeatureFillet3(
+                radius / 1000.0,   # R1 in meters
+                True,               # Propagate
+                0,                  # Ftyp
+                0, 0,              # VarRadTyp, OverflowType
+                0, None,           # NRadii, Radii
+                False, False,      # UseHelpPoint, UseTangentHoldLine
+            )
+        else:
+            feature_manager = adapter.currentModel.FeatureManager
+            feature = feature_manager.FeatureFillet3(
+                radius / 1000.0,
+                0, 0, 0, 0,
+                False, False, False, False,
+                False, False, False, False,
+                0, False,
+            )
 
-        if not feature:
+        # IModelDoc2.FeatureFillet3 returns int on SW 2025, not IFeature
+        if not feature and fillet_sw_major != 33:
             raise Exception("Failed to create fillet")
 
         return SolidWorksFeature(

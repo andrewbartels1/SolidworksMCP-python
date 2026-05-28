@@ -9,6 +9,17 @@ from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from src.solidworks_mcp.adapters.solidworks import sketch
 
 
+class _FakeSwApp:
+    """Minimal swApp stand-in; ActiveDoc proxies the adapter's currentModel."""
+
+    def __init__(self, adapter: "_FakeSketchAdapter") -> None:
+        self._adapter = adapter
+
+    @property
+    def ActiveDoc(self) -> object:
+        return self._adapter.currentModel
+
+
 class _FakeSketchAdapter:
     def __init__(self) -> None:
         self.currentModel = None
@@ -25,6 +36,7 @@ class _FakeSketchAdapter:
             "swSmartDimensionDirectionLeft": 2,
             "swSmartDimensionDirectionDown": 3,
         }
+        self.swApp = _FakeSwApp(self)
 
     def _handle_com_operation(self, _name, callback):
         try:
