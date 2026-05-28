@@ -172,3 +172,13 @@ def test_from_env_non_string_value_passthrough(
 
     with pytest.raises(ValidationError):
         SolidWorksMCPConfig.from_env(str(env_file))
+
+
+def test_config_cache_and_log_path_passthrough(tmp_path) -> None:
+    """Explicit cache_dir/log_file should be preserved."""
+    # Provide explicit paths to cover the passthrough branch.
+    cache_dir = tmp_path / "cache"
+    log_file = tmp_path / "logs" / "server.log"
+    config = SolidWorksMCPConfig(cache_dir=cache_dir, log_file=log_file)
+    assert config.cache_dir == cache_dir
+    assert config.log_file == log_file

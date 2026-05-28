@@ -127,3 +127,54 @@ def test_add_fillet_and_chamfer_selection_and_feature_failures() -> None:
     chamfer_feature_error = features._add_chamfer_impl(adapter, 1.0, ["Edge<2>"])
     assert chamfer_feature_error.status == AdapterResultStatus.ERROR
     assert "Failed to create chamfer" in (chamfer_feature_error.error or "")
+
+
+def test_create_cut_extrude_through_all_both_directions() -> None:
+    """Through-all + both directions should use the combined end condition."""
+    # Exercise the branch that uses swEndCondThroughAllBoth.
+    adapter = _FakeFeatureAdapter()
+
+    feature = SimpleNamespace(Name="Cut-Extrude1")
+    feature_manager = SimpleNamespace(
+        FeatureCut4=lambda *args: feature,
+        FeatureCut3=lambda *args: None,
+    )
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=feature_manager,
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=None,
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
+    )
+    adapter._last_sketch_name = "Sketch1"
+
+    result = features._create_cut_extrude_impl(
+        adapter,
+        ExtrusionParameters(depth=5.0, end_condition="ThroughAll", both_directions=True),
+    )
+    assert result.is_success
+    assert result.data.type == "Cut-Extrude"
+
+
+def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
+    """Missing cut feature should raise a generic error when no fallback errors exist."""
+    # Force all cut methods to return None without errors to hit the final raise.
+    adapter = _FakeFeatureAdapter()
+
+    feature_manager = SimpleNamespace(
+        FeatureCut4=lambda *args: None,
+        FeatureCut3=lambda *args: None,
+    )
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=feature_manager,
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=None,
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
+    )
+    adapter._last_sketch_name = "Sketch1"
+
+    result = features._create_cut_extrude_impl(
+        adapter,
+        ExtrusionParameters(depth=4.0),
+    )
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to create cut extrude feature" in (result.error or "")

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.solidworks_mcp.agents.soc_rewind import parse_script_checkpoints, truncate_script_at
+from src.solidworks_mcp.agents.soc_rewind import (
+    _cli,
+    parse_script_checkpoints,
+    rewind_to_checkpoint,
+    truncate_script_at,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -237,3 +242,138 @@ def test_list_checkpoints_returns_entries(tmp_path):
     assert len(result) == 1
     assert result[0]["label"] == "my-checkpoint"
     assert result[0]["file_path"] == "C:/tmp/cp.sldprt"
+
+
+# ---------------------------------------------------------------------------
+# rewind_to_checkpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rewind_to_checkpoint_missing_cp_raises(monkeypatch):
+    """Missing checkpoints should raise a clear error."""
+    # Ensure the DB lookup failure path raises RuntimeError.
+    monkeypatch.setattr(
+        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        lambda *_a, **_kw: None,
+    )
+
+    with pytest.raises(RuntimeError, match="not found"):
+        await rewind_to_checkpoint(adapter=None, session_id="s1", label="missing")
+
+
+@pytest.mark.asyncio
+async def test_rewind_to_checkpoint_open_model_failure(monkeypatch):
+    """Adapter open failures should raise RuntimeError."""
+    # Provide a checkpoint but simulate adapter failure.
+    monkeypatch.setattr(
+        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        lambda *_a, **_kw: {"file_path": "C:/tmp/checkpoint.sldprt"},
+    )
+
+    class _Adapter:
+        async def open_model(self, _path):
+            return type("Result", (), {"is_success": False, "error": "boom"})()
+
+    with pytest.raises(RuntimeError, match="Failed to open"):
+        await rewind_to_checkpoint(_Adapter(), session_id="s1", label="cp")
+
+
+@pytest.mark.asyncio
+async def test_rewind_to_checkpoint_returns_truncated_script(monkeypatch):
+    """Truncation should return the script up to the checkpoint."""
+    # Validate the happy-path truncation with an in-script checkpoint.
+    monkeypatch.setattr(
+        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        lambda *_a, **_kw: {"file_path": "C:/tmp/checkpoint.sldprt"},
+    )
+
+    class _Adapter:
+        async def open_model(self, _path):
+            return type("Result", (), {"is_success": True, "error": ""})()
+
+    script = _make_script(_CHECKPOINT_BLOCK)
+    truncated = await rewind_to_checkpoint(
+        _Adapter(), session_id="s1", label="base-extrude", script_text=script
+    )
+    assert "# label:    base-extrude" in truncated
+
+
+@pytest.mark.asyncio
+async def test_rewind_to_checkpoint_returns_original_when_label_missing(monkeypatch):
+    """Missing checkpoint blocks should return the original script."""
+    # Validate the KeyError fallback path.
+    monkeypatch.setattr(
+        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        lambda *_a, **_kw: {"file_path": "C:/tmp/checkpoint.sldprt"},
+    )
+
+    class _Adapter:
+        async def open_model(self, _path):
+            return type("Result", (), {"is_success": True, "error": ""})()
+
+    script = _make_script("        # no checkpoint block here\n")
+    truncated = await rewind_to_checkpoint(
+        _Adapter(), session_id="s1", label="missing", script_text=script
+    )
+    assert truncated == script
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def test_cli_usage_requires_args(monkeypatch, capsys):
+    """CLI should print usage when args are missing."""
+    # Trigger the usage guard by providing too few args.
+    monkeypatch.setattr("sys.argv", ["soc_rewind.py"])
+    with pytest.raises(SystemExit):
+        _cli()
+    out = capsys.readouterr().out
+    assert "Usage: python -m solidworks_mcp.agents.soc_rewind" in out
+
+
+def test_cli_missing_label_prints_available(monkeypatch, capsys):
+    """CLI should print available labels on mismatch."""
+    # Provide a label that does not exist and assert available labels are printed.
+    monkeypatch.setattr("sys.argv", ["soc_rewind.py", "s1", "missing"])
+    monkeypatch.setattr(
+        "src.solidworks_mcp.agents.soc_rewind.list_checkpoints",
+        lambda *_a, **_kw: [
+            {
+                "label": "base",
+                "file_path": "x",
+                "first_record_id": 1,
+                "last_record_id": 2,
+                "created_at": "now",
+            }
+        ],
+    )
+    with pytest.raises(SystemExit):
+        _cli()
+    out = capsys.readouterr().out
+    assert "not found" in out
+    assert "base" in out
+
+
+def test_cli_prints_checkpoint_info(monkeypatch, capsys):
+    """CLI should print checkpoint metadata when found."""
+    # Provide a matching label and assert printed fields.
+    monkeypatch.setattr("sys.argv", ["soc_rewind.py", "s1", "base"])
+    monkeypatch.setattr(
+        "src.solidworks_mcp.agents.soc_rewind.list_checkpoints",
+        lambda *_a, **_kw: [
+            {
+                "label": "base",
+                "file_path": "x",
+                "first_record_id": 1,
+                "last_record_id": 2,
+                "created_at": "now",
+            }
+        ],
+    )
+    _cli()
+    out = capsys.readouterr().out
+    assert "Checkpoint: base" in out
+    assert "file:" in out

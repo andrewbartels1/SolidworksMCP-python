@@ -899,6 +899,42 @@ async def test_run_local_stdio_sets_server_and_awaits_sync_runner_result(mock_co
     assert awaited["done"] is True
 
 
+class TestServerToolEventLogging:
+    """Focused tests for tool event logging branches."""
+
+    def test_log_tool_event_disabled_is_noop(self, monkeypatch):
+        """_log_tool_event should no-op when logging is disabled."""
+        config = SolidWorksMCPConfig()
+        server = SolidWorksMCPServer(config)
+        server._db_logging_enabled = False
+
+        called = {"count": 0}
+
+        def _fake_insert(*_a, **_kw):
+            called["count"] += 1
+
+        monkeypatch.setattr("src.solidworks_mcp.server.insert_tool_event", _fake_insert)
+        server._log_tool_event(tool_name="t", phase="start", payload=None)
+        assert called["count"] == 0
+
+    def test_log_tool_event_calls_insert(self, monkeypatch):
+        """_log_tool_event should call insert_tool_event when enabled."""
+        config = SolidWorksMCPConfig()
+        server = SolidWorksMCPServer(config)
+        server._db_logging_enabled = True
+        server._db_run_id = "run"
+        server._db_path = None
+
+        called = {"count": 0}
+
+        def _fake_insert(*_a, **_kw):
+            called["count"] += 1
+
+        monkeypatch.setattr("src.solidworks_mcp.server.insert_tool_event", _fake_insert)
+        server._log_tool_event(tool_name="t", phase="start", payload={"k": "v"})
+        assert called["count"] == 1
+
+
 @pytest.mark.asyncio
 async def test_start_marks_connected_on_success(mock_config):
     """Covers successful adapter connect branch in start()."""
