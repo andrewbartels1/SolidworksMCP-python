@@ -1177,10 +1177,11 @@ def _add_sketch_dimension_impl(
         # when entering a new sketch, so the global connect-time suppression
         # is not sufficient. Setting it to False here prevents the Modify
         # dialog from blocking unattended automation.
-        if adapter.swApp:
-            adapter._attempt(lambda: adapter.swApp.SetUserPreferenceToggle(10, False))
-            adapter._attempt(lambda: adapter.swApp.SetUserPreferenceToggle(372, False))
-            adapter._attempt(lambda: adapter.swApp.SetUserPreferenceToggle(520, False))
+        _sw = getattr(adapter, "swApp", None)
+        if _sw:
+            adapter._attempt(lambda: _sw.SetUserPreferenceToggle(10, False))
+            adapter._attempt(lambda: _sw.SetUserPreferenceToggle(372, False))
+            adapter._attempt(lambda: _sw.SetUserPreferenceToggle(520, False))
 
         def _radial_dimension_placement() -> tuple[float, float, float, int]:
             """Compute a deterministic placement for radial/diameter dimensions.
