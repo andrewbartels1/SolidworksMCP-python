@@ -22,7 +22,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from solidworks_mcp.agents.history_db import list_tool_call_records
+from .history_db import list_tool_call_records
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -584,7 +584,7 @@ def export_session(
     Returns:
         Path to the written file.
     """
-    from solidworks_mcp.agents.history_db import list_soc_checkpoints
+    from .history_db import list_soc_checkpoints
 
     records = list_tool_call_records(
         session_id, checkpoint_id=checkpoint_id, db_path=db_path

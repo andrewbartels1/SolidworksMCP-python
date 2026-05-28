@@ -207,6 +207,7 @@ class ToolCallRecord(SQLModel, table=True):
         output_json (str | None): The output json value.
         run_id (str | None): The run id value.
         session_id (str): The session id value.
+        status (str | None): Lifecycle status — None (active), 'reverted'.
         success (bool): The success value.
         tool_name (str): The tool name value.
     """
@@ -220,6 +221,7 @@ class ToolCallRecord(SQLModel, table=True):
     output_json: str | None = None
     success: bool = True
     latency_ms: float | None = None
+    status: str | None = None
     created_at: str
 
 
@@ -1019,6 +1021,7 @@ def list_tool_call_records(
     session_id: str,
     checkpoint_id: int | None = None,
     db_path: Path | None = None,
+    include_reverted: bool = False,
 ) -> list[dict[str, Any]]:
     """List tool call records for a session and optional checkpoint.
 
@@ -1026,6 +1029,7 @@ def list_tool_call_records(
         session_id (str): The session id value.
         checkpoint_id (int | None): The checkpoint id value. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
+        include_reverted (bool): Include records with status='reverted'. Defaults to False.
 
     Returns:
         list[dict[str, Any]]: A list containing the resulting items.
@@ -1036,6 +1040,10 @@ def list_tool_call_records(
         query = select(ToolCallRecord).where(ToolCallRecord.session_id == session_id)
         if checkpoint_id is not None:
             query = query.where(ToolCallRecord.checkpoint_id == checkpoint_id)
+        if not include_reverted:
+            query = query.where(
+                (ToolCallRecord.status == None) | (ToolCallRecord.status != "reverted")  # noqa: E711
+            )
         rows = session.exec(query.order_by(ToolCallRecord.id.asc())).all()  # type: ignore[union-attr]
 
     return [
@@ -1049,10 +1057,44 @@ def list_tool_call_records(
             "output_json": row.output_json,
             "success": row.success,
             "latency_ms": row.latency_ms,
+            "status": row.status,
             "created_at": row.created_at,
         }
         for row in rows
     ]
+
+
+def revert_tool_call_records(
+    session_id: str,
+    from_record_id: int,
+    db_path: Path | None = None,
+) -> int:
+    """Mark ToolCallRecords as reverted from from_record_id onward.
+
+    Sets status='reverted' on all records for the session with id >= from_record_id.
+    Reverted records are excluded from list_tool_call_records() by default and from
+    the soc_exporter output, so re-generating the script omits the rolled-back work.
+
+    Args:
+        session_id (str): The SoC session whose records should be reverted.
+        from_record_id (int): First record ID to mark as reverted (inclusive).
+        db_path (Path | None): Override default SQLite DB path.
+
+    Returns:
+        int: Number of records marked reverted.
+    """
+    resolved = init_db(db_path)
+    engine = _build_engine(resolved)
+    with Session(engine) as db_session:
+        rows = db_session.exec(
+            select(ToolCallRecord)
+            .where(ToolCallRecord.session_id == session_id)
+            .where(ToolCallRecord.id >= from_record_id)  # type: ignore[operator]
+        ).all()
+        for row in rows:
+            row.status = "reverted"
+        db_session.commit()
+    return len(rows)
 
 
 def insert_evidence_link(

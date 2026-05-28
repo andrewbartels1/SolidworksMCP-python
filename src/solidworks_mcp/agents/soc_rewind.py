@@ -150,7 +150,7 @@ async def rewind_to_checkpoint(
         RuntimeError: If the checkpoint is not found in the DB or the file cannot
             be opened.
     """
-    from solidworks_mcp.agents.history_db import get_soc_checkpoint
+    from .history_db import get_soc_checkpoint
 
     cp = get_soc_checkpoint(session_id, label, db_path=db_path)
     if cp is None:
@@ -191,7 +191,7 @@ def list_checkpoints(
         Ordered list of checkpoint dicts with keys: id, label, file_path,
         first_record_id, last_record_id, snapshot_id, created_at.
     """
-    from solidworks_mcp.agents.history_db import list_soc_checkpoints
+    from .history_db import list_soc_checkpoints
 
     return list_soc_checkpoints(session_id, db_path=db_path)
 

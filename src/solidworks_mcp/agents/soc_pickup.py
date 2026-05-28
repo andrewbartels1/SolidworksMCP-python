@@ -238,7 +238,7 @@ async def pickup_changes(
     Returns:
         List of generated Python source lines for the new features.
     """
-    from solidworks_mcp.agents.history_db import (
+    from .history_db import (
         insert_model_state_snapshot,
         list_model_state_snapshots,
     )
