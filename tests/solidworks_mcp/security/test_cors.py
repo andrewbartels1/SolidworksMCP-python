@@ -1,10 +1,10 @@
-"""Branch coverage tests for src.solidworks_mcp.security.cors."""
+"""Branch coverage tests for solidworks_mcp.security.cors."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.solidworks_mcp.security.cors import setup_cors
+from solidworks_mcp.security.cors import setup_cors
 
 
 def test_setup_cors_prefers_cors_origins() -> None:

@@ -1,6 +1,6 @@
 """Tests for test utils feature tree classifier coverage."""
 
-from src.solidworks_mcp.utils.feature_tree_classifier import (
+from solidworks_mcp.utils.feature_tree_classifier import (
     classify_feature_tree_snapshot,
     _match_examples,
 )

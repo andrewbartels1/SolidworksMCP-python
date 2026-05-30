@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-import src.solidworks_mcp.utils.validation as validation_mod
-from src.solidworks_mcp.exceptions import SolidWorksMCPError
+import solidworks_mcp.utils.validation as validation_mod
+from solidworks_mcp.exceptions import SolidWorksMCPError
 
 
 class _VersionInfo:
