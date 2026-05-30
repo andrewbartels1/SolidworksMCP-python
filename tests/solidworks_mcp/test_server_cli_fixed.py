@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.solidworks_mcp import server_cli_fixed
-from src.solidworks_mcp.config import DeploymentMode
+from solidworks_mcp import server_cli_fixed
+from solidworks_mcp.config import DeploymentMode
 
 
 class _FakeServer:
@@ -57,7 +57,7 @@ def test_run_overrides_config_and_starts_server(
     monkeypatch.setattr(server_cli_fixed, "load_config", lambda _path: cfg)
     monkeypatch.setattr(server_cli_fixed.utils, "setup_logging", lambda _cfg: None)
 
-    import src.solidworks_mcp.server as server_module
+    import solidworks_mcp.server as server_module
 
     monkeypatch.setattr(server_module, "SolidWorksMCPServer", _FakeServer)
 
@@ -90,7 +90,7 @@ def test_run_handles_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(server_cli_fixed, "load_config", lambda _path: cfg)
     monkeypatch.setattr(server_cli_fixed.utils, "setup_logging", lambda _cfg: None)
 
-    import src.solidworks_mcp.server as server_module
+    import solidworks_mcp.server as server_module
 
     monkeypatch.setattr(server_module, "SolidWorksMCPServer", _FakeServer)
 
@@ -117,7 +117,7 @@ def test_run_reraises_unexpected_errors(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(server_cli_fixed, "load_config", lambda _path: cfg)
     monkeypatch.setattr(server_cli_fixed.utils, "setup_logging", lambda _cfg: None)
 
-    import src.solidworks_mcp.server as server_module
+    import solidworks_mcp.server as server_module
 
     monkeypatch.setattr(server_module, "SolidWorksMCPServer", _FakeServer)
 

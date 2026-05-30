@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.config import DeploymentMode, SecurityLevel
-from src.solidworks_mcp.server import SolidWorksMCPServer
-from src.solidworks_mcp.tools.modeling import CreateExtrusionInput, CreatePartInput
-from src.solidworks_mcp.tools.sketching import AddCircleInput, CreateSketchInput
+from solidworks_mcp.config import DeploymentMode, SecurityLevel
+from solidworks_mcp.server import SolidWorksMCPServer
+from solidworks_mcp.tools.modeling import CreateExtrusionInput, CreatePartInput
+from solidworks_mcp.tools.sketching import AddCircleInput, CreateSketchInput
 
 
 class TestCompleteWorkflows:

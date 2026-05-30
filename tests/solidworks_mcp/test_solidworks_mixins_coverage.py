@@ -13,9 +13,9 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-from src.solidworks_mcp.adapters.solidworks.io import SolidWorksIOMixin
-from src.solidworks_mcp.adapters.solidworks.sketch import SolidWorksSketchMixin
+from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+from solidworks_mcp.adapters.solidworks.io import SolidWorksIOMixin
+from solidworks_mcp.adapters.solidworks.sketch import SolidWorksSketchMixin
 
 
 # ---------------------------------------------------------------------------
@@ -25,19 +25,19 @@ from src.solidworks_mcp.adapters.solidworks.sketch import SolidWorksSketchMixin
 
 def _build_adapter(monkeypatch) -> PyWin32Adapter:
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+        "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.pywin32_adapter.platform.system",
+        "solidworks_mcp.adapters.pywin32_adapter.platform.system",
         lambda: "Windows",
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+        "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
         SimpleNamespace(com_error=RuntimeError),
         raising=False,
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.pywin32_adapter._ComSessionCoordinator",
+        "solidworks_mcp.adapters.pywin32_adapter._ComSessionCoordinator",
         lambda _adapter: SimpleNamespace(),
         raising=False,
     )
@@ -161,12 +161,12 @@ class TestSolidWorksIOMixinNotConnected:
         adapter._read_model_title = lambda _m: "Part1"
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.solidworks.io.win32com",
+            "solidworks_mcp.adapters.solidworks.io.win32com",
             SimpleNamespace(client=SimpleNamespace(VARIANT=None)),
             raising=False,
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.solidworks.io.pythoncom",
+            "solidworks_mcp.adapters.solidworks.io.pythoncom",
             SimpleNamespace(VT_BYREF=0x4000, VT_I4=3),
             raising=False,
         )
@@ -308,9 +308,9 @@ class TestSolidWorksSketchMixinGeometryHelpers:
         expected = {"fully_defined": True, "sketch_name": "Sketch1"}
 
         with patch(
-            "src.solidworks_mcp.adapters.solidworks.sketch._check_sketch_fully_defined_impl",
+            "solidworks_mcp.adapters.solidworks.sketch._check_sketch_fully_defined_impl",
         ) as mock_fn:
-            from src.solidworks_mcp.adapters.base import (
+            from solidworks_mcp.adapters.base import (
                 AdapterResult,
                 AdapterResultStatus,
             )

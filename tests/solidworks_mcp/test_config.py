@@ -1,4 +1,4 @@
-"""Focused coverage tests for src.solidworks_mcp.config."""
+"""Focused coverage tests for solidworks_mcp.config."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.solidworks_mcp import config as config_module
-from src.solidworks_mcp.config import SolidWorksMCPConfig
+from solidworks_mcp import config as config_module
+from solidworks_mcp.config import SolidWorksMCPConfig
 
 
 def _clear_config_env(monkeypatch: pytest.MonkeyPatch) -> None:

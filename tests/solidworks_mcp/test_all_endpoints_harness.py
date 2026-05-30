@@ -13,13 +13,13 @@ from typing import Any
 import pytest
 import pytest_asyncio
 
-from src.solidworks_mcp.config import (
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
     SolidWorksMCPConfig,
 )
-from src.solidworks_mcp.server import SolidWorksMCPServer
+from solidworks_mcp.server import SolidWorksMCPServer
 
 # ---------------------------------------------------------------------------
 # Environment helpers

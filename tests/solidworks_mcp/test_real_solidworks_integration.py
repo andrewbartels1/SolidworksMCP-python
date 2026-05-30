@@ -12,15 +12,15 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from src.solidworks_mcp.config import (
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
     SolidWorksMCPConfig,
 )
-from src.solidworks_mcp.server import SolidWorksMCPServer
-from src.solidworks_mcp.tools.file_management import SaveAsInput, SaveFileInput
-from src.solidworks_mcp.tools.modeling import (
+from solidworks_mcp.server import SolidWorksMCPServer
+from solidworks_mcp.tools.file_management import SaveAsInput, SaveFileInput
+from solidworks_mcp.tools.modeling import (
     CloseModelInput,
     CreateAssemblyInput,
     CreatePartInput,
