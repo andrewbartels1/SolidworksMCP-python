@@ -15,14 +15,14 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 
-from src.solidworks_mcp.config import (
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
     SolidWorksMCPConfig,
 )
-from src.solidworks_mcp.server import SolidWorksMCPServer
-from src.solidworks_mcp.tools.docs_discovery import (
+from solidworks_mcp.server import SolidWorksMCPServer
+from solidworks_mcp.tools.docs_discovery import (
     DiscoverDocsInput,
     SolidWorksDocsDiscovery,
     _extract_year,
@@ -166,7 +166,7 @@ async def test_discover_solidworks_docs_execution(
 async def test_docs_discovery_import() -> None:
     """Test that docs discovery module imports without errors."""
     try:
-        from src.solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
+        from solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
 
         assert SolidWorksDocsDiscovery is not None
         assert hasattr(SolidWorksDocsDiscovery, "discover_com_objects")
@@ -183,7 +183,7 @@ async def test_docs_discovery_import() -> None:
 @pytest.mark.windows_only
 async def test_docs_discovery_output_dir_creation() -> None:
     """Test that docs discovery creates output directory if it doesn't exist."""
-    from src.solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
+    from solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
 
     # Use a unique directory to avoid flaky pre-cleanup on Windows file locks.
     test_dir = Path("tests/.generated") / f"docs-discovery-test-{time.time_ns()}"
@@ -277,7 +277,7 @@ async def test_search_solidworks_api_help_with_index(
 
 def test_discovery_connect_fails_without_win32(monkeypatch: pytest.MonkeyPatch) -> None:
     """Connect_to_solidworks should fail fast when win32com is unavailable."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
     discovery = docs_mod.SolidWorksDocsDiscovery(
@@ -291,7 +291,7 @@ def test_discovery_connect_fails_on_non_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Connect_to_solidworks should reject non-Windows platforms."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     monkeypatch.setattr(docs_mod.platform, "system", lambda: "Linux")
@@ -306,7 +306,7 @@ def test_discovery_connect_uses_dispatch_when_getobject_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Connect_to_solidworks should fall back to gencache.EnsureDispatch when GetActiveObject raises com_error."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     fake_sw = object()
 
@@ -382,7 +382,7 @@ def test_discover_vba_references_handles_available_and_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Discover_vba_references should return whatever _discover_vba_references_via_registry finds."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     fake_refs = {
         "SldWorks Type Library ({A4B97BA4-941C-45F8-B4E5-3AB637EA0306} v1.0)": {
@@ -434,7 +434,7 @@ def test_save_index_success_and_failure(
     saved = discovery.save_index("docs_index.json")
     assert saved is not None and saved.exists()
 
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(
         docs_mod.json,
@@ -492,7 +492,7 @@ async def test_discover_solidworks_docs_tool_error_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Tool should return structured error on unsupported environments."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -517,7 +517,7 @@ async def test_discover_solidworks_docs_tool_success_path(
     temp_dir: Path,
 ) -> None:
     """Tool should return successful payload when discovery and save succeed."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -575,7 +575,7 @@ async def test_discover_solidworks_docs_tool_success_path(
 
 def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Connect_to_solidworks should return False when both GetActiveObject and EnsureDispatch raise com_error."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _FakeComError(Exception):
         """Test suite for FakeComError."""
@@ -656,7 +656,7 @@ def test_discover_all_success_path_with_stubbed_steps(
 
 def test_normalize_input_helper_branches() -> None:
     """_normalize_input should accept None/model/dict/model_dump objects."""
-    from src.solidworks_mcp.tools.docs_discovery import _normalize_input
+    from solidworks_mcp.tools.docs_discovery import _normalize_input
 
     none_normalized = _normalize_input(None, DiscoverDocsInput)
     assert isinstance(none_normalized, DiscoverDocsInput)
@@ -683,7 +683,7 @@ def test_normalize_input_helper_branches() -> None:
 
 def test_extract_year_handles_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """_extract_year should return None when int conversion fails."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _BadMatch:
         """Test suite for BadMatch."""
@@ -700,7 +700,7 @@ def test_detect_installed_year_no_root_and_no_year_dirs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """_detect_installed_solidworks_year should handle missing/empty install roots."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _MissingRoot:
         """Test suite for MissingRoot."""
@@ -717,7 +717,7 @@ def test_load_index_file_non_dict_and_exception_paths(
     monkeypatch: pytest.MonkeyPatch, temp_dir: Path
 ) -> None:
     """_load_index_file should return None for invalid JSON shape and read exceptions."""
-    from src.solidworks_mcp.tools.docs_discovery import _load_index_file
+    from solidworks_mcp.tools.docs_discovery import _load_index_file
 
     arr_file = temp_dir / "array.json"
     arr_file.write_text("[1, 2, 3]", encoding="utf-8")
@@ -733,7 +733,7 @@ def test_load_index_file_non_dict_and_exception_paths(
 
 def test_find_index_file_search_dir_and_search_index_edge_cases(temp_dir: Path) -> None:
     """Cover search-dir discovery and empty-token/exact-match scoring in _search_index."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     original_path = docs_mod.Path
     base = temp_dir / "docs-index"
@@ -777,7 +777,7 @@ def test_detect_year_iteration_and_config_path_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cover non-dir iteration continue, no-year return, and config-path year resolution."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _Child:
         """Test suite for Child."""
@@ -814,7 +814,7 @@ def test_detect_year_iteration_and_config_path_resolution(
 
 def test_load_index_file_missing_and_search_property_match(temp_dir: Path) -> None:
     """Cover missing-file early return and property-result append scoring branch."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     missing = temp_dir / "missing.json"
     assert docs_mod._load_index_file(missing) is None
@@ -834,7 +834,7 @@ def test_load_index_file_missing_and_search_property_match(temp_dir: Path) -> No
 
 def test_normalize_input_non_dict_non_model_dump_path() -> None:
     """_normalize_input should validate plain objects via final fallback branch."""
-    from src.solidworks_mcp.tools.docs_discovery import _normalize_input
+    from solidworks_mcp.tools.docs_discovery import _normalize_input
 
     class _PlainInput:
         """Test suite for PlainInput."""
@@ -854,7 +854,7 @@ async def test_discover_solidworks_docs_tool_non_windows_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Discover_solidworks_docs should reject non-Windows platforms."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -881,7 +881,7 @@ async def test_search_api_help_auto_discovers_when_index_missing(
     temp_dir: Path,
 ) -> None:
     """Search_solidworks_api_help should auto-discover index when requested."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -942,7 +942,7 @@ async def test_search_api_help_exception_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Search_solidworks_api_help should return structured error on unexpected exceptions."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -968,7 +968,7 @@ async def test_search_api_help_exception_path(
 
 def test_enumerate_typeinfo_members_happy_path_and_error_item() -> None:
     """Covers method/property extraction, dedupe, and per-item exception continue."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _TypeAttr:
         cFuncs = 4
@@ -997,7 +997,7 @@ def test_enumerate_typeinfo_members_happy_path_and_error_item() -> None:
 
 def test_discover_com_via_typeinfo_no_win32(monkeypatch: pytest.MonkeyPatch) -> None:
     """Covers early-return branch when win32com is unavailable."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
     assert docs_mod._discover_com_via_typeinfo(object()) == {}
@@ -1007,7 +1007,7 @@ def test_discover_com_via_typeinfo_with_impl_interfaces(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Covers implemented-interface merge path and counters."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
 
@@ -1049,7 +1049,7 @@ def test_discover_com_via_typeinfo_outer_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Covers exception path when GetTypeInfo fails."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     sw_app = SimpleNamespace(
@@ -1068,7 +1068,7 @@ def test_discover_vba_references_via_registry_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Covers Windows registry scan success, duplicate guard, and query fallback."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
 
@@ -1111,7 +1111,7 @@ def test_discover_com_objects_with_typeinfo_and_active_doc(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Covers typeinfo logging path and active document supplement path."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     discovery = docs_mod.SolidWorksDocsDiscovery(
         output_dir=Path("tests/.generated/docs-typeinfo-active")
@@ -1142,7 +1142,7 @@ def test_discover_com_objects_with_typeinfo_and_active_doc(
 
 def test_find_index_file_none_when_missing() -> None:
     """Covers _find_index_file final return None branch."""
-    from src.solidworks_mcp.tools.docs_discovery import _find_index_file
+    from solidworks_mcp.tools.docs_discovery import _find_index_file
 
     assert _find_index_file(2099, "tests/.generated/does-not-exist.json") is None
 
@@ -1155,7 +1155,7 @@ async def test_discover_tool_sets_rag_indexed_true_when_rag_rebuild_succeeds(
     temp_dir: Path,
 ) -> None:
     """Covers RAG rebuild success branch in discover_solidworks_docs."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -1217,7 +1217,7 @@ async def test_discover_tool_handles_rag_import_error(
     temp_dir: Path,
 ) -> None:
     """Covers ImportError branch when vector_rag rebuild is unavailable."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -1270,7 +1270,7 @@ async def test_discover_tool_top_level_exception_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Covers top-level exception handler in discover_solidworks_docs."""
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 

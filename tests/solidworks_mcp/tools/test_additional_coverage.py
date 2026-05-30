@@ -8,20 +8,20 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import src.solidworks_mcp.adapters.pywin32_adapter as pywin32_mod
-from src.solidworks_mcp.adapters.base import (
+import solidworks_mcp.adapters.pywin32_adapter as pywin32_mod
+from solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
 )
-from src.solidworks_mcp.adapters.connection_pool import ConnectionPoolAdapter
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
-from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-from src.solidworks_mcp.exceptions import SolidWorksMCPError
-from src.solidworks_mcp.tools.drawing import (
+from solidworks_mcp.adapters.connection_pool import ConnectionPoolAdapter
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+from solidworks_mcp.exceptions import SolidWorksMCPError
+from solidworks_mcp.tools.drawing import (
     AddDimensionInput as DrawingAddDimensionInput,
 )
-from src.solidworks_mcp.tools.drawing import (
+from solidworks_mcp.tools.drawing import (
     AddNoteInput,
     AnnotationInput,
     CreateDetailViewInput,
@@ -33,20 +33,20 @@ from src.solidworks_mcp.tools.drawing import (
     UpdateSheetFormatInput,
     register_drawing_tools,
 )
-from src.solidworks_mcp.tools.drawing_analysis import (
+from solidworks_mcp.tools.drawing_analysis import (
     AnnotationAnalysisInput,
     ComplianceCheckInput,
     DimensionAnalysisInput,
     DrawingAnalysisInput,
     register_drawing_analysis_tools,
 )
-from src.solidworks_mcp.tools.export import (
+from solidworks_mcp.tools.export import (
     BatchExportInput,
     ExportFileInput,
     ExportImageInput,
     register_export_tools,
 )
-from src.solidworks_mcp.tools.sketching import (
+from solidworks_mcp.tools.sketching import (
     AddArcInput,
     AddCircleInput,
     AddLineInput,
@@ -57,10 +57,10 @@ from src.solidworks_mcp.tools.sketching import (
     TutorialSimpleHoleInput,
     register_sketching_tools,
 )
-from src.solidworks_mcp.tools.sketching import (
+from solidworks_mcp.tools.sketching import (
     AddDimensionInput as SketchAddDimensionInput,
 )
-from src.solidworks_mcp.tools.vba_generation import (
+from solidworks_mcp.tools.vba_generation import (
     VBAAssemblyInput,
     VBABatchInput,
     VBADrawingInput,

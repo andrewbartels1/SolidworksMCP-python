@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.tools.drawing import (
+from solidworks_mcp.tools.drawing import (
     AddDimensionInput,
     AddNoteInput,
     AnnotationInput,

@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastmcp import FastMCP
 
-from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
-from src.solidworks_mcp.config import (
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
@@ -80,7 +80,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_create_sketch_exception_handler(self):
         """Lines 324-326 — create_sketch exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import (
+        from solidworks_mcp.tools.sketching import (
             CreateSketchInput,
             register_sketching_tools,
         )
@@ -97,7 +97,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_line_adapter_error_result(self):
         """Lines 416-419 — add_sketch_line returns error result → error dict."""
-        from src.solidworks_mcp.tools.sketching import (
+        from solidworks_mcp.tools.sketching import (
             AddLineInput,
             register_sketching_tools,
         )
@@ -114,7 +114,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_line_exception_handler(self):
         """Lines 421-426 — add_line exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import (
+        from solidworks_mcp.tools.sketching import (
             AddLineInput,
             register_sketching_tools,
         )
@@ -130,7 +130,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_circle_exception_handler(self):
         """Line 463 — add_circle exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import (
+        from solidworks_mcp.tools.sketching import (
             AddCircleInput,
             register_sketching_tools,
         )
@@ -146,7 +146,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_rectangle_adapter_error_result(self):
         """Lines 563-566 — add_sketch_rectangle returns error → error dict."""
-        from src.solidworks_mcp.tools.sketching import (
+        from solidworks_mcp.tools.sketching import (
             AddRectangleInput,
             register_sketching_tools,
         )
@@ -162,7 +162,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_add_rectangle_exception_handler(self):
         """Lines 568-570 — add_rectangle exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import (
+        from solidworks_mcp.tools.sketching import (
             AddRectangleInput,
             register_sketching_tools,
         )
@@ -178,7 +178,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_exit_sketch_adapter_error_result(self):
         """Lines 618-621 — exit_sketch returns error → error dict."""
-        from src.solidworks_mcp.tools.sketching import register_sketching_tools
+        from solidworks_mcp.tools.sketching import register_sketching_tools
 
         mcp = _make_mcp()
         adapter = _error_result_adapter("exit_sketch", "exit failed")
@@ -191,7 +191,7 @@ class TestSketchingExceptionPaths:
     @pytest.mark.asyncio
     async def test_exit_sketch_exception_handler(self):
         """Lines 623-625 — exit_sketch exception → error dict."""
-        from src.solidworks_mcp.tools.sketching import register_sketching_tools
+        from solidworks_mcp.tools.sketching import register_sketching_tools
 
         mcp = _make_mcp()
         adapter = _error_adapter("exit_sketch")
@@ -213,7 +213,7 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_start_macro_recording_adapter_error(self):
         """Line 341 — adapter has method but returns error."""
-        from src.solidworks_mcp.tools.automation import (
+        from solidworks_mcp.tools.automation import (
             RecordMacroInput,
             register_automation_tools,
         )
@@ -234,7 +234,7 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_start_macro_recording_exception(self):
         """Lines 387-389 — exception in start_macro_recording."""
-        from src.solidworks_mcp.tools.automation import (
+        from solidworks_mcp.tools.automation import (
             RecordMacroInput,
             register_automation_tools,
         )
@@ -251,13 +251,13 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_stop_macro_recording_exception(self):
         """Line 412 — exception in stop_macro_recording."""
-        from src.solidworks_mcp.tools.automation import register_automation_tools
+        from solidworks_mcp.tools.automation import register_automation_tools
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
 
         # Patch the inner dict-return path to raise
-        with patch("src.solidworks_mcp.tools.automation.logger"):
+        with patch("solidworks_mcp.tools.automation.logger"):
             await register_automation_tools(mcp, adapter, _make_config())
             fn = await _get_tool(mcp, "automation_stop_macro_recording")
 
@@ -281,7 +281,7 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_batch_process_files_exception(self):
         """Line 462 — exception in batch_process_files."""
-        from src.solidworks_mcp.tools.automation import (
+        from solidworks_mcp.tools.automation import (
             BatchProcessInput,
             register_automation_tools,
         )
@@ -300,7 +300,7 @@ class TestAutomationExceptionPaths:
     @pytest.mark.asyncio
     async def test_manage_design_table_exception(self):
         """Line 506 — exception in manage_design_table."""
-        from src.solidworks_mcp.tools.automation import (
+        from solidworks_mcp.tools.automation import (
             DesignTableInput,
             register_automation_tools,
         )
@@ -326,7 +326,7 @@ class TestDrawingAnalysisExceptionPaths:
     @pytest.mark.asyncio
     async def test_analyze_drawing_dimensions_adapter_error(self):
         """Line 294 — adapter returns error result."""
-        from src.solidworks_mcp.tools.drawing_analysis import (
+        from solidworks_mcp.tools.drawing_analysis import (
             DimensionAnalysisInput,
             register_drawing_analysis_tools,
         )
@@ -347,7 +347,7 @@ class TestDrawingAnalysisExceptionPaths:
     @pytest.mark.asyncio
     async def test_analyze_drawing_dimensions_exception(self):
         """Lines 376-378 — exception in analyze_drawing_dimensions."""
-        from src.solidworks_mcp.tools.drawing_analysis import (
+        from solidworks_mcp.tools.drawing_analysis import (
             DimensionAnalysisInput,
             register_drawing_analysis_tools,
         )
@@ -366,7 +366,7 @@ class TestDrawingAnalysisExceptionPaths:
     @pytest.mark.asyncio
     async def test_analyze_drawing_annotations_exception(self):
         """Line 415 — exception in analyze_drawing_annotations."""
-        from src.solidworks_mcp.tools.drawing_analysis import (
+        from solidworks_mcp.tools.drawing_analysis import (
             AnnotationAnalysisInput,
             register_drawing_analysis_tools,
         )
@@ -385,7 +385,7 @@ class TestDrawingAnalysisExceptionPaths:
     @pytest.mark.asyncio
     async def test_check_drawing_compliance_exception(self):
         """Lines 512-514 — exception in check_drawing_compliance."""
-        from src.solidworks_mcp.tools.drawing_analysis import (
+        from solidworks_mcp.tools.drawing_analysis import (
             ComplianceCheckInput,
             register_drawing_analysis_tools,
         )
@@ -415,7 +415,7 @@ class TestMacroRecordingExceptionPaths:
     @pytest.mark.asyncio
     async def test_stop_macro_recording_adapter_error(self):
         """Line 243 — adapter returns error on stop_macro_recording."""
-        from src.solidworks_mcp.tools.macro_recording import (
+        from solidworks_mcp.tools.macro_recording import (
             register_macro_recording_tools,
         )
 
@@ -435,7 +435,7 @@ class TestMacroRecordingExceptionPaths:
     @pytest.mark.asyncio
     async def test_execute_macro_exception(self):
         """Line 358 — exception in execute_macro."""
-        from src.solidworks_mcp.tools.macro_recording import (
+        from solidworks_mcp.tools.macro_recording import (
             MacroPlaybackInput,
             register_macro_recording_tools,
         )
@@ -452,7 +452,7 @@ class TestMacroRecordingExceptionPaths:
     @pytest.mark.asyncio
     async def test_optimize_macro_exception(self):
         """Lines 757-759 — exception in optimize_macro."""
-        from src.solidworks_mcp.tools.macro_recording import (
+        from solidworks_mcp.tools.macro_recording import (
             MacroAnalysisInput,
             register_macro_recording_tools,
         )
@@ -469,7 +469,7 @@ class TestMacroRecordingExceptionPaths:
     @pytest.mark.asyncio
     async def test_create_macro_library_exception(self):
         """Lines 914-916 — exception in create_macro_library."""
-        from src.solidworks_mcp.tools.macro_recording import (
+        from solidworks_mcp.tools.macro_recording import (
             register_macro_recording_tools,
         )
 
@@ -493,14 +493,14 @@ class TestModelingCoverage:
 
     def test_create_extrusion_input_depth_zero_raises(self):
         """Line 134 — depth <= 0 raises ValueError."""
-        from src.solidworks_mcp.tools.modeling import CreateExtrusionInput
+        from solidworks_mcp.tools.modeling import CreateExtrusionInput
 
         with pytest.raises(ValueError, match="depth must be positive"):
             CreateExtrusionInput(sketch_name="Sketch1", depth=-1.0)
 
     def test_create_extrusion_input_empty_sketch_name_raises(self):
         """Line 136 — empty sketch_name raises ValueError."""
-        from src.solidworks_mcp.tools.modeling import CreateExtrusionInput
+        from solidworks_mcp.tools.modeling import CreateExtrusionInput
 
         with pytest.raises(ValueError, match="sketch_name is required"):
             CreateExtrusionInput(sketch_name="   ", depth=5.0)
@@ -508,7 +508,7 @@ class TestModelingCoverage:
     @pytest.mark.asyncio
     async def test_close_model_exception(self):
         """Lines 613-615 — close_model exception → error dict."""
-        from src.solidworks_mcp.tools.modeling import register_modeling_tools
+        from solidworks_mcp.tools.modeling import register_modeling_tools
 
         mcp = _make_mcp()
         adapter = _error_adapter("close_model")
@@ -530,7 +530,7 @@ class TestAnalysisCoverage:
     @pytest.mark.asyncio
     async def test_get_mass_properties_with_dict_input(self):
         """Line 221 — dict input is validated into MassPropertiesInput."""
-        from src.solidworks_mcp.tools.analysis import register_analysis_tools
+        from solidworks_mcp.tools.analysis import register_analysis_tools
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
@@ -546,7 +546,7 @@ class TestAnalysisCoverage:
     @pytest.mark.asyncio
     async def test_get_mass_properties_with_none_input(self):
         """Line 217 — None input creates default MassPropertiesInput."""
-        from src.solidworks_mcp.tools.analysis import register_analysis_tools
+        from solidworks_mcp.tools.analysis import register_analysis_tools
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})
@@ -561,7 +561,7 @@ class TestAnalysisCoverage:
     @pytest.mark.asyncio
     async def test_get_material_properties_returns_success(self):
         """Lines 358-371 — get_material_properties returns static material data."""
-        from src.solidworks_mcp.tools.analysis import register_analysis_tools
+        from solidworks_mcp.tools.analysis import register_analysis_tools
 
         mcp = _make_mcp()
         adapter = MockSolidWorksAdapter({})

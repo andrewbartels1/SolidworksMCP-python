@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.tools.analysis import (
+from solidworks_mcp.tools.analysis import (
     InterferenceCheckInput,
     MassPropertiesInput,
     register_analysis_tools,
