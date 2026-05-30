@@ -42,6 +42,18 @@ from ._utils import (
     trace_tool_records,
     workflow_copy,
 )
+from .checkpoint_service import execute_next_checkpoint
+from .docs_service import fetch_docs_context, ingest_reference_source
+from .llm_service import (
+    CheckpointCandidate,
+    ClarificationResponse,
+    FamilyInspection,
+    inspect_family,
+    request_clarifications,
+    run_go_orchestration,
+)
+from .model_service import connect_target_model, open_target_model
+from .preview_service import highlight_feature, refresh_preview
 from .session_service import (
     accept_family_choice,
     approve_design_brief,
@@ -55,18 +67,6 @@ from .session_service import (
     update_session_notes,
     update_ui_preferences,
 )
-from .llm_service import (
-    ClarificationResponse,
-    CheckpointCandidate,
-    FamilyInspection,
-    inspect_family,
-    request_clarifications,
-    run_go_orchestration,
-)
-from .checkpoint_service import execute_next_checkpoint
-from .docs_service import fetch_docs_context, ingest_reference_source
-from .model_service import connect_target_model, open_target_model
-from .preview_service import highlight_feature, refresh_preview
 
 __all__ = [
     # utils

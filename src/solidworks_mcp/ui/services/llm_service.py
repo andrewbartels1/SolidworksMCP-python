@@ -17,7 +17,7 @@ import os
 import re
 import subprocess  # noqa: S404  # TODO: security review — subprocess token extraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -27,16 +27,13 @@ from ...agents.history_db import (
     insert_evidence_link,
     insert_tool_call_record,
     replace_plan_checkpoints,
-    upsert_design_session,
 )
 from ._utils import (
     DEFAULT_API_ORIGIN,
-    DEFAULT_SESSION_ID,
-    DEFAULT_SOURCE_MODE,
     DEFAULT_USER_GOAL,
+    merge_metadata,
     normalize_model_name_for_provider,
     persist_ui_action,
-    merge_metadata,
     sanitize_ui_text,
 )
 
@@ -544,7 +541,10 @@ async def request_clarifications(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}
@@ -675,7 +675,10 @@ async def inspect_family(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, user_goal=user_goal, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}

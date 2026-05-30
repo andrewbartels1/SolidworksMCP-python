@@ -319,8 +319,12 @@ async def test_run_checkpoint_tools_success_and_mocked(
     )
 
     assert any(item["status"] == "success" for item in summary["tool_runs"])
-    assert "check_interference" in summary["mocked_tools"]
+    assert "check_interference" not in summary["mocked_tools"]
     assert "unknown_tool" in summary["mocked_tools"]
+    assert any(
+        r["tool"] == "check_interference" and r["status"] == "success"
+        for r in summary["tool_runs"]
+    )
     assert summary["failed_tools"] == []
 
 

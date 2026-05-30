@@ -173,10 +173,14 @@ async def test_execute_tool_create_and_sketch_branches() -> None:
     result = await service._execute_tool(adapter, {"part_name": "demo"}, "create_part")
     assert result["status"] == "success"
 
-    result = await service._execute_tool(adapter, {"assembly_name": "asm"}, "create_assembly")
+    result = await service._execute_tool(
+        adapter, {"assembly_name": "asm"}, "create_assembly"
+    )
     assert result["status"] == "success"
 
-    result = await service._execute_tool(adapter, {"model_path": "C:/tmp/part.sldprt"}, "open_model")
+    result = await service._execute_tool(
+        adapter, {"model_path": "C:/tmp/part.sldprt"}, "open_model"
+    )
     assert result["status"] == "success"
 
     result = await service._execute_tool(
@@ -196,7 +200,9 @@ async def test_execute_tool_geometry_branches() -> None:
     # Exercise line/rectangle/circle/centerline/arc branches.
     adapter = StubAdapter()
 
-    result = await service._execute_tool(adapter, {"line_mm": [0, 0, 10, 10]}, "add_line")
+    result = await service._execute_tool(
+        adapter, {"line_mm": [0, 0, 10, 10]}, "add_line"
+    )
     assert result["status"] == "success"
 
     result = await service._execute_tool(
@@ -206,7 +212,9 @@ async def test_execute_tool_geometry_branches() -> None:
     )
     assert result["status"] == "success"
 
-    result = await service._execute_tool(adapter, {"rectangle_mm": [0, 0, 5, 2]}, "add_rectangle")
+    result = await service._execute_tool(
+        adapter, {"rectangle_mm": [0, 0, 5, 2]}, "add_rectangle"
+    )
     assert result["status"] == "success"
 
     result = await service._execute_tool(
@@ -216,7 +224,9 @@ async def test_execute_tool_geometry_branches() -> None:
     )
     assert result["status"] == "success"
 
-    result = await service._execute_tool(adapter, {"centerline_mm": [0, 0, 0, 10]}, "add_centerline")
+    result = await service._execute_tool(
+        adapter, {"centerline_mm": [0, 0, 0, 10]}, "add_centerline"
+    )
     assert result["status"] == "success"
 
     result = await service._execute_tool(
@@ -256,7 +266,9 @@ async def test_execute_tool_feature_branches() -> None:
     )
     assert result["status"] == "success"
 
-    result = await service._execute_tool(adapter, {"sketch_name": "Sketch1"}, "check_sketch_fully_defined")
+    result = await service._execute_tool(
+        adapter, {"sketch_name": "Sketch1"}, "check_sketch_fully_defined"
+    )
     assert result["status"] == "success"
 
 
@@ -266,7 +278,9 @@ async def test_execute_tool_info_branches() -> None:
     # Exercise save/get/list/analyze/export branches.
     adapter = StubAdapter()
 
-    result = await service._execute_tool(adapter, {"file_path": "C:/tmp/test.sldprt"}, "save_file")
+    result = await service._execute_tool(
+        adapter, {"file_path": "C:/tmp/test.sldprt"}, "save_file"
+    )
     assert result["status"] == "success"
 
     result = await service._execute_tool(adapter, {}, "get_model_info")
@@ -310,9 +324,11 @@ async def test_execute_tool_export_requires_object_payload() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_checkpoint_tools_handles_mocked_and_unknown(tmp_path, monkeypatch) -> None:
-    """Mocked or unknown tools should be recorded without failures."""
-    # Exercise the mocked tool and unknown tool paths in _run_checkpoint_tools.
+async def test_run_checkpoint_tools_handles_mocked_and_unknown(
+    tmp_path, monkeypatch
+) -> None:
+    """Unknown tools should be recorded as mocked; check_interference should succeed."""
+    # check_interference is now dispatched; only truly unknown tools get mocked.
     adapter = StubAdapter()
 
     async def _create_adapter(_cfg):
@@ -323,15 +339,53 @@ async def test_run_checkpoint_tools_handles_mocked_and_unknown(tmp_path, monkeyp
     monkeypatch.setattr(service, "_checkpoint_script_dir", lambda _sid: tmp_path)
 
     planned = {"tools": ["check_interference", "unknown_tool"]}
-    summary = await service._run_checkpoint_tools(planned, session_id="s1", checkpoint_index=1)
+    summary = await service._run_checkpoint_tools(
+        planned, session_id="s1", checkpoint_index=1
+    )
 
     assert summary["failed_tools"] == []
-    assert set(summary["mocked_tools"]) == {"check_interference", "unknown_tool"}
+    assert summary["mocked_tools"] == ["unknown_tool"]
+    assert any(
+        r["tool"] == "check_interference" and r["status"] == "success"
+        for r in summary["tool_runs"]
+    )
     assert Path(summary["script_path"]).exists()
 
 
 @pytest.mark.asyncio
-async def test_run_checkpoint_tools_handles_connect_failure(tmp_path, monkeypatch) -> None:
+async def test_execute_tool_check_interference_with_adapter() -> None:
+    """check_interference should call adapter.check_interference with components and tolerance."""
+    adapter = StubAdapter()
+    result = await service._execute_tool(
+        adapter,
+        {"components": ["Part1", "Part2"], "tolerance": 0.05},
+        "check_interference",
+    )
+    assert result is not None
+    assert result["status"] == "success"
+    assert (
+        "check_interference",
+        {"components": ["Part1", "Part2"], "tolerance": 0.05},
+    ) in adapter.calls
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_check_interference_without_adapter_method() -> None:
+    """check_interference should return success even when adapter lacks the method."""
+
+    class _MinimalAdapter:
+        async def connect(self) -> None: ...
+        async def disconnect(self) -> None: ...
+
+    result = await service._execute_tool(_MinimalAdapter(), {}, "check_interference")
+    assert result is not None
+    assert result["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_run_checkpoint_tools_handles_connect_failure(
+    tmp_path, monkeypatch
+) -> None:
     """Connection failures should surface as checkpoint.execute errors."""
     # Validate the adapter connection failure path.
     adapter = StubAdapter(fail_connect=True)
@@ -344,7 +398,9 @@ async def test_run_checkpoint_tools_handles_connect_failure(tmp_path, monkeypatc
     monkeypatch.setattr(service, "_checkpoint_script_dir", lambda _sid: tmp_path)
 
     planned = {"tools": ["create_part"], "part_name": "demo"}
-    summary = await service._run_checkpoint_tools(planned, session_id="s1", checkpoint_index=2)
+    summary = await service._run_checkpoint_tools(
+        planned, session_id="s1", checkpoint_index=2
+    )
 
     assert summary["failed_tools"] == ["checkpoint.execute"]
     assert summary["tool_runs"][0]["status"] == "error"
@@ -369,7 +425,9 @@ async def test_run_checkpoint_tools_disconnect_raises(tmp_path, monkeypatch) -> 
     monkeypatch.setattr(service, "_checkpoint_script_dir", lambda _sid: tmp_path)
 
     planned = {"tools": ["unknown_tool"]}
-    summary = await service._run_checkpoint_tools(planned, session_id="s1", checkpoint_index=1)
+    summary = await service._run_checkpoint_tools(
+        planned, session_id="s1", checkpoint_index=1
+    )
 
     # Disconnect raising should not prevent the summary from being returned.
     assert "tool_runs" in summary
@@ -377,7 +435,9 @@ async def test_run_checkpoint_tools_disconnect_raises(tmp_path, monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_open_empty_part_before_checkpoint_handles_preview_error(monkeypatch, tmp_path) -> None:
+async def test_open_empty_part_before_checkpoint_handles_preview_error(
+    monkeypatch, tmp_path
+) -> None:
     """Preview failures should be captured in metadata updates."""
     # Exercise the preview-refresh exception path in the helper.
     adapter = StubAdapter()
@@ -393,7 +453,9 @@ async def test_open_empty_part_before_checkpoint_handles_preview_error(monkeypat
 
     monkeypatch.setattr(service, "create_adapter", _create_adapter)
     monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(service, "insert_tool_call_record", lambda **_kw: None)
     monkeypatch.setattr(service, "ensure_preview_dir", lambda: tmp_path)
     monkeypatch.setattr(preview_service, "refresh_preview", _refresh_preview)
@@ -406,11 +468,16 @@ async def test_open_empty_part_before_checkpoint_handles_preview_error(monkeypat
     )
 
     assert result["status"] == "success"
-    assert any("preview refresh is still pending" in call.get("preview_status", "") for call in merge_calls)
+    assert any(
+        "preview refresh is still pending" in call.get("preview_status", "")
+        for call in merge_calls
+    )
 
 
 @pytest.mark.asyncio
-async def test_execute_next_checkpoint_opens_empty_and_records_failure(monkeypatch) -> None:
+async def test_execute_next_checkpoint_opens_empty_and_records_failure(
+    monkeypatch,
+) -> None:
     """execute_next_checkpoint should open empty parts and record failures."""
     # Validate the empty-part pre-step and failed_tools message branch.
     session_row = {
@@ -441,15 +508,22 @@ async def test_execute_next_checkpoint_opens_empty_and_records_failure(monkeypat
 
     from solidworks_mcp.ui.services import session_service
 
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: session_row)
-    monkeypatch.setattr(service, "list_plan_checkpoints", lambda *_a, **_kw: checkpoints)
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: session_row
+    )
+    monkeypatch.setattr(
+        service, "list_plan_checkpoints", lambda *_a, **_kw: checkpoints
+    )
+
     async def _open_empty(**_kw):
         open_calls.append("open")
 
     async def _run_checkpoint(*_a, **_kw):
         return {
             "failed_tools": ["create_sketch"],
-            "tool_runs": [{"tool": "create_sketch", "status": "error", "message": "fail"}],
+            "tool_runs": [
+                {"tool": "create_sketch", "status": "error", "message": "fail"}
+            ],
             "script_path": "script.py",
             "script_text": "",
             "stdout_text": "",
@@ -462,8 +536,12 @@ async def test_execute_next_checkpoint_opens_empty_and_records_failure(monkeypat
     monkeypatch.setattr(service, "update_plan_checkpoint", lambda *_a, **_kw: None)
     monkeypatch.setattr(service, "insert_tool_call_record", lambda **_kw: None)
     monkeypatch.setattr(service, "upsert_design_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
 
     result = await service.execute_next_checkpoint("s1")
 
@@ -483,20 +561,38 @@ async def test_execute_next_checkpoint_all_executed(monkeypatch) -> None:
     monkeypatch.setattr(
         session_service,
         "ensure_dashboard_session",
-        lambda *_a, **_kw: {"user_goal": "demo", "source_mode": "plan", "metadata_json": "{}"},
+        lambda *_a, **_kw: {
+            "user_goal": "demo",
+            "source_mode": "plan",
+            "metadata_json": "{}",
+        },
     )
     monkeypatch.setattr(
-        service, "list_plan_checkpoints",
-        lambda *_a, **_kw: [{"executed": True, "id": 1, "checkpoint_index": 0, "title": "Done",
-                              "planned_action_json": "{}"}],
+        service,
+        "list_plan_checkpoints",
+        lambda *_a, **_kw: [
+            {
+                "executed": True,
+                "id": 1,
+                "checkpoint_index": 0,
+                "title": "Done",
+                "planned_action_json": "{}",
+            }
+        ],
     )
-    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
 
     result = await service.execute_next_checkpoint("s1")
 
     assert result == {"ok": True}
-    assert any("All checkpoints" in call.get("latest_message", "") for call in merge_calls)
+    assert any(
+        "All checkpoints" in call.get("latest_message", "") for call in merge_calls
+    )
 
 
 @pytest.mark.asyncio
@@ -507,7 +603,9 @@ async def test_execute_next_checkpoint_mocked_only_message(monkeypatch) -> None:
         "user_goal": "demo",
         "source_mode": "plan",
         "accepted_family": None,
-        "metadata_json": json.dumps({"workflow_mode": "edit_existing", "active_model_path": "/model.sldprt"}),
+        "metadata_json": json.dumps(
+            {"workflow_mode": "edit_existing", "active_model_path": "/model.sldprt"}
+        ),
     }
     checkpoints = [
         {
@@ -522,14 +620,20 @@ async def test_execute_next_checkpoint_mocked_only_message(monkeypatch) -> None:
 
     from solidworks_mcp.ui.services import session_service
 
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: session_row)
-    monkeypatch.setattr(service, "list_plan_checkpoints", lambda *_a, **_kw: checkpoints)
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: session_row
+    )
+    monkeypatch.setattr(
+        service, "list_plan_checkpoints", lambda *_a, **_kw: checkpoints
+    )
 
     async def _run_checkpoint(*_a, **_kw):
         return {
             "failed_tools": [],
             "mocked_tools": ["check_interference"],
-            "tool_runs": [{"tool": "check_interference", "status": "mocked", "message": "mocked"}],
+            "tool_runs": [
+                {"tool": "check_interference", "status": "mocked", "message": "mocked"}
+            ],
             "script_path": "script.py",
             "script_text": "",
             "stdout_text": "",
@@ -541,8 +645,12 @@ async def test_execute_next_checkpoint_mocked_only_message(monkeypatch) -> None:
     monkeypatch.setattr(service, "update_plan_checkpoint", lambda *_a, **_kw: None)
     monkeypatch.setattr(service, "insert_tool_call_record", lambda **_kw: None)
     monkeypatch.setattr(service, "upsert_design_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
 
     result = await service.execute_next_checkpoint("s1")
 
@@ -553,24 +661,47 @@ async def test_execute_next_checkpoint_mocked_only_message(monkeypatch) -> None:
 def test_should_open_empty_part_conditions() -> None:
     """_should_open_empty_part should respect all early-return conditions."""
     # Various session states that prevent opening an empty part.
-    base_meta = {"workflow_mode": "new_design", "active_model_path": "", "new_design_part_opened": False}
+    base_meta = {
+        "workflow_mode": "new_design",
+        "active_model_path": "",
+        "new_design_part_opened": False,
+    }
     sketch_planned = {"tools": ["create_sketch"]}
 
     # True when all conditions permit.
     assert service._should_open_empty_part(base_meta, sketch_planned) is True
 
     # False when workflow_mode is not new_design.
-    assert service._should_open_empty_part({**base_meta, "workflow_mode": "edit_existing"}, sketch_planned) is False
+    assert (
+        service._should_open_empty_part(
+            {**base_meta, "workflow_mode": "edit_existing"}, sketch_planned
+        )
+        is False
+    )
 
     # False when active_model_path is non-empty.
-    assert service._should_open_empty_part({**base_meta, "active_model_path": "/model.sldprt"}, sketch_planned) is False
+    assert (
+        service._should_open_empty_part(
+            {**base_meta, "active_model_path": "/model.sldprt"}, sketch_planned
+        )
+        is False
+    )
 
     # False when new_design_part_opened is True.
-    assert service._should_open_empty_part({**base_meta, "new_design_part_opened": True}, sketch_planned) is False
+    assert (
+        service._should_open_empty_part(
+            {**base_meta, "new_design_part_opened": True}, sketch_planned
+        )
+        is False
+    )
 
     # False when tools include create_part/create_assembly/open_model.
-    assert service._should_open_empty_part(base_meta, {"tools": ["create_part"]}) is False
-    assert service._should_open_empty_part(base_meta, {"tools": ["open_model"]}) is False
+    assert (
+        service._should_open_empty_part(base_meta, {"tools": ["create_part"]}) is False
+    )
+    assert (
+        service._should_open_empty_part(base_meta, {"tools": ["open_model"]}) is False
+    )
 
 
 @pytest.mark.asyncio
@@ -670,5 +801,7 @@ def test_pf_handles_non_float_value() -> None:
 def test_pv_handles_wrong_element_types() -> None:
     """_pv should skip lists with non-numeric elements and return default."""
     # Covers the except branch in _pv when list elements can't be converted.
-    result = service._pv({"key": ["a", "b", "c", "d"]}, "key", size=4, default=[1.0, 2.0, 3.0, 4.0])
+    result = service._pv(
+        {"key": ["a", "b", "c", "d"]}, "key", size=4, default=[1.0, 2.0, 3.0, 4.0]
+    )
     assert result == [1.0, 2.0, 3.0, 4.0]

@@ -46,7 +46,17 @@ class _Adapter(SolidWorksAdapter):
     async def create_drawing(self, drawing_name, template=None, sheet_size=None):
         return None
 
-    async def create_extrusion(self, depth, direction=None, reverse=False, thin_feature=False, thin_thickness=0.0, both_directions=False, auto_fillet_corners=False, fillet_corners_radius=0.0):
+    async def create_extrusion(
+        self,
+        depth,
+        direction=None,
+        reverse=False,
+        thin_feature=False,
+        thin_thickness=0.0,
+        both_directions=False,
+        auto_fillet_corners=False,
+        fillet_corners_radius=0.0,
+    ):
         return None
 
     async def create_revolve(self, angle, direction=None):

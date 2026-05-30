@@ -18,7 +18,9 @@ def test_import_handles_missing_pydantic_ai(monkeypatch) -> None:
     # Force a fresh import of llm_service with pydantic_ai blocked via sys.modules.
     # Setting sys.modules["pydantic_ai"] = None makes `from pydantic_ai import ...`
     # raise ImportError, triggering the outer except branch.
-    monkeypatch.delitem(sys.modules, "solidworks_mcp.ui.services.llm_service", raising=False)
+    monkeypatch.delitem(
+        sys.modules, "solidworks_mcp.ui.services.llm_service", raising=False
+    )
     monkeypatch.setitem(sys.modules, "pydantic_ai", None)
 
     fresh = importlib.import_module("solidworks_mcp.ui.services.llm_service")
@@ -31,7 +33,9 @@ def test_import_handles_missing_pydantic_ai(monkeypatch) -> None:
 def test_import_handles_missing_mcp_submodule(monkeypatch) -> None:
     """Import should set MCPServerStreamableHTTP to None when mcp missing."""
     # Force a fresh import with pydantic_ai.mcp blocked — inner try/except fires.
-    monkeypatch.delitem(sys.modules, "solidworks_mcp.ui.services.llm_service", raising=False)
+    monkeypatch.delitem(
+        sys.modules, "solidworks_mcp.ui.services.llm_service", raising=False
+    )
     monkeypatch.setitem(sys.modules, "pydantic_ai.mcp", None)
 
     fresh = importlib.import_module("solidworks_mcp.ui.services.llm_service")
@@ -103,7 +107,9 @@ def test_extract_explicit_feature_order_regex_no_match() -> None:
 def test_family_for_feature_order_returns_current_when_no_match() -> None:
     """_family_for_feature_order should return current_family when no keyword matches."""
     # None of assembly, revolve, extrude, cut, sketch in the feature list → line 192.
-    result = llm_service._family_for_feature_order(["fillet", "hole", "chamfer"], "loft")
+    result = llm_service._family_for_feature_order(
+        ["fillet", "hole", "chamfer"], "loft"
+    )
     assert result == "loft"
 
 
@@ -112,7 +118,9 @@ def test_extract_blind_depth_handles_value_error(monkeypatch) -> None:
     # Force float conversion to fail inside _extract_blind_depth_mm.
     import builtins
 
-    monkeypatch.setattr(builtins, "float", lambda _val: (_ for _ in ()).throw(ValueError("bad")))
+    monkeypatch.setattr(
+        builtins, "float", lambda _val: (_ for _ in ()).throw(ValueError("bad"))
+    )
     assert llm_service._extract_blind_depth_mm("blind 10.0 mm") is None
 
 
@@ -159,6 +167,7 @@ def test_build_agent_model_returns_raw_model() -> None:
 @pytest.mark.asyncio
 async def test_run_structured_agent_toolset_fallback(monkeypatch) -> None:
     """Toolset failures should fall back to a planning-only run."""
+
     # Force toolset run to fail and verify fallback agent is used.
     class DummyModel(BaseModel):
         value: str
@@ -182,14 +191,21 @@ async def test_run_structured_agent_toolset_fallback(monkeypatch) -> None:
             return types.SimpleNamespace(output={"value": "ok"})
 
     monkeypatch.setattr(llm_service, "Agent", FakeAgent)
+
     class FakeToolset:
         def __init__(self, *_a, **_kw):
             return None
 
     monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", FakeToolset)
-    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None
+    )
     monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
-    monkeypatch.setattr(llm_service._inspect, "signature", lambda *_a, **_kw: (_ for _ in ()).throw(ValueError("bad")))
+    monkeypatch.setattr(
+        llm_service._inspect,
+        "signature",
+        lambda *_a, **_kw: (_ for _ in ()).throw(ValueError("bad")),
+    )
 
     result = await llm_service._run_structured_agent(
         system_prompt="sys",
@@ -204,6 +220,7 @@ async def test_run_structured_agent_toolset_fallback(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_run_structured_agent_returns_recoverable_failure(monkeypatch) -> None:
     """RecoverableFailure payloads should pass through."""
+
     # Ensure RecoverableFailure data is returned directly.
     class DummyModel(BaseModel):
         value: str
@@ -219,7 +236,9 @@ async def test_run_structured_agent_returns_recoverable_failure(monkeypatch) -> 
 
     monkeypatch.setattr(llm_service, "Agent", FakeAgent)
     monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", None)
-    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None
+    )
     monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
 
     result = await llm_service._run_structured_agent(
@@ -233,6 +252,7 @@ async def test_run_structured_agent_returns_recoverable_failure(monkeypatch) -> 
 @pytest.mark.asyncio
 async def test_run_structured_agent_handles_agent_exception(monkeypatch) -> None:
     """Agent exceptions should return a RecoverableFailure."""
+
     # Ensure failures in agent.run are wrapped as RecoverableFailure.
     class DummyModel(BaseModel):
         value: str
@@ -246,7 +266,9 @@ async def test_run_structured_agent_handles_agent_exception(monkeypatch) -> None
 
     monkeypatch.setattr(llm_service, "Agent", FakeAgent)
     monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", None)
-    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None
+    )
     monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
 
     result = await llm_service._run_structured_agent(
@@ -266,18 +288,34 @@ async def test_run_go_orchestration_error_path(monkeypatch) -> None:
 
     merge_calls: list[dict[str, object]] = []
 
-    monkeypatch.setattr(session_service, "approve_design_brief", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "update_ui_preferences", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
-    monkeypatch.setattr(llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"})
-    monkeypatch.setattr(llm_service, "request_clarifications", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        session_service, "approve_design_brief", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "update_ui_preferences", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"}
+    )
+    monkeypatch.setattr(
+        llm_service,
+        "request_clarifications",
+        lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
     monkeypatch.setattr(llm_service, "inspect_family", lambda *_a, **_kw: None)
-    monkeypatch.setattr(llm_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        llm_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = await llm_service.run_go_orchestration("s1", user_goal="goal")
 
     assert result == {"ok": True}
-    assert any(call.get("orchestration_status") == "Go run failed." for call in merge_calls)
+    assert any(
+        call.get("orchestration_status") == "Go run failed." for call in merge_calls
+    )
 
 
 def test_build_agent_model_local_raises_when_not_installed(monkeypatch) -> None:
@@ -300,6 +338,7 @@ def test_build_agent_model_github_raises_when_openai_not_installed(monkeypatch) 
 @pytest.mark.asyncio
 async def test_run_structured_agent_no_toolsets_runs_directly(monkeypatch) -> None:
     """Agent without toolsets should use the simple agent.run path."""
+
     # MCPServerStreamableHTTP=None → no toolsets → else branch of the if toolsets check.
     class DummyModel(BaseModel):
         value: str
@@ -313,7 +352,9 @@ async def test_run_structured_agent_no_toolsets_runs_directly(monkeypatch) -> No
 
     monkeypatch.setattr(llm_service, "Agent", FakeAgent)
     monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", None)
-    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None
+    )
     monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
 
     result = await llm_service._run_structured_agent(
@@ -353,7 +394,11 @@ async def test_run_structured_agent_mcp_signature_success(monkeypatch) -> None:
 
     class _FakeParams:
         def __init__(self):
-            self._params = {"include_instructions": _inspect_mod.Parameter("include_instructions", _inspect_mod.Parameter.KEYWORD_ONLY)}
+            self._params = {
+                "include_instructions": _inspect_mod.Parameter(
+                    "include_instructions", _inspect_mod.Parameter.KEYWORD_ONLY
+                )
+            }
 
         @property
         def parameters(self):
@@ -364,7 +409,9 @@ async def test_run_structured_agent_mcp_signature_success(monkeypatch) -> None:
 
     monkeypatch.setattr(llm_service, "Agent", FakeAgent)
     monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", FakeToolset)
-    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None
+    )
     monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
     monkeypatch.setattr(llm_service._inspect, "signature", lambda _obj: _FakeParams())
 

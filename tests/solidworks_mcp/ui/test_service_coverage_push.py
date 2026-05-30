@@ -2,31 +2,25 @@
 
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from solidworks_mcp.agents.history_db import (
+from solidworks_mcp.agents.history_db import (  # type: ignore[import-untyped]
     get_design_session,
     insert_evidence_link,
     insert_model_state_snapshot,
     insert_plan_checkpoint,
-    list_model_state_snapshots,
     list_plan_checkpoints,
     update_plan_checkpoint,
-    upsert_design_session,
 )
-from solidworks_mcp.ui import service
-from solidworks_mcp.ui.service import (
+from solidworks_mcp.ui import service  # type: ignore[import-untyped]
+from solidworks_mcp.ui.service import (  # type: ignore[import-untyped]
     DEFAULT_SESSION_ID,
-    CheckpointCandidate,
-    ClarificationResponse,
-    FamilyInspection,
     accept_family_choice,
     approve_design_brief,
     build_dashboard_state,
@@ -89,7 +83,7 @@ class _DummyAdapter:
             execution_time=0.01,
         )
 
-    async def list_features(self, **kwargs) -> Any:
+    async def list_features(self, **kwargs: Any) -> Any:
         """Test list features."""
 
         return SimpleNamespace(
@@ -188,7 +182,9 @@ class _DummyAdapter:
         ("  clean text  ", "", "clean text"),
     ],
 )
-def test_sanitize_ui_text_variants(input_value, fallback, expected):
+def test_sanitize_ui_text_variants(
+    input_value: Any, fallback: str, expected: str
+) -> None:
     """Test _sanitize_ui_text with various input types and edge cases."""
     result = service._sanitize_ui_text(input_value, fallback)
     assert result == expected
@@ -205,7 +201,7 @@ def test_sanitize_ui_text_variants(input_value, fallback, expected):
         ("", ""),
     ],
 )
-def test_sanitize_model_path_text_variants(input_path, expected):
+def test_sanitize_model_path_text_variants(input_path: str, expected: str) -> None:
     """Test _sanitize_model_path_text with quoted and unquoted paths."""
     result = service._sanitize_model_path_text(input_path)
     assert result == expected
@@ -222,7 +218,7 @@ def test_sanitize_model_path_text_variants(input_path, expected):
         ("", "custom"),
     ],
 )
-def test_provider_from_model_name(model_name, expected_provider):
+def test_provider_from_model_name(model_name: str, expected_provider: str) -> None:
     """Test _provider_from_model_name with various qualified model names."""
     assert service._provider_from_model_name(model_name) == expected_provider
 
@@ -237,7 +233,9 @@ def test_provider_from_model_name(model_name, expected_provider):
         ("Valid_Context-Name", "x", "Valid_Context-Name"),
     ],
 )
-def test_safe_context_name(context_name, session_id, expected):
+def test_safe_context_name(
+    context_name: str | None, session_id: str, expected: str
+) -> None:
     """Test _safe_context_name normalization."""
     result = service._safe_context_name(context_name, session_id)
     assert result == expected
@@ -253,9 +251,11 @@ def test_safe_context_name(context_name, session_id, expected):
         ("unknown", None, "Choose a Workflow"),
     ],
 )
-def test_workflow_copy(workflow_mode, active_model_path, title_has):
+def test_workflow_copy(
+    workflow_mode: str, active_model_path: str | None, title_has: str
+) -> None:
     """Test _workflow_copy returns appropriate copy for different modes."""
-    title, desc, guide = service._workflow_copy(workflow_mode, active_model_path)
+    title, _, _ = service._workflow_copy(workflow_mode, active_model_path)
     assert title_has in title
 
 
@@ -270,7 +270,9 @@ def test_workflow_copy(workflow_mode, active_model_path, title_has):
         ("   ", []),
     ],
 )
-def test_normalize_feature_targets(feature_target_text, expected_targets):
+def test_normalize_feature_targets(
+    feature_target_text: str | None, expected_targets: list[str]
+) -> None:
     """Test _normalize_feature_targets filters out paths and whitespace."""
     result = service._normalize_feature_targets(feature_target_text)
     assert result == expected_targets
@@ -291,7 +293,7 @@ def test_normalize_feature_targets(feature_target_text, expected_targets):
         ("", False),
     ],
 )
-def test_looks_like_path_token(token, is_path):
+def test_looks_like_path_token(token: str, is_path: bool) -> None:
     """Test _looks_like_path_token correctly identifies file paths."""
     result = service._looks_like_path_token(token)
     assert result == is_path
@@ -305,7 +307,7 @@ def test_looks_like_path_token(token, is_path):
         ("nonexistent", "content line 1\ncontent line 2"),
     ],
 )
-def test_filter_docs_text(docs_query, text_snippet):
+def test_filter_docs_text(docs_query: str, text_snippet: str) -> None:
     """Test _filter_docs_text ranking and truncation."""
     text = "\n".join([f"line {i}" for i in range(50)]) + f"\n{text_snippet}"
     result = service._filter_docs_text(text, docs_query, max_chars=500)
@@ -742,17 +744,17 @@ def test_update_ui_preferences_assumptions(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "provider,profile,model_name,expected_in_result",
+    "provider,profile,model_name",
     [
-        ("github", "small", "gpt-4-mini", "github:"),
-        ("openai", "balanced", "gpt-4", "openai:"),
-        ("anthropic", "large", "claude-3", "anthropic:"),
-        ("local", "balanced", "llama2", "local:"),
+        ("github", "small", "gpt-4-mini"),
+        ("openai", "balanced", "gpt-4"),
+        ("anthropic", "large", "claude-3"),
+        ("local", "balanced", "llama2"),
     ],
 )
 def test_update_ui_preferences_model_normalization(
-    tmp_path: Path, provider, profile, model_name, expected_in_result
-):
+    tmp_path: Path, provider: str, profile: str, model_name: str
+) -> None:
     """Test update_ui_preferences normalizes model names to provider-qualified format."""
     db_path = tmp_path / "test.db"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
@@ -995,24 +997,30 @@ async def test_run_checkpoint_tools_tool_failure(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_checkpoint_tools_check_interference_mocked(tmp_path: Path) -> None:
-    """Check_interference is always mocked (no adapter binding)."""
+async def test_run_checkpoint_tools_check_interference_dispatched(
+    tmp_path: Path,
+) -> None:
+    """Check_interference is dispatched (not mocked) even when adapter lacks the method."""
     planned = {"goal": "test", "tools": ["check_interference"]}
     with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter()
         summary = await service._run_checkpoint_tools(planned)
 
-    assert "check_interference" in summary["mocked_tools"]
+    assert "check_interference" not in summary["mocked_tools"]
     assert summary["failed_tools"] == []
+    assert any(
+        r["tool"] == "check_interference" and r["status"] == "success"
+        for r in summary["tool_runs"]
+    )
 
 
 @pytest.mark.asyncio
-async def test_execute_next_checkpoint_mocked_tools_path(tmp_path: Path) -> None:
-    """Execute_next_checkpoint generates a MOCKED-tools message when no failures."""
+async def test_execute_next_checkpoint_unknown_tool_mocked_path(tmp_path: Path) -> None:
+    """Execute_next_checkpoint generates a MOCKED-tools message for unknown tools."""
     db_path = tmp_path / "test.db"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
-    # Insert a checkpoint that uses only check_interference (always mocked)
+    # Insert a checkpoint that uses only an unknown tool (always mocked)
     checkpoints = list_plan_checkpoints(DEFAULT_SESSION_ID, db_path=db_path)
     for cp in checkpoints:
         update_plan_checkpoint(int(cp["id"]), executed=True, db_path=db_path)
@@ -1022,7 +1030,7 @@ async def test_execute_next_checkpoint_mocked_tools_path(tmp_path: Path) -> None
         checkpoint_index=99,
         title="Mocked-only checkpoint",
         planned_action_json=json.dumps(
-            {"goal": "verify fit", "tools": ["check_interference"]}
+            {"goal": "verify fit", "tools": ["unknown_tool_xyz"]}
         ),
         approved_by_user=True,
         db_path=db_path,
@@ -1056,15 +1064,15 @@ def test_fetch_docs_context_success(tmp_path: Path) -> None:
 
             return fake_html
 
-        def __enter__(self) -> "_FakeResp":
+        def __enter__(self) -> _FakeResp:
             """Test enter."""
 
             return self
 
-        def __exit__(self, *a: Any) -> bool:
+        def __exit__(self, *_: Any) -> None:
             """Test exit."""
 
-            return False
+            return None
 
     with patch("solidworks_mcp.ui.service.urlopen", return_value=_FakeResp()):
         result = fetch_docs_context(

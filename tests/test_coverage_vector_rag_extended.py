@@ -108,7 +108,7 @@ class TestVectorRAGIndexOperations:
         idx = VectorRAGIndex(namespace="test5", rag_dir=temp_rag_dir)
 
         text = "Same content here. " * 10
-        count1 = idx.ingest_text(text, source="file1.md", deduplicate=True)
+        idx.ingest_text(text, source="file1.md", deduplicate=True)
         count2 = idx.ingest_text(text, source="file2.md", deduplicate=True)
 
         # Second ingestion should not add duplicates

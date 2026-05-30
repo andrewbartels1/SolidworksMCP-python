@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import os
 import platform
-import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from solidworks_mcp.config import (
-    AdapterType,
-    DeploymentMode,
-    SecurityLevel,
     SolidWorksMCPConfig,
 )
 from solidworks_mcp.tools.docs_discovery import (
@@ -26,13 +19,10 @@ from solidworks_mcp.tools.docs_discovery import (
     _enumerate_typeinfo_members,
     _extract_year,
     _fallback_help_for_query,
-    _find_index_file,
-    _load_index_file,
     _normalize_input,
     _resolve_solidworks_year,
     _search_index,
 )
-
 
 # ============================================================================
 # Test: RAG Index Rebuilding Logic (Lines 952-960, 979-981)
@@ -47,8 +37,8 @@ async def test_discover_docs_tool_rag_index_rebuild_success(
     temp_dir: Path,
 ) -> None:
     """RAG index rebuild should succeed when faiss-cpu is available."""
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
     import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -118,8 +108,8 @@ async def test_discover_docs_tool_rag_index_rebuild_faiss_import_error(
     temp_dir: Path,
 ) -> None:
     """RAG rebuild should skip gracefully when faiss-cpu ImportError occurs."""
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
     import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -179,8 +169,8 @@ async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
     temp_dir: Path,
 ) -> None:
     """RAG rebuild should warn and continue on generic Exception."""
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
     import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -598,7 +588,6 @@ def test_detect_installed_solidworks_year_finds_latest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """_detect_installed_solidworks_year should find latest installed year."""
-    years_found = []
 
     def fake_path_exists(self):
         """Check if path exists."""

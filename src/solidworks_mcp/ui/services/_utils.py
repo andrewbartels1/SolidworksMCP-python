@@ -12,18 +12,17 @@ Design principles applied:
 
 from __future__ import annotations
 
-import json
-import os
 import base64
 import binascii
+import json
+import os
+from html.parser import HTMLParser
+from importlib import import_module
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
-from html.parser import HTMLParser
-from io import BytesIO
-from importlib import import_module
 from urllib.request import Request, urlopen
-from loguru import logger
 
 from ...agents.history_db import (
     get_design_session,

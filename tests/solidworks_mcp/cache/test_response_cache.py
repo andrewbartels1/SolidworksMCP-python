@@ -25,9 +25,7 @@ def test_normalize_payload_falls_back_to_string_on_json_error(monkeypatch) -> No
             raise TypeError("boom")
         return original_dumps(payload, *args, **kwargs)
 
-    monkeypatch.setattr(
-        "solidworks_mcp.cache.response_cache.json.dumps", _failing_once
-    )
+    monkeypatch.setattr("solidworks_mcp.cache.response_cache.json.dumps", _failing_once)
 
     normalized = cache._normalize_payload(object())
 

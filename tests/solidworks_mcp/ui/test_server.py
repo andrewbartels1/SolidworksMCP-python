@@ -67,12 +67,22 @@ def test_api_endpoints(monkeypatch) -> None:
     """Test api endpoints."""
 
     from solidworks_mcp.ui.routers import (
-        session as session_router,
-        docs as docs_router,
-        model as model_router,
-        llm as llm_router,
         checkpoint as checkpoint_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        docs as docs_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        llm as llm_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        model as model_router,
+    )
+    from solidworks_mcp.ui.routers import (
         preview as preview_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        session as session_router,
     )
 
     async def _a(value: dict[str, Any]) -> dict[str, Any]:
@@ -467,10 +477,8 @@ async def test_startup_event_generic_exception(monkeypatch) -> None:
 
 def test_middleware_exception_path(monkeypatch) -> None:
     """Middleware exception branch is hit when a route raises inside the logged path."""
-    import pytest
 
     # Mount a route that raises
-    from fastapi import HTTPException
 
     @server.app.get("/api/ui/__test_error__")
     async def _error_route():

@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus, SweepParameters
+from solidworks_mcp.adapters.base import (
+    AdapterResult,
+    AdapterResultStatus,
+    SweepParameters,
+)
 from solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
 from solidworks_mcp.adapters.vba_macro_executor import MacroExecutionRequest
 
@@ -47,7 +51,9 @@ async def test_health_check_adds_vba_route() -> None:
 def test_generate_sweep_and_loft_vba() -> None:
     """VBA helpers should render snippets for sweep/loft."""
     # Ensure the helper functions embed key values.
-    backing = SimpleNamespace(connect=AsyncMock(), disconnect=AsyncMock(), is_connected=lambda: True)
+    backing = SimpleNamespace(
+        connect=AsyncMock(), disconnect=AsyncMock(), is_connected=lambda: True
+    )
     adapter = VbaGeneratorAdapter(backing)
     sweep = adapter._generate_sweep_vba(SweepParameters(path="Path1"))
     assert "Path1" in sweep
@@ -65,7 +71,9 @@ async def test_execute_macro_delegates_executor() -> None:
             return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="ok")
         )
     )
-    backing = SimpleNamespace(connect=AsyncMock(), disconnect=AsyncMock(), is_connected=lambda: True)
+    backing = SimpleNamespace(
+        connect=AsyncMock(), disconnect=AsyncMock(), is_connected=lambda: True
+    )
     adapter = VbaGeneratorAdapter(backing, macro_executor=executor)
 
     result = await adapter.execute_macro("code", macro_name="Macro", subroutine="Main")
@@ -80,7 +88,9 @@ def test_get_macro_execution_history_returns_dict() -> None:
     # Provide a fake execution history and ensure dict output.
     history = {"Macro": SimpleNamespace(status="ok")}
     executor = SimpleNamespace(get_execution_history=lambda _name=None: history)
-    backing = SimpleNamespace(connect=AsyncMock(), disconnect=AsyncMock(), is_connected=lambda: True)
+    backing = SimpleNamespace(
+        connect=AsyncMock(), disconnect=AsyncMock(), is_connected=lambda: True
+    )
     adapter = VbaGeneratorAdapter(backing, macro_executor=executor)
     result = adapter.get_macro_execution_history()
     assert result["Macro"]["status"] == "ok"

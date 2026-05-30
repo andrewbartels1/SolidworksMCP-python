@@ -126,9 +126,7 @@ async def test_polygon_flows_into_offset(
     offset = await sketch_adapter.sketch_offset(
         entities=[poly.data], offset_distance=2.0, reverse_direction=False
     )
-    assert offset.is_success, (
-        f"polygon -> offset composition failed: {offset.error}"
-    )
+    assert offset.is_success, f"polygon -> offset composition failed: {offset.error}"
 
 
 async def test_ellipse_flows_into_circular_pattern(
@@ -200,20 +198,29 @@ async def test_spline_flows_into_mirror(
 @pytest.mark.parametrize(
     ("consumer", "extra_kwargs"),
     [
-        ("sketch_linear_pattern", {
-            "direction_x": 1.0,
-            "direction_y": 0.0,
-            "spacing": 20.0,
-            "count": 3,
-        }),
-        ("sketch_circular_pattern", {
-            "angle": 360.0,
-            "count": 6,
-        }),
-        ("sketch_offset", {
-            "offset_distance": 2.0,
-            "reverse_direction": False,
-        }),
+        (
+            "sketch_linear_pattern",
+            {
+                "direction_x": 1.0,
+                "direction_y": 0.0,
+                "spacing": 20.0,
+                "count": 3,
+            },
+        ),
+        (
+            "sketch_circular_pattern",
+            {
+                "angle": 360.0,
+                "count": 6,
+            },
+        ),
+        (
+            "sketch_offset",
+            {
+                "offset_distance": 2.0,
+                "reverse_direction": False,
+            },
+        ),
     ],
 )
 async def test_consumer_rejects_unregistered_id(

@@ -3,21 +3,18 @@
 from __future__ import annotations
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from solidworks_mcp.agents.soc_exporter import (
-    _CodeGen,
     _checkpoint_comment,
+    _CodeGen,
     _entity_id_from_output,
     _fmt_num,
     _parse_input,
     _parse_output,
     generate_script,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper factories
@@ -161,8 +158,8 @@ def test_generate_script_session_id_in_header():
 def test_generate_script_create_part():
     records = [_rec("create_part", {"name": "my_bracket"})]
     script = generate_script(records)
-    assert 'adapter.create_part(name=\'my_bracket\')' in script
-    assert 'require(' in script
+    assert "adapter.create_part(name='my_bracket')" in script
+    assert "require(" in script
 
 
 def test_generate_script_create_sketch():
@@ -195,7 +192,13 @@ def test_generate_script_add_circle():
 
 
 def test_generate_script_add_arc():
-    inp = {"center_x": 0.0, "center_y": 0.0, "radius": 5.0, "start_angle": 0.0, "end_angle": 90.0}
+    inp = {
+        "center_x": 0.0,
+        "center_y": 0.0,
+        "radius": 5.0,
+        "start_angle": 0.0,
+        "end_angle": 90.0,
+    }
     out = {"data": {"entity_id": "Arc_1"}}
     records = [_rec("add_arc", inp, out)]
     script = generate_script(records)
@@ -246,8 +249,15 @@ def test_generate_script_add_ellipse():
 def test_generate_script_add_sketch_dimension():
     # Line_1 entity → references line_1 variable
     line_out = {"data": {"entity_id": "Line_1"}}
-    line_rec = _rec("add_line", {"x1": 0, "y1": 0, "x2": 10, "y2": 0}, line_out, rec_id=1)
-    dim_inp = {"entity1": "Line_1", "entity2": None, "dimension_type": "linear", "value": 10.0}
+    line_rec = _rec(
+        "add_line", {"x1": 0, "y1": 0, "x2": 10, "y2": 0}, line_out, rec_id=1
+    )
+    dim_inp = {
+        "entity1": "Line_1",
+        "entity2": None,
+        "dimension_type": "linear",
+        "value": 10.0,
+    }
     dim_rec = _rec("add_sketch_dimension", dim_inp, {}, rec_id=2)
     script = generate_script([line_rec, dim_rec])
     assert "line_1" in script
@@ -258,7 +268,9 @@ def test_generate_script_add_sketch_dimension():
 
 def test_generate_script_add_sketch_constraint():
     line_out = {"data": {"entity_id": "Line_1"}}
-    line_rec = _rec("add_line", {"x1": 0, "y1": 0, "x2": 10, "y2": 0}, line_out, rec_id=1)
+    line_rec = _rec(
+        "add_line", {"x1": 0, "y1": 0, "x2": 10, "y2": 0}, line_out, rec_id=1
+    )
     con_inp = {"entity1": "Line_1", "entity2": None, "relation_type": "fix"}
     con_rec = _rec("add_sketch_constraint", con_inp, {}, rec_id=2)
     script = generate_script([line_rec, con_rec])
@@ -401,7 +413,12 @@ def test_generate_script_with_checkpoint_comment():
         _rec("create_extrusion", {"depth": 10.0}, rec_id=2),
     ]
     checkpoints = [
-        {"label": "base-body", "file_path": "C:/tmp/cp1.sldprt", "first_record_id": 1, "last_record_id": 2}
+        {
+            "label": "base-body",
+            "file_path": "C:/tmp/cp1.sldprt",
+            "first_record_id": 1,
+            "last_record_id": 2,
+        }
     ]
     script = generate_script(records, checkpoints=checkpoints)
     assert "# -- checkpoint" in script
@@ -417,17 +434,29 @@ def test_generate_script_checkpoint_inserted_after_correct_record():
         _rec("create_sketch", {"plane": "Front"}, rec_id=3),
     ]
     checkpoints = [
-        {"label": "after-extrude", "file_path": "C:/cp.sldprt", "first_record_id": 1, "last_record_id": 2}
+        {
+            "label": "after-extrude",
+            "file_path": "C:/cp.sldprt",
+            "first_record_id": 1,
+            "last_record_id": 2,
+        }
     ]
     script = generate_script(records, checkpoints=checkpoints)
     lines = script.splitlines()
-    cp_idx = next(i for i, l in enumerate(lines) if "# -- checkpoint" in l)
-    sketch_idx = next(i for i, l in enumerate(lines) if "create_sketch" in l)
-    assert cp_idx < sketch_idx, "checkpoint comment should appear before the next sketch call"
+    cp_idx = next(i for i, line in enumerate(lines) if "# -- checkpoint" in line)
+    sketch_idx = next(i for i, line in enumerate(lines) if "create_sketch" in line)
+    assert cp_idx < sketch_idx, (
+        "checkpoint comment should appear before the next sketch call"
+    )
 
 
 def test_checkpoint_comment_no_records():
-    cp = {"label": "init", "file_path": "C:/tmp/init.sldprt", "first_record_id": None, "last_record_id": None}
+    cp = {
+        "label": "init",
+        "file_path": "C:/tmp/init.sldprt",
+        "first_record_id": None,
+        "last_record_id": None,
+    }
     comment = _checkpoint_comment(cp)
     assert "label:    init" in comment
     assert "records:" not in comment
@@ -491,6 +520,7 @@ def test_parse_output_empty_and_invalid() -> None:
 def test_coord_returns_default_when_no_key_matches() -> None:
     """_coord should return default when none of the keys are found. Covers line 103."""
     from solidworks_mcp.agents.soc_exporter import _coord
+
     result = _coord({}, "x", "y", default=99.0)
     assert result == 99.0
 
@@ -498,7 +528,12 @@ def test_coord_returns_default_when_no_key_matches() -> None:
 def test_codegen_emit_add_sketch_constraint_with_entity3() -> None:
     """emit_add_sketch_constraint should include entity3 ref when e3 is set. Covers line 291."""
     cg = _CodeGen()
-    inp = {"entity1": "line1", "entity2": "line2", "entity3": "origin", "relation_type": "coincident"}
+    inp = {
+        "entity1": "line1",
+        "entity2": "line2",
+        "entity3": "origin",
+        "relation_type": "coincident",
+    }
     cg.emit_add_sketch_constraint(inp, {})
     script = "\n".join(cg._lines)
     assert "add_sketch_constraint" in script
@@ -536,6 +571,7 @@ def test_codegen_process_skips_soc_and_ui_tools() -> None:
 def test_soc_exporter_cli_usage(monkeypatch) -> None:
     """CLI with <3 args should print usage and exit. Covers lines 611-615."""
     import sys
+
     from solidworks_mcp.agents import soc_exporter
 
     monkeypatch.setattr(sys, "argv", ["prog", "only_one_arg"])

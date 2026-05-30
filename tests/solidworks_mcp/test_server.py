@@ -327,9 +327,7 @@ class TestSolidWorksMCPServer:
                     "solidworks_mcp.adapters.create_adapter",
                     return_value=mock_adapter,
                 ):
-                    with patch(
-                        "solidworks_mcp.tools.register_tools", return_value=10
-                    ):
+                    with patch("solidworks_mcp.tools.register_tools", return_value=10):
                         await server.setup()
 
         # Server should be set up
@@ -391,9 +389,7 @@ class TestSolidWorksMCPServer:
                     "solidworks_mcp.adapters.create_adapter",
                     return_value=mock_adapter,
                 ):
-                    with patch(
-                        "solidworks_mcp.tools.register_tools", return_value=5
-                    ):
+                    with patch("solidworks_mcp.tools.register_tools", return_value=5):
                         with patch.object(server, "_start_http_server"):
                             # Server should start despite adapter connection failure
                             await server.start()
@@ -544,9 +540,7 @@ def test_create_server_uses_loader_when_config_missing():
         mock_load.return_value = SolidWorksMCPConfig(port=9123)
         server = SolidWorksMCPServer(mock_load.return_value)
 
-        with patch(
-            "solidworks_mcp.server.SolidWorksMCPServer", return_value=server
-        ):
+        with patch("solidworks_mcp.server.SolidWorksMCPServer", return_value=server):
             created = __import__(
                 "solidworks_mcp.server", fromlist=["create_server"]
             ).create_server()
@@ -557,9 +551,7 @@ def test_create_server_uses_loader_when_config_missing():
 
 def test_run_server_exits_on_unhandled_exception():
     """Test synchronous entrypoint exits with status 1 on fatal errors."""
-    with patch(
-        "solidworks_mcp.server.asyncio.run", side_effect=RuntimeError("boom")
-    ):
+    with patch("solidworks_mcp.server.asyncio.run", side_effect=RuntimeError("boom")):
         with patch("solidworks_mcp.server.sys.exit") as mock_exit:
             from solidworks_mcp.server import run_server
 
@@ -618,9 +610,7 @@ class TestServerIntegration:
 
             with patch("solidworks_mcp.utils.validate_environment"):
                 with patch("solidworks_mcp.security.setup_security"):
-                    with patch(
-                        "solidworks_mcp.tools.register_tools", return_value=10
-                    ):
+                    with patch("solidworks_mcp.tools.register_tools", return_value=10):
                         # First setup attempt should fail
                         with pytest.raises(RuntimeError):
                             await server.setup()
@@ -726,9 +716,7 @@ class TestServerFastMCPEdgeCases:
 
 def test_run_server_keyboard_interrupt_is_silent():
     """KeyboardInterrupt in run_server should not call sys.exit."""
-    with patch(
-        "solidworks_mcp.server.asyncio.run", side_effect=KeyboardInterrupt()
-    ):
+    with patch("solidworks_mcp.server.asyncio.run", side_effect=KeyboardInterrupt()):
         with patch("solidworks_mcp.server.sys.exit") as mock_exit:
             from solidworks_mcp.server import run_server
 
@@ -985,9 +973,7 @@ def test_cli_applies_overrides_and_runs_with_loaded_config():
     from solidworks_mcp.server import cli
 
     with patch("solidworks_mcp.server.load_config", return_value=cfg):
-        with patch(
-            "solidworks_mcp.server._run_with_config", new=_fake_run_with_config
-        ):
+        with patch("solidworks_mcp.server._run_with_config", new=_fake_run_with_config):
             cli(
                 config=None,
                 mode="remote",

@@ -149,7 +149,9 @@ def test_create_cut_extrude_through_all_both_directions() -> None:
 
     result = features._create_cut_extrude_impl(
         adapter,
-        ExtrusionParameters(depth=5.0, end_condition="ThroughAll", both_directions=True),
+        ExtrusionParameters(
+            depth=5.0, end_condition="ThroughAll", both_directions=True
+        ),
     )
     assert result.is_success
     assert result.data.type == "Cut-Extrude"

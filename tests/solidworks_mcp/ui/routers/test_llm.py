@@ -32,8 +32,12 @@ def test_resolve_user_goal_prefers_payload() -> None:
 async def test_clarify_calls_service(monkeypatch) -> None:
     """clarify should call request_clarifications."""
     # Patch the service call with an async mock.
-    monkeypatch.setattr(llm_router, "request_clarifications", AsyncMock(return_value={"ok": True}))
-    payload = llm_router.ClarifyWithAnswerRequest(session_id="s1", user_goal="goal", user_answer="answer")
+    monkeypatch.setattr(
+        llm_router, "request_clarifications", AsyncMock(return_value={"ok": True})
+    )
+    payload = llm_router.ClarifyWithAnswerRequest(
+        session_id="s1", user_goal="goal", user_answer="answer"
+    )
     result = await llm_router.clarify(payload)
     assert result == {"ok": True}
 
@@ -42,7 +46,9 @@ async def test_clarify_calls_service(monkeypatch) -> None:
 async def test_family_inspect_calls_service(monkeypatch) -> None:
     """family_inspect should call inspect_family."""
     # Patch the service call with an async mock.
-    monkeypatch.setattr(llm_router, "inspect_family", AsyncMock(return_value={"ok": True}))
+    monkeypatch.setattr(
+        llm_router, "inspect_family", AsyncMock(return_value={"ok": True})
+    )
     payload = llm_router.FamilyInspectRequest(session_id="s1", user_goal="goal")
     result = await llm_router.family_inspect(payload)
     assert result == {"ok": True}
@@ -52,7 +58,14 @@ async def test_family_inspect_calls_service(monkeypatch) -> None:
 async def test_orchestrate_go_calls_service(monkeypatch) -> None:
     """orchestrate_go should call run_go_orchestration."""
     # Patch the service call with an async mock.
-    monkeypatch.setattr(llm_router, "run_go_orchestration", AsyncMock(return_value={"ok": True}))
-    payload = llm_router.GoOrchestrationRequest(session_id="s1", user_goal="goal", assumptions_text="assume", user_answer="answer")
+    monkeypatch.setattr(
+        llm_router, "run_go_orchestration", AsyncMock(return_value={"ok": True})
+    )
+    payload = llm_router.GoOrchestrationRequest(
+        session_id="s1",
+        user_goal="goal",
+        assumptions_text="assume",
+        user_answer="answer",
+    )
     result = await llm_router.orchestrate_go(payload)
     assert result == {"ok": True}

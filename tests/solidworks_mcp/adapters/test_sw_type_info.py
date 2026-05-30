@@ -6,8 +6,6 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 
 def test_import_handles_missing_pywin32(monkeypatch) -> None:
     """Import should handle missing win32com gracefully."""
@@ -23,8 +21,16 @@ def test_import_handles_missing_pywin32(monkeypatch) -> None:
 
     monkeypatch.setattr(builtins, "__import__", _blocked_import)
 
-    module_path = Path(__file__).parents[3] / "src" / "solidworks_mcp" / "adapters" / "sw_type_info.py"
-    spec = importlib.util.spec_from_file_location("sw_type_info_no_pywin32", module_path)
+    module_path = (
+        Path(__file__).parents[3]
+        / "src"
+        / "solidworks_mcp"
+        / "adapters"
+        / "sw_type_info.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "sw_type_info_no_pywin32", module_path
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -95,7 +101,11 @@ def test_load_wrapper_warns_when_genpy_missing(monkeypatch) -> None:
 
     monkeypatch.setattr(sw_type_info, "PYWIN32_AVAILABLE", True)
     monkeypatch.setattr(sw_type_info, "gencache", _FakeCache, raising=False)
-    monkeypatch.setattr(sw_type_info, "logger", SimpleNamespace(warning=lambda msg: warnings.append(msg)))
+    monkeypatch.setattr(
+        sw_type_info,
+        "logger",
+        SimpleNamespace(warning=lambda msg: warnings.append(msg)),
+    )
     sw_type_info._wrapper_module = None
     sw_type_info._interface_methods.clear()
 

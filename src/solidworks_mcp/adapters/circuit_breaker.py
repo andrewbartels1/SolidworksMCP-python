@@ -721,9 +721,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
-    async def add_spline(
-        self, points: list[dict[str, float]]
-    ) -> AdapterResult[str]:
+    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
         """Add spline through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_spline",
@@ -1056,7 +1054,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 list_tool_call_records,
             )
 
-            records = list_tool_call_records(self.soc_session_id, db_path=self.soc_db_path)
+            records = list_tool_call_records(
+                self.soc_session_id, db_path=self.soc_db_path
+            )
             last_id = records[-1]["id"] if records else None
 
             snapshot_id: int | None = None
@@ -1086,7 +1086,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 db_path=self.soc_db_path,
             )
         except Exception as exc:
-            logger.debug(f"[soc_checkpoint] failed to create checkpoint {label!r}: {exc}")
+            logger.debug(
+                f"[soc_checkpoint] failed to create checkpoint {label!r}: {exc}"
+            )
             return None
 
 

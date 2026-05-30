@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
@@ -15,7 +14,9 @@ def test_feature_target_status_invalid_targets() -> None:
     # A Windows-path token is filtered out by normalize_feature_targets, yielding
     # an empty requested list while feature_target_text is still non-empty →
     # the "No valid feature targets found" branch fires.
-    status, matched, missing = _utils.feature_target_status([], r"C:\Users\model.sldprt")
+    status, matched, missing = _utils.feature_target_status(
+        [], r"C:\Users\model.sldprt"
+    )
     assert "No valid feature targets found" in status
     assert matched == []
     assert missing == []
@@ -32,6 +33,7 @@ def test_feature_target_status_no_match_returns_missing() -> None:
 
 def test_read_reference_source_pdf_uses_reader(monkeypatch, tmp_path) -> None:
     """PDF files should be parsed with PdfReader when available."""
+
     # Provide a fake PdfReader to cover the PDF branch.
     class _Page:
         def extract_text(self):
@@ -41,7 +43,9 @@ def test_read_reference_source_pdf_uses_reader(monkeypatch, tmp_path) -> None:
         def __init__(self, _path):
             self.pages = [_Page(), _Page()]
 
-    monkeypatch.setattr(_utils, "import_module", lambda _name: SimpleNamespace(PdfReader=_Reader))
+    monkeypatch.setattr(
+        _utils, "import_module", lambda _name: SimpleNamespace(PdfReader=_Reader)
+    )
     pdf_path = tmp_path / "doc.pdf"
     pdf_path.write_bytes(b"pdf")
 
@@ -52,7 +56,11 @@ def test_read_reference_source_pdf_uses_reader(monkeypatch, tmp_path) -> None:
 def test_read_reference_url_pdf_requires_pypdf(monkeypatch) -> None:
     """PDF URLs should raise when PdfReader is missing."""
     # Simulate a PDF response with no pypdf installed.
-    monkeypatch.setattr(_utils, "import_module", lambda _name: (_ for _ in ()).throw(ImportError("nope")))
+    monkeypatch.setattr(
+        _utils,
+        "import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("nope")),
+    )
 
     class _Headers:
         @staticmethod
@@ -84,7 +92,9 @@ def test_read_reference_url_pdf_requires_pypdf(monkeypatch) -> None:
 def test_read_reference_url_html_parses_text(monkeypatch) -> None:
     """HTML responses should be stripped to text."""
     # Provide a basic HTML response and assert text extraction.
-    monkeypatch.setattr(_utils, "import_module", lambda _name: SimpleNamespace(PdfReader=None))
+    monkeypatch.setattr(
+        _utils, "import_module", lambda _name: SimpleNamespace(PdfReader=None)
+    )
 
     class _Headers:
         @staticmethod
@@ -116,6 +126,7 @@ def test_read_reference_url_html_parses_text(monkeypatch) -> None:
 
 def test_read_reference_url_pdf_with_reader_success(monkeypatch) -> None:
     """PDF URLs with PdfReader available should extract text from pages (lines 892-894)."""
+
     # Provide a real PdfReader stub and a PDF response → text extraction path.
     class _Page:
         def extract_text(self):
@@ -125,7 +136,9 @@ def test_read_reference_url_pdf_with_reader_success(monkeypatch) -> None:
         def __init__(self, _bytes):
             self.pages = [_Page()]
 
-    monkeypatch.setattr(_utils, "import_module", lambda _name: SimpleNamespace(PdfReader=_Reader))
+    monkeypatch.setattr(
+        _utils, "import_module", lambda _name: SimpleNamespace(PdfReader=_Reader)
+    )
 
     class _Headers:
         @staticmethod
@@ -158,7 +171,9 @@ def test_read_reference_url_pdf_with_reader_success(monkeypatch) -> None:
 def test_read_reference_url_plain_text(monkeypatch) -> None:
     """Plain text responses should decode without HTML parsing."""
     # Return a text/plain response and assert the decoded string.
-    monkeypatch.setattr(_utils, "import_module", lambda _name: SimpleNamespace(PdfReader=None))
+    monkeypatch.setattr(
+        _utils, "import_module", lambda _name: SimpleNamespace(PdfReader=None)
+    )
 
     class _Headers:
         @staticmethod

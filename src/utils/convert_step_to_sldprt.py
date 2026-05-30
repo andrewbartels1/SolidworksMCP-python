@@ -44,7 +44,6 @@ Prerequisites
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -53,14 +52,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import time  # noqa: E402
 
-import pythoncom  # noqa: E402
 import win32api  # noqa: E402
 import win32com.client  # noqa: E402
 from win32com.client import dynamic  # noqa: E402
 
 from solidworks_mcp.adapters import sw_type_info  # noqa: E402
 from solidworks_mcp.adapters.com_executor import ComExecutor  # noqa: E402
-
 
 # swUserPreferenceToggle_e constants (from swconst.tlb).
 # Verified by introspection of the gen_py wrapper for SW 2025.
