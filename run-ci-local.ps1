@@ -8,6 +8,9 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Error "Docker CLI not found. Install Docker Desktop first."
 }
 
+# BuildKit is required for --mount=type=cache in the Dockerfile.
+$env:DOCKER_BUILDKIT = "1"
+
 $imageName = "solidworks-mcp-ci-local"
 
 if (-not $NoBuild) {
