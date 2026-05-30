@@ -7,16 +7,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.solidworks_mcp import security as security_module
-from src.solidworks_mcp.config import (
+from solidworks_mcp import security as security_module
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
     SolidWorksMCPConfig,
     load_config,
 )
-from src.solidworks_mcp.exceptions import SolidWorksMCPError
-from src.solidworks_mcp.server import (
+from solidworks_mcp.exceptions import SolidWorksMCPError
+from solidworks_mcp.server import (
     MCPServerState,
     SolidWorksMCPServer,
     list_capabilities,
@@ -241,13 +241,13 @@ class TestSolidWorksMCPServer:
         server = SolidWorksMCPServer(mock_config)
 
         # Mock dependencies
-        with patch("src.solidworks_mcp.utils.validate_environment") as mock_validate:
-            with patch("src.solidworks_mcp.security.setup_security") as mock_security:
+        with patch("solidworks_mcp.utils.validate_environment") as mock_validate:
+            with patch("solidworks_mcp.security.setup_security") as mock_security:
                 with patch(
-                    "src.solidworks_mcp.adapters.create_adapter"
+                    "solidworks_mcp.adapters.create_adapter"
                 ) as mock_create_adapter:
                     with patch(
-                        "src.solidworks_mcp.tools.register_tools"
+                        "solidworks_mcp.tools.register_tools"
                     ) as mock_register_tools:
                         mock_validate.return_value = None
                         mock_security.return_value = None
@@ -274,12 +274,12 @@ class TestSolidWorksMCPServer:
         """Test that setup can be called multiple times safely."""
         server = SolidWorksMCPServer(mock_config)
 
-        with patch("src.solidworks_mcp.utils.validate_environment"):
-            with patch("src.solidworks_mcp.security.setup_security"):
+        with patch("solidworks_mcp.utils.validate_environment"):
+            with patch("solidworks_mcp.security.setup_security"):
                 with patch(
-                    "src.solidworks_mcp.adapters.create_adapter"
+                    "solidworks_mcp.adapters.create_adapter"
                 ) as mock_create_adapter:
-                    with patch("src.solidworks_mcp.tools.register_tools"):
+                    with patch("solidworks_mcp.tools.register_tools"):
                         mock_create_adapter.return_value = Mock()
 
                         # First setup
@@ -321,14 +321,14 @@ class TestSolidWorksMCPServer:
         mock_adapter = Mock()
         mock_adapter.disconnect = AsyncMock()
 
-        with patch("src.solidworks_mcp.utils.validate_environment"):
-            with patch("src.solidworks_mcp.security.setup_security"):
+        with patch("solidworks_mcp.utils.validate_environment"):
+            with patch("solidworks_mcp.security.setup_security"):
                 with patch(
-                    "src.solidworks_mcp.adapters.create_adapter",
+                    "solidworks_mcp.adapters.create_adapter",
                     return_value=mock_adapter,
                 ):
                     with patch(
-                        "src.solidworks_mcp.tools.register_tools", return_value=10
+                        "solidworks_mcp.tools.register_tools", return_value=10
                     ):
                         await server.setup()
 
@@ -385,14 +385,14 @@ class TestSolidWorksMCPServer:
         mock_adapter = Mock()
         mock_adapter.connect = AsyncMock(side_effect=Exception("Connection failed"))
 
-        with patch("src.solidworks_mcp.utils.validate_environment"):
-            with patch("src.solidworks_mcp.security.setup_security"):
+        with patch("solidworks_mcp.utils.validate_environment"):
+            with patch("solidworks_mcp.security.setup_security"):
                 with patch(
-                    "src.solidworks_mcp.adapters.create_adapter",
+                    "solidworks_mcp.adapters.create_adapter",
                     return_value=mock_adapter,
                 ):
                     with patch(
-                        "src.solidworks_mcp.tools.register_tools", return_value=5
+                        "solidworks_mcp.tools.register_tools", return_value=5
                     ):
                         with patch.object(server, "_start_http_server"):
                             # Server should start despite adapter connection failure
@@ -418,8 +418,8 @@ class TestSolidWorksMCPServer:
         server = SolidWorksMCPServer(config)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            with patch("src.solidworks_mcp.server.FastMCPToolset", None):
-                with patch("src.solidworks_mcp.server.Agent") as mock_agent:
+            with patch("solidworks_mcp.server.FastMCPToolset", None):
+                with patch("solidworks_mcp.server.Agent") as mock_agent:
                     await server._setup_agent()
 
         mock_agent.assert_called_once()
@@ -432,8 +432,8 @@ class TestSolidWorksMCPServer:
         server = SolidWorksMCPServer(config)
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            with patch("src.solidworks_mcp.server.FastMCPToolset") as mock_toolset:
-                with patch("src.solidworks_mcp.server.Agent") as mock_agent:
+            with patch("solidworks_mcp.server.FastMCPToolset") as mock_toolset:
+                with patch("solidworks_mcp.server.Agent") as mock_agent:
                     mock_toolset.return_value = "toolset"
                     await server._setup_agent()
 
@@ -448,7 +448,7 @@ class TestSolidWorksMCPServer:
         server = SolidWorksMCPServer(config)
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch("src.solidworks_mcp.server.Agent") as mock_agent:
+            with patch("solidworks_mcp.server.Agent") as mock_agent:
                 await server._setup_agent()
 
         mock_agent.assert_not_called()
@@ -486,7 +486,7 @@ class TestSolidWorksMCPServer:
 
         sync_runner = Mock(return_value=None)
         server.server = SimpleNamespace(run_stdio=sync_runner)
-        monkeypatch.setattr("src.solidworks_mcp.server.sys.stdin", None)
+        monkeypatch.setattr("solidworks_mcp.server.sys.stdin", None)
 
         await server._run_local_stdio()
         sync_runner.assert_not_called()
@@ -540,15 +540,15 @@ async def test_server_status_and_capabilities_helpers():
 
 def test_create_server_uses_loader_when_config_missing():
     """Test create_server loads configuration when none is provided."""
-    with patch("src.solidworks_mcp.server.load_config") as mock_load:
+    with patch("solidworks_mcp.server.load_config") as mock_load:
         mock_load.return_value = SolidWorksMCPConfig(port=9123)
         server = SolidWorksMCPServer(mock_load.return_value)
 
         with patch(
-            "src.solidworks_mcp.server.SolidWorksMCPServer", return_value=server
+            "solidworks_mcp.server.SolidWorksMCPServer", return_value=server
         ):
             created = __import__(
-                "src.solidworks_mcp.server", fromlist=["create_server"]
+                "solidworks_mcp.server", fromlist=["create_server"]
             ).create_server()
 
     mock_load.assert_called_once_with()
@@ -558,10 +558,10 @@ def test_create_server_uses_loader_when_config_missing():
 def test_run_server_exits_on_unhandled_exception():
     """Test synchronous entrypoint exits with status 1 on fatal errors."""
     with patch(
-        "src.solidworks_mcp.server.asyncio.run", side_effect=RuntimeError("boom")
+        "solidworks_mcp.server.asyncio.run", side_effect=RuntimeError("boom")
     ):
-        with patch("src.solidworks_mcp.server.sys.exit") as mock_exit:
-            from src.solidworks_mcp.server import run_server
+        with patch("solidworks_mcp.server.sys.exit") as mock_exit:
+            from solidworks_mcp.server import run_server
 
             run_server()
 
@@ -609,17 +609,17 @@ class TestServerIntegration:
         server = SolidWorksMCPServer(mock_config)
 
         # Setup with some components failing
-        with patch("src.solidworks_mcp.adapters.create_adapter") as mock_create_adapter:
+        with patch("solidworks_mcp.adapters.create_adapter") as mock_create_adapter:
             # First call fails, second succeeds
             mock_create_adapter.side_effect = [
                 RuntimeError("First attempt failed"),
                 Mock(),
             ]
 
-            with patch("src.solidworks_mcp.utils.validate_environment"):
-                with patch("src.solidworks_mcp.security.setup_security"):
+            with patch("solidworks_mcp.utils.validate_environment"):
+                with patch("solidworks_mcp.security.setup_security"):
                     with patch(
-                        "src.solidworks_mcp.tools.register_tools", return_value=10
+                        "solidworks_mcp.tools.register_tools", return_value=10
                     ):
                         # First setup attempt should fail
                         with pytest.raises(RuntimeError):
@@ -727,10 +727,10 @@ class TestServerFastMCPEdgeCases:
 def test_run_server_keyboard_interrupt_is_silent():
     """KeyboardInterrupt in run_server should not call sys.exit."""
     with patch(
-        "src.solidworks_mcp.server.asyncio.run", side_effect=KeyboardInterrupt()
+        "solidworks_mcp.server.asyncio.run", side_effect=KeyboardInterrupt()
     ):
-        with patch("src.solidworks_mcp.server.sys.exit") as mock_exit:
-            from src.solidworks_mcp.server import run_server
+        with patch("solidworks_mcp.server.sys.exit") as mock_exit:
+            from solidworks_mcp.server import run_server
 
             run_server()
 
@@ -758,10 +758,10 @@ class TestServerMainEntrypoint:
         )
 
         with patch("argparse.ArgumentParser.parse_args", return_value=args):
-            with patch("src.solidworks_mcp.server.load_config", return_value=cfg):
-                with patch("src.solidworks_mcp.server.utils.setup_logging"):
+            with patch("solidworks_mcp.server.load_config", return_value=cfg):
+                with patch("solidworks_mcp.server.utils.setup_logging"):
                     with patch(
-                        "src.solidworks_mcp.server.SolidWorksMCPServer",
+                        "solidworks_mcp.server.SolidWorksMCPServer",
                         return_value=server_inst,
                     ):
                         await main()
@@ -793,10 +793,10 @@ class TestServerMainEntrypoint:
         )
 
         with patch("argparse.ArgumentParser.parse_args", return_value=args):
-            with patch("src.solidworks_mcp.server.load_config", return_value=cfg):
-                with patch("src.solidworks_mcp.server.utils.setup_logging"):
+            with patch("solidworks_mcp.server.load_config", return_value=cfg):
+                with patch("solidworks_mcp.server.utils.setup_logging"):
                     with patch(
-                        "src.solidworks_mcp.server.SolidWorksMCPServer",
+                        "solidworks_mcp.server.SolidWorksMCPServer",
                         return_value=server_inst,
                     ):
                         await main()
@@ -821,10 +821,10 @@ class TestServerMainEntrypoint:
         )
 
         with patch("argparse.ArgumentParser.parse_args", return_value=args):
-            with patch("src.solidworks_mcp.server.load_config", return_value=cfg):
-                with patch("src.solidworks_mcp.server.utils.setup_logging"):
+            with patch("solidworks_mcp.server.load_config", return_value=cfg):
+                with patch("solidworks_mcp.server.utils.setup_logging"):
                     with patch(
-                        "src.solidworks_mcp.server.SolidWorksMCPServer",
+                        "solidworks_mcp.server.SolidWorksMCPServer",
                         return_value=server_inst,
                     ):
                         with pytest.raises(RuntimeError, match="boom"):
@@ -873,7 +873,7 @@ async def test_routed_call_falls_back_to_com_when_router_unavailable(mock_config
 @pytest.mark.asyncio
 async def test_run_local_stdio_sets_server_and_awaits_sync_runner_result(mock_config):
     """Covers server assignment, stdin exception path, and awaitable run_stdio result."""
-    import src.solidworks_mcp.server as server_module
+    import solidworks_mcp.server as server_module
 
     server = SolidWorksMCPServer(mock_config)
     server.config.mock_solidworks = False
@@ -897,6 +897,42 @@ async def test_run_local_stdio_sets_server_and_awaits_sync_runner_result(mock_co
 
     assert server.server is server.mcp
     assert awaited["done"] is True
+
+
+class TestServerToolEventLogging:
+    """Focused tests for tool event logging branches."""
+
+    def test_log_tool_event_disabled_is_noop(self, monkeypatch):
+        """_log_tool_event should no-op when logging is disabled."""
+        config = SolidWorksMCPConfig()
+        server = SolidWorksMCPServer(config)
+        server._db_logging_enabled = False
+
+        called = {"count": 0}
+
+        def _fake_insert(*_a, **_kw):
+            called["count"] += 1
+
+        monkeypatch.setattr("solidworks_mcp.server.insert_tool_event", _fake_insert)
+        server._log_tool_event(tool_name="t", phase="start", payload=None)
+        assert called["count"] == 0
+
+    def test_log_tool_event_calls_insert(self, monkeypatch):
+        """_log_tool_event should call insert_tool_event when enabled."""
+        config = SolidWorksMCPConfig()
+        server = SolidWorksMCPServer(config)
+        server._db_logging_enabled = True
+        server._db_run_id = "run"
+        server._db_path = None
+
+        called = {"count": 0}
+
+        def _fake_insert(*_a, **_kw):
+            called["count"] += 1
+
+        monkeypatch.setattr("solidworks_mcp.server.insert_tool_event", _fake_insert)
+        server._log_tool_event(tool_name="t", phase="start", payload={"k": "v"})
+        assert called["count"] == 1
 
 
 @pytest.mark.asyncio
@@ -929,7 +965,7 @@ async def test_start_logs_mock_fallback_warning_when_connect_fails(mock_config):
     adapter.connect = AsyncMock(side_effect=RuntimeError("connect failed"))
     server.adapter = adapter
 
-    with patch("src.solidworks_mcp.server.logger.warning") as mock_warning:
+    with patch("solidworks_mcp.server.logger.warning") as mock_warning:
         await server.start()
 
     assert any(
@@ -946,11 +982,11 @@ def test_cli_applies_overrides_and_runs_with_loaded_config():
     async def _fake_run_with_config(config):
         captured["cfg"] = config
 
-    from src.solidworks_mcp.server import cli
+    from solidworks_mcp.server import cli
 
-    with patch("src.solidworks_mcp.server.load_config", return_value=cfg):
+    with patch("solidworks_mcp.server.load_config", return_value=cfg):
         with patch(
-            "src.solidworks_mcp.server._run_with_config", new=_fake_run_with_config
+            "solidworks_mcp.server._run_with_config", new=_fake_run_with_config
         ):
             cli(
                 config=None,
@@ -972,9 +1008,9 @@ def test_cli_applies_overrides_and_runs_with_loaded_config():
 
 def test_cli_main_delegates_to_typer_run():
     """Covers cli_main console-entry delegation branch."""
-    from src.solidworks_mcp.server import cli, cli_main
+    from solidworks_mcp.server import cli, cli_main
 
-    with patch("src.solidworks_mcp.server.typer.run") as mock_run:
+    with patch("solidworks_mcp.server.typer.run") as mock_run:
         cli_main()
 
     mock_run.assert_called_once_with(cli)

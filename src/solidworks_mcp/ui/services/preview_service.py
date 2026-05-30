@@ -56,11 +56,15 @@ def _public_preview_url(
     return f"{api_origin}/previews/{preview_path.name}?ts={timestamp}"
 
 
-async def _reopen_target_model_for_preview(adapter: Any, model_path: str, *, context: str) -> None:
+async def _reopen_target_model_for_preview(
+    adapter: Any, model_path: str, *, context: str
+) -> None:
     """Reopen the persisted target model before preview export."""
     candidate_path = Path(str(model_path))
     if not candidate_path.exists():
-        raise RuntimeError(f"Target model path for {context} does not exist: {candidate_path}")
+        raise RuntimeError(
+            f"Target model path for {context} does not exist: {candidate_path}"
+        )
 
     logger.info(
         "[ui.refresh_preview] reopening target model for {} {}",

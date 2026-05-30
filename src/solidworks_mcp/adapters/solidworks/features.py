@@ -327,7 +327,7 @@ def _create_revolve_impl(
         """
         # Detect SW major version for FeatureRevolve2 API choice
         revolve_sw_major = 0
-        if getattr(adapter, 'swApp', None):
+        if getattr(adapter, "swApp", None):
             rev = adapter._attempt(
                 lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
                 default="0",
@@ -338,6 +338,7 @@ def _create_revolve_impl(
                 revolve_sw_major = 0
 
         import math
+
         if revolve_sw_major == 33:
             # IFeatureManager.FeatureRevolve2 (20 params) per gen_py SW 2025
             # SingleDir, IsSolid, IsThin, IsCut, ReverseDir, BothDirUpToSame,
@@ -345,21 +346,27 @@ def _create_revolve_impl(
             # OffsetRev1/2, OffsetDist1/2, Merge, ThinThick1/2(m), AutoSelect, Propagate
             feature_manager = adapter.currentModel.FeatureManager
             feature = feature_manager.FeatureRevolve2(
-                True,                                              # SingleDir
-                True,                                              # IsSolid
-                False,                                             # IsThin
-                False,                                             # IsCut
-                params.reverse_direction,                          # ReverseDir
-                params.both_directions,                            # BothDirUpToSame
-                0, 0,                                             # Dir1Type, Dir2Type
-                params.angle * math.pi / 180.0,                    # Dir1Angle (rad)
-                (params.angle * math.pi / 180.0) if params.both_directions else 0.0,  # Dir2Angle
-                False, False,                                     # OffsetRev1/2
-                0.0, 0.0,                                         # OffsetDist1/2
-                params.merge_result,                               # Merge
-                (params.thin_thickness or 0.0) / 1000.0, 0.0,    # ThinThick1/2
-                True,                                              # AutoSelect
-                False,                                             # Propagate
+                True,  # SingleDir
+                True,  # IsSolid
+                False,  # IsThin
+                False,  # IsCut
+                params.reverse_direction,  # ReverseDir
+                params.both_directions,  # BothDirUpToSame
+                0,
+                0,  # Dir1Type, Dir2Type
+                params.angle * math.pi / 180.0,  # Dir1Angle (rad)
+                (params.angle * math.pi / 180.0)
+                if params.both_directions
+                else 0.0,  # Dir2Angle
+                False,
+                False,  # OffsetRev1/2
+                0.0,
+                0.0,  # OffsetDist1/2
+                params.merge_result,  # Merge
+                (params.thin_thickness or 0.0) / 1000.0,
+                0.0,  # ThinThick1/2
+                True,  # AutoSelect
+                False,  # Propagate
             )
         else:
             feature_manager = adapter.currentModel.FeatureManager
@@ -413,7 +420,7 @@ def _create_revolve_impl(
 def _create_sweep_impl(
     adapter: Any, params: SweepParameters
 ) -> AdapterResult[SolidWorksFeature]:
-    """Placeholder for sweep feature creation — not yet implemented.
+    """Placeholder for sweep feature creation ΓÇö not yet implemented.
 
     Retained for interface compatibility with the base ``SolidWorksAdapter``
     contract.  Callers that need a sweep should use a VBA macro via
@@ -443,7 +450,7 @@ def _create_sweep_impl(
 def _create_loft_impl(
     adapter: Any, params: LoftParameters
 ) -> AdapterResult[SolidWorksFeature]:
-    """Placeholder for loft feature creation — not yet implemented.
+    """Placeholder for loft feature creation ΓÇö not yet implemented.
 
     Retained for interface compatibility with the base ``SolidWorksAdapter``
     contract.  Callers that need a loft should use a VBA macro via
@@ -481,9 +488,9 @@ def _create_cut_extrude_impl(
 
     Three COM API variants are attempted in order of preference:
 
-    1. ``FeatureCut4`` — most modern (SolidWorks 2015+).
-    2. ``FeatureCut3`` modern signature — SolidWorks 2010–2014.
-    3. ``FeatureCut3`` legacy argument order — older installs.
+    1. ``FeatureCut4`` ΓÇö most modern (SolidWorks 2015+).
+    2. ``FeatureCut3`` modern signature ΓÇö SolidWorks 2010ΓÇô2014.
+    3. ``FeatureCut3`` legacy argument order ΓÇö older installs.
 
     All depth values are in millimetres and converted to metres internally.
 
@@ -601,7 +608,7 @@ def _create_cut_extrude_impl(
         # Detect SW major version for FeatureCut4 parameter count
         # SW 2025 (major=33) verified with 27 params; other versions use 28.
         sw_major = 0
-        if getattr(adapter, 'swApp', None):
+        if getattr(adapter, "swApp", None):
             rev = adapter._attempt(
                 lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
                 default="0",
@@ -617,26 +624,32 @@ def _create_cut_extrude_impl(
         if sw_major == 33:
             feature, cut4_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut4(
-                    is_through,                    # Sd
-                    False,                          # Flip
-                    normalized.reverse_direction,   # Dir
-                    t1,                             # T1
+                    is_through,  # Sd
+                    False,  # Flip
+                    normalized.reverse_direction,  # Dir
+                    t1,  # T1
                     adapter.constants["swEndCondBlind"],  # T2
-                    depth_m,                        # D1
-                    0.0,                            # D2
-                    False, False, False, False,     # Dchk1/2, Ddir1/2
+                    depth_m,  # D1
+                    0.0,  # D2
+                    False,
+                    False,
+                    False,
+                    False,  # Dchk1/2, Ddir1/2
                     normalized.draft_angle * 3.14159 / 180.0,  # Dang1
-                    0.0,                            # Dang2
-                    False, False, False, False,     # OffsetRev1/2, TranslateSurf1/2
-                    False,                          # NormalCut
-                    normalized.feature_scope,       # UseFeatScope
-                    normalized.auto_select,         # UseAutoSelect
-                    False,                          # AssemblyFeatureScope
-                    False,                          # AutoSelectComponents
-                    False,                          # PropagateFeatureToParts
-                    t0,                             # T0
-                    0.0,                            # StartOffset
-                    False,                          # FlipStartOffset
+                    0.0,  # Dang2
+                    False,
+                    False,
+                    False,
+                    False,  # OffsetRev1/2, TranslateSurf1/2
+                    False,  # NormalCut
+                    normalized.feature_scope,  # UseFeatScope
+                    normalized.auto_select,  # UseAutoSelect
+                    False,  # AssemblyFeatureScope
+                    False,  # AutoSelectComponents
+                    False,  # PropagateFeatureToParts
+                    t0,  # T0
+                    0.0,  # StartOffset
+                    False,  # FlipStartOffset
                 )
             )
         else:
@@ -817,7 +830,7 @@ def _add_fillet_impl(
         """
         # Detect SW major version for FeatureFillet3 parameter count
         fillet_sw_major = 0
-        if getattr(adapter, 'swApp', None):
+        if getattr(adapter, "swApp", None):
             rev = adapter._attempt(
                 lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
                 default="0",
@@ -846,21 +859,34 @@ def _add_fillet_impl(
         # Other versions: IFeatureManager.FeatureFillet3 (16 params, original code).
         if fillet_sw_major == 33:
             feature = adapter.currentModel.FeatureFillet3(
-                radius / 1000.0,   # R1 in meters
-                True,               # Propagate
-                0,                  # Ftyp
-                0, 0,              # VarRadTyp, OverflowType
-                0, None,           # NRadii, Radii
-                False, False,      # UseHelpPoint, UseTangentHoldLine
+                radius / 1000.0,  # R1 in meters
+                True,  # Propagate
+                0,  # Ftyp
+                0,
+                0,  # VarRadTyp, OverflowType
+                0,
+                None,  # NRadii, Radii
+                False,
+                False,  # UseHelpPoint, UseTangentHoldLine
             )
         else:
             feature_manager = adapter.currentModel.FeatureManager
             feature = feature_manager.FeatureFillet3(
                 radius / 1000.0,
-                0, 0, 0, 0,
-                False, False, False, False,
-                False, False, False, False,
-                0, False,
+                0,
+                0,
+                0,
+                0,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                0,
+                False,
             )
 
         # IModelDoc2.FeatureFillet3 returns int on SW 2025, not IFeature

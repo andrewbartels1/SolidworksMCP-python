@@ -71,10 +71,7 @@ flowchart TB
 | Distributed Load Balancing | Future state | Current implementation uses local queue-based pooling, not distributed scheduling. |
 | OAuth2/JWT Transport Enforcement | Future state | Planned for transport-layer integration in remote deployments. |
 
-For a dated implementation snapshot that may evolve quickly, see the planning docs:
-
-- [Architecture Analysis (Snapshot)](../planning/ARCHITECTURE_ANALYSIS.md)
-- [Architecture Alignment Report (Snapshot)](../planning/ARCHITECTURE_ALIGNMENT_REPORT.md)
+For implementation history, see the git log or open GitHub issues.
 
 ## Core Components
 
@@ -233,7 +230,7 @@ stateDiagram-v2
 - Explicit cancellation for in-progress MCP operations
 - Queue-backed background workers or autoscaling execution
 
-Planned runtime improvements are tracked in [Runtime Operations and Observability Plan](../planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md).
+Planned runtime improvements are tracked in the open GitHub issues.
 
 ## Error Handling
 
@@ -258,7 +255,7 @@ Planned runtime improvements are tracked in [Runtime Operations and Observabilit
 - Centralized incident routing or external observability integration
 - Rich cancellation-aware recovery for long-running jobs
 
-Planned runtime error/observability work is tracked in [Runtime Operations and Observability Plan](../planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md).
+Planned runtime error/observability work is tracked in the open GitHub issues.
 
 ## Monitoring and Observability
 
@@ -274,7 +271,7 @@ Planned runtime error/observability work is tracked in [Runtime Operations and O
 - Dashboard-oriented metrics sinks
 - Distributed metrics aggregation
 
-These roadmap ideas live in [Runtime Operations and Observability Plan](../planning/PLAN_RUNTIME_OPERATIONS_AND_OBSERVABILITY.md).
+These roadmap ideas are tracked in the open GitHub issues.
 
 ## Agent Orchestration Add-On
 

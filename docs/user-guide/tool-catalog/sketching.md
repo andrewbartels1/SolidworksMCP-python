@@ -54,7 +54,12 @@ Add a line to the current sketch.
 **Sample call:**
 
 ```json
-{}
+{
+  "x1": 0.0,
+  "y1": 0.0,
+  "x2": 80.0,
+  "y2": 0.0
+}
 ```
 
 ---
@@ -109,7 +114,12 @@ Add a rectangle to the current sketch.
 **Sample call:**
 
 ```json
-{}
+{
+  "x1": -40.0,
+  "y1": 0.0,
+  "x2": 40.0,
+  "y2": 52.0
+}
 ```
 
 ---
@@ -218,7 +228,12 @@ Add a centerline to the current sketch.
 **Sample call:**
 
 ```json
-{}
+{
+  "x1": 0.0,
+  "y1": 0.0,
+  "x2": 0.0,
+  "y2": 120.0
+}
 ```
 
 ---
@@ -353,7 +368,7 @@ Add a dimension to sketch entities.
 
 ```json
 {
-  "entity1": "Line1",
+  "entity1": "Line_1",
   "value": 50.0
 }
 ```

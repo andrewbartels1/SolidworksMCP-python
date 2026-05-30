@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastmcp import FastMCP
 
-from src.solidworks_mcp.tools.export import (
+from solidworks_mcp.tools.export import (
     BatchExportInput,
     ExportDWGInput,
     ExportIGESInput,

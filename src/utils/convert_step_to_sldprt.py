@@ -49,9 +49,7 @@ import sys
 from pathlib import Path
 
 # Make the package importable when this script is invoked directly.
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[1])
-)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import time  # noqa: E402
 
@@ -101,9 +99,7 @@ def _decode_errors(error_code: int) -> str:
     return ", ".join(parts) if parts else f"unknown(0x{error_code:X})"
 
 
-def _find_step_files(
-    target: Path, *, recursive: bool
-) -> list[Path]:
+def _find_step_files(target: Path, *, recursive: bool) -> list[Path]:
     """Return the STEP files implied by ``target``.
 
     If ``target`` is a file, returns it (if it's STEP) or empty.
@@ -162,15 +158,16 @@ def convert_one(
     prospective_sldasm = step_path.with_suffix(".SLDASM")
 
     # Pre-flight: if either output already exists, respect --overwrite.
-    existing = [
-        p for p in (prospective_sldprt, prospective_sldasm) if p.exists()
-    ]
+    existing = [p for p in (prospective_sldprt, prospective_sldasm) if p.exists()]
     if existing and not overwrite:
         names = ", ".join(p.name for p in existing)
         return (False, f"output exists (use --overwrite): {names}")
 
     if dry_run:
-        return (True, f"would convert -> {prospective_sldprt.name} (.SLDASM if assembly)")
+        return (
+            True,
+            f"would convert -> {prospective_sldprt.name} (.SLDASM if assembly)",
+        )
 
     # Snapshot current doc count so we can detect the new one.
     try:
@@ -307,9 +304,7 @@ def main(argv: list[str] | None = None) -> int:
 
         def _setup() -> tuple[object, bool]:
             try:
-                raw = win32com.client.GetActiveObject(
-                    "SldWorks.Application"
-                )
+                raw = win32com.client.GetActiveObject("SldWorks.Application")
                 app = dynamic.Dispatch(raw._oleobj_)
             except Exception:
                 app = dynamic.Dispatch("SldWorks.Application")
@@ -318,9 +313,7 @@ def main(argv: list[str] | None = None) -> int:
 
             # Capture current state so we restore it faithfully.
             was_on = bool(
-                app.GetUserPreferenceToggle(
-                    SW_PREF_MULTICAD_ENABLE_3D_INTERCONNECT
-                )
+                app.GetUserPreferenceToggle(SW_PREF_MULTICAD_ENABLE_3D_INTERCONNECT)
             )
             if was_on:
                 app.SetUserPreferenceToggle(
@@ -374,10 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         com.stop()
 
-    print(
-        f"\nDone. {ok_count} converted, {skip_count} skipped, "
-        f"{fail_count} failed."
-    )
+    print(f"\nDone. {ok_count} converted, {skip_count} skipped, {fail_count} failed.")
     return 0 if fail_count == 0 else 3
 
 

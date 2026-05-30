@@ -11,22 +11,22 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.adapters.base import (
+from solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
     SolidWorksFeature,
 )
-from src.solidworks_mcp.adapters.circuit_breaker import (
+from solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreakerAdapter,
     CircuitState,
 )
-from src.solidworks_mcp.adapters.connection_pool import (
+from solidworks_mcp.adapters.connection_pool import (
     ConnectionPool,
     ConnectionPoolAdapter,
 )
-from src.solidworks_mcp.adapters.mock_adapter import (
+from solidworks_mcp.adapters.mock_adapter import (
     MockSolidWorksAdapter,
     _BoolCallable,
 )
@@ -149,7 +149,7 @@ class TestAdapterBaseInitCoverage:
         """Line 269 — base save_file returns error."""
         adapter = MockSolidWorksAdapter({})
         # MockSolidWorksAdapter overrides save_file, so call the base directly
-        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+        from solidworks_mcp.adapters.base import SolidWorksAdapter
 
         result = await SolidWorksAdapter.save_file(adapter)
         assert result.status == AdapterResultStatus.ERROR
@@ -158,7 +158,7 @@ class TestAdapterBaseInitCoverage:
     @pytest.mark.asyncio
     async def test_add_arc_not_implemented(self):
         """Line 378 — base add_arc returns error."""
-        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+        from solidworks_mcp.adapters.base import SolidWorksAdapter
 
         result = await SolidWorksAdapter.add_arc(None, 0, 0, 1, 0, 0, 1)
         assert result.status == AdapterResultStatus.ERROR
@@ -166,7 +166,7 @@ class TestAdapterBaseInitCoverage:
     @pytest.mark.asyncio
     async def test_add_spline_not_implemented(self):
         """Line 385 — base add_spline returns error."""
-        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+        from solidworks_mcp.adapters.base import SolidWorksAdapter
 
         result = await SolidWorksAdapter.add_spline(None, [])
         assert result.status == AdapterResultStatus.ERROR
@@ -174,7 +174,7 @@ class TestAdapterBaseInitCoverage:
     @pytest.mark.asyncio
     async def test_add_centerline_not_implemented(self):
         """Line 394 — base add_centerline returns error."""
-        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+        from solidworks_mcp.adapters.base import SolidWorksAdapter
 
         result = await SolidWorksAdapter.add_centerline(None, 0, 0, 1, 1)
         assert result.status == AdapterResultStatus.ERROR
@@ -182,7 +182,7 @@ class TestAdapterBaseInitCoverage:
     @pytest.mark.asyncio
     async def test_create_cut_not_implemented(self):
         """Line 504 — base create_cut returns error."""
-        from src.solidworks_mcp.adapters.base import SolidWorksAdapter
+        from solidworks_mcp.adapters.base import SolidWorksAdapter
 
         result = await SolidWorksAdapter.create_cut(None, "Sketch1", 5.0)
         assert result.status == AdapterResultStatus.ERROR
@@ -759,7 +759,7 @@ class TestRealCircularPatternImpl:
     def test_full_circle_uses_angle_over_count(self):
         """A 360° pattern with count=6 should hand the COM call a
         ``PatternSpacing`` of ``2π / 6`` so adjacent instances tile."""
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
 
@@ -781,7 +781,7 @@ class TestRealCircularPatternImpl:
     def test_partial_sweep_uses_angle_over_count_minus_one(self):
         """For ``angle=180, count=3`` the partial-sweep formula puts the
         last instance at 180°, so spacing must be ``π / (3 - 1)`` rad."""
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
 
@@ -797,7 +797,7 @@ class TestRealCircularPatternImpl:
     def test_clear_selection_runs_on_com_failure(self):
         """``CreateCircularSketchStepAndRepeat`` returning False must
         still leave selection state cleaned up (try/finally)."""
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
         create_pattern.return_value = False
@@ -816,7 +816,7 @@ class TestRealCircularPatternImpl:
         """When ``_add_polygon_impl`` cached the polygon center at register
         time, circular_pattern must use that cached center to derive the
         seed-to-axis distance instead of rejecting the seed."""
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
         adapter._sketch_entities["Polygon_1"] = (Mock(), Mock(), Mock())
@@ -841,7 +841,7 @@ class TestRealCircularPatternImpl:
         circular_pattern the same as a polygon seed, deriving ArcRadius
         from the cached centre.
         """
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
         adapter._sketch_entities["Rectangle_1"] = (Mock(), Mock(), Mock(), Mock())
@@ -866,7 +866,7 @@ class TestRealCircularPatternImpl:
         through to a 1 mm placeholder radius, silently producing a tightly
         clustered pattern instead of the intended one. Surface a clear
         error pointing the caller at the supported seed types instead."""
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
         # Stand-in for a line/spline/centerline: single dispatch whose
@@ -899,7 +899,7 @@ class TestRealCircularPatternImpl:
         Surface a clear, actionable error that names only the
         always-works primitives instead.
         """
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, _ = self._build_adapter()
         # Stand in for a hypothetical tuple-registering primitive whose
@@ -927,7 +927,7 @@ class TestRealCircularPatternImpl:
         ``test_sketch_circular_pattern_creates_real_pattern`` regression
         and the live demo failed without this normalisation.
         """
-        from src.solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
 
         adapter, create_pattern, seed_entity = self._build_adapter()
         # Seed at (+30 mm, 0): GetCenterPoint returns metres on the SW side,
@@ -1123,7 +1123,7 @@ class TestCircuitBreakerCoverage:
         inner.export_image = AsyncMock(return_value=export_result)
         inner.export_file = AsyncMock(return_value=file_result)
 
-        async def passthrough(operation_name, operation):
+        async def passthrough(operation_name, operation, **kwargs):
             return await operation()
 
         cb._execute_with_circuit_breaker = AsyncMock(side_effect=passthrough)

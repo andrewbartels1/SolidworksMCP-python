@@ -7,8 +7,8 @@ import subprocess
 
 import pytest
 
-from src.solidworks_mcp.agents.harness import run_validated_prompt
-from src.solidworks_mcp.agents.schemas import (
+from solidworks_mcp.agents.harness import run_validated_prompt
+from solidworks_mcp.agents.schemas import (
     DocsPlan,
     ManufacturabilityReview,
     RecoverableFailure,
@@ -205,7 +205,7 @@ async def test_results_persisted_to_sqlite(tmp_path):
 
     from sqlmodel import Session, create_engine, select
 
-    from src.solidworks_mcp.agents.history_db import AgentRun, init_db
+    from solidworks_mcp.agents.history_db import AgentRun, init_db
 
     init_db(db)
     engine = create_engine(f"sqlite:///{db}")

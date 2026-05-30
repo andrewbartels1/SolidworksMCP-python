@@ -1,4 +1,4 @@
-"""Direct branch tests for src.solidworks_mcp.agents.smoke_test."""
+"""Direct branch tests for solidworks_mcp.agents.smoke_test."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import warnings
 
 
 def test_run_selects_reconstruction_schema(monkeypatch) -> None:
-    import src.solidworks_mcp.agents.smoke_test as smoke
+    import solidworks_mcp.agents.smoke_test as smoke
 
     captured: dict[str, object] = {}
 
@@ -49,12 +49,12 @@ def test_main_module_calls_app(monkeypatch) -> None:
             calls["app"] += 1
 
     monkeypatch.setattr("typer.Typer", _DummyTyper)
-    sys.modules.pop("src.solidworks_mcp.agents.smoke_test", None)
+    sys.modules.pop("solidworks_mcp.agents.smoke_test", None)
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
             category=RuntimeWarning,
             message=".*found in sys.modules.*",
         )
-        runpy.run_module("src.solidworks_mcp.agents.smoke_test", run_name="__main__")
+        runpy.run_module("solidworks_mcp.agents.smoke_test", run_name="__main__")
     assert calls["app"] == 1

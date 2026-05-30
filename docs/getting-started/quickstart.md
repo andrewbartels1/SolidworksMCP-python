@@ -21,6 +21,11 @@ python -m venv .venv
 
 ## 2. Configure VS Code MCP
 
+!!! warning "Mock mode vs real mode"
+    Without `--real`, the server runs in **mock mode** — all tool responses are
+    simulated.  Always include `--real --year <year>` for live SolidWorks work.
+    Open SolidWorks **before** restarting the server.
+
 Set `%APPDATA%\Code\User\mcp.json`:
 
 ```json
@@ -34,7 +39,10 @@ Set `%APPDATA%\Code\User\mcp.json`:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
       ]
     }
   }
@@ -42,6 +50,7 @@ Set `%APPDATA%\Code\User\mcp.json`:
 ```
 
 Replace the script path with your local repository location.
+Change `2026` to match your installed SolidWorks year if different.
 
 ## 2b. Configure LM Studio MCP (Optional)
 
@@ -57,7 +66,10 @@ If you want LM Studio to call SolidWorks tools directly, use an MCP config with 
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
       ]
     }
   }
@@ -81,16 +93,22 @@ Restart LM Studio after updating the file.
 
 ## 3. Start Server
 
+Open SolidWorks first, then:
+
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
 ```
 
 Expected log markers:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
+- `Adapter Mode: Real SolidWorks`
 - `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
+
+If you see `Adapter Mode: Mock` in the logs, `--real` was not picked up — check
+that your `mcp.json` args list includes it after the script path.
 
 ## 4. First Connection Check
 
@@ -173,10 +191,16 @@ Reinstall Python from python.org and ensure PATH option is enabled.
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
+### Tools return blank images or fake data
+
+The server is in mock mode.  Ensure `--real --year 2026` appears in your
+`mcp.json` args after the script path, then restart the server.
+
 ### SolidWorks tool actions fail
 
-- Start SolidWorks before MCP.
-- Confirm you are on Windows.
+- Open SolidWorks **before** starting the MCP server.
+- Confirm `--real` is in the server args (see above).
+- Confirm you are on Windows (COM does not work in WSL).
 - Check COM availability:
 
 ```powershell

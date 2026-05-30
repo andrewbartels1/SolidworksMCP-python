@@ -1,4 +1,4 @@
-"""Coverage placeholder for src.solidworks_mcp.adapters.factory."""
+"""Coverage placeholder for solidworks_mcp.adapters.factory."""
 
 import pytest
 
@@ -6,5 +6,5 @@ pytestmark = pytest.mark.skip(reason="Coverage placeholder for 1:1 source/test m
 
 
 def test_placeholder_factory() -> None:
-    """Tracks missing direct coverage for src.solidworks_mcp.adapters.factory."""
-    assert "src.solidworks_mcp.adapters.factory"
+    """Tracks missing direct coverage for solidworks_mcp.adapters.factory."""
+    assert "solidworks_mcp.adapters.factory"

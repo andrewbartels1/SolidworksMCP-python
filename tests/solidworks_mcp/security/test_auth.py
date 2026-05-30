@@ -1,4 +1,4 @@
-"""Coverage placeholder for src.solidworks_mcp.security.auth."""
+"""Coverage placeholder for solidworks_mcp.security.auth."""
 
 import pytest
 
@@ -6,5 +6,5 @@ pytestmark = pytest.mark.skip(reason="Coverage placeholder for 1:1 source/test m
 
 
 def test_placeholder_auth() -> None:
-    """Tracks missing direct coverage for src.solidworks_mcp.security.auth."""
-    assert "src.solidworks_mcp.security.auth"
+    """Tracks missing direct coverage for solidworks_mcp.security.auth."""
+    assert "solidworks_mcp.security.auth"

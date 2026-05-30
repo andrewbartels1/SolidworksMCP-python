@@ -9,13 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.agents.harness import (
+from solidworks_mcp.agents.harness import (
     _extract_data,
     _load_agent_prompt,
     pretty_json,
     run_validated_prompt,
 )
-from src.solidworks_mcp.agents.schemas import (
+from solidworks_mcp.agents.schemas import (
     ManufacturabilityReview,
     RecoverableFailure,
 )
@@ -213,7 +213,7 @@ class TestRunValidatedPromptSuccess:
         mock_agent.run = AsyncMock(return_value=mock_result)
         mock_agent_cls = MagicMock(return_value=mock_agent)
 
-        with patch("src.solidworks_mcp.agents.harness.Agent", mock_agent_cls):
+        with patch("solidworks_mcp.agents.harness.Agent", mock_agent_cls):
             result = await run_validated_prompt(
                 agent_file_name="test-agent.agent.md",
                 model_name="github:openai/gpt-4.1",
@@ -242,7 +242,7 @@ class TestRunValidatedPromptSuccess:
         mock_agent.run = AsyncMock(return_value=mock_result)
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             await run_validated_prompt(
@@ -255,7 +255,7 @@ class TestRunValidatedPromptSuccess:
 
         from sqlmodel import Session, create_engine, select
 
-        from src.solidworks_mcp.agents.history_db import (
+        from solidworks_mcp.agents.history_db import (
             AgentRun,
             init_db,
         )
@@ -284,7 +284,7 @@ class TestRunValidatedPromptSuccess:
         mock_agent.run = AsyncMock(return_value=mock_result)
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             result = await run_validated_prompt(
@@ -315,7 +315,7 @@ class TestRunValidatedPromptSuccess:
         mock_agent.run = AsyncMock(return_value=mock_result)
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             result = await run_validated_prompt(
@@ -355,7 +355,7 @@ class TestRunValidatedPromptRecoverable:
         mock_agent.run = AsyncMock(return_value=mock_result)
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             result = await run_validated_prompt(
@@ -396,7 +396,7 @@ class TestRunValidatedPromptRecoverable:
         )
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             result = await run_validated_prompt(
@@ -427,7 +427,7 @@ class TestRunValidatedPromptRecoverable:
         mock_agent.run = AsyncMock(return_value=SimpleNamespace(data=failure))
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             result = await run_validated_prompt(
@@ -461,7 +461,7 @@ class TestRunValidatedPromptRecoverable:
         mock_agent.run = AsyncMock(return_value=SimpleNamespace(data=failure))
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             result = await run_validated_prompt(
@@ -495,7 +495,7 @@ class TestRunValidatedPromptException:
         mock_agent.run = AsyncMock(side_effect=RuntimeError("Model API unreachable"))
 
         with patch(
-            "src.solidworks_mcp.agents.harness.Agent",
+            "solidworks_mcp.agents.harness.Agent",
             MagicMock(return_value=mock_agent),
         ):
             with pytest.raises(RuntimeError, match="Model API unreachable"):
@@ -509,7 +509,7 @@ class TestRunValidatedPromptException:
 
         from sqlmodel import Session, create_engine, select
 
-        from src.solidworks_mcp.agents.history_db import AgentRun, init_db
+        from solidworks_mcp.agents.history_db import AgentRun, init_db
 
         init_db(db_path)
         engine = create_engine(f"sqlite:///{db_path}")
@@ -524,7 +524,7 @@ class TestRunValidatedPromptException:
         """When pydantic_ai is not importable, run_validated_prompt raises RuntimeError."""
         monkeypatch.chdir(agent_file.parent.parent.parent)
 
-        import src.solidworks_mcp.agents.harness as harness_module
+        import solidworks_mcp.agents.harness as harness_module
 
         original_agent = harness_module.Agent
         original_err = harness_module.IMPORT_ERROR

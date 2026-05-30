@@ -1,12 +1,23 @@
-"""Direct branch coverage tests for src.solidworks_mcp.adapters.solidworks.sketch."""
+"""Direct branch coverage tests for solidworks_mcp.adapters.solidworks.sketch."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
-from src.solidworks_mcp.adapters.solidworks import sketch
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.solidworks import sketch
+
+
+class _FakeSwApp:
+    """Minimal swApp stand-in; ActiveDoc proxies the adapter's currentModel."""
+
+    def __init__(self, adapter: "_FakeSketchAdapter") -> None:
+        self._adapter = adapter
+
+    @property
+    def ActiveDoc(self) -> object:
+        return self._adapter.currentModel
 
 
 class _FakeSketchAdapter:
@@ -25,6 +36,7 @@ class _FakeSketchAdapter:
             "swSmartDimensionDirectionLeft": 2,
             "swSmartDimensionDirectionDown": 3,
         }
+        self.swApp = _FakeSwApp(self)
 
     def _handle_com_operation(self, _name, callback):
         try:

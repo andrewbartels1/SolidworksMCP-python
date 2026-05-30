@@ -12,25 +12,25 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.solidworks_mcp.adapters.base import (
+from solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
     SolidWorksAdapter,
     SolidWorksModel,
 )
-from src.solidworks_mcp.adapters.circuit_breaker import (
+from solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerAdapter,
     CircuitState,
 )
-from src.solidworks_mcp.exceptions import SolidWorksMCPError
-from src.solidworks_mcp.security import auth as auth_mod
-from src.solidworks_mcp.security import cors as cors_mod
-from src.solidworks_mcp.security import rate_limiting as rl_mod
-from src.solidworks_mcp.security import setup_security
-from src.solidworks_mcp.utils.logging import get_audit_logger, setup_logging
-from src.solidworks_mcp.utils.validation import validate_environment
+from solidworks_mcp.exceptions import SolidWorksMCPError
+from solidworks_mcp.security import auth as auth_mod
+from solidworks_mcp.security import cors as cors_mod
+from solidworks_mcp.security import rate_limiting as rl_mod
+from solidworks_mcp.security import setup_security
+from solidworks_mcp.utils.logging import get_audit_logger, setup_logging
+from solidworks_mcp.utils.validation import validate_environment
 
 
 class _DummyAdapter(SolidWorksAdapter):
@@ -184,7 +184,7 @@ async def test_security_setup_branches_and_auth_helpers(monkeypatch):
 
     monkeypatch.setitem(
         __import__("sys").modules,
-        "src.solidworks_mcp.config",
+        "solidworks_mcp.config",
         SimpleNamespace(SecurityLevel=_Level),
     )
 
@@ -192,15 +192,15 @@ async def test_security_setup_branches_and_auth_helpers(monkeypatch):
 
     calls = {"auth": 0, "cors": 0, "rate": 0}
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.setup_authentication",
+        "solidworks_mcp.security.setup_authentication",
         lambda *_: calls.__setitem__("auth", calls["auth"] + 1),
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.setup_cors",
+        "solidworks_mcp.security.setup_cors",
         lambda *_: calls.__setitem__("cors", calls["cors"] + 1),
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.setup_rate_limiting",
+        "solidworks_mcp.security.setup_rate_limiting",
         lambda *_: calls.__setitem__("rate", calls["rate"] + 1),
     )
 
@@ -261,7 +261,7 @@ async def test_validate_environment_branches(monkeypatch):
 
     # Non-windows warning path
     monkeypatch.setattr(
-        "src.solidworks_mcp.utils.validation.platform.system", lambda: "Linux"
+        "solidworks_mcp.utils.validation.platform.system", lambda: "Linux"
     )
     await validate_environment(cfg)
 
@@ -273,10 +273,10 @@ async def test_validate_environment_branches(monkeypatch):
     )
     helper = AsyncMock()
     monkeypatch.setattr(
-        "src.solidworks_mcp.utils.validation._validate_solidworks_installation", helper
+        "solidworks_mcp.utils.validation._validate_solidworks_installation", helper
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.utils.validation.platform.system", lambda: "Windows"
+        "solidworks_mcp.utils.validation.platform.system", lambda: "Windows"
     )
     await validate_environment(cfg2)
     helper.assert_awaited_once()
@@ -297,7 +297,7 @@ def test_setup_logging_file_and_audit(tmp_path: Path):
     # Newer loguru versions may reject "gzip" shorthand in tests; mock add()
     # so we still execute setup branches deterministically.
     """Test setup logging file and audit."""
-    from src.solidworks_mcp.utils import logging as logging_mod
+    from solidworks_mcp.utils import logging as logging_mod
 
     logging_mod.logger.add = lambda *args, **kwargs: 1
 
@@ -393,7 +393,7 @@ async def test_circuit_breaker_adapter_passthrough_methods(monkeypatch):
     """Test circuit breaker adapter passthrough methods."""
     cb = CircuitBreakerAdapter(adapter=_DummyAdapter({}), config={})
 
-    async def _fake_exec(name, operation):
+    async def _fake_exec(name, operation, **kwargs):
         """Test helper for fake exec."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"name": name})
 

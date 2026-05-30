@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.adapters.base import (
+from solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
 )
-from src.solidworks_mcp.adapters.connection_pool import (
+from solidworks_mcp.adapters.connection_pool import (
     ConnectionPool,
     ConnectionPoolAdapter,
 )
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -177,8 +177,8 @@ class TestConnectionPoolAdapterCoverage:
         result = pool._attempt_sync(raising_op, default=-1)
         assert result == -1
 
-    def test_attempt_sync_returns_value_on_success(self):
-        """Test attempt sync returns value on success."""
+        def test_attempt_sync_returns_value_on_success(self):
+            """Test attempt sync returns value on success."""
 
         pool = _make_pool()
 
@@ -189,6 +189,21 @@ class TestConnectionPoolAdapterCoverage:
 
         result = pool._attempt_sync(good_op)
         assert result == "sync_result"
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_constraint_dispatches(self):
+        """add_sketch_constraint should call through the pool."""
+        # Verify the adapter call is routed through _execute_with_pool.
+        pool = _make_pool()
+        pool._execute_with_pool = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data="ok",
+            )
+        )
+        result = await pool.add_sketch_constraint("e1", None, "coincident", None)
+        assert result.is_success
+        pool._execute_with_pool.assert_awaited()
 
     # ------------------------------------------------------------------
     # _invoke_with_optional_args – TypeError retry path (lines 110-114)
@@ -424,7 +439,7 @@ class TestConnectionPoolAdapterCoverage:
 
             raise RuntimeError("operation failed")
 
-        with patch("src.solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
+        with patch("solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
             result = await pool._execute_with_pool("test_op", always_fail)
 
         assert result.status == AdapterResultStatus.ERROR
@@ -449,7 +464,7 @@ class TestConnectionPoolAdapterCoverage:
         pool.pool.append(bad_adapter)
         await pool.available_adapters.put(bad_adapter)
 
-        with patch("src.solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
+        with patch("solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
             await pool.disconnect()
 
         mock_logger.warning.assert_called()

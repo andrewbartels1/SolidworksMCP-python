@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.solidworks_mcp.security.auth import require_auth, setup_authentication
+from solidworks_mcp.security.auth import require_auth, setup_authentication
 
 
 class _PayloadWithModelDump:

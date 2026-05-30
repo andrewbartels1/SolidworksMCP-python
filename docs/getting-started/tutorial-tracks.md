@@ -1,16 +1,18 @@
 # Tutorial Tracks
 
-Build SolidWorks parts and assemblies from scratch using the MCP server and Prefab UI.
+Build SolidWorks parts from scratch using the MCP server and Python scripting.
 
 ## Track A: Script-Based Part Generation
 
 Best for automated, reproducible builds with direct Python scripting.
 
-**Example:** Use Python scripts to call MCP tools directly and build parts from sketch definitions.
+**Example:** Build the sample U-bracket from measured sketch coordinates:
 
 ```powershell
-.\.venv\Scripts\python.exe docs/getting-started/tutorials/build_u_bracket_from_scratch.py
+.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_u_bracket_artifact.py
 ```
+
+This generates `tutorial-parts/u_bracket_from_prompt.SLDPRT` and an isometric PNG alongside the SolidWorks answer-key render for visual comparison.
 
 **Advantages:**
 - Fast, deterministic output
@@ -22,63 +24,21 @@ Best for automated, reproducible builds with direct Python scripting.
 
 ---
 
-## Track B: UI-Assisted Prompt Workflow
+## Track B: SolidWorks-as-Code (SoC) Export
 
-Best for human-in-the-loop design with visual checkpoints and interactive refinement.
+Best for capturing a live MCP session as a replayable Python script.
 
-![U-bracket UI prompt flow](../assets/images/tutorials/u_bracket_ui_prompt_flow.gif)
+After building a part interactively through MCP tool calls, export the session log as a clean script:
 
-### Setup (one time)
+```python
+from solidworks_mcp.agents.soc_exporter import export_session
 
-1. Start the MCP server:
-
-```powershell
-.\.venv\Scripts\python.exe -m solidworks_mcp.server
+export_session(session_id="...", output_path="my_part.py")
 ```
 
-2. Start the Prefab UI backend (Terminal 1):
+The exported script mirrors the structure of `build_u_bracket_artifact.py` — adapter calls, sketch sequences, extrusion parameters — ready to replay or version-control.
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn solidworks_mcp.ui.server:app --host 127.0.0.1 --port 8766
-```
-
-3. Start the Prefab UI frontend (Terminal 2):
-
-```powershell
-.\.venv\Scripts\prefab.exe serve src/solidworks_mcp/ui/prefab_dashboard.py
-```
-
-4. Open browser: `http://127.0.0.1:5175`
-
-### Workflow
-
-1. **New Design** → Click to start blank session
-2. **Enter intent** → Describe what you want to build (goal + assumptions)
-3. **Approve brief** → LLM classifies design family and suggests approach
-4. **Inspect & plan** → Review model context and feature tree
-5. **Execute & refine** → Run checkpoint tool calls, review evidence
-6. **Refresh 3D** → View isometric/orthographic previews in real-time
-7. **Manual sync** → Detect and approve manual edits if needed
-
-**Advantages:**
-- Visual feedback at every step
-- Edit and iterate interactively
-- Capture evidence for design review
-- Easy to explain to team members
-
-**Best for:** Learning, design exploration, team collaboration, design documentation
-
----
-
-## Track C: Hybrid Workflow (UI + Script + Direct Prompting)
-
-Combine UI for planning, scripts for part generation, and direct prompting for refinement.
-
-1. Use **Track B UI** to write and refine prompts interactively
-2. Export proven prompts as **Track A scripts**
-3. Use prompts directly in Claude/ChatGPT if MCP server unavailable
-
-**Best for:** Production workflows, cross-team collaboration, knowledge capture
+**Best for:** Capturing design intent, sharing reproducible builds, checkpoint rewind
 
 ---
 
@@ -86,19 +46,17 @@ Combine UI for planning, scripts for part generation, and direct prompting for r
 
 | Goal | Track | Reason |
 |------|-------|--------|
-| Learn the workflow | B (UI) | Visual feedback and real-time 3D |
-| Build a baseline | A (Script) | Fast, repeatable, CI-ready |
-| Share with team | C (Hybrid) | Prompts + UI for explanation |
-| One-shot creation | B (UI) | Interactive refinement |
+| Build a known part | A (Script) | Fast, repeatable, CI-ready |
+| Capture a live session | B (SoC Export) | Turn interactive work into a script |
 | Bulk generation | A (Script) | Automation, minimal overhead |
 
 ---
 
 ## Available Tutorials
 
-### From-Scratch Part Building
+### Reference Artifacts
 
-- **[U-Joint Assembly Tutorial](tutorials/u-joint-assembly-build.md)** — Build a complete mechanical drive assembly (8 parts + assembly) from scratch using Prompts and UI checkpoints
+- **[U-Bracket Build Script](tutorial-parts/build_u_bracket_artifact.py)** — Builds the SolidWorks 2026 sample bracket from measured sketch coordinates; produces `.sldprt` and isometric PNG
 
 ### Guided Prompt Packs
 
@@ -108,10 +66,10 @@ Combine UI for planning, scripts for part generation, and direct prompting for r
 
 ## Getting Started
 
-Choose your track and open the corresponding tutorial:
+Run the reference artifact to verify your MCP setup is working:
 
-- **Track A:** Look for `build_*.py` scripts in `docs/getting-started/tutorials/`
-- **Track B:** Open [U-Joint Assembly Tutorial](tutorials/u-joint-assembly-build.md) and start the Prefab UI
-- **Track C:** Follow both A and B in parallel
+```powershell
+.\.venv\Scripts\python.exe docs/getting-started/tutorial-parts/build_u_bracket_artifact.py
+```
 
-**First time?** Start with **Track B** (UI-Assisted) — it will teach you the MCP workflow and tool capabilities interactively.
+A successful run produces `tutorial-parts/u_bracket_from_prompt.SLDPRT` and two PNG images.

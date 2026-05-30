@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.tools.macro_recording import (
+from solidworks_mcp.tools.macro_recording import (
     MacroAnalysisInput,
     MacroBatchInput,
     MacroPlaybackInput,
@@ -636,7 +636,7 @@ class TestMacroRecordingTools:
 
         sleep_calls: list[float] = []
         monkeypatch.setattr(
-            "src.solidworks_mcp.tools.macro_recording.time.sleep",
+            "solidworks_mcp.tools.macro_recording.time.sleep",
             lambda seconds: sleep_calls.append(float(seconds)),
         )
 

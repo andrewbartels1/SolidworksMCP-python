@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.solidworks_mcp.agents.vector_rag as vr
+import solidworks_mcp.agents.vector_rag as vr
 
 
 class _FakeVectors:

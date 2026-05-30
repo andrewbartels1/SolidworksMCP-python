@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.solidworks_mcp.adapters.base import AdapterResultStatus
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.adapters.base import AdapterResultStatus
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
 
 @pytest.fixture

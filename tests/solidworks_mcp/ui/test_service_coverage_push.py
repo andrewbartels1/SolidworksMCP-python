@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.agents.history_db import (
+from solidworks_mcp.agents.history_db import (
     get_design_session,
     insert_evidence_link,
     insert_model_state_snapshot,
@@ -21,8 +21,8 @@ from src.solidworks_mcp.agents.history_db import (
     update_plan_checkpoint,
     upsert_design_session,
 )
-from src.solidworks_mcp.ui import service
-from src.solidworks_mcp.ui.service import (
+from solidworks_mcp.ui import service
+from solidworks_mcp.ui.service import (
     DEFAULT_SESSION_ID,
     CheckpointCandidate,
     ClarificationResponse,
@@ -497,7 +497,7 @@ async def test_connect_target_model_success(tmp_path: Path) -> None:
     model_file = tmp_path / "test_model.sldprt"
     model_file.write_bytes(b"fake solidworks data")
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_adapter = _DummyAdapter()
         mock_factory.return_value = mock_adapter
 
@@ -535,7 +535,7 @@ async def test_connect_target_model_adapter_failure(tmp_path: Path) -> None:
     model_file = tmp_path / "test_model.sldprt"
     model_file.write_bytes(b"fake data")
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_adapter = _DummyAdapter(fail=True)
         mock_factory.return_value = mock_adapter
 
@@ -779,7 +779,7 @@ async def test_execute_next_checkpoint_success(tmp_path: Path) -> None:
     db_path = tmp_path / "test.db"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_adapter = _DummyAdapter()
         mock_factory.return_value = mock_adapter
 
@@ -819,7 +819,7 @@ def test_ensure_context_dir_creation(tmp_path: Path) -> None:
     """Test ensure_context_dir creates directory if needed."""
     custom_dir = tmp_path / "context"
 
-    with patch("src.solidworks_mcp.ui.service.DEFAULT_CONTEXT_DIR", custom_dir):
+    with patch("solidworks_mcp.ui.service.DEFAULT_CONTEXT_DIR", custom_dir):
         result = ensure_context_dir(custom_dir)
 
     assert result.exists()
@@ -947,7 +947,7 @@ async def test_open_target_model_with_mock_adapter(tmp_path: Path) -> None:
     model_file = tmp_path / "part.sldprt"
     model_file.write_bytes(b"fake solidworks data")
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_adapter = _DummyAdapter()
         mock_factory.return_value = mock_adapter
         result = await open_target_model(
@@ -966,7 +966,7 @@ async def test_open_target_model_adapter_failure(tmp_path: Path) -> None:
     model_file = tmp_path / "part.sldprt"
     model_file.write_bytes(b"fake solidworks data")
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter(fail=True)
         result = await open_target_model(
             DEFAULT_SESSION_ID, model_path=str(model_file), db_path=db_path
@@ -986,7 +986,7 @@ async def test_open_target_model_adapter_failure(tmp_path: Path) -> None:
 async def test_run_checkpoint_tools_tool_failure(tmp_path: Path) -> None:
     """Tool-level failures are recorded in failed_tools per-tool."""
     planned = {"goal": "test", "tools": ["create_sketch", "add_line"]}
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter(fail=True)
         summary = await service._run_checkpoint_tools(planned)
 
@@ -998,7 +998,7 @@ async def test_run_checkpoint_tools_tool_failure(tmp_path: Path) -> None:
 async def test_run_checkpoint_tools_check_interference_mocked(tmp_path: Path) -> None:
     """Check_interference is always mocked (no adapter binding)."""
     planned = {"goal": "test", "tools": ["check_interference"]}
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter()
         summary = await service._run_checkpoint_tools(planned)
 
@@ -1028,7 +1028,7 @@ async def test_execute_next_checkpoint_mocked_tools_path(tmp_path: Path) -> None
         db_path=db_path,
     )
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter()
         result = await execute_next_checkpoint(DEFAULT_SESSION_ID, db_path=db_path)
 
@@ -1066,7 +1066,7 @@ def test_fetch_docs_context_success(tmp_path: Path) -> None:
 
             return False
 
-    with patch("src.solidworks_mcp.ui.service.urlopen", return_value=_FakeResp()):
+    with patch("solidworks_mcp.ui.service.urlopen", return_value=_FakeResp()):
         result = fetch_docs_context(
             DEFAULT_SESSION_ID, docs_query="workflow", db_path=db_path
         )
@@ -1107,7 +1107,7 @@ async def test_highlight_feature_success(tmp_path: Path) -> None:
     db_path = tmp_path / "test.db"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter()
         result = await highlight_feature(
             DEFAULT_SESSION_ID, "Boss-Extrude1", db_path=db_path
@@ -1123,7 +1123,7 @@ async def test_highlight_feature_not_selected(tmp_path: Path) -> None:
     db_path = tmp_path / "test.db"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter(fail=True)
         result = await highlight_feature(
             DEFAULT_SESSION_ID, "Boss-Extrude1", db_path=db_path
@@ -1161,7 +1161,7 @@ async def test_highlight_feature_with_known_tree_name(tmp_path: Path) -> None:
         db_path=db_path,
     )
 
-    with patch("src.solidworks_mcp.ui.service.create_adapter") as mock_factory:
+    with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         # fail=True makes select_feature return selected=False
         mock_factory.return_value = _DummyAdapter(fail=True)
         result = await highlight_feature(
@@ -1188,9 +1188,9 @@ def test_ingest_reference_source_faiss_import_error(tmp_path: Path) -> None:
         "SolidWorks design notes for bracket assembly.", encoding="utf-8"
     )
 
-    with patch("src.solidworks_mcp.ui.service.DEFAULT_RAG_DIR", tmp_path / "rag"):
+    with patch("solidworks_mcp.ui.service.DEFAULT_RAG_DIR", tmp_path / "rag"):
         with patch(
-            "src.solidworks_mcp.agents.vector_rag.VectorRAGIndex.load",
+            "solidworks_mcp.agents.vector_rag.VectorRAGIndex.load",
             side_effect=ImportError("faiss not installed"),
         ):
             result = ingest_reference_source(
@@ -1213,9 +1213,9 @@ def test_ingest_reference_source_faiss_generic_exception(tmp_path: Path) -> None
     src_file = tmp_path / "reference.txt"
     src_file.write_text("Engineering reference document.", encoding="utf-8")
 
-    with patch("src.solidworks_mcp.ui.service.DEFAULT_RAG_DIR", tmp_path / "rag"):
+    with patch("solidworks_mcp.ui.service.DEFAULT_RAG_DIR", tmp_path / "rag"):
         with patch(
-            "src.solidworks_mcp.agents.vector_rag.VectorRAGIndex.load",
+            "solidworks_mcp.agents.vector_rag.VectorRAGIndex.load",
             side_effect=RuntimeError("index corruption"),
         ):
             result = ingest_reference_source(
@@ -1260,7 +1260,7 @@ def test_build_dashboard_state_feature_target_evidence_dedup(tmp_path: Path) -> 
         )
 
     # Set active_model_path so model-scoped filtering is active
-    from src.solidworks_mcp.ui.service import _merge_metadata
+    from solidworks_mcp.ui.service import _merge_metadata
 
     _merge_metadata(
         DEFAULT_SESSION_ID, db_path=db_path, active_model_path="/active/model.sldprt"
@@ -1295,7 +1295,7 @@ def test_build_dashboard_state_selected_feature_highlight(tmp_path: Path) -> Non
         db_path=db_path,
     )
     # Set active_model_path and selected_feature_name in metadata
-    from src.solidworks_mcp.ui.service import _merge_metadata
+    from solidworks_mcp.ui.service import _merge_metadata
 
     _merge_metadata(
         DEFAULT_SESSION_ID,
@@ -1325,7 +1325,7 @@ def test_build_dashboard_state_checkpoint_with_mocked_tools(tmp_path: Path) -> N
 
     checkpoints = list_plan_checkpoints(DEFAULT_SESSION_ID, db_path=db_path)
     if checkpoints:
-        from src.solidworks_mcp.agents.history_db import update_plan_checkpoint
+        from solidworks_mcp.agents.history_db import update_plan_checkpoint
 
         update_plan_checkpoint(
             int(checkpoints[0]["id"]),

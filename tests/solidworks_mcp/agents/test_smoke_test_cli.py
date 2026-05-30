@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-import src.solidworks_mcp.agents.smoke_test as smoke_test
-from src.solidworks_mcp.agents.schemas import RecoverableFailure
+import solidworks_mcp.agents.smoke_test as smoke_test
+from solidworks_mcp.agents.schemas import RecoverableFailure
 
 SchemaChoice = smoke_test.SchemaChoice
 _ensure_provider_credentials = smoke_test._ensure_provider_credentials
@@ -282,7 +282,7 @@ class TestCLIApp:
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
 
-        from src.solidworks_mcp.agents.schemas import ManufacturabilityReview
+        from solidworks_mcp.agents.schemas import ManufacturabilityReview
 
         review = ManufacturabilityReview(
             summary="CLI test summary here.",
@@ -318,7 +318,7 @@ class TestCLIApp:
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
 
-        from src.solidworks_mcp.agents.schemas import DocsPlan
+        from solidworks_mcp.agents.schemas import DocsPlan
 
         plan = DocsPlan(
             audience="CAD engineers",
@@ -385,7 +385,7 @@ class TestCLIApp:
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
 
-        from src.solidworks_mcp.agents.schemas import ManufacturabilityReview
+        from solidworks_mcp.agents.schemas import ManufacturabilityReview
 
         review = ManufacturabilityReview(
             summary="Anthropic CLI test summary.",
@@ -427,7 +427,7 @@ class TestCLIApp:
         monkeypatch.chdir(cwd)
         monkeypatch.setenv("GH_TOKEN", "test_token")
 
-        from src.solidworks_mcp.agents.schemas import ManufacturabilityReview
+        from solidworks_mcp.agents.schemas import ManufacturabilityReview
 
         review = ManufacturabilityReview(
             summary="Retries test summary here.",
@@ -474,7 +474,7 @@ class TestMainEntryPoint:
     def test_main_is_callable(self):
         """Test main is callable."""
 
-        from src.solidworks_mcp.agents.smoke_test import main
+        from solidworks_mcp.agents.smoke_test import main
 
         assert callable(main)
 

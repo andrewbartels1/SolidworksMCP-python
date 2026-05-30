@@ -35,8 +35,12 @@ def _close_open_solidworks_docs_in_dir(target_dir: Path) -> None:
 
     target_prefix = str(target_dir.resolve()).lower()
 
-    # pywin32 typically exposes this as a SAFEARRAY property (not callable).
-    docs = getattr(sw_app, "GetDocuments", None)
+    # GetDocuments may be a method or a property depending on dispatch mode.
+    try:
+        _attr = getattr(sw_app, "GetDocuments", None)
+        docs = _attr() if callable(_attr) else _attr
+    except Exception:
+        return
     if not docs:
         return
 

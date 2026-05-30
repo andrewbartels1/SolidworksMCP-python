@@ -1,4 +1,4 @@
-"""Branch coverage tests for src.solidworks_mcp.security.runtime."""
+"""Branch coverage tests for solidworks_mcp.security.runtime."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.solidworks_mcp.config import SecurityLevel
-from src.solidworks_mcp.security.runtime import (
+from solidworks_mcp.config import SecurityLevel
+from solidworks_mcp.security.runtime import (
     SecurityContext,
     SecurityEnforcer,
     SecurityError,
@@ -16,7 +16,7 @@ from src.solidworks_mcp.security.runtime import (
 
 
 def test_get_security_enforcer_returns_current_value(monkeypatch) -> None:
-    import src.solidworks_mcp.security as security_mod
+    import solidworks_mcp.security as security_mod
 
     sentinel = object()
     monkeypatch.setattr(security_mod, "_security_enforcer", sentinel)
@@ -82,19 +82,19 @@ def test_enforce_rate_limit_and_auth_branches(monkeypatch) -> None:
     enforcer = SecurityEnforcer(cfg)
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: False
+        "solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: False
     )
     with pytest.raises(SecurityError, match="rate limit exceeded"):
         enforcer.enforce("tool", {"client_id": "c1", "api_key": "expected"})
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: True
+        "solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: True
     )
     with pytest.raises(SecurityError, match="api_key was not provided"):
         enforcer.enforce("tool", {"client_id": "c1"})
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.runtime.validate_api_key",
+        "solidworks_mcp.security.runtime.validate_api_key",
         lambda provided_key, expected_key: provided_key == expected_key,
     )
     with pytest.raises(SecurityError, match="invalid api_key"):
@@ -113,7 +113,7 @@ def test_enforce_auth_not_required_returns_early(monkeypatch) -> None:
     )
     enforcer = SecurityEnforcer(cfg)
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: True
+        "solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: True
     )
     enforcer.enforce("tool", {"client_id": "x"})
 
@@ -128,7 +128,7 @@ def test_enforce_required_but_no_configured_key(monkeypatch) -> None:
     )
     enforcer = SecurityEnforcer(cfg)
     monkeypatch.setattr(
-        "src.solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: True
+        "solidworks_mcp.security.runtime.check_rate_limit", lambda _client_id: True
     )
     with pytest.raises(SecurityError, match="no API key configured"):
         enforcer.enforce("tool", {"client_id": "x", "api_key": "anything"})

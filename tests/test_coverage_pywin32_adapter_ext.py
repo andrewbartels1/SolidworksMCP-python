@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
-from src.solidworks_mcp.exceptions import SolidWorksMCPError
+from solidworks_mcp.exceptions import SolidWorksMCPError
 
 
 class TestPyWin32AdapterInitialization:
@@ -17,9 +17,9 @@ class TestPyWin32AdapterInitialization:
         """Test that init raises error when pywin32 is not available."""
         # Mock PYWIN32_AVAILABLE as False
         with patch(
-            "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", False
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", False
         ):
-            from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+            from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
             with pytest.raises(SolidWorksMCPError, match="pywin32 is not available"):
                 PyWin32Adapter()
@@ -28,15 +28,15 @@ class TestPyWin32AdapterInitialization:
         """Test that init raises error on non-Windows platform."""
         # Mock platform.system to return non-Windows value
         with patch(
-            "src.solidworks_mcp.adapters.pywin32_adapter.platform.system"
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system"
         ) as mock_system:
             mock_system.return_value = "Linux"
 
             # Need to reload module to pick up mocked platform
             with patch(
-                "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+                "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
             ):
-                from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+                from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
                 with pytest.raises(
                     SolidWorksMCPError,
@@ -47,14 +47,14 @@ class TestPyWin32AdapterInitialization:
     def test_darwin_platform_raises_error(self) -> None:
         """Test that init raises error on macOS."""
         with patch(
-            "src.solidworks_mcp.adapters.pywin32_adapter.platform.system"
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system"
         ) as mock_system:
             mock_system.return_value = "Darwin"
 
             with patch(
-                "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+                "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
             ):
-                from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+                from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
                 with pytest.raises(SolidWorksMCPError):
                     PyWin32Adapter()
@@ -66,7 +66,7 @@ class TestPyWin32AdapterInitialization:
     def test_initialization_with_config(self) -> None:
         """Test initialization with configuration on Windows."""
         try:
-            from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+            from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
             config = {
                 "timeout": 30,
@@ -89,7 +89,7 @@ class TestPyWin32AdapterInitialization:
     def test_constants_initialized(self) -> None:
         """Test that COM constants are initialized."""
         try:
-            from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+            from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
             adapter = PyWin32Adapter()
 
@@ -109,16 +109,16 @@ class TestPyWin32AdapterInitialization:
     async def test_connect_com_initialization(self) -> None:
         """Test connect method initializes COM."""
         try:
-            from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+            from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
             adapter = PyWin32Adapter()
 
             # Mock COM operations
             with patch(
-                "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom"
+                "solidworks_mcp.adapters.pywin32_adapter.pythoncom"
             ) as mock_com:
                 with patch(
-                    "src.solidworks_mcp.adapters.pywin32_adapter.win32com.client"
+                    "solidworks_mcp.adapters.pywin32_adapter.win32com.client"
                 ) as mock_client:
                     mock_app = MagicMock()
                     mock_client.GetObject.return_value = mock_app
@@ -140,7 +140,7 @@ class TestVBModuleNameParsing:
 
     def test_parse_vb_module_name_with_attribute(self, tmp_path) -> None:
         """Test parsing VB module name from macro file."""
-        from src.solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
 
         macro_file = tmp_path / "test_macro.swp"
         macro_file.write_text(
@@ -152,7 +152,7 @@ class TestVBModuleNameParsing:
 
     def test_parse_vb_module_name_with_single_quotes(self, tmp_path) -> None:
         """Test parsing VB module name with single quotes."""
-        from src.solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
 
         macro_file = tmp_path / "test_macro.swp"
         macro_file.write_text(
@@ -164,7 +164,7 @@ class TestVBModuleNameParsing:
 
     def test_parse_vb_module_name_missing_attribute(self, tmp_path) -> None:
         """Test parsing when VB_Name attribute is missing."""
-        from src.solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
 
         macro_file = tmp_path / "test_macro.swp"
         macro_file.write_text("Sub Main()\nEnd Sub\n")
@@ -175,7 +175,7 @@ class TestVBModuleNameParsing:
 
     def test_parse_vb_module_name_nonexistent_file(self) -> None:
         """Test parsing nonexistent file."""
-        from src.solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
 
         name = _parse_vb_module_name("/nonexistent/path/macro.swp")
         # Should fall back to default
@@ -183,7 +183,7 @@ class TestVBModuleNameParsing:
 
     def test_parse_vb_module_name_fallback_to_default(self, tmp_path) -> None:
         """Test fallback to SolidWorksMacro when no name found."""
-        from src.solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
 
         # File with no name and no stem (edge case)
         macro_file = tmp_path / ".swp"
@@ -202,20 +202,20 @@ class TestPyWin32AdapterMockCOM:
         """Test opening a model with mocked COM."""
         # Mock the entire adapter to test COM interaction
         with patch(
-            "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         ):
             with patch(
-                "src.solidworks_mcp.adapters.pywin32_adapter.platform.system"
+                "solidworks_mcp.adapters.pywin32_adapter.platform.system"
             ) as mock_sys:
                 mock_sys.return_value = "Windows"
 
                 # Import after mocking
-                from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+                from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
                 # Mock pythoncom and win32com
-                with patch("src.solidworks_mcp.adapters.pywin32_adapter.pythoncom"):
+                with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom"):
                     with patch(
-                        "src.solidworks_mcp.adapters.pywin32_adapter.win32com.client"
+                        "solidworks_mcp.adapters.pywin32_adapter.win32com.client"
                     ) as mock_client:
                         # Setup mock COM objects
                         mock_app = AsyncMock()

@@ -104,9 +104,7 @@ class ComExecutor:
             return
 
         if not PYWIN32_AVAILABLE:
-            raise RuntimeError(
-                "pywin32 is required for ComExecutor; not available"
-            )
+            raise RuntimeError("pywin32 is required for ComExecutor; not available")
 
         self._ready.clear()
         self._stopped.clear()
@@ -162,8 +160,7 @@ class ComExecutor:
         """
         if self._thread is None or not self._thread.is_alive():
             raise RuntimeError(
-                f"ComExecutor '{self._name}' is not running; "
-                "call start() first"
+                f"ComExecutor '{self._name}' is not running; call start() first"
             )
 
         fut: Future[T] = Future()
@@ -210,8 +207,7 @@ class ComExecutor:
             pythoncom.CoInitialize()
         except Exception as e:
             logger.error(
-                f"CoInitialize failed in ComExecutor worker "
-                f"'{self._name}': {e!r}"
+                f"CoInitialize failed in ComExecutor worker '{self._name}': {e!r}"
             )
             # Ready anyway so start() doesn't hang; submit() will fail fast
             # because COM isn't actually initialized.

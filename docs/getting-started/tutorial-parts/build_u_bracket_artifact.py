@@ -267,7 +267,7 @@ async def build_part() -> None:
             )
 
         # Keep only the rebuilt bracket active at end of run.
-        close_all_docs_and_restore(adapter, OUTPUT_PART)
+        # close_all_docs_and_restore(adapter, OUTPUT_PART)
         await ensure_saved_part_active(adapter, OUTPUT_PART, "restore tutorial part")
     finally:
         await adapter.disconnect()

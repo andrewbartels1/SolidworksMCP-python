@@ -1424,6 +1424,7 @@ class PyWin32Adapter(
             "swEndCondOffset": 4,
             "swEndCondUpToVertex": 5,
             "swEndCondMidPlane": 6,
+            "swEndCondThroughAllBoth": 9,
             # Dimension preferences / directions
             "swInputDimValOnCreate": 10,
             "swSketchAcceptNumericInput": 372,

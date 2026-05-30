@@ -9,14 +9,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.solidworks_mcp.agents.history_db import (
+from solidworks_mcp.agents.history_db import (
     get_design_session,
     insert_evidence_link,
     insert_model_state_snapshot,
     list_tool_call_records,
     upsert_design_session,
 )
-from src.solidworks_mcp.ui.service import (
+from solidworks_mcp.ui.service import (
     DEFAULT_SESSION_ID,
     build_dashboard_state,
     build_dashboard_trace_payload,
@@ -304,7 +304,7 @@ async def test_connect_target_model_persists_active_model_context(
     part_path.write_text("solidworks placeholder", encoding="utf-8")
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.ui.service.load_config", lambda: SimpleNamespace()
+        "solidworks_mcp.ui.service.load_config", lambda: SimpleNamespace()
     )
 
     async def _fake_create_adapter(config):
@@ -313,7 +313,7 @@ async def test_connect_target_model_persists_active_model_context(
         return _DummyAdapter()
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.ui.service.create_adapter", _fake_create_adapter
+        "solidworks_mcp.ui.service.create_adapter", _fake_create_adapter
     )
 
     state = await connect_target_model(
@@ -343,7 +343,7 @@ async def test_connect_target_model_accepts_uploaded_file(
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.ui.service.load_config", lambda: SimpleNamespace()
+        "solidworks_mcp.ui.service.load_config", lambda: SimpleNamespace()
     )
 
     async def _fake_create_adapter(config):
@@ -352,7 +352,7 @@ async def test_connect_target_model_accepts_uploaded_file(
         return _DummyAdapter()
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.ui.service.create_adapter", _fake_create_adapter
+        "solidworks_mcp.ui.service.create_adapter", _fake_create_adapter
     )
 
     state = await connect_target_model(
@@ -407,7 +407,7 @@ def test_ingest_reference_source_accepts_url(
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.ui.service._read_reference_url",
+        "solidworks_mcp.ui.service._read_reference_url",
         lambda source_url: ("Remote guide text for planning.", "guide.html"),
     )
 

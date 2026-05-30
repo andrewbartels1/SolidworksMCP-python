@@ -178,47 +178,9 @@ function dev-test-full {
     Write-Host "Running full test suite (including real SolidWorks integration)..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
-
-    # Generate tool catalog
-    Invoke-Venv @("src/utils/generate_tool_catalog.py", "--json-only")
-    Get-ChildItem -Recurse -Filter "*.pyc*" | Remove-Item
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Tool catalog generation failed; aborting." -ForegroundColor Red
-        return
-    }
-
-    # Prepare harness report stubs
-    $integrationDir = Join-Path $PSScriptRoot "tests/.generated/solidworks_integration"
-    if (-not (Test-Path $integrationDir)) {
-        New-Item -ItemType Directory -Path $integrationDir -Force | Out-Null
-    }
-    $smokeReport  = Join-Path $integrationDir "smoke_test_report.json"
-    $compatReport = Join-Path $integrationDir "api_compat_report.json"
-    if (-not (Test-Path $smokeReport))  { "[]" | Set-Content -Path $smokeReport  -Encoding UTF8 }
-    if (-not (Test-Path $compatReport)) {
-        '{"solidworks_version":"unknown","required_com_interfaces":[],"discovery_status":"not_run","classification":{}}' |
-            Set-Content -Path $compatReport -Encoding UTF8
-    }
-
-    # Keep live SolidWorks smoke checks serial to avoid overloading COM/SolidWorks.
-    Invoke-Pytest @("tests/solidworks_mcp/test_all_endpoints_harness.py", "-k", "test_smoke_all_tools", "-n", "1", "--no-cov", "-q")
-    if ($LASTEXITCODE -ne 0) { Write-Host "Smoke harness failed; aborting." -ForegroundColor Red; return }
-
-    Invoke-Pytest @("tests/solidworks_mcp/test_all_endpoints_harness.py", "-k", "test_c10_docs_discovery_and_compat", "-n", "1", "--no-cov", "-q")
-
-    # Resolve GitHub token for smoke tests
-    if (-not $env:GITHUB_API_KEY -and -not $env:GH_TOKEN) {
-        try {
-            $ghToken = (gh auth token 2>$null).Trim()
-            if ($ghToken) { $env:GITHUB_API_KEY = $ghToken }
-        } catch { }
-    }
-
-    # Run non-SolidWorks/non-smoke suite in parallel to speed up the bulk of tests.
     Invoke-Pytest @(
         "tests/",
-        "-m", "not solidworks_only and not smoke",
-        "-n", "auto",
+        "-n", "1",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
@@ -226,22 +188,6 @@ function dev-test-full {
         "--durations=10",
         "-v"
     )
-    if ($LASTEXITCODE -ne 0) {
-        Invoke-IntegrationCleanup
-        Write-Host "Full tests failed in parallel subset." -ForegroundColor Red
-        return
-    }
-
-    # Run live SolidWorks + smoke tests serially for stability and hardware safety.
-    Invoke-Pytest @(
-        "tests/",
-        "-m", "solidworks_only or smoke",
-        "-k", "not test_smoke_all_tools and not test_c10_docs_discovery_and_compat",
-        "-n", "1",
-        "--no-cov",
-        "-v"
-    )
-    Invoke-IntegrationCleanup
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Full tests passed!" -ForegroundColor Green

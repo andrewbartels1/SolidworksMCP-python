@@ -6,12 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.solidworks_mcp.adapters.factory import (
+from solidworks_mcp.adapters.factory import (
     AdapterFactory,
     _register_default_adapters,
 )
-from src.solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
-from src.solidworks_mcp.config import AdapterType
+from solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
+from solidworks_mcp.config import AdapterType
 
 
 class _DummyAdapter:
@@ -49,7 +49,7 @@ def test_create_adapter_raises_for_unregistered_adapter_type(monkeypatch) -> Non
     factory = AdapterFactory()
     monkeypatch.setattr(factory, "_adapter_registry", {AdapterType.MOCK: _DummyAdapter})
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
+        "solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
     )
 
     with pytest.raises(ValueError, match="Adaptertype"):
@@ -70,7 +70,7 @@ def test_create_adapter_vba_uses_backing_adapter_with_built_config(monkeypatch) 
         },
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
+        "solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
     )
 
     adapter = factory._create_adapter_impl(_base_config(adapter_type=AdapterType.VBA))
@@ -118,7 +118,7 @@ def test_create_adapter_vba_raises_when_backing_type_unregistered(monkeypatch) -
         },
     )
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
+        "solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
     )
 
     with pytest.raises(ValueError, match="Backing adapter type"):
@@ -140,12 +140,12 @@ def test_determine_vba_backing_type_paths(monkeypatch) -> None:
     )
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Linux"
+        "solidworks_mcp.adapters.factory.platform.system", lambda: "Linux"
     )
     assert factory._determine_vba_backing_type(_base_config()) == AdapterType.MOCK
 
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
+        "solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
     )
     assert factory._determine_vba_backing_type(_base_config()) == AdapterType.PYWIN32
 
@@ -173,7 +173,7 @@ def test_register_default_adapters_handles_pywin32_importerror(monkeypatch) -> N
 
     AdapterFactory._adapter_registry.clear()
     monkeypatch.setattr(
-        "src.solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
+        "solidworks_mcp.adapters.factory.platform.system", lambda: "Windows"
     )
 
     import builtins

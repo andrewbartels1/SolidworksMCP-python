@@ -12,7 +12,7 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("faiss")
 
-from src.solidworks_mcp.agents.vector_rag import (
+from solidworks_mcp.agents.vector_rag import (
     VectorRAGIndex,
     _chunk_text,
     build_solidworks_api_docs_index,
@@ -46,7 +46,7 @@ def mock_model():
 def patched_embeddings(mock_model):
     """Patch embedding model retrieval."""
     with patch(
-        "src.solidworks_mcp.agents.vector_rag._get_embedding_model",
+        "solidworks_mcp.agents.vector_rag._get_embedding_model",
         return_value=mock_model,
     ):
         yield mock_model
@@ -211,9 +211,7 @@ class TestVectorRAGIndexOperations:
     def test_ingest_from_url(self, temp_rag_dir: Path, patched_embeddings) -> None:
         """Test that ingest_text accepts a URL source string."""
         idx = VectorRAGIndex(namespace="url_test", rag_dir=temp_rag_dir)
-        count = idx.ingest_text(
-            "Content from URL", source="https://example.com/doc.md"
-        )
+        count = idx.ingest_text("Content from URL", source="https://example.com/doc.md")
         assert count > 0
 
 

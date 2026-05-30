@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.tools.sketching import (
+from solidworks_mcp.tools.sketching import (
     AddArcInput,
     AddCircleInput,
     AddDimensionInput,

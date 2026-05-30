@@ -13,13 +13,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.config import (
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
     SolidWorksMCPConfig,
 )
-from src.solidworks_mcp.tools.docs_discovery import (
+from solidworks_mcp.tools.docs_discovery import (
     SolidWorksDocsDiscovery,
     _detect_installed_solidworks_year,
     _discover_vba_references_via_registry,
@@ -47,8 +47,8 @@ async def test_discover_docs_tool_rag_index_rebuild_success(
     temp_dir: Path,
 ) -> None:
     """RAG index rebuild should succeed when faiss-cpu is available."""
-    from src.solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -118,8 +118,8 @@ async def test_discover_docs_tool_rag_index_rebuild_faiss_import_error(
     temp_dir: Path,
 ) -> None:
     """RAG rebuild should skip gracefully when faiss-cpu ImportError occurs."""
-    from src.solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -179,8 +179,8 @@ async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
     temp_dir: Path,
 ) -> None:
     """RAG rebuild should warn and continue on generic Exception."""
-    from src.solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
-    import src.solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -241,7 +241,7 @@ def test_discover_com_objects_with_active_doc_typeinfo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Discover_com_objects should extract IModelDoc2_active interface from open document."""
-    from src.solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
+    from solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
 
     if not HAS_WIN32COM:
         pytest.skip("win32com not available")
@@ -405,7 +405,7 @@ def test_enumerate_typeinfo_members_with_inherited_interfaces(
             return self.inherited
 
     typeinfo = _MainTypeInfo()
-    from src.solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
+    from solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
 
     if not HAS_WIN32COM:
         pytest.skip("win32com not available")
@@ -436,7 +436,7 @@ def test_enumerate_typeinfo_members_handles_bad_names(
             """Raise exception."""
             raise RuntimeError("GetNames failed")
 
-    from src.solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
+    from solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
 
     if not HAS_WIN32COM:
         pytest.skip("win32com not available")
@@ -485,7 +485,7 @@ async def test_search_api_help_tool_no_index_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Search_solidworks_api_help should return fallback when index not found."""
-    from src.solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -517,7 +517,7 @@ async def test_search_api_help_tool_empty_index_file(
     temp_dir: Path,
 ) -> None:
     """Search_solidworks_api_help should handle empty index gracefully."""
-    from src.solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -636,7 +636,7 @@ def test_detect_installed_solidworks_year_finds_latest(
 
 def test_normalize_input_with_class_model_dump(monkeypatch: pytest.MonkeyPatch) -> None:
     """_normalize_input should handle Pydantic model_dump() protocol."""
-    from src.solidworks_mcp.tools.docs_discovery import DiscoverDocsInput
+    from solidworks_mcp.tools.docs_discovery import DiscoverDocsInput
 
     class _FakeModelWithDump:
         """Fake object with model_dump method."""

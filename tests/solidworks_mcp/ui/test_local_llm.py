@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import src.solidworks_mcp.ui.local_llm as local_llm_mod
-from src.solidworks_mcp.ui.local_llm import (
+import solidworks_mcp.ui.local_llm as local_llm_mod
+from solidworks_mcp.ui.local_llm import (
     GEMMA_TIERS,
     OLLAMA_DEFAULT_ENDPOINT,
     LocalLLMConfig,
@@ -124,6 +124,18 @@ def test_recommend_model_tier_large() -> None:
 def test_recommend_model_tier_fallback_small() -> None:
     """When no tier fits (0 RAM), still returns 'small' as a safe default."""
     assert recommend_model_tier(vram_gb=0, ram_gb=0) == "small"
+
+
+def test_detect_system_ram_gb_windows_parses_wmic(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WMIC output should be parsed into GB on Windows."""
+    # Force the Windows path and stub wmic output.
+    monkeypatch.setattr(local_llm_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        local_llm_mod.subprocess,
+        "check_output",
+        lambda *_a, **_kw: "TotalPhysicalMemory\n34359738368\n",
+    )
+    assert _detect_system_ram_gb() == pytest.approx(32.0, rel=0.01)
 
 
 # ---------------------------------------------------------------------------
@@ -603,7 +615,7 @@ async def test_run_local_agent_recoverable_failure(
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
-    from src.solidworks_mcp.agents.schemas import RecoverableFailure
+    from solidworks_mcp.agents.schemas import RecoverableFailure
 
     class _Out(BaseModel):
         """Test out."""
@@ -674,7 +686,7 @@ async def test_run_local_agent_with_rag_query(monkeypatch: pytest.MonkeyPatch) -
     )
 
     # Patch query_solidworks_api_docs to return a fake context string
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     monkeypatch.setattr(
         vr_mod, "query_solidworks_api_docs", lambda *a, **k: "## API context"
@@ -725,7 +737,7 @@ async def test_run_local_agent_rag_import_error_skipped(
         MagicMock(return_value=MagicMock()),
     )
 
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     monkeypatch.setattr(
         vr_mod,
@@ -778,7 +790,7 @@ async def test_run_local_agent_rag_other_namespace(
         MagicMock(return_value=MagicMock()),
     )
 
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     monkeypatch.setattr(
         vr_mod, "query_design_knowledge", lambda *a, **k: "## design context"

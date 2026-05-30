@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.solidworks_mcp.agents.history_db import ErrorRecord, insert_error
-from src.solidworks_mcp.agents.retrieval_index import (
+from solidworks_mcp.agents.history_db import ErrorRecord, insert_error
+from solidworks_mcp.agents.retrieval_index import (
     _chunk_text,
     _read_text,
     build_local_retrieval_index,

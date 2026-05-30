@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from src.solidworks_mcp.tools.file_management import (
+from solidworks_mcp.tools.file_management import (
     FileOperationInput,
     FormatConversionInput,
     SaveAsInput,
     register_file_management_tools,
 )
-from src.solidworks_mcp.utils.feature_tree_classifier import (
+from solidworks_mcp.utils.feature_tree_classifier import (
     classify_feature_tree_snapshot,
 )
 
