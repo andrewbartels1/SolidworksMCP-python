@@ -183,6 +183,7 @@ filterwarnings = [
     "ignore::UserWarning",
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    "ignore::sqlalchemy.exc.SAWarning",
 ]
 collect_ignore = ["setup.py", "conftest.py"]
 asyncio_mode = "auto"
