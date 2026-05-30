@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import os
 import sys
 import types
-from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
@@ -14,68 +13,30 @@ from pydantic import BaseModel
 from solidworks_mcp.ui.services import llm_service
 
 
-def _load_llm_service_alias(monkeypatch, *, with_mcp: bool) -> types.ModuleType:
-    """Load llm_service under an alias with stubbed pydantic_ai modules."""
-    fake = types.ModuleType("pydantic_ai")
-    fake.Agent = object
-    fake.RecoverableFailure = type("RecoverableFailure", (BaseModel,), {})
-
-    models = types.ModuleType("pydantic_ai.models")
-    models_openai = types.ModuleType("pydantic_ai.models.openai")
-    models_openai.OpenAIChatModel = object
-    providers = types.ModuleType("pydantic_ai.providers")
-    providers_openai = types.ModuleType("pydantic_ai.providers.openai")
-    providers_openai.OpenAIProvider = object
-
-    monkeypatch.setitem(sys.modules, "pydantic_ai", fake)
-    monkeypatch.setitem(sys.modules, "pydantic_ai.models", models)
-    monkeypatch.setitem(sys.modules, "pydantic_ai.models.openai", models_openai)
-    monkeypatch.setitem(sys.modules, "pydantic_ai.providers", providers)
-    monkeypatch.setitem(sys.modules, "pydantic_ai.providers.openai", providers_openai)
-
-    if with_mcp:
-        mcp = types.ModuleType("pydantic_ai.mcp")
-        mcp.MCPServerStreamableHTTP = object
-        monkeypatch.setitem(sys.modules, "pydantic_ai.mcp", mcp)
-
-    module_path = Path(__file__).parents[3] / "src" / "solidworks_mcp" / "ui" / "services" / "llm_service.py"
-    spec = importlib.util.spec_from_file_location("llm_service_alias", module_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def test_import_handles_missing_pydantic_ai(monkeypatch) -> None:
     """Import should fall back to local RecoverableFailure when missing deps."""
-    # Force import to fail for pydantic_ai and assert fallback class is created.
-    import builtins
+    # Force a fresh import of llm_service with pydantic_ai blocked via sys.modules.
+    # Setting sys.modules["pydantic_ai"] = None makes `from pydantic_ai import ...`
+    # raise ImportError, triggering the outer except branch.
+    monkeypatch.delitem(sys.modules, "solidworks_mcp.ui.services.llm_service", raising=False)
+    monkeypatch.setitem(sys.modules, "pydantic_ai", None)
 
-    original_import = builtins.__import__
+    fresh = importlib.import_module("solidworks_mcp.ui.services.llm_service")
 
-    def _blocked_import(name, *args, **kwargs):
-        if name.startswith("pydantic_ai"):
-            raise ImportError("blocked")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", _blocked_import)
-
-    module_path = Path(__file__).parents[3] / "src" / "solidworks_mcp" / "ui" / "services" / "llm_service.py"
-    spec = importlib.util.spec_from_file_location("llm_service_no_ai", module_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    assert module.Agent is None
-    assert module.OpenAIChatModel is None
-    assert module.RecoverableFailure is not None
+    assert fresh.Agent is None
+    assert fresh.OpenAIChatModel is None
+    assert fresh.RecoverableFailure is not None
 
 
 def test_import_handles_missing_mcp_submodule(monkeypatch) -> None:
     """Import should set MCPServerStreamableHTTP to None when mcp missing."""
-    # Load llm_service with a fake pydantic_ai that lacks the mcp submodule.
-    module = _load_llm_service_alias(monkeypatch, with_mcp=False)
-    assert module.MCPServerStreamableHTTP is None
+    # Force a fresh import with pydantic_ai.mcp blocked — inner try/except fires.
+    monkeypatch.delitem(sys.modules, "solidworks_mcp.ui.services.llm_service", raising=False)
+    monkeypatch.setitem(sys.modules, "pydantic_ai.mcp", None)
+
+    fresh = importlib.import_module("solidworks_mcp.ui.services.llm_service")
+
+    assert fresh.MCPServerStreamableHTTP is None
 
 
 def test_parse_json_blob_variants() -> None:
@@ -130,6 +91,20 @@ def test_feature_helpers_and_coerce_plan() -> None:
     assert coerced.family == "extrude"
     assert len(coerced.checkpoints) == 3
     assert coerced.confidence in {"low", "high"}
+
+
+def test_extract_explicit_feature_order_regex_no_match() -> None:
+    """_extract_explicit_feature_order should return [] when regex finds no match."""
+    # The string has "->" but no valid identifier pattern → regex no-match branch (line 146).
+    result = llm_service._extract_explicit_feature_order("-> -> ->")
+    assert result == []
+
+
+def test_family_for_feature_order_returns_current_when_no_match() -> None:
+    """_family_for_feature_order should return current_family when no keyword matches."""
+    # None of assembly, revolve, extrude, cut, sketch in the feature list → line 192.
+    result = llm_service._family_for_feature_order(["fillet", "hole", "chamfer"], "loft")
+    assert result == "loft"
 
 
 def test_extract_blind_depth_handles_value_error(monkeypatch) -> None:
@@ -303,3 +278,99 @@ async def test_run_go_orchestration_error_path(monkeypatch) -> None:
 
     assert result == {"ok": True}
     assert any(call.get("orchestration_status") == "Go run failed." for call in merge_calls)
+
+
+def test_build_agent_model_local_raises_when_not_installed(monkeypatch) -> None:
+    """local: model should raise when OpenAIChatModel or OpenAIProvider is None."""
+    # Patch both to None so the guard at the top of the local: branch fires.
+    monkeypatch.setattr(llm_service, "OpenAIChatModel", None)
+    monkeypatch.setattr(llm_service, "OpenAIProvider", None)
+    with pytest.raises(RuntimeError, match="OpenAI provider support is not installed"):
+        llm_service._build_agent_model("local:llama3")
+
+
+def test_build_agent_model_github_raises_when_openai_not_installed(monkeypatch) -> None:
+    """github: model should raise when OpenAIChatModel is None."""
+    # This covers the OpenAIChatModel is None guard inside the github: branch.
+    monkeypatch.setattr(llm_service, "OpenAIChatModel", None)
+    with pytest.raises(RuntimeError, match="OpenAI support is not installed"):
+        llm_service._build_agent_model("github:openai/gpt-4.1")
+
+
+@pytest.mark.asyncio
+async def test_run_structured_agent_no_toolsets_runs_directly(monkeypatch) -> None:
+    """Agent without toolsets should use the simple agent.run path."""
+    # MCPServerStreamableHTTP=None → no toolsets → else branch of the if toolsets check.
+    class DummyModel(BaseModel):
+        value: str
+
+    class FakeAgent:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        async def run(self, _prompt):
+            return types.SimpleNamespace(output={"value": "direct"})
+
+    monkeypatch.setattr(llm_service, "Agent", FakeAgent)
+    monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", None)
+    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
+
+    result = await llm_service._run_structured_agent(
+        system_prompt="sys",
+        user_prompt="user",
+        result_type=DummyModel,
+    )
+    assert isinstance(result, DummyModel)
+    assert result.value == "direct"
+
+
+@pytest.mark.asyncio
+async def test_run_structured_agent_mcp_signature_success(monkeypatch) -> None:
+    """MCPServerStreamableHTTP with include_instructions param should set kwargs."""
+    # Signature inspection succeeds and include_instructions is in params.
+    import inspect as _inspect_mod
+
+    class DummyModel(BaseModel):
+        value: str
+
+    class FakeAgent:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+        async def run(self, _prompt):
+            return types.SimpleNamespace(output={"value": "ok"})
+
+    class FakeToolset:
+        def __init__(self, *_a, **_kw):
+            pass
+
+    class _FakeParams:
+        def __init__(self):
+            self._params = {"include_instructions": _inspect_mod.Parameter("include_instructions", _inspect_mod.Parameter.KEYWORD_ONLY)}
+
+        @property
+        def parameters(self):
+            return self._params
+
+    def _fake_signature(_obj):
+        return _FakeParams()
+
+    monkeypatch.setattr(llm_service, "Agent", FakeAgent)
+    monkeypatch.setattr(llm_service, "MCPServerStreamableHTTP", FakeToolset)
+    monkeypatch.setattr(llm_service, "_ensure_provider_credentials", lambda *_a, **_kw: None)
+    monkeypatch.setattr(llm_service, "_build_agent_model", lambda *_a, **_kw: "model")
+    monkeypatch.setattr(llm_service._inspect, "signature", lambda _obj: _FakeParams())
+
+    result = await llm_service._run_structured_agent(
+        system_prompt="sys",
+        user_prompt="user",
+        result_type=DummyModel,
+    )
+    assert isinstance(result, DummyModel)

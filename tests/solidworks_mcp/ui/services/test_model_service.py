@@ -120,3 +120,63 @@ async def test_connect_target_model_refresh_preview_failure(monkeypatch, tmp_pat
     result = await model_service.connect_target_model("s1", model_path=str(model_path))
 
     assert result == {"ok": True}
+
+
+def test_resolve_model_path_sanitize_returns_empty(monkeypatch) -> None:
+    """Sanitize returning empty should store an error and return None."""
+    # sanitize_model_path_text returns "" → the "No target model was provided" branch fires.
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(model_service, "sanitize_model_path_text", lambda _: "")
+    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+
+    result = model_service._resolve_model_path(
+        "s1",
+        model_path="/some/model.sldprt",
+        uploaded_files=None,
+        feature_target_text="",
+        db_path=None,
+        api_origin="http://localhost",
+    )
+
+    assert result is None
+    assert any("No target model was provided" in call.get("latest_message", "") for call in merge_calls)
+
+
+def test_resolve_model_path_missing_file(monkeypatch, tmp_path) -> None:
+    """A model_path pointing to a non-existent file should return None."""
+    # sanitize returns the path but the file doesn't exist → missing-file branch.
+    merge_calls: list[dict] = []
+    nonexistent = str(tmp_path / "missing.sldprt")
+    monkeypatch.setattr(model_service, "sanitize_model_path_text", lambda p: p)
+    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+
+    result = model_service._resolve_model_path(
+        "s1",
+        model_path=nonexistent,
+        uploaded_files=None,
+        feature_target_text="",
+        db_path=None,
+        api_origin="http://localhost",
+    )
+
+    assert result is None
+    assert any("not found" in call.get("latest_message", "") for call in merge_calls)
+
+
+def test_resolve_model_path_no_model_returns_none(monkeypatch) -> None:
+    """No model_path and no uploaded_files should persist an error and return None."""
+    # Neither model_path nor uploaded_files is provided → last merge_metadata branch.
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+
+    result = model_service._resolve_model_path(
+        "s1",
+        model_path=None,
+        uploaded_files=None,
+        feature_target_text="",
+        db_path=None,
+        api_origin="http://localhost",
+    )
+
+    assert result is None
+    assert any("No target model was provided" in call.get("latest_message", "") for call in merge_calls)

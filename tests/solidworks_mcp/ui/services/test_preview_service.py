@@ -208,9 +208,14 @@ async def test_refresh_preview_merges_view_urls_with_new_images(monkeypatch, tmp
     async def _create_adapter(_cfg):
         return adapters.pop(0)
 
+    # Create a real model file so _reopen_target_model_for_preview passes the exists() check.
+    model_file = tmp_path / "model.sldprt"
+    model_file.write_bytes(b"model")
+    model_path_str = str(model_file)
+
     merge_calls: list[dict[str, object]] = []
     metadata = {
-        "active_model_path": "C:/tmp/model.sldprt",
+        "active_model_path": model_path_str,
         "preview_view_urls": {"front": "old", "right": "old-right"},
         "selected_feature_name": "Feat1",
     }
@@ -228,7 +233,7 @@ async def test_refresh_preview_merges_view_urls_with_new_images(monkeypatch, tmp
     result = await preview_service.refresh_preview(
         "s1",
         preview_dir=tmp_path,
-        active_model_path_override="C:/tmp/model.sldprt",
+        active_model_path_override=model_path_str,
         reopen_active_model=False,
     )
 
@@ -309,3 +314,191 @@ async def test_highlight_feature_handles_exception(monkeypatch) -> None:
 
     assert result == {"ok": True}
     assert any(call.get("latest_error_text") == "boom" for call in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_refresh_preview_png_success_writes_snapshot(monkeypatch, tmp_path) -> None:
+    """PNG success path should write a snapshot and tool-call record."""
+    # export_image writes the file and returns success → png_ok=True branch executes.
+    from solidworks_mcp.ui.services import session_service
+
+    def export_file(_path: str, _fmt: str):
+        return _result(is_success=False, error="glb fail")
+
+    snapshot_calls: list[dict] = []
+    tool_record_calls: list[dict] = []
+
+    def export_image(payload: dict):
+        Path(payload["file_path"]).write_bytes(b"png-data")
+        return _result(is_success=True)
+
+    def export_views(payload: dict):
+        return _result(is_success=False, error="view fail")
+
+    adapter_main = _Adapter(export_file_cb=export_file, export_image_cb=export_image)
+    adapter_views = _Adapter(export_image_cb=export_views)
+    adapters = [adapter_main, adapter_views]
+
+    async def _create_adapter(_cfg):
+        return adapters.pop(0)
+
+    merge_calls: list[dict] = []
+
+    monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
+    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        preview_service, "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": json.dumps({"active_model_path": "C:/tmp/model.sldprt"})},
+    )
+    monkeypatch.setattr(
+        preview_service, "insert_model_state_snapshot",
+        lambda **kw: snapshot_calls.append(kw) or 42,
+    )
+    monkeypatch.setattr(
+        preview_service, "insert_tool_call_record",
+        lambda **kw: tool_record_calls.append(kw),
+    )
+    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
+
+    result = await preview_service.refresh_preview(
+        "s1",
+        preview_dir=tmp_path,
+        active_model_path_override="C:/tmp/model.sldprt",
+        reopen_active_model=False,
+    )
+
+    assert result == {"ok": True}
+    assert any(call.get("preview_png_ready") is True for call in merge_calls)
+    assert len(snapshot_calls) >= 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_preview_png_export_raises_exception(monkeypatch, tmp_path) -> None:
+    """PNG export exceptions should be caught and recorded as png_error."""
+    # export_image raises → except branch at lines 231-233 fires.
+    from solidworks_mcp.ui.services import session_service
+
+    def export_file(_path: str, _fmt: str):
+        return _result(is_success=False, error="glb fail")
+
+    def export_image(_payload: dict):
+        raise RuntimeError("PNG crashed")
+
+    def export_views(_payload: dict):
+        return _result(is_success=False, error="view fail")
+
+    adapter_main = _Adapter(export_file_cb=export_file, export_image_cb=export_image)
+    adapter_views = _Adapter(export_image_cb=export_views)
+    adapters = [adapter_main, adapter_views]
+
+    async def _create_adapter(_cfg):
+        return adapters.pop(0)
+
+    merge_calls: list[dict] = []
+
+    monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
+    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        preview_service, "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": json.dumps({"active_model_path": "/some/model.sldprt"})},
+    )
+    monkeypatch.setattr(preview_service, "insert_model_state_snapshot", lambda **_kw: 1)
+    monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
+
+    result = await preview_service.refresh_preview(
+        "s1",
+        preview_dir=tmp_path,
+        active_model_path_override="/some/model.sldprt",
+        reopen_active_model=False,
+    )
+
+    assert result == {"ok": True}
+    # The PNG error message should mention the exception.
+    assert any("PNG crashed" in str(call) for call in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_refresh_preview_reselect_logs_success(monkeypatch, tmp_path) -> None:
+    """Successful re-select before view screenshots should log an info message (line 259)."""
+    # selected_feature_name is set and select_feature succeeds → info log at line 259.
+    from solidworks_mcp.ui.services import session_service
+
+    model_file = tmp_path / "model.sldprt"
+    model_file.write_bytes(b"model")
+
+    def export_file(path: str, _fmt: str):
+        Path(path).write_bytes(b"glb")
+        return _result(is_success=True)
+
+    def export_image_main(_payload: dict):
+        return _result(is_success=False, error="no png")
+
+    def export_image_views(payload: dict):
+        view_path = Path(payload["file_path"])
+        view_path.write_bytes(b"view")
+        return _result(is_success=True)
+
+    adapter_main = _Adapter(export_file_cb=export_file, export_image_cb=export_image_main)
+    adapter_views = _Adapter(export_image_cb=export_image_views)
+    adapters = [adapter_main, adapter_views]
+
+    async def _create_adapter(_cfg):
+        return adapters.pop(0)
+
+    merge_calls: list[dict] = []
+    metadata = {
+        "active_model_path": str(model_file),
+        "selected_feature_name": "BossExtrude1",
+        "preview_view_urls": {},
+    }
+
+    monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
+    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        preview_service, "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": json.dumps(metadata)},
+    )
+    monkeypatch.setattr(preview_service, "insert_model_state_snapshot", lambda **_kw: 1)
+    monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
+
+    result = await preview_service.refresh_preview(
+        "s1",
+        preview_dir=tmp_path,
+        active_model_path_override=str(model_file),
+        reopen_active_model=False,
+    )
+
+    assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_highlight_feature_empty_name_returns_state(monkeypatch) -> None:
+    """highlight_feature with an empty name should skip selection and return state."""
+    # Empty feature_name triggers the guard branch → build_dashboard_state immediately.
+    from solidworks_mcp.ui.services import session_service
+
+    merge_calls: list[dict] = []
+
+    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
+    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        preview_service, "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": "{}"},
+    )
+    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+
+    result = await preview_service.highlight_feature("s1", "")
+
+    assert result == {"ok": True}
+    assert any("No feature name provided" in call.get("latest_error_text", "") for call in merge_calls)

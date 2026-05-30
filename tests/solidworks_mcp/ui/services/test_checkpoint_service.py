@@ -351,6 +351,32 @@ async def test_run_checkpoint_tools_handles_connect_failure(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_run_checkpoint_tools_disconnect_raises(tmp_path, monkeypatch) -> None:
+    """Disconnect exceptions in run_checkpoint_tools should be swallowed."""
+    # Exercise the except-in-finally at lines 963-964.
+
+    class DisconnectRaisesAdapter(StubAdapter):
+        async def disconnect(self):
+            raise RuntimeError("disconnect failed")
+
+    adapter = DisconnectRaisesAdapter()
+
+    async def _create_adapter(_cfg):
+        return adapter
+
+    monkeypatch.setattr(service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(service, "_checkpoint_script_dir", lambda _sid: tmp_path)
+
+    planned = {"tools": ["unknown_tool"]}
+    summary = await service._run_checkpoint_tools(planned, session_id="s1", checkpoint_index=1)
+
+    # Disconnect raising should not prevent the summary from being returned.
+    assert "tool_runs" in summary
+    assert summary["failed_tools"] == []
+
+
+@pytest.mark.asyncio
 async def test_open_empty_part_before_checkpoint_handles_preview_error(monkeypatch, tmp_path) -> None:
     """Preview failures should be captured in metadata updates."""
     # Exercise the preview-refresh exception path in the helper.
@@ -405,7 +431,9 @@ async def test_execute_next_checkpoint_opens_empty_and_records_failure(monkeypat
             "checkpoint_index": 0,
             "title": "First",
             "executed": False,
-            "planned_action_json": json.dumps({"tools": ["create_part"]}),
+            # Use create_sketch (not create_part/assembly/open_model) so that
+            # _should_open_empty_part returns True and the open-empty step fires.
+            "planned_action_json": json.dumps({"tools": ["create_sketch"]}),
         }
     ]
     open_calls: list[str] = []
@@ -420,8 +448,8 @@ async def test_execute_next_checkpoint_opens_empty_and_records_failure(monkeypat
 
     async def _run_checkpoint(*_a, **_kw):
         return {
-            "failed_tools": ["create_part"],
-            "tool_runs": [{"tool": "create_part", "status": "error", "message": "fail"}],
+            "failed_tools": ["create_sketch"],
+            "tool_runs": [{"tool": "create_sketch", "status": "error", "message": "fail"}],
             "script_path": "script.py",
             "script_text": "",
             "stdout_text": "",
@@ -442,3 +470,205 @@ async def test_execute_next_checkpoint_opens_empty_and_records_failure(monkeypat
     assert result == {"ok": True}
     assert open_calls == ["open"]
     assert any("failed" in call.get("latest_error_text", "") for call in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_execute_next_checkpoint_all_executed(monkeypatch) -> None:
+    """execute_next_checkpoint should short-circuit when all checkpoints are done."""
+    # Provide a list of already-executed checkpoints and assert early return.
+    merge_calls: list[dict[str, object]] = []
+
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service,
+        "ensure_dashboard_session",
+        lambda *_a, **_kw: {"user_goal": "demo", "source_mode": "plan", "metadata_json": "{}"},
+    )
+    monkeypatch.setattr(
+        service, "list_plan_checkpoints",
+        lambda *_a, **_kw: [{"executed": True, "id": 1, "checkpoint_index": 0, "title": "Done",
+                              "planned_action_json": "{}"}],
+    )
+    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+
+    result = await service.execute_next_checkpoint("s1")
+
+    assert result == {"ok": True}
+    assert any("All checkpoints" in call.get("latest_message", "") for call in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_execute_next_checkpoint_mocked_only_message(monkeypatch) -> None:
+    """Mocked-only runs should produce the MOCKED message, not the success message."""
+    # Use check_interference (a mocked tool) to trigger the mocked-only branch.
+    session_row = {
+        "user_goal": "demo",
+        "source_mode": "plan",
+        "accepted_family": None,
+        "metadata_json": json.dumps({"workflow_mode": "edit_existing", "active_model_path": "/model.sldprt"}),
+    }
+    checkpoints = [
+        {
+            "id": 2,
+            "checkpoint_index": 1,
+            "title": "Check",
+            "executed": False,
+            "planned_action_json": json.dumps({"tools": ["check_interference"]}),
+        }
+    ]
+    merge_calls: list[dict[str, object]] = []
+
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: session_row)
+    monkeypatch.setattr(service, "list_plan_checkpoints", lambda *_a, **_kw: checkpoints)
+
+    async def _run_checkpoint(*_a, **_kw):
+        return {
+            "failed_tools": [],
+            "mocked_tools": ["check_interference"],
+            "tool_runs": [{"tool": "check_interference", "status": "mocked", "message": "mocked"}],
+            "script_path": "script.py",
+            "script_text": "",
+            "stdout_text": "",
+            "stderr_text": "",
+            "validation_failures": [],
+        }
+
+    monkeypatch.setattr(service, "_run_checkpoint_tools", _run_checkpoint)
+    monkeypatch.setattr(service, "update_plan_checkpoint", lambda *_a, **_kw: None)
+    monkeypatch.setattr(service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(service, "upsert_design_session", lambda *_a, **_kw: None)
+    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+
+    result = await service.execute_next_checkpoint("s1")
+
+    assert result == {"ok": True}
+    assert any("MOCKED" in call.get("latest_message", "") for call in merge_calls)
+
+
+def test_should_open_empty_part_conditions() -> None:
+    """_should_open_empty_part should respect all early-return conditions."""
+    # Various session states that prevent opening an empty part.
+    base_meta = {"workflow_mode": "new_design", "active_model_path": "", "new_design_part_opened": False}
+    sketch_planned = {"tools": ["create_sketch"]}
+
+    # True when all conditions permit.
+    assert service._should_open_empty_part(base_meta, sketch_planned) is True
+
+    # False when workflow_mode is not new_design.
+    assert service._should_open_empty_part({**base_meta, "workflow_mode": "edit_existing"}, sketch_planned) is False
+
+    # False when active_model_path is non-empty.
+    assert service._should_open_empty_part({**base_meta, "active_model_path": "/model.sldprt"}, sketch_planned) is False
+
+    # False when new_design_part_opened is True.
+    assert service._should_open_empty_part({**base_meta, "new_design_part_opened": True}, sketch_planned) is False
+
+    # False when tools include create_part/create_assembly/open_model.
+    assert service._should_open_empty_part(base_meta, {"tools": ["create_part"]}) is False
+    assert service._should_open_empty_part(base_meta, {"tools": ["open_model"]}) is False
+
+
+@pytest.mark.asyncio
+async def test_open_empty_part_create_part_failure(monkeypatch, tmp_path) -> None:
+    """create_part failures in _open_empty_part_before_checkpoint should raise."""
+    # Exercise the RuntimeError path when create_part returns is_success=False.
+
+    class FailAdapter:
+        async def connect(self):
+            pass
+
+        async def create_part(self, **_kw):
+            return SimpleNamespace(is_success=False, error="COM error")
+
+        async def disconnect(self):
+            pass
+
+    async def _create_adapter(_cfg):
+        return FailAdapter()
+
+    monkeypatch.setattr(service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **_kw: None)
+    monkeypatch.setattr(service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(service, "ensure_preview_dir", lambda: tmp_path)
+
+    # The function should propagate the RuntimeError raised internally.
+    with pytest.raises(RuntimeError, match="Failed to open blank part|COM error"):
+        await service._open_empty_part_before_checkpoint(
+            session_id="s1",
+            session_row={"user_goal": "demo"},
+            db_path=None,
+            api_origin="http://localhost",
+        )
+
+
+@pytest.mark.asyncio
+async def test_open_empty_part_disconnect_raises(monkeypatch, tmp_path) -> None:
+    """Disconnect errors in _open_empty_part_before_checkpoint should be swallowed."""
+    # Exercise the except-in-finally at lines 190-191.
+    from solidworks_mcp.ui.services import preview_service
+
+    class DisconnectRaisesAdapter:
+        async def connect(self):
+            pass
+
+        async def create_part(self, **_kw):
+            return SimpleNamespace(is_success=True, error="")
+
+        async def disconnect(self):
+            raise RuntimeError("disconnect failed")
+
+    async def _create_adapter(_cfg):
+        return DisconnectRaisesAdapter()
+
+    async def _refresh_preview(*_a, **_kw):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(service, "merge_metadata", lambda *_a, **_kw: None)
+    monkeypatch.setattr(service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(service, "ensure_preview_dir", lambda: tmp_path)
+    monkeypatch.setattr(preview_service, "refresh_preview", _refresh_preview)
+
+    # Disconnect exception is swallowed; result should still be success.
+    result = await service._open_empty_part_before_checkpoint(
+        session_id="s1",
+        session_row={"user_goal": "demo"},
+        db_path=None,
+        api_origin="http://localhost",
+    )
+    assert result["status"] == "success"
+
+
+def test_planned_tool_payloads_direct_dict_and_suffix() -> None:
+    """_planned_tool_payloads should include direct dict and suffixed payloads."""
+    # Cover the direct-dict and suffixed-key branches.
+    planned = {
+        "create_part": {"part_name": "base"},
+        "create_part#2": {"part_name": "second"},
+        "other": "ignored",
+    }
+    payloads = service._planned_tool_payloads(planned, "create_part")
+    assert len(payloads) == 2
+    assert payloads[0]["part_name"] == "base"
+    assert payloads[1]["part_name"] == "second"
+
+
+def test_pf_handles_non_float_value() -> None:
+    """_pf should skip keys with non-numeric values and return the default."""
+    # Covers the except branch in _pf when the value can't be converted.
+    result = service._pf({"key": "not-a-float"}, "key", default=5.0)
+    assert result == 5.0
+
+
+def test_pv_handles_wrong_element_types() -> None:
+    """_pv should skip lists with non-numeric elements and return default."""
+    # Covers the except branch in _pv when list elements can't be converted.
+    result = service._pv({"key": ["a", "b", "c", "d"]}, "key", size=4, default=[1.0, 2.0, 3.0, 4.0])
+    assert result == [1.0, 2.0, 3.0, 4.0]

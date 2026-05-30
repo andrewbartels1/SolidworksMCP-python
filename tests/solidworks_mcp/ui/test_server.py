@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from src.solidworks_mcp.ui import server
+from solidworks_mcp.ui import server
 
 
 def test_should_log_request_paths() -> None:
@@ -66,7 +66,7 @@ def test_main_invokes_uvicorn(monkeypatch) -> None:
 def test_api_endpoints(monkeypatch) -> None:
     """Test api endpoints."""
 
-    from src.solidworks_mcp.ui.routers import (
+    from solidworks_mcp.ui.routers import (
         session as session_router,
         docs as docs_router,
         model as model_router,
@@ -214,7 +214,7 @@ def test_sanitize_log_payload_list_passthrough() -> None:
 
 def test_local_model_probe_endpoint(monkeypatch) -> None:
     """GET /api/ui/local-model/probe returns a JSON probe result."""
-    from src.solidworks_mcp.ui.local_llm import GEMMA_TIERS, LocalModelProbeResult
+    from solidworks_mcp.ui.local_llm import GEMMA_TIERS, LocalModelProbeResult
 
     spec = GEMMA_TIERS["small"]
     fake_probe = LocalModelProbeResult(
@@ -239,7 +239,7 @@ def test_local_model_probe_endpoint(monkeypatch) -> None:
 
         return fake_probe
 
-    import src.solidworks_mcp.ui.local_llm as llm_mod
+    import solidworks_mcp.ui.local_llm as llm_mod
 
     monkeypatch.setattr(llm_mod, "probe_local_model", _fake_probe)
 
@@ -253,14 +253,14 @@ def test_local_model_probe_endpoint(monkeypatch) -> None:
 
 def test_local_model_pull_endpoint_success(monkeypatch) -> None:
     """POST /api/ui/local-model/pull returns queued=True on success."""
-    from src.solidworks_mcp.ui.local_llm import LocalModelPullResult
+    from solidworks_mcp.ui.local_llm import LocalModelPullResult
 
     async def _fake_pull(model, endpoint=None):
         """Test fake pull."""
 
         return LocalModelPullResult(queued=True, model=model)
 
-    import src.solidworks_mcp.ui.local_llm as llm_mod
+    import solidworks_mcp.ui.local_llm as llm_mod
 
     monkeypatch.setattr(llm_mod, "pull_ollama_model", _fake_pull)
 
@@ -274,7 +274,7 @@ def test_local_model_query_endpoint(monkeypatch) -> None:
     """POST /api/ui/local-model/query returns a LocalAgentResult."""
     from pydantic import BaseModel
 
-    from src.solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
+    from solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
 
     class _FreeForm(BaseModel):
         """Test free form."""
@@ -289,7 +289,7 @@ def test_local_model_query_endpoint(monkeypatch) -> None:
 
         return fake_result
 
-    import src.solidworks_mcp.ui.local_llm as llm_mod
+    import solidworks_mcp.ui.local_llm as llm_mod
 
     monkeypatch.setattr(llm_mod, "run_local_agent", _fake_run)
 
@@ -306,7 +306,7 @@ def test_local_model_query_endpoint_with_overrides(monkeypatch) -> None:
     """Endpoint applies endpoint and model overrides from payload."""
     from pydantic import BaseModel
 
-    from src.solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
+    from solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
 
     class _FreeForm(BaseModel):
         """Test free form."""
@@ -324,7 +324,7 @@ def test_local_model_query_endpoint_with_overrides(monkeypatch) -> None:
         captured["config"] = kwargs.get("config")
         return fake_result
 
-    import src.solidworks_mcp.ui.local_llm as llm_mod
+    import solidworks_mcp.ui.local_llm as llm_mod
 
     monkeypatch.setattr(llm_mod, "run_local_agent", _fake_run)
 
@@ -355,7 +355,7 @@ def test_startup_event_no_knowledge_dir(monkeypatch) -> None:
 
 def test_middleware_logs_non_ui_requests(monkeypatch) -> None:
     """Non-UI paths bypass the logging middleware without error."""
-    from src.solidworks_mcp.ui.routers import session as session_router
+    from solidworks_mcp.ui.routers import session as session_router
 
     monkeypatch.setattr(
         session_router, "build_dashboard_state", lambda *a, **k: {"ok": 1}
@@ -367,7 +367,7 @@ def test_middleware_logs_non_ui_requests(monkeypatch) -> None:
 
 async def test_startup_event_ingests_knowledge(monkeypatch, tmp_path) -> None:
     """Startup event runs full ingest path when design_knowledge dir exists with md files."""
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     # Track calls
     ingested: list[str] = []
@@ -404,7 +404,7 @@ async def test_startup_event_ingests_knowledge(monkeypatch, tmp_path) -> None:
 
 async def test_startup_event_skips_nonempty_index(monkeypatch) -> None:
     """Startup event skips ingest when FAISS index already has chunks."""
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     ingested: list[str] = []
 
@@ -436,7 +436,7 @@ async def test_startup_event_skips_nonempty_index(monkeypatch) -> None:
 
 async def test_startup_event_import_error(monkeypatch) -> None:
     """Startup event swallows ImportError when faiss is unavailable."""
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     def _raise(*a, **k):
         """Test raise."""
@@ -452,7 +452,7 @@ async def test_startup_event_import_error(monkeypatch) -> None:
 
 async def test_startup_event_generic_exception(monkeypatch) -> None:
     """Startup event swallows generic exceptions (non-fatal)."""
-    import src.solidworks_mcp.agents.vector_rag as vr_mod
+    import solidworks_mcp.agents.vector_rag as vr_mod
 
     def _raise(*a, **k):
         """Test raise."""
@@ -483,3 +483,19 @@ def test_middleware_exception_path(monkeypatch) -> None:
     # The middleware re-raises after logging; TestClient with raise_server_exceptions=False
     # returns 500
     assert resp.status_code == 500
+
+
+def test_middleware_skips_logging_for_non_ui_path(monkeypatch) -> None:
+    """Middleware should return early for paths not starting with /api/ui/. Covers server.py line 227."""
+    from fastapi.testclient import TestClient
+
+    @server.app.get("/api/other/endpoint")
+    async def _other_route():
+        return {"non_ui": True}
+
+    client = TestClient(server.app)
+    # Path /api/other/endpoint is not /api/health and not /api/ui/...
+    # So _should_log_request returns False → line 227 executes
+    resp = client.get("/api/other/endpoint")
+    assert resp.status_code == 200
+    assert resp.json() == {"non_ui": True}

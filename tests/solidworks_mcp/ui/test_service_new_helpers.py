@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.ui import service
-from src.solidworks_mcp.ui.service import (
+from solidworks_mcp.ui import service
+from solidworks_mcp.ui.service import (
     _context_file_path,
     _default_model_for_profile,
     _feature_grounding_warning_text,
@@ -452,7 +452,7 @@ def test_fetch_docs_context_network_error(tmp_path: Path) -> None:
 
     db = tmp_path / "test.db"
     with patch(
-        "src.solidworks_mcp.ui.service.urlopen",
+        "solidworks_mcp.ui.service.urlopen",
         side_effect=OSError("connection refused"),
     ):
         state = fetch_docs_context(

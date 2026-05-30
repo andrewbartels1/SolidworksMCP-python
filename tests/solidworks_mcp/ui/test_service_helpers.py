@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from src.solidworks_mcp.agents.schemas import RecoverableFailure
-from src.solidworks_mcp.ui import service
+from solidworks_mcp.agents.schemas import RecoverableFailure
+from solidworks_mcp.ui import service
 
 
 class _DummyResult:

@@ -1,4 +1,4 @@
-"""Coverage placeholder for src.solidworks_mcp.ui.prefab_dashboard."""
+"""Coverage placeholder for solidworks_mcp.ui.prefab_dashboard."""
 
 import pytest
 
@@ -6,5 +6,5 @@ pytestmark = pytest.mark.skip(reason="Coverage placeholder for 1:1 source/test m
 
 
 def test_placeholder_prefab_dashboard() -> None:
-    """Tracks missing direct coverage for src.solidworks_mcp.ui.prefab_dashboard."""
-    assert "src.solidworks_mcp.ui.prefab_dashboard"
+    """Tracks missing direct coverage for solidworks_mcp.ui.prefab_dashboard."""
+    assert "solidworks_mcp.ui.prefab_dashboard"

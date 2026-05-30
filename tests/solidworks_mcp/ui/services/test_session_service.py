@@ -75,5 +75,5 @@ def test_build_feature_tree_rows_handles_bad_json(monkeypatch) -> None:
         "list_model_state_snapshots",
         lambda *_a, **_kw: [{"feature_tree_json": "{bad json"}],
     )
-    rows = session_service._build_feature_tree_rows("s1", selected_feature_name="", db_path=None, is_new_design_clean=False)
+    rows = session_service._build_feature_tree("s1", selected_feature_name="", db_path=None, is_new_design_clean=False)
     assert rows == []

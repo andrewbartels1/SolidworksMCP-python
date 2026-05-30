@@ -231,11 +231,11 @@ def test_prefab_modules_import_with_stubbed_prefab_ui(monkeypatch) -> None:
     _install_prefab_stubs()
 
     for name in [
-        "src.solidworks_mcp.ui.prefab_smoke_minimal",
-        "src.solidworks_mcp.ui.prefab_smoke_fetch",
-        "src.solidworks_mcp.ui.prefab_smoke_table",
-        "src.solidworks_mcp.ui.prefab_trace_probe",
-        "src.solidworks_mcp.ui.prefab_dashboard",
+        "solidworks_mcp.ui.prefab_smoke_minimal",
+        "solidworks_mcp.ui.prefab_smoke_fetch",
+        "solidworks_mcp.ui.prefab_smoke_table",
+        "solidworks_mcp.ui.prefab_trace_probe",
+        "solidworks_mcp.ui.prefab_dashboard",
     ]:
         sys.modules.pop(name, None)
         module = importlib.import_module(name)
@@ -246,8 +246,8 @@ def test_prefab_dashboard_helper_functions(monkeypatch) -> None:
     """Test prefab dashboard helper functions."""
 
     _install_prefab_stubs()
-    sys.modules.pop("src.solidworks_mcp.ui.prefab_dashboard", None)
-    module = importlib.import_module("src.solidworks_mcp.ui.prefab_dashboard")
+    sys.modules.pop("solidworks_mcp.ui.prefab_dashboard", None)
+    module = importlib.import_module("solidworks_mcp.ui.prefab_dashboard")
 
     assert module._result_state("workflow_mode", "unselected") == "unselected"
     toast = module._error_toast()
@@ -263,8 +263,8 @@ def test_prefab_trace_probe_helpers(monkeypatch) -> None:
     """Test prefab trace probe helpers."""
 
     _install_prefab_stubs()
-    sys.modules.pop("src.solidworks_mcp.ui.prefab_trace_probe", None)
-    module = importlib.import_module("src.solidworks_mcp.ui.prefab_trace_probe")
+    sys.modules.pop("solidworks_mcp.ui.prefab_trace_probe", None)
+    module = importlib.import_module("solidworks_mcp.ui.prefab_trace_probe")
 
     assert module._result_state("workflow_mode", "unselected") == "unselected"
 

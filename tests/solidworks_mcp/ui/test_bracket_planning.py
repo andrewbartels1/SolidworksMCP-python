@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.solidworks_mcp.ui.services import llm_service
+from solidworks_mcp.ui.services import llm_service
 
 
 @pytest.mark.asyncio

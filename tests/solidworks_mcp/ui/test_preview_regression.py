@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from src.solidworks_mcp.ui.services import preview_service, session_service
-from src.solidworks_mcp.ui.services._utils import merge_metadata
+from solidworks_mcp.ui.services import preview_service, session_service
+from solidworks_mcp.ui.services._utils import merge_metadata
 
 
 class _Result:
