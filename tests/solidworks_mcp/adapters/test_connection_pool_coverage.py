@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.solidworks_mcp.adapters.base import (
+from solidworks_mcp.adapters.base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
 )
-from src.solidworks_mcp.adapters.connection_pool import (
+from solidworks_mcp.adapters.connection_pool import (
     ConnectionPool,
     ConnectionPoolAdapter,
 )
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,7 +63,7 @@ def _make_unhealthy_health() -> AdapterHealth:
 # ===========================================================================
 
 
-    class TestConnectionPoolAdapterCoverage:
+class TestConnectionPoolAdapterCoverage:
     """Coverage tests for ConnectionPoolAdapter internals."""
 
     # ------------------------------------------------------------------
@@ -439,7 +439,7 @@ def _make_unhealthy_health() -> AdapterHealth:
 
             raise RuntimeError("operation failed")
 
-        with patch("src.solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
+        with patch("solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
             result = await pool._execute_with_pool("test_op", always_fail)
 
         assert result.status == AdapterResultStatus.ERROR
@@ -464,7 +464,7 @@ def _make_unhealthy_health() -> AdapterHealth:
         pool.pool.append(bad_adapter)
         await pool.available_adapters.put(bad_adapter)
 
-        with patch("src.solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
+        with patch("solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
             await pool.disconnect()
 
         mock_logger.warning.assert_called()

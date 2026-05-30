@@ -10,25 +10,25 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from src.solidworks_mcp.adapters import (
+from solidworks_mcp.adapters import (
     AdapterFactory,
     create_adapter,
 )
-from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
-from src.solidworks_mcp.adapters.circuit_breaker import (
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerAdapter,
     CircuitState,
 )
-from src.solidworks_mcp.adapters.connection_pool import (
+from solidworks_mcp.adapters.connection_pool import (
     ConnectionPool,
     ConnectionPoolAdapter,
 )
-from src.solidworks_mcp.adapters.factory import _register_default_adapters
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
-from src.solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-from src.solidworks_mcp.config import AdapterType
-from src.solidworks_mcp.exceptions import (
+from solidworks_mcp.adapters.factory import _register_default_adapters
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+from solidworks_mcp.config import AdapterType
+from solidworks_mcp.exceptions import (
     SolidWorksMCPError,
     SolidWorksOperationError,
 )
@@ -52,7 +52,7 @@ class TestAdapterFactory:
         mock_config.mock_solidworks = False
 
         with patch("platform.system", return_value="Windows"):
-            with patch("src.solidworks_mcp.adapters.pywin32_adapter.PyWin32Adapter"):
+            with patch("solidworks_mcp.adapters.pywin32_adapter.PyWin32Adapter"):
                 await create_adapter(mock_config)
                 # Would be PyWin32Adapter on actual Windows system
 
@@ -429,7 +429,7 @@ class TestConnectionPoolAdapterExtras:
         """Test AdapterHealth __contains__ and __getitem__ legacy compatibility keys."""
         from datetime import datetime
 
-        from src.solidworks_mcp.adapters.base import AdapterHealth
+        from solidworks_mcp.adapters.base import AdapterHealth
 
         health = AdapterHealth(
             healthy=True,
@@ -489,14 +489,14 @@ class TestPyWin32AdapterBranches:
     def _build_adapter(monkeypatch) -> PyWin32Adapter:
         """Test helper for build adapter."""
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
             lambda: "Windows",
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
             SimpleNamespace(com_error=RuntimeError),
             raising=False,
         )
@@ -549,11 +549,11 @@ class TestPyWin32AdapterBranches:
         # Avoid real filesystem calls: makedirs is a no-op and existence check
         # always returns True so SaveAs3 returning True is treated as success.
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.os.makedirs",
+            "solidworks_mcp.adapters.pywin32_adapter.os.makedirs",
             lambda *a, **kw: None,
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            "solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
             lambda p: True,
         )
 
@@ -576,7 +576,7 @@ class TestPyWin32AdapterBranches:
         assert (await adapter.export_file("C:/tmp/out.bad", "badfmt")).is_error
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            "solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
             lambda p: False,
         )
         assert (await adapter.export_file("C:/tmp/out.step", "step")).is_error
@@ -585,7 +585,7 @@ class TestPyWin32AdapterBranches:
         assert (await adapter.rebuild_model()).is_error
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            "solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
             lambda p: True,
         )
         model.Save3 = Mock(return_value=True)
@@ -851,7 +851,7 @@ class TestPyWin32AdapterBranches:
         co_initialize = Mock()
         co_uninitialize = Mock()
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            "solidworks_mcp.adapters.pywin32_adapter.pythoncom",
             SimpleNamespace(
                 CoInitialize=co_initialize,
                 CoUninitialize=co_uninitialize,
@@ -869,7 +869,7 @@ class TestPyWin32AdapterBranches:
             CloseDoc=Mock(),
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.win32com",
+            "solidworks_mcp.adapters.pywin32_adapter.win32com",
             SimpleNamespace(
                 client=SimpleNamespace(
                     GetActiveObject=Mock(side_effect=RuntimeError("no running app")),
@@ -1205,7 +1205,7 @@ class TestPyWin32AdapterBranches:
             pass
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
             SimpleNamespace(com_error=_FakeComError),
             raising=False,
         )
@@ -1267,7 +1267,7 @@ class TestPyWin32AdapterBranches:
             SaveAs=Mock(return_value=1),
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.os.remove",
+            "solidworks_mcp.adapters.pywin32_adapter.os.remove",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(PermissionError("locked")),
         )
         failed_save_as = await adapter.save_file(str(target))
@@ -1422,7 +1422,7 @@ class TestPyWin32AdapterBranches:
             )
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
+            "solidworks_mcp.adapters.pywin32_adapter.os.path.exists",
             lambda p: str(p).endswith("Part.prtdot"),
         )
         resolved = adapter._resolve_template_path([8, 0], ".prtdot")
@@ -2474,7 +2474,7 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            "solidworks_mcp.adapters.pywin32_adapter.pythoncom",
             SimpleNamespace(CoInitialize=Mock(), CoUninitialize=Mock()),
             raising=False,
         )
@@ -2483,7 +2483,7 @@ class TestPyWin32AdapterBranches:
             Dispatch=Mock(return_value=None),
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.win32com",
+            "solidworks_mcp.adapters.pywin32_adapter.win32com",
             SimpleNamespace(client=fake_client),
             raising=False,
         )
@@ -2491,7 +2491,7 @@ class TestPyWin32AdapterBranches:
         # also stub it or the call will hit the real COM (which connects on
         # any box with SolidWorks installed).
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter._dynamic_module",
+            "solidworks_mcp.adapters.pywin32_adapter._dynamic_module",
             SimpleNamespace(Dispatch=Mock(return_value=None)),
             raising=False,
         )
@@ -2696,7 +2696,7 @@ class TestPyWin32AdapterBranches:
 
         co_init = Mock()
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            "solidworks_mcp.adapters.pywin32_adapter.pythoncom",
             SimpleNamespace(CoInitialize=co_init, CoUninitialize=Mock()),
             raising=False,
         )
@@ -2708,10 +2708,10 @@ class TestPyWin32AdapterBranches:
             return None
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep", _fast_sleep
+            "solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep", _fast_sleep
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.win32com",
+            "solidworks_mcp.adapters.pywin32_adapter.win32com",
             SimpleNamespace(
                 client=SimpleNamespace(
                     GetActiveObject=Mock(side_effect=RuntimeError("active fail")),
@@ -2723,7 +2723,7 @@ class TestPyWin32AdapterBranches:
         # Acquire path now routes through win32com.client.dynamic.Dispatch —
         # stub it so the retry loop sees the same RuntimeError surface.
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter._dynamic_module",
+            "solidworks_mcp.adapters.pywin32_adapter._dynamic_module",
             SimpleNamespace(Dispatch=Mock(side_effect=RuntimeError("dispatch fail"))),
             raising=False,
         )
@@ -2744,7 +2744,7 @@ class TestPyWin32AdapterBranches:
             return None
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep", _fast_sleep
+            "solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep", _fast_sleep
         )
 
         never_ready = SimpleNamespace(RevisionNumber=lambda: None)
@@ -3029,14 +3029,14 @@ class TestPyWin32AdapterAdditionalCoverage:
     def _build_adapter(monkeypatch) -> PyWin32Adapter:
         """Test helper for build adapter."""
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
             lambda: "Windows",
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
             SimpleNamespace(com_error=RuntimeError),
             raising=False,
         )
@@ -3052,10 +3052,10 @@ class TestPyWin32AdapterAdditionalCoverage:
     def test_platform_guard_raises_on_non_windows(self, monkeypatch):
         """Test platform guard raises on non windows."""
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
             lambda: "Linux",
         )
         with pytest.raises(SolidWorksMCPError, match="requires Windows"):
@@ -3077,7 +3077,7 @@ class TestPyWin32AdapterAdditionalCoverage:
         adapter._session_coordinator.initialize_com_apartment = MagicMock()
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
             SimpleNamespace(com_error=ValueError),
             raising=False,
         )
@@ -3106,12 +3106,12 @@ class TestPyWin32AdapterAdditionalCoverage:
         adapter.swApp = fake_app
 
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            "solidworks_mcp.adapters.pywin32_adapter.pythoncom",
             SimpleNamespace(VT_BYREF=0x4000, VT_I4=3),
             raising=False,
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.win32com",
+            "solidworks_mcp.adapters.pywin32_adapter.win32com",
             SimpleNamespace(client=SimpleNamespace(VARIANT=lambda _kind, val: val)),
             raising=False,
         )
@@ -3172,14 +3172,14 @@ class TestAdapterCompatibilityFixes:
     ):
         """Test pywin32 health check with property revision number."""
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
             lambda: "Windows",
         )
         monkeypatch.setattr(
-            "src.solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
             SimpleNamespace(com_error=RuntimeError),
             raising=False,
         )

@@ -1,15 +1,15 @@
-"""Direct branch coverage tests for src.solidworks_mcp.adapters.solidworks.features."""
+"""Direct branch coverage tests for solidworks_mcp.adapters.solidworks.features."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.solidworks_mcp.adapters.base import (
+from solidworks_mcp.adapters.base import (
     AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
 )
-from src.solidworks_mcp.adapters.solidworks import features
+from solidworks_mcp.adapters.solidworks import features
 
 
 class _FakeFeatureAdapter:

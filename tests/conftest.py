@@ -12,15 +12,15 @@ import pytest
 import pytest_asyncio
 from fastmcp import FastMCP
 
-from src.solidworks_mcp.adapters import create_adapter
-from src.solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
-from src.solidworks_mcp.config import (
+from solidworks_mcp.adapters import create_adapter
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
     SecurityLevel,
     SolidWorksMCPConfig,
 )
-from src.solidworks_mcp.server import SolidWorksMCPServer
+from solidworks_mcp.server import SolidWorksMCPServer
 
 # Test configuration
 os.environ["USE_MOCK_SOLIDWORKS"] = "true"

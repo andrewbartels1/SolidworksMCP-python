@@ -27,7 +27,11 @@ class _IOHarness(SolidWorksIOMixin):
             return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
 
 
-def test_get_mass_properties_uses_callable_gmp() -> None:
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_get_mass_properties_uses_callable_gmp() -> None:
     """Callable GetMassProperties should be used when CreateMassProperty is missing."""
     # Provide a callable GetMassProperties to cover the callable branch.
     current_model = SimpleNamespace(
@@ -36,12 +40,13 @@ def test_get_mass_properties_uses_callable_gmp() -> None:
         GetMassProperties=lambda: [1.0, 2.0, 3.0, 0.1, 0.2, 0.3],
     )
     harness = _IOHarness(current_model)
-    result = harness.get_mass_properties()
+    result = await harness.get_mass_properties()
     assert result.is_success
     assert result.data.mass == 0.3
 
 
-def test_get_mass_properties_missing_gmp_fails() -> None:
+@pytest.mark.asyncio
+async def test_get_mass_properties_missing_gmp_fails() -> None:
     """Missing GetMassProperties should surface a failure."""
     # Use a non-callable/non-list attribute to hit raw=None.
     current_model = SimpleNamespace(
@@ -50,6 +55,6 @@ def test_get_mass_properties_missing_gmp_fails() -> None:
         GetMassProperties=123,
     )
     harness = _IOHarness(current_model)
-    result = harness.get_mass_properties()
+    result = await harness.get_mass_properties()
     assert result.status == AdapterResultStatus.ERROR
     assert "Failed to get mass properties" in (result.error or "")

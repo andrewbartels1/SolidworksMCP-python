@@ -1,12 +1,12 @@
-"""Direct branch coverage tests for src.solidworks_mcp.adapters.solidworks.sketch."""
+"""Direct branch coverage tests for solidworks_mcp.adapters.solidworks.sketch."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from src.solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
-from src.solidworks_mcp.adapters.solidworks import sketch
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.solidworks import sketch
 
 
 class _FakeSwApp:

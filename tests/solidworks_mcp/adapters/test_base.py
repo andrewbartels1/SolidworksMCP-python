@@ -16,6 +16,78 @@ class _Adapter(SolidWorksAdapter):
     async def disconnect(self) -> None:
         return None
 
+    def is_connected(self) -> bool:
+        return False
+
+    async def health_check(self):
+        return None
+
+    async def open_model(self, file_path):
+        return None
+
+    async def close_model(self, save=False):
+        return None
+
+    async def get_model_info(self):
+        return None
+
+    async def list_features(self, include_suppressed=True):
+        return None
+
+    async def list_configurations(self):
+        return None
+
+    async def create_part(self, part_name, template=None, units=None, material=None):
+        return None
+
+    async def create_assembly(self, assembly_name, template=None):
+        return None
+
+    async def create_drawing(self, drawing_name, template=None, sheet_size=None):
+        return None
+
+    async def create_extrusion(self, depth, direction=None, reverse=False, thin_feature=False, thin_thickness=0.0, both_directions=False, auto_fillet_corners=False, fillet_corners_radius=0.0):
+        return None
+
+    async def create_revolve(self, angle, direction=None):
+        return None
+
+    async def create_sweep(self, path_sketch, profile_sketch):
+        return None
+
+    async def create_loft(self, profile_sketches, guide_curves=None):
+        return None
+
+    async def create_sketch(self, plane):
+        return None
+
+    async def add_line(self, x1, y1, x2, y2):
+        return None
+
+    async def add_circle(self, cx, cy, radius):
+        return None
+
+    async def add_rectangle(self, x1, y1, x2, y2):
+        return None
+
+    async def exit_sketch(self):
+        return None
+
+    async def get_mass_properties(self):
+        return None
+
+    async def export_image(self, payload):
+        return None
+
+    async def export_file(self, file_path, file_format):
+        return None
+
+    async def get_dimension(self, name):
+        return None
+
+    async def set_dimension(self, name, value):
+        return None
+
 
 def test_base_config_normalizes_unknown_object() -> None:
     """Non-mapping config objects should normalize to empty dict."""
@@ -39,7 +111,7 @@ async def test_base_default_sketch_helpers_return_error() -> None:
     result = await adapter.add_sketch_constraint("e1", None, "coincident")
     assert result.status == AdapterResultStatus.ERROR
 
-    result = await adapter.sketch_linear_pattern(["e1"], 1.0, 2)
+    result = await adapter.sketch_linear_pattern(["e1"], 1.0, 0.0, 5.0, 2)
     assert result.status == AdapterResultStatus.ERROR
 
     result = await adapter.sketch_circular_pattern(["e1"], 90.0, 4)

@@ -94,7 +94,7 @@ def test_load_wrapper_warns_when_genpy_missing(monkeypatch) -> None:
             raise RuntimeError("no gen_py")
 
     monkeypatch.setattr(sw_type_info, "PYWIN32_AVAILABLE", True)
-    monkeypatch.setattr(sw_type_info, "gencache", _FakeCache)
+    monkeypatch.setattr(sw_type_info, "gencache", _FakeCache, raising=False)
     monkeypatch.setattr(sw_type_info, "logger", SimpleNamespace(warning=lambda msg: warnings.append(msg)))
     sw_type_info._wrapper_module = None
     sw_type_info._interface_methods.clear()

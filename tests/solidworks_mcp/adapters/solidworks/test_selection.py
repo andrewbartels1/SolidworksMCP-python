@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.adapters.solidworks.selection import SolidWorksSelectionMixin
 
@@ -22,28 +24,31 @@ class _SelectionHarness(SolidWorksSelectionMixin):
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=operation(*args))
 
 
-def test_list_features_requires_active_model() -> None:
+@pytest.mark.asyncio
+async def test_list_features_requires_active_model() -> None:
     """list_features should error when no model is active."""
     # Validate the error branch when currentModel is missing.
     harness = _SelectionHarness(has_model=False)
-    result = harness.list_features()
+    result = await harness.list_features()
     assert result.status == AdapterResultStatus.ERROR
 
 
-def test_select_feature_requires_active_model() -> None:
+@pytest.mark.asyncio
+async def test_select_feature_requires_active_model() -> None:
     """select_feature should error when no model is active."""
     # Validate the error branch when currentModel is missing.
     harness = _SelectionHarness(has_model=False)
-    result = harness.select_feature("Feat1")
+    result = await harness.select_feature("Feat1")
     assert result.status == AdapterResultStatus.ERROR
 
 
-def test_list_and_select_feature_success() -> None:
+@pytest.mark.asyncio
+async def test_list_and_select_feature_success() -> None:
     """list_features/select_feature should call the selector when model exists."""
     # Exercise the success path when currentModel is set.
     harness = _SelectionHarness(has_model=True)
-    list_result = harness.list_features()
-    select_result = harness.select_feature("Feat1")
+    list_result = await harness.list_features()
+    select_result = await harness.select_feature("Feat1")
     assert list_result.is_success
     assert list_result.data == [{"name": "Feat1"}]
     assert select_result.is_success
