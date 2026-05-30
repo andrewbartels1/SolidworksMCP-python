@@ -1797,8 +1797,6 @@ async def test_exit_sketch_clears_leftover_sw_sketch_live(
         adapter._reset_sketch_entity_registry()
 
         # SW still has the sketch open (verify before the actual exercise).
-        from solidworks_mcp.adapters import sw_type_info
-
         def _probe_sw_state() -> object:
             return adapter.swApp.ActiveDoc.GetActiveSketch2()
 
