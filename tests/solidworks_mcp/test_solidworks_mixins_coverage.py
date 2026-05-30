@@ -17,7 +17,6 @@ from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 from solidworks_mcp.adapters.solidworks.io import SolidWorksIOMixin
 from solidworks_mcp.adapters.solidworks.sketch import SolidWorksSketchMixin
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -299,7 +298,7 @@ class TestSolidWorksSketchMixinGeometryHelpers:
     @pytest.mark.asyncio
     async def test_check_sketch_fully_defined_delegates(self, monkeypatch) -> None:
         """Verify check_sketch_fully_defined passes through to sketch ops."""
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
 
         adapter = _build_adapter(monkeypatch)
         adapter.currentModel = MagicMock()

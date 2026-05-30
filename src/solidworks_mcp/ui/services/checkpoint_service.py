@@ -11,7 +11,6 @@ Design note:
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
@@ -27,13 +26,13 @@ from ...agents.history_db import (
 from ...config import load_config
 from ._utils import (
     DEFAULT_API_ORIGIN,
+    DEFAULT_PREVIEW_ORIENTATION,
     DEFAULT_SESSION_ID,
     DEFAULT_SOURCE_MODE,
     DEFAULT_USER_GOAL,
-    DEFAULT_PREVIEW_ORIENTATION,
     ensure_preview_dir,
-    parse_json_blob,
     merge_metadata,
+    parse_json_blob,
 )
 
 
@@ -607,7 +606,7 @@ def _render_checkpoint_script(
 # Direct-execution helpers
 # ---------------------------------------------------------------------------
 
-_MOCKED_TOOLS: frozenset[str] = frozenset({"check_interference"})
+_MOCKED_TOOLS: frozenset[str] = frozenset()
 
 
 def _pf(planned: dict[str, Any], *keys: str, default: float = 0.0) -> float:
@@ -870,6 +869,24 @@ async def _execute_tool(
         _ok(await adapter.export_image(payload), "export_image")
         return {"tool": tool, "status": "success", "message": "Exported image"}
 
+    if tool == "check_interference":
+        payload = (tool_payloads or [{}])[0]
+        merged = {**ctx, **payload}
+        components = merged.get("components", [])
+        tolerance = float(merged.get("tolerance", 0.001))
+        if hasattr(adapter, "check_interference"):
+            _ok(
+                await adapter.check_interference(
+                    {"components": components, "tolerance": tolerance}
+                ),
+                "check_interference",
+            )
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": "Interference check completed",
+        }
+
     return None  # Unknown tool → caller mocks it
 
 
@@ -992,7 +1009,10 @@ async def execute_next_checkpoint(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     checkpoints = list_plan_checkpoints(session_id, db_path=db_path)

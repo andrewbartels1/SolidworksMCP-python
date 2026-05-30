@@ -678,9 +678,7 @@ class TestPyWin32AdapterBranches:
         assert (
             await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)
         ).is_success
-        assert (
-            await adapter.sketch_circular_pattern(["L1"], 180.0, 4)
-        ).is_success
+        assert (await adapter.sketch_circular_pattern(["L1"], 180.0, 4)).is_success
         assert (await adapter.sketch_mirror(["L1"], "Centerline_42")).is_success
         assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_success
 
@@ -2829,9 +2827,7 @@ class TestPyWin32AdapterBranches:
         adapter.currentSketchManager = None
         assert (await adapter.add_sketch_dimension("L1", None, "linear", 10.0)).is_error
         assert (await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)).is_error
-        assert (
-            await adapter.sketch_circular_pattern(["L1"], 180.0, 4)
-        ).is_error
+        assert (await adapter.sketch_circular_pattern(["L1"], 180.0, 4)).is_error
         assert (await adapter.sketch_mirror(["L1"], "CL1")).is_error
         assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_error
 

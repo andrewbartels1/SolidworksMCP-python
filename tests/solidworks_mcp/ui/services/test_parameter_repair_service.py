@@ -64,7 +64,9 @@ def test_build_repair_instruction_text_formats_missing() -> None:
 def test_build_repair_instruction_text_for_valid() -> None:
     """Valid results should short-circuit to a success message."""
     # Valid inputs should return the success banner.
-    validation = prs.validate_checkpoint_parameters({"part_name": "demo"}, "create_part")
+    validation = prs.validate_checkpoint_parameters(
+        {"part_name": "demo"}, "create_part"
+    )
     text = prs.build_repair_instruction_text(validation)
     assert "All parameters valid" in text
 
@@ -130,7 +132,9 @@ def test_attempt_auto_repair_partial_repair_still_invalid() -> None:
     """Auto-repair should return invalid if repaired plan still has missing keys."""
     # create_circle requires circle_center_mm and circle_radius_mm; only provide one via context.
     # No auto-repair strategy for those keys → still invalid.
-    result = prs.attempt_auto_repair({}, "add_circle", context={"active_sketch_plane": "Front"})
+    result = prs.attempt_auto_repair(
+        {}, "add_circle", context={"active_sketch_plane": "Front"}
+    )
     assert result.is_valid is False
 
 

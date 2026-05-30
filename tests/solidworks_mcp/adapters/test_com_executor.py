@@ -20,7 +20,9 @@ def _fake_pythoncom(*, fail_init: bool = False, calls: list[str] | None = None):
     def _couninitialize():
         calls.append("uninit")
 
-    return SimpleNamespace(CoInitialize=_coinitialize, CoUninitialize=_couninitialize), calls
+    return SimpleNamespace(
+        CoInitialize=_coinitialize, CoUninitialize=_couninitialize
+    ), calls
 
 
 def test_start_raises_when_pywin32_missing(monkeypatch) -> None:

@@ -1072,7 +1072,6 @@ def build_dashboard_state(
     tool_history_text = trace_json(trace_tool_records(tool_history[-20:]))
 
     # --- Preview URL ---
-    import time as _time
 
     preview_url = ""
     preview_status = "No preview captured yet."

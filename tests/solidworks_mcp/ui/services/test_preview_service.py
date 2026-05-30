@@ -11,7 +11,9 @@ import pytest
 from solidworks_mcp.ui.services import preview_service
 
 
-def _result(*, is_success: bool, error: str = "", data: dict | None = None) -> SimpleNamespace:
+def _result(
+    *, is_success: bool, error: str = "", data: dict | None = None
+) -> SimpleNamespace:
     """Build a simple adapter result."""
     return SimpleNamespace(is_success=is_success, error=error, data=data or {})
 
@@ -77,7 +79,9 @@ def test_public_preview_url_uses_mtime(tmp_path, monkeypatch) -> None:
     assert "http://host/previews/preview.png?ts=" in url
 
     monkeypatch.setattr(preview_service.time, "time", lambda: 123)
-    missing = preview_service._public_preview_url(tmp_path / "missing.png", api_origin="http://host")
+    missing = preview_service._public_preview_url(
+        tmp_path / "missing.png", api_origin="http://host"
+    )
     assert missing.endswith("ts=123")
 
 
@@ -102,20 +106,37 @@ async def test_refresh_preview_missing_model_path(monkeypatch) -> None:
 
     merge_calls: list[dict[str, object]] = []
 
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
-    monkeypatch.setattr(preview_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"})
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": "{}"},
+    )
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
 
-    result = await preview_service.refresh_preview("s1", active_model_path_override=None)
+    result = await preview_service.refresh_preview(
+        "s1", active_model_path_override=None
+    )
 
     assert result == {"ok": True}
-    assert any("Preview refresh failed" in call.get("preview_status", "") for call in merge_calls)
+    assert any(
+        "Preview refresh failed" in call.get("preview_status", "")
+        for call in merge_calls
+    )
 
 
 @pytest.mark.asyncio
-async def test_refresh_preview_stl_fallback_and_png_failure(monkeypatch, tmp_path) -> None:
+async def test_refresh_preview_stl_fallback_and_png_failure(
+    monkeypatch, tmp_path
+) -> None:
     """STL fallback and PNG failure paths should update metadata."""
     # Exercise GLB fail -> STL success and PNG failure branches.
     from solidworks_mcp.ui.services import session_service
@@ -141,16 +162,29 @@ async def test_refresh_preview_stl_fallback_and_png_failure(monkeypatch, tmp_pat
         return adapters.pop(0)
 
     merge_calls: list[dict[str, object]] = []
-    metadata = {"active_model_path": "C:/tmp/model.sldprt", "preview_view_urls": {"front": "old"}}
+    metadata = {
+        "active_model_path": "C:/tmp/model.sldprt",
+        "preview_view_urls": {"front": "old"},
+    }
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
-    monkeypatch.setattr(preview_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": json.dumps(metadata)})
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": json.dumps(metadata)},
+    )
     monkeypatch.setattr(preview_service, "insert_model_state_snapshot", lambda **_kw: 1)
     monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
 
     result = await preview_service.refresh_preview(
@@ -163,11 +197,15 @@ async def test_refresh_preview_stl_fallback_and_png_failure(monkeypatch, tmp_pat
     assert result == {"ok": True}
     assert any("fmt=stl" in call.get("preview_viewer_url", "") for call in merge_calls)
     assert any(call.get("preview_png_ready") is False for call in merge_calls)
-    assert any(call.get("preview_view_urls") == {"front": "old"} for call in merge_calls)
+    assert any(
+        call.get("preview_view_urls") == {"front": "old"} for call in merge_calls
+    )
 
 
 @pytest.mark.asyncio
-async def test_refresh_preview_merges_view_urls_with_new_images(monkeypatch, tmp_path) -> None:
+async def test_refresh_preview_merges_view_urls_with_new_images(
+    monkeypatch, tmp_path
+) -> None:
     """View URL merges should preserve existing entries and add new ones."""
     # Cover re-select error handling and per-view export outcomes.
     from solidworks_mcp.ui.services import session_service
@@ -179,7 +217,9 @@ async def test_refresh_preview_merges_view_urls_with_new_images(monkeypatch, tmp
     def export_image_main(_payload: dict):
         return _result(is_success=True)
 
-    adapter_main = _Adapter(export_file_cb=export_file, export_image_cb=export_image_main)
+    adapter_main = _Adapter(
+        export_file_cb=export_file, export_image_cb=export_image_main
+    )
 
     select_calls = {"count": 0}
 
@@ -222,12 +262,22 @@ async def test_refresh_preview_merges_view_urls_with_new_images(monkeypatch, tmp
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
-    monkeypatch.setattr(preview_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": json.dumps(metadata)})
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": json.dumps(metadata)},
+    )
     monkeypatch.setattr(preview_service, "insert_model_state_snapshot", lambda **_kw: 1)
     monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
 
     result = await preview_service.refresh_preview(
@@ -238,13 +288,19 @@ async def test_refresh_preview_merges_view_urls_with_new_images(monkeypatch, tmp
     )
 
     assert result == {"ok": True}
-    merged = next(call.get("preview_view_urls") for call in merge_calls if "preview_view_urls" in call)
+    merged = next(
+        call.get("preview_view_urls")
+        for call in merge_calls
+        if "preview_view_urls" in call
+    )
     assert merged["front"] != "old"
     assert merged["right"] == "old-right"
 
 
 @pytest.mark.asyncio
-async def test_highlight_feature_parses_snapshots_and_selects(monkeypatch, tmp_path) -> None:
+async def test_highlight_feature_parses_snapshots_and_selects(
+    monkeypatch, tmp_path
+) -> None:
     """Highlight should parse feature trees and select features."""
     # Cover feature-tree parsing and selection success branches.
     from solidworks_mcp.ui.services import session_service
@@ -253,7 +309,10 @@ async def test_highlight_feature_parses_snapshots_and_selects(monkeypatch, tmp_p
     active_model.write_bytes(b"model")
 
     def select_feature(_name: str):
-        return _result(is_success=True, data={"selected": True, "entity_type": "Face", "selected_name": "Feat1"})
+        return _result(
+            is_success=True,
+            data={"selected": True, "entity_type": "Face", "selected_name": "Feat1"},
+        )
 
     adapter = _Adapter(select_feature_cb=select_feature)
 
@@ -269,15 +328,25 @@ async def test_highlight_feature_parses_snapshots_and_selects(monkeypatch, tmp_p
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
     monkeypatch.setattr(
         preview_service,
         "get_design_session",
-        lambda *_a, **_kw: {"metadata_json": json.dumps({"active_model_path": str(active_model)})},
+        lambda *_a, **_kw: {
+            "metadata_json": json.dumps({"active_model_path": str(active_model)})
+        },
     )
-    monkeypatch.setattr(preview_service, "list_model_state_snapshots", lambda *_a, **_kw: snapshots)
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "list_model_state_snapshots", lambda *_a, **_kw: snapshots
+    )
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
 
     result = await preview_service.highlight_feature("s1", "Feat1")
@@ -304,11 +373,23 @@ async def test_highlight_feature_handles_exception(monkeypatch) -> None:
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
-    monkeypatch.setattr(preview_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"})
-    monkeypatch.setattr(preview_service, "list_model_state_snapshots", lambda *_a, **_kw: [])
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
+        lambda *_a, **_kw: {"metadata_json": "{}"},
+    )
+    monkeypatch.setattr(
+        preview_service, "list_model_state_snapshots", lambda *_a, **_kw: []
+    )
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = await preview_service.highlight_feature("s1", "Feat1")
 
@@ -317,7 +398,9 @@ async def test_highlight_feature_handles_exception(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresh_preview_png_success_writes_snapshot(monkeypatch, tmp_path) -> None:
+async def test_refresh_preview_png_success_writes_snapshot(
+    monkeypatch, tmp_path
+) -> None:
     """PNG success path should write a snapshot and tool-call record."""
     # export_image writes the file and returns success → png_ok=True branch executes.
     from solidworks_mcp.ui.services import session_service
@@ -346,21 +429,32 @@ async def test_refresh_preview_png_success_writes_snapshot(monkeypatch, tmp_path
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
     monkeypatch.setattr(
-        preview_service, "get_design_session",
-        lambda *_a, **_kw: {"metadata_json": json.dumps({"active_model_path": "C:/tmp/model.sldprt"})},
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
     )
     monkeypatch.setattr(
-        preview_service, "insert_model_state_snapshot",
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
+        lambda *_a, **_kw: {
+            "metadata_json": json.dumps({"active_model_path": "C:/tmp/model.sldprt"})
+        },
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "insert_model_state_snapshot",
         lambda **kw: snapshot_calls.append(kw) or 42,
     )
     monkeypatch.setattr(
-        preview_service, "insert_tool_call_record",
+        preview_service,
+        "insert_tool_call_record",
         lambda **kw: tool_record_calls.append(kw),
     )
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
 
     result = await preview_service.refresh_preview(
@@ -376,7 +470,9 @@ async def test_refresh_preview_png_success_writes_snapshot(monkeypatch, tmp_path
 
 
 @pytest.mark.asyncio
-async def test_refresh_preview_png_export_raises_exception(monkeypatch, tmp_path) -> None:
+async def test_refresh_preview_png_export_raises_exception(
+    monkeypatch, tmp_path
+) -> None:
     """PNG export exceptions should be caught and recorded as png_error."""
     # export_image raises → except branch at lines 231-233 fires.
     from solidworks_mcp.ui.services import session_service
@@ -401,15 +497,24 @@ async def test_refresh_preview_png_export_raises_exception(monkeypatch, tmp_path
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
     monkeypatch.setattr(
-        preview_service, "get_design_session",
-        lambda *_a, **_kw: {"metadata_json": json.dumps({"active_model_path": "/some/model.sldprt"})},
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
+        lambda *_a, **_kw: {
+            "metadata_json": json.dumps({"active_model_path": "/some/model.sldprt"})
+        },
     )
     monkeypatch.setattr(preview_service, "insert_model_state_snapshot", lambda **_kw: 1)
     monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
 
     result = await preview_service.refresh_preview(
@@ -445,7 +550,9 @@ async def test_refresh_preview_reselect_logs_success(monkeypatch, tmp_path) -> N
         view_path.write_bytes(b"view")
         return _result(is_success=True)
 
-    adapter_main = _Adapter(export_file_cb=export_file, export_image_cb=export_image_main)
+    adapter_main = _Adapter(
+        export_file_cb=export_file, export_image_cb=export_image_main
+    )
     adapter_views = _Adapter(export_image_cb=export_image_views)
     adapters = [adapter_main, adapter_views]
 
@@ -461,15 +568,22 @@ async def test_refresh_preview_reselect_logs_success(monkeypatch, tmp_path) -> N
 
     monkeypatch.setattr(preview_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(preview_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
     monkeypatch.setattr(
-        preview_service, "get_design_session",
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
         lambda *_a, **_kw: {"metadata_json": json.dumps(metadata)},
     )
     monkeypatch.setattr(preview_service, "insert_model_state_snapshot", lambda **_kw: 1)
     monkeypatch.setattr(preview_service, "insert_tool_call_record", lambda **_kw: None)
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
     monkeypatch.setattr(preview_service, "ensure_preview_dir", lambda _p=None: tmp_path)
 
     result = await preview_service.refresh_preview(
@@ -490,15 +604,25 @@ async def test_highlight_feature_empty_name_returns_state(monkeypatch) -> None:
 
     merge_calls: list[dict] = []
 
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
     monkeypatch.setattr(
-        preview_service, "get_design_session",
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        preview_service,
+        "get_design_session",
         lambda *_a, **_kw: {"metadata_json": "{}"},
     )
-    monkeypatch.setattr(preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        preview_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = await preview_service.highlight_feature("s1", "")
 
     assert result == {"ok": True}
-    assert any("No feature name provided" in call.get("latest_error_text", "") for call in merge_calls)
+    assert any(
+        "No feature name provided" in call.get("latest_error_text", "")
+        for call in merge_calls
+    )

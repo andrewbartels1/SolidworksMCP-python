@@ -65,7 +65,9 @@ def _make_script(*body_chunks: str) -> str:
 
 
 def test_parse_no_checkpoints():
-    script = _make_script("        require(await adapter.create_part(name='p'), 'create_part')\n")
+    script = _make_script(
+        "        require(await adapter.create_part(name='p'), 'create_part')\n"
+    )
     result = parse_script_checkpoints(script)
     assert result == []
 
@@ -131,12 +133,15 @@ def test_truncate_basic():
 
 def test_truncate_adds_footer_if_absent():
     # Build a script with no footer (simulate mid-body truncation)
-    script = _SCRIPT_HEADER + "        require(await adapter.create_part(name='p'), 'create_part')\n"
+    script = (
+        _SCRIPT_HEADER
+        + "        require(await adapter.create_part(name='p'), 'create_part')\n"
+    )
     script += _CHECKPOINT_BLOCK
     # No footer
     truncated = truncate_script_at(script, "base-extrude")
     assert "await adapter.disconnect()" in truncated
-    assert 'asyncio.run(build_part())' in truncated
+    assert "asyncio.run(build_part())" in truncated
 
 
 def test_truncate_preserves_disconnect_if_already_present():
@@ -195,6 +200,7 @@ def test_truncate_result_is_runnable_python(tmp_path):
     truncated = truncate_script_at(script, "base-extrude")
     # Must be syntactically valid Python
     import ast
+
     ast.parse(truncated)  # raises SyntaxError if not valid
 
 
@@ -214,7 +220,7 @@ def test_list_checkpoints_empty(tmp_path):
 
 
 def test_list_checkpoints_returns_entries(tmp_path):
-    from solidworks_mcp.agents.history_db import init_db, insert_tool_call_record
+    from solidworks_mcp.agents.history_db import init_db
     from solidworks_mcp.agents.soc_rewind import list_checkpoints
 
     db = tmp_path / "test.sqlite3"
@@ -222,6 +228,7 @@ def test_list_checkpoints_returns_entries(tmp_path):
 
     # Insert a SoCCheckpoint via the DB directly
     from sqlmodel import Session
+
     from solidworks_mcp.agents.history_db import SoCCheckpoint, _build_engine
 
     engine = _build_engine(db)

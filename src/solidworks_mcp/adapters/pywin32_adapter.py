@@ -1233,7 +1233,8 @@ class _FeatureSelectionService:
             # Flag each new feature dispatch
             if feature is not None:
                 self._adapter._attempt(
-                    lambda f=feature: sw_type_info.flag_methods(f, "IFeature"), default=0
+                    lambda f=feature: sw_type_info.flag_methods(f, "IFeature"),
+                    default=0,
                 )
 
         if features:

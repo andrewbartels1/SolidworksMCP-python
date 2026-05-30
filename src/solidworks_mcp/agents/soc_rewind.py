@@ -113,7 +113,7 @@ def truncate_script_at(script_text: str, label: str) -> str:
     end_line = match["line_end"] + 1
     truncated_lines = lines[:end_line]
     # Append the script footer so the truncated version is still runnable
-    if not any("await adapter.disconnect()" in l for l in truncated_lines):
+    if not any("await adapter.disconnect()" in line for line in truncated_lines):
         truncated_lines.append(
             '\n    finally:\n        await adapter.disconnect()\n\n\nif __name__ == "__main__":\n    asyncio.run(build_part())\n'
         )

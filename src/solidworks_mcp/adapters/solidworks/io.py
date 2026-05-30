@@ -393,9 +393,7 @@ class SolidWorksIOMixin:
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
             # SystemValue is reliable on SW 2025 (in meters, convert to mm)
-            value = adapter._attempt(
-                lambda: dimension.SystemValue, default=None
-            )
+            value = adapter._attempt(lambda: dimension.SystemValue, default=None)
             if value is None:
                 # Fall back to GetValue3 for older SW versions
                 value = adapter._attempt(
@@ -560,21 +558,29 @@ class SolidWorksIOMixin:
             """Get model information."""
             active_config = adapter.currentModel.GetActiveConfiguration()
             # 'Name' on Configuration is a property, not a method.
-            config_name = getattr(active_config, "Name", "Default") if active_config else "Default"
+            config_name = (
+                getattr(active_config, "Name", "Default")
+                if active_config
+                else "Default"
+            )
             # Try GetSaveFlag (method) first, fallback to property
             is_dirty_raw = adapter._attempt(
                 lambda: adapter.currentModel.GetSaveFlag(), default=None
             )
             is_dirty = bool(is_dirty_raw) if is_dirty_raw is not None else None
             feature_count = adapter._attempt(
-                lambda: int(adapter.currentModel.FeatureManager.GetFeatureCount(True) or 0),
+                lambda: int(
+                    adapter.currentModel.FeatureManager.GetFeatureCount(True) or 0
+                ),
                 default=0,
             )
             rebuild_status_raw = adapter._attempt(
                 lambda: adapter.currentModel.GetRebuildStatus(), default=None
             )
             # GetRebuildStatus returns 0=ok, 1=needs rebuild, or None=failed
-            rebuild_status = rebuild_status_raw if rebuild_status_raw is not None else None
+            rebuild_status = (
+                rebuild_status_raw if rebuild_status_raw is not None else None
+            )
             return {
                 "title": adapter.currentModel.GetTitle(),
                 "path": adapter.currentModel.GetPathName(),
