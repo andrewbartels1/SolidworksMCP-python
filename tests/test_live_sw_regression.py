@@ -38,6 +38,10 @@ import threading
 
 import pytest
 
+# base.py is pure-pydantic (no pywin32), so importing the parameter models at
+# module scope is safe on non-Windows CI even though the SW tests are skipped.
+from solidworks_mcp.adapters.base import LoftParameters, SweepParameters
+
 # Skip the entire module when the env flag isn't set. This matches the
 # pattern used by tests/test_real_solidworks_integration.py and keeps CI
 # fast on boxes without SW.
@@ -1862,5 +1866,221 @@ async def test_spline_id_flows_into_mirror_live(connected_adapter) -> None:
         assert mirrored.is_success, (
             f"spline -> mirror composition failed: {mirrored.error}"
         )
+    finally:
+        await adapter.close_model(save=False)
+
+
+# ---- create_sweep / create_loft live regression ----
+#
+# Phase 1 of the tool-surface expansion (fork issue #2). These exercise the
+# real InsertProtrusionSwept4 / InsertProtrusionBlend2 COM calls end to end.
+# Geometry the adapter can't yet build natively (an offset reference plane for
+# the loft's second profile, a helix for the sweep path) is created with raw
+# COM, routed through the adapter's ComExecutor so it runs on the STA thread.
+
+
+def _solid_body_count(adapter) -> int:
+    """Return the number of solid bodies in the active part.
+
+    Uses ``IPartDoc.GetBodies2(swSolidBody, bVisibleOnly=True)``. A successful
+    boss feature (loft/sweep) must leave at least one solid body, so this is
+    the geometric proof that the feature actually built rather than silently
+    no-opping. COM runs inline on the calling thread, matching the rest of
+    this suite.
+    """
+    # swBodyType_e.swSolidBody == 0.
+    bodies = adapter.currentModel.GetBodies2(0, True)
+    if bodies is None:
+        return 0
+    try:
+        return len(bodies)
+    except TypeError:
+        # Single body comes back as a bare IBody2, not a tuple.
+        return 1
+
+
+def _feature_name_by_type(adapter, type_name: str) -> str:
+    """Return the name of the last feature whose ``GetTypeName2`` matches.
+
+    Walks ``FirstFeature`` → ``GetNextFeature``, flagging each feature for
+    ``IFeature`` and reading members with a call-then-fallback accessor so it
+    works whether or not pywin32 has method-flagged the feature. Used to
+    recover a feature whose creator call returns None on success (e.g.
+    ``InsertHelix``).
+    """
+    from solidworks_mcp.adapters import sw_type_info
+
+    def _flag(obj, iface):
+        try:
+            sw_type_info.flag_methods(obj, iface)
+        except Exception:
+            pass
+
+    def _read(obj, name):
+        member = getattr(obj, name, None)
+        if not callable(member):
+            return member
+        try:
+            return member()
+        except Exception:
+            return member
+
+    _flag(adapter.currentModel, "IModelDoc2")
+    found = ""
+    feat = _read(adapter.currentModel, "FirstFeature")
+    for _ in range(5000):
+        if not feat:
+            break
+        _flag(feat, "IFeature")
+        try:
+            if _read(feat, "GetTypeName2") == type_name:
+                found = str(_read(feat, "Name"))
+        except Exception:
+            pass
+        try:
+            feat = _read(feat, "GetNextFeature")
+        except Exception:
+            break
+    return found
+
+
+async def test_create_loft_tapered_bevel(connected_adapter) -> None:
+    """End-to-end loft between two parallel circular profiles of different
+    radii — a cone/gear-like tapered bevel.
+
+    Builds a 30 mm-radius circle on the Front plane, an offset reference
+    plane 40 mm in front of it, and a 10 mm-radius circle on that plane, then
+    lofts the two profiles. Asserts the feature is created AND a solid body
+    now exists, so a silently-failing ``InsertProtrusionBlend2`` (returns
+    None / leaves no geometry) fails the test.
+    """
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success, f"create_part failed: {part_result.error}"
+
+    try:
+        # Profile 1: large circle on the Front plane.
+        s1 = await adapter.create_sketch("Front")
+        assert s1.is_success, f"create_sketch(Front) failed: {s1.error}"
+        c1 = await adapter.add_circle(0.0, 0.0, 30.0)
+        assert c1.is_success, f"add_circle #1 failed: {c1.error}"
+        assert (await adapter.exit_sketch()).is_success
+
+        # Offset reference plane 40 mm in front of the Front plane. The
+        # FirstConstraint flag 8 == distance (per the InsertProtrusionBlend
+        # API example); InsertRefPlane works in metres.
+        front = adapter.currentModel.FeatureByName("Front Plane")
+        assert front and front.Select2(False, 0), "could not select Front plane"
+        ref_plane = adapter.currentModel.FeatureManager.InsertRefPlane(
+            8, 0.040, 0, 0, 0, 0
+        )
+        adapter.currentModel.ClearSelection2(True)
+        plane_name = str(ref_plane.Name) if ref_plane else ""
+        assert plane_name, "InsertRefPlane returned no reference plane"
+
+        # Profile 2: small circle on the offset plane.
+        s2 = await adapter.create_sketch(plane_name)
+        assert s2.is_success, f"create_sketch({plane_name}) failed: {s2.error}"
+        c2 = await adapter.add_circle(0.0, 0.0, 10.0)
+        assert c2.is_success, f"add_circle #2 failed: {c2.error}"
+        assert (await adapter.exit_sketch()).is_success
+
+        loft = await adapter.create_loft(
+            LoftParameters(profiles=[s1.data, s2.data])
+        )
+        assert loft.is_success, f"create_loft failed: {loft.error}"
+        assert loft.data.type == "Loft"
+        assert loft.data.name, "loft feature has no name"
+
+        assert _solid_body_count(adapter) >= 1, (
+            "loft reported success but the part has no solid body"
+        )
+    finally:
+        await adapter.close_model(save=False)
+
+
+async def test_create_sweep_circular_profile_along_helix(connected_adapter) -> None:
+    """End-to-end sweep of a circular profile along a helical path — the
+    classic spring/coil.
+
+    Builds a helix from a base circle on the Top plane, a small circular
+    profile on the Front plane positioned at the helix's start point, then
+    sweeps the profile along the helix. The profile-inference logic must pick
+    the *profile* sketch (most recent, on the Front plane) rather than the
+    helix's base-circle sketch, and the path selection must resolve the helix
+    as a reference curve (not a sketch). Asserts a solid body results.
+    """
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success, f"create_part failed: {part_result.error}"
+
+    try:
+        # Base circle (helix diameter) on the Top plane, radius 10 mm,
+        # centred on the origin. The helix axis is the Top-plane normal, so
+        # the helix starts at (10, 0, 0).
+        base = await adapter.create_sketch("Top")
+        assert base.is_success, f"create_sketch(Top) failed: {base.error}"
+        base_circle = await adapter.add_circle(0.0, 0.0, 10.0)
+        assert base_circle.is_success, f"base add_circle failed: {base_circle.error}"
+
+        # Helix by height & pitch (swHelixDefinedBy_e.HeightAndPitch == 2):
+        # 50 mm tall, 10 mm pitch → 5 revolutions. InsertHelix consumes the
+        # *open* base sketch directly (matching the SW Create_Spiral example),
+        # so the sketch must NOT be exited or re-selected first. It lives on
+        # IModelDoc2 (not IFeatureManager) and, like FeatureRevolve2 on recent
+        # SW builds, returns None on success — the helix name is read back from
+        # the feature tree afterwards.
+        adapter.currentModel.InsertHelix(
+            False,  # Reversed
+            True,  # Clockwise
+            False,  # Tapered
+            False,  # Outward
+            2,  # Helixdef = height & pitch
+            0.050,  # Height (m)
+            0.010,  # Pitch (m)
+            0.0,  # Revolution (ignored for height & pitch)
+            0.0,  # TaperAngle
+            0.0,  # Startangle
+        )
+        adapter.currentModel.ClearSelection2(True)
+        helix_name = _feature_name_by_type(adapter, "Helix")
+        assert helix_name, "InsertHelix did not create a helix feature"
+
+        # Profile: small circle on the Front plane (z=0), centred at the
+        # helix start point (10, 0) so the profile pierces the path start.
+        prof = await adapter.create_sketch("Front")
+        assert prof.is_success, f"create_sketch(Front) failed: {prof.error}"
+        prof_circle = await adapter.add_circle(10.0, 0.0, 2.0)
+        assert prof_circle.is_success, f"profile add_circle failed: {prof_circle.error}"
+        assert (await adapter.exit_sketch()).is_success
+
+        sweep = await adapter.create_sweep(SweepParameters(path=helix_name))
+        assert sweep.is_success, f"create_sweep failed: {sweep.error}"
+        assert sweep.data.type == "Sweep"
+        # The profile must be the Front-plane circle, not the helix base.
+        assert sweep.data.parameters["profile"] == prof.data, (
+            f"sweep used wrong profile {sweep.data.parameters['profile']!r}; "
+            f"expected the Front-plane profile {prof.data!r}"
+        )
+
+        assert _solid_body_count(adapter) >= 1, (
+            "sweep reported success but the part has no solid body"
+        )
+    finally:
+        await adapter.close_model(save=False)
+
+
+async def test_create_loft_too_few_profiles_returns_error(connected_adapter) -> None:
+    """A single-profile loft must error without touching SW geometry."""
+    adapter = connected_adapter
+
+    part_result = await adapter.create_part()
+    assert part_result.is_success
+    try:
+        bad = await adapter.create_loft(LoftParameters(profiles=["Sketch1"]))
+        assert bad.is_error
+        assert "at least 2 profile" in (bad.error or "")
     finally:
         await adapter.close_model(save=False)
