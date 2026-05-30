@@ -12,8 +12,10 @@ from pydantic import BaseModel, Field
 
 from ..adapters.base import (
     ExtrusionParameters,
+    LoftParameters,
     RevolveParameters,
     SolidWorksAdapter,
+    SweepParameters,
 )
 from .input_compat import CompatInput
 
@@ -1099,5 +1101,128 @@ async def register_modeling_tools(
             logger.error(f"Error in add_fillet tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 10  # Number of tools registered
+    @mcp.tool()
+    async def create_sweep(input_data: CreateSweepInput) -> dict[str, Any]:
+        """Sweep the active profile sketch along a named path sketch.
+
+        Creates a swept boss/protrusion (Insert > Boss/Base > Sweep). Requires
+        two sketches in the active part: a closed profile sketch and an open
+        path sketch named by ``path``. The profile is inferred as the sketch
+        that is not the path (in the usual "draw profile, draw path, sweep"
+        flow this is unambiguous). Optionally applies a constant twist along
+        the path.
+
+        Args:
+            input_data (CreateSweepInput): Path name and twist/merge options.
+
+        Returns:
+            dict[str, Any]: Status and feature details.
+
+        Example:
+            ```python
+            # Sweep a circular profile along "Sketch2"
+            result = await create_sweep({"path": "Sketch2"})
+
+            # Sweep with a 90-degree twist along the path
+            result = await create_sweep({
+                "path": "Sketch2",
+                "twist_along_path": True,
+                "twist_angle": 90.0,
+            })
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, CreateSweepInput)
+            params = SweepParameters(
+                path=input_data.path,
+                twist_along_path=input_data.twist_along_path,
+                twist_angle=input_data.twist_angle,
+                merge_result=input_data.merge_result,
+            )
+            result = await adapter.create_sweep(params)
+            if result.is_success:
+                feature = result.data
+                return {
+                    "status": "success",
+                    "message": f"Created sweep: {_result_value(feature, 'feature_name', 'name', default='Sweep')}",
+                    "sweep": {
+                        "name": _result_value(
+                            feature, "feature_name", "name", default="Sweep"
+                        ),
+                        "path": input_data.path,
+                        "twist_along_path": input_data.twist_along_path,
+                        "twist_angle": input_data.twist_angle,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Failed to create sweep: {result.error}",
+                }
+        except Exception as e:
+            logger.error(f"Error in create_sweep tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def create_loft(input_data: CreateLoftInput) -> dict[str, Any]:
+        """Loft a solid between two or more profile sketches.
+
+        Creates a lofted boss/protrusion (Insert > Boss/Base > Loft) blending
+        the listed profile sketches in order. Each profile must be a closed
+        contour. Optional guide curves shape the transition between profiles.
+
+        Args:
+            input_data (CreateLoftInput): Profile names, optional guide curves,
+                and tangency/merge options.
+
+        Returns:
+            dict[str, Any]: Status and feature details.
+
+        Example:
+            ```python
+            # Loft between two profiles (e.g. a tapered bevel)
+            result = await create_loft({"profiles": ["Sketch1", "Sketch2"]})
+
+            # Loft with guide curves
+            result = await create_loft({
+                "profiles": ["Sketch1", "Sketch2"],
+                "guide_curves": ["Sketch3"],
+            })
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, CreateLoftInput)
+            params = LoftParameters(
+                profiles=input_data.profiles,
+                guide_curves=input_data.guide_curves,
+                start_tangent=input_data.start_tangent,
+                end_tangent=input_data.end_tangent,
+                merge_result=input_data.merge_result,
+            )
+            result = await adapter.create_loft(params)
+            if result.is_success:
+                feature = result.data
+                return {
+                    "status": "success",
+                    "message": f"Created loft: {_result_value(feature, 'feature_name', 'name', default='Loft')}",
+                    "loft": {
+                        "name": _result_value(
+                            feature, "feature_name", "name", default="Loft"
+                        ),
+                        "profiles": input_data.profiles,
+                        "guide_curves": input_data.guide_curves,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Failed to create loft: {result.error}",
+                }
+        except Exception as e:
+            logger.error(f"Error in create_loft tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 12  # Number of tools registered
     return tool_count

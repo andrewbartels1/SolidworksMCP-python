@@ -5,6 +5,7 @@ Comprehensive test suite covering adapter factory, pywin32 adapter,
 mock adapter, circuit breaker, and connection pooling functionality.
 """
 
+import math
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -2538,6 +2539,264 @@ class TestPyWin32AdapterBranches:
         assert "Failed to create extrusion feature" in (extrusion_result.error or "")
         assert revolve_result.is_error
         assert "Failed to create revolve feature" in (revolve_result.error or "")
+
+    @staticmethod
+    def _sketch_tree(*names):
+        """Build a FirstFeature→GetNextFeature chain of ProfileFeature mocks.
+
+        Each node mimics the COM ``IFeature`` attributes the feature-tree
+        walk in ``features.py`` reads: ``GetTypeName2`` and ``Name`` as
+        properties and ``GetNextFeature`` as the link to the next node.
+        """
+        nxt = None
+        for name in reversed(names):
+            nxt = SimpleNamespace(
+                GetTypeName2="ProfileFeature", Name=name, GetNextFeature=nxt
+            )
+        return nxt
+
+    @staticmethod
+    def _feature_by_name(selected, *, fail=()):
+        """Return a FeatureByName mock that records ``Select2(append, mark)``.
+
+        ``features.py`` selects sketches/curves via
+        ``currentModel.FeatureByName(name).Select2(append, mark)``.  This
+        helper returns a callable that appends ``(name, append, mark)`` to
+        ``selected`` and reports success, except for names in ``fail`` (which
+        return ``None`` from ``FeatureByName`` to simulate a missing feature).
+        """
+
+        def factory(name):
+            if name in fail:
+                return None
+            feature = SimpleNamespace()
+            feature.Select2 = (
+                lambda append, mark, _n=name: bool(
+                    selected.append((_n, append, mark)) or True
+                )
+            )
+            return feature
+
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_no_model_and_missing_path(self, monkeypatch) -> None:
+        """create_sweep guards: no active model, then missing path name."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = None
+        no_model = await adapter.create_sweep(SimpleNamespace(path="Sketch2"))
+        assert no_model.is_error
+        assert "No active model" in (no_model.error or "")
+
+        adapter.currentModel = SimpleNamespace()
+        no_path = await adapter.create_sweep(
+            SimpleNamespace(path="", twist_along_path=False, twist_angle=0.0)
+        )
+        assert no_path.is_error
+        assert "path" in (no_path.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_success_selects_profile_and_path(
+        self, monkeypatch
+    ) -> None:
+        """create_sweep selects the non-path sketch (mark 1) + path (mark 4)
+        and forwards the constant-twist option to InsertProtrusionSwept4."""
+        adapter = self._build_adapter(monkeypatch)
+
+        selected: list[tuple] = []
+        swept = Mock(return_value=SimpleNamespace(Name="Sweep1", GetID=lambda: 7))
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
+            FeatureByName=self._feature_by_name(selected),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=swept),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(
+                path="Sketch2",
+                twist_along_path=True,
+                twist_angle=90.0,
+                merge_result=True,
+            )
+        )
+
+        assert result.is_success, result.error
+        assert result.data.type == "Sweep"
+        assert result.data.parameters["profile"] == "Sketch1"
+        assert result.data.parameters["path"] == "Sketch2"
+
+        # Profile selected under mark 1 (append False), path under mark 4
+        # (append True). Recorded tuples are (name, append, mark).
+        assert ("Sketch1", False, 1) in selected
+        assert ("Sketch2", True, 4) in selected
+
+        # TwistCtrlOption (arg index 2) == 8 (constant twist along path) and
+        # TwistAngle (arg index 15) == 90 degrees in radians.
+        swept_args = swept.call_args.args
+        assert swept_args[2] == 8
+        assert swept_args[15] == pytest.approx(math.radians(90.0))
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_no_profile_distinct_from_path(
+        self, monkeypatch
+    ) -> None:
+        """When the only sketch is the path itself, create_sweep errors."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch2"),
+            FeatureByName=self._feature_by_name([]),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=Mock()),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
+        )
+        assert result.is_error
+        assert "profile sketch distinct from the path" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_feature_none_errors(self, monkeypatch) -> None:
+        """create_sweep errors when InsertProtrusionSwept4 returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
+            FeatureByName=self._feature_by_name([]),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(
+                InsertProtrusionSwept4=Mock(return_value=None)
+            ),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
+        )
+        assert result.is_error
+        assert "Failed to create sweep feature" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_profile_selection_failure(self, monkeypatch) -> None:
+        """create_sweep errors with the profile name when Select2 can't find it."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
+            # FeatureByName returns None for the inferred profile sketch.
+            FeatureByName=self._feature_by_name([], fail=("Sketch1",)),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=Mock()),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
+        )
+        assert result.is_error
+        assert "Sketch1" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_loft_no_model_and_too_few_profiles(
+        self, monkeypatch
+    ) -> None:
+        """create_loft guards: no active model, then fewer than two profiles."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = None
+        no_model = await adapter.create_loft(SimpleNamespace(profiles=["A", "B"]))
+        assert no_model.is_error
+        assert "No active model" in (no_model.error or "")
+
+        adapter.currentModel = SimpleNamespace()
+        too_few = await adapter.create_loft(SimpleNamespace(profiles=["OnlyOne"]))
+        assert too_few.is_error
+        assert "at least 2 profile" in (too_few.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_loft_success_selects_profiles_in_order(
+        self, monkeypatch
+    ) -> None:
+        """create_loft selects every profile under mark 1 (first replaces,
+        rest append) and guide curves under mark 2."""
+        adapter = self._build_adapter(monkeypatch)
+
+        selected: list[tuple] = []
+        blend = Mock(return_value=SimpleNamespace(Name="Loft1", GetID=lambda: 9))
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=self._feature_by_name(selected),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionBlend2=blend),
+        )
+
+        result = await adapter.create_loft(
+            SimpleNamespace(
+                profiles=["Sketch1", "Sketch2"],
+                guide_curves=["Sketch3"],
+                start_tangent="normal",
+                end_tangent=None,
+                merge_result=True,
+            )
+        )
+
+        assert result.is_success, result.error
+        assert result.data.type == "Loft"
+        assert result.data.parameters["profiles"] == ["Sketch1", "Sketch2"]
+
+        # Recorded tuples are (name, append, mark).
+        assert ("Sketch1", False, 1) in selected  # first profile, replace
+        assert ("Sketch2", True, 1) in selected  # second profile, append
+        assert ("Sketch3", True, 2) in selected  # guide curve, mark 2
+
+        # StartMatchingType (arg 4) == 1 (tangent to normal) from
+        # start_tangent="normal"; EndMatchingType (arg 5) == 0 from None.
+        blend_args = blend.call_args.args
+        assert blend_args[4] == 1
+        assert blend_args[5] == 0
+
+    @pytest.mark.asyncio
+    async def test_create_loft_feature_none_errors(self, monkeypatch) -> None:
+        """create_loft errors when InsertProtrusionBlend2 returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=self._feature_by_name([]),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(
+                InsertProtrusionBlend2=Mock(return_value=None)
+            ),
+        )
+
+        result = await adapter.create_loft(
+            SimpleNamespace(
+                profiles=["Sketch1", "Sketch2"],
+                guide_curves=None,
+                start_tangent=None,
+                end_tangent=None,
+                merge_result=True,
+            )
+        )
+        assert result.is_error
+        assert "Failed to create loft feature" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_loft_profile_selection_failure(self, monkeypatch) -> None:
+        """create_loft errors with the profile name when Select2 can't find it."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=self._feature_by_name([], fail=("SketchA",)),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionBlend2=Mock()),
+        )
+
+        result = await adapter.create_loft(
+            SimpleNamespace(
+                profiles=["SketchA", "SketchB"],
+                guide_curves=None,
+                start_tangent=None,
+                end_tangent=None,
+                merge_result=True,
+            )
+        )
+        assert result.is_error
+        assert "SketchA" in (result.error or "")
 
     @pytest.mark.asyncio
     async def test_create_sketch_empty_plane_and_total_select_failure(
