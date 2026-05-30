@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.solidworks_mcp.agents.history_db import (
+from solidworks_mcp.agents.history_db import (
     ConversationEvent,
     find_conversation_events,
     find_run_timeline,

@@ -12,8 +12,8 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("faiss")
 
-import src.solidworks_mcp.agents.vector_rag as vector_rag_mod
-from src.solidworks_mcp.agents.vector_rag import (
+import solidworks_mcp.agents.vector_rag as vector_rag_mod
+from solidworks_mcp.agents.vector_rag import (
     VectorRAGIndex,
     _chunk_text,
     _get_embedding_model,

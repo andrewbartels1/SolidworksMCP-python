@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.solidworks_mcp.agents.schemas import (
+from solidworks_mcp.agents.schemas import (
     Assumption,
     DocsPlan,
     ManufacturabilityReview,

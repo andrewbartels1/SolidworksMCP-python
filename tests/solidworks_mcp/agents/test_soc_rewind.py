@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.solidworks_mcp.agents.soc_rewind import (
+from solidworks_mcp.agents.soc_rewind import (
     _cli,
     parse_script_checkpoints,
     rewind_to_checkpoint,
@@ -204,8 +204,8 @@ def test_truncate_result_is_runnable_python(tmp_path):
 
 
 def test_list_checkpoints_empty(tmp_path):
-    from src.solidworks_mcp.agents.history_db import init_db
-    from src.solidworks_mcp.agents.soc_rewind import list_checkpoints
+    from solidworks_mcp.agents.history_db import init_db
+    from solidworks_mcp.agents.soc_rewind import list_checkpoints
 
     db = tmp_path / "test.sqlite3"
     init_db(db)
@@ -214,15 +214,15 @@ def test_list_checkpoints_empty(tmp_path):
 
 
 def test_list_checkpoints_returns_entries(tmp_path):
-    from src.solidworks_mcp.agents.history_db import init_db, insert_tool_call_record
-    from src.solidworks_mcp.agents.soc_rewind import list_checkpoints
+    from solidworks_mcp.agents.history_db import init_db, insert_tool_call_record
+    from solidworks_mcp.agents.soc_rewind import list_checkpoints
 
     db = tmp_path / "test.sqlite3"
     init_db(db)
 
     # Insert a SoCCheckpoint via the DB directly
     from sqlmodel import Session
-    from src.solidworks_mcp.agents.history_db import SoCCheckpoint, _build_engine
+    from solidworks_mcp.agents.history_db import SoCCheckpoint, _build_engine
 
     engine = _build_engine(db)
     with Session(engine) as sess:
@@ -254,7 +254,7 @@ async def test_rewind_to_checkpoint_missing_cp_raises(monkeypatch):
     """Missing checkpoints should raise a clear error."""
     # Ensure the DB lookup failure path raises RuntimeError.
     monkeypatch.setattr(
-        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        "solidworks_mcp.agents.history_db.get_soc_checkpoint",
         lambda *_a, **_kw: None,
     )
 
@@ -267,7 +267,7 @@ async def test_rewind_to_checkpoint_open_model_failure(monkeypatch):
     """Adapter open failures should raise RuntimeError."""
     # Provide a checkpoint but simulate adapter failure.
     monkeypatch.setattr(
-        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        "solidworks_mcp.agents.history_db.get_soc_checkpoint",
         lambda *_a, **_kw: {"file_path": "C:/tmp/checkpoint.sldprt"},
     )
 
@@ -284,7 +284,7 @@ async def test_rewind_to_checkpoint_returns_truncated_script(monkeypatch):
     """Truncation should return the script up to the checkpoint."""
     # Validate the happy-path truncation with an in-script checkpoint.
     monkeypatch.setattr(
-        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        "solidworks_mcp.agents.history_db.get_soc_checkpoint",
         lambda *_a, **_kw: {"file_path": "C:/tmp/checkpoint.sldprt"},
     )
 
@@ -304,7 +304,7 @@ async def test_rewind_to_checkpoint_returns_original_when_label_missing(monkeypa
     """Missing checkpoint blocks should return the original script."""
     # Validate the KeyError fallback path.
     monkeypatch.setattr(
-        "src.solidworks_mcp.agents.soc_rewind.get_soc_checkpoint",
+        "solidworks_mcp.agents.history_db.get_soc_checkpoint",
         lambda *_a, **_kw: {"file_path": "C:/tmp/checkpoint.sldprt"},
     )
 
@@ -339,7 +339,7 @@ def test_cli_missing_label_prints_available(monkeypatch, capsys):
     # Provide a label that does not exist and assert available labels are printed.
     monkeypatch.setattr("sys.argv", ["soc_rewind.py", "s1", "missing"])
     monkeypatch.setattr(
-        "src.solidworks_mcp.agents.soc_rewind.list_checkpoints",
+        "solidworks_mcp.agents.soc_rewind.list_checkpoints",
         lambda *_a, **_kw: [
             {
                 "label": "base",
@@ -362,7 +362,7 @@ def test_cli_prints_checkpoint_info(monkeypatch, capsys):
     # Provide a matching label and assert printed fields.
     monkeypatch.setattr("sys.argv", ["soc_rewind.py", "s1", "base"])
     monkeypatch.setattr(
-        "src.solidworks_mcp.agents.soc_rewind.list_checkpoints",
+        "solidworks_mcp.agents.soc_rewind.list_checkpoints",
         lambda *_a, **_kw: [
             {
                 "label": "base",

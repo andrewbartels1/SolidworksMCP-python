@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from src.solidworks_mcp.agents.soc_exporter import (
+from solidworks_mcp.agents.soc_exporter import (
     _CodeGen,
     _checkpoint_comment,
     _entity_id_from_output,
@@ -439,12 +439,12 @@ def test_checkpoint_comment_no_records():
 
 
 def test_export_session_writes_file(tmp_path):
-    from src.solidworks_mcp.agents.soc_exporter import export_session
+    from solidworks_mcp.agents.soc_exporter import export_session
 
     db = tmp_path / "test.sqlite3"
     out = tmp_path / "session_out.py"
 
-    from src.solidworks_mcp.agents.history_db import init_db, insert_tool_call_record
+    from solidworks_mcp.agents.history_db import init_db, insert_tool_call_record
 
     init_db(db)
     insert_tool_call_record(
@@ -470,3 +470,74 @@ def test_export_session_writes_file(tmp_path):
     assert "create_part" in content
     assert "create_sketch" in content
     assert "async def build_part()" in content
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage for uncovered lines
+# ---------------------------------------------------------------------------
+
+
+def test_parse_output_empty_and_invalid() -> None:
+    """_parse_output should return {} for empty/None and invalid JSON. Covers lines 89, 93-94."""
+    # Empty string → line 89
+    assert _parse_output(None) == {}
+    assert _parse_output("") == {}
+    # Invalid JSON → lines 93-94
+    assert _parse_output("{bad json}") == {}
+    # Non-dict JSON → line 92
+    assert _parse_output("[1, 2, 3]") == {}
+
+
+def test_coord_returns_default_when_no_key_matches() -> None:
+    """_coord should return default when none of the keys are found. Covers line 103."""
+    from solidworks_mcp.agents.soc_exporter import _coord
+    result = _coord({}, "x", "y", default=99.0)
+    assert result == 99.0
+
+
+def test_codegen_emit_add_sketch_constraint_with_entity3() -> None:
+    """emit_add_sketch_constraint should include entity3 ref when e3 is set. Covers line 291."""
+    cg = _CodeGen()
+    inp = {"entity1": "line1", "entity2": "line2", "entity3": "origin", "relation_type": "coincident"}
+    cg.emit_add_sketch_constraint(inp, {})
+    script = "\n".join(cg._lines)
+    assert "add_sketch_constraint" in script
+    # entity3 was included (3 entity refs + relation = 4 args)
+    assert script.count(",") >= 3
+
+
+def test_codegen_emit_create_cut_extrude_with_reverse() -> None:
+    """emit_create_cut_extrude should include reverse_direction when reverse_direction=True. Covers line 360."""
+    cg = _CodeGen()
+    inp = {"depth": 5.0, "reverse_direction": True, "through_all": False}
+    cg.emit_create_cut_extrude(inp, {})
+    script = "\n".join(cg._lines)
+    assert "reverse_direction=True" in script
+
+
+def test_codegen_emit_unknown_writes_todo() -> None:
+    """emit_unknown should write a TODO comment. Covers lines 414-415."""
+    cg = _CodeGen()
+    cg.emit_unknown("some_unknown_tool", {"param": "value"})
+    script = "\n".join(cg._lines)
+    assert "# TODO: some_unknown_tool" in script
+
+
+def test_codegen_process_skips_soc_and_ui_tools() -> None:
+    """process() should return early for soc_create_checkpoint and ui.* tools. Covers line 466."""
+    cg = _CodeGen()
+    initial_lines = len(cg._lines)
+    cg.process("soc_create_checkpoint", {}, {})
+    cg.process("ui.some_action", {}, {})
+    # No new lines added
+    assert len(cg._lines) == initial_lines
+
+
+def test_soc_exporter_cli_usage(monkeypatch) -> None:
+    """CLI with <3 args should print usage and exit. Covers lines 611-615."""
+    import sys
+    from solidworks_mcp.agents import soc_exporter
+
+    monkeypatch.setattr(sys, "argv", ["prog", "only_one_arg"])
+    with pytest.raises(SystemExit):
+        soc_exporter._cli()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.solidworks_mcp.agents.history_db import (
+from solidworks_mcp.agents.history_db import (
     DEFAULT_DB_PATH,
     AgentRun,
     ErrorCatalog,
@@ -113,7 +113,7 @@ class TestBuildEngineAndInitDb:
 
     def test_init_db_uses_default_path_when_none(self, monkeypatch, tmp_path: Path):
         """Passing db_path=None falls back to DEFAULT_DB_PATH."""
-        import src.solidworks_mcp.agents.history_db as hdb
+        import solidworks_mcp.agents.history_db as hdb
 
         fake_default = tmp_path / ".solidworks_mcp" / "agent_memory.sqlite3"
         monkeypatch.setattr(hdb, "DEFAULT_DB_PATH", fake_default)
