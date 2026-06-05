@@ -4,6 +4,8 @@ Provides tools for managing SolidWorks files including save, save as, file prope
 and reference management.
 """
 
+import os
+from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
@@ -266,6 +268,94 @@ async def register_file_management_tools(
             if value is not None:
                 return value
         return default
+
+    def _prepare_save_target(
+        raw_path: str,
+        *,
+        required_extension: str,
+        overwrite: bool,
+    ) -> tuple[str | None, dict[str, Any] | None]:
+        """Normalize and validate a save target before adapter/COM calls.
+
+        Enforces pre-save guardrails used by save convenience tools so invalid paths are
+        rejected consistently in both mock and real adapter modes. The helper performs:
+        path trimming, extension normalization, parent-directory existence check,
+        directory writability check, and overwrite policy enforcement.
+
+        Args:
+            raw_path (str): User-supplied path where the file should be saved.
+            required_extension (str): Required extension for the target document type
+                (for example, ``.sldprt`` or ``.sldasm``).
+            overwrite (bool): Whether saving is allowed to replace an existing file.
+
+        Returns:
+            tuple[str | None, dict[str, Any] | None]: A tuple where the first element is
+            the normalized save path string when validation succeeds, and the second element
+            is ``None``. When validation fails, the first element is ``None`` and the second
+            element is an error payload shaped like ``{"status": "error", "message": ...}``.
+
+        Example:
+            ```python
+            target, error = _prepare_save_target(
+                r"C:/Exports/bracket.step",
+                required_extension=".sldprt",
+                overwrite=False,
+            )
+
+            # target == "C:/Exports/bracket.sldprt" when valid
+            # error is populated when directory is missing/not writable,
+            # or when the target exists and overwrite is False.
+            ```
+
+        Note:
+            Validation is intentionally executed before adapter calls to avoid opaque COM
+            failures and to provide deterministic, user-friendly error messages.
+        """
+        file_path = raw_path.strip()
+        if not file_path:
+            return None, {
+                "status": "error",
+                "message": "Invalid file_path: path is empty or whitespace.",
+            }
+
+        cleaned = file_path.strip()
+        extension_name = required_extension.lstrip(".")
+        if (
+            cleaned.count(".") == 1
+            and cleaned.startswith(".")
+            and cleaned[1:].lower() == extension_name
+        ):
+            # Reject extension-only input such as ".sldprt".
+            return None, {
+                "status": "error",
+                "message": "Invalid file_path: missing base filename before extension.",
+            }
+
+        target = Path(file_path)
+        if target.suffix.lower() != required_extension.lower():
+            # Normalize extension so save_part/save_assembly always use their canonical type.
+            target = target.with_suffix(required_extension)
+
+        target_dir = target.parent
+        if not target_dir.exists():
+            return None, {
+                "status": "error",
+                "message": f"Target directory does not exist: {target_dir}",
+            }
+
+        if not os.access(target_dir, os.W_OK):
+            return None, {
+                "status": "error",
+                "message": f"Target directory is not writable: {target_dir}",
+            }
+
+        if target.exists() and not overwrite:
+            return None, {
+                "status": "error",
+                "message": f"File already exists and overwrite=False: {target}. Set overwrite=True to replace it.",
+            }
+
+        return str(target), None
 
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
@@ -947,27 +1037,13 @@ async def register_file_management_tools(
 
             # If file_path provided, use save_as; otherwise use regular save
             if input_data.file_path:
-                # Normalize and validate provided path
-                file_path = input_data.file_path.strip()
-                if not file_path:
-                    return {
-                        "status": "error",
-                        "message": "Invalid file_path: path is empty or whitespace.",
-                    }
-                # Detect paths that are effectively just the extension (e.g., ".sldprt")
-                cleaned = file_path.strip()
-                if (
-                    cleaned.count(".") == 1
-                    and cleaned.startswith(".")
-                    and cleaned[1:].lower() == "sldprt"
-                ):
-                    return {
-                        "status": "error",
-                        "message": "Invalid file_path: missing base filename before extension.",
-                    }
-                # Ensure path ends with .sldprt for parts
-                if not file_path.lower().endswith(".sldprt"):
-                    file_path = file_path.rsplit(".", 1)[0] + ".sldprt"
+                file_path, validation_error = _prepare_save_target(
+                    input_data.file_path,
+                    required_extension=".sldprt",
+                    overwrite=input_data.overwrite,
+                )
+                if validation_error is not None:
+                    return validation_error
 
                 result = await adapter.save_file(file_path)
                 if result.is_success:
@@ -1043,10 +1119,13 @@ async def register_file_management_tools(
 
             # If file_path provided, use save_as; otherwise use regular save
             if input_data.file_path:
-                # Ensure path ends with .sldasm for assemblies
-                file_path = input_data.file_path
-                if not file_path.lower().endswith(".sldasm"):
-                    file_path = file_path.rsplit(".", 1)[0] + ".sldasm"
+                file_path, validation_error = _prepare_save_target(
+                    input_data.file_path,
+                    required_extension=".sldasm",
+                    overwrite=input_data.overwrite,
+                )
+                if validation_error is not None:
+                    return validation_error
 
                 result = await adapter.save_file(file_path)
                 if result.is_success:
