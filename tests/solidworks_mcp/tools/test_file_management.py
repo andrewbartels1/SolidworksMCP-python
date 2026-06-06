@@ -1021,8 +1021,7 @@ class TestFileManagementTools:
         )
         assert parent_file_asm_result["status"] == "error"
         assert (
-            "Target parent path is not a directory"
-            in parent_file_asm_result["message"]
+            "Target parent path is not a directory" in parent_file_asm_result["message"]
         )
 
         writable_dir = tmp_path / "writable"
@@ -1137,6 +1136,92 @@ class TestFileManagementTools:
         assert str(existing_asm) in saved_paths
         assert str(new_part_path.with_suffix(".sldprt")) in saved_paths
         assert str(new_asm_path.with_suffix(".sldasm")) in saved_paths
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_copy_path(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Copy active assembly and dependencies when include_references=True."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        source_dir = tmp_path / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_asm = source_dir / "wifi_box.sldasm"
+        source_part_a = source_dir / "router.sldprt"
+        source_part_b = source_dir / "lid.sldprt"
+        source_asm.write_text("asm", encoding="utf-8")
+        source_part_a.write_text("part-a", encoding="utf-8")
+        source_part_b.write_text("part-b", encoding="utf-8")
+
+        current_model = Mock()
+        current_model.GetPathName = Mock(return_value=str(source_asm))
+        current_model.GetDependencies2 = Mock(
+            return_value=(
+                "router",
+                str(source_part_a),
+                "lid",
+                str(source_part_b),
+            )
+        )
+        mock_adapter.currentModel = current_model
+        mock_adapter.save_file = AsyncMock(
+            return_value=Mock(is_success=True, execution_time=0.01)
+        )
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_asm_path = target_dir / "wifi_box_copy.sldasm"
+
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_asm_path),
+                "include_references": True,
+                "overwrite": False,
+            }
+        )
+
+        assert result["status"] == "success"
+        assert result["copy_method"] == "tool_dependency_copy"
+        assert result["file_path"] == str(target_asm_path)
+        assert result["copied_file_count"] == 3
+        assert target_asm_path.exists()
+        assert (target_dir / source_part_a.name).exists()
+        assert (target_dir / source_part_b.name).exists()
+        assert mock_adapter.save_file.await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_requires_active_model(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Return deterministic error when include_references=True without active model."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        mock_adapter.currentModel = None
+        target_dir = tmp_path / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_dir / "copy.sldasm"),
+                "include_references": True,
+            }
+        )
+
+        assert result["status"] == "error"
+        assert "No active model" in result["message"]
 
     @pytest.mark.asyncio
     async def test_read_tools_fallback_when_adapter_methods_missing(

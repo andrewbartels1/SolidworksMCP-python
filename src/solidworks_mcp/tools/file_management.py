@@ -5,6 +5,7 @@ and reference management.
 """
 
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -158,6 +159,10 @@ class SaveAssemblyInput(CompatInput):
         description="Optional output path. If omitted, saves the active assembly to its existing location.",
     )
     overwrite: bool = Field(default=False, description="Overwrite existing file")
+    include_references: bool = Field(
+        default=False,
+        description="When true and file_path is set, copy referenced assembly files into the target folder.",
+    )
 
 
 class ListFeaturesInput(CompatInput):
@@ -368,6 +373,199 @@ async def register_file_management_tools(
             }
 
         return str(target), None
+
+    def _get_attr_or_call(obj: Any, name: str, default: Any = None) -> Any:
+        """Read COM values that may be exposed as either properties or methods."""
+        if obj is None:
+            return default
+        candidate = getattr(obj, name, None)
+        if candidate is None:
+            return default
+        if callable(candidate):
+            try:
+                value = candidate()
+            except Exception:
+                return default
+            return default if value is None else value
+        return candidate
+
+    def _extract_dependency_paths(raw_dependencies: Any) -> list[Path]:
+        """Extract model file paths from SolidWorks GetDependencies2 payloads."""
+        if not isinstance(raw_dependencies, (list, tuple)):
+            return []
+
+        dependency_paths: list[Path] = []
+        for item in raw_dependencies:
+            if not isinstance(item, str):
+                continue
+            lower_item = item.lower()
+            if lower_item.endswith((".sldprt", ".sldasm", ".slddrw")):
+                dependency_paths.append(Path(item))
+        return dependency_paths
+
+    def _copy_with_collision_handling(source_path: Path, target_dir: Path) -> Path:
+        """Copy a source file into target_dir, suffixing when name collisions occur."""
+        destination = target_dir / source_path.name
+        try:
+            same_target = (
+                destination.exists()
+                and source_path.resolve(strict=False)
+                == destination.resolve(strict=False)
+            )
+        except Exception:
+            same_target = False
+        if same_target:
+            return destination
+
+        if not destination.exists():
+            shutil.copy2(source_path, destination)
+            return destination
+
+        stem = source_path.stem
+        suffix = source_path.suffix
+        index = 1
+        while True:
+            candidate = target_dir / f"{stem}_{index}{suffix}"
+            if not candidate.exists():
+                shutil.copy2(source_path, candidate)
+                return candidate
+            index += 1
+
+    def _copy_active_assembly_with_references(
+        target_assembly_path: str,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Copy active assembly and resolved dependencies into target folder."""
+        current_model = getattr(adapter, "currentModel", None)
+        if current_model is None:
+            return None, {
+                "status": "error",
+                "message": "No active model available to copy references.",
+            }
+
+        source_assembly_raw = _get_attr_or_call(current_model, "GetPathName")
+        source_assembly = Path(str(source_assembly_raw)) if source_assembly_raw else None
+        if source_assembly is None or not source_assembly.exists():
+            return None, {
+                "status": "error",
+                "message": "Active assembly must be saved before include_references=True can copy dependencies.",
+            }
+
+        target_assembly = Path(target_assembly_path)
+        target_dir = target_assembly.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        dependency_callable = getattr(current_model, "GetDependencies2", None)
+        if not callable(dependency_callable):
+            return None, {
+                "status": "error",
+                "message": "Adapter does not expose GetDependencies2; cannot copy assembly references in this mode.",
+            }
+
+        try:
+            raw_dependencies = dependency_callable(True, True, False)
+        except Exception as exc:
+            return None, {
+                "status": "error",
+                "message": f"Failed to enumerate assembly dependencies: {exc}",
+            }
+
+        dependency_paths = _extract_dependency_paths(raw_dependencies)
+        unique_sources: list[Path] = [source_assembly]
+        for dep in dependency_paths:
+            if dep not in unique_sources:
+                unique_sources.append(dep)
+
+        copied_files: list[str] = []
+        missing_sources: list[str] = []
+
+        for source in unique_sources:
+            if not source.exists():
+                missing_sources.append(str(source))
+                continue
+
+            if source.resolve(strict=False) == source_assembly.resolve(strict=False):
+                shutil.copy2(source, target_assembly)
+                copied_files.append(str(target_assembly))
+            else:
+                copied_target = _copy_with_collision_handling(source, target_dir)
+                copied_files.append(str(copied_target))
+
+        copied_files = sorted(copied_files)
+        return {
+            "status": "success",
+            "message": f"Assembly and references copied to: {target_dir}",
+            "file_path": str(target_assembly),
+            "copied_file_count": len(copied_files),
+            "copied_files": copied_files,
+            "missing_source_files": missing_sources,
+            "copy_method": "tool_dependency_copy",
+        }, None
+
+    def _native_pack_and_go(
+        target_assembly_path: str,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        """Try documented Pack-and-Go COM flow before fallback copy logic."""
+        current_model = getattr(adapter, "currentModel", None)
+        if current_model is None:
+            return None, "No active model available for Pack and Go."
+
+        target_assembly = Path(target_assembly_path)
+        target_dir = target_assembly.parent
+
+        model_ext = getattr(current_model, "Extension", None)
+        if model_ext is None:
+            return None, "Active model extension is not available for Pack and Go."
+
+        try:
+            from win32com.client import Dispatch
+
+            model_ext_typed = Dispatch(
+                model_ext,
+                "IModelDocExtension",
+                "{99F4D4AF-F268-4EE1-8C55-041F7BECF879}",
+            )
+
+            # SolidWorks API docs sequence:
+            # GetPackAndGo -> SetSaveToName -> FlattenToSingleFolder -> SavePackAndGo
+            pack_and_go = model_ext_typed.GetPackAndGo()
+            if pack_and_go is None:
+                return None, "GetPackAndGo returned None."
+
+            set_path_ok = bool(pack_and_go.SetSaveToName(True, str(target_dir)))
+            pack_and_go.FlattenToSingleFolder = True
+            pack_and_go.IncludeDrawings = False
+            pack_and_go.IncludeSimulationResults = False
+            pack_and_go.IncludeToolboxComponents = True
+
+            save_result = model_ext_typed.SavePackAndGo(pack_and_go)
+
+            copied_files = sorted(str(p) for p in target_dir.rglob("*") if p.is_file())
+            if not copied_files:
+                return None, (
+                    "SavePackAndGo did not produce output files "
+                    f"(SetSaveToName={set_path_ok}, SavePackAndGo={save_result})."
+                )
+
+            # If Pack-and-Go emitted assembly using original name, align to requested name.
+            if not target_assembly.exists():
+                produced_assemblies = sorted(target_dir.glob("*.sldasm"))
+                if len(produced_assemblies) == 1:
+                    produced_assemblies[0].replace(target_assembly)
+                    copied_files = sorted(
+                        str(p) for p in target_dir.rglob("*") if p.is_file()
+                    )
+
+            return {
+                "status": "success",
+                "message": f"Assembly and references copied via native Pack and Go to: {target_dir}",
+                "file_path": str(target_assembly),
+                "copied_file_count": len(copied_files),
+                "copied_files": copied_files,
+                "missing_source_files": [],
+                "copy_method": "solidworks_pack_and_go_api",
+            }, None
+        except Exception as exc:
+            return None, str(exc)
 
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
@@ -1138,6 +1336,20 @@ async def register_file_management_tools(
                 )
                 if validation_error is not None:
                     return validation_error
+
+                if input_data.include_references:
+                    native_result, native_error = _native_pack_and_go(file_path)
+                    if native_result is not None:
+                        return native_result
+
+                    copied_result, copy_error = _copy_active_assembly_with_references(
+                        file_path
+                    )
+                    if copy_error is not None:
+                        return copy_error
+                    if native_error is not None:
+                        copied_result["native_pack_and_go_error"] = native_error
+                    return copied_result
 
                 result = await adapter.save_file(file_path)
                 if result.is_success:
