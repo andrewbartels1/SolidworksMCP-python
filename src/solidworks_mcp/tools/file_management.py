@@ -142,7 +142,7 @@ class SavePartInput(CompatInput):
         default=None,
         description="Optional output path. If omitted, saves the active part to its existing location.",
     )
-    overwrite: bool = Field(default=True, description="Overwrite existing file")
+    overwrite: bool = Field(default=False, description="Overwrite existing file")
 
 
 class SaveAssemblyInput(CompatInput):
@@ -157,7 +157,7 @@ class SaveAssemblyInput(CompatInput):
         default=None,
         description="Optional output path. If omitted, saves the active assembly to its existing location.",
     )
-    overwrite: bool = Field(default=True, description="Overwrite existing file")
+    overwrite: bool = Field(default=False, description="Overwrite existing file")
 
 
 class ListFeaturesInput(CompatInput):
@@ -343,10 +343,22 @@ async def register_file_management_tools(
                 "message": f"Target directory does not exist: {target_dir}",
             }
 
+        if not target_dir.is_dir():
+            return None, {
+                "status": "error",
+                "message": f"Target parent path is not a directory: {target_dir}",
+            }
+
         if not os.access(target_dir, os.W_OK):
             return None, {
                 "status": "error",
                 "message": f"Target directory is not writable: {target_dir}",
+            }
+
+        if target.exists() and target.is_dir():
+            return None, {
+                "status": "error",
+                "message": f"Target path is a directory, expected file path: {target}",
             }
 
         if target.exists() and not overwrite:

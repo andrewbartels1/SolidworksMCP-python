@@ -1002,6 +1002,29 @@ class TestFileManagementTools:
         assert missing_asm_result["status"] == "error"
         assert "Target directory does not exist" in missing_asm_result["message"]
 
+        parent_file = tmp_path / "not_a_directory"
+        parent_file.write_text("placeholder", encoding="utf-8")
+        parent_file_part_target = parent_file / "child_part.sldprt"
+        parent_file_asm_target = parent_file / "child_asm.sldasm"
+
+        parent_file_part_result = await save_part_tool(
+            input_data={"file_path": str(parent_file_part_target), "overwrite": True}
+        )
+        parent_file_asm_result = await save_assembly_tool(
+            input_data={"file_path": str(parent_file_asm_target), "overwrite": True}
+        )
+
+        assert parent_file_part_result["status"] == "error"
+        assert (
+            "Target parent path is not a directory"
+            in parent_file_part_result["message"]
+        )
+        assert parent_file_asm_result["status"] == "error"
+        assert (
+            "Target parent path is not a directory"
+            in parent_file_asm_result["message"]
+        )
+
         writable_dir = tmp_path / "writable"
         writable_dir.mkdir(parents=True, exist_ok=True)
         non_writable_part = writable_dir / "no_write_part.sldprt"
@@ -1021,6 +1044,23 @@ class TestFileManagementTools:
         assert "Target directory is not writable" in no_write_part_result["message"]
         assert no_write_asm_result["status"] == "error"
         assert "Target directory is not writable" in no_write_asm_result["message"]
+
+        target_dir_part = writable_dir / "target_is_dir.sldprt"
+        target_dir_asm = writable_dir / "target_is_dir.sldasm"
+        target_dir_part.mkdir(parents=True, exist_ok=True)
+        target_dir_asm.mkdir(parents=True, exist_ok=True)
+
+        target_dir_part_result = await save_part_tool(
+            input_data={"file_path": str(target_dir_part), "overwrite": True}
+        )
+        target_dir_asm_result = await save_assembly_tool(
+            input_data={"file_path": str(target_dir_asm), "overwrite": True}
+        )
+
+        assert target_dir_part_result["status"] == "error"
+        assert "Target path is a directory" in target_dir_part_result["message"]
+        assert target_dir_asm_result["status"] == "error"
+        assert "Target path is a directory" in target_dir_asm_result["message"]
 
         existing_part = writable_dir / "existing_part.sldprt"
         existing_asm = writable_dir / "existing_asm.sldasm"
@@ -1043,6 +1083,24 @@ class TestFileManagementTools:
         assert (
             "File already exists and overwrite=False"
             in exists_no_overwrite_asm["message"]
+        )
+
+        default_no_overwrite_part = await save_part_tool(
+            input_data={"file_path": str(existing_part)}
+        )
+        default_no_overwrite_asm = await save_assembly_tool(
+            input_data={"file_path": str(existing_asm)}
+        )
+
+        assert default_no_overwrite_part["status"] == "error"
+        assert (
+            "File already exists and overwrite=False"
+            in default_no_overwrite_part["message"]
+        )
+        assert default_no_overwrite_asm["status"] == "error"
+        assert (
+            "File already exists and overwrite=False"
+            in default_no_overwrite_asm["message"]
         )
 
         mock_adapter.save_file = AsyncMock(
