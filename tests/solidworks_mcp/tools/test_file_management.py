@@ -899,7 +899,7 @@ class TestFileManagementTools:
 
     @pytest.mark.asyncio
     async def test_save_part_and_save_assembly_paths(
-        self, mcp_server, mock_adapter, mock_config
+        self, mcp_server, mock_adapter, mock_config, tmp_path
     ):
         """Cover path normalization and error branches for save_part/save_assembly."""
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
@@ -926,14 +926,18 @@ class TestFileManagementTools:
         mock_adapter.save_file = AsyncMock(
             return_value=Mock(is_success=True, execution_time=0.02)
         )
+
+        out_dir = tmp_path / "save_paths"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
         save_part_as = await save_part_tool(
-            input_data={"file_path": "C:/tmp/demo.step"}
+            input_data={"file_path": str(out_dir / "demo.step")}
         )
         assert save_part_as["status"] == "success"
         assert save_part_as["file_path"].endswith(".sldprt")
 
         save_asm_as = await save_assembly_tool(
-            input_data={"file_path": "C:/tmp/demo.step"}
+            input_data={"file_path": str(out_dir / "demo.step")}
         )
         assert save_asm_as["status"] == "success"
         assert save_asm_as["file_path"].endswith(".sldasm")
@@ -947,20 +951,20 @@ class TestFileManagementTools:
             return_value=Mock(is_success=False, error="save failed")
         )
         save_part_err = await save_part_tool(
-            input_data={"file_path": "C:/tmp/demo.sldprt"}
+            input_data={"file_path": str(out_dir / "demo.sldprt")}
         )
         save_asm_err = await save_assembly_tool(
-            input_data={"file_path": "C:/tmp/demo.sldasm"}
+            input_data={"file_path": str(out_dir / "demo.sldasm")}
         )
         assert save_part_err["status"] == "error"
         assert save_asm_err["status"] == "error"
 
         mock_adapter.save_file = AsyncMock(side_effect=RuntimeError("save crash"))
         save_part_ex = await save_part_tool(
-            input_data={"file_path": "C:/tmp/demo.sldprt"}
+            input_data={"file_path": str(out_dir / "demo.sldprt")}
         )
         save_asm_ex = await save_assembly_tool(
-            input_data={"file_path": "C:/tmp/demo.sldasm"}
+            input_data={"file_path": str(out_dir / "demo.sldasm")}
         )
         assert save_part_ex["status"] == "error"
         assert save_asm_ex["status"] == "error"
@@ -1003,7 +1007,9 @@ class TestFileManagementTools:
         non_writable_part = writable_dir / "no_write_part.sldprt"
         non_writable_asm = writable_dir / "no_write_asm.sldasm"
 
-        with patch("solidworks_mcp.tools.file_management.os.access", return_value=False):
+        with patch(
+            "solidworks_mcp.tools.file_management.os.access", return_value=False
+        ):
             no_write_part_result = await save_part_tool(
                 input_data={"file_path": str(non_writable_part), "overwrite": True}
             )
@@ -1029,13 +1035,15 @@ class TestFileManagementTools:
         )
 
         assert exists_no_overwrite_part["status"] == "error"
-        assert "File already exists and overwrite=False" in exists_no_overwrite_part[
-            "message"
-        ]
+        assert (
+            "File already exists and overwrite=False"
+            in exists_no_overwrite_part["message"]
+        )
         assert exists_no_overwrite_asm["status"] == "error"
-        assert "File already exists and overwrite=False" in exists_no_overwrite_asm[
-            "message"
-        ]
+        assert (
+            "File already exists and overwrite=False"
+            in exists_no_overwrite_asm["message"]
+        )
 
         mock_adapter.save_file = AsyncMock(
             return_value=Mock(is_success=True, execution_time=0.03)
