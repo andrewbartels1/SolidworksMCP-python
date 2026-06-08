@@ -352,9 +352,7 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             # sketch unselectable by later features.
             adapter.currentSketch = adapter._attempt(
                 lambda: adapter.currentModel.GetActiveSketch2()
-            ) or adapter._attempt(
-                lambda: adapter.swApp.ActiveDoc.GetActiveSketch2()
-            )
+            ) or adapter._attempt(lambda: adapter.swApp.ActiveDoc.GetActiveSketch2())
 
         adapter._sketch_count += 1
 

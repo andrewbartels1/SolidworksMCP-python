@@ -618,16 +618,12 @@ async def test_add_ellipse_creates_real_ellipse(connected_adapter) -> None:
         minor_dx_m = mnr[0] - ctr[0]
         minor_dy_m = mnr[1] - ctr[1]
 
-        assert (
-            abs(major_dx_m - expected_major_m) < tol_m and abs(major_dy_m) < tol_m
-        ), (
+        assert abs(major_dx_m - expected_major_m) < tol_m and abs(major_dy_m) < tol_m, (
             f"major-axis offset ({major_dx_m}, {major_dy_m}) m, expected "
             f"(~{expected_major_m}, ~0); axis order or mm-to-m conversion "
             f"is probably broken"
         )
-        assert (
-            abs(minor_dx_m) < tol_m and abs(minor_dy_m - expected_minor_m) < tol_m
-        ), (
+        assert abs(minor_dx_m) < tol_m and abs(minor_dy_m - expected_minor_m) < tol_m, (
             f"minor-axis offset ({minor_dx_m}, {minor_dy_m}) m, expected "
             f"(~0, ~{expected_minor_m}); axis order or mm-to-m "
             f"conversion is probably broken"
@@ -946,9 +942,7 @@ async def test_sketch_circular_pattern_creates_real_pattern(
             angle=360.0,
             count=6,
         )
-        assert pattern.is_success, (
-            f"sketch_circular_pattern failed: {pattern.error}"
-        )
+        assert pattern.is_success, f"sketch_circular_pattern failed: {pattern.error}"
         assert pattern.data.startswith("CircularPattern_6x360.0deg_"), (
             f"unexpected circular pattern id: {pattern.data!r}"
         )
@@ -1421,9 +1415,7 @@ async def test_polygon_id_flows_into_linear_pattern_live(
     assert part_result.is_success, f"create_part failed: {part_result.error}"
     try:
         sketch_result = await adapter.create_sketch("Front")
-        assert sketch_result.is_success, (
-            f"create_sketch failed: {sketch_result.error}"
-        )
+        assert sketch_result.is_success, f"create_sketch failed: {sketch_result.error}"
 
         seed = await adapter.add_polygon(
             center_x=-50.0, center_y=0.0, radius=5.0, sides=6
@@ -1735,9 +1727,7 @@ async def test_arc_id_flows_into_mirror_and_offset_live(
             f"setup failed: {cl.error} / {arc.error}"
         )
 
-        mirrored = await adapter.sketch_mirror(
-            entities=[arc.data], mirror_line=cl.data
-        )
+        mirrored = await adapter.sketch_mirror(entities=[arc.data], mirror_line=cl.data)
         assert mirrored.is_success, f"arc -> mirror failed: {mirrored.error}"
 
         offset = await adapter.sketch_offset(
@@ -1858,9 +1848,7 @@ async def test_spline_id_flows_into_mirror_live(connected_adapter) -> None:
             f"setup failed: {spl.error} / {cl.error}"
         )
 
-        mirrored = await adapter.sketch_mirror(
-            entities=[spl.data], mirror_line=cl.data
-        )
+        mirrored = await adapter.sketch_mirror(entities=[spl.data], mirror_line=cl.data)
         assert mirrored.is_success, (
             f"spline -> mirror composition failed: {mirrored.error}"
         )
@@ -1984,9 +1972,7 @@ async def test_create_loft_tapered_bevel(connected_adapter) -> None:
         assert c2.is_success, f"add_circle #2 failed: {c2.error}"
         assert (await adapter.exit_sketch()).is_success
 
-        loft = await adapter.create_loft(
-            LoftParameters(profiles=[s1.data, s2.data])
-        )
+        loft = await adapter.create_loft(LoftParameters(profiles=[s1.data, s2.data]))
         assert loft.is_success, f"create_loft failed: {loft.error}"
         assert loft.data.type == "Loft"
         assert loft.data.name, "loft feature has no name"

@@ -1343,3 +1343,165 @@ class TestFileManagementTools:
         )
         assert asm_obj_value["status"] == "success"
         assert asm_obj_value["model"]["path"] == "C:/tmp/object-model.sldasm"
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_missing_deps_and_collision(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Missing dep files are tracked; colliding names get a numeric suffix."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        source_dir = tmp_path / "src_collision"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_asm = source_dir / "box.sldasm"
+        source_part = source_dir / "bracket.sldprt"
+        source_asm.write_text("asm", encoding="utf-8")
+        source_part.write_text("part", encoding="utf-8")
+
+        target_dir = tmp_path / "tgt_collision"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        # Pre-place a file that collides with the dependency name.
+        (target_dir / "bracket.sldprt").write_text("existing", encoding="utf-8")
+
+        current_model = Mock()
+        current_model.GetPathName = Mock(return_value=str(source_asm))
+        current_model.GetDependencies2 = Mock(
+            return_value=(
+                str(source_part),
+                # This path does not exist — should end up in missing_source_files.
+                str(source_dir / "ghost.sldprt"),
+            )
+        )
+        mock_adapter.currentModel = current_model
+
+        target_asm_path = target_dir / "box_copy.sldasm"
+        # Force native Pack-and-Go to fail so the fallback copy path is exercised.
+        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+            result = await save_assembly_tool(
+                input_data={
+                    "file_path": str(target_asm_path),
+                    "include_references": True,
+                    "overwrite": False,
+                }
+            )
+
+        assert result["status"] == "success"
+        assert result["copy_method"] == "tool_dependency_copy"
+        # The collision produces bracket_1.sldprt instead of bracket.sldprt.
+        assert any("bracket_1.sldprt" in f for f in result["copied_files"])
+        # The ghost file ends up in missing_source_files.
+        assert any("ghost.sldprt" in f for f in result["missing_source_files"])
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_getdeps_exception(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Error is surfaced cleanly when GetDependencies2 raises."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        source_dir = tmp_path / "src_exc"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_asm = source_dir / "crash.sldasm"
+        source_asm.write_text("asm", encoding="utf-8")
+
+        current_model = Mock()
+        current_model.GetPathName = Mock(return_value=str(source_asm))
+        current_model.GetDependencies2 = Mock(side_effect=RuntimeError("COM explosion"))
+        mock_adapter.currentModel = current_model
+
+        target_dir = tmp_path / "tgt_exc"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+            result = await save_assembly_tool(
+                input_data={
+                    "file_path": str(target_dir / "crash_copy.sldasm"),
+                    "include_references": True,
+                }
+            )
+
+        assert result["status"] == "error"
+        assert "COM explosion" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_unsaved_source(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Return error when active assembly has no path (not yet saved to disk)."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        current_model = Mock()
+        current_model.GetPathName = Mock(return_value="")
+        mock_adapter.currentModel = current_model
+
+        target_dir = tmp_path / "tgt_unsaved"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+            result = await save_assembly_tool(
+                input_data={
+                    "file_path": str(target_dir / "copy.sldasm"),
+                    "include_references": True,
+                }
+            )
+
+        assert result["status"] == "error"
+        assert "must be saved before" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_no_getdeps_method(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Error when adapter's model has no GetDependencies2 callable."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        source_dir = tmp_path / "src_nodeps"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_asm = source_dir / "nodeps.sldasm"
+        source_asm.write_text("asm", encoding="utf-8")
+
+        current_model = Mock(spec=[])  # no attributes at all
+        # Manually set GetPathName but not GetDependencies2.
+        current_model.GetPathName = Mock(return_value=str(source_asm))
+        mock_adapter.currentModel = current_model
+
+        target_dir = tmp_path / "tgt_nodeps"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        # Force native Pack-and-Go off so the fallback copy runs and hits the
+        # missing-GetDependencies2 branch.
+        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+            result = await save_assembly_tool(
+                input_data={
+                    "file_path": str(target_dir / "copy.sldasm"),
+                    "include_references": True,
+                }
+            )
+
+        assert result["status"] == "error"
+        assert "GetDependencies2" in result["message"]

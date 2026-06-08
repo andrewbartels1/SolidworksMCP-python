@@ -407,11 +407,9 @@ async def register_file_management_tools(
         """Copy a source file into target_dir, suffixing when name collisions occur."""
         destination = target_dir / source_path.name
         try:
-            same_target = (
-                destination.exists()
-                and source_path.resolve(strict=False)
-                == destination.resolve(strict=False)
-            )
+            same_target = destination.exists() and source_path.resolve(
+                strict=False
+            ) == destination.resolve(strict=False)
         except Exception:
             same_target = False
         if same_target:
@@ -443,7 +441,9 @@ async def register_file_management_tools(
             }
 
         source_assembly_raw = _get_attr_or_call(current_model, "GetPathName")
-        source_assembly = Path(str(source_assembly_raw)) if source_assembly_raw else None
+        source_assembly = (
+            Path(str(source_assembly_raw)) if source_assembly_raw else None
+        )
         if source_assembly is None or not source_assembly.exists():
             return None, {
                 "status": "error",
@@ -517,19 +517,19 @@ async def register_file_management_tools(
             return None, "Active model extension is not available for Pack and Go."
 
         try:
-            from win32com.client import Dispatch
+            import win32com.client as _win32
 
-            model_ext_typed = Dispatch(
-                model_ext,
-                "IModelDocExtension",
-                "{99F4D4AF-F268-4EE1-8C55-041F7BECF879}",
-            )
-
-            # SolidWorks API docs sequence:
-            # GetPackAndGo -> SetSaveToName -> FlattenToSingleFolder -> SavePackAndGo
-            pack_and_go = model_ext_typed.GetPackAndGo()
-            if pack_and_go is None:
+            # GetPackAndGo is a COM property (VBA: Set png = ext.GetPackAndGo).
+            # sw_type_info auto-upgrades model_ext to the gen_py IModelDocExtension
+            # wrapper whose GetPackAndGo() calls InvokeTypes with wFlags=1
+            # (DISPATCH_METHOD). SolidWorks rejects that with DISP_E_PARAMNOTOPTIONAL.
+            # Invoke directly on _oleobj_ with wFlags=2 (DISPATCH_PROPERTYGET) to
+            # match VBA property-get semantics.
+            pack_and_go_raw = model_ext._oleobj_.InvokeTypes(207, 0, 2, (9, 0), ())
+            if pack_and_go_raw is None:
                 return None, "GetPackAndGo returned None."
+
+            pack_and_go = _win32.Dispatch(pack_and_go_raw)
 
             set_path_ok = bool(pack_and_go.SetSaveToName(True, str(target_dir)))
             pack_and_go.FlattenToSingleFolder = True
@@ -537,7 +537,7 @@ async def register_file_management_tools(
             pack_and_go.IncludeSimulationResults = False
             pack_and_go.IncludeToolboxComponents = True
 
-            save_result = model_ext_typed.SavePackAndGo(pack_and_go)
+            save_result = model_ext.SavePackAndGo(pack_and_go)
 
             copied_files = sorted(str(p) for p in target_dir.rglob("*") if p.is_file())
             if not copied_files:

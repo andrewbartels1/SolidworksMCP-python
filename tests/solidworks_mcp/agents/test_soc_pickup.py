@@ -230,6 +230,7 @@ def test_generate_pickup_lines_fill_placeholder_note():
 @pytest.fixture()
 def tmp_db(tmp_path):
     from solidworks_mcp.agents.history_db import init_db
+
     db = tmp_path / "pickup_test.sqlite3"
     init_db(db)
     return db
@@ -285,7 +286,7 @@ async def test_pickup_changes_with_snapshot_only_delta(tmp_db):
 
     new_features = [
         _feat("Boss-Extrude1", "Boss-Extrude"),  # existing
-        _feat("Fillet1", "Fillet"),               # new
+        _feat("Fillet1", "Fillet"),  # new
     ]
     adapter = _make_adapter(new_features)
 
@@ -327,7 +328,9 @@ async def test_pickup_changes_appends_to_script_file(tmp_db, tmp_path):
     features = [_feat("Fillet1", "Fillet")]
     adapter = _make_adapter(features)
 
-    await pickup_changes(adapter, "sess-append", output_path=script_path, db_path=tmp_db)
+    await pickup_changes(
+        adapter, "sess-append", output_path=script_path, db_path=tmp_db
+    )
 
     content = script_path.read_text()
     assert "add_fillet" in content
@@ -363,7 +366,13 @@ def test_revert_tool_call_records(tmp_path):
     db = tmp_path / "revert_test.sqlite3"
     init_db(db)
 
-    for tool in ["create_part", "create_sketch", "add_line", "exit_sketch", "create_extrusion"]:
+    for tool in [
+        "create_part",
+        "create_sketch",
+        "add_line",
+        "exit_sketch",
+        "create_extrusion",
+    ]:
         insert_tool_call_record(session_id="sess-rev", tool_name=tool, db_path=db)
 
     all_records = list_tool_call_records("sess-rev", db_path=db, include_reverted=True)
@@ -405,7 +414,9 @@ def test_reverted_records_excluded_by_default(tmp_path):
     init_db(db)
 
     insert_tool_call_record(session_id="sess-excl", tool_name="create_part", db_path=db)
-    insert_tool_call_record(session_id="sess-excl", tool_name="create_sketch", db_path=db)
+    insert_tool_call_record(
+        session_id="sess-excl", tool_name="create_sketch", db_path=db
+    )
 
     all_records = list_tool_call_records("sess-excl", db_path=db, include_reverted=True)
     second_id = all_records[1]["id"]
@@ -415,7 +426,9 @@ def test_reverted_records_excluded_by_default(tmp_path):
     assert len(active) == 1
     assert active[0]["tool_name"] == "create_part"
 
-    with_reverted = list_tool_call_records("sess-excl", db_path=db, include_reverted=True)
+    with_reverted = list_tool_call_records(
+        "sess-excl", db_path=db, include_reverted=True
+    )
     assert len(with_reverted) == 2
 
 
@@ -427,6 +440,7 @@ def test_reverted_records_excluded_by_default(tmp_path):
 def test_feature_map_returns_name_keyed_dict() -> None:
     """_feature_map should return dict keyed by feature name. Covers line 63."""
     from solidworks_mcp.agents.soc_pickup import _feature_map
+
     tree = [{"name": "BossExtrude1", "type": "Boss"}, {"name": "Cut1", "type": "Cut"}]
     result = _feature_map(tree)
     assert "BossExtrude1" in result
@@ -459,6 +473,7 @@ def test_pickup_changes_handles_bad_snapshot_json(tmp_path, monkeypatch) -> None
     # Provide a snapshot with invalid JSON in feature_tree_json
     # The functions are imported inline from .history_db, so patch at that level
     from solidworks_mcp.agents import history_db
+
     monkeypatch.setattr(
         history_db,
         "list_model_state_snapshots",
@@ -467,9 +482,8 @@ def test_pickup_changes_handles_bad_snapshot_json(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(history_db, "insert_model_state_snapshot", lambda **_kw: 1)
 
     import asyncio
-    result = asyncio.run(
-        soc_pickup.pickup_changes(mock_adapter, session_id="s1")
-    )
+
+    result = asyncio.run(soc_pickup.pickup_changes(mock_adapter, session_id="s1"))
     assert result is not None
 
 
@@ -502,6 +516,7 @@ def test_pickup_changes_appends_when_no_finally(tmp_path, monkeypatch) -> None:
     )
 
     from solidworks_mcp.agents import history_db
+
     monkeypatch.setattr(history_db, "list_model_state_snapshots", lambda *_a, **_kw: [])
     monkeypatch.setattr(history_db, "insert_model_state_snapshot", lambda **_kw: 1)
 
@@ -509,8 +524,11 @@ def test_pickup_changes_appends_when_no_finally(tmp_path, monkeypatch) -> None:
     script_file.write_text("# script content\nsome_code()\n", encoding="utf-8")
 
     import asyncio
+
     result = asyncio.run(
-        soc_pickup.pickup_changes(mock_adapter, session_id="s1", output_path=str(script_file))
+        soc_pickup.pickup_changes(
+            mock_adapter, session_id="s1", output_path=str(script_file)
+        )
     )
     # File was written with appended lines (no "    finally:" present)
     content = script_file.read_text(encoding="utf-8")

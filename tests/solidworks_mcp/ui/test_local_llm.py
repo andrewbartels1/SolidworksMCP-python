@@ -126,7 +126,9 @@ def test_recommend_model_tier_fallback_small() -> None:
     assert recommend_model_tier(vram_gb=0, ram_gb=0) == "small"
 
 
-def test_detect_system_ram_gb_windows_parses_wmic(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detect_system_ram_gb_windows_parses_wmic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """WMIC output should be parsed into GB on Windows."""
     # Force the Windows path and stub wmic output.
     monkeypatch.setattr(local_llm_mod.platform, "system", lambda: "Windows")

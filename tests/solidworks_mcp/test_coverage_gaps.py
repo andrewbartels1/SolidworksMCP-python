@@ -40,6 +40,7 @@ def open_circuit_breaker():
     # Force state to OPEN without timing dependencies
     cb.state = CircuitState.OPEN
     import time
+
     cb.last_failure_time = time.time()
     return cb
 
@@ -82,8 +83,6 @@ async def test_soc_log_writes_record_when_session_set(monkeypatch, tmp_path):
     assert len(records) == 1
     assert records[0]["tool_name"] == "test_tool"
     assert records[0]["success"] is True
-
-
 
 
 @pytest.mark.asyncio
@@ -136,14 +135,30 @@ async def test_soc_log_handles_insert_exception(monkeypatch):
 def cb_with_mock():
     """Return (CircuitBreakerAdapter, inner_mock) with a permissive mock adapter."""
     inner = AsyncMock()
-    inner.add_spline = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="spline"))
-    inner.add_polygon = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="polygon"))
-    inner.add_ellipse = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="ellipse"))
-    inner.sketch_linear_pattern = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS))
-    inner.sketch_circular_pattern = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS))
-    inner.sketch_mirror = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS))
-    inner.sketch_offset = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS))
-    inner.add_sketch_constraint = AsyncMock(return_value=AdapterResult(status=AdapterResultStatus.SUCCESS))
+    inner.add_spline = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="spline")
+    )
+    inner.add_polygon = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="polygon")
+    )
+    inner.add_ellipse = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="ellipse")
+    )
+    inner.sketch_linear_pattern = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
+    inner.sketch_circular_pattern = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
+    inner.sketch_mirror = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
+    inner.sketch_offset = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
+    inner.add_sketch_constraint = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
     inner.is_connected = MagicMock(return_value=False)
 
     cb = CircuitBreakerAdapter(adapter=inner, failure_threshold=10)
@@ -237,7 +252,9 @@ async def test_soc_create_checkpoint_returns_none_when_no_session(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_soc_create_checkpoint_creates_record_when_session_set(monkeypatch, tmp_path):
+async def test_soc_create_checkpoint_creates_record_when_session_set(
+    monkeypatch, tmp_path
+):
     """soc_create_checkpoint should create a DB record when soc_session_id is set. Covers 1052-1087."""
     snapshots: list[dict] = []
     checkpoints: list[dict] = []
@@ -471,13 +488,22 @@ def test_docs_service_ingest_saves_index(monkeypatch, tmp_path):
 
     # Patch the inline import by setting it on the vector_rag module
     from solidworks_mcp.agents import vector_rag
+
     monkeypatch.setattr(vector_rag, "VectorRAGIndex", _FakeIndex)
 
     from solidworks_mcp.ui.services.session_service import (
         ensure_dashboard_session,
         build_dashboard_state,
     )
-    monkeypatch.setattr(docs_service, "ensure_dashboard_session" if hasattr(docs_service, "ensure_dashboard_session") else "__missing__", lambda *_a, **_kw: None, raising=False)
+
+    monkeypatch.setattr(
+        docs_service,
+        "ensure_dashboard_session"
+        if hasattr(docs_service, "ensure_dashboard_session")
+        else "__missing__",
+        lambda *_a, **_kw: None,
+        raising=False,
+    )
 
     # Create a real markdown file to ingest
     md_file = tmp_path / "test.md"
@@ -658,7 +684,9 @@ def test_update_plan_checkpoint_existing(tmp_path):
     assert len(rows) == 1
     cp_id = rows[0]["id"]
 
-    update_plan_checkpoint(cp_id, executed=True, result_json='{"ok": true}', db_path=db_path)
+    update_plan_checkpoint(
+        cp_id, executed=True, result_json='{"ok": true}', db_path=db_path
+    )
 
     rows_after = list_plan_checkpoints("s1", db_path=db_path)
     assert rows_after[0]["executed"] is True
@@ -709,12 +737,17 @@ def test_update_plan_checkpoint_planned_action(tmp_path):
 
 def test_update_plan_checkpoint_planned_action_missing(tmp_path):
     """update_plan_checkpoint_planned_action should return None when row missing. Covers line 872."""
-    from solidworks_mcp.agents.history_db import init_db, update_plan_checkpoint_planned_action
+    from solidworks_mcp.agents.history_db import (
+        init_db,
+        update_plan_checkpoint_planned_action,
+    )
 
     db_path = tmp_path / "test.db"
     init_db(db_path=db_path)
     # Non-existent ID → row is None → early return
-    result = update_plan_checkpoint_planned_action(99999, planned_action_json='{}', db_path=db_path)
+    result = update_plan_checkpoint_planned_action(
+        99999, planned_action_json="{}", db_path=db_path
+    )
     assert result is None
 
 
@@ -813,7 +846,10 @@ async def test_vector_rag_index_await():
 
 def test_build_solidworks_api_docs_index_returns_empty_when_no_path():
     """build_solidworks_api_docs_index should return early when docs_json_path is None. Covers line 565."""
-    from solidworks_mcp.agents.vector_rag import build_solidworks_api_docs_index, VectorRAGIndex
+    from solidworks_mcp.agents.vector_rag import (
+        build_solidworks_api_docs_index,
+        VectorRAGIndex,
+    )
 
     result = build_solidworks_api_docs_index(docs_json_path=None)
     assert isinstance(result, VectorRAGIndex)

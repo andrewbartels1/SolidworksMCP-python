@@ -452,9 +452,7 @@ def _select_named_feature(
     )
     if not feature:
         return False
-    return bool(
-        adapter._attempt(lambda: feature.Select2(append, mark), default=False)
-    )
+    return bool(adapter._attempt(lambda: feature.Select2(append, mark), default=False))
 
 
 def _flag_feature_methods(obj: Any, interface: str) -> None:

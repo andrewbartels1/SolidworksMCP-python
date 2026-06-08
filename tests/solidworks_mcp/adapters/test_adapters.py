@@ -678,9 +678,7 @@ class TestPyWin32AdapterBranches:
         assert (
             await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)
         ).is_success
-        assert (
-            await adapter.sketch_circular_pattern(["L1"], 180.0, 4)
-        ).is_success
+        assert (await adapter.sketch_circular_pattern(["L1"], 180.0, 4)).is_success
         assert (await adapter.sketch_mirror(["L1"], "Centerline_42")).is_success
         assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_success
 
@@ -2570,10 +2568,8 @@ class TestPyWin32AdapterBranches:
             if name in fail:
                 return None
             feature = SimpleNamespace()
-            feature.Select2 = (
-                lambda append, mark, _n=name: bool(
-                    selected.append((_n, append, mark)) or True
-                )
+            feature.Select2 = lambda append, mark, _n=name: bool(
+                selected.append((_n, append, mark)) or True
             )
             return feature
 
@@ -2695,9 +2691,7 @@ class TestPyWin32AdapterBranches:
         assert "Sketch1" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_create_loft_no_model_and_too_few_profiles(
-        self, monkeypatch
-    ) -> None:
+    async def test_create_loft_no_model_and_too_few_profiles(self, monkeypatch) -> None:
         """create_loft guards: no active model, then fewer than two profiles."""
         adapter = self._build_adapter(monkeypatch)
 
@@ -2829,9 +2823,7 @@ class TestPyWin32AdapterBranches:
         adapter.currentSketchManager = None
         assert (await adapter.add_sketch_dimension("L1", None, "linear", 10.0)).is_error
         assert (await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)).is_error
-        assert (
-            await adapter.sketch_circular_pattern(["L1"], 180.0, 4)
-        ).is_error
+        assert (await adapter.sketch_circular_pattern(["L1"], 180.0, 4)).is_error
         assert (await adapter.sketch_mirror(["L1"], "CL1")).is_error
         assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_error
 

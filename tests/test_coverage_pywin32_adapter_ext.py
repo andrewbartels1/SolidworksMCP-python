@@ -16,9 +16,7 @@ class TestPyWin32AdapterInitialization:
     def test_pywin32_not_available_raises_error(self) -> None:
         """Test that init raises error when pywin32 is not available."""
         # Mock PYWIN32_AVAILABLE as False
-        with patch(
-            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", False
-        ):
+        with patch("solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", False):
             from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
             with pytest.raises(SolidWorksMCPError, match="pywin32 is not available"):
@@ -114,9 +112,7 @@ class TestPyWin32AdapterInitialization:
             adapter = PyWin32Adapter()
 
             # Mock COM operations
-            with patch(
-                "solidworks_mcp.adapters.pywin32_adapter.pythoncom"
-            ) as mock_com:
+            with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom") as mock_com:
                 with patch(
                     "solidworks_mcp.adapters.pywin32_adapter.win32com.client"
                 ) as mock_client:
@@ -201,9 +197,7 @@ class TestPyWin32AdapterMockCOM:
     async def test_open_model_with_mock_com(self) -> None:
         """Test opening a model with mocked COM."""
         # Mock the entire adapter to test COM interaction
-        with patch(
-            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
-        ):
+        with patch("solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True):
             with patch(
                 "solidworks_mcp.adapters.pywin32_adapter.platform.system"
             ) as mock_sys:

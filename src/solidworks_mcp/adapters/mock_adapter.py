@@ -1137,9 +1137,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         if math.hypot(direction_x, direction_y) < 1e-9:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=(
-                    "sketch_linear_pattern requires a non-zero direction vector"
-                ),
+                error=("sketch_linear_pattern requires a non-zero direction vector"),
             )
         for ent in entities:
             if ent not in self._sketch_entity_ids:
@@ -1209,9 +1207,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["sketch_operation"] / 2)
         self._operation_count += 1
 
-        pattern_id = (
-            f"CircularPattern_{count}x{angle}deg_{random.randint(1000, 9999)}"
-        )
+        pattern_id = f"CircularPattern_{count}x{angle}deg_{random.randint(1000, 9999)}"
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=pattern_id,
@@ -1243,8 +1239,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=(
-                    "sketch_mirror requires a mirror_line entity ID "
-                    "(add_centerline)"
+                    "sketch_mirror requires a mirror_line entity ID (add_centerline)"
                 ),
             )
         if mirror_line not in self._sketch_entity_ids:
@@ -1332,9 +1327,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._operation_count += 1
 
         direction = "inward" if reverse_direction else "outward"
-        offset_id = (
-            f"Offset_{offset_distance}_{direction}_{random.randint(1000, 9999)}"
-        )
+        offset_id = f"Offset_{offset_distance}_{direction}_{random.randint(1000, 9999)}"
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=offset_id,

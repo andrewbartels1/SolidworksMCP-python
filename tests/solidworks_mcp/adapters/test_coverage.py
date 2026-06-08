@@ -346,9 +346,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.connect()
         await adapter.create_part()
 
-        result = await adapter.add_spline(
-            [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
-        )
+        result = await adapter.add_spline([{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}])
         assert result.status == AdapterResultStatus.ERROR
         assert "No active sketch" in (result.error or "")
 
@@ -421,9 +419,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.create_sketch("Front")
         circle = await adapter.add_circle(0.0, 0.0, 3.0)
 
-        result = await adapter.sketch_linear_pattern(
-            [circle.data], 1.0, 0.0, 10.0, 4
-        )
+        result = await adapter.sketch_linear_pattern([circle.data], 1.0, 0.0, 10.0, 4)
         assert result.status == AdapterResultStatus.SUCCESS
         assert result.data.startswith("LinearPattern_4x10.0_")
 
@@ -446,9 +442,7 @@ class TestMockAdapterSuccessPaths:
         await adapter.create_part()
         await adapter.create_sketch("Front")
 
-        result = await adapter.sketch_linear_pattern(
-            ["Bogus_123"], 1.0, 0.0, 10.0, 3
-        )
+        result = await adapter.sketch_linear_pattern(["Bogus_123"], 1.0, 0.0, 10.0, 3)
         assert result.status == AdapterResultStatus.ERROR
         assert "Unknown sketch entity" in (result.error or "")
 
@@ -467,23 +461,17 @@ class TestMockAdapterSuccessPaths:
         assert "at least one entity" in (result.error or "")
 
         # count < 2
-        result = await adapter.sketch_linear_pattern(
-            [circle.data], 1.0, 0.0, 10.0, 1
-        )
+        result = await adapter.sketch_linear_pattern([circle.data], 1.0, 0.0, 10.0, 1)
         assert result.status == AdapterResultStatus.ERROR
         assert "count >= 2" in (result.error or "")
 
         # spacing <= 0
-        result = await adapter.sketch_linear_pattern(
-            [circle.data], 1.0, 0.0, 0.0, 3
-        )
+        result = await adapter.sketch_linear_pattern([circle.data], 1.0, 0.0, 0.0, 3)
         assert result.status == AdapterResultStatus.ERROR
         assert "spacing > 0" in (result.error or "")
 
         # zero direction vector
-        result = await adapter.sketch_linear_pattern(
-            [circle.data], 0.0, 0.0, 10.0, 3
-        )
+        result = await adapter.sketch_linear_pattern([circle.data], 0.0, 0.0, 10.0, 3)
         assert result.status == AdapterResultStatus.ERROR
         assert "non-zero direction" in (result.error or "")
 
@@ -732,13 +720,9 @@ class TestRealCircularPatternImpl:
 
         def _handle(_name, fn):
             try:
-                return AdapterResult(
-                    status=AdapterResultStatus.SUCCESS, data=fn()
-                )
+                return AdapterResult(status=AdapterResultStatus.SUCCESS, data=fn())
             except Exception as exc:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR, error=str(exc)
-                )
+                return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
 
         def _attempt(fn, default=None):
             try:
@@ -879,9 +863,7 @@ class TestRealCircularPatternImpl:
         bare_seed.GetCenterPoint = Mock(return_value=None)
         adapter._sketch_entities["Line_1"] = bare_seed
 
-        result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Line_1"], 360.0, 6
-        )
+        result = sketch_ops._sketch_circular_pattern_impl(adapter, ["Line_1"], 360.0, 6)
 
         assert result.status == AdapterResultStatus.ERROR
         assert "Line_1" in (result.error or "")
@@ -906,9 +888,7 @@ class TestRealCircularPatternImpl:
         # ``add_*`` writer never stashed a centre.
         adapter._sketch_entities["Slot_1"] = (Mock(), Mock(), Mock(), Mock())
 
-        result = sketch_ops._sketch_circular_pattern_impl(
-            adapter, ["Slot_1"], 360.0, 6
-        )
+        result = sketch_ops._sketch_circular_pattern_impl(adapter, ["Slot_1"], 360.0, 6)
 
         assert result.status == AdapterResultStatus.ERROR
         # Error must name the offending entity and the accepted seed types.
