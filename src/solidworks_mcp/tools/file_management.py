@@ -165,6 +165,30 @@ class SaveAssemblyInput(CompatInput):
     )
 
 
+class PackAndGoInput(CompatInput):
+    """Input schema for Pack-and-Go assembly copy.
+
+    Attributes:
+        source_path (str): Path to the source assembly file.
+        target_dir (str): Destination directory for the self-contained copy.
+        export_preview (bool): Whether to export an isometric PNG preview.
+        overwrite (bool): Whether to overwrite files already in target_dir.
+    """
+
+    source_path: str = Field(description="Absolute path to the source .sldasm file")
+    target_dir: str = Field(
+        description="Directory where the assembly and all referenced parts will be copied"
+    )
+    export_preview: bool = Field(
+        default=True,
+        description="Export an isometric PNG preview next to the copied files",
+    )
+    overwrite: bool = Field(
+        default=False,
+        description="Overwrite files that already exist in target_dir",
+    )
+
+
 class ListFeaturesInput(CompatInput):
     """Input schema for feature tree listing.
 
@@ -1383,5 +1407,109 @@ async def register_file_management_tools(
                 "message": f"Unexpected error: {str(e)}",
             }
 
-    tool_count = 14  # Total number of registered tools in this module
+    @mcp.tool()
+    async def pack_and_go_assembly(
+        input_data: PackAndGoInput | None = None,
+    ) -> dict[str, Any]:
+        """Copy a SolidWorks assembly and all its referenced parts to a self-contained folder.
+
+        Enumerates every component referenced by the active assembly, copies the
+        assembly and each part into ``target_dir``, then rewrites the stored
+        component paths inside the copied assembly so it opens without any
+        dependency on the original file locations — equivalent to the SolidWorks
+        GUI Pack-and-Go operation.
+
+        Args:
+            input_data (PackAndGoInput | None): The input data value. Defaults to None.
+
+        Returns:
+            dict[str, Any]: A dictionary containing the resulting values.
+
+        Example:
+                            ```python
+                            result = await pack_and_go_assembly({
+                                "source_path": "C:/Projects/robot_arm.sldasm",
+                                "target_dir": "C:/Exports/robot_arm_pkg",
+                                "export_preview": True
+                            })
+
+                            if result["status"] == "success":
+                                print(result["copied_files"])
+                                print(result["all_files_saved"])
+                            ```
+
+                        Note:
+                            - SolidWorks must be open with the assembly loaded or openable
+                            - target_dir is created if it does not exist
+                            - Use overwrite=True to replace files in an existing target_dir
+        """
+        try:
+            if input_data is None:
+                input_data = PackAndGoInput(source_path="", target_dir="")
+            else:
+                input_data = _coerce_input(PackAndGoInput, input_data)
+
+            from pathlib import Path as _Path
+
+            source = _Path(input_data.source_path)
+            out_dir = _Path(input_data.target_dir)
+
+            if not source.exists():
+                return {
+                    "status": "error",
+                    "message": f"Source assembly not found: {source}",
+                }
+
+            if not source.suffix.lower() == ".sldasm":
+                return {
+                    "status": "error",
+                    "message": f"source_path must be a .sldasm file, got: {source.suffix}",
+                }
+
+            if not input_data.overwrite and out_dir.exists() and any(out_dir.iterdir()):
+                return {
+                    "status": "error",
+                    "message": (
+                        f"target_dir already contains files: {out_dir}. "
+                        "Set overwrite=True to replace them."
+                    ),
+                }
+
+            result = await adapter.pack_and_go_assembly(
+                source_path=str(source),
+                target_dir=str(out_dir),
+            )
+
+            if not result.is_success:
+                return {"status": "error", "message": result.error}
+
+            report: dict[str, Any] = {
+                "status": "success",
+                "method": "native_pack_and_go",
+                "execution_time": result.execution_time,
+                **result.data,
+            }
+
+            if input_data.export_preview:
+                preview_path = out_dir / "assembly_preview.png"
+                img_result = await adapter.export_image(
+                    {
+                        "file_path": str(preview_path),
+                        "format_type": "png",
+                        "width": 1600,
+                        "height": 1000,
+                        "view_orientation": "isometric",
+                    }
+                )
+                report["preview_image"] = (
+                    str(preview_path) if img_result.is_success else None
+                )
+
+            return report
+
+        except Exception as e:
+            logger.error(f"Error in pack_and_go_assembly tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 15  # Total number of registered tools in this module
     return tool_count
