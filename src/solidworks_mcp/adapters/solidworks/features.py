@@ -1209,10 +1209,12 @@ def _add_fillet_impl(
             if not selected:
                 raise Exception(f"Failed to select edge: {edge_name}")
 
-        # SW 2025 (major=33): IModelDoc2.FeatureFillet3 (9 params) verified.
-        # Other versions: IFeatureManager.FeatureFillet3 (16 params, original code).
-        if fillet_sw_major == 33:
-            feature = adapter.currentModel.FeatureFillet3(
+        # SW 2025+ (major >= 33): IModelDoc2.FeatureFillet3 (9 params).
+        # Returns a non-zero int on success — NOT an IFeature — so we look up
+        # the last modified feature afterwards to get the name/id.
+        # Older builds: IFeatureManager.FeatureFillet3 (15 params, returns IFeature).
+        if fillet_sw_major >= 33:
+            result_code = adapter.currentModel.FeatureFillet3(
                 radius / 1000.0,  # R1 in meters
                 True,  # Propagate
                 0,  # Ftyp
@@ -1223,6 +1225,11 @@ def _add_fillet_impl(
                 False,
                 False,  # UseHelpPoint, UseTangentHoldLine
             )
+            if not result_code:
+                raise Exception(
+                    "Failed to create fillet (IModelDoc2.FeatureFillet3 returned 0)"
+                )
+            feature = None  # int return — retrieve feature object below
         else:
             feature_manager = adapter.currentModel.FeatureManager
             feature = feature_manager.FeatureFillet3(
@@ -1242,15 +1249,32 @@ def _add_fillet_impl(
                 0,
                 False,
             )
+            if not feature:
+                raise Exception("Failed to create fillet")
 
-        # IModelDoc2.FeatureFillet3 returns int on SW 2025, not IFeature
-        if not feature and fillet_sw_major != 33:
-            raise Exception("Failed to create fillet")
+        # Resolve feature name/id — for SW 2025+ the int-return path needs to
+        # fish the newly added feature out of the FeatureManager.
+        feature_name = "Fillet"
+        if feature is not None and hasattr(feature, "Name"):
+            try:
+                feature_name = feature.Name or "Fillet"
+            except Exception:
+                pass
+        elif fillet_sw_major >= 33:
+            try:
+                last = adapter._attempt(
+                    lambda: adapter.currentModel.FeatureManager.GetLastModifiedFeature()
+                )
+                if last and hasattr(last, "Name"):
+                    feature_name = last.Name or "Fillet"
+                    feature = last
+            except Exception:
+                pass
 
         return SolidWorksFeature(
-            name=feature.Name,
+            name=feature_name,
             type="Fillet",
-            id=adapter._get_feature_id(feature),
+            id=adapter._get_feature_id(feature) if feature else "",
             parameters={"radius": radius, "edges": edge_names},
             properties={"created": datetime.now().isoformat()},
         )
