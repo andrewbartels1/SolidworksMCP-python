@@ -17,6 +17,36 @@ from ..adapters.base import SolidWorksAdapter
 from ..utils.feature_tree_classifier import classify_feature_tree_snapshot
 from .input_compat import CompatInput
 
+# swPackAndGoSaveStatus_e — returned (per-file) by IModelDocExtension::SavePackAndGo.
+# All zeros means every file was written successfully by SolidWorks Pack-and-Go.
+_SW_PACK_AND_GO_STATUS: dict[int, str] = {
+    0: "Ok",
+    2: "FileAlreadyExist — target file already exists and was not overwritten",
+    3: "MissingSource — source reference file could not be found",
+}
+
+
+def _decode_pack_and_go_statuses(save_result) -> tuple[bool, list[str]]:
+    """Decode the SavePackAndGo per-file status array.
+
+    Returns (all_ok, human_readable_warnings).
+    """
+    if save_result is None:
+        return True, []
+    try:
+        codes = [int(c) for c in save_result]
+    except TypeError:
+        codes = [int(save_result)]
+    warnings: list[str] = []
+    for i, code in enumerate(codes):
+        if code != 0:
+            label = _SW_PACK_AND_GO_STATUS.get(
+                code, f"Unknown status code {code}"
+            )
+            warnings.append(f"File index {i}: {label} (swPackAndGoSaveStatus_e={code})")
+    return len(warnings) == 0, warnings
+
+
 # Input schemas using Python 3.14 built-in types
 
 
@@ -562,6 +592,7 @@ async def register_file_management_tools(
             pack_and_go.IncludeToolboxComponents = True
 
             save_result = model_ext_typed.SavePackAndGo(pack_and_go)
+            all_ok, status_warnings = _decode_pack_and_go_statuses(save_result)
 
             copied_files = sorted(str(p) for p in target_dir.rglob("*") if p.is_file())
             if not copied_files:
@@ -585,6 +616,8 @@ async def register_file_management_tools(
                 "file_path": str(target_assembly),
                 "copied_file_count": len(copied_files),
                 "copied_files": copied_files,
+                "all_files_saved": all_ok,
+                "save_status_warnings": status_warnings,
                 "missing_source_files": [],
                 "copy_method": "solidworks_pack_and_go_api",
             }, None

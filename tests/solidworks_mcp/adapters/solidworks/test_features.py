@@ -221,17 +221,16 @@ def _make_sw2026_adapter(fillet3_return=1, last_feature=None):
     return adapter
 
 
-def test_add_fillet_sw2026_success_with_last_modified_feature() -> None:
-    """SW 2026 path: FeatureFillet3 returns non-zero, feature name resolved via
-    GetLastModifiedFeature."""
-    last = SimpleNamespace(Name="Fillet1")
-    adapter = _make_sw2026_adapter(fillet3_return=1, last_feature=last)
+def test_add_fillet_sw2026_success_returns_default_name() -> None:
+    """SW 2026 path: FeatureFillet3 returns non-zero; name defaults to 'Fillet'
+    because IModelDoc2.FeatureFillet3 returns an int, not an IFeature."""
+    adapter = _make_sw2026_adapter(fillet3_return=1)
 
     result = features._add_fillet_impl(adapter, 3.0, ["Edge<1>"])
 
     assert result.is_success
     assert result.data.type == "Fillet"
-    assert result.data.name == "Fillet1"
+    assert result.data.name == "Fillet"
 
 
 def test_add_fillet_sw2026_success_last_feature_none_uses_default_name() -> None:
@@ -266,14 +265,13 @@ def test_add_fillet_sw2026_edge_selection_failure() -> None:
 
 
 def test_add_fillet_sw33_also_uses_new_path() -> None:
-    """major=33 (SW 2025) still hits the >= 33 branch after the fix."""
+    """major=33 (SW 2025) hits the >= 33 branch; name defaults to 'Fillet'
+    because IModelDoc2.FeatureFillet3 returns int, not IFeature."""
     adapter = _FilletAdapterSW2026()
     adapter.swApp = SimpleNamespace(RevisionNumber="33.2.1")
-    last = SimpleNamespace(Name="Fillet2")
     adapter.currentModel = SimpleNamespace(
         FeatureManager=SimpleNamespace(
             FeatureFillet3=lambda *args: None,
-            GetLastModifiedFeature=lambda: last,
         ),
         Extension=SimpleNamespace(SelectByID2=lambda *_args: True),
         FeatureFillet3=lambda *args: 1,
@@ -282,4 +280,4 @@ def test_add_fillet_sw33_also_uses_new_path() -> None:
     result = features._add_fillet_impl(adapter, 1.5, ["Edge<1>"])
 
     assert result.is_success
-    assert result.data.name == "Fillet2"
+    assert result.data.name == "Fillet"

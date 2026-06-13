@@ -4,7 +4,7 @@ Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as 
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 13**
+**Total tools in this category: 14**
 
 ---
 
@@ -296,5 +296,56 @@ Save the active SolidWorks assembly document.
 ```json
 {}
 ```
+
+---
+
+### `pack_and_go_assembly`
+
+Copy a SolidWorks assembly and all its referenced parts to a self-contained folder — equivalent to the SolidWorks GUI **Pack and Go** operation.
+
+The active assembly (or `source_path`) is opened, every referenced component is enumerated via the native SolidWorks IPackAndGo COM API, and all files are written into `target_dir` with internal paths rewritten so the copy opens without any dependency on the original file locations.
+
+**Prerequisite:** SolidWorks running with the assembly loaded (or openable). `target_dir` must be writable.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `source_path` | `str` | ✅ | | Absolute path to the source `.sldasm` file |
+| `target_dir` | `str` | ✅ | | Directory where the assembly and all referenced parts will be copied |
+| `export_preview` | `bool` | — | `True` | Export an isometric PNG preview next to the copied files |
+| `overwrite` | `bool` | — | `False` | Overwrite files that already exist in `target_dir` |
+
+**Sample call:**
+
+```json
+{
+  "source_path": "C:\\Projects\\robot_arm.sldasm",
+  "target_dir": "C:\\Exports\\robot_arm_pkg",
+  "export_preview": true
+}
+```
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `str` | `"success"` or `"error"` |
+| `file_path` | `str` | Path to the copied root assembly file |
+| `copied_file_count` | `int` | Total number of files written |
+| `copied_files` | `list[str]` | Absolute paths of every copied file |
+| `all_files_saved` | `bool` | `true` when every per-file save status is `swPackAndGoSaveStatus_Ok` (0) |
+| `save_status_warnings` | `list[str]` | Human-readable description of any non-zero per-file statuses (empty list on full success) |
+| `preview_image` | `str?` | Path to the isometric PNG preview, or `null` if export was skipped or failed |
+
+**`swPackAndGoSaveStatus_e` reference** (values reported in `save_status_warnings`):
+
+| Code | Name | Meaning |
+|------|------|---------|
+| `0` | `Ok` | File was written successfully |
+| `2` | `FileAlreadyExist` | Target file already existed and was not overwritten |
+| `3` | `MissingSource` | Source reference file could not be found |
+
+All zeros in the per-file status array (`all_files_saved: true`) means SolidWorks confirmed every file was written successfully via its native Pack-and-Go engine.
 
 ---
