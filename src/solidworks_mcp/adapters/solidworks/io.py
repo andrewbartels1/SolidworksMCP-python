@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
+import re
+import shutil
+import uuid
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -16,6 +21,58 @@ try:
 except ImportError:  # pragma: no cover
     pythoncom = SimpleNamespace()
     win32com = SimpleNamespace(client=SimpleNamespace())
+
+try:
+    import comtypes
+    import comtypes.client as _comtypes_client
+
+    _COMTYPES_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _COMTYPES_AVAILABLE = False
+
+# SolidWorks type library GUID (stable across SW versions)
+_SW_TLB_GUID = "{83A33D31-27C5-11CE-BFD4-00400513BB57}"
+# Cached comtypes wrapper module (loaded once per process)
+_sw_comtypes_lib: Any = None
+
+
+def _get_sw_comtypes_lib() -> Any:
+    """Return the comtypes wrapper for the SolidWorks type library.
+
+    Tries SW version numbers 35..30 (newest to oldest). Returns ``None`` when
+    comtypes is unavailable or the TLB cannot be found in the registry.
+    """
+    global _sw_comtypes_lib
+    if _sw_comtypes_lib is not None:
+        return _sw_comtypes_lib
+    if not _COMTYPES_AVAILABLE:
+        return None
+    for major in (35, 34, 33, 32, 31, 30):
+        try:
+            _sw_comtypes_lib = _comtypes_client.GetModule(
+                (comtypes.GUID(_SW_TLB_GUID), major, 0)
+            )
+            return _sw_comtypes_lib
+        except Exception:
+            continue
+    return None
+
+
+def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:
+    """Bridge a pywin32 CDispatch/COM object to a comtypes interface pointer.
+
+    Extracts the raw IUnknown pointer from pywin32's repr string, then
+    QueryInterface-es for *iface* via comtypes.  The AddRef keeps the object
+    alive through the Python reference.
+    """
+    unk = pywin32_obj._oleobj_.QueryInterface(pythoncom.IID_IUnknown)
+    m = re.search(r"obj at (0x[0-9a-fA-F]+)", repr(unk))
+    if not m:
+        raise RuntimeError(f"Could not extract COM pointer from {repr(unk)!r}")
+    ptr_int = int(m.group(1), 16)
+    ct_unk = ctypes.cast(ptr_int, ctypes.POINTER(comtypes.IUnknown))
+    ct_unk.AddRef()
+    return ct_unk.QueryInterface(iface)
 
 
 class SolidWorksIOMixin:
@@ -719,4 +776,123 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[MassProperties],
             adapter._handle_com_operation("get_mass_properties", _get),
+        )
+
+    async def pack_and_go_assembly(
+        self,
+        source_path: str,
+        target_dir: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Copy an assembly and all its referenced components to a self-contained folder.
+
+        Uses ``IModelDocExtension.GetPackAndGo()`` → ``IPackAndGo`` via the
+        comtypes vtable interface (bypassing the broken IDispatch path present
+        in SolidWorks 2026's late-binding layer), then calls
+        ``IModelDocExtension.SavePackAndGo()`` to execute the copy.  All file
+        paths inside the copied assembly are automatically updated by
+        SolidWorks — this is the native Pack-and-Go mechanism.
+
+        Args:
+            source_path: Absolute path to the source ``.sldasm`` file.
+            target_dir: Directory where the assembly and parts will be copied.
+                        Created if it does not exist.
+
+        Returns:
+            AdapterResult[dict]: On success, ``data`` is a dict with keys:
+            ``source_assembly``, ``target_dir``, ``copied_files``,
+            ``source_files``, ``save_statuses``, and ``all_files_saved``.
+        """
+        adapter = self._adapter(self)
+        source = Path(source_path)
+        out_dir = Path(target_dir)
+
+        def _do_pack_and_go() -> dict[str, Any]:
+            # Load comtypes TLB (cached after first call)
+            sw_lib = _get_sw_comtypes_lib()
+            if sw_lib is None:
+                raise RuntimeError(
+                    "comtypes SolidWorks type library not available. "
+                    "Ensure comtypes is installed and SolidWorks is registered."
+                )
+
+            # Prepare a clean target directory. SW holds file locks on previously
+            # opened assemblies so rmtree raises WinError 32. We rename the old
+            # dir aside (Windows allows rename with open handles) and delete the
+            # backup afterwards; if rename also fails we just proceed and let SW
+            # overwrite existing files.
+            if out_dir.exists():
+                backup = out_dir.parent / f"{out_dir.name}_bak_{uuid.uuid4().hex[:8]}"
+                try:
+                    os.rename(out_dir, backup)
+                    try:
+                        shutil.rmtree(backup)
+                    except Exception:
+                        pass  # best-effort cleanup; stale backup is harmless
+                except OSError:
+                    pass  # rename also failed — proceed; SW will overwrite files
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            # Open the source assembly
+            vt = pythoncom.VT_BYREF | pythoncom.VT_I4
+            from win32com.client import VARIANT  # noqa: PLC0415
+
+            err = VARIANT(vt, 0)
+            warn = VARIANT(vt, 0)
+            model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
+            if model is None and err.value == 65536:
+                adapter.swApp.CloseAllDocuments(False)
+                err = VARIANT(vt, 0)
+                warn = VARIANT(vt, 0)
+                model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
+            if model is None:
+                raise RuntimeError(
+                    f"OpenDoc6 failed err={err.value} warn={warn.value}"
+                )
+            _sw_type_info.flag_doc(model, 2)
+            adapter.currentModel = model
+
+            # Bridge model.Extension → IModelDocExtension via comtypes vtable
+            ext_ct = _bridge_com_to_comtypes(model.Extension, sw_lib.IModelDocExtension)
+
+            # GetPackAndGo() via vtable (IDispatch path broken in SW 2026)
+            pg = ext_ct.GetPackAndGo()
+
+            # Configure: flatten all files to root of target directory
+            pg.FlattenToSingleFolder = True
+            pg.SetSaveToName(True, str(out_dir) + "\\")
+
+            # Record what files will be packed
+            names_result = pg.GetDocumentNames()
+            source_files: list[str] = list(names_result[0]) if names_result[0] else []
+
+            # Execute Pack and Go — SavePackAndGo returns a tuple of per-file status codes
+            ext_ct2 = _bridge_com_to_comtypes(model.Extension, sw_lib.IModelDocExtension)
+            status_arr = ext_ct2.SavePackAndGo(pg)
+            save_statuses: list[int] = list(status_arr) if status_arr else []
+
+            copied_files = sorted(
+                str(p)
+                for p in out_dir.rglob("*")
+                if p.is_file()
+                and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
+            )
+            return {
+                "source_assembly": str(source),
+                "target_dir": str(out_dir),
+                "copied_files": copied_files,
+                "source_files": source_files,
+                "save_statuses": save_statuses,
+                "all_files_saved": all(s == 0 for s in save_statuses),
+            }
+
+        result = adapter._handle_com_operation("pack_and_go_assembly", _do_pack_and_go)
+        if not result.is_success:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Pack and Go failed: {result.error}",
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=result.data,
+            execution_time=result.execution_time,
         )

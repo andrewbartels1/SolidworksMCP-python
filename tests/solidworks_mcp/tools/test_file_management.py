@@ -1,6 +1,7 @@
 """Tests for SolidWorks file management tools."""
 
-from unittest.mock import AsyncMock, Mock
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -898,7 +899,7 @@ class TestFileManagementTools:
 
     @pytest.mark.asyncio
     async def test_save_part_and_save_assembly_paths(
-        self, mcp_server, mock_adapter, mock_config
+        self, mcp_server, mock_adapter, mock_config, tmp_path
     ):
         """Cover path normalization and error branches for save_part/save_assembly."""
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
@@ -925,14 +926,18 @@ class TestFileManagementTools:
         mock_adapter.save_file = AsyncMock(
             return_value=Mock(is_success=True, execution_time=0.02)
         )
+
+        out_dir = tmp_path / "save_paths"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
         save_part_as = await save_part_tool(
-            input_data={"file_path": "C:/tmp/demo.step"}
+            input_data={"file_path": str(out_dir / "demo.step")}
         )
         assert save_part_as["status"] == "success"
         assert save_part_as["file_path"].endswith(".sldprt")
 
         save_asm_as = await save_assembly_tool(
-            input_data={"file_path": "C:/tmp/demo.step"}
+            input_data={"file_path": str(out_dir / "demo.step")}
         )
         assert save_asm_as["status"] == "success"
         assert save_asm_as["file_path"].endswith(".sldasm")
@@ -946,23 +951,277 @@ class TestFileManagementTools:
             return_value=Mock(is_success=False, error="save failed")
         )
         save_part_err = await save_part_tool(
-            input_data={"file_path": "C:/tmp/demo.sldprt"}
+            input_data={"file_path": str(out_dir / "demo.sldprt")}
         )
         save_asm_err = await save_assembly_tool(
-            input_data={"file_path": "C:/tmp/demo.sldasm"}
+            input_data={"file_path": str(out_dir / "demo.sldasm")}
         )
         assert save_part_err["status"] == "error"
         assert save_asm_err["status"] == "error"
 
         mock_adapter.save_file = AsyncMock(side_effect=RuntimeError("save crash"))
         save_part_ex = await save_part_tool(
-            input_data={"file_path": "C:/tmp/demo.sldprt"}
+            input_data={"file_path": str(out_dir / "demo.sldprt")}
         )
         save_asm_ex = await save_assembly_tool(
-            input_data={"file_path": "C:/tmp/demo.sldasm"}
+            input_data={"file_path": str(out_dir / "demo.sldasm")}
         )
         assert save_part_ex["status"] == "error"
         assert save_asm_ex["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_save_tools_path_validation_and_overwrite_policy(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Cover directory/writability/overwrite guards for save_part and save_assembly."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_part_tool = None
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_part":
+                save_part_tool = tool.fn
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_part_tool is not None
+        assert save_assembly_tool is not None
+
+        missing_dir_part = tmp_path / "missing_part_dir" / "demo.sldprt"
+        missing_dir_asm = tmp_path / "missing_asm_dir" / "demo.sldasm"
+
+        missing_part_result = await save_part_tool(
+            input_data={"file_path": str(missing_dir_part), "overwrite": True}
+        )
+        missing_asm_result = await save_assembly_tool(
+            input_data={"file_path": str(missing_dir_asm), "overwrite": True}
+        )
+
+        assert missing_part_result["status"] == "error"
+        assert "Target directory does not exist" in missing_part_result["message"]
+        assert missing_asm_result["status"] == "error"
+        assert "Target directory does not exist" in missing_asm_result["message"]
+
+        parent_file = tmp_path / "not_a_directory"
+        parent_file.write_text("placeholder", encoding="utf-8")
+        parent_file_part_target = parent_file / "child_part.sldprt"
+        parent_file_asm_target = parent_file / "child_asm.sldasm"
+
+        parent_file_part_result = await save_part_tool(
+            input_data={"file_path": str(parent_file_part_target), "overwrite": True}
+        )
+        parent_file_asm_result = await save_assembly_tool(
+            input_data={"file_path": str(parent_file_asm_target), "overwrite": True}
+        )
+
+        assert parent_file_part_result["status"] == "error"
+        assert (
+            "Target parent path is not a directory"
+            in parent_file_part_result["message"]
+        )
+        assert parent_file_asm_result["status"] == "error"
+        assert (
+            "Target parent path is not a directory" in parent_file_asm_result["message"]
+        )
+
+        writable_dir = tmp_path / "writable"
+        writable_dir.mkdir(parents=True, exist_ok=True)
+        non_writable_part = writable_dir / "no_write_part.sldprt"
+        non_writable_asm = writable_dir / "no_write_asm.sldasm"
+
+        with patch(
+            "solidworks_mcp.tools.file_management.os.access", return_value=False
+        ):
+            no_write_part_result = await save_part_tool(
+                input_data={"file_path": str(non_writable_part), "overwrite": True}
+            )
+            no_write_asm_result = await save_assembly_tool(
+                input_data={"file_path": str(non_writable_asm), "overwrite": True}
+            )
+
+        assert no_write_part_result["status"] == "error"
+        assert "Target directory is not writable" in no_write_part_result["message"]
+        assert no_write_asm_result["status"] == "error"
+        assert "Target directory is not writable" in no_write_asm_result["message"]
+
+        target_dir_part = writable_dir / "target_is_dir.sldprt"
+        target_dir_asm = writable_dir / "target_is_dir.sldasm"
+        target_dir_part.mkdir(parents=True, exist_ok=True)
+        target_dir_asm.mkdir(parents=True, exist_ok=True)
+
+        target_dir_part_result = await save_part_tool(
+            input_data={"file_path": str(target_dir_part), "overwrite": True}
+        )
+        target_dir_asm_result = await save_assembly_tool(
+            input_data={"file_path": str(target_dir_asm), "overwrite": True}
+        )
+
+        assert target_dir_part_result["status"] == "error"
+        assert "Target path is a directory" in target_dir_part_result["message"]
+        assert target_dir_asm_result["status"] == "error"
+        assert "Target path is a directory" in target_dir_asm_result["message"]
+
+        existing_part = writable_dir / "existing_part.sldprt"
+        existing_asm = writable_dir / "existing_asm.sldasm"
+        existing_part.write_text("part", encoding="utf-8")
+        existing_asm.write_text("assembly", encoding="utf-8")
+
+        exists_no_overwrite_part = await save_part_tool(
+            input_data={"file_path": str(existing_part), "overwrite": False}
+        )
+        exists_no_overwrite_asm = await save_assembly_tool(
+            input_data={"file_path": str(existing_asm), "overwrite": False}
+        )
+
+        assert exists_no_overwrite_part["status"] == "error"
+        assert (
+            "File already exists and overwrite=False"
+            in exists_no_overwrite_part["message"]
+        )
+        assert exists_no_overwrite_asm["status"] == "error"
+        assert (
+            "File already exists and overwrite=False"
+            in exists_no_overwrite_asm["message"]
+        )
+
+        default_no_overwrite_part = await save_part_tool(
+            input_data={"file_path": str(existing_part)}
+        )
+        default_no_overwrite_asm = await save_assembly_tool(
+            input_data={"file_path": str(existing_asm)}
+        )
+
+        assert default_no_overwrite_part["status"] == "error"
+        assert (
+            "File already exists and overwrite=False"
+            in default_no_overwrite_part["message"]
+        )
+        assert default_no_overwrite_asm["status"] == "error"
+        assert (
+            "File already exists and overwrite=False"
+            in default_no_overwrite_asm["message"]
+        )
+
+        mock_adapter.save_file = AsyncMock(
+            return_value=Mock(is_success=True, execution_time=0.03)
+        )
+
+        overwrite_part_ok = await save_part_tool(
+            input_data={"file_path": str(existing_part), "overwrite": True}
+        )
+        overwrite_asm_ok = await save_assembly_tool(
+            input_data={"file_path": str(existing_asm), "overwrite": True}
+        )
+
+        assert overwrite_part_ok["status"] == "success"
+        assert overwrite_asm_ok["status"] == "success"
+
+        new_part_path = Path(tmp_path / "writable" / "new_part_target.step")
+        new_asm_path = Path(tmp_path / "writable" / "new_asm_target.step")
+
+        happy_part = await save_part_tool(
+            input_data={"file_path": str(new_part_path), "overwrite": False}
+        )
+        happy_asm = await save_assembly_tool(
+            input_data={"file_path": str(new_asm_path), "overwrite": False}
+        )
+
+        assert happy_part["status"] == "success"
+        assert happy_part["file_path"].endswith(".sldprt")
+        assert happy_asm["status"] == "success"
+        assert happy_asm["file_path"].endswith(".sldasm")
+
+        saved_paths = [call.args[0] for call in mock_adapter.save_file.await_args_list]
+        assert str(existing_part) in saved_paths
+        assert str(existing_asm) in saved_paths
+        assert str(new_part_path.with_suffix(".sldprt")) in saved_paths
+        assert str(new_asm_path.with_suffix(".sldasm")) in saved_paths
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_copy_path(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Copy active assembly and dependencies when include_references=True."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        source_dir = tmp_path / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        source_asm = source_dir / "wifi_box.sldasm"
+        source_part_a = source_dir / "router.sldprt"
+        source_part_b = source_dir / "lid.sldprt"
+        source_asm.write_text("asm", encoding="utf-8")
+        source_part_a.write_text("part-a", encoding="utf-8")
+        source_part_b.write_text("part-b", encoding="utf-8")
+
+        current_model = Mock()
+        current_model.GetPathName = Mock(return_value=str(source_asm))
+        current_model.GetDependencies2 = Mock(
+            return_value=(
+                "router",
+                str(source_part_a),
+                "lid",
+                str(source_part_b),
+            )
+        )
+        mock_adapter.currentModel = current_model
+        mock_adapter.save_file = AsyncMock(
+            return_value=Mock(is_success=True, execution_time=0.01)
+        )
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_asm_path = target_dir / "wifi_box_copy.sldasm"
+
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_asm_path),
+                "include_references": True,
+                "overwrite": False,
+            }
+        )
+
+        assert result["status"] == "success"
+        assert result["copy_method"] == "tool_dependency_copy"
+        assert result["file_path"] == str(target_asm_path)
+        assert result["copied_file_count"] == 3
+        assert target_asm_path.exists()
+        assert (target_dir / source_part_a.name).exists()
+        assert (target_dir / source_part_b.name).exists()
+        assert mock_adapter.save_file.await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_save_assembly_with_references_requires_active_model(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Return deterministic error when include_references=True without active model."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        save_assembly_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "save_assembly":
+                save_assembly_tool = tool.fn
+
+        assert save_assembly_tool is not None
+
+        mock_adapter.currentModel = None
+        target_dir = tmp_path / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_dir / "copy.sldasm"),
+                "include_references": True,
+            }
+        )
+
+        assert result["status"] == "error"
+        assert "No active model" in result["message"]
 
     @pytest.mark.asyncio
     async def test_read_tools_fallback_when_adapter_methods_missing(

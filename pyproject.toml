@@ -37,6 +37,7 @@ dependencies = [
     "chardet<6",
     "pywin32>=306; platform_system=='Windows'",
     "pywin32-ctypes>=0.2.0; platform_system=='Windows'",
+    "comtypes>=1.4.0; platform_system=='Windows'",
     "loguru>=0.7.0",
     "typing-extensions>=4.8.0",
     "httpx>=0.24.0",

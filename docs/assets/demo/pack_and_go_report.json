@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-06-08T12:07:10",
+  "source_assembly": "C:\\Users\\andre\\Downloads\\wall_marker_jig_assem.SLDASM",
+  "target_dir": "C:\\Users\\andre\\Documents\\GitHub\\SolidworksMCP-python\\out\\pack_and_go",
+  "status": "success",
+  "method": "native_pack_and_go",
+  "copied_file_count": 3,
+  "copied_files": [
+    "C:\\Users\\andre\\Documents\\GitHub\\SolidworksMCP-python\\out\\pack_and_go\\Part83.SLDPRT",
+    "C:\\Users\\andre\\Documents\\GitHub\\SolidworksMCP-python\\out\\pack_and_go\\small_target_floating_shelf_wall_screw_adapter.SLDPRT",
+    "C:\\Users\\andre\\Documents\\GitHub\\SolidworksMCP-python\\out\\pack_and_go\\wall_marker_jig_assem.SLDASM"
+  ],
+  "reference_updates": {
+    "small_target_floating_shelf_wall_screw_adapter.SLDPRT": true,
+    "Part83.SLDPRT": true
+  },
+  "all_references_updated": true,
+  "preview_image": "C:\\Users\\andre\\Documents\\GitHub\\SolidworksMCP-python\\out\\pack_and_go\\assembly_preview.png"
+}
