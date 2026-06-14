@@ -185,7 +185,6 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
     "ignore::sqlalchemy.exc.SAWarning",
 ]
-collect_ignore = ["setup.py", "conftest.py"]
 asyncio_mode = "auto"
 log_cli = true
 log_cli_level = "INFO"
