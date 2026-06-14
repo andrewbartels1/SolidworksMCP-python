@@ -345,7 +345,14 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             adapter.currentSketch = adapter.currentSketchManager.InsertSketch()
 
         if not adapter.currentSketch:
+            # Prefer the method-flagged ``currentModel`` dispatch: a bare
+            # ``swApp.ActiveDoc`` is not flagged, so its ``GetActiveSketch2``
+            # resolves to a non-callable and silently yields ``None`` — which
+            # forces the synthetic ``Sketch_N`` fallback name and makes the
+            # sketch unselectable by later features.
             adapter.currentSketch = adapter._attempt(
+                lambda: adapter.currentModel.GetActiveSketch2()
+            ) or adapter._attempt(
                 lambda: adapter.swApp.ActiveDoc.GetActiveSketch2()
             )
 

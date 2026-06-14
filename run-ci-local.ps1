@@ -22,7 +22,28 @@ if (-not $NoBuild) {
 }
 
 Write-Host "Running local CI test command (make test)..." -ForegroundColor Cyan
-docker run --rm -t $imageName
+$ghToken = if ($env:GH_TOKEN) {
+    $env:GH_TOKEN
+} elseif ($env:GITHUB_API_KEY) {
+    $env:GITHUB_API_KEY
+} else {
+    "local-ci-placeholder-token"
+}
+
+$githubApiKey = if ($env:GITHUB_API_KEY) {
+    $env:GITHUB_API_KEY
+} else {
+    $ghToken
+}
+
+if (-not $env:GH_TOKEN -and -not $env:GITHUB_API_KEY) {
+    Write-Host "GH_TOKEN/GITHUB_API_KEY not set; using placeholder values for local CI-only test paths." -ForegroundColor Yellow
+}
+
+docker run --rm -t `
+    -e "GH_TOKEN=$ghToken" `
+    -e "GITHUB_API_KEY=$githubApiKey" `
+    $imageName
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Local CI container run failed."
 }

@@ -30,7 +30,10 @@ class TestModelingTools:
         tool_count = await register_modeling_tools(
             mcp_server, mock_adapter, mock_config
         )
-        assert tool_count == 10
+        assert tool_count == 12
+        # The Phase 1 sweep/loft tools must be registered alongside the rest.
+        names = {tool.name for tool in await mcp_server.list_tools()}
+        assert {"create_sweep", "create_loft"} <= names
 
     @pytest.mark.asyncio
     async def test_open_model_success(self, mcp_server, mock_adapter, mock_config):
@@ -233,6 +236,109 @@ class TestModelingTools:
         assert result["status"] == "success"
         assert result["revolve"]["angle"] == 360.0
         assert result["revolve"]["direction"] == "one_direction"
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_success(self, mcp_server, mock_adapter, mock_config):
+        """create_sweep wires the path/twist params and reports success."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.create_sweep = AsyncMock(
+            return_value=Mock(
+                is_success=True, data={"feature_name": "Sweep1"}, execution_time=1.2
+            )
+        )
+
+        tool_func = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "create_sweep":
+                tool_func = tool.fn
+                break
+        assert tool_func is not None, "create_sweep tool was not registered"
+
+        input_data = CreateSweepInput(
+            path="Sketch2", twist_along_path=True, twist_angle=90.0
+        )
+        result = await tool_func(input_data)
+
+        assert result["status"] == "success"
+        assert result["sweep"]["name"] == "Sweep1"
+        assert result["sweep"]["path"] == "Sketch2"
+        assert result["sweep"]["twist_along_path"] is True
+        assert result["sweep"]["twist_angle"] == 90.0
+        # Adapter received the translated SweepParameters.
+        params = mock_adapter.create_sweep.await_args.args[0]
+        assert params.path == "Sketch2"
+        assert params.twist_along_path is True
+        assert params.twist_angle == 90.0
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_failure(self, mcp_server, mock_adapter, mock_config):
+        """create_sweep surfaces the adapter error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.create_sweep = AsyncMock(
+            return_value=Mock(is_success=False, error="no path sketch")
+        )
+
+        tool_func = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "create_sweep":
+                tool_func = tool.fn
+                break
+
+        result = await tool_func(CreateSweepInput(path="Sketch2"))
+        assert result["status"] == "error"
+        assert "no path sketch" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_create_loft_success(self, mcp_server, mock_adapter, mock_config):
+        """create_loft wires the profile/guide params and reports success."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.create_loft = AsyncMock(
+            return_value=Mock(
+                is_success=True, data={"feature_name": "Loft1"}, execution_time=1.5
+            )
+        )
+
+        tool_func = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "create_loft":
+                tool_func = tool.fn
+                break
+        assert tool_func is not None, "create_loft tool was not registered"
+
+        input_data = CreateLoftInput(
+            profiles=["Sketch1", "Sketch2"], guide_curves=["Sketch3"]
+        )
+        result = await tool_func(input_data)
+
+        assert result["status"] == "success"
+        assert result["loft"]["name"] == "Loft1"
+        assert result["loft"]["profiles"] == ["Sketch1", "Sketch2"]
+        assert result["loft"]["guide_curves"] == ["Sketch3"]
+        params = mock_adapter.create_loft.await_args.args[0]
+        assert params.profiles == ["Sketch1", "Sketch2"]
+        assert params.guide_curves == ["Sketch3"]
+
+    @pytest.mark.asyncio
+    async def test_create_loft_failure(self, mcp_server, mock_adapter, mock_config):
+        """create_loft surfaces the adapter error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.create_loft = AsyncMock(
+            return_value=Mock(is_success=False, error="need 2 profiles")
+        )
+
+        tool_func = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "create_loft":
+                tool_func = tool.fn
+                break
+
+        result = await tool_func(CreateLoftInput(profiles=["Sketch1", "Sketch2"]))
+        assert result["status"] == "error"
+        assert "need 2 profiles" in result["message"]
 
     @pytest.mark.asyncio
     async def test_get_dimension_value(self, mcp_server, mock_adapter, mock_config):

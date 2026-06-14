@@ -194,6 +194,39 @@ updated 2026-04-24.
   user settings (`[SettingsIo] Failed to read ... Unexpected token '﻿'`).
   Strip the BOM; write plain UTF-8.
 
+### 11. `SelectByID2` Callout type mismatch — use `VT_DISPATCH` null, not `None`
+
+- **Signature:** `(-2147352571, 'Type mismatch.', None, 8)` on any `SelectByID2` call.
+- **Cause:** The `Callout` parameter (8th arg) is typed `VT_DISPATCH`. Python `None`
+  marshals as `VT_NULL` which SW rejects. Must pass an explicit COM null pointer:
+
+  ```python
+  import pythoncom, win32com.client as _win32com
+  null_callout = _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
+  model.Extension.SelectByID2("", "EDGE", x, y, z, append, mark, null_callout, 0)
+  ```
+
+- **Applies to:** Every `SelectByID2` / `SelectByID` call with no real callout.
+
+### 12. `InsertFeatureChamfer` is on `IFeatureManager`, not `IModelDocExtension`
+
+- **Signature:** `<unknown>.InsertFeatureChamfer` when calling via `model.Extension`.
+- **Cause:** `InsertFeatureChamfer` (DISPID 83) is on `IFeatureManager`.
+  Routing through `model.Extension` (IModelDocExtension) causes `DISP_E_MEMBERNOTFOUND`.
+- **Fix:** `fm = model.FeatureManager; fm.InsertFeatureChamfer(1, 1, width_m, pi/4, 0, 0, 0, 0)`
+- **More detail:** See `docs/agents/com-api-pitfalls.md` for the full pattern catalogue.
+
+### 13. `ForceRebuild3(True)` required before coordinate-based edge/face selection
+
+- **Signature:** `SelectByID2("", "EDGE", x, y, z, ...)` returns `False` on a freshly
+  created feature.
+- **Cause:** New feature edges are not tessellated until an explicit rebuild.
+  `SelectByID2` uses the tessellated mesh to resolve coordinates.
+- **Fix:** Call `model.ForceRebuild3(True)` once before the first `SelectByID2` in a
+  feature operation.
+
+> **Full COM pitfall catalogue for LLM agents:** `docs/agents/com-api-pitfalls.md`
+
 ### Decision order when starting a debug session
 
 1. Read recent `%APPDATA%\Claude\logs\main.log` entries for

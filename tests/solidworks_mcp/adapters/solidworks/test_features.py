@@ -178,3 +178,106 @@ def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
     )
     assert result.status == AdapterResultStatus.ERROR
     assert "Failed to create cut extrude feature" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# Fillet: SW 2025+ (major >= 33) code paths
+# ---------------------------------------------------------------------------
+
+class _FilletAdapterSW2026(_FakeFeatureAdapter):
+    """Fake adapter that simulates SW 2026 (major=34) for fillet tests."""
+
+    def _get_attr_or_call(self, obj, name, default=None):
+        if obj is None:
+            return default
+        candidate = getattr(obj, name, None)
+        if candidate is None:
+            return default
+        if callable(candidate):
+            try:
+                return candidate()
+            except Exception:
+                return default
+        return candidate
+
+
+def _make_sw2026_adapter(fillet3_return=1, last_feature=None):
+    """Return a fake adapter reporting SW 2026 (major=34)."""
+    adapter = _FilletAdapterSW2026()
+    adapter.swApp = SimpleNamespace(RevisionNumber="34.0.0")
+
+    feature_manager = SimpleNamespace(
+        FeatureFillet3=lambda *args: None,  # old path — not used for major >= 33
+        GetLastModifiedFeature=lambda: last_feature,
+    )
+    extension = SimpleNamespace(SelectByID2=lambda edge, *_args: edge != "Edge<bad>")
+
+    # IModelDoc2.FeatureFillet3 on the model directly (SW 2025+ path)
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=feature_manager,
+        Extension=extension,
+        FeatureFillet3=lambda *args: fillet3_return,
+    )
+    return adapter
+
+
+def test_add_fillet_sw2026_success_returns_default_name() -> None:
+    """SW 2026 path: FeatureFillet3 returns non-zero; name defaults to 'Fillet'
+    because IModelDoc2.FeatureFillet3 returns an int, not an IFeature."""
+    adapter = _make_sw2026_adapter(fillet3_return=1)
+
+    result = features._add_fillet_impl(adapter, 3.0, ["Edge<1>"])
+
+    assert result.is_success
+    assert result.data.type == "Fillet"
+    assert result.data.name == "Fillet"
+
+
+def test_add_fillet_sw2026_success_last_feature_none_uses_default_name() -> None:
+    """SW 2026 path: GetLastModifiedFeature returns None — fall back to 'Fillet'."""
+    adapter = _make_sw2026_adapter(fillet3_return=1, last_feature=None)
+
+    result = features._add_fillet_impl(adapter, 2.0, ["Edge<1>"])
+
+    assert result.is_success
+    assert result.data.name == "Fillet"
+    assert result.data.id == ""
+
+
+def test_add_fillet_sw2026_failure_returns_zero() -> None:
+    """SW 2026 path: FeatureFillet3 returns 0 — should raise and return error."""
+    adapter = _make_sw2026_adapter(fillet3_return=0)
+
+    result = features._add_fillet_impl(adapter, 2.0, ["Edge<1>"])
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "FeatureFillet3 returned 0" in (result.error or "")
+
+
+def test_add_fillet_sw2026_edge_selection_failure() -> None:
+    """SW 2026 path: edge selection failure is reported before fillet call."""
+    adapter = _make_sw2026_adapter(fillet3_return=1)
+
+    result = features._add_fillet_impl(adapter, 2.0, ["Edge<bad>"])
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to select edge" in (result.error or "")
+
+
+def test_add_fillet_sw33_also_uses_new_path() -> None:
+    """major=33 (SW 2025) hits the >= 33 branch; name defaults to 'Fillet'
+    because IModelDoc2.FeatureFillet3 returns int, not IFeature."""
+    adapter = _FilletAdapterSW2026()
+    adapter.swApp = SimpleNamespace(RevisionNumber="33.2.1")
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(
+            FeatureFillet3=lambda *args: None,
+        ),
+        Extension=SimpleNamespace(SelectByID2=lambda *_args: True),
+        FeatureFillet3=lambda *args: 1,
+    )
+
+    result = features._add_fillet_impl(adapter, 1.5, ["Edge<1>"])
+
+    assert result.is_success
+    assert result.data.name == "Fillet"
