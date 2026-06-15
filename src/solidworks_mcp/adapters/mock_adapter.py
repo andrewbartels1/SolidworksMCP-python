@@ -1565,6 +1565,46 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             metadata={"mock": True, "orientation": orientation},
         )
 
+    async def pack_and_go_assembly(
+        self,
+        source_path: str,
+        target_dir: str,
+    ) -> AdapterResult[dict]:
+        """Mock Pack-and-Go: simulate copying an assembly to a target directory.
+
+        Args:
+            source_path (str): Path to the source .sldasm file.
+            target_dir (str): Directory to copy files into.
+
+        Returns:
+            AdapterResult[dict]: Simulated pack-and-go result.
+        """
+        import pathlib
+
+        await asyncio.sleep(0.05)
+        self._operation_count += 1
+
+        source = pathlib.Path(source_path)
+        out_dir = pathlib.Path(target_dir)
+        mock_parts = [f"MockPart{i}.SLDPRT" for i in range(1, 3)]
+        source_files = [str(source)] + [str(source.parent / p) for p in mock_parts]
+        copied_files = [str(out_dir / source.name)] + [
+            str(out_dir / p) for p in mock_parts
+        ]
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "source_assembly": str(source),
+                "target_dir": str(out_dir),
+                "copied_files": copied_files,
+                "source_files": source_files,
+                "save_statuses": [0] * (len(mock_parts) + 1),
+                "all_files_saved": True,
+            },
+            execution_time=0.05,
+            metadata={"mock": True},
+        )
+
     async def export_file(
         self, file_path: str, format_type: str
     ) -> AdapterResult[None]:

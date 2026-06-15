@@ -1953,6 +1953,11 @@ class PyWin32Adapter(
             # Zoom to fit so the model fills the viewport before capture
             self._zoom_to_fit(target_doc)
 
+            # Remove any pre-existing file so SolidWorks never shows the
+            # "already exists — replace?" confirmation dialog.
+            if _os.path.exists(resolved):
+                _os.remove(resolved)
+
             # Try screenshot methods in order: ModelView → TargetDoc → SaveAs3
             saved = self._save_screenshot_with_modelview(
                 target_doc, resolved, width, height

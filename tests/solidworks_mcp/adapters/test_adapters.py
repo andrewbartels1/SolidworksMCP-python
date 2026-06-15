@@ -966,6 +966,7 @@ class TestPyWin32AdapterBranches:
             FeatureCut3=Mock(return_value=feature_obj),
             FeatureFillet3=Mock(return_value=feature_obj),
             FeatureChamfer=Mock(return_value=feature_obj),
+            InsertFeatureChamfer=Mock(return_value=feature_obj),
         )
         mass_props = SimpleNamespace(
             Volume=2.0e-9,
@@ -982,6 +983,7 @@ class TestPyWin32AdapterBranches:
             Extension=extension,
             SketchManager=sketch_manager,
             FeatureManager=feature_manager,
+            ClearSelection2=Mock(return_value=True),
         )
 
         created_sketch = await adapter.create_sketch("XY")
@@ -1077,6 +1079,7 @@ class TestPyWin32AdapterBranches:
             FeatureCut3=Mock(return_value=feature_obj),
             FeatureFillet3=Mock(return_value=feature_obj),
             FeatureChamfer=Mock(return_value=feature_obj),
+            InsertFeatureChamfer=Mock(return_value=feature_obj),
         )
         sketch_manager = SimpleNamespace(
             InsertSketch=Mock(return_value=SimpleNamespace(Name="SketchA")),
@@ -1091,6 +1094,7 @@ class TestPyWin32AdapterBranches:
             Extension=extension,
             SketchManager=sketch_manager,
             FeatureManager=feature_manager,
+            ClearSelection2=Mock(return_value=True),
             GetMassProperties=(
                 0.001,
                 0.002,
