@@ -96,6 +96,7 @@ async def run_export_demo(out_dir: Path) -> dict[str, str]:
         part_path = str((out_dir / "export_demo.SLDPRT").resolve())
         _check("save_file (native .sldprt)", await adapter.save_file(part_path))
         artefacts["native_sldprt"] = part_path
+        artefacts["part"] = part_path
 
         # ------------------------------------------------------------------
         # export_step
@@ -176,6 +177,10 @@ async def run_export_demo(out_dir: Path) -> dict[str, str]:
         return artefacts
 
     finally:
+        try:
+            await adapter.close_model(save=False)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             await adapter.disconnect()
             print("\nDisconnected.")

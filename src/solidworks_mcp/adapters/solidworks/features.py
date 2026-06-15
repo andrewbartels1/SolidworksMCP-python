@@ -1456,6 +1456,7 @@ def _add_chamfer_impl(
         # Parameters: Options, ChamferType, Width(m), Angle(rad), OtherDist,
         #             VertexChamDist1, VertexChamDist2, VertexChamDist3
         fm = adapter.currentModel.FeatureManager
+        _flag_feature_methods(fm, "IFeatureManager")
         feature, insert_err = adapter._attempt_with_error(
             lambda: fm.InsertFeatureChamfer(
                 1,                   # Options

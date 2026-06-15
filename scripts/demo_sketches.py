@@ -197,6 +197,10 @@ async def build_demo_part(out_dir: Path) -> dict[str, str]:
         }
     finally:
         try:
+            await adapter.close_model(save=False)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             await adapter.disconnect()
             print("Disconnected.")
         except Exception as exc:  # noqa: BLE001
