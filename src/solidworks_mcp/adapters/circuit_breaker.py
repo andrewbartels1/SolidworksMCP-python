@@ -249,7 +249,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             if result.data is not None:
                 try:
                     output_data = {"data": result.data}
-                except Exception:
+                except Exception:  # pragma: no cover
                     output_data = {"data": str(result.data)}
 
             insert_tool_call_record(

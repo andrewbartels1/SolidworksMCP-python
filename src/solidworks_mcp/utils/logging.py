@@ -61,7 +61,7 @@ def setup_logging(config: SolidWorksMCPConfig) -> None:
             filter=lambda record: "audit" in record["extra"],
             rotation="1 day",
             retention="30 days",
-            compression="gzip",
+            compression="gz",
         )
 
     logger.info("Logging configured")

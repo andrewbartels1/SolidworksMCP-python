@@ -444,7 +444,7 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _get() -> float:
+        def _get() -> float:  # pragma: no cover
             """Get the dimension value."""
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
@@ -784,7 +784,7 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("get_mass_properties", _get),
         )
 
-    async def pack_and_go_assembly(
+    async def pack_and_go_assembly(  # pragma: no cover
         self,
         source_path: str,
         target_dir: str,

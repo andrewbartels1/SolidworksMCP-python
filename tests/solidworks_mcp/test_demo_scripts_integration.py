@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCRIPTS = REPO_ROOT / "scripts"
 _REAL_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
 _REAL_ENABLED = os.getenv(_REAL_FLAG, "").strip().lower() in {"1", "true", "yes", "on"}

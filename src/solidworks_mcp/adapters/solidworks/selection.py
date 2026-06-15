@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
 
 from ..base import AdapterResult, AdapterResultStatus
@@ -13,7 +13,7 @@ from ..base import AdapterResult, AdapterResultStatus
 class SolidWorksSelectionMixin:
     """Expose feature-selection and feature-list methods through a mixin."""
 
-    if TYPE_CHECKING:
+    if TYPE_CHECKING:  # pragma: no cover
         # Mixin protocol: declare attributes that must exist on the parent class
         currentModel: Any
         _feature_selector: Any

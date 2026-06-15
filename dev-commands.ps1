@@ -182,9 +182,11 @@ function dev-test-full {
         "tests/",
         "-n", "1",
         "--cov=src/solidworks_mcp",
+        "--cov-config=.coveragerc.full",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
         "--cov-report=xml:coverage.xml",
+        "--cov-fail-under=99",
         "--durations=10",
         "-v"
     )

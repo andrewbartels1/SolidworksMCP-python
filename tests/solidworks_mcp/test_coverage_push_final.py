@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+
 # ---------------------------------------------------------------------------
 # mock_adapter gaps
 # ---------------------------------------------------------------------------
@@ -258,20 +260,21 @@ class TestModelingToolSuccessPaths:
     ) -> None:
         from solidworks_mcp.tools.modeling import register_modeling_tools
 
+        # Mock the adapter method to return a known success so the tool's
+        # success branch (lines 1037-1038) is exercised.
+        mock_adapter.create_cut_extrude = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={"feature_name": "Cut-Extrude1", "name": "Cut-Extrude1"},
+                execution_time=0.01,
+            )
+        )
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
-
-        # Set up an active model with an active sketch so the adapter succeeds
-        await mock_adapter.create_part()
-        await mock_adapter.create_sketch("Front")
-        await mock_adapter.add_circle(0, 0, 10)
-        await mock_adapter.exit_sketch()
-
         tool_fn = next(
             t.fn for t in await mcp_server.list_tools() if t.name == "create_cut_extrude"
         )
         result = await tool_fn(input_data={"depth": 5.0})
-        # Mock adapter always returns success for feature operations
-        assert result["status"] in ("success", "error")  # adapter may lack the method
+        assert result["status"] == "success"
 
     @pytest.mark.asyncio
     async def test_add_fillet_success(
@@ -279,14 +282,19 @@ class TestModelingToolSuccessPaths:
     ) -> None:
         from solidworks_mcp.tools.modeling import register_modeling_tools
 
+        mock_adapter.add_fillet = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={"feature_name": "Fillet1", "name": "Fillet1"},
+                execution_time=0.01,
+            )
+        )
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
-        await mock_adapter.create_part()
-
         tool_fn = next(
             t.fn for t in await mcp_server.list_tools() if t.name == "add_fillet"
         )
         result = await tool_fn(input_data={"radius": 2.0, "edge_names": ["Edge<1>"]})
-        assert result["status"] in ("success", "error")
+        assert result["status"] == "success"
 
     @pytest.mark.asyncio
     async def test_create_cut_extrude_exception_path(
@@ -327,3 +335,127 @@ class TestModelingToolSuccessPaths:
         )
         result = await tool_fn(input_data={"radius": 3.0})
         assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_close_model_success_via_tool(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        """close_model tool returns success when a model is active (line 706)."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        await mock_adapter.create_part()
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "close_model"
+        )
+        result = await tool_fn(input_data={"save": False})
+        assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_empty_name_returns_error(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        """get_dimension with empty name returns error (line 921)."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "get_dimension"
+        )
+        result = await tool_fn(input_data={"name": ""})
+        assert result["status"] == "error"
+        assert "required" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_set_dimension_empty_name_returns_error(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        """set_dimension with empty name returns error (line 967)."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "set_dimension"
+        )
+        result = await tool_fn(input_data={"name": "", "value": 10.0})
+        assert result["status"] == "error"
+        assert "required" in result["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Additional mock_adapter gap tests (lines 386-388, 1361-1368, 1379, 1400, 1466)
+# ---------------------------------------------------------------------------
+
+
+class TestMockAdapterDelayBranches:
+    """Cover the success-path 'delay' statements and remaining add_sketch_constraint paths."""
+
+    @pytest.mark.asyncio
+    async def test_select_feature_with_active_model(self, mock_adapter) -> None:
+        """select_feature success path: asyncio.sleep + increment + return (lines 386-388)."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        result = await mock_adapter.select_feature("Boss-Extrude1")
+        assert result.is_success
+        assert result.data["selected"] is True
+        assert result.data["feature_name"] == "Boss-Extrude1"
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_constraint_no_active_sketch(self, mock_adapter) -> None:
+        """add_sketch_constraint returns ERROR when no sketch is open (lines 1361-1363)."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        # Do NOT call create_sketch — _current_sketch stays None
+        result = await mock_adapter.add_sketch_constraint("Line_1", "Line_2", "perpendicular")
+        assert not result.is_success
+        assert "No active sketch" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_constraint_unsupported_relation(self, mock_adapter) -> None:
+        """add_sketch_constraint returns ERROR for unsupported relation type (lines 1367-1368)."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        await mock_adapter.create_sketch("Front")
+        line1 = (await mock_adapter.add_line(0, 0, 10, 0)).data
+        result = await mock_adapter.add_sketch_constraint(line1, None, "diagonal")
+        assert not result.is_success
+        assert "Unsupported relation type" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_constraint_symmetric_missing_entity2(
+        self, mock_adapter
+    ) -> None:
+        """symmetric relation without entity2 returns arity ERROR (line 1379)."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        await mock_adapter.create_sketch("Front")
+        line1 = (await mock_adapter.add_line(0, 0, 10, 0)).data
+        # entity2=None triggers the arity guard inside the symmetric branch
+        result = await mock_adapter.add_sketch_constraint(
+            line1, None, "symmetric", entity3="anything"
+        )
+        assert not result.is_success
+        assert "entity2" in (result.error or "").lower() or "requires" in (result.error or "").lower()
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_constraint_unknown_entity(self, mock_adapter) -> None:
+        """add_sketch_constraint returns ERROR for entity ID not in registry (line 1400)."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        await mock_adapter.create_sketch("Front")
+        result = await mock_adapter.add_sketch_constraint(
+            "FAKE_ID_999", None, "horizontal"
+        )
+        assert not result.is_success
+        assert "Unknown sketch entity" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_check_sketch_fully_defined_success(self, mock_adapter) -> None:
+        """check_sketch_fully_defined success path returns is_fully_defined=True (line 1466)."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        await mock_adapter.create_sketch("Front")
+        # call without sketch_name so it resolves to _current_sketch
+        result = await mock_adapter.check_sketch_fully_defined()
+        assert result.is_success
+        assert result.data["is_fully_defined"] is True

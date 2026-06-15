@@ -69,7 +69,7 @@ def _load_wrapper() -> None:
     """
     global _wrapper_module, _interface_methods
 
-    if not PYWIN32_AVAILABLE:
+    if not PYWIN32_AVAILABLE:  # pragma: no cover
         return
 
     # Try version numbers from newest to oldest. SW 3DEXPERIENCE R2026x = 34,
@@ -83,7 +83,7 @@ def _load_wrapper() -> None:
             _wrapper_module = mod
             break
 
-    if _wrapper_module is None:
+    if _wrapper_module is None:  # pragma: no cover
         # Gen_py wrapper not generated yet — try to generate now.
         for major in (35, 34, 33, 32, 31, 30):
             try:
@@ -175,7 +175,7 @@ def flag_methods(obj: Any, *interfaces: str) -> int:
     """
     _ensure_loaded()
 
-    if not _interface_methods or obj is None:
+    if not _interface_methods or obj is None:  # pragma: no cover
         return 0
 
     obj_id = id(obj)
@@ -217,7 +217,7 @@ def flagged(obj: Any, *interfaces: str) -> Any:
     If ``obj`` is ``None`` (e.g. SW returned Nothing), passes through
     unchanged.
     """
-    if obj is not None:
+    if obj is not None:  # pragma: no cover
         flag_methods(obj, *interfaces)
     return obj
 

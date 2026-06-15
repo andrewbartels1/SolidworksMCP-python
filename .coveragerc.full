@@ -1,0 +1,28 @@
+# Coverage config for dev-test-full (real SolidWorks integration run).
+#
+# Key difference from pyproject.toml: "pragma: no cover" is NOT in
+# exclude_lines, so COM-specific code that is actually exercised by live
+# SolidWorks tests counts toward coverage instead of being excluded.
+# The result should be 100% when all solidworks_only tests pass.
+
+[run]
+source = src/solidworks_mcp
+omit =
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */migrations/*
+
+[report]
+exclude_lines =
+    # Always exclude these — they are truly unreachable at runtime
+    def __repr__
+    if self\.debug:
+    if settings\.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__\.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    if TYPE_CHECKING:

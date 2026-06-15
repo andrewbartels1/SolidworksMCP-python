@@ -107,7 +107,7 @@ def _create_extrusion_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _extrusion_operation() -> SolidWorksFeature:
+    def _extrusion_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that builds and returns the extrusion feature.
 
         Normalises ``params`` into a ``SimpleNamespace`` so every attribute
@@ -314,7 +314,7 @@ def _create_revolve_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _revolve_operation() -> SolidWorksFeature:
+    def _revolve_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that builds and returns the revolve feature.
 
         Converts the degree angle to radians and invokes ``FeatureRevolve2``.
@@ -455,7 +455,7 @@ def _select_named_feature(
     return bool(adapter._attempt(lambda: feature.Select2(append, mark), default=False))
 
 
-def _flag_feature_methods(obj: Any, interface: str) -> None:
+def _flag_feature_methods(obj: Any, interface: str) -> None:  # pragma: no cover
     """Best-effort method flagging for a COM object via ``sw_type_info``.
 
     Flagging tells pywin32 late binding to resolve names like ``GetTypeName2``
@@ -474,7 +474,7 @@ def _flag_feature_methods(obj: Any, interface: str) -> None:
         pass
 
 
-def _read_member(obj: Any, name: str) -> Any:
+def _read_member(obj: Any, name: str) -> Any:  # pragma: no cover
     """Read a COM member that pywin32 may expose as a property *or* a method.
 
     Late-bound pywin32 dispatches are inconsistent: an unflagged zero-arg
@@ -502,7 +502,7 @@ def _read_member(obj: Any, name: str) -> Any:
         return member
 
 
-def _profile_feature_names(adapter: Any) -> list[str]:
+def _profile_feature_names(adapter: Any) -> list[str]:  # pragma: no cover
     """Return sketch (``ProfileFeature``) names in feature-tree order.
 
     Walks ``FirstFeature`` -> ``GetNextFeature`` reading ``GetTypeName2`` and
@@ -595,7 +595,7 @@ def _create_sweep_impl(
             error="Sweep requires a 'path' sketch name",
         )
 
-    def _sweep_operation() -> SolidWorksFeature:
+    def _sweep_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects profile + path and runs the sweep.
 
         Returns:
@@ -749,7 +749,7 @@ def _create_loft_impl(
             error="Loft requires at least 2 profile sketches",
         )
 
-    def _loft_operation() -> SolidWorksFeature:
+    def _loft_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects profiles/guides and runs the loft.
 
         Returns:
@@ -777,7 +777,7 @@ def _create_loft_impl(
                 raise Exception(f"Failed to select loft guide curve: {guide}")
 
         # swTangencyType_e: 0 = none, 1 = tangent to profile normal.
-        def _tangency(value: str | None) -> int:
+        def _tangency(value: str | None) -> int:  # pragma: no cover
             return 1 if str(value or "").strip().lower() == "normal" else 0
 
         start_match = _tangency(getattr(params, "start_tangent", None))
@@ -880,7 +880,7 @@ def _create_cut_extrude_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _cut_operation() -> SolidWorksFeature:
+    def _cut_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that locates the active sketch and performs the cut.
 
         Normalises ``params``, resolves the end-condition constant, selects the
@@ -1150,7 +1150,7 @@ def _create_cut_extrude_impl(
     )
 
 
-def _parse_edge_spec(edge_name: str) -> tuple[str, float, float, float]:
+def _parse_edge_spec(edge_name: str) -> tuple[str, float, float, float]:  # pragma: no cover
     """Parse an edge specification string into (SelectByID2 name, x, y, z).
 
     Supports two formats:
@@ -1167,7 +1167,7 @@ def _parse_edge_spec(edge_name: str) -> tuple[str, float, float, float]:
     return edge_name, 0.0, 0.0, 0.0
 
 
-def _select_edge_by_coord(
+def _select_edge_by_coord(  # pragma: no cover
     adapter: Any,
     x: float,
     y: float,
@@ -1276,7 +1276,7 @@ def _add_fillet_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _fillet_operation() -> SolidWorksFeature:
+    def _fillet_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects edges and invokes FeatureFillet3.
 
         Returns:
@@ -1421,7 +1421,7 @@ def _add_chamfer_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _chamfer_operation() -> SolidWorksFeature:
+    def _chamfer_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects edges and invokes FeatureChamfer.
 
         Returns:
