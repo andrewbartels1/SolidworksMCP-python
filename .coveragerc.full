@@ -12,6 +12,7 @@ omit =
     */test_*
     */__pycache__/*
     */migrations/*
+    */solidworks_mcp/ui/*
 
 [report]
 exclude_lines =

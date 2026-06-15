@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Any, cast
 
+from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
 
 # swConstraintType_e values per the official SolidWorks API enum docs
@@ -338,6 +339,12 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             raise Exception(f"Failed to select plane: {actual_plane}")
 
         adapter.currentSketchManager = adapter.currentModel.SketchManager
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(
+                adapter.currentSketchManager, "ISketchManager"
+            ),
+            default=0,
+        )
         adapter._reset_sketch_entity_registry()
         try:
             adapter.currentSketch = adapter.currentSketchManager.InsertSketch(True)
@@ -682,6 +689,22 @@ def _add_spline_impl(
         spline = adapter.currentSketchManager.CreateSpline2(points_arg, False)
         if not spline:
             raise Exception("Failed to create spline")
+
+        # ISketchSpline dispatch does not expose Select4 via IDispatch —
+        # GetIDsOfNames returns Member not found. Retrieve the entity as
+        # ISketchSegment from the active sketch instead; that interface
+        # exposes Select4, which mirror/offset require.
+        if adapter.currentSketch is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(adapter.currentSketch, "ISketch"),
+                default=0,
+            )
+            segments = adapter._attempt(
+                lambda: adapter.currentSketch.GetSketchSegments(), default=None
+            )
+            if segments is not None and len(segments) > 0:
+                return cast(str, adapter._register_sketch_entity("Spline", segments[-1]))
+
         return cast(str, adapter._register_sketch_entity("Spline", spline))
 
     return cast(
@@ -1417,6 +1440,13 @@ def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> N
         # original Select4 path.
         if isinstance(entity, (list, tuple)):
             for segment in entity:
+                if _sw_type_info is not None:
+                    adapter._attempt(
+                        lambda s=segment: _sw_type_info.flag_methods(
+                            s, "ISketchSegment"
+                        ),
+                        default=0,
+                    )
                 ok = segment.Select4(True, select_data)
                 if not ok:
                     raise Exception(
