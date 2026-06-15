@@ -69,3 +69,21 @@ async def test_orchestrate_go_calls_service(monkeypatch) -> None:
     )
     result = await llm_router.orchestrate_go(payload)
     assert result == {"ok": True}
+
+
+def test_resolve_user_goal_session_row_none(monkeypatch) -> None:
+    """_resolve_user_goal should return DEFAULT_USER_GOAL when session row is None."""
+    monkeypatch.setattr(
+        llm_router, "get_design_session", lambda *_a, **_kw: None
+    )
+    resolved = llm_router._resolve_user_goal("s1", llm_router.DEFAULT_USER_GOAL)
+    assert resolved == llm_router.DEFAULT_USER_GOAL
+
+
+def test_resolve_user_goal_session_row_no_goal(monkeypatch) -> None:
+    """_resolve_user_goal should return DEFAULT_USER_GOAL when session row has no goal."""
+    monkeypatch.setattr(
+        llm_router, "get_design_session", lambda *_a, **_kw: {"user_goal": None}
+    )
+    resolved = llm_router._resolve_user_goal("s1", llm_router.DEFAULT_USER_GOAL)
+    assert resolved == llm_router.DEFAULT_USER_GOAL

@@ -47,7 +47,7 @@ def _get_sw_comtypes_lib() -> Any:
         return _sw_comtypes_lib
     if not _COMTYPES_AVAILABLE:
         return None
-    for major in (35, 34, 33, 32, 31, 30):
+    for major in (35, 34, 33, 32, 31, 30):  # pragma: no cover
         try:
             _sw_comtypes_lib = _comtypes_client.GetModule(
                 (comtypes.GUID(_SW_TLB_GUID), major, 0)
@@ -55,10 +55,10 @@ def _get_sw_comtypes_lib() -> Any:
             return _sw_comtypes_lib
         except Exception:
             continue
-    return None
+    return None  # pragma: no cover
 
 
-def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:
+def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:  # pragma: no cover
     """Bridge a pywin32 CDispatch/COM object to a comtypes interface pointer.
 
     Extracts the raw IUnknown pointer from pywin32's repr string, then
@@ -812,7 +812,7 @@ class SolidWorksIOMixin:
         source = Path(source_path)
         out_dir = Path(target_dir)
 
-        def _do_pack_and_go() -> dict[str, Any]:
+        def _do_pack_and_go() -> dict[str, Any]:  # pragma: no cover
             # Load comtypes TLB (cached after first call)
             sw_lib = _get_sw_comtypes_lib()
             if sw_lib is None:

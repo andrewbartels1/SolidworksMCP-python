@@ -218,3 +218,110 @@ def test_resolve_model_path_no_model_returns_none(monkeypatch) -> None:
         "No target model was provided" in call.get("latest_message", "")
         for call in merge_calls
     )
+
+
+@pytest.mark.asyncio
+async def test_open_target_model_raises_on_open_failure(monkeypatch, tmp_path) -> None:
+    """open_model failure should update metadata with error and return state."""
+    from solidworks_mcp.ui.services import session_service
+
+    model_path = tmp_path / "model.sldprt"
+    model_path.write_bytes(b"model")
+
+    class FailOpenAdapter:
+        async def connect(self):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def open_model(self, _path):
+            return SimpleNamespace(is_success=False, error="COM error")
+
+    async def _create_adapter(_cfg):
+        return FailOpenAdapter()
+
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(model_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(model_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(model_service, "insert_tool_call_record", lambda **_kw: None)
+
+    result = await model_service.open_target_model("s1", model_path=str(model_path))
+
+    assert result == {"ok": True}
+    assert any("Failed" in call.get("latest_message", "") for call in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_connect_target_model_path_none_returns_state(monkeypatch) -> None:
+    """When _resolve_model_path returns None, connect should return dashboard state immediately."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        model_service, "_resolve_model_path", lambda *_a, **_kw: None
+    )
+
+    result = await model_service.connect_target_model("s1", model_path=None)
+    assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_connect_target_model_open_failure(monkeypatch, tmp_path) -> None:
+    """open_model failure in connect should update metadata with error."""
+    from solidworks_mcp.ui.services import session_service
+
+    model_path = tmp_path / "model.sldprt"
+    model_path.write_bytes(b"model")
+
+    class FailOpenAdapter:
+        async def connect(self):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def open_model(self, _path):
+            return SimpleNamespace(is_success=False, error="COM open failed")
+
+        async def list_features(self, include_suppressed=True):
+            return SimpleNamespace(is_success=True, data=[])
+
+    async def _create_adapter(_cfg):
+        return FailOpenAdapter()
+
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(model_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(model_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(model_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(model_service, "ensure_preview_dir", lambda _p=None: tmp_path)
+    monkeypatch.setattr(model_service, "insert_evidence_link", lambda **_kw: None)
+    monkeypatch.setattr(model_service, "insert_model_state_snapshot", lambda **_kw: 1)
+
+    result = await model_service.connect_target_model("s1", model_path=str(model_path))
+
+    assert result == {"ok": True}
+    assert any("COM open failed" in str(call) for call in merge_calls)

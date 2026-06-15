@@ -6,6 +6,7 @@ import importlib
 import os
 import sys
 import types
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
@@ -421,3 +422,290 @@ async def test_run_structured_agent_mcp_signature_success(monkeypatch) -> None:
         result_type=DummyModel,
     )
     assert isinstance(result, DummyModel)
+
+
+# ---------------------------------------------------------------------------
+# Additional _ensure_provider_credentials branches
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_provider_credentials_github_subprocess_fails(monkeypatch) -> None:
+    """GitHub credential missing and gh auth fails should raise RuntimeError."""
+    monkeypatch.delenv("GITHUB_API_KEY", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+
+    class _Result:
+        returncode = 1
+        stdout = ""
+
+    monkeypatch.setattr(llm_service.subprocess, "run", lambda *_a, **_kw: _Result())
+    with pytest.raises(RuntimeError, match="GH_TOKEN"):
+        llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+
+
+def test_ensure_provider_credentials_github_subprocess_raises(monkeypatch) -> None:
+    """subprocess.run raising should be caught and credential error raised."""
+    monkeypatch.delenv("GITHUB_API_KEY", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+
+    monkeypatch.setattr(
+        llm_service.subprocess,
+        "run",
+        lambda *_a, **_kw: (_ for _ in ()).throw(OSError("no gh")),
+    )
+    with pytest.raises(RuntimeError, match="GH_TOKEN"):
+        llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+
+
+def test_ensure_provider_credentials_openai_missing(monkeypatch) -> None:
+    """Missing OPENAI_API_KEY should raise RuntimeError."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        llm_service._ensure_provider_credentials("openai:gpt-4.1")
+
+
+def test_ensure_provider_credentials_anthropic_missing(monkeypatch) -> None:
+    """Missing ANTHROPIC_API_KEY should raise RuntimeError."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        llm_service._ensure_provider_credentials("anthropic:claude-3")
+
+
+def test_ensure_provider_credentials_local_no_error(monkeypatch) -> None:
+    """local: model should not raise even without credentials."""
+    llm_service._ensure_provider_credentials("local:gemma4:e2b", "http://localhost:11434")
+
+
+def test_ensure_provider_credentials_github_env_already_set(monkeypatch) -> None:
+    """When GITHUB_API_KEY is already set, no subprocess is needed."""
+    monkeypatch.setenv("GITHUB_API_KEY", "tok123")
+    subprocess_calls: list = []
+    monkeypatch.setattr(
+        llm_service.subprocess, "run", lambda *_a, **_kw: subprocess_calls.append(1)
+    )
+    llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+    assert not subprocess_calls  # subprocess should NOT be called
+
+
+# ---------------------------------------------------------------------------
+# _resolve_model_name
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_model_name_uses_explicit(monkeypatch) -> None:
+    result = llm_service._resolve_model_name("github:openai/gpt-4.1")
+    assert result == "github:openai/gpt-4.1"
+
+
+def test_resolve_model_name_falls_back_to_env(monkeypatch) -> None:
+    monkeypatch.setenv("SOLIDWORKS_UI_MODEL", "openai:gpt-4o")
+    result = llm_service._resolve_model_name(None)
+    assert result == "openai:gpt-4o"
+
+
+def test_resolve_model_name_default_when_no_env(monkeypatch) -> None:
+    monkeypatch.delenv("SOLIDWORKS_UI_MODEL", raising=False)
+    result = llm_service._resolve_model_name(None)
+    assert result == "github:openai/gpt-4.1"
+
+
+# ---------------------------------------------------------------------------
+# _parse_json_blob (module-level helper in llm_service)
+# ---------------------------------------------------------------------------
+
+
+def test_llm_parse_json_blob_valid() -> None:
+    assert llm_service._parse_json_blob('{"a": 1}') == {"a": 1}
+
+
+def test_llm_parse_json_blob_list_returns_empty() -> None:
+    assert llm_service._parse_json_blob('[1, 2]') == {}
+
+
+# ---------------------------------------------------------------------------
+# request_clarifications — success and failure paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_request_clarifications_recoverable_failure(monkeypatch) -> None:
+    """RecoverableFailure from agent should update metadata and return state."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: {}
+    )
+    monkeypatch.setattr(
+        llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"}
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(
+        llm_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
+    monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(
+        llm_service,
+        "_run_structured_agent",
+        AsyncMock(return_value=llm_service.RecoverableFailure(explanation="no model")),
+    )
+
+    result = await llm_service.request_clarifications("s1", "make a bracket")
+    assert result == {"ok": True}
+    assert any("no model" in str(kw) for kw in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_request_clarifications_success(monkeypatch) -> None:
+    """Successful clarification should update metadata with questions."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: {}
+    )
+    monkeypatch.setattr(
+        llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"}
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(
+        llm_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(llm_service, "insert_evidence_link", lambda **_kw: None)
+
+    fake_result = llm_service.ClarificationResponse(
+        normalized_brief="A mounting bracket for wall use.",
+        questions=["What thickness?"],
+    )
+    monkeypatch.setattr(
+        llm_service, "_run_structured_agent", AsyncMock(return_value=fake_result)
+    )
+
+    result = await llm_service.request_clarifications("s1", "make a bracket")
+    assert result == {"ok": True}
+    assert any(kw.get("clarifying_questions") == ["What thickness?"] for kw in merge_calls)
+
+
+# ---------------------------------------------------------------------------
+# inspect_family — recoverable-failure with feature order fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_inspect_family_recoverable_failure_with_feature_order(monkeypatch) -> None:
+    """RecoverableFailure + explicit feature order should trigger coerce fallback."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: {}
+    )
+    monkeypatch.setattr(
+        llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"}
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        llm_service, "merge_metadata", lambda *_a, **kw: kw or {}
+    )
+    monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(llm_service, "insert_evidence_link", lambda **_kw: None)
+    monkeypatch.setattr(llm_service, "replace_plan_checkpoints", lambda **_kw: None)
+    monkeypatch.setattr(llm_service, "upsert_design_session", lambda *_a, **_kw: None)
+
+    monkeypatch.setattr(
+        llm_service,
+        "_run_structured_agent",
+        AsyncMock(return_value=llm_service.RecoverableFailure(explanation="model down")),
+    )
+
+    # Goal with explicit feature order → coerce fallback should fire
+    result = await llm_service.inspect_family(
+        "s1", "Sketch -> Extrude -> Cut blind 5 mm"
+    )
+    assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_inspect_family_recoverable_failure_no_feature_order(monkeypatch) -> None:
+    """RecoverableFailure without feature order should update metadata and return state."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: {}
+    )
+    monkeypatch.setattr(
+        llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"}
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(
+        llm_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
+
+    monkeypatch.setattr(
+        llm_service,
+        "_run_structured_agent",
+        AsyncMock(return_value=llm_service.RecoverableFailure(explanation="model down")),
+    )
+
+    result = await llm_service.inspect_family("s1", "make a bracket")
+    assert result == {"ok": True}
+    assert any("model down" in str(kw) for kw in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_inspect_family_success_with_checkpoints(monkeypatch) -> None:
+    """Successful family inspection should replace checkpoints and persist."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: {}
+    )
+    monkeypatch.setattr(
+        llm_service, "get_design_session", lambda *_a, **_kw: {"metadata_json": "{}"}
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(
+        llm_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(llm_service, "insert_evidence_link", lambda **_kw: None)
+    replace_calls: list = []
+    monkeypatch.setattr(
+        llm_service, "replace_plan_checkpoints",
+        lambda **kw: replace_calls.append(kw)
+    )
+    monkeypatch.setattr(llm_service, "upsert_design_session", lambda *_a, **_kw: None)
+
+    fake_result = llm_service.FamilyInspection(
+        family="extrude",
+        confidence="high",
+        evidence=["Boss-Extrude found"],
+        warnings=[],
+        checkpoints=[
+            llm_service.CheckpointCandidate(
+                title="Create sketch",
+                allowed_tools=["create_sketch"],
+                rationale="Start with sketch",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        llm_service, "_run_structured_agent", AsyncMock(return_value=fake_result)
+    )
+
+    result = await llm_service.inspect_family("s1", "make a bracket")
+    assert result == {"ok": True}
+    assert replace_calls  # checkpoints were replaced

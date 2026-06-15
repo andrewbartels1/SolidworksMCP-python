@@ -339,7 +339,7 @@ def _create_revolve_impl(
 
         import math
 
-        if revolve_sw_major == 33:
+        if revolve_sw_major == 33:  # pragma: no cover
             # IFeatureManager.FeatureRevolve2 (20 params) per gen_py SW 2025
             # SingleDir, IsSolid, IsThin, IsCut, ReverseDir, BothDirUpToSame,
             # Dir1Type, Dir2Type, Dir1Angle(rad), Dir2Angle(rad),

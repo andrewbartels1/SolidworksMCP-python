@@ -422,3 +422,70 @@ def test_ingest_reference_source_accepts_url(
     assert state["rag_source_path"] == "https://example.com/guide.html"
     assert state["rag_chunk_count"] >= 1
     assert Path(state["rag_index_path"]).exists()
+
+
+# ---------------------------------------------------------------------------
+# service.py compatibility shim helpers
+# ---------------------------------------------------------------------------
+
+
+def test_default_model_for_profile_local_variants() -> None:
+    """Legacy _default_model_for_profile covers local provider variants."""
+    import solidworks_mcp.ui.service as svc
+
+    assert svc._default_model_for_profile("local", "small").startswith("local:")
+    assert svc._default_model_for_profile("local", "balanced").startswith("local:")
+    assert svc._default_model_for_profile("local", "large").startswith("local:")
+    assert svc._default_model_for_profile("local", "unknown").startswith("local:")
+
+
+def test_default_model_for_profile_non_local() -> None:
+    """Legacy _default_model_for_profile for github provider."""
+    import solidworks_mcp.ui.service as svc
+
+    result = svc._default_model_for_profile("github", "balanced")
+    assert result.startswith("github:")
+
+
+def test_temporary_module_bindings_restores() -> None:
+    """_temporary_module_bindings should restore original attributes after exit."""
+    import solidworks_mcp.ui.service as svc
+    import solidworks_mcp.ui.services.llm_service as llm_mod
+
+    original_agent = llm_mod.Agent
+    sentinel = object()
+    with svc._temporary_module_bindings(llm_mod, Agent=sentinel):
+        assert llm_mod.Agent is sentinel
+    assert llm_mod.Agent is original_agent
+
+
+def test_read_reference_source_delegates_to_utils(tmp_path: Path) -> None:
+    """_read_reference_source should delegate to _utils.read_reference_source."""
+    import solidworks_mcp.ui.service as svc
+
+    md_file = tmp_path / "readme.md"
+    md_file.write_text("# Content\nHello.", encoding="utf-8")
+    result = svc._read_reference_source(md_file)
+    assert "# Content" in result
+
+
+def test_ensure_uploaded_model_dir_delegates(tmp_path: Path) -> None:
+    """ensure_uploaded_model_dir should create the directory."""
+    import solidworks_mcp.ui.service as svc
+
+    override = tmp_path / "uploads"
+    result = svc.ensure_uploaded_model_dir(override)
+    assert result.exists()
+
+
+def test_build_agent_model_passthrough(monkeypatch) -> None:
+    """Legacy _build_agent_model should delegate to the service's function."""
+    import solidworks_mcp.ui.service as svc
+    import solidworks_mcp.ui.services.llm_service as llm_mod
+
+    monkeypatch.setattr(llm_mod, "OpenAIChatModel", None)
+    monkeypatch.setattr(llm_mod, "OpenAIProvider", None)
+
+    # Non-local, non-github model name should pass through unchanged
+    result = svc._build_agent_model("openai:gpt-4.1")
+    assert result == "openai:gpt-4.1"

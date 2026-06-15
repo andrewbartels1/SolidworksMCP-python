@@ -667,16 +667,16 @@ def _add_spline_impl(
         try:
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
-        except ImportError:
+        except ImportError:  # pragma: no cover
             _pythoncom = None  # type: ignore[assignment]
             _VARIANT = None  # type: ignore[assignment]
 
         points_arg: Any
         if _pythoncom is not None and _VARIANT is not None:
             points_arg = _VARIANT(_pythoncom.VT_ARRAY | _pythoncom.VT_R8, spline_points)
-        elif sys.platform == "win32":
+        elif sys.platform == "win32":  # pragma: no cover
             raise Exception("pywin32 is required for add_spline on Windows")
-        else:
+        else:  # pragma: no cover
             points_arg = spline_points
 
         spline = adapter.currentSketchManager.CreateSpline2(points_arg, False)

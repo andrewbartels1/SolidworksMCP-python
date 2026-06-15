@@ -499,3 +499,106 @@ def test_middleware_skips_logging_for_non_ui_path(monkeypatch) -> None:
     resp = client.get("/api/other/endpoint")
     assert resp.status_code == 200
     assert resp.json() == {"non_ui": True}
+
+
+def test_decode_request_body_json_with_list() -> None:
+    """JSON array body should be returned as-is (no sanitization of top-level lists)."""
+    result = server._decode_request_body(b'[1, 2, 3]')
+    assert result == [1, 2, 3]
+
+
+def test_sanitize_log_payload_nested_uploaded_files() -> None:
+    """Nested uploaded_files entries should redact 'data' fields."""
+    payload = {
+        "nested": {
+            "uploaded_files": [{"name": "file.sldprt", "data": "AAAABBBB"}]
+        }
+    }
+    sanitized = server._sanitize_log_payload(payload)
+    # The outer key "nested" is a dict value with no matching "uploaded_files" at this level
+    # The function recurses into dicts; uploaded_files redaction applies at the dict level
+    inner = sanitized["nested"]
+    assert "omitted base64 payload" in inner["uploaded_files"][0]["data"]
+
+
+def test_local_model_pull_endpoint_with_endpoint_override(monkeypatch) -> None:
+    """Pull endpoint should forward optional endpoint override."""
+    from solidworks_mcp.ui.local_llm import LocalModelPullResult
+    import solidworks_mcp.ui.local_llm as llm_mod
+
+    captured: dict = {}
+
+    async def _fake_pull(model, endpoint=None):
+        captured["endpoint"] = endpoint
+        return LocalModelPullResult(queued=True, model=model)
+
+    monkeypatch.setattr(llm_mod, "pull_ollama_model", _fake_pull)
+
+    client = TestClient(server.app)
+    resp = client.post(
+        "/api/ui/local-model/pull",
+        json={"model": "gemma4:e2b", "endpoint": "http://myhost:11434"},
+    )
+    assert resp.status_code == 200
+    assert captured["endpoint"] == "http://myhost:11434"
+
+
+def test_local_model_pull_endpoint_without_endpoint(monkeypatch) -> None:
+    """Pull endpoint with no endpoint field should use default (None)."""
+    from solidworks_mcp.ui.local_llm import LocalModelPullResult
+    import solidworks_mcp.ui.local_llm as llm_mod
+
+    captured: dict = {}
+
+    async def _fake_pull(model, endpoint=None):
+        captured["endpoint"] = endpoint
+        return LocalModelPullResult(queued=True, model=model)
+
+    monkeypatch.setattr(llm_mod, "pull_ollama_model", _fake_pull)
+
+    client = TestClient(server.app)
+    resp = client.post("/api/ui/local-model/pull", json={"model": "gemma4:e2b"})
+    assert resp.status_code == 200
+
+
+def test_local_model_query_endpoint_with_local_prefix_model(monkeypatch) -> None:
+    """Query endpoint should not prepend 'local:' when model already starts with it."""
+    from pydantic import BaseModel as _BaseModel
+    from solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
+    import solidworks_mcp.ui.local_llm as llm_mod
+
+    class _FreeForm(_BaseModel):
+        text: str = "ok"
+
+    captured: dict = {}
+
+    async def _fake_run(**kwargs):
+        captured["config"] = kwargs.get("config")
+        return LocalAgentResult(success=True, data=_FreeForm(), config=LocalLLMConfig())
+
+    monkeypatch.setattr(llm_mod, "run_local_agent", _fake_run)
+
+    client = TestClient(server.app)
+    resp = client.post(
+        "/api/ui/local-model/query",
+        json={"prompt": "hello", "model": "local:gemma4:26b"},
+    )
+    assert resp.status_code == 200
+    cfg = captured.get("config")
+    assert cfg is not None
+    assert cfg.service_model == "local:gemma4:26b"
+
+
+def test_configure_ui_file_logging_first_call_creates_sink() -> None:
+    """First call to _configure_ui_file_logging with None should add a sink."""
+    # Reset the sink ID to simulate first-call scenario in a temp context
+    original_sink_id = server._UI_FILE_SINK_ID
+    try:
+        server._UI_FILE_SINK_ID = None
+        # This should execute the sink creation branch
+        server._configure_ui_file_logging()
+        # After this the ID should be set
+        assert server._UI_FILE_SINK_ID is not None
+    finally:
+        # Clean up - the sink was already created by module import so just restore
+        server._UI_FILE_SINK_ID = original_sink_id
