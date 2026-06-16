@@ -6,10 +6,10 @@ This module preserves historical import paths used by tests and external callers
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from io import BytesIO
 import os
 import subprocess
+from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -23,51 +23,43 @@ from ..agents.history_db import (
     upsert_design_session,
 )
 from ..agents.retrieval_index import _chunk_text
-from ..config import load_config
 from ..agents.schemas import RecoverableFailure as _AgentRecoverableFailure
-from .services import *  # noqa: F401,F403
+from ..config import load_config
+from .services import *  # noqa: F401,F403,F405
+from .services import _utils as _utils_service
 from .services import checkpoint_service as _checkpoint_service
 from .services import docs_service as _docs_service
 from .services import llm_service as _llm_service
 from .services import model_service as _model_service
 from .services import preview_service as _preview_service
 from .services import session_service as _session_service
-from .services import _utils as _utils_service
+from .services._utils import DEFAULT_API_ORIGIN, DEFAULT_PREVIEW_ORIENTATION
 from .services._utils import (
-    _looks_like_path_token,
-    _trace_json_default,
-    filter_docs_text as _filter_docs_text,
-    feature_grounding_warning_text as _feature_grounding_warning_text,
-    feature_target_status as _feature_target_status,
-    materialize_uploaded_model as _materialize_uploaded_model_impl,
-    merge_metadata as _merge_metadata,
-    normalize_feature_targets as _normalize_feature_targets,
-    normalize_model_name_for_provider as _normalize_model_name_for_provider,
-    parse_json_blob as _parse_json_blob,
     context_file_path as _context_file_path_impl,
+)
+from .services._utils import (
+    materialize_uploaded_model as _materialize_uploaded_model_impl,
+)
+from .services._utils import (
+    merge_metadata as _merge_metadata,
+)
+from .services._utils import (
+    normalize_feature_targets as _normalize_feature_targets,
+)
+from .services._utils import (
     safe_context_name as _safe_context_name,
-    provider_from_model_name as _provider_from_model_name,
-    provider_has_credentials as _provider_has_credentials,
-    read_reference_source as _read_reference_source,
-    read_reference_url as _read_reference_url,
+)
+from .services._utils import (
     sanitize_model_path_text as _sanitize_model_path_text,
+)
+from .services._utils import (
     sanitize_preview_viewer_url as _sanitize_preview_viewer_url,
-    sanitize_ui_text as _sanitize_ui_text,
-    trace_json as _trace_json,
-    trace_session_row as _trace_session_row,
-    trace_tool_records as _trace_tool_records,
-    workflow_copy as _workflow_copy,
 )
 from .services.llm_service import (
     Agent,
-    CheckpointCandidate,
-    ClarificationResponse,
-    FamilyInspection,
     OpenAIChatModel,
     OpenAIProvider,
-    _build_agent_model,
     _ensure_provider_credentials,
-    _run_structured_agent,
 )
 
 _ORIG_BUILD_AGENT_MODEL = _llm_service._build_agent_model
@@ -291,8 +283,8 @@ async def execute_next_checkpoint(
     with (
         _temporary_module_bindings(
             _session_service,
-            ensure_dashboard_session=ensure_dashboard_session,
-            build_dashboard_state=build_dashboard_state,
+            ensure_dashboard_session=ensure_dashboard_session,  # noqa: F405
+            build_dashboard_state=build_dashboard_state,  # noqa: F405
         ),
         _temporary_module_bindings(
             _checkpoint_service,
@@ -479,6 +471,20 @@ _sanitize_model_path_text = _sanitize_model_path_text
 _safe_context_name = _safe_context_name
 _normalize_feature_targets = _normalize_feature_targets
 _sanitize_preview_viewer_url = _sanitize_preview_viewer_url
+_sanitize_ui_text = _utils_service.sanitize_ui_text
+_provider_from_model_name = _utils_service.provider_from_model_name
+_workflow_copy = _utils_service.workflow_copy
+_filter_docs_text = _utils_service.filter_docs_text
+_feature_target_status = _utils_service.feature_target_status
+_feature_grounding_warning_text = _utils_service.feature_grounding_warning_text
+_parse_json_blob = _utils_service.parse_json_blob
+_trace_json_default = _utils_service._trace_json_default
+_looks_like_path_token = _utils_service._looks_like_path_token
+_normalize_model_name_for_provider = _utils_service.normalize_model_name_for_provider
+_provider_has_credentials = _utils_service.provider_has_credentials
+_trace_json = _utils_service.trace_json
+_trace_session_row = _utils_service.trace_session_row
+_trace_tool_records = _utils_service.trace_tool_records
 
 
 __all__ = [

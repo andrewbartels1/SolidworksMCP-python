@@ -458,7 +458,7 @@ class SolidWorksIOMixin:
                 )
             if value is None:
                 raise Exception(f"Failed to read dimension '{name}'")
-            return cast(float, float(value) * 1000)
+            return float(value) * 1000
 
         return cast(
             AdapterResult[float],
@@ -851,9 +851,7 @@ class SolidWorksIOMixin:
                 warn = VARIANT(vt, 0)
                 model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
             if model is None:
-                raise RuntimeError(
-                    f"OpenDoc6 failed err={err.value} warn={warn.value}"
-                )
+                raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
             _sw_type_info.flag_doc(model, 2)
             adapter.currentModel = model
 
@@ -872,15 +870,16 @@ class SolidWorksIOMixin:
             source_files: list[str] = list(names_result[0]) if names_result[0] else []
 
             # Execute Pack and Go — SavePackAndGo returns a tuple of per-file status codes
-            ext_ct2 = _bridge_com_to_comtypes(model.Extension, sw_lib.IModelDocExtension)
+            ext_ct2 = _bridge_com_to_comtypes(
+                model.Extension, sw_lib.IModelDocExtension
+            )
             status_arr = ext_ct2.SavePackAndGo(pg)
             save_statuses: list[int] = list(status_arr) if status_arr else []
 
             copied_files = sorted(
                 str(p)
                 for p in out_dir.rglob("*")
-                if p.is_file()
-                and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
+                if p.is_file() and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
             )
             return {
                 "source_assembly": str(source),

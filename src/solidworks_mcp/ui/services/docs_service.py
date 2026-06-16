@@ -31,7 +31,6 @@ from ._utils import (
     sanitize_ui_text,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -55,7 +54,10 @@ def fetch_docs_context(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, db_path=db_path)
     docs_url = f"{api_origin}/docs"
@@ -116,7 +118,10 @@ def ingest_reference_source(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, db_path=db_path)
     source_reference = (source_path or "").strip()
@@ -151,7 +156,7 @@ def ingest_reference_source(
         chunks = _chunk_text(source_text, chunk_size=chunk_size, overlap=overlap)
         output_path = DEFAULT_RAG_DIR / f"{resolved_namespace}.json"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
+        payload: dict[str, Any] = {
             "version": "1.0",
             "namespace": resolved_namespace,
             "source_location": source_identifier,

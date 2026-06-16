@@ -31,11 +31,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Script-side rewind (no SolidWorks required)
@@ -113,7 +109,7 @@ def truncate_script_at(script_text: str, label: str) -> str:
     end_line = match["line_end"] + 1
     truncated_lines = lines[:end_line]
     # Append the script footer so the truncated version is still runnable
-    if not any("await adapter.disconnect()" in l for l in truncated_lines):
+    if not any("await adapter.disconnect()" in ln for ln in truncated_lines):
         truncated_lines.append(
             '\n    finally:\n        await adapter.disconnect()\n\n\nif __name__ == "__main__":\n    asyncio.run(build_part())\n'
         )

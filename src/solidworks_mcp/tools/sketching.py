@@ -456,7 +456,7 @@ async def register_sketching_tools(
                 )
             else:
                 result = await adapter.add_line(
-                    input_data.x1, input_data.y1, input_data.x2, input_data.y2
+                    input_data.x1, input_data.y1, input_data.x2, input_data.y2  # type: ignore[arg-type]
                 )
 
             if result.is_success:
@@ -465,17 +465,19 @@ async def register_sketching_tools(
                     if isinstance(result.data, dict)
                     else result.data
                 )
+                x1, y1 = input_data.x1 or 0.0, input_data.y1 or 0.0
+                x2, y2 = input_data.x2 or 0.0, input_data.y2 or 0.0
                 return {
                     "status": "success",
-                    "message": f"Added line from ({input_data.x1}, {input_data.y1}) to ({input_data.x2}, {input_data.y2})",
+                    "message": f"Added line from ({x1}, {y1}) to ({x2}, {y2})",
                     "line": {
                         "id": line_id,
-                        "start": {"x": input_data.x1, "y": input_data.y1},
-                        "end": {"x": input_data.x2, "y": input_data.y2},
+                        "start": {"x": x1, "y": y1},
+                        "end": {"x": x2, "y": y2},
                         "construction": input_data.construction,
                         "length": (
-                            (input_data.x2 - input_data.x1) ** 2
-                            + (input_data.y2 - input_data.y1) ** 2
+                            (x2 - x1) ** 2
+                            + (y2 - y1) ** 2
                         )
                         ** 0.5,
                     },
@@ -594,7 +596,7 @@ async def register_sketching_tools(
                 )
             else:
                 result = await adapter.add_rectangle(
-                    input_data.x1, input_data.y1, input_data.x2, input_data.y2
+                    input_data.x1, input_data.y1, input_data.x2, input_data.y2  # type: ignore[arg-type]
                 )
 
             if result.is_success:
@@ -603,16 +605,18 @@ async def register_sketching_tools(
                     if isinstance(result.data, dict)
                     else result.data
                 )
-                width = abs(input_data.x2 - input_data.x1)
-                height = abs(input_data.y2 - input_data.y1)
+                rx1, ry1 = input_data.x1 or 0.0, input_data.y1 or 0.0
+                rx2, ry2 = input_data.x2 or 0.0, input_data.y2 or 0.0
+                width = abs(rx2 - rx1)
+                height = abs(ry2 - ry1)
 
                 return {
                     "status": "success",
-                    "message": f"Added rectangle from ({input_data.x1}, {input_data.y1}) to ({input_data.x2}, {input_data.y2})",
+                    "message": f"Added rectangle from ({rx1}, {ry1}) to ({rx2}, {ry2})",
                     "rectangle": {
                         "id": rect_id,
-                        "corner1": {"x": input_data.x1, "y": input_data.y1},
-                        "corner2": {"x": input_data.x2, "y": input_data.y2},
+                        "corner1": {"x": rx1, "y": ry1},
+                        "corner2": {"x": rx2, "y": ry2},
                         "construction": input_data.construction,
                         "width": width,
                         "height": height,
@@ -905,7 +909,7 @@ async def register_sketching_tools(
             input_data = _normalize_input(input_data, AddLineInput)
 
             result = await adapter.add_centerline(
-                input_data.x1, input_data.y1, input_data.x2, input_data.y2
+                input_data.x1, input_data.y1, input_data.x2, input_data.y2  # type: ignore[arg-type]
             )
 
             if result.is_success:

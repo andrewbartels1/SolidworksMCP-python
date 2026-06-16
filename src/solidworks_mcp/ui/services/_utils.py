@@ -12,18 +12,17 @@ Design principles applied:
 
 from __future__ import annotations
 
-import json
-import os
 import base64
 import binascii
+import json
+import os
+from html.parser import HTMLParser
+from importlib import import_module
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
-from html.parser import HTMLParser
-from io import BytesIO
-from importlib import import_module
 from urllib.request import Request, urlopen
-from loguru import logger
 
 from ...agents.history_db import (
     get_design_session,
@@ -753,15 +752,15 @@ class HTMLTextExtractor(HTMLParser):
         self._parts: list[str] = []
         self._skip_depth = 0
 
-    def handle_starttag(self, tag: str, attrs: list) -> None:  # type: ignore[override]
+    def handle_starttag(self, tag: str, attrs: list) -> None:
         if tag.lower() in self._SKIP_TAGS:
             self._skip_depth += 1
 
-    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+    def handle_endtag(self, tag: str) -> None:
         if tag.lower() in self._SKIP_TAGS and self._skip_depth > 0:
             self._skip_depth -= 1
 
-    def handle_data(self, data: str) -> None:  # type: ignore[override]
+    def handle_data(self, data: str) -> None:
         if self._skip_depth == 0:
             stripped = data.strip()
             if stripped:

@@ -13,22 +13,21 @@ from typing import Any
 from loguru import logger
 
 from ...adapters import create_adapter
-from ...config import load_config
 from ...agents.history_db import (
     insert_evidence_link,
-    insert_tool_call_record,
     insert_model_state_snapshot,
+    insert_tool_call_record,
 )
+from ...config import load_config
 from ...utils.feature_tree_classifier import classify_feature_tree_snapshot
 from ._utils import (
     DEFAULT_API_ORIGIN,
     DEFAULT_PREVIEW_ORIENTATION,
-    merge_metadata,
-    materialize_uploaded_model,
     ensure_preview_dir,
+    materialize_uploaded_model,
+    merge_metadata,
     sanitize_model_path_text,
 )
-
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -57,7 +56,10 @@ async def open_target_model(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, db_path=db_path)
     adapter = None
@@ -184,8 +186,11 @@ async def connect_target_model(
     Returns:
         Full dashboard state payload (includes preview state after the refresh).
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
     from .preview_service import refresh_preview  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, db_path=db_path)
     adapter = None
@@ -240,7 +245,7 @@ async def connect_target_model(
 
         from ._utils import feature_target_status  # noqa: PLC0415
 
-        classification = classify_feature_tree_snapshot(model_info, features)
+        classification = classify_feature_tree_snapshot(model_info, features)  # type: ignore[arg-type]
         target_status, matched_targets, missing_targets = feature_target_status(
             features, feature_target_text
         )

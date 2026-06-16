@@ -28,32 +28,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
+from .routers import checkpoint as checkpoint_router
+from .routers import docs as docs_router
+from .routers import llm as llm_router
+from .routers import local_model as local_model_router
+from .routers import model as model_router
+from .routers import preview as preview_router
+from .routers import session as session_router
+from .routers import viewer as viewer_router
 from .services import (  # noqa: F401  (re-exported for monkeypatching in tests)
     DEFAULT_API_ORIGIN,
     DEFAULT_SESSION_ID,
-    ensure_preview_dir,
+    accept_family_choice,
+    approve_design_brief,
     build_dashboard_state,
     build_dashboard_trace_payload,
-    approve_design_brief,
-    update_ui_preferences,
-    select_workflow_mode,
-    accept_family_choice,
     connect_target_model,
-    request_clarifications,
-    inspect_family,
+    ensure_preview_dir,
     execute_next_checkpoint,
-    refresh_preview,
     ingest_reference_source,
+    inspect_family,
     reconcile_manual_edits,
+    refresh_preview,
+    request_clarifications,
+    select_workflow_mode,
+    update_ui_preferences,
 )
-from .routers import session as session_router
-from .routers import model as model_router
-from .routers import preview as preview_router
-from .routers import llm as llm_router
-from .routers import checkpoint as checkpoint_router
-from .routers import docs as docs_router
-from .routers import local_model as local_model_router
-from .routers import viewer as viewer_router
 
 UI_LOG_DIR = FilePath(".solidworks_mcp") / "ui_logs"
 UI_HTTP_LOG_FILE = UI_LOG_DIR / "ui_http.log"

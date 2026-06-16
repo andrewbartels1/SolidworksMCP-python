@@ -908,8 +908,8 @@ class SolidWorksAdapter(ABC):
         )
 
     async def create_cut_extrude(
-        self, params: "ExtrusionParameters"
-    ) -> "AdapterResult[Any]":
+        self, params: ExtrusionParameters
+    ) -> AdapterResult[Any]:
         """Create a cut-extrude feature from the active sketch.
 
         Cuts material from the current solid body using the active sketch profile.
@@ -928,7 +928,7 @@ class SolidWorksAdapter(ABC):
 
     async def add_fillet(
         self, radius: float, edge_names: list[str]
-    ) -> "AdapterResult[Any]":
+    ) -> AdapterResult[Any]:
         """Add a fillet feature to selected edges.
 
         Rounds the selected edges of the current solid body with the given radius.

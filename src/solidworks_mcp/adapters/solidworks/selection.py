@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
@@ -41,8 +41,9 @@ class SolidWorksSelectionMixin:
     def _build_feature_candidate_names(
         self, feature_name: str, target_doc: Any
     ) -> list[str]:
-        return self._feature_selector.build_feature_candidate_names(
-            feature_name, target_doc
+        return cast(
+            list[str],
+            self._feature_selector.build_feature_candidate_names(feature_name, target_doc),
         )
 
     def _try_select_by_extension(
@@ -51,8 +52,11 @@ class SolidWorksSelectionMixin:
         candidate_names: list[str],
         feature_name: str,
     ) -> dict[str, Any] | None:
-        return self._feature_selector.try_select_by_extension(
-            target_doc, candidate_names, feature_name
+        return cast(
+            "dict[str, Any] | None",
+            self._feature_selector.try_select_by_extension(
+                target_doc, candidate_names, feature_name
+            ),
         )
 
     def _try_select_by_component(
@@ -61,8 +65,11 @@ class SolidWorksSelectionMixin:
         candidate_names: list[str],
         feature_name: str,
     ) -> dict[str, Any] | None:
-        return self._feature_selector.try_select_by_component(
-            target_doc, candidate_names, feature_name
+        return cast(
+            "dict[str, Any] | None",
+            self._feature_selector.try_select_by_component(
+                target_doc, candidate_names, feature_name
+            ),
         )
 
     def _try_select_by_feature_tree(
@@ -71,8 +78,11 @@ class SolidWorksSelectionMixin:
         feature_name: str,
         candidate_names: list[str],
     ) -> dict[str, Any] | None:
-        return self._feature_selector.try_select_by_feature_tree(
-            target_doc, feature_name, candidate_names
+        return cast(
+            "dict[str, Any] | None",
+            self._feature_selector.try_select_by_feature_tree(
+                target_doc, feature_name, candidate_names
+            ),
         )
 
     async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:

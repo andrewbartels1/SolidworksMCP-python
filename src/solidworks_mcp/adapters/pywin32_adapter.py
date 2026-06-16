@@ -1051,7 +1051,7 @@ class _FeatureSelectionService:
         for candidate in candidate_names:
             component_name = candidate.split("@", 1)[0]
             component = self._adapter._attempt(
-                lambda name=component_name: get_component_by_name(name),
+                lambda name=component_name: get_component_by_name(name),  # type: ignore[misc]
                 default=None,
             )
             if component is None:
@@ -1118,7 +1118,7 @@ class _FeatureSelectionService:
             guard += 1
             feature_ref = feature
             tree_name = self._adapter._attempt(
-                lambda current_feature=feature_ref: str(current_feature.Name or ""),
+                lambda current_feature=feature_ref: str(current_feature.Name or ""),  # type: ignore[misc]
                 default="",
             )
             if self._matches_candidate_name(
@@ -1135,7 +1135,7 @@ class _FeatureSelectionService:
                 except Exception:
                     pass
             next_feature = self._adapter._attempt(
-                lambda current_feature=feature_ref: current_feature.GetNextFeature()
+                lambda current_feature=feature_ref: current_feature.GetNextFeature()  # type: ignore[misc]
             )
             if next_feature is None:
                 break
@@ -1211,12 +1211,12 @@ class _FeatureSelectionService:
         seen: set[tuple[str, str]] = set()
 
         feature = self._adapter._attempt(
-            lambda: self._adapter.currentModel.FirstFeature()
+            lambda: self._adapter.currentModel.FirstFeature()  # type: ignore[union-attr]
         )
         # Flag the feature dispatch so methods like GetNextFeature work
         if feature is not None:
             self._adapter._attempt(
-                lambda f=feature: sw_type_info.flag_methods(f, "IFeature"), default=0
+                lambda f=feature: sw_type_info.flag_methods(f, "IFeature"), default=0  # type: ignore[misc]
             )
         pos = 0
         guard = 0
@@ -1225,7 +1225,7 @@ class _FeatureSelectionService:
             pos += 1
             guard += 1
             next_feature = self._adapter._attempt(
-                lambda current_feature=feature: current_feature.GetNextFeature()
+                lambda current_feature=feature: current_feature.GetNextFeature()  # type: ignore[misc]
             )
             if next_feature is None:
                 break
@@ -1233,7 +1233,7 @@ class _FeatureSelectionService:
             # Flag each new feature dispatch
             if feature is not None:
                 self._adapter._attempt(
-                    lambda f=feature: sw_type_info.flag_methods(f, "IFeature"),
+                    lambda f=feature: sw_type_info.flag_methods(f, "IFeature"),  # type: ignore[misc]
                     default=0,
                 )
 
@@ -1242,12 +1242,12 @@ class _FeatureSelectionService:
 
         feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
         count = self._adapter._attempt(
-            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0
+            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0  # type: ignore[misc, union-attr]
         )
-        for reverse_pos in range(1, count + 1):
+        for reverse_pos in range(1, (count or 0) + 1):
             feature = self._adapter._attempt(
                 lambda pos=reverse_pos: (
-                    self._adapter.currentModel.FeatureByPositionReverse(pos)
+                    self._adapter.currentModel.FeatureByPositionReverse(pos)  # type: ignore[union-attr]
                 )
             )
             if feature is None:
@@ -1256,7 +1256,7 @@ class _FeatureSelectionService:
                 features,
                 seen,
                 feature,
-                count - reverse_pos,
+                (count or 0) - reverse_pos,
                 include_suppressed,
             )
 
@@ -1476,7 +1476,9 @@ class PyWin32Adapter(
         """
         await self._session_coordinator.wait_for_server_ready(app)
 
-    def _set_automation_preferences(self, app: Any, *, interactive: bool) -> None:  # pragma: no cover
+    def _set_automation_preferences(  # pragma: no cover
+        self, app: Any, *, interactive: bool
+    ) -> None:
         """Toggle SolidWorks warning/question prompts for automation safety.
 
         Args:
@@ -1583,7 +1585,7 @@ class PyWin32Adapter(
             },
         )
 
-    def _handle_com_operation(
+    def _handle_com_operation(  # type: ignore[override]
         self,
         operation_name: str,
         operation_func: Callable[..., T],
@@ -1943,7 +1945,7 @@ class PyWin32Adapter(
 
             # Ensure SolidWorks window is focused so the viewport is rendered.
             # Required for both view changes and bitmap capture.
-            self._attempt(lambda: self.swApp.Frame.SetFocus())
+            self._attempt(lambda: self.swApp.Frame.SetFocus())  # type: ignore[union-attr]
 
             # Set view orientation if requested
             if orientation != "current" and orientation in _VIEW_CONSTANTS:
@@ -2145,7 +2147,7 @@ class PyWin32Adapter(
             if format_lower == "stl":
                 # For assemblies, resolve lightweight components first so all
                 # geometry is available for the mesh export.
-                self._attempt(lambda: target_doc.ResolveAllLightweightComponents(True))
+                self._attempt(lambda: target_doc.ResolveAllLightweightComponents(True))  # type: ignore[union-attr]
 
                 ext = getattr(target_doc, "Extension", None)
                 if ext is None:
@@ -2170,7 +2172,7 @@ class PyWin32Adapter(
                 "[pywin32.export_file] SaveAs3 {} (version=0, options=Silent)",
                 resolved_path,
             )
-            success = target_doc.SaveAs3(
+            success = target_doc.SaveAs3(  # type: ignore[union-attr]
                 resolved_path,
                 0,  # swSaveAsCurrentVersion — format inferred from file extension
                 2,  # swSaveAsOptions_Silent
@@ -2214,7 +2216,7 @@ class PyWin32Adapter(
         Raises:
             SolidWorksMCPError: If RunMacro2 reports failure.
         """
-        result = self.swApp.RunMacro2(macro_path, module_name, proc_name, 0, 0)
+        result = self.swApp.RunMacro2(macro_path, module_name, proc_name, 0, 0)  # type: ignore[union-attr]
         if isinstance(result, (list, tuple)):
             success, errors = result[0], result[1]
         else:

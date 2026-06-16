@@ -210,7 +210,7 @@ async def register_macro_recording_tools(
                     "message": result.error or "Failed to start recording",
                 }
 
-            recording_session = {
+            recording_session: dict[str, Any] = {
                 "session_id": f"REC-{int(time.time() * 1000) % 100000}",
                 "macro_name": input_data.macro_name,
                 "description": input_data.description,
@@ -378,7 +378,7 @@ End Sub"""
                     "message": result.error or "Failed to execute macro",
                 }
 
-            execution_results = []
+            execution_results: list[dict[str, Any]] = []
 
             for run in range(input_data.repeat_count):
                 run_result = {
@@ -401,8 +401,8 @@ End Sub"""
                         min(input_data.pause_between_runs, 1.0)
                     )  # Cap the actual sleep
 
-            total_time = sum(r["execution_time"] for r in execution_results)
-            total_features = sum(r["features_created"] for r in execution_results)
+            total_time = sum(float(r["execution_time"]) for r in execution_results)
+            total_features = sum(int(r["features_created"]) for r in execution_results)
 
             return {
                 "status": "success",

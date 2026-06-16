@@ -907,15 +907,23 @@ def _create_cut_extrude_impl(
         depth_m = normalized.depth / 1000.0
         if end_condition in {"throughall", "through all", "through_all"}:
             t1 = adapter.constants["swEndCondThroughAll"]
-        elif end_condition in {"throughallboth", "through all both", "through_all_both"}:
+        elif end_condition in {
+            "throughallboth",
+            "through all both",
+            "through_all_both",
+        }:
             t1 = adapter.constants["swEndCondThroughAllBoth"]
 
         t0 = adapter.constants.get("swStartSketchPlane", 0)
         feature = None
         fallback_errors: list[str] = []
         is_through = end_condition in {
-            "throughall", "through all", "through_all",
-            "throughallboth", "through all both", "through_all_both",
+            "throughall",
+            "through all",
+            "through_all",
+            "throughallboth",
+            "through all both",
+            "through_all_both",
         }
 
         # Detect SW major version for FeatureCut4 parameter count
@@ -1150,7 +1158,9 @@ def _create_cut_extrude_impl(
     )
 
 
-def _parse_edge_spec(edge_name: str) -> tuple[str, float, float, float]:  # pragma: no cover
+def _parse_edge_spec(  # pragma: no cover
+    edge_name: str,
+) -> tuple[str, float, float, float]:
     """Parse an edge specification string into (SelectByID2 name, x, y, z).
 
     Supports two formats:
@@ -1196,7 +1206,7 @@ def _select_edge_by_coord(  # pragma: no cover
     if not append:
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
 
-    r = math.sqrt(x ** 2 + z ** 2)
+    r = math.sqrt(x**2 + z**2)
     if r > 0:
         # Candidates: exact point plus small radial scale-in/out and Y offsets.
         candidates = [
@@ -1220,6 +1230,7 @@ def _select_edge_by_coord(  # pragma: no cover
     try:
         import pythoncom
         import win32com.client as _win32com
+
         null_callout = _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
     except Exception:
         null_callout = None  # fallback: may fail on some SW versions
@@ -1298,7 +1309,9 @@ def _add_fillet_impl(
                 fillet_sw_major = 0
 
         # Clear any prior selection so the edge set is clean.
-        adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
 
         for idx, edge_name in enumerate(edge_names):
             sel_name, ex, ey, ez = _parse_edge_spec(edge_name)
@@ -1325,12 +1338,12 @@ def _add_fillet_impl(
         if fillet_sw_major >= 33:
             result_code = adapter.currentModel.FeatureFillet3(
                 radius / 1000.0,  # R1 in meters
-                True,   # Propagate (VT_BOOL)
-                0,      # Ftyp (VT_I4)
+                True,  # Propagate (VT_BOOL)
+                0,  # Ftyp (VT_I4)
                 False,  # VarRadTyp (VT_BOOL — must be bool, not int)
-                0,      # OverflowType (VT_I4)
-                0,      # NRadii (VT_I4)
-                None,   # Radii (VT_VARIANT)
+                0,  # OverflowType (VT_I4)
+                0,  # NRadii (VT_I4)
+                None,  # Radii (VT_VARIANT)
                 False,  # UseHelpPoint (VT_BOOL)
                 False,  # UseTangentHoldLine (VT_BOOL)
             )
@@ -1433,13 +1446,17 @@ def _add_chamfer_impl(
         import math
 
         # Clear any prior selection so the edge set is clean.
-        adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
 
         for idx, edge_name in enumerate(edge_names):
             sel_name, cx, cy, cz = _parse_edge_spec(edge_name)
             append = idx > 0
             if sel_name == "":
-                selected = _select_edge_by_coord(adapter, cx, cy, cz, append=append, mark=0)
+                selected = _select_edge_by_coord(
+                    adapter, cx, cy, cz, append=append, mark=0
+                )
             else:
                 selected = adapter._attempt(
                     lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append: (
@@ -1459,12 +1476,14 @@ def _add_chamfer_impl(
         _flag_feature_methods(fm, "IFeatureManager")
         feature, insert_err = adapter._attempt_with_error(
             lambda: fm.InsertFeatureChamfer(
-                1,                   # Options
-                1,                   # ChamferType = equal distance
-                distance / 1000.0,   # Width in metres
-                math.pi / 4,         # 45° angle
-                0.0,                 # OtherDist (unused for equal-distance)
-                0.0, 0.0, 0.0,      # VertexChamDist1,2,3 (unused)
+                1,  # Options
+                1,  # ChamferType = equal distance
+                distance / 1000.0,  # Width in metres
+                math.pi / 4,  # 45° angle
+                0.0,  # OtherDist (unused for equal-distance)
+                0.0,
+                0.0,
+                0.0,  # VertexChamDist1,2,3 (unused)
             )
         )
 

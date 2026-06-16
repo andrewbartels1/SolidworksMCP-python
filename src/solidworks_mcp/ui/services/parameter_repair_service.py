@@ -10,7 +10,6 @@ from typing import Any
 
 from loguru import logger
 
-
 # Tool parameter schemas: required parameters per tool name
 TOOL_PARAM_SCHEMAS: dict[str, dict[str, Any]] = {
     "create_part": {

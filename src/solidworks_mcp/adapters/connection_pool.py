@@ -259,7 +259,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
         async with self._lock:
             if self.pool_initialized:
-                return
+                return  # type: ignore[unreachable]  # double-check locking pattern
 
             logger.info(f"Initializing connection pool with {self.pool_size} adapters")
 
@@ -353,7 +353,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
                     from .base import SolidWorksAdapter
 
                     typed_adapter: SolidWorksAdapter = adapter
-                    await self._attempt_async(lambda a=typed_adapter: a.disconnect())
+                    await self._attempt_async(lambda a=typed_adapter: a.disconnect())  # type: ignore[misc]
 
                     replacement_error = await self._attempt_async(
                         self._replace_failed_adapter
@@ -393,7 +393,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
             typed_adapter: SolidWorksAdapter = adapter
             _, error = await self._attempt_async_with_error(
-                lambda a=typed_adapter: a.disconnect()
+                lambda a=typed_adapter: a.disconnect()  # type: ignore[misc]
             )
             if error is not None:
                 logger.warning(f"Error disconnecting adapter: {error}")
@@ -446,7 +446,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             from .base import SolidWorksAdapter
 
             typed_adapter: SolidWorksAdapter = adapter
-            health = await self._attempt_async(lambda a=typed_adapter: a.health_check())
+            health = await self._attempt_async(lambda a=typed_adapter: a.health_check())  # type: ignore[misc]
             if not health:
                 continue
             if health.healthy:

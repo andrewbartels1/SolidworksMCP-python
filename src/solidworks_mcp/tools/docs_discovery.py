@@ -242,7 +242,7 @@ def _discover_com_via_typeinfo(sw_app: Any) -> tuple[dict[str, Any], int, int]:
         tuple[dict[str, Any], int, int]: com_index, total_methods, total_properties.
     """
     if not HAS_WIN32COM:
-        return {}
+        return {}, 0, 0
 
     com_index: dict[str, Any] = {}
     total_methods = 0

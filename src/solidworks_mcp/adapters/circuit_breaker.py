@@ -9,7 +9,7 @@ import json
 import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from loguru import logger
 
@@ -33,8 +33,8 @@ T = TypeVar("T")
 def _to_input_dict(params: Any) -> dict[str, Any]:
     """Convert a Pydantic model or plain dict to a flat dict for SoC logging."""
     if hasattr(params, "model_dump"):
-        return params.model_dump()
-    return params if isinstance(params, dict) else {}
+        return cast(dict[str, Any], params.model_dump())
+    return cast(dict[str, Any], params) if isinstance(params, dict) else {}
 
 
 class CircuitState(Enum):

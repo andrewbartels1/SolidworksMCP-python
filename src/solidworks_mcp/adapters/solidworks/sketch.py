@@ -425,7 +425,7 @@ def _add_line_impl(
         )
         if not line:
             raise Exception("Failed to create line")
-        return cast(AdapterResult[str], adapter._register_sketch_entity("Line", line))
+        return adapter._register_sketch_entity("Line", line)
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_line", _line_operation)
@@ -475,9 +475,7 @@ def _add_circle_impl(
         )
         if not circle:
             raise Exception("Failed to create circle")
-        return cast(
-            AdapterResult[str], adapter._register_sketch_entity("Circle", circle)
-        )
+        return adapter._register_sketch_entity("Circle", circle)
 
     return cast(
         AdapterResult[str],
@@ -615,7 +613,7 @@ def _add_arc_impl(
         )
         if not arc:
             raise Exception("Failed to create arc")
-        return cast(AdapterResult[str], adapter._register_sketch_entity("Arc", arc))
+        return adapter._register_sketch_entity("Arc", arc)
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_arc", _arc_operation)
@@ -675,8 +673,8 @@ def _add_spline_impl(
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
         except ImportError:  # pragma: no cover
-            _pythoncom = None  # type: ignore[assignment]
-            _VARIANT = None  # type: ignore[assignment]
+            _pythoncom = None
+            _VARIANT = None
 
         points_arg: Any
         if _pythoncom is not None and _VARIANT is not None:
@@ -703,7 +701,9 @@ def _add_spline_impl(
                 lambda: adapter.currentSketch.GetSketchSegments(), default=None
             )
             if segments is not None and len(segments) > 0:
-                return cast(str, adapter._register_sketch_entity("Spline", segments[-1]))
+                return cast(
+                    str, adapter._register_sketch_entity("Spline", segments[-1])
+                )
 
         return cast(str, adapter._register_sketch_entity("Spline", spline))
 
@@ -1077,8 +1077,8 @@ def _add_sketch_constraint_impl(
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
         except ImportError:
-            _pythoncom = None  # type: ignore[assignment]
-            _VARIANT = None  # type: ignore[assignment]
+            _pythoncom = None
+            _VARIANT = None
 
         ents_variant: Any
         if _pythoncom is not None and _VARIANT is not None:
@@ -1369,10 +1369,7 @@ def _add_sketch_dimension_impl(
                     if hasattr(dim_obj, "SystemValue"):
                         dim_obj.SystemValue = value_si
 
-        return cast(
-            AdapterResult[str],
-            adapter._register_sketch_entity("Dimension", display_dim),
-        )
+        return adapter._register_sketch_entity("Dimension", display_dim)
 
     return cast(
         AdapterResult[str],
@@ -1380,7 +1377,9 @@ def _add_sketch_dimension_impl(
     )
 
 
-def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> None:  # pragma: no cover
+def _select_sketch_entities(  # pragma: no cover
+    adapter: Any, entity_ids: list[str], mark: int
+) -> None:
     """Select sketch entities from the registry under a specific mark.
 
     Resolves each ID against ``adapter._sketch_entities`` and calls
@@ -2391,7 +2390,7 @@ def _check_sketch_fully_defined_impl(
         }
 
     return cast(
-        AdapterResult[str],
+        AdapterResult[dict[str, Any]],
         adapter._handle_com_operation(
             "check_sketch_fully_defined", _get_sketch_payload
         ),

@@ -20,9 +20,9 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
-from urllib.request import urlopen
+from typing import Any
 
 import numpy as np
 
@@ -123,7 +123,7 @@ class _AwaitableQueryResult(str):
 
     _hits: list[dict[str, Any]]
 
-    def __new__(cls, text: str, hits: list[dict[str, Any]] | None = None):
+    def __new__(cls, text: str, hits: list[dict[str, Any]] | None = None) -> "_AwaitableQueryResult":
         obj = super().__new__(cls, text)
         obj._hits = list(hits or [])
         return obj

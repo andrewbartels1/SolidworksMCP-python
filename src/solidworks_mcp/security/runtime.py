@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import cast
 import secrets
 from dataclasses import dataclass
+from typing import cast
 
 from ..config import SecurityLevel, SolidWorksMCPConfig
 from .auth import validate_api_key
