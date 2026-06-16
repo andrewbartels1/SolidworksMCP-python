@@ -1000,7 +1000,7 @@ def test_discover_com_via_typeinfo_no_win32(monkeypatch: pytest.MonkeyPatch) -> 
     import solidworks_mcp.tools.docs_discovery as docs_mod
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
-    assert docs_mod._discover_com_via_typeinfo(object()) == {}
+    assert docs_mod._discover_com_via_typeinfo(object()) == ({}, 0, 0)
 
 
 def test_discover_com_via_typeinfo_with_impl_interfaces(

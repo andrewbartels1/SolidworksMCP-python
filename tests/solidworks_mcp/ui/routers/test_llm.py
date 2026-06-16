@@ -73,9 +73,7 @@ async def test_orchestrate_go_calls_service(monkeypatch) -> None:
 
 def test_resolve_user_goal_session_row_none(monkeypatch) -> None:
     """_resolve_user_goal should return DEFAULT_USER_GOAL when session row is None."""
-    monkeypatch.setattr(
-        llm_router, "get_design_session", lambda *_a, **_kw: None
-    )
+    monkeypatch.setattr(llm_router, "get_design_session", lambda *_a, **_kw: None)
     resolved = llm_router._resolve_user_goal("s1", llm_router.DEFAULT_USER_GOAL)
     assert resolved == llm_router.DEFAULT_USER_GOAL
 

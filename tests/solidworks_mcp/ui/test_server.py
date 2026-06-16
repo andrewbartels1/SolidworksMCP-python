@@ -67,12 +67,22 @@ def test_api_endpoints(monkeypatch) -> None:
     """Test api endpoints."""
 
     from solidworks_mcp.ui.routers import (
-        session as session_router,
-        docs as docs_router,
-        model as model_router,
-        llm as llm_router,
         checkpoint as checkpoint_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        docs as docs_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        llm as llm_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        model as model_router,
+    )
+    from solidworks_mcp.ui.routers import (
         preview as preview_router,
+    )
+    from solidworks_mcp.ui.routers import (
+        session as session_router,
     )
 
     async def _a(value: dict[str, Any]) -> dict[str, Any]:
@@ -467,10 +477,8 @@ async def test_startup_event_generic_exception(monkeypatch) -> None:
 
 def test_middleware_exception_path(monkeypatch) -> None:
     """Middleware exception branch is hit when a route raises inside the logged path."""
-    import pytest
 
     # Mount a route that raises
-    from fastapi import HTTPException
 
     @server.app.get("/api/ui/__test_error__")
     async def _error_route():
@@ -503,16 +511,14 @@ def test_middleware_skips_logging_for_non_ui_path(monkeypatch) -> None:
 
 def test_decode_request_body_json_with_list() -> None:
     """JSON array body should be returned as-is (no sanitization of top-level lists)."""
-    result = server._decode_request_body(b'[1, 2, 3]')
+    result = server._decode_request_body(b"[1, 2, 3]")
     assert result == [1, 2, 3]
 
 
 def test_sanitize_log_payload_nested_uploaded_files() -> None:
     """Nested uploaded_files entries should redact 'data' fields."""
     payload = {
-        "nested": {
-            "uploaded_files": [{"name": "file.sldprt", "data": "AAAABBBB"}]
-        }
+        "nested": {"uploaded_files": [{"name": "file.sldprt", "data": "AAAABBBB"}]}
     }
     sanitized = server._sanitize_log_payload(payload)
     # The outer key "nested" is a dict value with no matching "uploaded_files" at this level
@@ -523,8 +529,8 @@ def test_sanitize_log_payload_nested_uploaded_files() -> None:
 
 def test_local_model_pull_endpoint_with_endpoint_override(monkeypatch) -> None:
     """Pull endpoint should forward optional endpoint override."""
-    from solidworks_mcp.ui.local_llm import LocalModelPullResult
     import solidworks_mcp.ui.local_llm as llm_mod
+    from solidworks_mcp.ui.local_llm import LocalModelPullResult
 
     captured: dict = {}
 
@@ -545,8 +551,8 @@ def test_local_model_pull_endpoint_with_endpoint_override(monkeypatch) -> None:
 
 def test_local_model_pull_endpoint_without_endpoint(monkeypatch) -> None:
     """Pull endpoint with no endpoint field should use default (None)."""
-    from solidworks_mcp.ui.local_llm import LocalModelPullResult
     import solidworks_mcp.ui.local_llm as llm_mod
+    from solidworks_mcp.ui.local_llm import LocalModelPullResult
 
     captured: dict = {}
 
@@ -564,8 +570,9 @@ def test_local_model_pull_endpoint_without_endpoint(monkeypatch) -> None:
 def test_local_model_query_endpoint_with_local_prefix_model(monkeypatch) -> None:
     """Query endpoint should not prepend 'local:' when model already starts with it."""
     from pydantic import BaseModel as _BaseModel
-    from solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
+
     import solidworks_mcp.ui.local_llm as llm_mod
+    from solidworks_mcp.ui.local_llm import LocalAgentResult, LocalLLMConfig
 
     class _FreeForm(_BaseModel):
         text: str = "ok"

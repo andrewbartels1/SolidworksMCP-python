@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import platform
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -112,7 +112,7 @@ class TestPyWin32AdapterInitialization:
             adapter = PyWin32Adapter()
 
             # Mock COM operations
-            with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom") as mock_com:
+            with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom"):
                 with patch(
                     "solidworks_mcp.adapters.pywin32_adapter.win32com.client"
                 ) as mock_client:

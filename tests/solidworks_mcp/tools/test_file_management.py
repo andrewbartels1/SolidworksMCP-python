@@ -1,7 +1,8 @@
 """Tests for SolidWorks file management tools."""
 
+import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -1383,7 +1384,11 @@ class TestFileManagementTools:
 
         target_asm_path = target_dir / "box_copy.sldasm"
         # Force native Pack-and-Go to fail so the fallback copy path is exercised.
-        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+        # Inject a stub win32com so the deferred `from win32com.client import Dispatch`
+        # inside _native_pack_and_go succeeds but Dispatch itself raises RuntimeError.
+        _fake_w32 = MagicMock()
+        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
+        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_asm_path),
@@ -1425,7 +1430,9 @@ class TestFileManagementTools:
 
         target_dir = tmp_path / "tgt_exc"
         target_dir.mkdir(parents=True, exist_ok=True)
-        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+        _fake_w32 = MagicMock()
+        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
+        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_dir / "crash_copy.sldasm"),
@@ -1456,7 +1463,9 @@ class TestFileManagementTools:
 
         target_dir = tmp_path / "tgt_unsaved"
         target_dir.mkdir(parents=True, exist_ok=True)
-        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+        _fake_w32 = MagicMock()
+        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
+        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_dir / "copy.sldasm"),
@@ -1495,7 +1504,9 @@ class TestFileManagementTools:
         target_dir.mkdir(parents=True, exist_ok=True)
         # Force native Pack-and-Go off so the fallback copy runs and hits the
         # missing-GetDependencies2 branch.
-        with patch("win32com.client.Dispatch", side_effect=RuntimeError("no COM")):
+        _fake_w32 = MagicMock()
+        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
+        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_dir / "copy.sldasm"),
@@ -1505,3 +1516,286 @@ class TestFileManagementTools:
 
         assert result["status"] == "error"
         assert "GetDependencies2" in result["message"]
+
+    # ------------------------------------------------------------------
+    # pack_and_go_assembly tool
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_none_input_creates_empty_and_errors(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly with None input falls through to source-not-found error."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        # None input → PackAndGoInput(source_path="", target_dir="").
+        # Path("") resolves to the current directory on Windows (exists=True),
+        # so the .sldasm extension check fires before the source-not-found check.
+        result = await pack_tool(input_data=None)
+        assert result["status"] == "error"
+        assert (
+            "sldasm" in result["message"].lower()
+            or "not found" in result["message"].lower()
+        )
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_source_not_found(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly returns error when source path does not exist."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(tmp_path / "ghost.sldasm"),
+                "target_dir": str(tmp_path / "out"),
+            }
+        )
+        assert result["status"] == "error"
+        assert "Source assembly not found" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_not_sldasm(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly returns error when source is not a .sldasm file."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        # Create a .sldprt file (not an assembly) to trigger the extension check.
+        not_asm = tmp_path / "part.sldprt"
+        not_asm.write_text("placeholder", encoding="utf-8")
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(not_asm),
+                "target_dir": str(tmp_path / "out"),
+            }
+        )
+        assert result["status"] == "error"
+        assert "sldasm" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_overwrite_guard(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly returns error when target dir has files and overwrite=False."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "existing.sldprt").write_text("part", encoding="utf-8")
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(out_dir),
+                "overwrite": False,
+            }
+        )
+        assert result["status"] == "error"
+        assert "overwrite=True" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_adapter_error(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly surfaces adapter error when pack_and_go_assembly fails."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+
+        mock_adapter.pack_and_go_assembly = AsyncMock(
+            return_value=Mock(is_success=False, error="pack failed")
+        )
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(tmp_path / "out"),
+                "overwrite": True,
+            }
+        )
+        assert result["status"] == "error"
+        assert "pack failed" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_success_without_preview(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly succeeds and skips preview when export_preview=False."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+
+        mock_adapter.pack_and_go_assembly = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"source_assembly": str(source), "copied_files": []},
+                execution_time=0.5,
+            )
+        )
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(tmp_path / "out"),
+                "overwrite": True,
+                "export_preview": False,
+            }
+        )
+        assert result["status"] == "success"
+        assert result["method"] == "native_pack_and_go"
+        assert "preview_image" not in result
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_success_with_preview(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly includes preview path when export_image succeeds."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+        out_dir = tmp_path / "out"
+
+        mock_adapter.pack_and_go_assembly = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"source_assembly": str(source), "copied_files": []},
+                execution_time=0.5,
+            )
+        )
+        mock_adapter.export_image = AsyncMock(return_value=Mock(is_success=True))
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(out_dir),
+                "overwrite": True,
+                "export_preview": True,
+            }
+        )
+        assert result["status"] == "success"
+        assert result["preview_image"] is not None
+        assert "assembly_preview.png" in result["preview_image"]
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_success_preview_fails(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly sets preview_image=None when export_image fails."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+
+        mock_adapter.pack_and_go_assembly = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"source_assembly": str(source), "copied_files": []},
+                execution_time=0.5,
+            )
+        )
+        mock_adapter.export_image = AsyncMock(return_value=Mock(is_success=False))
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(tmp_path / "out"),
+                "overwrite": True,
+                "export_preview": True,
+            }
+        )
+        assert result["status"] == "success"
+        assert result["preview_image"] is None
+
+    @pytest.mark.asyncio
+    async def test_pack_and_go_exception(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """pack_and_go_assembly catches unexpected exceptions and returns error."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        pack_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "pack_and_go_assembly":
+                pack_tool = tool.fn
+
+        assert pack_tool is not None
+
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+
+        mock_adapter.pack_and_go_assembly = AsyncMock(
+            side_effect=RuntimeError("unexpected")
+        )
+
+        result = await pack_tool(
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(tmp_path / "out"),
+                "overwrite": True,
+            }
+        )
+        assert result["status"] == "error"
+        assert "Unexpected error" in result["message"]

@@ -4,13 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
-import pytest
-
-import solidworks_mcp.utils.logging as logging_mod
 from solidworks_mcp.utils.logging import get_audit_logger, setup_logging
-
 
 # ---------------------------------------------------------------------------
 # setup_logging branches

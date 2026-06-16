@@ -473,7 +473,9 @@ def test_ensure_provider_credentials_anthropic_missing(monkeypatch) -> None:
 
 def test_ensure_provider_credentials_local_no_error(monkeypatch) -> None:
     """local: model should not raise even without credentials."""
-    llm_service._ensure_provider_credentials("local:gemma4:e2b", "http://localhost:11434")
+    llm_service._ensure_provider_credentials(
+        "local:gemma4:e2b", "http://localhost:11434"
+    )
 
 
 def test_ensure_provider_credentials_github_env_already_set(monkeypatch) -> None:
@@ -519,7 +521,7 @@ def test_llm_parse_json_blob_valid() -> None:
 
 
 def test_llm_parse_json_blob_list_returns_empty() -> None:
-    assert llm_service._parse_json_blob('[1, 2]') == {}
+    assert llm_service._parse_json_blob("[1, 2]") == {}
 
 
 # ---------------------------------------------------------------------------
@@ -588,7 +590,9 @@ async def test_request_clarifications_success(monkeypatch) -> None:
 
     result = await llm_service.request_clarifications("s1", "make a bracket")
     assert result == {"ok": True}
-    assert any(kw.get("clarifying_questions") == ["What thickness?"] for kw in merge_calls)
+    assert any(
+        kw.get("clarifying_questions") == ["What thickness?"] for kw in merge_calls
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -597,7 +601,9 @@ async def test_request_clarifications_success(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_inspect_family_recoverable_failure_with_feature_order(monkeypatch) -> None:
+async def test_inspect_family_recoverable_failure_with_feature_order(
+    monkeypatch,
+) -> None:
     """RecoverableFailure + explicit feature order should trigger coerce fallback."""
     from solidworks_mcp.ui.services import session_service
 
@@ -610,9 +616,7 @@ async def test_inspect_family_recoverable_failure_with_feature_order(monkeypatch
     monkeypatch.setattr(
         session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
     )
-    monkeypatch.setattr(
-        llm_service, "merge_metadata", lambda *_a, **kw: kw or {}
-    )
+    monkeypatch.setattr(llm_service, "merge_metadata", lambda *_a, **kw: kw or {})
     monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
     monkeypatch.setattr(llm_service, "insert_evidence_link", lambda **_kw: None)
     monkeypatch.setattr(llm_service, "replace_plan_checkpoints", lambda **_kw: None)
@@ -621,7 +625,9 @@ async def test_inspect_family_recoverable_failure_with_feature_order(monkeypatch
     monkeypatch.setattr(
         llm_service,
         "_run_structured_agent",
-        AsyncMock(return_value=llm_service.RecoverableFailure(explanation="model down")),
+        AsyncMock(
+            return_value=llm_service.RecoverableFailure(explanation="model down")
+        ),
     )
 
     # Goal with explicit feature order → coerce fallback should fire
@@ -654,7 +660,9 @@ async def test_inspect_family_recoverable_failure_no_feature_order(monkeypatch) 
     monkeypatch.setattr(
         llm_service,
         "_run_structured_agent",
-        AsyncMock(return_value=llm_service.RecoverableFailure(explanation="model down")),
+        AsyncMock(
+            return_value=llm_service.RecoverableFailure(explanation="model down")
+        ),
     )
 
     result = await llm_service.inspect_family("s1", "make a bracket")
@@ -684,8 +692,7 @@ async def test_inspect_family_success_with_checkpoints(monkeypatch) -> None:
     monkeypatch.setattr(llm_service, "insert_evidence_link", lambda **_kw: None)
     replace_calls: list = []
     monkeypatch.setattr(
-        llm_service, "replace_plan_checkpoints",
-        lambda **kw: replace_calls.append(kw)
+        llm_service, "replace_plan_checkpoints", lambda **kw: replace_calls.append(kw)
     )
     monkeypatch.setattr(llm_service, "upsert_design_session", lambda *_a, **_kw: None)
 

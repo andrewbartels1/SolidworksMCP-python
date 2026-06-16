@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import platform
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -37,9 +36,7 @@ def _skip_unless_live() -> None:
     if platform.system() != "Windows":
         pytest.skip("Demo integration tests require Windows")
     if not _REAL_ENABLED:
-        pytest.skip(
-            f"Set {_REAL_FLAG}=1 to run live SolidWorks demo integration tests"
-        )
+        pytest.skip(f"Set {_REAL_FLAG}=1 to run live SolidWorks demo integration tests")
 
 
 # ---------------------------------------------------------------------------

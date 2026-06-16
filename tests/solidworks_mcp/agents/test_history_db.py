@@ -29,6 +29,7 @@ from solidworks_mcp.agents.history_db import (
     list_sketch_graph_snapshots,
     list_tool_call_records,
     update_plan_checkpoint,
+    update_plan_checkpoint_planned_action,
     upsert_design_session,
 )
 
@@ -690,3 +691,53 @@ def test_list_sketch_graph_snapshots_filters_model_path(tmp_path: Path) -> None:
     )
     assert len(filtered) == 1
     assert filtered[0]["model_path"] == "B.sldprt"
+
+
+def test_update_plan_checkpoint_planned_action_with_optional_fields(
+    tmp_path: Path,
+) -> None:
+    """update_plan_checkpoint_planned_action writes executed and result_json when provided."""
+    db = _db(tmp_path)
+    upsert_design_session(session_id="sess-pca", user_goal="test goal", db_path=db)
+    # insert_plan_checkpoint requires session_id, checkpoint_index, title, planned_action_json.
+    checkpoint_id = insert_plan_checkpoint(
+        session_id="sess-pca",
+        checkpoint_index=0,
+        title="step 0 — create part",
+        planned_action_json='{"tool":"create_part"}',
+        approved_by_user=False,
+        db_path=db,
+    )
+    assert checkpoint_id > 0
+
+    # Call with both optional fields set — covers lines 876 and 878.
+    update_plan_checkpoint_planned_action(
+        checkpoint_id,
+        planned_action_json='{"tool":"create_part","revised":true}',
+        executed=True,
+        result_json='{"status":"success"}',
+        db_path=db,
+    )
+
+    checkpoints = list_plan_checkpoints("sess-pca", db_path=db)
+    assert len(checkpoints) == 1
+    assert (
+        checkpoints[0]["planned_action_json"] == '{"tool":"create_part","revised":true}'
+    )
+    assert checkpoints[0]["executed"] is True
+    assert checkpoints[0]["result_json"] == '{"status":"success"}'
+
+
+def test_update_plan_checkpoint_planned_action_missing_row_is_noop(
+    tmp_path: Path,
+) -> None:
+    """update_plan_checkpoint_planned_action returns silently for non-existent row."""
+    db = _db(tmp_path)
+    # Should not raise even when checkpoint_id does not exist.
+    update_plan_checkpoint_planned_action(
+        9999,
+        planned_action_json='{"tool":"x"}',
+        executed=True,
+        result_json="{}",
+        db_path=db,
+    )

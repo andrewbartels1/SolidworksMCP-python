@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -272,9 +270,7 @@ async def test_connect_target_model_path_none_returns_state(monkeypatch) -> None
     monkeypatch.setattr(
         session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
     )
-    monkeypatch.setattr(
-        model_service, "_resolve_model_path", lambda *_a, **_kw: None
-    )
+    monkeypatch.setattr(model_service, "_resolve_model_path", lambda *_a, **_kw: None)
 
     result = await model_service.connect_target_model("s1", model_path=None)
     assert result == {"ok": True}

@@ -12,7 +12,7 @@ from solidworks_mcp.adapters.solidworks import sketch
 class _FakeSwApp:
     """Minimal swApp stand-in; ActiveDoc proxies the adapter's currentModel."""
 
-    def __init__(self, adapter: "_FakeSketchAdapter") -> None:
+    def __init__(self, adapter: _FakeSketchAdapter) -> None:
         self._adapter = adapter
 
     @property
@@ -252,6 +252,30 @@ def test_spline_error_when_too_few_points() -> None:
     result = sketch._add_spline_impl(adapter, [{"x": 0.0, "y": 0.0}])
     assert result.status == AdapterResultStatus.ERROR
     assert "at least 2 points" in (result.error or "")
+
+
+def test_spline_uses_segments_fallback_when_current_sketch_present() -> None:
+    """When currentSketch is set and GetSketchSegments returns segments, the last
+    segment is registered instead of the raw spline IDispatch (sketch.py:706)."""
+    adapter = _FakeSketchAdapter()
+    sentinel_segment = object()
+
+    adapter.currentSketchManager = SimpleNamespace(
+        CreateSpline2=lambda *args: object()  # returns a truthy spline object
+    )
+    fake_sketch = SimpleNamespace(
+        GetSketchSegments=lambda: [sentinel_segment],
+    )
+    adapter.currentSketch = fake_sketch
+
+    result = sketch._add_spline_impl(
+        adapter, [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
+    )
+    assert result.is_success
+    # The registered entity must be the sentinel segment, not the raw spline.
+    entity_id = result.data
+    assert entity_id.startswith("Spline_")
+    assert adapter._sketch_entities[entity_id] is sentinel_segment
 
 
 def _make_pattern_adapter() -> tuple[_FakeSketchAdapter, Mock, Mock, Mock, Mock]:

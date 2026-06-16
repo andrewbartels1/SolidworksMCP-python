@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
-import pytest
 
 from solidworks_mcp.ui.services import session_service
 
@@ -107,7 +104,10 @@ def test_build_feature_tree_returns_empty_for_new_design_clean(monkeypatch) -> N
 
 def test_build_feature_tree_marks_selected_feature(monkeypatch) -> None:
     """Feature matching selected_feature_name should get _selected marker."""
-    features = [{"name": "Feat1", "type": "extrude"}, {"name": "Feat2", "type": "sketch"}]
+    features = [
+        {"name": "Feat1", "type": "extrude"},
+        {"name": "Feat2", "type": "sketch"},
+    ]
     monkeypatch.setattr(
         session_service,
         "list_model_state_snapshots",
@@ -237,22 +237,28 @@ def test_build_checkpoint_rows_executed_approved_queued(monkeypatch) -> None:
     """Status should be 'executed', 'approved', and 'queued' for different states."""
     rows = [
         {
-            "checkpoint_index": 1, "title": "First",
+            "checkpoint_index": 1,
+            "title": "First",
             "planned_action_json": json.dumps({"tools": ["create_part"]}),
             "result_json": json.dumps({"status": "success"}),
-            "executed": True, "approved_by_user": True,
+            "executed": True,
+            "approved_by_user": True,
         },
         {
-            "checkpoint_index": 2, "title": "Second",
+            "checkpoint_index": 2,
+            "title": "Second",
             "planned_action_json": json.dumps({"tools": ["create_sketch"]}),
             "result_json": "",
-            "executed": False, "approved_by_user": True,
+            "executed": False,
+            "approved_by_user": True,
         },
         {
-            "checkpoint_index": 3, "title": "Third",
+            "checkpoint_index": 3,
+            "title": "Third",
             "planned_action_json": json.dumps({"tools": ["exit_sketch"]}),
             "result_json": "",
-            "executed": False, "approved_by_user": False,
+            "executed": False,
+            "approved_by_user": False,
         },
     ]
     monkeypatch.setattr(
@@ -270,10 +276,14 @@ def test_build_checkpoint_rows_mocked_tools_in_tools_text(monkeypatch) -> None:
     """Mocked tools should appear in the tools text."""
     rows = [
         {
-            "checkpoint_index": 1, "title": "Check",
+            "checkpoint_index": 1,
+            "title": "Check",
             "planned_action_json": json.dumps({"tools": ["check_interference"]}),
-            "result_json": json.dumps({"status": "success", "mocked_tools": ["check_interference"]}),
-            "executed": True, "approved_by_user": True,
+            "result_json": json.dumps(
+                {"status": "success", "mocked_tools": ["check_interference"]}
+            ),
+            "executed": True,
+            "approved_by_user": True,
         }
     ]
     monkeypatch.setattr(
@@ -289,10 +299,12 @@ def test_build_checkpoint_rows_new_design_clean_resets_status(monkeypatch) -> No
     """is_new_design_clean=True and not executed should force 'queued'."""
     rows = [
         {
-            "checkpoint_index": 1, "title": "Step",
+            "checkpoint_index": 1,
+            "title": "Step",
             "planned_action_json": json.dumps({"tools": ["create_sketch"]}),
             "result_json": "",
-            "executed": False, "approved_by_user": True,  # approved but not executed
+            "executed": False,
+            "approved_by_user": True,  # approved but not executed
         }
     ]
     monkeypatch.setattr(
@@ -356,9 +368,7 @@ def test_reconcile_manual_edits_not_enough_snapshots(monkeypatch) -> None:
     monkeypatch.setattr(
         session_service, "list_model_state_snapshots", lambda *_a, **_kw: []
     )
-    monkeypatch.setattr(
-        session_service, "persist_ui_action", lambda *_a, **_kw: None
-    )
+    monkeypatch.setattr(session_service, "persist_ui_action", lambda *_a, **_kw: None)
     monkeypatch.setattr(
         session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
     )
@@ -421,19 +431,19 @@ def test_select_workflow_mode_new_design_resets_state(monkeypatch) -> None:
         lambda *_a, **_kw: {"metadata_json": "{}", "source_mode": "prompt"},
     )
     monkeypatch.setattr(
-        session_service, "upsert_design_session", lambda *_a, **_kw: upsert_calls.append(1)
+        session_service,
+        "upsert_design_session",
+        lambda *_a, **_kw: upsert_calls.append(1),
     )
     monkeypatch.setattr(
-        session_service, "list_plan_checkpoints",
-        lambda *_a, **_kw: [{"id": 1}]
+        session_service, "list_plan_checkpoints", lambda *_a, **_kw: [{"id": 1}]
     )
     monkeypatch.setattr(
-        session_service, "update_plan_checkpoint",
-        lambda _id, **_kw: checkpoint_calls.append(_id)
+        session_service,
+        "update_plan_checkpoint",
+        lambda _id, **_kw: checkpoint_calls.append(_id),
     )
-    monkeypatch.setattr(
-        session_service, "persist_ui_action", lambda *_a, **_kw: None
-    )
+    monkeypatch.setattr(session_service, "persist_ui_action", lambda *_a, **_kw: None)
     monkeypatch.setattr(
         session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
     )
@@ -451,11 +461,11 @@ def test_select_workflow_mode_edit_existing_merges(monkeypatch) -> None:
         lambda *_a, **_kw: {"metadata_json": "{}", "source_mode": "prompt"},
     )
     monkeypatch.setattr(
-        session_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+        session_service,
+        "merge_metadata",
+        lambda *_a, **kw: merge_calls.append(kw) or {},
     )
-    monkeypatch.setattr(
-        session_service, "persist_ui_action", lambda *_a, **_kw: None
-    )
+    monkeypatch.setattr(session_service, "persist_ui_action", lambda *_a, **_kw: None)
     monkeypatch.setattr(
         session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
     )
@@ -480,11 +490,11 @@ def test_update_session_notes(monkeypatch) -> None:
 def test_save_session_context(tmp_path, monkeypatch) -> None:
     """save_session_context should write a JSON file and return state."""
     monkeypatch.setattr(
-        session_service, "build_dashboard_state", lambda *_a, **_kw: {"session_id": "s1"}
+        session_service,
+        "build_dashboard_state",
+        lambda *_a, **_kw: {"session_id": "s1"},
     )
-    monkeypatch.setattr(
-        session_service, "persist_ui_action", lambda *_a, **_kw: None
-    )
+    monkeypatch.setattr(session_service, "persist_ui_action", lambda *_a, **_kw: None)
     result = session_service.save_session_context(
         "s1", context_name="test-save", context_dir=tmp_path
     )
@@ -506,7 +516,9 @@ def test_load_session_context_file_not_found(tmp_path, monkeypatch) -> None:
         "s1", context_file=str(tmp_path / "nonexistent.json")
     )
     assert result == {"ok": True}
-    assert any("not found" in str(kw.get("context_load_status", "")) for kw in merge_calls)
+    assert any(
+        "not found" in str(kw.get("context_load_status", "")) for kw in merge_calls
+    )
 
 
 def test_load_session_context_invalid_json(tmp_path, monkeypatch) -> None:
@@ -522,17 +534,23 @@ def test_load_session_context_invalid_json(tmp_path, monkeypatch) -> None:
     )
     result = session_service.load_session_context("s1", context_file=str(bad_file))
     assert result == {"ok": True}
-    assert any("Context load failed" in str(kw.get("context_load_status", "")) for kw in merge_calls)
+    assert any(
+        "Context load failed" in str(kw.get("context_load_status", ""))
+        for kw in merge_calls
+    )
 
 
 def test_compute_readiness_with_credentials(monkeypatch, tmp_path) -> None:
     """_compute_readiness should show provider_configured=True when token set."""
     monkeypatch.setenv("GITHUB_API_KEY", "tok")
     monkeypatch.setattr(
-        session_service, "load_config",
-        lambda: type("C", (), {"adapter_type": type("A", (), {"value": "mock"})()})()
+        session_service,
+        "load_config",
+        lambda: type("C", (), {"adapter_type": type("A", (), {"value": "mock"})()})(),
     )
     monkeypatch.setattr(session_service, "ensure_preview_dir", lambda: tmp_path)
-    result = session_service._compute_readiness({"model_name": "github:openai/gpt-4.1"}, db_ready=True)
+    result = session_service._compute_readiness(
+        {"model_name": "github:openai/gpt-4.1"}, db_ready=True
+    )
     assert result["readiness_provider_configured"] is True
     assert result["readiness_db_ready"] is True

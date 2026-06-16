@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import base64
-import json
-import os
-from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -364,18 +360,34 @@ def test_trace_session_row_returns_empty_for_none() -> None:
 
 
 def test_trace_tool_records_returns_last_ten() -> None:
-    records = [{"id": i, "tool_name": f"tool_{i}", "success": True,
-                "input_json": None, "output_json": None, "created_at": None}
-               for i in range(15)]
+    records = [
+        {
+            "id": i,
+            "tool_name": f"tool_{i}",
+            "success": True,
+            "input_json": None,
+            "output_json": None,
+            "created_at": None,
+        }
+        for i in range(15)
+    ]
     result = _utils.trace_tool_records(records)
     assert len(result) == 10
     assert result[0]["id"] == 5  # last 10 of 15
 
 
 def test_trace_tool_records_returns_all_when_fewer_than_ten() -> None:
-    records = [{"id": i, "tool_name": f"t{i}", "success": True,
-                "input_json": None, "output_json": None, "created_at": None}
-               for i in range(3)]
+    records = [
+        {
+            "id": i,
+            "tool_name": f"t{i}",
+            "success": True,
+            "input_json": None,
+            "output_json": None,
+            "created_at": None,
+        }
+        for i in range(3)
+    ]
     result = _utils.trace_tool_records(records)
     assert len(result) == 3
 
@@ -525,9 +537,7 @@ def test_normalize_model_name_empty_uses_profile_default() -> None:
 
 
 def test_normalize_model_name_github_without_slash_gets_prefix() -> None:
-    result = _utils.normalize_model_name_for_provider(
-        "gpt-4.1", provider="github"
-    )
+    result = _utils.normalize_model_name_for_provider("gpt-4.1", provider="github")
     assert result.startswith("github:openai/")
 
 
@@ -539,23 +549,17 @@ def test_normalize_model_name_github_with_slash_passes_through() -> None:
 
 
 def test_normalize_model_name_openai_provider() -> None:
-    result = _utils.normalize_model_name_for_provider(
-        "gpt-4o", provider="openai"
-    )
+    result = _utils.normalize_model_name_for_provider("gpt-4o", provider="openai")
     assert result == "openai:gpt-4o"
 
 
 def test_normalize_model_name_anthropic_provider() -> None:
-    result = _utils.normalize_model_name_for_provider(
-        "claude-3", provider="anthropic"
-    )
+    result = _utils.normalize_model_name_for_provider("claude-3", provider="anthropic")
     assert result == "anthropic:claude-3"
 
 
 def test_normalize_model_name_unknown_provider_returns_raw() -> None:
-    result = _utils.normalize_model_name_for_provider(
-        "mymodel", provider="custom"
-    )
+    result = _utils.normalize_model_name_for_provider("mymodel", provider="custom")
     assert result == "mymodel"
 
 
@@ -605,7 +609,10 @@ def test_provider_has_credentials_anthropic(monkeypatch) -> None:
 
 
 def test_provider_has_credentials_local_needs_endpoint() -> None:
-    assert _utils.provider_has_credentials("local:gemma4:e2b", "http://localhost:11434") is True
+    assert (
+        _utils.provider_has_credentials("local:gemma4:e2b", "http://localhost:11434")
+        is True
+    )
     assert _utils.provider_has_credentials("local:gemma4:e2b", None) is False
 
 
@@ -784,6 +791,7 @@ def test_context_file_path_with_context_name(tmp_path: Path) -> None:
 
 def test_html_text_extractor_basic() -> None:
     from solidworks_mcp.ui.services._utils import HTMLTextExtractor
+
     parser = HTMLTextExtractor()
     parser.feed("<html><body><p>Hello World</p></body></html>")
     assert "Hello World" in parser.text()
@@ -791,6 +799,7 @@ def test_html_text_extractor_basic() -> None:
 
 def test_html_text_extractor_skips_script_content() -> None:
     from solidworks_mcp.ui.services._utils import HTMLTextExtractor
+
     parser = HTMLTextExtractor()
     parser.feed("<html><body><script>alert('skip')</script><p>Keep</p></body></html>")
     assert "Keep" in parser.text()
@@ -799,6 +808,7 @@ def test_html_text_extractor_skips_script_content() -> None:
 
 def test_html_text_extractor_handles_nested_skip_tags() -> None:
     from solidworks_mcp.ui.services._utils import HTMLTextExtractor
+
     parser = HTMLTextExtractor()
     parser.feed("<nav><script>js</script></nav><p>Visible</p>")
     assert "Visible" in parser.text()
@@ -886,7 +896,9 @@ def test_materialize_uploaded_model_missing_name_raises() -> None:
 
 def test_materialize_uploaded_model_bad_suffix_raises() -> None:
     with pytest.raises(RuntimeError, match="Unsupported uploaded model type"):
-        _utils.materialize_uploaded_model("sess1", [{"name": "file.txt", "data": "aaa"}])
+        _utils.materialize_uploaded_model(
+            "sess1", [{"name": "file.txt", "data": "aaa"}]
+        )
 
 
 def test_materialize_uploaded_model_missing_data_raises() -> None:
@@ -926,9 +938,7 @@ def test_merge_metadata_creates_and_updates(tmp_path: Path) -> None:
     assert result.get("key1") == "value1"
 
     # Second call - merges additional keys
-    result2 = _utils.merge_metadata(
-        "test-session", db_path=db_path, key2="value2"
-    )
+    result2 = _utils.merge_metadata("test-session", db_path=db_path, key2="value2")
     assert result2.get("key1") == "value1"
     assert result2.get("key2") == "value2"
 

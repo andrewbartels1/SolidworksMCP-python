@@ -27,7 +27,6 @@ from solidworks_mcp.ui.local_llm import (
     run_local_agent,
 )
 
-
 # ---------------------------------------------------------------------------
 # LocalLLMConfig.from_env
 # ---------------------------------------------------------------------------
@@ -245,7 +244,7 @@ async def test_ollama_health_available(monkeypatch: pytest.MonkeyPatch) -> None:
 
         status = 200
 
-        def __enter__(self) -> "_FakeResp":
+        def __enter__(self) -> _FakeResp:
             """Test enter."""
 
             return self
@@ -300,7 +299,7 @@ async def test_ollama_list_models_success(monkeypatch: pytest.MonkeyPatch) -> No
 
             return data
 
-        def __enter__(self) -> "_FakeResp":
+        def __enter__(self) -> _FakeResp:
             """Test enter."""
 
             return self
@@ -455,7 +454,7 @@ async def test_pull_ollama_model_success(monkeypatch: pytest.MonkeyPatch) -> Non
 
             return pull_resp
 
-        def __enter__(self) -> "_FakeResp":
+        def __enter__(self) -> _FakeResp:
             """Test enter."""
 
             return self
@@ -503,7 +502,7 @@ async def test_pull_ollama_model_custom_endpoint(
 
             return pull_resp
 
-        def __enter__(self) -> "_FakeResp":
+        def __enter__(self) -> _FakeResp:
             """Test enter."""
 
             return self
@@ -526,11 +525,10 @@ async def test_pull_ollama_model_custom_endpoint(
 async def test_run_local_agent_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test run local agent success."""
 
-    from pydantic import BaseModel
-
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
+    from pydantic import BaseModel
 
     class _Out(BaseModel):
         """Test out."""
@@ -570,11 +568,10 @@ async def test_run_local_agent_success(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_run_local_agent_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test run local agent exception."""
 
-    from pydantic import BaseModel
-
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
+    from pydantic import BaseModel
 
     class _Out(BaseModel):
         """Test out."""
@@ -612,11 +609,11 @@ async def test_run_local_agent_recoverable_failure(
 ) -> None:
     """Test run local agent recoverable failure."""
 
-    from pydantic import BaseModel
-
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
+    from pydantic import BaseModel
+
     from solidworks_mcp.agents.schemas import RecoverableFailure
 
     class _Out(BaseModel):
@@ -656,11 +653,10 @@ async def test_run_local_agent_recoverable_failure(
 
 async def test_run_local_agent_with_rag_query(monkeypatch: pytest.MonkeyPatch) -> None:
     """RAG augmentation path: injects context into system_prompt."""
-    from pydantic import BaseModel
-
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
+    from pydantic import BaseModel
 
     class _Out(BaseModel):
         """Test out."""
@@ -708,11 +704,10 @@ async def test_run_local_agent_rag_import_error_skipped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """RAG failure is non-fatal; agent still runs normally."""
-    from pydantic import BaseModel
-
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
+    from pydantic import BaseModel
 
     class _Out(BaseModel):
         """Test out."""
@@ -761,11 +756,10 @@ async def test_run_local_agent_rag_other_namespace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Uses query_design_knowledge when namespace != 'solidworks-api-docs'."""
-    from pydantic import BaseModel
-
     import pydantic_ai
     import pydantic_ai.models.openai
     import pydantic_ai.providers.openai
+    from pydantic import BaseModel
 
     class _Out(BaseModel):
         """Test out."""

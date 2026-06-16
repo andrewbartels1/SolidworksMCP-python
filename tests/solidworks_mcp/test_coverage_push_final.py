@@ -10,9 +10,7 @@ Covers:
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -67,11 +65,15 @@ class TestMockAdapterCoveragePush:
         assert "centerline" in (result.error or "").lower()
 
     @pytest.mark.asyncio
-    async def test_check_sketch_fully_defined_unknown_sketch(self, mock_adapter) -> None:
+    async def test_check_sketch_fully_defined_unknown_sketch(
+        self, mock_adapter
+    ) -> None:
         """check_sketch_fully_defined returns ERROR for unknown sketch (lines 1460-1464)."""
         await mock_adapter.connect()
         await mock_adapter.create_part()
-        result = await mock_adapter.check_sketch_fully_defined(sketch_name="NonExistent")
+        result = await mock_adapter.check_sketch_fully_defined(
+            sketch_name="NonExistent"
+        )
         assert not result.is_success
         assert "not found" in (result.error or "").lower()
 
@@ -234,7 +236,7 @@ class TestModelingInputValidation:
     def test_cut_extrude_zero_depth_raises(self) -> None:
         from solidworks_mcp.tools.modeling import CreateCutExtrudeInput
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="depth must be positive"):
             CreateCutExtrudeInput(depth=0.0)
 
     def test_fillet_negative_radius_raises(self) -> None:
@@ -247,7 +249,7 @@ class TestModelingInputValidation:
     def test_fillet_zero_radius_raises(self) -> None:
         from solidworks_mcp.tools.modeling import AddFilletInput
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="radius must be positive"):
             AddFilletInput(radius=0.0)
 
 
@@ -271,7 +273,9 @@ class TestModelingToolSuccessPaths:
         )
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
         tool_fn = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "create_cut_extrude"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_cut_extrude"
         )
         result = await tool_fn(input_data={"depth": 5.0})
         assert result["status"] == "success"
@@ -311,15 +315,15 @@ class TestModelingToolSuccessPaths:
 
         await register_modeling_tools(mcp_server, bad_adapter, mock_config)
         tool_fn = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "create_cut_extrude"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_cut_extrude"
         )
         result = await tool_fn(input_data={"depth": 10.0})
         assert result["status"] == "error"
 
     @pytest.mark.asyncio
-    async def test_add_fillet_exception_path(
-        self, mcp_server, mock_config
-    ) -> None:
+    async def test_add_fillet_exception_path(self, mcp_server, mock_config) -> None:
         """Exception inside add_fillet returns error dict (line ~1100)."""
         from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
         from solidworks_mcp.tools.modeling import register_modeling_tools
@@ -406,12 +410,16 @@ class TestMockAdapterDelayBranches:
         await mock_adapter.connect()
         await mock_adapter.create_part()
         # Do NOT call create_sketch — _current_sketch stays None
-        result = await mock_adapter.add_sketch_constraint("Line_1", "Line_2", "perpendicular")
+        result = await mock_adapter.add_sketch_constraint(
+            "Line_1", "Line_2", "perpendicular"
+        )
         assert not result.is_success
         assert "No active sketch" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_add_sketch_constraint_unsupported_relation(self, mock_adapter) -> None:
+    async def test_add_sketch_constraint_unsupported_relation(
+        self, mock_adapter
+    ) -> None:
         """add_sketch_constraint returns ERROR for unsupported relation type (lines 1367-1368)."""
         await mock_adapter.connect()
         await mock_adapter.create_part()
@@ -435,7 +443,10 @@ class TestMockAdapterDelayBranches:
             line1, None, "symmetric", entity3="anything"
         )
         assert not result.is_success
-        assert "entity2" in (result.error or "").lower() or "requires" in (result.error or "").lower()
+        assert (
+            "entity2" in (result.error or "").lower()
+            or "requires" in (result.error or "").lower()
+        )
 
     @pytest.mark.asyncio
     async def test_add_sketch_constraint_unknown_entity(self, mock_adapter) -> None:

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from solidworks_mcp.utils.feature_tree_classifier import (
-    classify_feature_tree_snapshot,
     _as_lower_text,
     _feature_text,
     _has_any,
     _match_examples,
+    classify_feature_tree_snapshot,
 )
-
 
 # ---------------------------------------------------------------------------
 # Low-level helper tests

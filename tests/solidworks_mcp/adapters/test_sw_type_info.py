@@ -6,8 +6,6 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 
 def test_import_handles_missing_pywin32(monkeypatch) -> None:
     """Import should handle missing win32com gracefully."""

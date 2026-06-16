@@ -220,7 +220,7 @@ def test_list_checkpoints_empty(tmp_path):
 
 
 def test_list_checkpoints_returns_entries(tmp_path):
-    from solidworks_mcp.agents.history_db import init_db, insert_tool_call_record
+    from solidworks_mcp.agents.history_db import init_db
     from solidworks_mcp.agents.soc_rewind import list_checkpoints
 
     db = tmp_path / "test.sqlite3"
@@ -228,6 +228,7 @@ def test_list_checkpoints_returns_entries(tmp_path):
 
     # Insert a SoCCheckpoint via the DB directly
     from sqlmodel import Session
+
     from solidworks_mcp.agents.history_db import SoCCheckpoint, _build_engine
 
     engine = _build_engine(db)

@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
 from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import BaseModel
 
-from solidworks_mcp.ui.routers import local_model as local_model_router
 from solidworks_mcp.ui.local_llm import (
+    GEMMA_TIERS,
     LocalAgentResult,
     LocalLLMConfig,
     LocalModelProbeResult,
     LocalModelPullResult,
-    GEMMA_TIERS,
 )
-
+from solidworks_mcp.ui.routers import local_model as local_model_router
 
 # ---------------------------------------------------------------------------
 # probe_local_model_endpoint
@@ -45,7 +44,9 @@ async def test_probe_endpoint_returns_result(monkeypatch) -> None:
         all_tiers={k: v.label for k, v in GEMMA_TIERS.items()},
     )
 
-    monkeypatch.setattr(llm_mod, "probe_local_model", AsyncMock(return_value=fake_result))
+    monkeypatch.setattr(
+        llm_mod, "probe_local_model", AsyncMock(return_value=fake_result)
+    )
 
     result = await local_model_router.probe_local_model_endpoint()
     assert result.available is True
@@ -109,7 +110,9 @@ async def test_query_endpoint_basic(monkeypatch) -> None:
     class _FreeForm(BaseModel):
         text: str = "ok"
 
-    fake_result = LocalAgentResult(success=True, data=_FreeForm(), config=LocalLLMConfig())
+    fake_result = LocalAgentResult(
+        success=True, data=_FreeForm(), config=LocalLLMConfig()
+    )
     monkeypatch.setattr(llm_mod, "run_local_agent", AsyncMock(return_value=fake_result))
 
     from solidworks_mcp.ui.local_llm import LocalModelQueryRequest

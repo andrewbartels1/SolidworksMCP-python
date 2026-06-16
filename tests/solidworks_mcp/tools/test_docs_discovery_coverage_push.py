@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import os
 import platform
-import time
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from solidworks_mcp.config import (
-    AdapterType,
-    DeploymentMode,
-    SecurityLevel,
     SolidWorksMCPConfig,
 )
 from solidworks_mcp.tools.docs_discovery import (
@@ -26,13 +19,10 @@ from solidworks_mcp.tools.docs_discovery import (
     _enumerate_typeinfo_members,
     _extract_year,
     _fallback_help_for_query,
-    _find_index_file,
-    _load_index_file,
     _normalize_input,
     _resolve_solidworks_year,
     _search_index,
 )
-
 
 # ============================================================================
 # Test: RAG Index Rebuilding Logic (Lines 952-960, 979-981)
@@ -47,8 +37,8 @@ async def test_discover_docs_tool_rag_index_rebuild_success(
     temp_dir: Path,
 ) -> None:
     """RAG index rebuild should succeed when faiss-cpu is available."""
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
     import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -118,8 +108,8 @@ async def test_discover_docs_tool_rag_index_rebuild_faiss_import_error(
     temp_dir: Path,
 ) -> None:
     """RAG rebuild should skip gracefully when faiss-cpu ImportError occurs."""
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
     import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -178,9 +168,14 @@ async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
     monkeypatch: pytest.MonkeyPatch,
     temp_dir: Path,
 ) -> None:
-    """RAG rebuild should warn and continue on generic Exception."""
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+    """RAG rebuild should warn and continue on generic Exception (lines 1052-1053).
+
+    This exercises the ``except Exception as _rag_exc`` branch that fires when
+    ``build_solidworks_api_docs_index`` raises something other than ImportError.
+    """
+    import solidworks_mcp.agents.vector_rag as _rag_mod
     import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
 
     await register_docs_discovery_tools(mcp_server, object(), mock_config)
 
@@ -227,8 +222,16 @@ async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
     monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
+    # Patch build_solidworks_api_docs_index to raise a RuntimeError so the
+    # generic except block (lines 1052-1053) is reached instead of ImportError.
+    monkeypatch.setattr(
+        _rag_mod,
+        "build_solidworks_api_docs_index",
+        MagicMock(side_effect=RuntimeError("disk full")),
+    )
 
     result = await discover_tool({"output_dir": str(temp_dir)})
+    # Despite the RAG failure the discovery itself should still succeed.
     assert result["status"] == "success"
 
 
@@ -598,7 +601,6 @@ def test_detect_installed_solidworks_year_finds_latest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """_detect_installed_solidworks_year should find latest installed year."""
-    years_found = []
 
     def fake_path_exists(self):
         """Check if path exists."""
@@ -732,3 +734,305 @@ def test_extract_year_regex_coverage(input_str: str, expected_year: int | None) 
     """_extract_year should extract years from various formats with word boundaries."""
     result = _extract_year(input_str)
     assert result == expected_year
+
+
+# ============================================================================
+# Test: _enumerate_typeinfo_members — name-is-None and GetTypeAttr-fails paths
+# ============================================================================
+
+
+def test_enumerate_typeinfo_members_skips_none_and_underscore_names() -> None:
+    """_enumerate_typeinfo_members skips entries where name is None or starts with _
+    (docs_discovery.py line 215: continue branch)."""
+    from types import SimpleNamespace
+
+    class _TypeInfoWithNullName:
+        """Mock that returns None for the first entry, then a valid name."""
+
+        def GetTypeAttr(self):
+            return SimpleNamespace(cFuncs=2, cImplTypes=0)
+
+        def GetFuncDesc(self, i):
+            return SimpleNamespace(memid=i, invkind=1)
+
+        def GetNames(self, memid):
+            # First entry returns no names; second returns a name with leading underscore.
+            if memid == 0:
+                return []
+            return ["_InternalMethod"]
+
+    methods, props = _enumerate_typeinfo_members(_TypeInfoWithNullName())
+    # Both entries should be skipped — methods and props stay empty.
+    assert methods == []
+    assert props == []
+
+
+def test_enumerate_typeinfo_members_outer_exception() -> None:
+    """_enumerate_typeinfo_members returns empty lists when GetTypeAttr() raises
+    (docs_discovery.py lines 226-227: outer except block)."""
+
+    class _BrokenTypeInfo:
+        """Raises on GetTypeAttr."""
+
+        def GetTypeAttr(self):
+            raise RuntimeError("no type info")
+
+    methods, props = _enumerate_typeinfo_members(_BrokenTypeInfo())
+    assert methods == []
+    assert props == []
+
+
+# ============================================================================
+# Test: _discover_com_via_typeinfo — impl-type and GetTypeAttr exception paths
+# ============================================================================
+
+
+def test_discover_com_via_typeinfo_impl_type_exception() -> None:
+    """_discover_com_via_typeinfo continues gracefully when GetRefTypeOfImplType raises
+    (docs_discovery.py lines 270-271) and when the outer GetTypeAttr raises (lines 272-273)."""
+    from types import SimpleNamespace
+
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    # First GetTypeAttr (inside _enumerate_typeinfo_members) must succeed.
+    # Second GetTypeAttr (inside _discover_com_via_typeinfo) raises.
+    call_count = {"n": 0}
+
+    class _TypeInfo:
+        def GetTypeAttr(self):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return SimpleNamespace(cFuncs=1, cImplTypes=1)
+            # Second call raises — triggers outer except (lines 272-273).
+            raise RuntimeError("type attr unavailable")
+
+        def GetFuncDesc(self, i):
+            return SimpleNamespace(memid=i, invkind=1)
+
+        def GetNames(self, memid):
+            return ["CreatePart"]
+
+    class _FakeSWApp:
+        class _OleObj:
+            def GetTypeInfo(self_inner):  # noqa: N805
+                return _TypeInfo()
+
+        _oleobj_ = _OleObj()
+
+    with patch.object(docs_mod, "HAS_WIN32COM", True):
+        result = docs_mod._discover_com_via_typeinfo(_FakeSWApp())
+
+    com_dict, m_count, p_count = result
+    # CreatePart should appear as a method despite the outer exception.
+    assert "ISldWorks" in com_dict
+    assert "CreatePart" in com_dict["ISldWorks"]["methods"]
+
+
+def test_discover_com_via_typeinfo_impl_type_ref_exception() -> None:
+    """_discover_com_via_typeinfo skips impl interfaces when GetRefTypeOfImplType raises
+    (docs_discovery.py lines 270-271: inner continue branch)."""
+    from types import SimpleNamespace
+
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    class _TypeInfo:
+        def GetTypeAttr(self):
+            return SimpleNamespace(cFuncs=1, cImplTypes=1)
+
+        def GetFuncDesc(self, i):
+            return SimpleNamespace(memid=i, invkind=1)
+
+        def GetNames(self, memid):
+            return ["SaveFile"]
+
+        def GetRefTypeOfImplType(self, impl_idx):
+            raise RuntimeError("COM interface unavailable")
+
+    class _FakeSWApp:
+        class _OleObj:
+            def GetTypeInfo(self_inner):  # noqa: N805
+                return _TypeInfo()
+
+        _oleobj_ = _OleObj()
+
+    with patch.object(docs_mod, "HAS_WIN32COM", True):
+        result = docs_mod._discover_com_via_typeinfo(_FakeSWApp())
+
+    com_dict, m_count, p_count = result
+    # The impl type is skipped but the primary method is still registered.
+    assert "SaveFile" in com_dict["ISldWorks"]["methods"]
+
+
+# ============================================================================
+# Test: _discover_vba_references_via_registry — registry exception paths
+# ============================================================================
+
+
+def test_discover_vba_references_typelib_key_open_fails() -> None:
+    """Returns empty dict when HKEY_CLASSES_ROOT\\TypeLib cannot be opened
+    (docs_discovery.py lines 370-371)."""
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("winreg only on Windows")
+
+    import winreg
+
+    with patch.object(winreg, "OpenKey", side_effect=OSError("access denied")):
+        refs = _discover_vba_references_via_registry()
+
+    assert refs == {}
+
+
+def test_discover_vba_references_guid_key_open_fails() -> None:
+    """Continues enumeration when individual GUID key cannot be opened
+    (docs_discovery.py lines 367-368)."""
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("winreg only on Windows")
+
+    import winreg
+
+    call_count = {"n": 0}
+
+    def _open_key_side_effect(root, sub_key, *args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            # First call (typelib_key) must succeed but return a mock.
+            return MagicMock()
+        raise OSError("no such guid key")
+
+    enum_call = {"n": 0}
+
+    def _enum_key_once(key, idx):
+        # Return one GUID then raise to break the while-True loop.
+        # Without raising, EnumKey always returns and the loop never exits.
+        enum_call["n"] += 1
+        if enum_call["n"] == 1:
+            return "{00000000-0000-0000-0000-000000000000}"
+        raise OSError("no more keys")
+
+    with (
+        patch.object(winreg, "OpenKey", side_effect=_open_key_side_effect),
+        patch.object(winreg, "EnumKey", side_effect=_enum_key_once),
+        patch.object(winreg, "CloseKey"),
+    ):
+        refs = _discover_vba_references_via_registry()
+
+    assert isinstance(refs, dict)
+
+
+def test_discover_vba_references_version_key_open_fails() -> None:
+    """Continues enumeration when version key cannot be opened
+    (docs_discovery.py lines 364-365)."""
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("winreg only on Windows")
+
+    import winreg
+
+    call_count = {"n": 0}
+
+    def _open_key_side_effect(root, sub_key, *args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return MagicMock()  # typelib_key
+        if call_count["n"] == 2:
+            return MagicMock()  # guid_key
+        # Third call (version key) fails.
+        raise OSError("version key missing")
+
+    enum_call = {"n": 0}
+
+    def _enum_key_side_effect(key, idx):
+        # First EnumKey (GUID level) returns a GUID.
+        # Second EnumKey (version level) returns a version then raises.
+        enum_call["n"] += 1
+        if enum_call["n"] == 1:
+            return "{DEADBEEF-0000-0000-0000-000000000000}"
+        if enum_call["n"] == 2:
+            return "1.0"
+        raise OSError("no more keys")
+
+    with (
+        patch.object(winreg, "OpenKey", side_effect=_open_key_side_effect),
+        patch.object(winreg, "EnumKey", side_effect=_enum_key_side_effect),
+        patch.object(winreg, "CloseKey"),
+    ):
+        refs = _discover_vba_references_via_registry()
+
+    assert isinstance(refs, dict)
+
+
+# ============================================================================
+# Test: SolidWorksDocsDiscovery.index_com — typeinfo path exception (line 472-473)
+# ============================================================================
+
+
+def test_discover_com_objects_typeinfo_exception_is_logged() -> None:
+    """discover_com_objects logs and continues when _discover_com_via_typeinfo raises
+    (docs_discovery.py lines 472-473)."""
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    discovery = SolidWorksDocsDiscovery()
+    discovery.sw_app = MagicMock()  # fake connected app
+
+    with (
+        patch.object(docs_mod, "HAS_WIN32COM", True),
+        patch.object(
+            docs_mod,
+            "_discover_com_via_typeinfo",
+            side_effect=RuntimeError("COM explosion"),
+        ),
+    ):
+        result = discovery.discover_com_objects()
+
+    # Despite the exception, discover_com_objects should return a dict (not raise).
+    assert isinstance(result, dict)
+
+
+# ============================================================================
+# Test: SolidWorksDocsDiscovery.discover_vba_references — empty refs (line 543)
+# ============================================================================
+
+
+def test_discover_vba_references_empty_result_logs_debug() -> None:
+    """discover_vba_references logs at DEBUG level when no refs are found
+    (docs_discovery.py line 543)."""
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    discovery = SolidWorksDocsDiscovery()
+
+    with patch.object(
+        docs_mod, "_discover_vba_references_via_registry", return_value={}
+    ):
+        refs = discovery.discover_vba_references()
+
+    assert refs == {}
+
+
+# ============================================================================
+# Test: _detect_installed_solidworks_year — OSError on iterdir (lines 725-727)
+# ============================================================================
+
+
+def test_detect_installed_solidworks_year_oserror_on_iterdir(tmp_path) -> None:
+    """_detect_installed_solidworks_year returns None when iterdir raises OSError
+    (docs_discovery.py lines 725-727)."""
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    # We test the real implementation directly — no mock needed here.
+    pass
+
+    # Patch the root path to exist but iterdir() raises OSError.
+    from pathlib import Path
+
+    real_func = docs_mod._detect_installed_solidworks_year
+
+    with patch.object(Path, "exists", return_value=True):
+        with patch.object(Path, "iterdir", side_effect=OSError("permission denied")):
+            result = real_func()
+
+    assert result is None

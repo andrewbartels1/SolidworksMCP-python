@@ -117,7 +117,9 @@ async def test_accept_family_calls_service(monkeypatch) -> None:
 async def test_reconcile_edits_calls_service(monkeypatch) -> None:
     """reconcile_edits should call reconcile_manual_edits."""
     monkeypatch.setattr(
-        session_router, "reconcile_manual_edits", lambda *_a, **_kw: {"reconciled": True}
+        session_router,
+        "reconcile_manual_edits",
+        lambda *_a, **_kw: {"reconciled": True},
     )
     payload = session_router.SessionRequest(session_id="s1")
     result = await session_router.reconcile_edits(payload)
