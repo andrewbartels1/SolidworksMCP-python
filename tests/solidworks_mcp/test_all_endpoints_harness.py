@@ -443,6 +443,10 @@ _SMOKE_PAYLOADS: dict[str, dict[str, Any]] = {
     "load_assembly": {"file_path": "C:\\Temp\\asm.sldasm"},
     "save_part": {},
     "save_assembly": {},
+    "pack_and_go_assembly": {
+        "source_path": "C:\\Temp\\robot_arm.sldasm",
+        "target_dir": "C:\\Temp\\robot_arm_pkg",
+    },
     # Automation
     "generate_vba_code": {"code_type": "extrusion"},
     "start_macro_recording": {"macro_name": "smoke_macro"},
