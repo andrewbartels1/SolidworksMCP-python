@@ -14,6 +14,7 @@ from .schemas import RecoverableFailure
 
 try:
     from pydantic_ai import Agent
+
     IMPORT_ERROR: ImportError | None = None
 except ImportError as exc:  # pragma: no cover
     Agent = None  # type: ignore[assignment, misc]

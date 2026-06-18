@@ -1401,7 +1401,9 @@ async def register_file_management_tools(
                 )
                 if validation_error is not None:
                     return validation_error
-                assert file_path is not None  # validation_error being None implies file_path is valid
+                assert (
+                    file_path is not None
+                )  # validation_error being None implies file_path is valid
 
                 if input_data.include_references:
                     native_result, native_error = _native_pack_and_go(file_path)

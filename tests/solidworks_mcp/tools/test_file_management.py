@@ -1388,7 +1388,9 @@ class TestFileManagementTools:
         # inside _native_pack_and_go succeeds but Dispatch itself raises RuntimeError.
         _fake_w32 = MagicMock()
         _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
+        with patch.dict(
+            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
+        ):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_asm_path),
@@ -1432,7 +1434,9 @@ class TestFileManagementTools:
         target_dir.mkdir(parents=True, exist_ok=True)
         _fake_w32 = MagicMock()
         _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
+        with patch.dict(
+            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
+        ):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_dir / "crash_copy.sldasm"),
@@ -1465,7 +1469,9 @@ class TestFileManagementTools:
         target_dir.mkdir(parents=True, exist_ok=True)
         _fake_w32 = MagicMock()
         _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
+        with patch.dict(
+            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
+        ):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_dir / "copy.sldasm"),
@@ -1506,7 +1512,9 @@ class TestFileManagementTools:
         # missing-GetDependencies2 branch.
         _fake_w32 = MagicMock()
         _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}):
+        with patch.dict(
+            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
+        ):
             result = await save_assembly_tool(
                 input_data={
                     "file_path": str(target_dir / "copy.sldasm"),

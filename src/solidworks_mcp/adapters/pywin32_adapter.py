@@ -1216,7 +1216,8 @@ class _FeatureSelectionService:
         # Flag the feature dispatch so methods like GetNextFeature work
         if feature is not None:
             self._adapter._attempt(
-                lambda f=feature: sw_type_info.flag_methods(f, "IFeature"), default=0  # type: ignore[misc]
+                lambda f=feature: sw_type_info.flag_methods(f, "IFeature"),
+                default=0,  # type: ignore[misc]
             )
         pos = 0
         guard = 0
@@ -1242,7 +1243,8 @@ class _FeatureSelectionService:
 
         feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
         count = self._adapter._attempt(
-            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0  # type: ignore[union-attr]
+            lambda: int(feature_manager.GetFeatureCount(True) or 0),
+            default=0,  # type: ignore[union-attr]
         )
         for reverse_pos in range(1, (count or 0) + 1):
             feature = self._adapter._attempt(

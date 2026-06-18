@@ -43,7 +43,9 @@ class SolidWorksSelectionMixin:
     ) -> list[str]:
         return cast(
             list[str],
-            self._feature_selector.build_feature_candidate_names(feature_name, target_doc),
+            self._feature_selector.build_feature_candidate_names(
+                feature_name, target_doc
+            ),
         )
 
     def _try_select_by_extension(
