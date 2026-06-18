@@ -161,7 +161,7 @@ class AdapterFactory:
         if adapter_type != AdapterType.MOCK and config.enable_connection_pooling:
             adapter = self._wrap_with_connection_pool(adapter, config)
 
-        return adapter  # type: ignore[return-value]
+        return adapter
 
     def _determine_adapter_type(self, config: SolidWorksMCPConfig) -> AdapterType:
         """Determine optimal adapter type based on environment and config.

@@ -3,6 +3,8 @@
 This module provides all the MCP tools for SolidWorks automation, organized by category.
 """
 
+from typing import Any
+
 from fastmcp import FastMCP
 from loguru import logger
 
@@ -20,7 +22,7 @@ from .template_management import register_template_management_tools
 from .vba_generation import register_vba_generation_tools
 
 
-async def register_tools(mcp: FastMCP, adapter, config) -> int:
+async def register_tools(mcp: FastMCP, adapter: Any, config: Any) -> int:
     """Register all SolidWorks MCP tools.
 
     Args:

@@ -23,8 +23,8 @@ except ImportError:  # pragma: no cover
     win32com = SimpleNamespace(client=SimpleNamespace())
 
 try:
-    import comtypes
-    import comtypes.client as _comtypes_client
+    import comtypes  # type: ignore[import-untyped]
+    import comtypes.client as _comtypes_client  # type: ignore[import-untyped]
 
     _COMTYPES_AVAILABLE = True
 except ImportError:  # pragma: no cover

@@ -87,7 +87,7 @@ class SolidWorksMCPServer:
         self.config = config
         self.state = MCPServerState(config=config)
         self.mcp = FastMCP("SolidWorks MCP Server")
-        self.server = None
+        self.server: FastMCP | None = None
         self._setup_complete = False
         self._db_logging_enabled = self._env_truthy(
             os.getenv("SOLIDWORKS_MCP_DB_LOGGING", "0")
@@ -285,7 +285,7 @@ class SolidWorksMCPServer:
                     payload = None
 
                 if self._router is None:
-                    return await _com_callable(*call_args, **call_kwargs)
+                    return await _com_callable(*call_args, **call_kwargs)  # type: ignore[no-any-return]
 
                 result, _ = await self._router.execute(
                     operation=_operation_name,
@@ -453,11 +453,11 @@ class SolidWorksMCPServer:
         Returns:
             None: None.
         """
-        run_result = self.mcp.run(
+        run_result = self.mcp.run(  # type: ignore[func-returns-value]
             transport="http", host=self.config.host, port=self.config.port
         )
         if inspect.isawaitable(run_result):
-            await run_result
+            await run_result  # type: ignore[unreachable]
 
     async def stop(self) -> None:
         """Gracefully stop the server.

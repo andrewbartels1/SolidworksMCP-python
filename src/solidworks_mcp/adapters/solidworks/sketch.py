@@ -425,7 +425,7 @@ def _add_line_impl(
         )
         if not line:
             raise Exception("Failed to create line")
-        return adapter._register_sketch_entity("Line", line)
+        return adapter._register_sketch_entity("Line", line)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_line", _line_operation)
@@ -475,7 +475,7 @@ def _add_circle_impl(
         )
         if not circle:
             raise Exception("Failed to create circle")
-        return adapter._register_sketch_entity("Circle", circle)
+        return adapter._register_sketch_entity("Circle", circle)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str],
@@ -613,7 +613,7 @@ def _add_arc_impl(
         )
         if not arc:
             raise Exception("Failed to create arc")
-        return adapter._register_sketch_entity("Arc", arc)
+        return adapter._register_sketch_entity("Arc", arc)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_arc", _arc_operation)
@@ -1369,7 +1369,7 @@ def _add_sketch_dimension_impl(
                     if hasattr(dim_obj, "SystemValue"):
                         dim_obj.SystemValue = value_si
 
-        return adapter._register_sketch_entity("Dimension", display_dim)
+        return adapter._register_sketch_entity("Dimension", display_dim)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str],

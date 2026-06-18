@@ -1242,11 +1242,11 @@ class _FeatureSelectionService:
 
         feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
         count = self._adapter._attempt(
-            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0  # type: ignore[misc, union-attr]
+            lambda: int(feature_manager.GetFeatureCount(True) or 0), default=0  # type: ignore[union-attr]
         )
         for reverse_pos in range(1, (count or 0) + 1):
             feature = self._adapter._attempt(
-                lambda pos=reverse_pos: (
+                lambda pos=reverse_pos: (  # type: ignore[misc]
                     self._adapter.currentModel.FeatureByPositionReverse(pos)  # type: ignore[union-attr]
                 )
             )

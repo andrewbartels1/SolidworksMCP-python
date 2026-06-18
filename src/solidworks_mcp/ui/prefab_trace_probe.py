@@ -314,8 +314,8 @@ with PrefabApp(
                                             variant="outline",
                                             on_click=OpenFilePicker(
                                                 accept=".sldprt,.sldasm,.slddrw",
-                                                max_size=500 * 1024 * 1024,
-                                                on_success=[
+                                                maxSize=500 * 1024 * 1024,
+                                                onSuccess=[
                                                     SetState(
                                                         "last_picker_event", EVENT
                                                     ),
@@ -341,7 +341,7 @@ with PrefabApp(
                                                         ),
                                                     ),
                                                 ],
-                                                on_error=[
+                                                onError=[
                                                     SetState(
                                                         "checklist_result",
                                                         "File picker failed before upload. Check size/type and browser permissions.",

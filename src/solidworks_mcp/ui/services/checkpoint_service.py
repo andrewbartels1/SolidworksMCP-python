@@ -814,10 +814,10 @@ async def _execute_tool(
 
     if tool == "check_sketch_fully_defined":
         payload = (tool_payloads or [{}])[0]
-        sketch_name: str | None = {**ctx, **payload}.get("sketch_name")
+        check_sketch_name: str | None = {**ctx, **payload}.get("sketch_name")
         _ok(
             await adapter.check_sketch_fully_defined(
-                str(sketch_name) if sketch_name else None
+                str(check_sketch_name) if check_sketch_name else None
             ),
             "check_sketch_fully_defined",
         )

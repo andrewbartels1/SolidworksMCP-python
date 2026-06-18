@@ -14,11 +14,10 @@ from .schemas import RecoverableFailure
 
 try:
     from pydantic_ai import Agent
+    IMPORT_ERROR: ImportError | None = None
 except ImportError as exc:  # pragma: no cover
-    Agent = None
+    Agent = None  # type: ignore[assignment, misc]
     IMPORT_ERROR = exc
-else:
-    IMPORT_ERROR = None
 
 
 TModel = TypeVar("TModel", bound=BaseModel)
