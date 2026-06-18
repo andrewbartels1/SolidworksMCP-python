@@ -12,7 +12,7 @@ from solidworks_mcp.adapters.solidworks import sketch
 class _FakeSwApp:
     """Minimal swApp stand-in; ActiveDoc proxies the adapter's currentModel."""
 
-    def __init__(self, adapter: "_FakeSketchAdapter") -> None:
+    def __init__(self, adapter: _FakeSketchAdapter) -> None:
         self._adapter = adapter
 
     @property
@@ -248,12 +248,34 @@ def test_spline_error_when_no_sketch_manager() -> None:
 
 def test_spline_error_when_too_few_points() -> None:
     adapter = _FakeSketchAdapter()
-    adapter.currentSketchManager = SimpleNamespace(
-        CreateSpline2=lambda *args: object()
-    )
+    adapter.currentSketchManager = SimpleNamespace(CreateSpline2=lambda *args: object())
     result = sketch._add_spline_impl(adapter, [{"x": 0.0, "y": 0.0}])
     assert result.status == AdapterResultStatus.ERROR
     assert "at least 2 points" in (result.error or "")
+
+
+def test_spline_uses_segments_fallback_when_current_sketch_present() -> None:
+    """When currentSketch is set and GetSketchSegments returns segments, the last
+    segment is registered instead of the raw spline IDispatch (sketch.py:706)."""
+    adapter = _FakeSketchAdapter()
+    sentinel_segment = object()
+
+    adapter.currentSketchManager = SimpleNamespace(
+        CreateSpline2=lambda *args: object()  # returns a truthy spline object
+    )
+    fake_sketch = SimpleNamespace(
+        GetSketchSegments=lambda: [sentinel_segment],
+    )
+    adapter.currentSketch = fake_sketch
+
+    result = sketch._add_spline_impl(
+        adapter, [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}]
+    )
+    assert result.is_success
+    # The registered entity must be the sentinel segment, not the raw spline.
+    entity_id = result.data
+    assert entity_id.startswith("Spline_")
+    assert adapter._sketch_entities[entity_id] is sentinel_segment
 
 
 def _make_pattern_adapter() -> tuple[_FakeSketchAdapter, Mock, Mock, Mock, Mock]:
@@ -294,13 +316,9 @@ def test_sketch_linear_pattern_calls_com_with_converted_args() -> None:
     calls ``CreateLinearSketchStepAndRepeat`` with mm-to-m and
     direction-vector-to-radian conversions.
     """
-    adapter, create_pattern, clear_selection, seed_entity, _ = (
-        _make_pattern_adapter()
-    )
+    adapter, create_pattern, clear_selection, seed_entity, _ = _make_pattern_adapter()
 
-    result = sketch._sketch_linear_pattern_impl(
-        adapter, ["Line_1"], 1, 0, 5.0, 3
-    )
+    result = sketch._sketch_linear_pattern_impl(adapter, ["Line_1"], 1, 0, 5.0, 3)
 
     assert result.is_success
     assert result.data.startswith("LinearPattern_3x5.0_")
@@ -328,21 +346,15 @@ def test_sketch_linear_pattern_validates_inputs() -> None:
         == AdapterResultStatus.ERROR
     )
     assert (
-        sketch._sketch_linear_pattern_impl(
-            adapter, ["Line_1"], 1, 0, 5.0, 1
-        ).status
+        sketch._sketch_linear_pattern_impl(adapter, ["Line_1"], 1, 0, 5.0, 1).status
         == AdapterResultStatus.ERROR
     )
     assert (
-        sketch._sketch_linear_pattern_impl(
-            adapter, ["Line_1"], 1, 0, 0.0, 3
-        ).status
+        sketch._sketch_linear_pattern_impl(adapter, ["Line_1"], 1, 0, 0.0, 3).status
         == AdapterResultStatus.ERROR
     )
     assert (
-        sketch._sketch_linear_pattern_impl(
-            adapter, ["Line_1"], 0, 0, 5.0, 3
-        ).status
+        sketch._sketch_linear_pattern_impl(adapter, ["Line_1"], 0, 0, 5.0, 3).status
         == AdapterResultStatus.ERROR
     )
 
@@ -352,9 +364,7 @@ def test_sketch_linear_pattern_unknown_entity_does_not_mutate_selection() -> Non
     does not leave SW with a half-built selection state."""
     adapter, _, clear_selection, _, _ = _make_pattern_adapter()
 
-    result = sketch._sketch_linear_pattern_impl(
-        adapter, ["Line_NOPE"], 1, 0, 5.0, 3
-    )
+    result = sketch._sketch_linear_pattern_impl(adapter, ["Line_NOPE"], 1, 0, 5.0, 3)
 
     assert result.status == AdapterResultStatus.ERROR
     assert "Unknown sketch entity 'Line_NOPE'" in (result.error or "")
@@ -367,9 +377,7 @@ def test_sketch_linear_pattern_clears_selection_on_com_failure() -> None:
     adapter, create_pattern, clear_selection, _, _ = _make_pattern_adapter()
     create_pattern.return_value = False
 
-    result = sketch._sketch_linear_pattern_impl(
-        adapter, ["Line_1"], 1, 0, 5.0, 3
-    )
+    result = sketch._sketch_linear_pattern_impl(adapter, ["Line_1"], 1, 0, 5.0, 3)
 
     assert result.status == AdapterResultStatus.ERROR
     # ClearSelection2 must run both before selecting and after the failure.
@@ -699,9 +707,7 @@ def test_exit_sketch_sw_active_but_adapter_state_empty() -> None:
     assert adapter.currentSketchManager is None  # the divergent state
 
     result = sketch._exit_sketch_impl(adapter)
-    assert result.status == AdapterResultStatus.SUCCESS, (
-        f"unexpected: {result.error}"
-    )
+    assert result.status == AdapterResultStatus.SUCCESS, f"unexpected: {result.error}"
     sketch_manager.InsertSketch.assert_called_once_with(True)
     # Adapter state stays clean afterwards.
     assert adapter.currentSketchManager is None

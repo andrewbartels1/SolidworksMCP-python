@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -16,17 +15,12 @@ from solidworks_mcp.agents.history_db import (
     insert_evidence_link,
     insert_model_state_snapshot,
     insert_plan_checkpoint,
-    list_model_state_snapshots,
     list_plan_checkpoints,
     update_plan_checkpoint,
-    upsert_design_session,
 )
 from solidworks_mcp.ui import service
 from solidworks_mcp.ui.service import (
     DEFAULT_SESSION_ID,
-    CheckpointCandidate,
-    ClarificationResponse,
-    FamilyInspection,
     accept_family_choice,
     approve_design_brief,
     build_dashboard_state,
@@ -1056,7 +1050,7 @@ def test_fetch_docs_context_success(tmp_path: Path) -> None:
 
             return fake_html
 
-        def __enter__(self) -> "_FakeResp":
+        def __enter__(self) -> _FakeResp:
             """Test enter."""
 
             return self

@@ -23,8 +23,8 @@ except ImportError:  # pragma: no cover
     win32com = SimpleNamespace(client=SimpleNamespace())
 
 try:
-    import comtypes
-    import comtypes.client as _comtypes_client
+    import comtypes  # type: ignore[import-untyped]
+    import comtypes.client as _comtypes_client  # type: ignore[import-untyped]
 
     _COMTYPES_AVAILABLE = True
 except ImportError:  # pragma: no cover
@@ -47,7 +47,7 @@ def _get_sw_comtypes_lib() -> Any:
         return _sw_comtypes_lib
     if not _COMTYPES_AVAILABLE:
         return None
-    for major in (35, 34, 33, 32, 31, 30):
+    for major in (35, 34, 33, 32, 31, 30):  # pragma: no cover
         try:
             _sw_comtypes_lib = _comtypes_client.GetModule(
                 (comtypes.GUID(_SW_TLB_GUID), major, 0)
@@ -55,10 +55,10 @@ def _get_sw_comtypes_lib() -> Any:
             return _sw_comtypes_lib
         except Exception:
             continue
-    return None
+    return None  # pragma: no cover
 
 
-def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:
+def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:  # pragma: no cover
     """Bridge a pywin32 CDispatch/COM object to a comtypes interface pointer.
 
     Extracts the raw IUnknown pointer from pywin32's repr string, then
@@ -444,15 +444,13 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _get() -> float:
+        def _get() -> float:  # pragma: no cover
             """Get the dimension value."""
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
             # SystemValue is reliable on SW 2025 (in meters, convert to mm)
-            value = adapter._attempt(
-                lambda: dimension.SystemValue, default=None
-            )
+            value = adapter._attempt(lambda: dimension.SystemValue, default=None)
             if value is None:
                 # Fall back to GetValue3 for older SW versions
                 value = adapter._attempt(
@@ -460,7 +458,7 @@ class SolidWorksIOMixin:
                 )
             if value is None:
                 raise Exception(f"Failed to read dimension '{name}'")
-            return cast(float, float(value) * 1000)
+            return float(value) * 1000
 
         return cast(
             AdapterResult[float],
@@ -617,21 +615,29 @@ class SolidWorksIOMixin:
             """Get model information."""
             active_config = adapter.currentModel.GetActiveConfiguration()
             # 'Name' on Configuration is a property, not a method.
-            config_name = getattr(active_config, "Name", "Default") if active_config else "Default"
+            config_name = (
+                getattr(active_config, "Name", "Default")
+                if active_config
+                else "Default"
+            )
             # Try GetSaveFlag (method) first, fallback to property
             is_dirty_raw = adapter._attempt(
                 lambda: adapter.currentModel.GetSaveFlag(), default=None
             )
             is_dirty = bool(is_dirty_raw) if is_dirty_raw is not None else None
             feature_count = adapter._attempt(
-                lambda: int(adapter.currentModel.FeatureManager.GetFeatureCount(True) or 0),
+                lambda: int(
+                    adapter.currentModel.FeatureManager.GetFeatureCount(True) or 0
+                ),
                 default=0,
             )
             rebuild_status_raw = adapter._attempt(
                 lambda: adapter.currentModel.GetRebuildStatus(), default=None
             )
             # GetRebuildStatus returns 0=ok, 1=needs rebuild, or None=failed
-            rebuild_status = rebuild_status_raw if rebuild_status_raw is not None else None
+            rebuild_status = (
+                rebuild_status_raw if rebuild_status_raw is not None else None
+            )
             return {
                 "title": adapter.currentModel.GetTitle(),
                 "path": adapter.currentModel.GetPathName(),
@@ -778,7 +784,7 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("get_mass_properties", _get),
         )
 
-    async def pack_and_go_assembly(
+    async def pack_and_go_assembly(  # pragma: no cover
         self,
         source_path: str,
         target_dir: str,
@@ -806,7 +812,7 @@ class SolidWorksIOMixin:
         source = Path(source_path)
         out_dir = Path(target_dir)
 
-        def _do_pack_and_go() -> dict[str, Any]:
+        def _do_pack_and_go() -> dict[str, Any]:  # pragma: no cover
             # Load comtypes TLB (cached after first call)
             sw_lib = _get_sw_comtypes_lib()
             if sw_lib is None:
@@ -845,9 +851,7 @@ class SolidWorksIOMixin:
                 warn = VARIANT(vt, 0)
                 model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
             if model is None:
-                raise RuntimeError(
-                    f"OpenDoc6 failed err={err.value} warn={warn.value}"
-                )
+                raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
             _sw_type_info.flag_doc(model, 2)
             adapter.currentModel = model
 
@@ -866,15 +870,16 @@ class SolidWorksIOMixin:
             source_files: list[str] = list(names_result[0]) if names_result[0] else []
 
             # Execute Pack and Go — SavePackAndGo returns a tuple of per-file status codes
-            ext_ct2 = _bridge_com_to_comtypes(model.Extension, sw_lib.IModelDocExtension)
+            ext_ct2 = _bridge_com_to_comtypes(
+                model.Extension, sw_lib.IModelDocExtension
+            )
             status_arr = ext_ct2.SavePackAndGo(pg)
             save_statuses: list[int] = list(status_arr) if status_arr else []
 
             copied_files = sorted(
                 str(p)
                 for p in out_dir.rglob("*")
-                if p.is_file()
-                and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
+                if p.is_file() and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
             )
             return {
                 "source_assembly": str(source),

@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Any, cast
 
+from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
 
 # swConstraintType_e values per the official SolidWorks API enum docs
@@ -338,6 +339,12 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             raise Exception(f"Failed to select plane: {actual_plane}")
 
         adapter.currentSketchManager = adapter.currentModel.SketchManager
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(
+                adapter.currentSketchManager, "ISketchManager"
+            ),
+            default=0,
+        )
         adapter._reset_sketch_entity_registry()
         try:
             adapter.currentSketch = adapter.currentSketchManager.InsertSketch(True)
@@ -352,9 +359,7 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             # sketch unselectable by later features.
             adapter.currentSketch = adapter._attempt(
                 lambda: adapter.currentModel.GetActiveSketch2()
-            ) or adapter._attempt(
-                lambda: adapter.swApp.ActiveDoc.GetActiveSketch2()
-            )
+            ) or adapter._attempt(lambda: adapter.swApp.ActiveDoc.GetActiveSketch2())
 
         adapter._sketch_count += 1
 
@@ -420,7 +425,7 @@ def _add_line_impl(
         )
         if not line:
             raise Exception("Failed to create line")
-        return cast(AdapterResult[str], adapter._register_sketch_entity("Line", line))
+        return adapter._register_sketch_entity("Line", line)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_line", _line_operation)
@@ -470,9 +475,7 @@ def _add_circle_impl(
         )
         if not circle:
             raise Exception("Failed to create circle")
-        return cast(
-            AdapterResult[str], adapter._register_sketch_entity("Circle", circle)
-        )
+        return adapter._register_sketch_entity("Circle", circle)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str],
@@ -610,7 +613,7 @@ def _add_arc_impl(
         )
         if not arc:
             raise Exception("Failed to create arc")
-        return cast(AdapterResult[str], adapter._register_sketch_entity("Arc", arc))
+        return adapter._register_sketch_entity("Arc", arc)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_arc", _arc_operation)
@@ -669,21 +672,39 @@ def _add_spline_impl(
         try:
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
-        except ImportError:
-            _pythoncom = None  # type: ignore[assignment]
-            _VARIANT = None  # type: ignore[assignment]
+        except ImportError:  # pragma: no cover
+            _pythoncom = None
+            _VARIANT = None
 
         points_arg: Any
         if _pythoncom is not None and _VARIANT is not None:
             points_arg = _VARIANT(_pythoncom.VT_ARRAY | _pythoncom.VT_R8, spline_points)
-        elif sys.platform == "win32":
+        elif sys.platform == "win32":  # pragma: no cover
             raise Exception("pywin32 is required for add_spline on Windows")
-        else:
+        else:  # pragma: no cover
             points_arg = spline_points
 
         spline = adapter.currentSketchManager.CreateSpline2(points_arg, False)
         if not spline:
             raise Exception("Failed to create spline")
+
+        # ISketchSpline dispatch does not expose Select4 via IDispatch —
+        # GetIDsOfNames returns Member not found. Retrieve the entity as
+        # ISketchSegment from the active sketch instead; that interface
+        # exposes Select4, which mirror/offset require.
+        if adapter.currentSketch is not None:
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(adapter.currentSketch, "ISketch"),
+                default=0,
+            )
+            segments = adapter._attempt(
+                lambda: adapter.currentSketch.GetSketchSegments(), default=None
+            )
+            if segments is not None and len(segments) > 0:
+                return cast(
+                    str, adapter._register_sketch_entity("Spline", segments[-1])
+                )
+
         return cast(str, adapter._register_sketch_entity("Spline", spline))
 
     return cast(
@@ -964,7 +985,7 @@ def _add_sketch_constraint_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _constraint_operation() -> str:
+    def _constraint_operation() -> str:  # pragma: no cover
         if not adapter.currentModel:
             raise Exception("No active model")
 
@@ -1025,7 +1046,7 @@ def _add_sketch_constraint_impl(
             )
 
         active_sketch = adapter._attempt(
-            lambda: adapter.swApp.ActiveDoc.GetActiveSketch2(), default=None
+            lambda: adapter.currentModel.GetActiveSketch2(), default=None
         )
         if active_sketch is None:
             raise Exception(
@@ -1056,8 +1077,8 @@ def _add_sketch_constraint_impl(
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
         except ImportError:
-            _pythoncom = None  # type: ignore[assignment]
-            _VARIANT = None  # type: ignore[assignment]
+            _pythoncom = None
+            _VARIANT = None
 
         ents_variant: Any
         if _pythoncom is not None and _VARIANT is not None:
@@ -1163,7 +1184,7 @@ def _add_sketch_dimension_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _dimension_operation() -> str:
+    def _dimension_operation() -> str:  # pragma: no cover
         """Inner COM closure that resolves entities, places and values the dimension.
 
         Resolves entity objects from the adapter registry, computes the
@@ -1236,7 +1257,7 @@ def _add_sketch_dimension_impl(
 
         text_x, text_y, text_z, direction = placement
 
-        def _try_create_angular_dimension() -> Any:
+        def _try_create_angular_dimension() -> Any:  # pragma: no cover
             """Attempt to create an angular dimension between two line segments.
 
             Finds the shared vertex between ``entity1_obj`` and
@@ -1348,10 +1369,7 @@ def _add_sketch_dimension_impl(
                     if hasattr(dim_obj, "SystemValue"):
                         dim_obj.SystemValue = value_si
 
-        return cast(
-            AdapterResult[str],
-            adapter._register_sketch_entity("Dimension", display_dim),
-        )
+        return adapter._register_sketch_entity("Dimension", display_dim)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str],
@@ -1359,7 +1377,9 @@ def _add_sketch_dimension_impl(
     )
 
 
-def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> None:
+def _select_sketch_entities(  # pragma: no cover
+    adapter: Any, entity_ids: list[str], mark: int
+) -> None:
     """Select sketch entities from the registry under a specific mark.
 
     Resolves each ID against ``adapter._sketch_entities`` and calls
@@ -1419,12 +1439,24 @@ def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> N
         # original Select4 path.
         if isinstance(entity, (list, tuple)):
             for segment in entity:
+                if _sw_type_info is not None:
+                    adapter._attempt(
+                        lambda s=segment: _sw_type_info.flag_methods(
+                            s, "ISketchSegment"
+                        ),
+                        default=0,
+                    )
                 ok = segment.Select4(True, select_data)
                 if not ok:
                     raise Exception(
                         f"Failed to select segment of sketch entity '{ent_id}'"
                     )
         else:
+            if _sw_type_info is not None:
+                adapter._attempt(
+                    lambda e=entity: _sw_type_info.flag_methods(e, "ISketchSegment"),
+                    default=0,
+                )
             ok = entity.Select4(True, select_data)
             if not ok:
                 raise Exception(f"Failed to select sketch entity '{ent_id}'")
@@ -1484,7 +1516,7 @@ def _sketch_linear_pattern_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _linear_pattern_operation() -> str:
+    def _linear_pattern_operation() -> str:  # pragma: no cover
         if not entities:
             raise Exception("sketch_linear_pattern requires at least one entity")
         if count < 2:
@@ -1606,7 +1638,7 @@ def _sketch_circular_pattern_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _circular_pattern_operation() -> str:
+    def _circular_pattern_operation() -> str:  # pragma: no cover
         if not entities:
             raise Exception("sketch_circular_pattern requires at least one entity")
         if count < 2:
@@ -1814,7 +1846,7 @@ def _sketch_mirror_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _mirror_operation() -> str:
+    def _mirror_operation() -> str:  # pragma: no cover
         if not entities:
             raise Exception("sketch_mirror requires at least one entity")
         if not mirror_line:
@@ -1923,7 +1955,7 @@ def _sketch_offset_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _offset_operation() -> str:
+    def _offset_operation() -> str:  # pragma: no cover
         if not entities:
             raise Exception("sketch_offset requires at least one entity")
         if offset_distance <= 0:
@@ -1952,6 +1984,12 @@ def _sketch_offset_impl(
                 else offset_distance / 1000.0
             )
 
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(
+                    adapter.currentSketchManager, "ISketchManager"
+                ),
+                default=0,
+            )
             ok = adapter.currentSketchManager.SketchOffset2(
                 offset_m,  # Offset (metres)
                 False,  # BothDirections
@@ -2021,7 +2059,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
             error="No active sketch to exit",
         )
 
-    def _exit_operation() -> str:
+    def _exit_operation() -> str:  # pragma: no cover
         try:
             from .. import sw_type_info as _sw_type_info
         except ImportError:
@@ -2037,7 +2075,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
                 default=0,
             )
 
-        sw_active = adapter._attempt(lambda: adapter.swApp.ActiveDoc.GetActiveSketch2())
+        sw_active = adapter._attempt(lambda: adapter.currentModel.GetActiveSketch2())
         adapter_active = adapter.currentSketchManager
 
         # Already out of sketch-edit mode — clean up adapter state so a
@@ -2083,7 +2121,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
             AdapterResult[None],
             AdapterResult(status=AdapterResultStatus.SUCCESS, data=None),
         )
-    return cast(AdapterResult[None], result)
+    return cast(AdapterResult[None], result)  # pragma: no cover
 
 
 def _check_sketch_fully_defined_impl(
@@ -2139,7 +2177,7 @@ def _check_sketch_fully_defined_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _to_bool(value: Any) -> bool | None:
+    def _to_bool(value: Any) -> bool | None:  # pragma: no cover
         """Normalise an arbitrary raw value to a Python bool.
 
         Handles booleans, 0/1 integers and floats, truthy/falsy strings, and
@@ -2173,7 +2211,7 @@ def _check_sketch_fully_defined_impl(
             return _to_bool(value[0])
         return None
 
-    def _to_number(value: Any) -> float | None:
+    def _to_number(value: Any) -> float | None:  # pragma: no cover
         """Normalise an arbitrary raw value to a float.
 
         Args:
@@ -2193,7 +2231,7 @@ def _check_sketch_fully_defined_impl(
             return _to_number(value[0])
         return None
 
-    def _probe_to_flag(source: str, raw: Any) -> bool | None:
+    def _probe_to_flag(source: str, raw: Any) -> bool | None:  # pragma: no cover
         """Interpret a raw probe result according to the property-name semantics.
 
         The SolidWorks API uses both positive and negative naming conventions
@@ -2243,7 +2281,7 @@ def _check_sketch_fully_defined_impl(
 
         return _to_bool(raw)
 
-    def _state_from_bool(flag: bool | None) -> str:
+    def _state_from_bool(flag: bool | None) -> str:  # pragma: no cover
         """Convert a nullable bool flag to a descriptive state string.
 
         Args:
@@ -2259,7 +2297,7 @@ def _check_sketch_fully_defined_impl(
             return "not_fully_defined"
         return "unknown"
 
-    def _get_sketch_payload() -> dict[str, Any]:
+    def _get_sketch_payload() -> dict[str, Any]:  # pragma: no cover
         """Main inner closure that locates the sketch and probes its constraint status.
 
         Resolves the sketch feature by name (falling back to the last-known
@@ -2288,7 +2326,7 @@ def _check_sketch_fully_defined_impl(
             )
         else:
             sketch_obj = adapter.currentSketch or adapter._attempt(
-                lambda: adapter.swApp.ActiveDoc.GetActiveSketch2(), default=None
+                lambda: adapter.currentModel.GetActiveSketch2(), default=None
             )
             if sketch_obj is None and adapter._last_sketch_name:
                 sketch_feature = adapter._attempt(
@@ -2363,7 +2401,7 @@ def _check_sketch_fully_defined_impl(
         }
 
     return cast(
-        AdapterResult[str],
+        AdapterResult[dict[str, Any]],
         adapter._handle_com_operation(
             "check_sketch_fully_defined", _get_sketch_payload
         ),

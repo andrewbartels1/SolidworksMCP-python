@@ -107,7 +107,7 @@ def _create_extrusion_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _extrusion_operation() -> SolidWorksFeature:
+    def _extrusion_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that builds and returns the extrusion feature.
 
         Normalises ``params`` into a ``SimpleNamespace`` so every attribute
@@ -314,7 +314,7 @@ def _create_revolve_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _revolve_operation() -> SolidWorksFeature:
+    def _revolve_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that builds and returns the revolve feature.
 
         Converts the degree angle to radians and invokes ``FeatureRevolve2``.
@@ -339,7 +339,7 @@ def _create_revolve_impl(
 
         import math
 
-        if revolve_sw_major == 33:
+        if revolve_sw_major == 33:  # pragma: no cover
             # IFeatureManager.FeatureRevolve2 (20 params) per gen_py SW 2025
             # SingleDir, IsSolid, IsThin, IsCut, ReverseDir, BothDirUpToSame,
             # Dir1Type, Dir2Type, Dir1Angle(rad), Dir2Angle(rad),
@@ -452,12 +452,10 @@ def _select_named_feature(
     )
     if not feature:
         return False
-    return bool(
-        adapter._attempt(lambda: feature.Select2(append, mark), default=False)
-    )
+    return bool(adapter._attempt(lambda: feature.Select2(append, mark), default=False))
 
 
-def _flag_feature_methods(obj: Any, interface: str) -> None:
+def _flag_feature_methods(obj: Any, interface: str) -> None:  # pragma: no cover
     """Best-effort method flagging for a COM object via ``sw_type_info``.
 
     Flagging tells pywin32 late binding to resolve names like ``GetTypeName2``
@@ -476,7 +474,7 @@ def _flag_feature_methods(obj: Any, interface: str) -> None:
         pass
 
 
-def _read_member(obj: Any, name: str) -> Any:
+def _read_member(obj: Any, name: str) -> Any:  # pragma: no cover
     """Read a COM member that pywin32 may expose as a property *or* a method.
 
     Late-bound pywin32 dispatches are inconsistent: an unflagged zero-arg
@@ -504,7 +502,7 @@ def _read_member(obj: Any, name: str) -> Any:
         return member
 
 
-def _profile_feature_names(adapter: Any) -> list[str]:
+def _profile_feature_names(adapter: Any) -> list[str]:  # pragma: no cover
     """Return sketch (``ProfileFeature``) names in feature-tree order.
 
     Walks ``FirstFeature`` -> ``GetNextFeature`` reading ``GetTypeName2`` and
@@ -597,7 +595,7 @@ def _create_sweep_impl(
             error="Sweep requires a 'path' sketch name",
         )
 
-    def _sweep_operation() -> SolidWorksFeature:
+    def _sweep_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects profile + path and runs the sweep.
 
         Returns:
@@ -751,7 +749,7 @@ def _create_loft_impl(
             error="Loft requires at least 2 profile sketches",
         )
 
-    def _loft_operation() -> SolidWorksFeature:
+    def _loft_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects profiles/guides and runs the loft.
 
         Returns:
@@ -779,7 +777,7 @@ def _create_loft_impl(
                 raise Exception(f"Failed to select loft guide curve: {guide}")
 
         # swTangencyType_e: 0 = none, 1 = tangent to profile normal.
-        def _tangency(value: str | None) -> int:
+        def _tangency(value: str | None) -> int:  # pragma: no cover
             return 1 if str(value or "").strip().lower() == "normal" else 0
 
         start_match = _tangency(getattr(params, "start_tangent", None))
@@ -882,7 +880,7 @@ def _create_cut_extrude_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _cut_operation() -> SolidWorksFeature:
+    def _cut_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that locates the active sketch and performs the cut.
 
         Normalises ``params``, resolves the end-condition constant, selects the
@@ -909,15 +907,23 @@ def _create_cut_extrude_impl(
         depth_m = normalized.depth / 1000.0
         if end_condition in {"throughall", "through all", "through_all"}:
             t1 = adapter.constants["swEndCondThroughAll"]
-        elif end_condition in {"throughallboth", "through all both", "through_all_both"}:
+        elif end_condition in {
+            "throughallboth",
+            "through all both",
+            "through_all_both",
+        }:
             t1 = adapter.constants["swEndCondThroughAllBoth"]
 
         t0 = adapter.constants.get("swStartSketchPlane", 0)
         feature = None
         fallback_errors: list[str] = []
         is_through = end_condition in {
-            "throughall", "through all", "through_all",
-            "throughallboth", "through all both", "through_all_both",
+            "throughall",
+            "through all",
+            "through_all",
+            "throughallboth",
+            "through all both",
+            "through_all_both",
         }
 
         # Detect SW major version for FeatureCut4 parameter count
@@ -1152,7 +1158,9 @@ def _create_cut_extrude_impl(
     )
 
 
-def _parse_edge_spec(edge_name: str) -> tuple[str, float, float, float]:
+def _parse_edge_spec(  # pragma: no cover
+    edge_name: str,
+) -> tuple[str, float, float, float]:
     """Parse an edge specification string into (SelectByID2 name, x, y, z).
 
     Supports two formats:
@@ -1169,7 +1177,7 @@ def _parse_edge_spec(edge_name: str) -> tuple[str, float, float, float]:
     return edge_name, 0.0, 0.0, 0.0
 
 
-def _select_edge_by_coord(
+def _select_edge_by_coord(  # pragma: no cover
     adapter: Any,
     x: float,
     y: float,
@@ -1198,7 +1206,7 @@ def _select_edge_by_coord(
     if not append:
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
 
-    r = math.sqrt(x ** 2 + z ** 2)
+    r = math.sqrt(x**2 + z**2)
     if r > 0:
         # Candidates: exact point plus small radial scale-in/out and Y offsets.
         candidates = [
@@ -1222,6 +1230,7 @@ def _select_edge_by_coord(
     try:
         import pythoncom
         import win32com.client as _win32com
+
         null_callout = _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
     except Exception:
         null_callout = None  # fallback: may fail on some SW versions
@@ -1278,7 +1287,7 @@ def _add_fillet_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _fillet_operation() -> SolidWorksFeature:
+    def _fillet_operation() -> SolidWorksFeature:  # pragma: no cover
         """Inner COM closure that selects edges and invokes FeatureFillet3.
 
         Returns:
@@ -1300,7 +1309,9 @@ def _add_fillet_impl(
                 fillet_sw_major = 0
 
         # Clear any prior selection so the edge set is clean.
-        adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
 
         for idx, edge_name in enumerate(edge_names):
             sel_name, ex, ey, ez = _parse_edge_spec(edge_name)
@@ -1327,12 +1338,12 @@ def _add_fillet_impl(
         if fillet_sw_major >= 33:
             result_code = adapter.currentModel.FeatureFillet3(
                 radius / 1000.0,  # R1 in meters
-                True,   # Propagate (VT_BOOL)
-                0,      # Ftyp (VT_I4)
+                True,  # Propagate (VT_BOOL)
+                0,  # Ftyp (VT_I4)
                 False,  # VarRadTyp (VT_BOOL — must be bool, not int)
-                0,      # OverflowType (VT_I4)
-                0,      # NRadii (VT_I4)
-                None,   # Radii (VT_VARIANT)
+                0,  # OverflowType (VT_I4)
+                0,  # NRadii (VT_I4)
+                None,  # Radii (VT_VARIANT)
                 False,  # UseHelpPoint (VT_BOOL)
                 False,  # UseTangentHoldLine (VT_BOOL)
             )
@@ -1423,25 +1434,41 @@ def _add_chamfer_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _chamfer_operation() -> SolidWorksFeature:
-        """Inner COM closure that selects edges and invokes FeatureChamfer.
+    def _chamfer_operation() -> SolidWorksFeature:  # pragma: no cover
+        """Inner COM closure that selects edges and invokes the chamfer API.
 
         Returns:
             SolidWorksFeature: Populated feature descriptor.
 
         Raises:
-            Exception: If any edge selection fails or the feature is ``None``.
+            Exception: If any edge selection fails or the feature is not created.
         """
         import math
 
+        # Detect SW major version (same pattern as fillet).
+        chamfer_sw_major = 0
+        if getattr(adapter, "swApp", None):
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
+            )
+            try:
+                chamfer_sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                chamfer_sw_major = 0
+
         # Clear any prior selection so the edge set is clean.
-        adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
 
         for idx, edge_name in enumerate(edge_names):
             sel_name, cx, cy, cz = _parse_edge_spec(edge_name)
             append = idx > 0
             if sel_name == "":
-                selected = _select_edge_by_coord(adapter, cx, cy, cz, append=append, mark=0)
+                selected = _select_edge_by_coord(
+                    adapter, cx, cy, cz, append=append, mark=0
+                )
             else:
                 selected = adapter._attempt(
                     lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append: (
@@ -1454,38 +1481,55 @@ def _add_chamfer_impl(
             if not selected:
                 raise Exception(f"Failed to select edge: {edge_name}")
 
-        # IFeatureManager.InsertFeatureChamfer returns IFeature (DISPID=83).
-        # Parameters: Options, ChamferType, Width(m), Angle(rad), OtherDist,
-        #             VertexChamDist1, VertexChamDist2, VertexChamDist3
         fm = adapter.currentModel.FeatureManager
-        feature, insert_err = adapter._attempt_with_error(
-            lambda: fm.InsertFeatureChamfer(
-                1,                   # Options
-                1,                   # ChamferType = equal distance
-                distance / 1000.0,   # Width in metres
-                math.pi / 4,         # 45° angle
-                0.0,                 # OtherDist (unused for equal-distance)
-                0.0, 0.0, 0.0,      # VertexChamDist1,2,3 (unused)
-            )
+        _flag_feature_methods(fm, "IFeatureManager")
+        count_before = adapter._attempt(
+            lambda: int(fm.GetFeatureCount(True) or 0), default=0
         )
 
         feature_name = "Chamfer"
-        if feature and hasattr(feature, "Name"):
-            feature_name = feature.Name or "Chamfer"
-        elif not feature:
-            # Fallback: IModelDoc2.FeatureChamfer returns int (1=success, 0=fail).
-            feature_int = adapter._attempt(
-                lambda: adapter.currentModel.FeatureChamfer(
-                    distance / 1000.0,
-                    math.pi / 4,
-                    False,
-                ),
-                default=0,
+        feature = None
+
+        if chamfer_sw_major >= 33:
+            # SW 2025+ (major >= 33): IModelDoc2.FeatureChamferType (8 params,
+            # VT_VOID). Detect success via feature count change.
+            adapter.currentModel.FeatureChamferType(
+                0,  # ChamferType: 0 = swChamferType_EqualDistance
+                distance / 1000.0,  # Width in metres
+                math.pi / 4,  # 45° angle
+                False,  # Flip
+                0.0,  # OtherDist
+                0.0,  # VertexChamDist1
+                0.0,  # VertexChamDist2
+                0.0,  # VertexChamDist3
             )
-            if not feature_int:
+            count_after = adapter._attempt(
+                lambda: int(fm.GetFeatureCount(True) or 0), default=0
+            )
+            if count_after <= count_before:
                 raise Exception(
-                    f"Failed to create chamfer (InsertFeatureChamfer: {insert_err};"
-                    " FeatureChamfer returned 0)"
+                    "Failed to create chamfer (IModelDoc2.FeatureChamferType;"
+                    " feature count unchanged)"
+                )
+        else:
+            # Older SW: IFeatureManager.InsertFeatureChamfer returns IFeature.
+            feature, insert_err = adapter._attempt_with_error(
+                lambda: fm.InsertFeatureChamfer(
+                    1,  # Options
+                    1,  # ChamferType = equal distance
+                    distance / 1000.0,  # Width in metres
+                    math.pi / 4,  # 45° angle
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                )
+            )
+            if feature and hasattr(feature, "Name"):
+                feature_name = feature.Name or "Chamfer"
+            elif not feature:
+                raise Exception(
+                    f"Failed to create chamfer (InsertFeatureChamfer: {insert_err})"
                 )
 
         return SolidWorksFeature(

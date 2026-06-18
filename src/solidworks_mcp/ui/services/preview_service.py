@@ -14,13 +14,13 @@ from typing import Any
 from loguru import logger
 
 from ...adapters import create_adapter
-from ...config import load_config
 from ...agents.history_db import (
+    get_design_session,
     insert_model_state_snapshot,
     insert_tool_call_record,
     list_model_state_snapshots,
-    get_design_session,
 )
+from ...config import load_config
 from ._utils import (
     DEFAULT_API_ORIGIN,
     DEFAULT_PREVIEW_ORIENTATION,
@@ -29,7 +29,6 @@ from ._utils import (
     parse_json_blob,
     sanitize_preview_viewer_url,
 )
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -113,7 +112,10 @@ async def refresh_preview(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, db_path=db_path)
     logger.info(
@@ -379,7 +381,10 @@ async def highlight_feature(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     ensure_dashboard_session(session_id, db_path=db_path)
     session_row = get_design_session(session_id, db_path=db_path) or {}

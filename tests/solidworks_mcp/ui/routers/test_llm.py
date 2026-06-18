@@ -32,8 +32,12 @@ def test_resolve_user_goal_prefers_payload() -> None:
 async def test_clarify_calls_service(monkeypatch) -> None:
     """clarify should call request_clarifications."""
     # Patch the service call with an async mock.
-    monkeypatch.setattr(llm_router, "request_clarifications", AsyncMock(return_value={"ok": True}))
-    payload = llm_router.ClarifyWithAnswerRequest(session_id="s1", user_goal="goal", user_answer="answer")
+    monkeypatch.setattr(
+        llm_router, "request_clarifications", AsyncMock(return_value={"ok": True})
+    )
+    payload = llm_router.ClarifyWithAnswerRequest(
+        session_id="s1", user_goal="goal", user_answer="answer"
+    )
     result = await llm_router.clarify(payload)
     assert result == {"ok": True}
 
@@ -42,7 +46,9 @@ async def test_clarify_calls_service(monkeypatch) -> None:
 async def test_family_inspect_calls_service(monkeypatch) -> None:
     """family_inspect should call inspect_family."""
     # Patch the service call with an async mock.
-    monkeypatch.setattr(llm_router, "inspect_family", AsyncMock(return_value={"ok": True}))
+    monkeypatch.setattr(
+        llm_router, "inspect_family", AsyncMock(return_value={"ok": True})
+    )
     payload = llm_router.FamilyInspectRequest(session_id="s1", user_goal="goal")
     result = await llm_router.family_inspect(payload)
     assert result == {"ok": True}
@@ -52,7 +58,30 @@ async def test_family_inspect_calls_service(monkeypatch) -> None:
 async def test_orchestrate_go_calls_service(monkeypatch) -> None:
     """orchestrate_go should call run_go_orchestration."""
     # Patch the service call with an async mock.
-    monkeypatch.setattr(llm_router, "run_go_orchestration", AsyncMock(return_value={"ok": True}))
-    payload = llm_router.GoOrchestrationRequest(session_id="s1", user_goal="goal", assumptions_text="assume", user_answer="answer")
+    monkeypatch.setattr(
+        llm_router, "run_go_orchestration", AsyncMock(return_value={"ok": True})
+    )
+    payload = llm_router.GoOrchestrationRequest(
+        session_id="s1",
+        user_goal="goal",
+        assumptions_text="assume",
+        user_answer="answer",
+    )
     result = await llm_router.orchestrate_go(payload)
     assert result == {"ok": True}
+
+
+def test_resolve_user_goal_session_row_none(monkeypatch) -> None:
+    """_resolve_user_goal should return DEFAULT_USER_GOAL when session row is None."""
+    monkeypatch.setattr(llm_router, "get_design_session", lambda *_a, **_kw: None)
+    resolved = llm_router._resolve_user_goal("s1", llm_router.DEFAULT_USER_GOAL)
+    assert resolved == llm_router.DEFAULT_USER_GOAL
+
+
+def test_resolve_user_goal_session_row_no_goal(monkeypatch) -> None:
+    """_resolve_user_goal should return DEFAULT_USER_GOAL when session row has no goal."""
+    monkeypatch.setattr(
+        llm_router, "get_design_session", lambda *_a, **_kw: {"user_goal": None}
+    )
+    resolved = llm_router._resolve_user_goal("s1", llm_router.DEFAULT_USER_GOAL)
+    assert resolved == llm_router.DEFAULT_USER_GOAL

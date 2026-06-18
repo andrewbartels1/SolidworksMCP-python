@@ -200,6 +200,10 @@ async def run_analysis_demo(out_dir: Path) -> None:
 
     finally:
         try:
+            await adapter.close_model(save=False)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             await adapter.disconnect()
             print("\nDisconnected.")
         except Exception as exc:  # noqa: BLE001

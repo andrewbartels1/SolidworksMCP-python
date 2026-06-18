@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -28,7 +26,9 @@ class _Adapter:
         return SimpleNamespace(is_success=True, error="")
 
     async def get_model_info(self):
-        return SimpleNamespace(is_success=True, data={"type": "Part", "configuration": "Default"})
+        return SimpleNamespace(
+            is_success=True, data={"type": "Part", "configuration": "Default"}
+        )
 
     async def list_features(self, include_suppressed: bool = True):
         return SimpleNamespace(is_success=True, data=[{"name": "Feat1"}])
@@ -44,7 +44,9 @@ def test_resolve_model_path_upload_error(monkeypatch) -> None:
         "materialize_uploaded_model",
         lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("bad upload")),
     )
-    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = model_service._resolve_model_path(
         "s1",
@@ -56,7 +58,10 @@ def test_resolve_model_path_upload_error(monkeypatch) -> None:
     )
 
     assert result is None
-    assert any("Uploaded model could not be prepared" in call.get("latest_message", "") for call in merge_calls)
+    assert any(
+        "Uploaded model could not be prepared" in call.get("latest_message", "")
+        for call in merge_calls
+    )
 
 
 @pytest.mark.asyncio
@@ -75,8 +80,12 @@ async def test_open_target_model_disconnect_failure(monkeypatch, tmp_path) -> No
 
     monkeypatch.setattr(model_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(model_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
     monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **_kw: {})
     monkeypatch.setattr(model_service, "insert_tool_call_record", lambda **_kw: None)
 
@@ -86,7 +95,9 @@ async def test_open_target_model_disconnect_failure(monkeypatch, tmp_path) -> No
 
 
 @pytest.mark.asyncio
-async def test_connect_target_model_refresh_preview_failure(monkeypatch, tmp_path) -> None:
+async def test_connect_target_model_refresh_preview_failure(
+    monkeypatch, tmp_path
+) -> None:
     """refresh_preview failures should log and continue cleanup."""
     # Force refresh_preview to raise and ensure cleanup proceeds.
     from solidworks_mcp.ui.services import session_service
@@ -104,7 +115,16 @@ async def test_connect_target_model_refresh_preview_failure(monkeypatch, tmp_pat
 
     monkeypatch.setattr(model_service, "create_adapter", _create_adapter)
     monkeypatch.setattr(model_service, "load_config", lambda: SimpleNamespace())
-    monkeypatch.setattr(model_service, "classify_feature_tree_snapshot", lambda *_a, **_kw: {"family": "extrude", "confidence": "high", "evidence": [], "warnings": []})
+    monkeypatch.setattr(
+        model_service,
+        "classify_feature_tree_snapshot",
+        lambda *_a, **_kw: {
+            "family": "extrude",
+            "confidence": "high",
+            "evidence": [],
+            "warnings": [],
+        },
+    )
     monkeypatch.setattr(model_service, "insert_model_state_snapshot", lambda **_kw: 1)
     monkeypatch.setattr(model_service, "insert_tool_call_record", lambda **_kw: None)
     monkeypatch.setattr(model_service, "insert_evidence_link", lambda **_kw: None)
@@ -114,8 +134,12 @@ async def test_connect_target_model_refresh_preview_failure(monkeypatch, tmp_pat
 
     monkeypatch.setattr(preview_service, "refresh_preview", _refresh_preview)
 
-    monkeypatch.setattr(session_service, "ensure_dashboard_session", lambda *_a, **_kw: None)
-    monkeypatch.setattr(session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
 
     result = await model_service.connect_target_model("s1", model_path=str(model_path))
 
@@ -127,7 +151,9 @@ def test_resolve_model_path_sanitize_returns_empty(monkeypatch) -> None:
     # sanitize_model_path_text returns "" → the "No target model was provided" branch fires.
     merge_calls: list[dict] = []
     monkeypatch.setattr(model_service, "sanitize_model_path_text", lambda _: "")
-    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = model_service._resolve_model_path(
         "s1",
@@ -139,7 +165,10 @@ def test_resolve_model_path_sanitize_returns_empty(monkeypatch) -> None:
     )
 
     assert result is None
-    assert any("No target model was provided" in call.get("latest_message", "") for call in merge_calls)
+    assert any(
+        "No target model was provided" in call.get("latest_message", "")
+        for call in merge_calls
+    )
 
 
 def test_resolve_model_path_missing_file(monkeypatch, tmp_path) -> None:
@@ -148,7 +177,9 @@ def test_resolve_model_path_missing_file(monkeypatch, tmp_path) -> None:
     merge_calls: list[dict] = []
     nonexistent = str(tmp_path / "missing.sldprt")
     monkeypatch.setattr(model_service, "sanitize_model_path_text", lambda p: p)
-    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = model_service._resolve_model_path(
         "s1",
@@ -167,7 +198,9 @@ def test_resolve_model_path_no_model_returns_none(monkeypatch) -> None:
     """No model_path and no uploaded_files should persist an error and return None."""
     # Neither model_path nor uploaded_files is provided → last merge_metadata branch.
     merge_calls: list[dict] = []
-    monkeypatch.setattr(model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw))
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw)
+    )
 
     result = model_service._resolve_model_path(
         "s1",
@@ -179,4 +212,112 @@ def test_resolve_model_path_no_model_returns_none(monkeypatch) -> None:
     )
 
     assert result is None
-    assert any("No target model was provided" in call.get("latest_message", "") for call in merge_calls)
+    assert any(
+        "No target model was provided" in call.get("latest_message", "")
+        for call in merge_calls
+    )
+
+
+@pytest.mark.asyncio
+async def test_open_target_model_raises_on_open_failure(monkeypatch, tmp_path) -> None:
+    """open_model failure should update metadata with error and return state."""
+    from solidworks_mcp.ui.services import session_service
+
+    model_path = tmp_path / "model.sldprt"
+    model_path.write_bytes(b"model")
+
+    class FailOpenAdapter:
+        async def connect(self):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def open_model(self, _path):
+            return SimpleNamespace(is_success=False, error="COM error")
+
+    async def _create_adapter(_cfg):
+        return FailOpenAdapter()
+
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(model_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(model_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(model_service, "insert_tool_call_record", lambda **_kw: None)
+
+    result = await model_service.open_target_model("s1", model_path=str(model_path))
+
+    assert result == {"ok": True}
+    assert any("Failed" in call.get("latest_message", "") for call in merge_calls)
+
+
+@pytest.mark.asyncio
+async def test_connect_target_model_path_none_returns_state(monkeypatch) -> None:
+    """When _resolve_model_path returns None, connect should return dashboard state immediately."""
+    from solidworks_mcp.ui.services import session_service
+
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(model_service, "_resolve_model_path", lambda *_a, **_kw: None)
+
+    result = await model_service.connect_target_model("s1", model_path=None)
+    assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_connect_target_model_open_failure(monkeypatch, tmp_path) -> None:
+    """open_model failure in connect should update metadata with error."""
+    from solidworks_mcp.ui.services import session_service
+
+    model_path = tmp_path / "model.sldprt"
+    model_path.write_bytes(b"model")
+
+    class FailOpenAdapter:
+        async def connect(self):
+            pass
+
+        async def disconnect(self):
+            pass
+
+        async def open_model(self, _path):
+            return SimpleNamespace(is_success=False, error="COM open failed")
+
+        async def list_features(self, include_suppressed=True):
+            return SimpleNamespace(is_success=True, data=[])
+
+    async def _create_adapter(_cfg):
+        return FailOpenAdapter()
+
+    merge_calls: list[dict] = []
+    monkeypatch.setattr(model_service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(model_service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(
+        session_service, "ensure_dashboard_session", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        session_service, "build_dashboard_state", lambda *_a, **_kw: {"ok": True}
+    )
+    monkeypatch.setattr(
+        model_service, "merge_metadata", lambda *_a, **kw: merge_calls.append(kw) or {}
+    )
+    monkeypatch.setattr(model_service, "insert_tool_call_record", lambda **_kw: None)
+    monkeypatch.setattr(model_service, "ensure_preview_dir", lambda _p=None: tmp_path)
+    monkeypatch.setattr(model_service, "insert_evidence_link", lambda **_kw: None)
+    monkeypatch.setattr(model_service, "insert_model_state_snapshot", lambda **_kw: 1)
+
+    result = await model_service.connect_target_model("s1", model_path=str(model_path))
+
+    assert result == {"ok": True}
+    assert any("COM open failed" in str(call) for call in merge_calls)

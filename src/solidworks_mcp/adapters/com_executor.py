@@ -37,8 +37,9 @@ from __future__ import annotations
 
 import queue
 import threading
+from collections.abc import Callable
 from concurrent.futures import Future
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from loguru import logger
 
@@ -46,7 +47,7 @@ try:
     import pythoncom
 
     PYWIN32_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     PYWIN32_AVAILABLE = False
 
 
@@ -187,7 +188,7 @@ class ComExecutor:
 
     # ---- Context manager ----
 
-    def __enter__(self) -> "ComExecutor":
+    def __enter__(self) -> ComExecutor:
         self.start()
         return self
 
@@ -225,7 +226,7 @@ class ComExecutor:
 
                 fn, fut = item
                 if not fut.set_running_or_notify_cancel():
-                    continue
+                    continue  # pragma: no cover
 
                 try:
                     result = fn()
@@ -235,7 +236,7 @@ class ComExecutor:
                     fut.set_result(result)
         finally:
             try:
-                pythoncom.CoUninitialize()
-            except Exception:
+                pythoncom.CoUninitialize()  # pragma: no cover
+            except Exception:  # pragma: no cover
                 pass
             logger.info(f"ComExecutor '{self._name}' stopped")

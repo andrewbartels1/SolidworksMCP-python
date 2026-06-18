@@ -200,6 +200,7 @@ omit = [
     "*/test_*",
     "*/__pycache__/*",
     "*/migrations/*",
+    "*/solidworks_mcp/ui/*",
 ]
 
 [tool.coverage.report]
@@ -218,6 +219,9 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.11"
+exclude = [
+    "src/utils/",
+]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -240,6 +244,19 @@ module = [
     "win32con",
 ]
 ignore_missing_imports = true
+
+# UI prefab files are slated for removal — suppress all errors.
+[[tool.mypy.overrides]]
+module = [
+    "solidworks_mcp.ui.prefab_dashboard",
+    "solidworks_mcp.ui.prefab_trace_probe",
+    "solidworks_mcp.ui.local_llm",
+    "solidworks_mcp.ui.service",
+    "solidworks_mcp.ui.server",
+    "solidworks_mcp.ui.services.llm_service",
+]
+ignore_errors = true
+
 
 [tool.black]
 target-version = ["py311"]

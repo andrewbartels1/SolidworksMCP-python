@@ -9,7 +9,7 @@ import json
 import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from loguru import logger
 
@@ -33,8 +33,8 @@ T = TypeVar("T")
 def _to_input_dict(params: Any) -> dict[str, Any]:
     """Convert a Pydantic model or plain dict to a flat dict for SoC logging."""
     if hasattr(params, "model_dump"):
-        return params.model_dump()
-    return params if isinstance(params, dict) else {}
+        return cast(dict[str, Any], params.model_dump())
+    return cast(dict[str, Any], params) if isinstance(params, dict) else {}
 
 
 class CircuitState(Enum):
@@ -249,7 +249,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             if result.data is not None:
                 try:
                     output_data = {"data": result.data}
-                except Exception:
+                except Exception:  # pragma: no cover
                     output_data = {"data": str(result.data)}
 
             insert_tool_call_record(
@@ -721,9 +721,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
-    async def add_spline(
-        self, points: list[dict[str, float]]
-    ) -> AdapterResult[str]:
+    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
         """Add spline through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_spline",
@@ -1056,7 +1054,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 list_tool_call_records,
             )
 
-            records = list_tool_call_records(self.soc_session_id, db_path=self.soc_db_path)
+            records = list_tool_call_records(
+                self.soc_session_id, db_path=self.soc_db_path
+            )
             last_id = records[-1]["id"] if records else None
 
             snapshot_id: int | None = None
@@ -1086,7 +1086,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 db_path=self.soc_db_path,
             )
         except Exception as exc:
-            logger.debug(f"[soc_checkpoint] failed to create checkpoint {label!r}: {exc}")
+            logger.debug(
+                f"[soc_checkpoint] failed to create checkpoint {label!r}: {exc}"
+            )
             return None
 
 

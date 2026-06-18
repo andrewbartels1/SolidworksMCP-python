@@ -1,12 +1,14 @@
 """Tests for SolidWorks modeling tools."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
 from solidworks_mcp.tools.modeling import (
+    AddFilletInput,
     CloseModelInput,
     CreateAssemblyInput,
+    CreateCutExtrudeInput,
     CreateDrawingInput,
     CreateExtrusionInput,
     CreateLoftInput,
@@ -605,3 +607,62 @@ class TestModelingTools:
         assert (
             await tool["set_dimension"](SetDimensionInput(name="D1@Sketch1", value=2.5))
         )["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_dimension_empty_name_validation(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """get_dimension and set_dimension return error when name is empty string."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool = {
+            registered.name: registered.fn
+            for registered in await mcp_server.list_tools()
+        }
+
+        import solidworks_mcp.tools.modeling as _modeling_mod
+
+        # model_post_init raises for empty name, so we patch _normalize_input to return
+        # a mock with name="" to exercise the handler's own guard (lines 920-921, 966-967).
+        fake_get = MagicMock(spec=["name", "dimension_name"])
+        fake_get.name = ""
+        with patch.object(_modeling_mod, "_normalize_input", return_value=fake_get):
+            get_result = await tool["get_dimension"]({})
+        assert get_result["status"] == "error"
+        assert "Dimension name is required" in get_result["message"]
+
+        fake_set = MagicMock(spec=["name", "dimension_name", "value", "units"])
+        fake_set.name = ""
+        fake_set.value = 5.0
+        with patch.object(_modeling_mod, "_normalize_input", return_value=fake_set):
+            set_result = await tool["set_dimension"]({})
+        assert set_result["status"] == "error"
+        assert "Dimension name is required" in set_result["message"]
+
+    @pytest.mark.asyncio
+    async def test_create_cut_extrude_and_add_fillet_failure_paths(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """create_cut_extrude and add_fillet surface adapter error messages."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.create_cut_extrude = AsyncMock(
+            return_value=Mock(is_success=False, error="cut blocked by geometry")
+        )
+        mock_adapter.add_fillet = AsyncMock(
+            return_value=Mock(is_success=False, error="fillet radius too large")
+        )
+
+        tool = {
+            registered.name: registered.fn
+            for registered in await mcp_server.list_tools()
+        }
+
+        cut_result = await tool["create_cut_extrude"](CreateCutExtrudeInput(depth=5.0))
+        assert cut_result["status"] == "error"
+        assert "cut blocked by geometry" in cut_result["message"]
+
+        fillet_result = await tool["add_fillet"](
+            AddFilletInput(radius=10.0, edge_names=["Edge<1>"])
+        )
+        assert fillet_result["status"] == "error"
+        assert "fillet radius too large" in fillet_result["message"]

@@ -327,7 +327,7 @@ async def register_automation_tools(
 
 Option Explicit
 
-Sub {input_data.operation_description.replace(" ", "_")}()
+Sub {(input_data.operation_description or "").replace(" ", "_")}()
     Dim swApp As SldWorks.SldWorks
     Dim swModel As SldWorks.ModelDoc2
 

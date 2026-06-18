@@ -430,7 +430,7 @@ async def register_export_tools(
                 file_path = input_data.file_path
             else:
                 payload = dict(input_data)
-                file_path = payload.get("file_path")
+                file_path = str(payload.get("file_path") or "")
 
             if hasattr(adapter, "export_step"):
                 result = await adapter.export_step(payload)
@@ -833,7 +833,7 @@ async def register_export_tools(
                 }
 
             if hasattr(adapter, "export_file") and input_data.file_path:
-                result = await adapter.export_file(
+                result = await adapter.export_file(  # type: ignore[assignment]
                     input_data.file_path, input_data.format_type
                 )
                 if result.is_success:
@@ -932,7 +932,7 @@ async def register_export_tools(
                 "batch_export": {
                     "source_directory": input_data.source_directory,
                     "output_directory": input_data.output_directory,
-                    "format": input_data.format_type.upper(),
+                    "format": (input_data.format_type or "").upper(),
                     "files_processed": 0,  # Would be actual count
                     "files_successful": 0,
                     "files_failed": 0,

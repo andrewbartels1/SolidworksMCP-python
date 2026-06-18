@@ -11,7 +11,9 @@ from solidworks_mcp.ui.routers import docs as docs_router
 async def test_docs_context_calls_service(monkeypatch) -> None:
     """docs_context should call fetch_docs_context."""
     # Patch the service call to return a sentinel response.
-    monkeypatch.setattr(docs_router, "fetch_docs_context", lambda *_a, **_kw: {"ok": True})
+    monkeypatch.setattr(
+        docs_router, "fetch_docs_context", lambda *_a, **_kw: {"ok": True}
+    )
     payload = docs_router.DocsContextRequest(session_id="s1", query="query")
     result = await docs_router.docs_context(payload)
     assert result == {"ok": True}
@@ -21,7 +23,9 @@ async def test_docs_context_calls_service(monkeypatch) -> None:
 async def test_rag_ingest_calls_service(monkeypatch) -> None:
     """rag_ingest should call ingest_reference_source."""
     # Patch the service call to return a sentinel response.
-    monkeypatch.setattr(docs_router, "ingest_reference_source", lambda *_a, **_kw: {"ingested": True})
+    monkeypatch.setattr(
+        docs_router, "ingest_reference_source", lambda *_a, **_kw: {"ingested": True}
+    )
     payload = docs_router.RagIngestRequest(
         session_id="s1",
         source_path="C:/tmp/doc.txt",

@@ -565,7 +565,7 @@ def find_conversation_events(
         rows = session.exec(
             select(ConversationEvent)
             .where(ConversationEvent.conversation_id == conversation_id)
-            .order_by(ConversationEvent.id.asc())
+            .order_by(ConversationEvent.id.asc())  # type: ignore[union-attr]
         ).all()
 
     return [
@@ -642,18 +642,18 @@ def find_run_timeline(run_id: str, db_path: Path | None = None) -> dict[str, Any
                 }
             )
 
-        for evt in convo_events:
+        for conv_evt in convo_events:
             events.append(
                 {
-                    "timestamp": evt.created_at,
+                    "timestamp": conv_evt.created_at,
                     "event_type": "message",
-                    "role": evt.role,
-                    "content_preview": evt.content_snippet[:100],
-                    "metadata": evt.metadata_json,
+                    "role": conv_evt.role,
+                    "content_preview": conv_evt.content_snippet[:100],
+                    "metadata": conv_evt.metadata_json,
                 }
             )
 
-        events.sort(key=lambda e: e["timestamp"] or "")  # type: ignore[return-value]
+        events.sort(key=lambda e: e["timestamp"] or "")
         timeline["events"] = events
 
     return timeline
@@ -901,7 +901,7 @@ def list_plan_checkpoints(
         rows = session.exec(
             select(PlanCheckpoint)
             .where(PlanCheckpoint.session_id == session_id)
-            .order_by(PlanCheckpoint.checkpoint_index.asc())  # type: ignore[union-attr]
+            .order_by(PlanCheckpoint.checkpoint_index.asc())  # type: ignore[attr-defined]
         ).all()
 
     return [

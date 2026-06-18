@@ -214,6 +214,10 @@ async def run_validation() -> int:
 
     finally:
         try:
+            await adapter.close_model(save=False)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             await adapter.disconnect()
             print("\nDisconnected.")
         except Exception as exc:  # noqa: BLE001

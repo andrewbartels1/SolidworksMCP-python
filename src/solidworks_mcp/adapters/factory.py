@@ -146,13 +146,13 @@ class AdapterFactory:
                 backing_adapter = backing_class(self._build_adapter_config(config))
             base_adapter = VbaGeneratorAdapter(backing_adapter=backing_adapter)
         elif adapter_type == AdapterType.MOCK:
-            base_adapter = adapter_class(config)
+            base_adapter = adapter_class(config)  # type: ignore[assignment]
         else:
             adapter_config = self._build_adapter_config(config)
-            base_adapter = adapter_class(adapter_config)
+            base_adapter = adapter_class(adapter_config)  # type: ignore[assignment]
 
         # Wrap with additional features if enabled
-        adapter = base_adapter
+        adapter: SolidWorksAdapter = base_adapter  # type: ignore[assignment]
 
         # Keep mock/testing adapters simple and deterministic.
         if adapter_type != AdapterType.MOCK and config.enable_circuit_breaker:
@@ -161,7 +161,7 @@ class AdapterFactory:
         if adapter_type != AdapterType.MOCK and config.enable_connection_pooling:
             adapter = self._wrap_with_connection_pool(adapter, config)
 
-        return adapter  # type: ignore[return-value]
+        return adapter
 
     def _determine_adapter_type(self, config: SolidWorksMCPConfig) -> AdapterType:
         """Determine optimal adapter type based on environment and config.

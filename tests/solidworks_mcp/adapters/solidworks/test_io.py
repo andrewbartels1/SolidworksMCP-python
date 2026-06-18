@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
-from solidworks_mcp.adapters.solidworks.io import SolidWorksIOMixin
+from solidworks_mcp.adapters.solidworks import io as _io_module
+from solidworks_mcp.adapters.solidworks.io import (
+    SolidWorksIOMixin,
+    _get_sw_comtypes_lib,
+)
 
 
 class _IOHarness(SolidWorksIOMixin):
@@ -58,3 +63,21 @@ async def test_get_mass_properties_missing_gmp_fails() -> None:
     result = await harness.get_mass_properties()
     assert result.status == AdapterResultStatus.ERROR
     assert "Failed to get mass properties" in (result.error or "")
+
+
+def test_get_sw_comtypes_lib_returns_cached_value() -> None:
+    """Second call returns the cached module without re-querying the registry (io.py:46-47)."""
+    sentinel = object()
+    with patch.object(_io_module, "_sw_comtypes_lib", sentinel):
+        result = _get_sw_comtypes_lib()
+    assert result is sentinel
+
+
+def test_get_sw_comtypes_lib_returns_none_when_comtypes_unavailable() -> None:
+    """Returns None immediately when comtypes is not installed (io.py:48-49)."""
+    with (
+        patch.object(_io_module, "_sw_comtypes_lib", None),
+        patch.object(_io_module, "_COMTYPES_AVAILABLE", False),
+    ):
+        result = _get_sw_comtypes_lib()
+    assert result is None

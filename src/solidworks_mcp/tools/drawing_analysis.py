@@ -112,7 +112,7 @@ class ComplianceCheckInput(CompatInput):
 
 
 async def register_drawing_analysis_tools(
-    mcp: FastMCP, adapter: SolidWorksAdapter, config
+    mcp: FastMCP, adapter: SolidWorksAdapter, config: Any
 ) -> int:
     """Register advanced drawing analysis tools with FastMCP.
 

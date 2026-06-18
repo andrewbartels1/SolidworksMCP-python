@@ -11,7 +11,6 @@ Design note:
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
@@ -27,13 +26,13 @@ from ...agents.history_db import (
 from ...config import load_config
 from ._utils import (
     DEFAULT_API_ORIGIN,
+    DEFAULT_PREVIEW_ORIENTATION,
     DEFAULT_SESSION_ID,
     DEFAULT_SOURCE_MODE,
     DEFAULT_USER_GOAL,
-    DEFAULT_PREVIEW_ORIENTATION,
     ensure_preview_dir,
-    parse_json_blob,
     merge_metadata,
+    parse_json_blob,
 )
 
 
@@ -815,10 +814,10 @@ async def _execute_tool(
 
     if tool == "check_sketch_fully_defined":
         payload = (tool_payloads or [{}])[0]
-        sketch_name = {**ctx, **payload}.get("sketch_name")
+        check_sketch_name: str | None = {**ctx, **payload}.get("sketch_name")
         _ok(
             await adapter.check_sketch_fully_defined(
-                str(sketch_name) if sketch_name else None
+                str(check_sketch_name) if check_sketch_name else None
             ),
             "check_sketch_fully_defined",
         )
@@ -992,7 +991,10 @@ async def execute_next_checkpoint(
     Returns:
         Full dashboard state payload.
     """
-    from .session_service import build_dashboard_state, ensure_dashboard_session  # noqa: PLC0415
+    from .session_service import (  # noqa: PLC0415
+        build_dashboard_state,
+        ensure_dashboard_session,
+    )
 
     session_row = ensure_dashboard_session(session_id, db_path=db_path)
     checkpoints = list_plan_checkpoints(session_id, db_path=db_path)

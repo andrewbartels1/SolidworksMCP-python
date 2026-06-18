@@ -183,6 +183,7 @@ async def register_analysis_tools(
 
             if result.is_success:
                 props = result.data
+                assert props is not None
                 return {
                     "status": "success",
                     "message": "Mass properties calculated successfully",

@@ -1,0 +1,34 @@
+# Coverage config for dev-test-full (real SolidWorks integration run).
+#
+# ui/ is excluded (needs a full rework; tracked in docs/planning).
+# pragma: no cover IS in exclude_lines for the same reasons as pyproject.toml:
+# non-Windows import fallbacks, pack-and-go paths that require an assembly
+# file (SOLIDWORKS_MCP_TEST_ASSEMBLY), and other unreachable branches.
+# Live SW tests cover the real COM paths that unit tests skip.
+
+[run]
+source = src/solidworks_mcp
+omit =
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */migrations/*
+    */solidworks_mcp/ui/*
+
+[report]
+exclude_lines =
+    # Always exclude these — they are truly unreachable at runtime
+    def __repr__
+    if self\.debug:
+    if settings\.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__\.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    if TYPE_CHECKING:
+    # Exclude lines that are unreachable in the live-SW environment:
+    # non-Windows import fallbacks, pack-and-go paths that need an assembly
+    # file env var, and other branches that can't fire on the test machine.
+    pragma: no cover

@@ -108,7 +108,7 @@ class TemplateComparisonInput(CompatInput):
 
 
 async def register_template_management_tools(
-    mcp: FastMCP, adapter: SolidWorksAdapter, config
+    mcp: FastMCP, adapter: SolidWorksAdapter, config: Any
 ) -> int:
     """Register template management tools with FastMCP.
 
@@ -310,7 +310,7 @@ async def register_template_management_tools(
                 }
 
             # Simulate batch processing
-            processed_files = [
+            processed_files: list[dict[str, Any]] = [
                 {"file": "part001.sldprt", "status": "success", "changes": 5},
                 {"file": "part002.sldprt", "status": "success", "changes": 4},
                 {"file": "assembly001.sldasm", "status": "success", "changes": 3},
@@ -584,7 +584,7 @@ async def register_template_management_tools(
             sort_by = input_data.get("sort_by", "name")  # name, date, usage
 
             # Simulated template library
-            library_templates = [
+            library_templates: list[dict[str, Any]] = [
                 {
                     "template_id": "STD-PART-001",
                     "name": "Standard Part Template",

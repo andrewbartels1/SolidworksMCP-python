@@ -149,7 +149,9 @@ def test_create_cut_extrude_through_all_both_directions() -> None:
 
     result = features._create_cut_extrude_impl(
         adapter,
-        ExtrusionParameters(depth=5.0, end_condition="ThroughAll", both_directions=True),
+        ExtrusionParameters(
+            depth=5.0, end_condition="ThroughAll", both_directions=True
+        ),
     )
     assert result.is_success
     assert result.data.type == "Cut-Extrude"
@@ -183,6 +185,7 @@ def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
 # ---------------------------------------------------------------------------
 # Fillet: SW 2025+ (major >= 33) code paths
 # ---------------------------------------------------------------------------
+
 
 class _FilletAdapterSW2026(_FakeFeatureAdapter):
     """Fake adapter that simulates SW 2026 (major=34) for fillet tests."""
