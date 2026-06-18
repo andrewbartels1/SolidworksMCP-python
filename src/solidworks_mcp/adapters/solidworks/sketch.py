@@ -1452,6 +1452,11 @@ def _select_sketch_entities(  # pragma: no cover
                         f"Failed to select segment of sketch entity '{ent_id}'"
                     )
         else:
+            if _sw_type_info is not None:
+                adapter._attempt(
+                    lambda e=entity: _sw_type_info.flag_methods(e, "ISketchSegment"),
+                    default=0,
+                )
             ok = entity.Select4(True, select_data)
             if not ok:
                 raise Exception(f"Failed to select sketch entity '{ent_id}'")
@@ -1979,6 +1984,12 @@ def _sketch_offset_impl(
                 else offset_distance / 1000.0
             )
 
+            adapter._attempt(
+                lambda: _sw_type_info.flag_methods(
+                    adapter.currentSketchManager, "ISketchManager"
+                ),
+                default=0,
+            )
             ok = adapter.currentSketchManager.SketchOffset2(
                 offset_m,  # Offset (metres)
                 False,  # BothDirections

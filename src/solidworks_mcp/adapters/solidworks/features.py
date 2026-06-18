@@ -1435,15 +1435,27 @@ def _add_chamfer_impl(
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
     def _chamfer_operation() -> SolidWorksFeature:  # pragma: no cover
-        """Inner COM closure that selects edges and invokes FeatureChamfer.
+        """Inner COM closure that selects edges and invokes the chamfer API.
 
         Returns:
             SolidWorksFeature: Populated feature descriptor.
 
         Raises:
-            Exception: If any edge selection fails or the feature is ``None``.
+            Exception: If any edge selection fails or the feature is not created.
         """
         import math
+
+        # Detect SW major version (same pattern as fillet).
+        chamfer_sw_major = 0
+        if getattr(adapter, "swApp", None):
+            rev = adapter._attempt(
+                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
+                default="0",
+            )
+            try:
+                chamfer_sw_major = int(str(rev).split(".")[0])
+            except (ValueError, IndexError):
+                chamfer_sw_major = 0
 
         # Clear any prior selection so the edge set is clean.
         adapter._attempt(
@@ -1469,41 +1481,55 @@ def _add_chamfer_impl(
             if not selected:
                 raise Exception(f"Failed to select edge: {edge_name}")
 
-        # IFeatureManager.InsertFeatureChamfer returns IFeature (DISPID=83).
-        # Parameters: Options, ChamferType, Width(m), Angle(rad), OtherDist,
-        #             VertexChamDist1, VertexChamDist2, VertexChamDist3
         fm = adapter.currentModel.FeatureManager
         _flag_feature_methods(fm, "IFeatureManager")
-        feature, insert_err = adapter._attempt_with_error(
-            lambda: fm.InsertFeatureChamfer(
-                1,  # Options
-                1,  # ChamferType = equal distance
-                distance / 1000.0,  # Width in metres
-                math.pi / 4,  # 45° angle
-                0.0,  # OtherDist (unused for equal-distance)
-                0.0,
-                0.0,
-                0.0,  # VertexChamDist1,2,3 (unused)
-            )
+        count_before = adapter._attempt(
+            lambda: int(fm.GetFeatureCount(True) or 0), default=0
         )
 
         feature_name = "Chamfer"
-        if feature and hasattr(feature, "Name"):
-            feature_name = feature.Name or "Chamfer"
-        elif not feature:
-            # Fallback: IModelDoc2.FeatureChamfer returns int (1=success, 0=fail).
-            feature_int = adapter._attempt(
-                lambda: adapter.currentModel.FeatureChamfer(
-                    distance / 1000.0,
-                    math.pi / 4,
-                    False,
-                ),
-                default=0,
+        feature = None
+
+        if chamfer_sw_major >= 33:
+            # SW 2025+ (major >= 33): IModelDoc2.FeatureChamferType (8 params,
+            # VT_VOID). Detect success via feature count change.
+            adapter.currentModel.FeatureChamferType(
+                0,  # ChamferType: 0 = swChamferType_EqualDistance
+                distance / 1000.0,  # Width in metres
+                math.pi / 4,  # 45° angle
+                False,  # Flip
+                0.0,  # OtherDist
+                0.0,  # VertexChamDist1
+                0.0,  # VertexChamDist2
+                0.0,  # VertexChamDist3
             )
-            if not feature_int:
+            count_after = adapter._attempt(
+                lambda: int(fm.GetFeatureCount(True) or 0), default=0
+            )
+            if count_after <= count_before:
                 raise Exception(
-                    f"Failed to create chamfer (InsertFeatureChamfer: {insert_err};"
-                    " FeatureChamfer returned 0)"
+                    "Failed to create chamfer (IModelDoc2.FeatureChamferType;"
+                    " feature count unchanged)"
+                )
+        else:
+            # Older SW: IFeatureManager.InsertFeatureChamfer returns IFeature.
+            feature, insert_err = adapter._attempt_with_error(
+                lambda: fm.InsertFeatureChamfer(
+                    1,  # Options
+                    1,  # ChamferType = equal distance
+                    distance / 1000.0,  # Width in metres
+                    math.pi / 4,  # 45° angle
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                )
+            )
+            if feature and hasattr(feature, "Name"):
+                feature_name = feature.Name or "Chamfer"
+            elif not feature:
+                raise Exception(
+                    f"Failed to create chamfer (InsertFeatureChamfer: {insert_err})"
                 )
 
         return SolidWorksFeature(
