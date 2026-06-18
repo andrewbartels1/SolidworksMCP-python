@@ -456,9 +456,9 @@ async def register_sketching_tools(
                 )
             else:
                 result = await adapter.add_line(
-                    input_data.x1,
-                    input_data.y1,
-                    input_data.x2,
+                    input_data.x1,  # type: ignore[arg-type]
+                    input_data.y1,  # type: ignore[arg-type]
+                    input_data.x2,  # type: ignore[arg-type]
                     input_data.y2,  # type: ignore[arg-type]
                 )
 
@@ -595,9 +595,9 @@ async def register_sketching_tools(
                 )
             else:
                 result = await adapter.add_rectangle(
-                    input_data.x1,
-                    input_data.y1,
-                    input_data.x2,
+                    input_data.x1,  # type: ignore[arg-type]
+                    input_data.y1,  # type: ignore[arg-type]
+                    input_data.x2,  # type: ignore[arg-type]
                     input_data.y2,  # type: ignore[arg-type]
                 )
 
@@ -911,9 +911,9 @@ async def register_sketching_tools(
             input_data = _normalize_input(input_data, AddLineInput)
 
             result = await adapter.add_centerline(
-                input_data.x1,
-                input_data.y1,
-                input_data.x2,
+                input_data.x1,  # type: ignore[arg-type]
+                input_data.y1,  # type: ignore[arg-type]
+                input_data.x2,  # type: ignore[arg-type]
                 input_data.y2,  # type: ignore[arg-type]
             )
 

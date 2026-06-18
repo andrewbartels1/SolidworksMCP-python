@@ -125,7 +125,7 @@ class _AwaitableQueryResult(str):
 
     def __new__(
         cls, text: str, hits: list[dict[str, Any]] | None = None
-    ) -> "_AwaitableQueryResult":
+    ) -> _AwaitableQueryResult:
         obj = super().__new__(cls, text)
         obj._hits = list(hits or [])
         return obj
