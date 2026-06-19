@@ -28,8 +28,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NOTE: trivy-action had a supply chain incident 2026-03-19 where 76/77
+      # version tags were force-pushed to credential-stealing malware. v0.36.0
+      # (released 2026-04-22, after the incident was remediated) is the current
+      # clean release. For maximum protection, pin this to the full commit SHA:
+      #   gh api repos/aquasecurity/trivy-action/git/ref/tags/v0.36.0 --jq .object.sha
       - name: Run Trivy (filesystem scan)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -47,7 +52,7 @@ jobs:
           category: 'trivy'
 
       - name: Fail on CRITICAL/HIGH findings
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
