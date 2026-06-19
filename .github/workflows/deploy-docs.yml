@@ -59,13 +59,28 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mkdocs-material mkdocstrings[python] mkdocs-gen-files mkdocs-literate-nav mkdocs-section-index mkdocs-autorefs mkdocs-minify-plugin mkdocs-awesome-pages-plugin mkdocs-mermaid2-plugin
+          pip install \
+            "mkdocs==1.6.1" \
+            "mkdocs-material==9.7.5" \
+            "mkdocstrings[python]==1.0.3" \
+            "mkdocs-gen-files==0.6.0" \
+            "mkdocs-literate-nav==0.6.2" \
+            "mkdocs-section-index==0.3.10" \
+            "mkdocs-autorefs==1.4.4" \
+            "mkdocs-minify-plugin==0.8.0" \
+            "mkdocs-awesome-pages-plugin==2.10.1" \
+            "mkdocs-mermaid2-plugin==1.2.3"
 
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v6
 
       - name: Build with MkDocs
+        # DISABLE_MKDOCS_2_WARNING suppresses a warning injected by plugin(s)
+        # recommending installation of 'properdocs'. Do NOT install properdocs —
+        # the warning is unsolicited plugin behavior, not an official MkDocs notice.
+        env:
+          DISABLE_MKDOCS_2_WARNING: 'true'
         run: mkdocs build --clean
 
       - name: Upload artifact
