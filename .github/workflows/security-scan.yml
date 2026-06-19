@@ -1,0 +1,149 @@
+name: Security Scan
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  schedule:
+    # Run daily at 06:00 UTC so new CVEs are caught even without a push
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+  security-events: write  # required to upload SARIF results to GitHub Security tab
+
+jobs:
+  # ── 1. Trivy full-repo scan ──────────────────────────────────────────────────
+  # Trivy (Aqua Security) scans the entire codebase for:
+  #   - OS/library CVEs (SCA)
+  #   - Leaked secrets / hardcoded credentials
+  #   - Misconfigurations (IaC, Docker, GitHub Actions)
+  #   - Supply-chain issues (compromised packages / domains)
+  trivy-scan:
+    name: Trivy — filesystem, secrets & misconfig
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy (filesystem scan)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          scanners: 'vuln,secret,misconfig'
+          exit-code: '0'       # don't fail the step — upload SARIF first
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy'
+
+      - name: Fail on CRITICAL/HIGH findings
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          scanners: 'vuln,secret,misconfig'
+          exit-code: '1'
+
+  # ── 2. Python dependency CVE audit ──────────────────────────────────────────
+  pip-audit:
+    name: pip-audit — Python dependency CVEs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package + pip-audit
+        run: |
+          pip install --upgrade pip
+          pip install pip-audit
+          # Install only what we can without Windows-only deps
+          pip install -e ".[dev,docs]" --ignore-requires-python 2>/dev/null || \
+            pip install -e "." --ignore-requires-python 2>/dev/null || true
+
+      - name: Audit Python dependencies
+        run: pip-audit --desc --output-format markdown 2>&1 | tee pip-audit-results.md
+        continue-on-error: false
+
+  # ── 3. Bandit — Python SAST ─────────────────────────────────────────────────
+  bandit:
+    name: Bandit — Python static security analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit on source tree
+        run: |
+          bandit -r src/ \
+            --severity-level medium \
+            --confidence-level medium \
+            --format sarif \
+            --output bandit-results.sarif \
+            || true   # generate SARIF even on findings; gate below
+
+      - name: Upload Bandit SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'bandit-results.sarif'
+          category: 'bandit'
+
+      - name: Fail on HIGH severity findings
+        run: |
+          bandit -r src/ \
+            --severity-level high \
+            --confidence-level medium \
+            --format text
+
+  # ── 4. Banned / compromised CDN domain check ────────────────────────────────
+  # Belt-and-suspenders grep to catch polyfill.io and similar supply-chain
+  # compromised CDN domains before they reach the built docs.
+  banned-cdn-check:
+    name: Banned CDN domain check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for known-compromised CDN domains
+        run: |
+          BANNED=(
+            "polyfill\.io"
+            "bootcss\.com"
+            "bootcdn\.net"
+            "freecdn\.cn"
+          )
+          FOUND=0
+          for pat in "${BANNED[@]}"; do
+            hits=$(grep -rn -E "$pat" \
+                    --include="*.yml" --include="*.yaml" \
+                    --include="*.html" --include="*.js" --include="*.ts" \
+                    --include="*.py" --include="*.md" --include="*.json" \
+                    . 2>/dev/null || true)
+            if [ -n "$hits" ]; then
+              echo "::error::Banned CDN pattern '$pat' found:"
+              echo "$hits"
+              FOUND=1
+            fi
+          done
+          [ "$FOUND" -eq 0 ] && echo "OK: no banned CDN domains." || exit 1
