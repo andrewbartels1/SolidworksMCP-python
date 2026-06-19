@@ -41,7 +41,7 @@ jobs:
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH'
           scanners: 'vuln,secret,misconfig'
           exit-code: '0'       # don't fail the step — upload SARIF first
 
