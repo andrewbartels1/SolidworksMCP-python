@@ -122,7 +122,7 @@ jobs:
           bandit -r src/ \
             --severity-level high \
             --confidence-level medium \
-            --format text
+            --format txt
 
   # ── 4. Banned / compromised CDN domain check ────────────────────────────────
   # Belt-and-suspenders grep to catch compromised CDN domains before they
