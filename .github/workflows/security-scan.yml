@@ -22,18 +22,19 @@ jobs:
   #   - Leaked secrets / hardcoded credentials
   #   - Misconfigurations (IaC, Docker, GitHub Actions)
   #   - Supply-chain issues (compromised packages / domains)
+  #
+  # NOTE: trivy-action had a supply chain incident 2026-03-19 where 76/77
+  # version tags were force-pushed to credential-stealing malware. v0.36.0
+  # (released 2026-04-22, after the incident was remediated) is the current
+  # clean release. For maximum protection, pin this to the full commit SHA:
+  #   gh api repos/aquasecurity/trivy-action/git/ref/tags/v0.36.0 --jq .object.sha
   trivy-scan:
     name: Trivy — filesystem, secrets & misconfig
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # NOTE: trivy-action had a supply chain incident 2026-03-19 where 76/77
-      # version tags were force-pushed to credential-stealing malware. v0.36.0
-      # (released 2026-04-22, after the incident was remediated) is the current
-      # clean release. For maximum protection, pin this to the full commit SHA:
-      #   gh api repos/aquasecurity/trivy-action/git/ref/tags/v0.36.0 --jq .object.sha
-      - name: Run Trivy (filesystem scan)
+      - name: Run Trivy (SARIF report)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
@@ -45,7 +46,7 @@ jobs:
           exit-code: '0'       # don't fail the step — upload SARIF first
 
       - name: Upload Trivy SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -76,7 +77,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pip-audit
-          # Install only what we can without Windows-only deps
           pip install -e ".[dev,docs]" --ignore-requires-python 2>/dev/null || \
             pip install -e "." --ignore-requires-python 2>/dev/null || true
 
@@ -95,20 +95,23 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Bandit
-        run: pip install bandit[toml]
+      - name: Install Bandit + SARIF formatter
+        # bandit-sarif-formatter registers the 'sarif' output format as a plugin
+        run: pip install "bandit[toml]" bandit-sarif-formatter
 
-      - name: Run Bandit on source tree
+      - name: Run Bandit (SARIF report)
+        # --exit-zero ensures the file is always written even when findings exist;
+        # a separate step below gates the build on HIGH severity.
         run: |
           bandit -r src/ \
             --severity-level medium \
             --confidence-level medium \
             --format sarif \
             --output bandit-results.sarif \
-            || true   # generate SARIF even on findings; gate below
+            --exit-zero
 
       - name: Upload Bandit SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'bandit-results.sarif'
@@ -122,8 +125,8 @@ jobs:
             --format text
 
   # ── 4. Banned / compromised CDN domain check ────────────────────────────────
-  # Belt-and-suspenders grep to catch polyfill.io and similar supply-chain
-  # compromised CDN domains before they reach the built docs.
+  # Belt-and-suspenders grep to catch compromised CDN domains before they
+  # reach the built docs or runtime JavaScript.
   banned-cdn-check:
     name: Banned CDN domain check
     runs-on: ubuntu-latest
@@ -144,6 +147,7 @@ jobs:
                     --include="*.yml" --include="*.yaml" \
                     --include="*.html" --include="*.js" --include="*.ts" \
                     --include="*.py" --include="*.md" --include="*.json" \
+                    --exclude="security-scan.yml" \
                     . 2>/dev/null || true)
             if [ -n "$hits" ]; then
               echo "::error::Banned CDN pattern '$pat' found:"

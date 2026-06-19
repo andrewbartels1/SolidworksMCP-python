@@ -26,4 +26,6 @@ RUN --mount=type=cache,target=/home/mambauser/.cache/pip,uid=1000,gid=1000 \
 # Copied last so frequent edits to tests don't bust the pip cache layer.
 COPY --chown=mambauser:mambauser . /workspace
 
+USER mambauser
+
 CMD ["bash", "-lc", "micromamba run -n solidworks_mcp make test"]
