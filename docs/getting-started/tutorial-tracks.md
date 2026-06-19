@@ -56,11 +56,23 @@ The exported script mirrors the structure of `build_u_bracket_artifact.py` — a
 
 ### Reference Artifacts
 
-- **[U-Bracket Build Script](tutorial-parts/build_u_bracket_artifact.py)** — Builds the SolidWorks 2026 sample bracket from measured sketch coordinates; produces `.sldprt` and isometric PNG
+**U-Bracket Build Script** — Builds the SolidWorks 2026 sample bracket from measured sketch coordinates; produces `.sldprt` and isometric PNG
+
+[⬇ Download Script](tutorial-parts/build_u_bracket_artifact.py){ .md-button .md-button--primary download="" }
+
+??? example "View full script — `build_u_bracket_artifact.py`"
+    ```python
+    --8<-- "docs/getting-started/tutorial-parts/build_u_bracket_artifact.py"
+    ```
 
 ### Guided Prompt Packs
 
-- **[U-Joint Rebuild Prompts](tutorial-parts/u_joint_rebuild_prompt.md)** — Pre-written prompts for rebuilding the U-joint if you already have reference samples
+**U-Joint Rebuild Prompts** — Pre-written prompts for rebuilding the U-joint if you already have reference samples
+
+[⬇ Download Prompts](tutorial-parts/u_joint_rebuild_prompt.md){ .md-button .md-button--primary download="" }
+
+??? example "View full prompt pack — `u_joint_rebuild_prompt.md`"
+    --8<-- "docs/getting-started/tutorial-parts/u_joint_rebuild_prompt.md"
 
 ---
 

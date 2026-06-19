@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from loguru import logger
@@ -62,9 +63,11 @@ def fetch_docs_context(
     ensure_dashboard_session(session_id, db_path=db_path)
     docs_url = f"{api_origin}/docs"
     query_text = sanitize_ui_text(docs_query, "solidworks workflow")
+    if urlparse(docs_url).scheme not in {"http", "https"}:
+        raise ValueError(f"Disallowed URL scheme in docs endpoint: {docs_url!r}")
     try:
         request = Request(docs_url, headers={"User-Agent": "solidworks-mcp-ui/1.0"})
-        with urlopen(request, timeout=8) as response:
+        with urlopen(request, timeout=8) as response:  # nosec B310
             html = response.read().decode("utf-8", errors="ignore")
         extractor = HTMLTextExtractor()
         extractor.feed(html)

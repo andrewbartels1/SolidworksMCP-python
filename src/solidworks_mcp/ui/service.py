@@ -121,13 +121,14 @@ def _read_reference_source(source_path: Path) -> str:
 
 
 def _read_reference_url(source_url: str) -> tuple[str, str]:
+    parsed = urlparse(source_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"Disallowed URL scheme: {parsed.scheme!r}")
     request = Request(source_url, headers={"User-Agent": "SolidWorksMCP/1.0"})
-    with urlopen(request, timeout=20) as response:
+    with urlopen(request, timeout=20) as response:  # nosec B310
         content_type = response.headers.get_content_type()
         charset = response.headers.get_content_charset() or "utf-8"
         raw_bytes = response.read()
-
-    parsed = urlparse(source_url)
     label = Path(parsed.path).name or parsed.netloc or source_url
     suffix = Path(parsed.path).suffix.lower()
 

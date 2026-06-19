@@ -32,7 +32,7 @@ jobs:
     name: Trivy — filesystem, secrets & misconfig
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Run Trivy (SARIF report)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -68,9 +68,9 @@ jobs:
     name: pip-audit — Python dependency CVEs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -90,9 +90,9 @@ jobs:
     name: Bandit — Python static security analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -132,7 +132,7 @@ jobs:
     name: Banned CDN domain check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check for known-compromised CDN domains
         run: |
@@ -157,3 +157,4 @@ jobs:
             fi
           done
           [ "$FOUND" -eq 0 ] && echo "OK: no banned CDN domains." || exit 1
+
