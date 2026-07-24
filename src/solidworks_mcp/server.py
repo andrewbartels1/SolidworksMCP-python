@@ -22,13 +22,6 @@ from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-try:
-    from pydantic_ai.toolsets.fastmcp import (
-        FastMCPToolset,
-    )  # pydantic-ai <1.x; removed in 2.x
-except ImportError:
-    FastMCPToolset = None  # type: ignore[assignment]
-
 from . import adapters, security, tools, utils
 from .adapters.base import AdapterResult
 from .adapters.complexity_analyzer import ComplexityAnalyzer
@@ -358,26 +351,12 @@ class SolidWorksMCPServer:
             self.agent = None
             return
 
-        if FastMCPToolset is None:
-            logger.warning(
-                "FastMCPToolset is unavailable. Install pydantic-ai with FastMCP support "
-                "for direct PydanticAI/FastMCP integration."
-            )
-            self.agent = Agent(
-                model="openai:gpt-4",
-                system_prompt=AGENT_SYSTEM_PROMPT,
-            )
-            return
-
-        toolset = FastMCPToolset(self.mcp)
-
         self.agent = Agent(
             model="openai:gpt-4",
             system_prompt=AGENT_SYSTEM_PROMPT,
-            toolsets=[toolset],
         )
 
-        logger.info("PydanticAI agent configured with in-process FastMCP toolset")
+        logger.info("PydanticAI agent configured")
 
     async def _run_local_stdio(self) -> None:
         """Start local MCP stdio transport using the available FastMCP API.
