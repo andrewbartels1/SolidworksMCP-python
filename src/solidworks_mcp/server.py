@@ -21,7 +21,13 @@ from fastmcp import FastMCP
 from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
-from pydantic_ai.toolsets.fastmcp import FastMCPToolset
+
+try:
+    from pydantic_ai.toolsets.fastmcp import (
+        FastMCPToolset,
+    )  # pydantic-ai <1.x; removed in 2.x
+except ImportError:
+    FastMCPToolset = None  # type: ignore[assignment]
 
 from . import adapters, security, tools, utils
 from .adapters.base import AdapterResult
