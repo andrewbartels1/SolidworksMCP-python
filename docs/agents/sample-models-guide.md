@@ -33,16 +33,11 @@ The four tiers determine which MCP tools are needed. Choose your starting point 
 ```mermaid
 flowchart LR
     A(["Start here"])
-    T1(["Tier 1\nSimple"])
-    T2(["Tier 2\nIntermediate"])
-    T3(["Tier 3\nAdvanced"])
-    T4(["Tier 4\nAssembly"])
+    T1(["Tier 1<br/>Simple"])
+    T2(["Tier 2<br/>Intermediate"])
+    T3(["Tier 3<br/>Advanced"])
+    T4(["Tier 4<br/>Assembly"])
     A --> T1 --> T2 --> T3 --> T4
-
-    T1 -. "create_sketch\nadd_rectangle/circle\ncreate_extrusion" .- T1
-    T2 -. "set_dimension\nadd_sketch_constraint\nmulti-feature" .- T2
-    T3 -. "generate_vba_part_modeling\nexecute_macro" .- T3
-    T4 -. "create_assembly\nload_part\ngenerate_vba_assembly_insert" .- T4
 ```
 
 | Tier | Description | Key Tools |
