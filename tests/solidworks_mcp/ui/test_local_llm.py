@@ -21,6 +21,7 @@ from solidworks_mcp.ui.local_llm import (
     _detect_system_ram_gb,
     _ollama_health,
     _ollama_list_models,
+    _require_http_endpoint,
     probe_local_model,
     pull_ollama_model,
     recommend_model_tier,
@@ -229,6 +230,47 @@ def test_detect_system_ram_gb_prefers_psutil_when_available() -> None:
             del sys.modules["psutil"]
         else:
             sys.modules["psutil"] = original_psutil  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# _require_http_endpoint  (CWE-22 / Bandit B310 guard)
+# ---------------------------------------------------------------------------
+
+
+def test_require_http_endpoint_http_allowed() -> None:
+    """http:// endpoints pass without raising."""
+    _require_http_endpoint("http://127.0.0.1:11434")
+    _require_http_endpoint("http://ollama.internal:11434")
+
+
+def test_require_http_endpoint_https_allowed() -> None:
+    """https:// endpoints pass without raising."""
+    _require_http_endpoint("https://ollama.example.com:11434")
+    _require_http_endpoint("HTTPS://ollama.example.com")  # uppercase normalised
+
+
+def test_require_http_endpoint_rejects_file_scheme() -> None:
+    """file:// is rejected to prevent local-file exfiltration."""
+    with pytest.raises(ValueError, match="http or https"):
+        _require_http_endpoint("file:///etc/passwd")
+
+
+def test_require_http_endpoint_rejects_ftp_scheme() -> None:
+    """ftp:// is rejected."""
+    with pytest.raises(ValueError, match="http or https"):
+        _require_http_endpoint("ftp://host/file")
+
+
+def test_require_http_endpoint_rejects_data_scheme() -> None:
+    """data: is rejected."""
+    with pytest.raises(ValueError, match="http or https"):
+        _require_http_endpoint("data:text/html,hello")
+
+
+def test_require_http_endpoint_rejects_javascript_scheme() -> None:
+    """javascript: is rejected."""
+    with pytest.raises(ValueError, match="http or https"):
+        _require_http_endpoint("javascript:alert(1)")
 
 
 # ---------------------------------------------------------------------------

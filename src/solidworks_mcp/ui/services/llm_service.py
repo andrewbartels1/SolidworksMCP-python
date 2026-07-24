@@ -472,8 +472,8 @@ async def _run_structured_agent(
             pass
         toolsets = [MCPServerStreamableHTTP(mcp_server_url, **mcp_kwargs)]
 
-    _ensure_provider_credentials(resolved_model, resolved_endpoint)
     try:
+        _ensure_provider_credentials(resolved_model, resolved_endpoint)
         configured_model = _build_agent_model(resolved_model, resolved_endpoint)
         agent = Agent(
             configured_model,

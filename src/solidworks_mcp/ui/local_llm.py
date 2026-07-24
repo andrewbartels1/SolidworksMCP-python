@@ -33,6 +33,7 @@ import logging
 import os
 import platform
 import subprocess
+import urllib.parse
 from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field
@@ -48,6 +49,29 @@ _T = TypeVar("_T", bound=BaseModel)
 
 OLLAMA_DEFAULT_ENDPOINT = "http://127.0.0.1:11434"
 OLLAMA_OPENAI_ENDPOINT = f"{OLLAMA_DEFAULT_ENDPOINT}/v1"
+
+_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+
+def _require_http_endpoint(url: str) -> None:
+    """Raise ValueError if *url* does not use an http/https scheme.
+
+    Guards every ``urllib.request.urlopen`` call so that attacker-controlled
+    endpoint values cannot redirect requests to ``file://`` or other
+    non-network schemes (CWE-22 / Bandit B310).
+
+    Args:
+        url (str): The full URL (or endpoint prefix) to validate.
+
+    Raises:
+        ValueError: When the parsed scheme is not ``http`` or ``https``.
+    """
+    scheme = urllib.parse.urlparse(url).scheme.lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(
+            f"Ollama endpoint must use http or https, got scheme {scheme!r}."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Tier spec — typed model for each hardware tier
@@ -417,6 +441,7 @@ async def _ollama_health(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> bool:
 
     loop = asyncio.get_event_loop()
     try:
+        _require_http_endpoint(endpoint)
 
         def _get() -> bool:
             """Build internal get.
@@ -426,7 +451,7 @@ async def _ollama_health(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> bool:
             """
 
             try:
-                with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=3) as r:
+                with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=3) as r:  # nosec B310
                     return r.status == 200
             except Exception:
                 return False
@@ -448,6 +473,7 @@ async def _ollama_list_models(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> list[s
     import json
     import urllib.request
 
+    _require_http_endpoint(endpoint)
     loop = asyncio.get_event_loop()
 
     def _get() -> list[str]:
@@ -458,7 +484,7 @@ async def _ollama_list_models(endpoint: str = OLLAMA_DEFAULT_ENDPOINT) -> list[s
         """
 
         try:
-            with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=5) as r:
+            with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=5) as r:  # nosec B310
                 data = json.loads(r.read())
                 return [m.get("name", "") for m in data.get("models", [])]
         except Exception:
@@ -551,6 +577,7 @@ async def pull_ollama_model(
     resolved_endpoint = endpoint or os.getenv(
         "SOLIDWORKS_UI_OLLAMA_ENDPOINT", OLLAMA_DEFAULT_ENDPOINT
     )
+    _require_http_endpoint(resolved_endpoint)
     loop = asyncio.get_event_loop()
 
     def _pull() -> LocalModelPullResult:
@@ -568,7 +595,7 @@ async def pull_ollama_model(
             headers={"Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(req, timeout=300) as r:
+            with urllib.request.urlopen(req, timeout=300) as r:  # nosec B310
                 body = json.loads(r.read())
                 return LocalModelPullResult(queued=True, model=model, response=body)
         except Exception as exc:
