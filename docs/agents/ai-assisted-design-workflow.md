@@ -29,15 +29,15 @@ Quick server check — if the MCP server is running, this returns immediately:
 
 ```mermaid
 flowchart LR
-    D(["1 · Describe\nShape + dimensions\nin plain text"])
-    P(["2 · Plan\nLLM proposes\ntool call sequence"])
-    R(["3 · Review\nYou read the list\nand approve"])
-    E(["4 · Execute\nClaude Code runs\nthe MCP tools"])
-    C(["5 · Check\nVisual or\nfeature tree"])
-    I(["6 · Iterate\nAdjust and re-run\nonly what changed"])
+    D(["1 - Describe<br/>Shape + dimensions<br/>in plain text"])
+    P(["2 - Plan<br/>LLM proposes<br/>tool call sequence"])
+    R(["3 - Review<br/>You read the list<br/>and approve"])
+    E(["4 - Execute<br/>Claude Code runs<br/>the MCP tools"])
+    C(["5 - Check<br/>Visual or<br/>feature tree"])
+    I(["6 - Iterate<br/>Adjust and re-run<br/>only what changed"])
 
     D --> P --> R --> E --> C --> I
-    I -->|"new idea or fix"| D
+    I -->|new idea or fix| D
 
     style R fill:#fff3cd,stroke:#ffc107
     style C fill:#fff3cd,stroke:#ffc107

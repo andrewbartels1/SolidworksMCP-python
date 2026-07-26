@@ -77,9 +77,6 @@ theme:
     - navigation.path
     - navigation.footer
     - navigation.indexes
-    - navigation.instant
-    - navigation.instant.prefetch
-    - navigation.instant.progress
     - navigation.sections
     - navigation.tabs
     - navigation.tracking
@@ -143,8 +140,6 @@ plugins:
             show_signature: true
             show_signature_annotations: true
             separate_signature: true
-  - mermaid2:
-      javascript: https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
 
 # Extensions
 markdown_extensions:
@@ -211,7 +206,6 @@ extra_css:
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-  - javascripts/extra.js
 
 # Copyright
 copyright: |

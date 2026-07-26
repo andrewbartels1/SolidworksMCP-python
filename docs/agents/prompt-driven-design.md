@@ -21,15 +21,15 @@ Every design session follows the same loop:
 
 ```mermaid
 flowchart LR
-    D(["1 · Describe\nWhat to build\n+ dimensions"])
-    P(["2 · Plan\nLLM proposes\nMCP call sequence"])
-    R(["3 · Review\nYou approve\nthe plan"])
-    E(["4 · Execute\nClaude Code runs\nMCP tools"])
-    C(["5 · Check\nVisual or\nfeature-tree"])
-    I(["6 · Iterate\nRefine dimensions,\nadd features"])
+    D(["1 - Describe<br/>What to build<br/>+ dimensions"])
+    P(["2 - Plan<br/>LLM proposes<br/>MCP call sequence"])
+    R(["3 - Review<br/>You approve<br/>the plan"])
+    E(["4 - Execute<br/>Claude Code runs<br/>MCP tools"])
+    C(["5 - Check<br/>Visual or<br/>feature-tree"])
+    I(["6 - Iterate<br/>Refine dimensions,<br/>add features"])
 
     D --> P --> R --> E --> C --> I
-    I -->|"new idea or fix"| D
+    I -->|new idea or fix| D
 
     style R fill:#f0f4ff,stroke:#4a6cf7
     style C fill:#f0f4ff,stroke:#4a6cf7

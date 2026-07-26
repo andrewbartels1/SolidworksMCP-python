@@ -23,6 +23,8 @@ function addCopyButtons() {
     
     codeBlocks.forEach(function(codeBlock) {
         const pre = codeBlock.parentNode;
+        // Mermaid blocks are rendered from raw pre content; adding nodes can break parsing.
+        if (pre.classList && pre.classList.contains('mermaid')) return;
         if (pre.querySelector('.copy-button')) return; // Already has button
         
         const button = document.createElement('button');

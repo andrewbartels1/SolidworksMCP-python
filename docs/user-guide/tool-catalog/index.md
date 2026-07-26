@@ -52,7 +52,7 @@ sequenceDiagram
     COM->>SW: Windows COM dispatch
     SW-->>COM: return value / results
     COM-->>MCP: Python object
-    MCP-->>LLM: {"status":"success","data":{...}}
+    MCP-->>LLM: success response payload
 ```
 
 ## Calling Tools from an LLM
