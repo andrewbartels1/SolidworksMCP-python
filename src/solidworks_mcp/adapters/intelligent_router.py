@@ -61,12 +61,15 @@ class IntelligentRouter:
         self._analyzer = analyzer
         self._cache = cache
         self._cacheable_operations = cacheable_operations or {
-            # Lightweight metadata operations
-            "get_model_info",
-            "list_features",
-            "list_configurations",
-            "get_file_properties",
-            "get_dimension",
+            # Live document metadata is deliberately NOT cached. Model state,
+            # save state, paths, features, configurations, dimensions and
+            # properties can all change after any CAD operation, and this
+            # router has no reliable mutation-triggered invalidation.
+            # "get_model_info",
+            # "list_features",
+            # "list_configurations",
+            # "get_file_properties",
+            # "get_dimension",
             # Analysis operations — NOT cached: model state changes with
             # every feature-creation tool call and the router has no
             # automatic invalidation. Caching these produced stale

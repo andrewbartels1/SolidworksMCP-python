@@ -826,20 +826,60 @@ async def register_file_management_tools(
                             - Some properties may be empty if not set
                             - Technical properties depend on document configuration
         """
-        # Simulated file properties - would get from adapter
-        return {
-            "status": "success",
-            "properties": {
-                "file_name": "Example.sldprt",
-                "file_size": "2.5 MB",
-                "created_date": "2024-03-14T00:00:00Z",
-                "modified_date": "2024-03-14T12:00:00Z",
-                "author": "User",
-                "description": "SolidWorks part file",
-                "material": "Default",
-                "units": "millimeters",
-            },
-        }
+        try:
+            if not hasattr(adapter, "get_model_info"):
+                return {
+                    "status": "error",
+                    "message": "Active adapter does not support model metadata",
+                }
+
+            result = await adapter.get_model_info()
+            if not result.is_success or not isinstance(result.data, dict):
+                return {
+                    "status": "error",
+                    "message": result.error or "No active SolidWorks document",
+                }
+
+            model_info = dict(result.data)
+            raw_path = str(model_info.get("path") or "")
+            file_path = Path(raw_path) if raw_path else None
+            properties: dict[str, Any] = {
+                "file_name": (
+                    file_path.name
+                    if file_path is not None
+                    else str(model_info.get("title") or "")
+                ),
+                "file_path": raw_path,
+                "file_size_bytes": None,
+                "created_date": None,
+                "modified_date": None,
+                "document_type": model_info.get("type"),
+                "configuration": model_info.get("configuration"),
+                "is_dirty": model_info.get("is_dirty"),
+                "feature_count": model_info.get("feature_count"),
+            }
+
+            if file_path is not None and file_path.is_file():
+                stat = file_path.stat()
+                properties.update(
+                    {
+                        "file_size_bytes": stat.st_size,
+                        "created_date": stat.st_ctime,
+                        "modified_date": stat.st_mtime,
+                    }
+                )
+
+            return {
+                "status": "success",
+                "properties": properties,
+                "execution_time": result.execution_time,
+            }
+        except Exception as e:
+            logger.error(f"Error in get_file_properties tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
 
     @mcp.tool()
     async def get_model_info() -> dict[str, Any]:
