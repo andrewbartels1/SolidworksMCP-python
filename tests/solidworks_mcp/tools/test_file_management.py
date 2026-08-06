@@ -407,7 +407,94 @@ class TestFileManagementTools:
 
         properties_result = await properties_tool()
         assert properties_result["status"] == "success"
-        assert properties_result["properties"]["file_name"] == "Example.sldprt"
+        # get_file_properties now derives file_name from the live active
+        # document instead of returning placeholder data (was "Example.sldprt").
+        assert properties_result["properties"]["file_name"] == "CoveragePart.sldprt"
+
+    @pytest.mark.asyncio
+    async def test_get_file_properties_error_when_adapter_lacks_model_info(
+        self, mcp_server, mock_config
+    ):
+        """get_file_properties should error cleanly when the adapter can't read live state."""
+
+        class _AdapterWithoutModelInfo:
+            """Stand-in adapter missing get_model_info entirely."""
+
+        await register_file_management_tools(
+            mcp_server, _AdapterWithoutModelInfo(), mock_config
+        )
+
+        properties_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "get_file_properties":
+                properties_tool = tool.fn
+                break
+
+        assert properties_tool is not None
+        result = await properties_tool()
+        assert result["status"] == "error"
+        assert "does not support model metadata" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_get_file_properties_reads_real_file_stats(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """get_file_properties should populate size/timestamps for a file that exists on disk."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        real_file = tmp_path / "OnDisk.sldprt"
+        real_file.write_bytes(b"not a real sldprt, just needs to exist")
+
+        mock_adapter.get_model_info = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={
+                    "title": "OnDisk.sldprt",
+                    "path": str(real_file),
+                    "type": "Part",
+                    "configuration": "Default",
+                    "is_dirty": False,
+                    "feature_count": 1,
+                },
+                execution_time=0.02,
+            )
+        )
+
+        properties_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "get_file_properties":
+                properties_tool = tool.fn
+                break
+
+        assert properties_tool is not None
+        result = await properties_tool()
+
+        assert result["status"] == "success"
+        assert result["properties"]["file_name"] == "OnDisk.sldprt"
+        assert result["properties"]["file_size_bytes"] == real_file.stat().st_size
+        assert result["properties"]["created_date"] is not None
+        assert result["properties"]["modified_date"] is not None
+
+    @pytest.mark.asyncio
+    async def test_get_file_properties_handles_unexpected_exception(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """get_file_properties should catch unexpected errors and report them, not raise."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.get_model_info = AsyncMock(side_effect=RuntimeError("boom"))
+
+        properties_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "get_file_properties":
+                properties_tool = tool.fn
+                break
+
+        assert properties_tool is not None
+        result = await properties_tool()
+        assert result["status"] == "error"
+        assert "Unexpected error" in result["message"]
+        assert "boom" in result["message"]
 
     @pytest.mark.asyncio
     async def test_save_as_solidworks_path_success_and_error(

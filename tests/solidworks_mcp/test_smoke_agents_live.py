@@ -16,7 +16,7 @@ from solidworks_mcp.agents.schemas import (
 
 
 async def _run_or_skip(**kwargs):
-    """Wrap run_validated_prompt and skip the test on auth/connection errors."""
+    """Wrap run_validated_prompt and skip the test on auth/connection/outage errors."""
     from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 
     try:
@@ -25,6 +25,14 @@ async def _run_or_skip(**kwargs):
         if exc.status_code == 401:
             pytest.skip(
                 "LLM credentials rejected with 401 — refresh GH_TOKEN or provide ANTHROPIC_API_KEY"
+            )
+        if exc.status_code == 410:
+            # GitHub Models has been returning this during its retirement
+            # rollout (body.code == "github_models_retirement_brownout").
+            # Treat as an unavailable provider rather than a hard failure.
+            pytest.skip(
+                "GitHub Models API returned 410 (service retirement/brownout) — "
+                "provide ANTHROPIC_API_KEY or wait for GitHub Models availability"
             )
         raise
     except ModelAPIError:

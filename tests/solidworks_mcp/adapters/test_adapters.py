@@ -750,9 +750,11 @@ class TestPyWin32AdapterBranches:
                 """Test helper for IsSuppressed."""
                 return False
 
+        # FeatureByPositionReverse is zero-based: position 0 is the newest
+        # feature (Boss-Extrude1), position 1 is the next-oldest (Sketch1).
         by_pos = {
-            1: _Feature("Boss-Extrude1", "Boss"),
-            2: _Feature("Sketch1", "ProfileFeature"),
+            0: _Feature("Boss-Extrude1", "Boss"),
+            1: _Feature("Sketch1", "ProfileFeature"),
         }
 
         adapter.currentModel = SimpleNamespace(
@@ -2319,6 +2321,59 @@ class TestPyWin32AdapterBranches:
         assert info_result.error == "No active model"
         assert list_result.is_error
         assert list_result.error == "No active model"
+
+    @pytest.mark.asyncio
+    async def test_get_model_info_syncs_currentmodel_from_active_doc(
+        self, monkeypatch
+    ) -> None:
+        """get_model_info should resync currentModel to swApp.ActiveDoc.
+
+        Regression coverage for the live-readback fix: a stale currentModel
+        pointer (e.g. from a prior document) must not shadow whatever
+        document is actually active in SolidWorks right now.
+        """
+        adapter = self._build_adapter(monkeypatch)
+
+        active_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="LiveActive.sldprt"),
+            GetPathName=Mock(return_value="C:/parts/LiveActive.sldprt"),
+            GetType=Mock(return_value=1),
+            GetSaveFlag=Mock(return_value=False),
+            GetRebuildStatus=Mock(return_value=0),
+            GetActiveConfiguration=None,
+            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(return_value=3)),
+        )
+        adapter.swApp = SimpleNamespace(ActiveDoc=active_doc)
+        # A stale reference from a previously-open document.
+        adapter.currentModel = SimpleNamespace(
+            GetTitle=Mock(return_value="Stale.sldprt")
+        )
+
+        result = await adapter.get_model_info()
+
+        assert result.is_success
+        assert result.data["title"] == "LiveActive.sldprt"
+        assert result.data["path"] == "C:/parts/LiveActive.sldprt"
+        assert adapter.currentModel is active_doc
+
+    @pytest.mark.asyncio
+    async def test_list_features_syncs_currentmodel_from_active_doc(
+        self, monkeypatch
+    ) -> None:
+        """list_features should resync currentModel to swApp.ActiveDoc before traversal."""
+        adapter = self._build_adapter(monkeypatch)
+
+        active_doc = SimpleNamespace(
+            FirstFeature=Mock(return_value=None),
+            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(return_value=0)),
+        )
+        adapter.swApp = SimpleNamespace(ActiveDoc=active_doc)
+        adapter.currentModel = None
+
+        result = await adapter.list_features()
+
+        assert result.is_success
+        assert adapter.currentModel is active_doc
 
     @pytest.mark.asyncio
     async def test_list_features_handles_none_feature_in_reverse_fallback(
