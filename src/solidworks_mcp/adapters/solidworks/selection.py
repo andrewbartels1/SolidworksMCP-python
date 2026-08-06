@@ -25,6 +25,10 @@ class SolidWorksSelectionMixin:
     async def list_features(
         self, include_suppressed: bool = False
     ) -> AdapterResult[list[dict[str, Any]]]:
+        sw_app = getattr(self, "swApp", None)
+        active_model = getattr(sw_app, "ActiveDoc", None) if sw_app else None
+        if active_model is not None:
+            self.currentModel = active_model
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,

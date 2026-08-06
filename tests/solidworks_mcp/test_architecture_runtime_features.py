@@ -222,8 +222,15 @@ def test_security_enforcer_requires_valid_api_key(
 
 
 @pytest.mark.asyncio
-async def test_server_runtime_instrumentation_caches_read_calls() -> None:
-    """Server instrumentation should cache eligible read operations."""
+async def test_server_runtime_instrumentation_does_not_cache_live_reads() -> None:
+    """Live document reads must never be cached; state can change between calls.
+
+    ``get_model_info`` (and the other live-document reads) were removed from
+    the router's cacheable-operations set because the router has no
+    mutation-triggered invalidation. A cached read could report a stale path,
+    dirty flag, or feature list after a save or modeling operation. See PR
+    "fix: make SolidWorks live readback consistent".
+    """
     cfg = SolidWorksMCPConfig(
         mock_solidworks=True,
         enable_intelligent_routing=True,
@@ -256,7 +263,7 @@ async def test_server_runtime_instrumentation_caches_read_calls() -> None:
 
     assert first.is_success is True
     assert second.is_success is True
-    assert adapter.calls == 1
+    assert adapter.calls == 2
 
 
 def test_complexity_analyzer_recognizes_expanded_operations() -> None:

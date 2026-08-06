@@ -1238,15 +1238,19 @@ class _FeatureSelectionService:
                     default=0,
                 )
 
-        if features:
-            return features
-
+        # Always augment the forward traversal with FeatureByPositionReverse.
+        # Some SolidWorks COM/type-library combinations stop GetNextFeature at
+        # the system folders even though later sketches and body features
+        # exist. The dedupe set keeps this fallback safe when both traversals
+        # return the same entries.
         feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
         count = self._adapter._attempt(
             lambda: int(feature_manager.GetFeatureCount(True) or 0),  # type: ignore[union-attr]
             default=0,
         )
-        for reverse_pos in range(1, (count or 0) + 1):
+        # FeatureByPositionReverse is zero-based. Starting at one silently
+        # skipped the newest feature (typically the just-created extrusion).
+        for reverse_pos in range(0, count or 0):
             feature = self._adapter._attempt(
                 lambda pos=reverse_pos: (  # type: ignore[misc]
                     self._adapter.currentModel.FeatureByPositionReverse(pos)  # type: ignore[union-attr]
@@ -1258,7 +1262,7 @@ class _FeatureSelectionService:
                 features,
                 seen,
                 feature,
-                (count or 0) - reverse_pos,
+                (count or 0) - reverse_pos - 1,
                 include_suppressed,
             )
 
@@ -1283,7 +1287,10 @@ class _FeatureSelectionService:
         """
         name = str(getattr(feature, "Name", ""))
         feature_type = str(
-            self._adapter._attempt(lambda: feature.GetTypeName2(), default="Unknown")
+            self._adapter._attempt(
+                lambda: self._adapter._get_attr_or_call(feature, "GetTypeName2"),
+                default="Unknown",
+            )
         )
         dedupe_key = (name, feature_type)
         if dedupe_key in seen:
@@ -2198,7 +2205,7 @@ class PyWin32Adapter(
         if not self.currentModel:
             return "Unknown"
 
-        doc_type = self.currentModel.GetType()
+        doc_type = self._get_attr_or_call(self.currentModel, "GetType")
         type_map = {1: "Part", 2: "Assembly", 3: "Drawing"}
         return type_map.get(doc_type, "Unknown")
 
