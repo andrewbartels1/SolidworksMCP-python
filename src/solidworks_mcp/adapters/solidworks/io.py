@@ -633,9 +633,7 @@ class SolidWorksIOMixin:
             )
             # Try GetSaveFlag (method) first, fallback to property
             is_dirty_raw = adapter._attempt(
-                lambda: adapter._get_attr_or_call(
-                    adapter.currentModel, "GetSaveFlag"
-                ),
+                lambda: adapter._get_attr_or_call(adapter.currentModel, "GetSaveFlag"),
                 default=None,
             )
             is_dirty = bool(is_dirty_raw) if is_dirty_raw is not None else None
@@ -653,12 +651,8 @@ class SolidWorksIOMixin:
                 rebuild_status_raw if rebuild_status_raw is not None else None
             )
             return {
-                "title": adapter._get_attr_or_call(
-                    adapter.currentModel, "GetTitle"
-                ),
-                "path": adapter._get_attr_or_call(
-                    adapter.currentModel, "GetPathName"
-                ),
+                "title": adapter._get_attr_or_call(adapter.currentModel, "GetTitle"),
+                "path": adapter._get_attr_or_call(adapter.currentModel, "GetPathName"),
                 "type": adapter._get_document_type(),
                 "configuration": config_name,
                 "is_dirty": is_dirty,

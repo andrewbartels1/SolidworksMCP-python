@@ -249,7 +249,7 @@ await adapter.create_cut_extrude(
 
 | Question | Where to look |
 |---|---|
-| Which class owns a method? | `gen_py/3.11/83A33D31-*x0x34x0.py` — search `def MethodName` and note the class above it |
+| Which class owns a method? | `gen_py/3.13/83A33D31-*x0x34x0.py` — search `def MethodName` and note the class above it |
 | Is a name a method or property? | In gen_py class: `def Name(...)` = method; `"Name": (...)` in `_prop_map_get_` = property |
 | What DISPID does a method have? | `InvokeTypes(DISPID, ...)` line in the gen_py method body |
 | Does a method return IFeature? | Check return type: `(9, 0)` = VT_DISPATCH (object); `(24, 0)` = VT_I4 (integer) |

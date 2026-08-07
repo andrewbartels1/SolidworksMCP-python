@@ -63,7 +63,7 @@ async def test_validate_environment_windows_and_version_guard(monkeypatch):
     assert "SolidWorks not available" in warning.call_args[0][0]
 
     monkeypatch.setattr(sys, "version_info", _VersionInfo(3, 10))
-    with pytest.raises(SolidWorksMCPError, match=r"Python 3.11\+ required"):
+    with pytest.raises(SolidWorksMCPError, match=r"Python 3.13\+ required"):
         await validation_mod.validate_environment(cfg)
 
 

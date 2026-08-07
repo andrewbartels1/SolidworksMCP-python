@@ -27,7 +27,7 @@ os.environ["USE_MOCK_SOLIDWORKS"] = "true"
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+def event_loop() -> Generator[asyncio.AbstractEventLoop]:
     """Create event loop for async tests."""
     try:
         loop = asyncio.get_running_loop()
@@ -38,7 +38,7 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 @pytest.fixture
-def temp_dir() -> Generator[Path, None, None]:
+def temp_dir() -> Generator[Path]:
     """Create temporary directory for test files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         yield Path(tmp_dir)
@@ -99,7 +99,7 @@ def strict_config() -> SolidWorksMCPConfig:
 @pytest_asyncio.fixture
 async def mock_adapter(
     mock_config: SolidWorksMCPConfig,
-) -> AsyncGenerator[MockSolidWorksAdapter, None]:
+) -> AsyncGenerator[MockSolidWorksAdapter]:
     """Create mock SolidWorks adapter."""
     adapter = await create_adapter(mock_config)
     await adapter.connect()
@@ -108,7 +108,7 @@ async def mock_adapter(
 
 
 @pytest_asyncio.fixture
-async def mcp_server(mock_config: SolidWorksMCPConfig) -> AsyncGenerator[FastMCP, None]:
+async def mcp_server(mock_config: SolidWorksMCPConfig) -> AsyncGenerator[FastMCP]:
     """Create FastMCP server instance."""
     mcp = FastMCP("Test SolidWorks MCP Server")
     yield mcp
@@ -117,7 +117,7 @@ async def mcp_server(mock_config: SolidWorksMCPConfig) -> AsyncGenerator[FastMCP
 @pytest_asyncio.fixture
 async def solidworks_server(
     mock_config: SolidWorksMCPConfig,
-) -> AsyncGenerator[SolidWorksMCPServer, None]:
+) -> AsyncGenerator[SolidWorksMCPServer]:
     """Create full SolidWorks MCP Server instance."""
     server = SolidWorksMCPServer(mock_config)
     await server.setup()

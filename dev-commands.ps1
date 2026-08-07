@@ -41,7 +41,7 @@ function Ensure-Venv {
     # Create with uv (preferred)
     if (Get-Command uv -ErrorAction SilentlyContinue) {
         Write-Host "Creating .venv with uv..." -ForegroundColor Cyan
-        uv venv .venv --python 3.11
+        uv venv .venv --python 3.13
         if ($LASTEXITCODE -eq 0 -and (Test-Path $venvPy)) {
             & $venvPy -m ensurepip --upgrade
             return $true
@@ -50,7 +50,7 @@ function Ensure-Venv {
 
     # Fallback: py launcher or python
     $pyCmd  = if (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { "python" }
-    $pyArgs = if ($pyCmd -eq "py") { @("-3.11") } else { @() }
+    $pyArgs = if ($pyCmd -eq "py") { @("-3.13") } else { @() }
     Write-Host "Creating .venv with $pyCmd..." -ForegroundColor Cyan
     & $pyCmd @pyArgs -m venv .venv
     if ($LASTEXITCODE -eq 0 -and (Test-Path $venvPy)) {

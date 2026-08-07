@@ -1,6 +1,6 @@
 # SolidWorks CAD Assistant & MCP Server
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
@@ -58,7 +58,7 @@ When this is correct, startup logs show:
 ## Requirements
 
 - Windows 10/11 for real SolidWorks COM automation.
-- Python 3.11+ from python.org.
+- Python 3.13+ from python.org.
 - Git.
 - SolidWorks installed and launched at least once.
 

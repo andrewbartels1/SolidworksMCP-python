@@ -60,7 +60,7 @@ def _is_windows() -> bool:
 
 
 @pytest_asyncio.fixture
-async def mock_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
+async def mock_server() -> AsyncGenerator[SolidWorksMCPServer]:
     """Mock-adapter server — no SolidWorks required."""
     config = SolidWorksMCPConfig(
         adapter_type=AdapterType.MOCK,
@@ -74,7 +74,7 @@ async def mock_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
 
 
 @pytest_asyncio.fixture
-async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
+async def real_server() -> AsyncGenerator[SolidWorksMCPServer]:
     """Real COM adapter — requires Windows + SolidWorks running."""
     config = SolidWorksMCPConfig(
         adapter_type=AdapterType.PYWIN32,
