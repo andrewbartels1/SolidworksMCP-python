@@ -42,9 +42,9 @@ async def validate_environment(config: SolidWorksMCPConfig) -> None:
     import sys
 
     python_version = sys.version_info
-    if python_version < (3, 11):
+    if python_version < (3, 13):
         raise SolidWorksMCPError(
-            f"Python 3.11+ required, but running {python_version.major}.{python_version.minor}"
+            f"Python 3.13+ required, but running {python_version.major}.{python_version.minor}"
         )
 
     logger.info("Environment validation complete")

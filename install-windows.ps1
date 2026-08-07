@@ -169,7 +169,7 @@ foreach ($candidate in $launcherCandidates) {
 
 if (-not $pythonExe) {
     Write-Host "ERROR: No working Python launcher found." -ForegroundColor Red
-    Write-Host "Install Python 3.11+ from https://python.org and ensure either 'python' or 'py -3' works." -ForegroundColor Yellow
+    Write-Host "Install Python 3.13+ from https://python.org and ensure either 'python' or 'py -3' works." -ForegroundColor Yellow
     exit 1
 }
 $pythonVersion = Invoke-Python --version 2>&1
@@ -182,8 +182,8 @@ if (-not $versionMatch.Success) {
 
 $major = [int]$versionMatch.Groups[1].Value
 $minor = [int]$versionMatch.Groups[2].Value
-if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 11)) {
-    Write-Host "ERROR: Python 3.11+ is required. Found $versionText" -ForegroundColor Red
+if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 13)) {
+    Write-Host "ERROR: Python 3.13+ is required. Found $versionText" -ForegroundColor Red
     exit 1
 }
 
