@@ -4,7 +4,7 @@ Get running quickly with the verified Windows setup.
 
 ## Prerequisites
 
-- Python 3.11+ installed from python.org.
+- Python 3.13+ installed from python.org.
 - PATH enabled during Python install.
 - Windows 10/11.
 - SolidWorks installed (for real automation).

@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "solidworks-mcp-python"
-version = "1.0.0"
+version = "1.0.1"
 description = "SolidWorks MCP Server with FastMCP and PydanticAI - Python Implementation"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = "MIT"
 authors = [
     { name = "Andrew", email = "your-email@example.com" },
@@ -21,8 +21,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -220,7 +218,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 exclude = [
     "src/utils/",
 ]
@@ -261,7 +259,7 @@ ignore_errors = true
 
 
 [tool.black]
-target-version = ["py311"]
+target-version = ["py313"]
 line-length = 88
 skip-string-normalization = false
 extend-exclude = '''
@@ -277,7 +275,7 @@ extend-exclude = '''
 '''
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]

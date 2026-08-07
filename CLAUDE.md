@@ -4,7 +4,7 @@ This file is the quick orientation guide for contributors and coding agents.
 
 ## Platform and Runtime
 
-- Primary runtime is Python 3.11+.
+- Primary runtime is Python 3.13+.
 - Real COM automation requires Windows + SolidWorks installed.
 - Cross-platform development is possible in mock/test mode.
 

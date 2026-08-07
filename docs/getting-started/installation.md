@@ -11,7 +11,7 @@ Real SolidWorks automation requires Windows.
 
 ## 1. Install Python from python.org
 
-1. Download Python 3.11+ from <https://www.python.org/downloads/windows/>.
+1. Download Python 3.13+ from <https://www.python.org/downloads/windows/>.
 2. Run installer.
 3. Enable **Add python.exe to PATH**.
 4. Finish install and open a new PowerShell window.
