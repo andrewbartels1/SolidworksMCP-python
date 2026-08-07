@@ -80,6 +80,7 @@ dev = [
     "pre-commit>=3.4.0",
     "tox>=4.11.0",
     "factory-boy>=3.3.0",
+    "build>=1.0.0",  # `python -m build`, used by `make build`
 ]
 test = [
     "pytest>=7.4.0",
