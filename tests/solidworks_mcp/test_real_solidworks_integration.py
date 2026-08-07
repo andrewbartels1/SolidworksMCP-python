@@ -50,7 +50,7 @@ async def _tool_names(server: SolidWorksMCPServer) -> list[str]:
 
 
 @pytest_asyncio.fixture
-async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
+async def real_server() -> AsyncGenerator[SolidWorksMCPServer]:
     """Test helper for real server."""
     if platform.system() != "Windows":
         pytest.skip("Real SolidWorks integration tests require Windows")

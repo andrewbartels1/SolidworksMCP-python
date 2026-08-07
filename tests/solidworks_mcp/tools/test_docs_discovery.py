@@ -52,7 +52,7 @@ async def _find_tool(server: SolidWorksMCPServer, tool_name: str):
 
 
 @pytest_asyncio.fixture
-async def real_server() -> AsyncGenerator[SolidWorksMCPServer, None]:
+async def real_server() -> AsyncGenerator[SolidWorksMCPServer]:
     """Create real MCP server for testing."""
     config = SolidWorksMCPConfig(
         adapter_type=AdapterType.PYWIN32,
