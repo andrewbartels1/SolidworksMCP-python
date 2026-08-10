@@ -165,7 +165,7 @@ Set your LM Studio MCP config file to include this server (LM Studio expects `mc
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\Users\\andre\\OneDrive\\Documents\\GitHub\\SolidworksMCP-python\\run-mcp.ps1"
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
       ]
     }
   }
@@ -178,7 +178,7 @@ Alternative direct-python entry:
 {
   "mcpServers": {
     "solidworks-mcp-server": {
-      "command": "C:\\Users\\andre\\OneDrive\\Documents\\GitHub\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
       "args": ["-m", "solidworks_mcp.server"]
     }
   }
