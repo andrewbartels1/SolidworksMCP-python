@@ -24,10 +24,10 @@ function Resolve-UvCommand {
         return $uvCommand.Source
     }
 
-    $candidatePaths = @(
-        (Join-Path $HOME ".local\bin\uv.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe")
-    )
+    $candidatePaths = @(Join-Path $HOME ".local\bin\uv.exe")
+    if ($env:LOCALAPPDATA) {
+        $candidatePaths += Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe"
+    }
 
     foreach ($candidatePath in $candidatePaths) {
         if (Test-Path $candidatePath) {

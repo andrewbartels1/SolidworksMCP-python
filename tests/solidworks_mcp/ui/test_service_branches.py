@@ -199,13 +199,6 @@ def test_ui_service_ensure_provider_credentials_github_failure(
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_API_KEY", raising=False)
 
-    def _raise(*_a: Any, **_k: Any) -> Any:
-        """Test raise."""
-
-        raise RuntimeError("gh missing")
-
-    monkeypatch.setattr(service.subprocess, "run", _raise)
-
     with pytest.raises(RuntimeError, match="Set GH_TOKEN"):
         service._ensure_provider_credentials("github:openai/gpt-4.1")
 
