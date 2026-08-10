@@ -1,5 +1,7 @@
 
 
+**Idiomas:** [English](README.md) | [Español](README.es-ES.md)
+
 # Asistente CAD de SolidWorks y Servidor MCP
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
@@ -167,7 +169,7 @@ Configura tu archivo de configuración de MCP de LM Studio para incluir este ser
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\Users\\andre\\OneDrive\\Documents\\GitHub\\SolidworksMCP-python\\run-mcp.ps1"
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
       ]
     }
   }
@@ -180,7 +182,7 @@ Entrada alternativa directa con Python:
 {
   "mcpServers": {
     "solidworks-mcp-server": {
-      "command": "C:\\Users\\andre\\OneDrive\\Documents\\GitHub\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
       "args": ["-m", "solidworks_mcp.server"]
     }
   }
