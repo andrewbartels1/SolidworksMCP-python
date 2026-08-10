@@ -24,14 +24,20 @@ function Resolve-UvCommand {
         return $uvCommand.Source
     }
 
-    $userLocalBin = Join-Path $HOME ".local\bin"
-    $userLocalUv = Join-Path $userLocalBin "uv.exe"
-    if (Test-Path $userLocalUv) {
-        $pathParts = $env:Path -split ";"
-        if ($pathParts -notcontains $userLocalBin) {
-            $env:Path = "$userLocalBin;$env:Path"
+    $candidatePaths = @(Join-Path $HOME ".local\bin\uv.exe")
+    if ($env:LOCALAPPDATA) {
+        $candidatePaths += Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe"
+    }
+
+    foreach ($candidatePath in $candidatePaths) {
+        if (Test-Path $candidatePath) {
+            $candidateDir = Split-Path $candidatePath -Parent
+            $pathParts = $env:Path -split ";"
+            if ($pathParts -notcontains $candidateDir) {
+                $env:Path = "$candidateDir;$env:Path"
+            }
+            return $candidatePath
         }
-        return $userLocalUv
     }
 
     return $null

@@ -7,7 +7,6 @@ This module preserves historical import paths used by tests and external callers
 from __future__ import annotations
 
 import os
-import subprocess
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path

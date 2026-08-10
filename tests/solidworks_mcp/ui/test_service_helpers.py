@@ -226,11 +226,7 @@ def test_provider_credentials_checks(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("SOLIDWORKS_UI_LOCAL_ENDPOINT", raising=False)
 
-    monkeypatch.setattr(
-        service.subprocess,
-        "run",
-        lambda *a, **k: SimpleNamespace(returncode=0, stdout="tok\n"),
-    )
+    monkeypatch.setenv("GH_TOKEN", "tok")
     service._ensure_provider_credentials("github:openai/gpt-4.1")
     assert service.os.getenv("GITHUB_API_KEY") == "tok"
 
