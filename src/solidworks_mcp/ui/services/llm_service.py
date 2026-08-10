@@ -1,12 +1,11 @@
 """LLM orchestration service for the Prefab CAD assistant dashboard.
 
 Wraps all pydantic-ai calls for clarification, family inspection, and Go orchestration.
-This module is the only place that imports pydantic-ai or subprocess for token retrieval.
+This module is the only place that imports pydantic-ai for dashboard orchestration.
 
 Security note:
-    ``_ensure_provider_credentials`` uses ``subprocess.run(["gh", "auth", "token"])``.
-    # TODO: security review — subprocess token extraction.  Consider replacing with a
-    # credential-store or environment-variable-only approach.
+    ``_ensure_provider_credentials`` is environment-variable only and does not shell
+    out to external credential helpers.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ import inspect as _inspect
 import json
 import os
 import re
-import subprocess  # noqa: S404  # TODO: security review — subprocess token extraction
 from pathlib import Path
 from typing import Any, Literal
 
@@ -315,22 +313,8 @@ def _ensure_provider_credentials(
     Raises:
         RuntimeError: When the required credential is missing.
     """
-    # TODO: security review — subprocess token extraction.  Replace with env-only lookup.
     if model_name.startswith("github:"):
         github_token = os.getenv("GITHUB_API_KEY") or os.getenv("GH_TOKEN")
-        if not github_token:
-            try:
-                result = subprocess.run(  # noqa: S603
-                    ["gh", "auth", "token"],  # noqa: S607
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    check=False,
-                )
-            except Exception:
-                result = None  # type: ignore[assignment]
-            if result and result.returncode == 0:
-                github_token = result.stdout.strip()
         if not github_token:
             raise RuntimeError(
                 "Set GH_TOKEN or GITHUB_API_KEY with models:read scope before using the dashboard LLM actions."

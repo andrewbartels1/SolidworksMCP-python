@@ -125,19 +125,22 @@ def test_extract_blind_depth_handles_value_error(monkeypatch) -> None:
     assert llm_service._extract_blind_depth_mm("blind 10.0 mm") is None
 
 
-def test_ensure_provider_credentials_sets_github_from_subprocess(monkeypatch) -> None:
-    """GitHub credentials should be sourced from gh auth token."""
-    # Ensure the subprocess fallback sets GITHUB_API_KEY.
+def test_ensure_provider_credentials_uses_gh_token_env(monkeypatch) -> None:
+    """GitHub credentials should be sourced from environment variables only."""
+    monkeypatch.delenv("GITHUB_API_KEY", raising=False)
+    monkeypatch.setenv("GH_TOKEN", "token")
+
+    llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+    assert os.environ.get("GITHUB_API_KEY") == "token"
+
+
+def test_ensure_provider_credentials_github_missing_raises(monkeypatch) -> None:
+    """GitHub provider should fail closed when required credentials are missing."""
     monkeypatch.delenv("GITHUB_API_KEY", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
 
-    class _Result:
-        returncode = 0
-        stdout = "token"
-
-    monkeypatch.setattr(llm_service.subprocess, "run", lambda *_a, **_kw: _Result())
-    llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
-    assert os.environ.get("GITHUB_API_KEY") == "token"
+    with pytest.raises(RuntimeError, match="Set GH_TOKEN or GITHUB_API_KEY"):
+        llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
 
 
 def test_build_agent_model_github_import_error(monkeypatch) -> None:
@@ -429,32 +432,34 @@ async def test_run_structured_agent_mcp_signature_success(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_provider_credentials_github_subprocess_fails(monkeypatch) -> None:
-    """GitHub credential missing and gh auth fails should raise RuntimeError."""
+def test_ensure_provider_credentials_github_missing_without_any_env_raises(
+    monkeypatch,
+) -> None:
+    """GitHub credential missing in env should raise RuntimeError."""
     monkeypatch.delenv("GITHUB_API_KEY", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
 
-    class _Result:
-        returncode = 1
-        stdout = ""
-
-    monkeypatch.setattr(llm_service.subprocess, "run", lambda *_a, **_kw: _Result())
     with pytest.raises(RuntimeError, match="GH_TOKEN"):
         llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
 
 
-def test_ensure_provider_credentials_github_subprocess_raises(monkeypatch) -> None:
-    """subprocess.run raising should be caught and credential error raised."""
-    monkeypatch.delenv("GITHUB_API_KEY", raising=False)
+def test_ensure_provider_credentials_github_prefers_existing_api_key(
+    monkeypatch,
+) -> None:
+    """When GITHUB_API_KEY is already set, credential checks should pass."""
+    monkeypatch.setenv("GITHUB_API_KEY", "tok123")
     monkeypatch.delenv("GH_TOKEN", raising=False)
 
-    monkeypatch.setattr(
-        llm_service.subprocess,
-        "run",
-        lambda *_a, **_kw: (_ for _ in ()).throw(OSError("no gh")),
-    )
-    with pytest.raises(RuntimeError, match="GH_TOKEN"):
-        llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+    llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+
+
+def test_ensure_provider_credentials_github_prefers_gh_token(monkeypatch) -> None:
+    """GH_TOKEN should be promoted to GITHUB_API_KEY for provider compatibility."""
+    monkeypatch.delenv("GITHUB_API_KEY", raising=False)
+    monkeypatch.setenv("GH_TOKEN", "tok-gh")
+
+    llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
+    assert os.environ.get("GITHUB_API_KEY") == "tok-gh"
 
 
 def test_ensure_provider_credentials_openai_missing(monkeypatch) -> None:
@@ -476,17 +481,6 @@ def test_ensure_provider_credentials_local_no_error(monkeypatch) -> None:
     llm_service._ensure_provider_credentials(
         "local:gemma4:e2b", "http://localhost:11434"
     )
-
-
-def test_ensure_provider_credentials_github_env_already_set(monkeypatch) -> None:
-    """When GITHUB_API_KEY is already set, no subprocess is needed."""
-    monkeypatch.setenv("GITHUB_API_KEY", "tok123")
-    subprocess_calls: list = []
-    monkeypatch.setattr(
-        llm_service.subprocess, "run", lambda *_a, **_kw: subprocess_calls.append(1)
-    )
-    llm_service._ensure_provider_credentials("github:openai/gpt-4.1")
-    assert not subprocess_calls  # subprocess should NOT be called
 
 
 # ---------------------------------------------------------------------------

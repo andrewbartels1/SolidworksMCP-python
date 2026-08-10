@@ -18,6 +18,25 @@ function Get-VenvPython {
     return (Join-Path $PSScriptRoot ".venv\Scripts\python.exe")
 }
 
+function Resolve-UvCommand {
+    $uvCommand = Get-Command uv -ErrorAction SilentlyContinue
+    if ($uvCommand) {
+        return $uvCommand.Source
+    }
+
+    $userLocalBin = Join-Path $HOME ".local\bin"
+    $userLocalUv = Join-Path $userLocalBin "uv.exe"
+    if (Test-Path $userLocalUv) {
+        $pathParts = $env:Path -split ";"
+        if ($pathParts -notcontains $userLocalBin) {
+            $env:Path = "$userLocalBin;$env:Path"
+        }
+        return $userLocalUv
+    }
+
+    return $null
+}
+
 function Ensure-Venv {
     $venvDir = Join-Path $PSScriptRoot ".venv"
     $venvCfg = Join-Path $venvDir "pyvenv.cfg"
@@ -39,9 +58,10 @@ function Ensure-Venv {
     }
 
     # Create with uv (preferred)
-    if (Get-Command uv -ErrorAction SilentlyContinue) {
+    $uvCmd = Resolve-UvCommand
+    if ($uvCmd) {
         Write-Host "Creating .venv with uv..." -ForegroundColor Cyan
-        uv venv .venv --python 3.13
+        & $uvCmd venv .venv --python 3.13
         if ($LASTEXITCODE -eq 0 -and (Test-Path $venvPy)) {
             & $venvPy -m ensurepip --upgrade
             return $true
@@ -115,8 +135,10 @@ function dev-help {
 function dev-install {
     Write-Host "Installing SolidWorks MCP Server..." -ForegroundColor Cyan
 
-    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    $uvCmd = Resolve-UvCommand
+    if (-not $uvCmd) {
         Write-Host "ERROR: uv is required. Install from: https://docs.astral.sh/uv/" -ForegroundColor Red
+        Write-Host "Hint: installer location is usually $HOME\.local\bin\uv.exe" -ForegroundColor Yellow
         return
     }
 
@@ -124,7 +146,7 @@ function dev-install {
     if (-not $ready) { return }
 
     $venvPy = Get-VenvPython
-    uv pip install --python $venvPy -e ".[dev,test,docs,ui,rag]"
+    & $uvCmd pip install --python $venvPy -e ".[dev,test,docs,ui,rag]"
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Installation complete!" -ForegroundColor Green
     } else {
