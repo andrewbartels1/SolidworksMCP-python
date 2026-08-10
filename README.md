@@ -1,5 +1,7 @@
 # SolidWorks CAD Assistant & MCP Server
 
+**Languages:** [English](README.md) | [Español](README.es-ES.md)
+
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
