@@ -821,6 +821,39 @@ class TestFileManagementTools:
         configs_exception = await list_configs_tool()
         assert configs_exception["status"] == "error"
 
+    @pytest.mark.asyncio
+    async def test_list_features_tool_flattened_assembly_result(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """list_features tool count/features keep working against a real
+        (unmocked) flattened Assembly result — guards the design decision
+        to keep AdapterResult.data a flat list for assemblies (see OpenSpec
+        change assembly-aware-list-features/design.md) against silent
+        breakage of the count/features contract.
+        """
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        list_features_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "list_features":
+                list_features_tool = tool.fn
+        assert list_features_tool is not None
+
+        await mock_adapter.open_model("C:\\mock\\Assem1.sldasm")
+
+        result = await list_features_tool(input_data={"include_suppressed": False})
+
+        assert result["status"] == "success"
+        assert isinstance(result["features"], list)
+        assert result["count"] == len(result["features"])
+        assert result["count"] > 0
+        # classify_feature_tree_snapshot must not choke on the new
+        # component/component_path keys riding along on each descriptor.
+        classification = classify_feature_tree_snapshot(
+            {"type": "Assembly"}, result["features"]
+        )
+        assert classification["family"] is not None
+
     def test_classify_feature_tree_snapshot_paths(self):
         """Classify common feature families and low-confidence sketch-only snapshots."""
         revolve = classify_feature_tree_snapshot(

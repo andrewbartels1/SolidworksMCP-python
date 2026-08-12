@@ -1198,11 +1198,59 @@ class _FeatureSelectionService:
             "selected_name": feature_name,
         }
 
-    def list_features(self, include_suppressed: bool = False) -> list[dict[str, Any]]:
-        """Enumerate model features using primary and fallback traversal paths.
+    def list_features(
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
+    ) -> list[dict[str, Any]]:
+        """Enumerate model features, including assembly component trees.
+
+        For a Part document, returns that document's own feature list only
+        (unchanged from prior behavior). For an Assembly document, also
+        flattens in every resolved top-level component's features — and,
+        recursively, sub-assembly components' features up to
+        ``max_assembly_depth`` — tagged with ``component``/``component_path``
+        so callers can tell which document each descriptor came from.
 
         Args:
             include_suppressed: Include suppressed features when ``True``.
+            max_assembly_depth: Sub-assembly recursion budget. Ignored for
+                Part documents.
+
+        Returns:
+            list[dict[str, Any]]: Ordered, flattened feature descriptors.
+        """
+        document = self._adapter.currentModel
+        features = self._list_document_features(document, include_suppressed)
+
+        doc_type = self._adapter._attempt(
+            lambda: int(document.GetType() or 0),  # type: ignore[union-attr]
+            default=0,
+        )
+        if doc_type == self._adapter.constants.get("swDocASSEMBLY", 2):
+            features.extend(
+                self._list_assembly_component_features(
+                    document, include_suppressed, max_assembly_depth - 1
+                )
+            )
+
+        return features
+
+    def _list_document_features(
+        self,
+        document: Any,
+        include_suppressed: bool,
+        component: str | None = None,
+        component_path: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Enumerate one document's own features using primary and fallback
+        traversal paths.
+
+        Args:
+            document: SolidWorks ``IModelDoc2`` COM object to traverse.
+            include_suppressed: Include suppressed features when ``True``.
+            component: Owning component name to tag every descriptor with,
+                or ``None`` for the document's own (non-component) features.
+            component_path: Owning component's resolved document path, or
+                ``None`` to match ``component``.
 
         Returns:
             list[dict[str, Any]]: Ordered feature descriptors.
@@ -1210,9 +1258,7 @@ class _FeatureSelectionService:
         features: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
 
-        feature = self._adapter._attempt(
-            lambda: self._adapter.currentModel.FirstFeature()  # type: ignore[union-attr]
-        )
+        feature = self._adapter._attempt(lambda: document.FirstFeature())
         # Flag the feature dispatch so methods like GetNextFeature work
         if feature is not None:
             self._adapter._attempt(
@@ -1222,7 +1268,15 @@ class _FeatureSelectionService:
         pos = 0
         guard = 0
         while feature and guard < 10000:
-            self._append_feature_to(features, seen, feature, pos, include_suppressed)
+            self._append_feature_to(
+                features,
+                seen,
+                feature,
+                pos,
+                include_suppressed,
+                component=component,
+                component_path=component_path,
+            )
             pos += 1
             guard += 1
             next_feature = self._adapter._attempt(
@@ -1243,7 +1297,7 @@ class _FeatureSelectionService:
         # the system folders even though later sketches and body features
         # exist. The dedupe set keeps this fallback safe when both traversals
         # return the same entries.
-        feature_manager = getattr(self._adapter.currentModel, "FeatureManager", None)
+        feature_manager = getattr(document, "FeatureManager", None)
         count = self._adapter._attempt(
             lambda: int(feature_manager.GetFeatureCount(True) or 0),  # type: ignore[union-attr]
             default=0,
@@ -1252,9 +1306,7 @@ class _FeatureSelectionService:
         # skipped the newest feature (typically the just-created extrusion).
         for reverse_pos in range(0, count or 0):
             feature = self._adapter._attempt(
-                lambda pos=reverse_pos: (  # type: ignore[misc]
-                    self._adapter.currentModel.FeatureByPositionReverse(pos)  # type: ignore[union-attr]
-                )
+                lambda pos=reverse_pos: document.FeatureByPositionReverse(pos)
             )
             if feature is None:
                 continue
@@ -1264,9 +1316,114 @@ class _FeatureSelectionService:
                 feature,
                 (count or 0) - reverse_pos - 1,
                 include_suppressed,
+                component=component,
+                component_path=component_path,
             )
 
         return features
+
+    def _list_assembly_component_features(
+        self,
+        assembly_doc: Any,
+        include_suppressed: bool,
+        depth_remaining: int,
+    ) -> list[dict[str, Any]]:
+        """Traverse an assembly's top-level components and flatten their
+        features into the same shape ``_list_document_features`` produces.
+
+        A component that resolves to another Assembly is expanded (its own
+        features plus a recursive pass over its components) only while
+        ``depth_remaining > 0``; beyond that it is represented by a single
+        bare descriptor (name + path) instead of being expanded further.
+        Part components are always expanded fully — they have no further
+        nesting, so there is no unbounded-recursion risk from doing so.
+
+        Args:
+            assembly_doc: SolidWorks ``IAssemblyDoc``/``IModelDoc2`` COM
+                object whose top-level components to traverse.
+            include_suppressed: Include suppressed features when ``True``.
+            depth_remaining: Sub-assembly recursion budget remaining.
+
+        Returns:
+            list[dict[str, Any]]: Flattened, component-tagged descriptors.
+        """
+        results: list[dict[str, Any]] = []
+        assembly_swdoc_type = self._adapter.constants.get("swDocASSEMBLY", 2)
+
+        components = self._adapter._attempt(
+            lambda: assembly_doc.GetComponents(True), default=None
+        )
+        if not components:
+            return results
+
+        for component in components:
+            component_name = str(
+                self._adapter._attempt(
+                    lambda c=component: self._adapter._get_attr_or_call(c, "Name2"),
+                    default="",
+                )
+                or ""
+            )
+
+            resolved_doc = self._adapter._attempt(
+                lambda c=component: self._adapter._get_attr_or_call(
+                    c, "GetModelDoc2"
+                ),
+                default=None,
+            )
+            if resolved_doc is None:
+                results.append(
+                    {
+                        "name": component_name,
+                        "type": "UnresolvedComponent",
+                        "suppressed": False,
+                        "position": -1,
+                        "component": component_name,
+                        "component_path": None,
+                    }
+                )
+                continue
+
+            resolved_doc_type = self._adapter._attempt(
+                lambda d=resolved_doc: int(d.GetType() or 0), default=0
+            )
+            sw_type_info.flag_doc(resolved_doc, resolved_doc_type)
+            component_path, _title = self._adapter._document_routing.document_identity(
+                resolved_doc
+            )
+
+            if resolved_doc_type == assembly_swdoc_type and depth_remaining <= 0:
+                # Depth limit reached: identify the sub-assembly component
+                # without expanding its own features or its components.
+                results.append(
+                    {
+                        "name": component_name,
+                        "type": "Component",
+                        "suppressed": False,
+                        "position": -1,
+                        "component": component_name,
+                        "component_path": component_path,
+                    }
+                )
+                continue
+
+            results.extend(
+                self._list_document_features(
+                    resolved_doc,
+                    include_suppressed,
+                    component=component_name,
+                    component_path=component_path,
+                )
+            )
+
+            if resolved_doc_type == assembly_swdoc_type:
+                results.extend(
+                    self._list_assembly_component_features(
+                        resolved_doc, include_suppressed, depth_remaining - 1
+                    )
+                )
+
+        return results
 
     def _append_feature_to(
         self,
@@ -1275,6 +1432,8 @@ class _FeatureSelectionService:
         feature: Any,
         position: int,
         include_suppressed: bool,
+        component: str | None = None,
+        component_path: str | None = None,
     ) -> None:
         """Append one feature descriptor when dedupe and suppression rules allow.
 
@@ -1284,6 +1443,10 @@ class _FeatureSelectionService:
             feature: Feature COM object.
             position: Display position index.
             include_suppressed: Include suppressed entries when ``True``.
+            component: Owning component name, or ``None`` for a document's
+                own (non-component) feature.
+            component_path: Owning component's resolved document path, or
+                ``None`` to match ``component``.
         """
         name = str(getattr(feature, "Name", ""))
         feature_type = str(
@@ -1307,6 +1470,8 @@ class _FeatureSelectionService:
                 "type": feature_type,
                 "suppressed": suppressed,
                 "position": position,
+                "component": component,
+                "component_path": component_path,
             }
         )
 

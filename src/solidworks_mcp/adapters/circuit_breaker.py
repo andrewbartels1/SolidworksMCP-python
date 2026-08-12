@@ -927,20 +927,24 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def list_features(
-        self, include_suppressed: bool = False
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
     ) -> AdapterResult[list[dict[str, object]]]:
         """List model features through circuit breaker.
 
         Args:
             include_suppressed (bool): The include suppressed value. Defaults to False.
+            max_assembly_depth (int): Sub-assembly recursion depth. Defaults to 2.
 
         Returns:
             AdapterResult[list[dict[str, object]]]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
             "list_features",
-            lambda: self.adapter.list_features(include_suppressed),
-            input_dict={"include_suppressed": include_suppressed},
+            lambda: self.adapter.list_features(include_suppressed, max_assembly_depth),
+            input_dict={
+                "include_suppressed": include_suppressed,
+                "max_assembly_depth": max_assembly_depth,
+            },
         )
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
