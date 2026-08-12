@@ -474,6 +474,31 @@ def _flag_feature_methods(obj: Any, interface: str) -> None:  # pragma: no cover
         pass
 
 
+def _flag_feature_members(obj: Any, *names: str) -> None:  # pragma: no cover
+    """Flag only the named members on ``obj``.
+
+    Cheaper than :func:`_flag_feature_methods` inside a loop: flagging a
+    whole interface (``IFeature`` is ~100 names, ~27 ms) costs a fixed price
+    per object, and ``sw_type_info``'s flag cache is keyed by ``id(obj)``, so
+    a walk over fresh dispatches — one per feature — never hits it. Flagging
+    just the handful of members about to be read avoids that cost.
+
+    Args:
+        obj: The COM object (or test double) to flag.
+        *names: Member names about to be read.
+    """
+    try:
+        from solidworks_mcp.adapters import sw_type_info
+
+        sw_type_info.flag_members(obj, *names)
+    except Exception:
+        pass
+
+
+#: Members read while walking the feature tree in ``_profile_feature_names``.
+_TREE_WALK_MEMBERS = ("GetTypeName2", "GetNextFeature", "Name")
+
+
 def _read_member(obj: Any, name: str) -> Any:  # pragma: no cover
     """Read a COM member that pywin32 may expose as a property *or* a method.
 
@@ -527,7 +552,7 @@ def _profile_feature_names(adapter: Any) -> list[str]:  # pragma: no cover
         for _ in range(5000):
             if not feat:
                 break
-            _flag_feature_methods(feat, "IFeature")
+            _flag_feature_members(feat, *_TREE_WALK_MEMBERS)
             try:
                 if _read_member(feat, "GetTypeName2") == "ProfileFeature":
                     names.append(str(_read_member(feat, "Name")))

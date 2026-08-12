@@ -887,6 +887,15 @@ class _DocumentRoutingService:
         return self._adapter.currentModel
 
 
+#: Members the ``list_features`` tree walk actually reads on each feature
+#: dispatch. Flagging just these instead of the whole ``IFeature`` interface
+#: (~100 names, ~27 ms per object) is what keeps the walk cheap: the flag
+#: cache in ``sw_type_info`` is keyed by ``id(obj)``, and every feature here
+#: is a freshly returned dispatch, so a full-interface flag never hits that
+#: cache and pays its full cost on every single feature.
+_WALK_MEMBERS = ("GetNextFeature", "GetTypeName2", "IsSuppressed", "IsSuppressed2")
+
+
 class _FeatureSelectionService:
     """Encapsulate feature-selection strategies and name-candidate expansion.
 
@@ -1213,10 +1222,12 @@ class _FeatureSelectionService:
         feature = self._adapter._attempt(
             lambda: self._adapter.currentModel.FirstFeature()  # type: ignore[union-attr]
         )
-        # Flag the feature dispatch so methods like GetNextFeature work
+        # Flag only the members this walk reads (see ``_WALK_MEMBERS``) so
+        # methods like GetNextFeature work, without paying the cost of
+        # flagging the entire IFeature interface on every fresh dispatch.
         if feature is not None:
             self._adapter._attempt(
-                lambda f=feature: sw_type_info.flag_methods(f, "IFeature"),  # type: ignore[misc]
+                lambda f=feature: sw_type_info.flag_members(f, *_WALK_MEMBERS),  # type: ignore[misc]
                 default=0,
             )
         pos = 0
@@ -1234,7 +1245,7 @@ class _FeatureSelectionService:
             # Flag each new feature dispatch
             if feature is not None:
                 self._adapter._attempt(
-                    lambda f=feature: sw_type_info.flag_methods(f, "IFeature"),  # type: ignore[misc]
+                    lambda f=feature: sw_type_info.flag_members(f, *_WALK_MEMBERS),  # type: ignore[misc]
                     default=0,
                 )
 
