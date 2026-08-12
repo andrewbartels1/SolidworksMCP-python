@@ -79,8 +79,12 @@ htmlcov/
 .playwright-mcp/
 tmp/ui_smoke/
 
-# Claude local settings
-.claude/
+# Claude local settings (personal, machine-specific)
+.claude/*
+!.claude/commands/
+!.claude/commands/**
+!.claude/skills/
+!.claude/skills/**
 
 # random mypy artifacts
 mypy_*
