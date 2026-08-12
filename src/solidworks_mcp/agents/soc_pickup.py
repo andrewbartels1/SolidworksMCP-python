@@ -59,11 +59,27 @@ def _feature_map(feature_tree: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     return {f.get("name", ""): f for f in feature_tree if f.get("name")}
 
 
+def _feature_key(feature: dict[str, Any]) -> tuple[Any, str] | None:
+    """Stable identity for a feature row: (owning component, name).
+
+    An assembly's flattened feature list commonly has the same name
+    (e.g. "Boss-Extrude1") in several different components, so bare name
+    alone isn't unique across an assembly. Pairing it with ``component``
+    (``None`` for a document's own features) disambiguates that while
+    leaving Part-only trees - where every row's ``component`` is ``None``
+    - behaving exactly as bare-name comparison did before.
+    """
+    name = feature.get("name")
+    if not name:
+        return None
+    return (feature.get("component"), name)
+
+
 def diff_feature_trees(
     old_tree: list[dict[str, Any]],
     new_tree: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Return features present in new_tree but not in old_tree (by name).
+    """Return features present in new_tree but not in old_tree (by component+name).
 
     Args:
         old_tree: Feature list from the last ModelStateSnapshot.
@@ -72,8 +88,8 @@ def diff_feature_trees(
     Returns:
         List of new feature dicts, in the order they appear in new_tree.
     """
-    old_names = set(_feature_names(old_tree))
-    return [f for f in new_tree if f.get("name") not in old_names]
+    old_keys = {key for f in old_tree if (key := _feature_key(f)) is not None}
+    return [f for f in new_tree if _feature_key(f) not in old_keys]
 
 
 # ---------------------------------------------------------------------------

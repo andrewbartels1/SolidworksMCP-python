@@ -255,6 +255,51 @@ def test_build_component_tree_nests_subassembly_components() -> None:
     assert [f["name"] for f in sub["components"]["PartC"]["features"]] == ["Boss1"]
 
 
+def test_build_component_tree_preserves_parent_across_mixed_rows() -> None:
+    """A component's first-discovered non-None parent survives later rows
+    for the same component that lack component_parent or carry it as None.
+    """
+    features = [
+        {
+            "name": "Mate1",
+            "type": "Mate",
+            "component": "SubAssem-1",
+            "component_path": "C:/SubAssem.sldasm",
+            "component_parent": None,
+        },
+        {
+            "name": "Boss1",
+            "type": "Boss",
+            "component": "PartC",
+            "component_path": "C:/PartC.sldprt",
+            "component_parent": "SubAssem-1",
+        },
+        {
+            "name": "Fillet1",
+            "type": "Fillet",
+            "component": "PartC",
+            "component_path": "C:/PartC.sldprt",
+            "component_parent": None,
+        },
+        {
+            "name": "Cut1",
+            "type": "Cut",
+            "component": "PartC",
+            "component_path": "C:/PartC.sldprt",
+        },
+    ]
+    tree = build_component_tree(features)
+    assert "PartC" not in tree["components"]
+    assert set(tree["components"].keys()) == {"SubAssem-1"}
+    nested = tree["components"]["SubAssem-1"]["components"]
+    assert set(nested.keys()) == {"PartC"}
+    assert [f["name"] for f in nested["PartC"]["features"]] == [
+        "Boss1",
+        "Fillet1",
+        "Cut1",
+    ]
+
+
 def test_build_component_tree_excludes_marker_rows_from_features() -> None:
     """UnresolvedComponent/Component marker rows create a node but aren't feature entries."""
     features = [

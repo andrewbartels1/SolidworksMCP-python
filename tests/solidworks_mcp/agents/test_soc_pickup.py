@@ -118,6 +118,27 @@ def test_diff_ignores_removed_features():
     assert result == []
 
 
+def test_diff_disambiguates_same_name_across_components():
+    """Two different components sharing a feature name (e.g. every part has
+    its own "Boss-Extrude1") must not shadow each other in the diff - a new
+    feature in one component isn't "already seen" just because a
+    same-named feature already existed in a different component.
+    """
+
+    def _comp_feat(name: str, ftype: str, component: str) -> dict:
+        return {"name": name, "type": ftype, "component": component}
+
+    old = [_comp_feat("Boss-Extrude1", "Boss-Extrude", "PartA-1")]
+    new = [
+        _comp_feat("Boss-Extrude1", "Boss-Extrude", "PartA-1"),
+        # Same feature name, different component - genuinely new.
+        _comp_feat("Boss-Extrude1", "Boss-Extrude", "PartB-1"),
+    ]
+    result = diff_feature_trees(old, new)
+    assert len(result) == 1
+    assert result[0]["component"] == "PartB-1"
+
+
 # ---------------------------------------------------------------------------
 # emit_feature_lines
 # ---------------------------------------------------------------------------

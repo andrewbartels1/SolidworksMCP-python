@@ -327,7 +327,9 @@ def build_component_tree(features: list[Mapping[str, Any]] | None) -> dict[str, 
             node["features"].append(dict(row))
         if row.get("component_path") and not node.get("path"):
             node["path"] = row["component_path"]
-        parent_of[component] = row.get("component_parent")
+        parent = row.get("component_parent")
+        if parent is not None or component not in parent_of:
+            parent_of[component] = parent
 
     for name, node in nodes.items():
         parent = parent_of.get(name)
