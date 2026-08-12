@@ -14,6 +14,7 @@ required.
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -148,10 +149,14 @@ async def test_assembly_flattens_component_features(monkeypatch) -> None:
     assert by_name["Mate1"]["component_path"] is None
 
     assert by_name["Boss-Extrude1"]["component"] == "PartA-1"
-    assert by_name["Boss-Extrude1"]["component_path"] == "C:\\mock\\PartA.sldprt"
+    assert by_name["Boss-Extrude1"]["component_path"] == os.path.abspath(
+        "C:\\mock\\PartA.sldprt"
+    )
 
     assert by_name["Cut-Extrude1"]["component"] == "PartB-1"
-    assert by_name["Cut-Extrude1"]["component_path"] == "C:\\mock\\PartB.sldprt"
+    assert by_name["Cut-Extrude1"]["component_path"] == os.path.abspath(
+        "C:\\mock\\PartB.sldprt"
+    )
 
 
 @pytest.mark.asyncio
@@ -260,7 +265,7 @@ async def test_subassembly_beyond_depth_limit_is_not_expanded(monkeypatch) -> No
     descriptor = next(row for row in result.data if row["name"] == "SubAssem-1")
     assert descriptor["type"] == "Component"
     assert descriptor["component"] == "SubAssem-1"
-    assert descriptor["component_path"] == "C:\\mock\\SubAssem.sldasm"
+    assert descriptor["component_path"] == os.path.abspath("C:\\mock\\SubAssem.sldasm")
 
 
 @pytest.mark.asyncio

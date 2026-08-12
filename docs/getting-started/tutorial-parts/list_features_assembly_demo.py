@@ -158,7 +158,7 @@ async def main() -> None:
 
         print("\n--- nested component tree (build_component_tree) ---")
         print("Same data as above, reshaped so 'crank sub-1's three parts")
-        print("nest under it instead of sitting flat alongside its siblings:")
+        print("nest under each part instead of sitting flat alongside its sibling components:")
         tree = build_component_tree(feat_result.data)
         print_tree(tree)
 
