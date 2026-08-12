@@ -530,14 +530,50 @@ class SolidWorksIOMixin:
             """Save the model."""
             if file_path:
                 resolved_path = os.path.abspath(file_path)
-                os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+                directory = os.path.dirname(resolved_path)
+                if directory:
+                    os.makedirs(directory, exist_ok=True)
 
+                current_path = adapter._attempt(
+                    lambda: adapter._get_attr_or_call(
+                        adapter.currentModel, "GetPathName"
+                    ),
+                    default="",
+                )
+                same_file = bool(current_path) and os.path.normcase(
+                    os.path.abspath(str(current_path))
+                ) == os.path.normcase(resolved_path)
+
+                if same_file:
+                    # Saving a document over its own path is a plain Save.
+                    # It used to fall through to the Save-As branch below, which
+                    # closed the document and deleted the file before calling
+                    # SaveAs3 on the now-closed doc. That wrote an empty part and
+                    # lost the geometry.
+                    save_result = adapter._attempt(
+                        lambda: adapter.currentModel.Save3(1, None, None)
+                    )
+                    if save_result is None:
+                        save_fn = getattr(adapter.currentModel, "Save", None)
+                        if callable(save_fn):
+                            save_fn()
+                    if not os.path.exists(resolved_path):
+                        raise Exception(
+                            f"File not written after save: {resolved_path}"
+                        )
+                    return
+
+                # A *different* document may be holding the target path open.
+                # Close that one by name only - never the document being saved.
                 if adapter.swApp:
-                    adapter._attempt(lambda: adapter.swApp.CloseDoc(resolved_path))
+                    adapter._attempt(
+                        lambda: adapter.swApp.CloseDoc(
+                            os.path.basename(resolved_path)
+                        )
+                    )
 
-                if os.path.exists(resolved_path):
-                    adapter._attempt(lambda: os.remove(resolved_path))
-
+                # Deliberately no os.remove here: SaveAs3 overwrites, and
+                # deleting first meant a failed save destroyed the old file too.
                 save_as3_result = adapter.currentModel.SaveAs3(resolved_path, 0, 0)
                 if not self._is_success(save_as3_result):
                     save_as = getattr(adapter.currentModel, "SaveAs", None)
