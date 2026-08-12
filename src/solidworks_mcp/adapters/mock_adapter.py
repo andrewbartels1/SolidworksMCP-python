@@ -463,9 +463,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 feature_rows.append(row)
 
         if is_assembly:
+            components = self._assembly_components or _DEFAULT_ASSEMBLY_COMPONENTS
             feature_rows.extend(
                 self._flatten_assembly_components(
-                    self._assembly_components,
+                    components,
                     include_suppressed,
                     max_assembly_depth - 1,
                     None,
