@@ -210,6 +210,21 @@ async def test_subassembly_recursion_within_default_depth(monkeypatch) -> None:
     assert "Boss-Extrude1" in names
 
     by_name = {row["name"]: row for row in result.data}
+    # SubAssem-1 is top-level: no parent.
+    assert by_name["Mate2"]["component"] == "SubAssem-1"
+    assert by_name["Mate2"]["component_parent"] is None
+    # PartC-1 is nested inside SubAssem-1: component_parent links it back,
+    # distinguishing "nested inside" from merely "also in this assembly".
+    assert by_name["Boss-Extrude1"]["component"] == "PartC-1"
+    assert by_name["Boss-Extrude1"]["component_parent"] == "SubAssem-1"
+
+    from solidworks_mcp.utils.feature_tree_classifier import build_component_tree
+
+    tree = build_component_tree(result.data)
+    assert "PartC-1" in tree["components"]["SubAssem-1"]["components"]
+    assert "PartC-1" not in tree["components"]
+
+    by_name = {row["name"]: row for row in result.data}
     assert by_name["Mate2"]["component"] == "SubAssem-1"
     assert by_name["Boss-Extrude1"]["component"] == "PartC-1"
 

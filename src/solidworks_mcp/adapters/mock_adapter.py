@@ -400,6 +400,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "suppressed": False,
                     "component": None,
                     "component_path": None,
+                    "component_parent": None,
                 },
                 {
                     "name": "Front Plane",
@@ -407,6 +408,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "suppressed": False,
                     "component": None,
                     "component_path": None,
+                    "component_parent": None,
                 },
                 {
                     "name": "Right Plane",
@@ -414,6 +416,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "suppressed": False,
                     "component": None,
                     "component_path": None,
+                    "component_parent": None,
                 },
                 {
                     "name": "Top Plane",
@@ -421,6 +424,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "suppressed": False,
                     "component": None,
                     "component_path": None,
+                    "component_parent": None,
                 },
                 {
                     "name": "Sketch1",
@@ -428,13 +432,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "suppressed": False,
                     "component": None,
                     "component_path": None,
+                    "component_parent": None,
                 },
             ]
             if is_assembly:
                 components = self._assembly_components or _DEFAULT_ASSEMBLY_COMPONENTS
                 seeded.extend(
                     self._flatten_assembly_components(
-                        components, include_suppressed, max_assembly_depth - 1
+                        components, include_suppressed, max_assembly_depth - 1, None
                     )
                 )
             return AdapterResult(
@@ -452,6 +457,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "position": i,
                 "component": None,
                 "component_path": None,
+                "component_parent": None,
             }
             if include_suppressed or not row["suppressed"]:
                 feature_rows.append(row)
@@ -459,7 +465,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         if is_assembly:
             feature_rows.extend(
                 self._flatten_assembly_components(
-                    self._assembly_components, include_suppressed, max_assembly_depth - 1
+                    self._assembly_components,
+                    include_suppressed,
+                    max_assembly_depth - 1,
+                    None,
                 )
             )
 
@@ -474,6 +483,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         components: dict[str, dict[str, Any]],
         include_suppressed: bool,
         depth_remaining: int,
+        parent_component: str | None,
     ) -> list[dict[str, Any]]:
         """Flatten a mock component tree into tagged feature descriptors.
 
@@ -491,6 +501,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 for "Assembly" components, a nested ``components`` mapping.
             include_suppressed: Include suppressed entries when ``True``.
             depth_remaining: Sub-assembly recursion budget remaining.
+            parent_component: Name of the component this level of
+                ``components`` is nested inside, or ``None`` for top-level.
 
         Returns:
             list[dict[str, Any]]: Flattened, component-tagged descriptors.
@@ -509,6 +521,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                         "position": -1,
                         "component": name,
                         "component_path": None,
+                        "component_parent": parent_component,
                     }
                 )
                 continue
@@ -522,6 +535,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                         "position": -1,
                         "component": name,
                         "component_path": path,
+                        "component_parent": parent_component,
                     }
                 )
                 continue
@@ -538,6 +552,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                         "position": i,
                         "component": name,
                         "component_path": path,
+                        "component_parent": parent_component,
                     }
                 )
 
@@ -547,6 +562,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                         comp.get("components", {}),
                         include_suppressed,
                         depth_remaining - 1,
+                        name,
                     )
                 )
 

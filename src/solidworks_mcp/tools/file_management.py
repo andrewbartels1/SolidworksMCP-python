@@ -14,7 +14,10 @@ from loguru import logger
 from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
-from ..utils.feature_tree_classifier import classify_feature_tree_snapshot
+from ..utils.feature_tree_classifier import (
+    build_component_tree,
+    classify_feature_tree_snapshot,
+)
 from .input_compat import CompatInput
 
 # swPackAndGoSaveStatus_e — returned (per-file) by IModelDocExtension::SavePackAndGo.
@@ -951,6 +954,12 @@ async def register_file_management_tools(
                         "status": "success",
                         "features": result.data or [],
                         "count": len(result.data or []),
+                        # Additive, derived view of the same flat "features"
+                        # list above - grouped by component/sub-component
+                        # for callers that want the assembly structure
+                        # rather than a flat tag-and-scan. Does not change
+                        # the meaning of "features"/"count".
+                        "assembly_tree": build_component_tree(result.data),
                         "execution_time": result.execution_time,
                     }
                 return {

@@ -278,3 +278,61 @@ def classify_feature_tree_snapshot(
         "next_actions": next_actions,
         "feature_count": len(feature_list),
     }
+
+
+def build_component_tree(features: list[Mapping[str, Any]] | None) -> dict[str, Any]:
+    """Reconstruct a nested component/sub-component tree from a flat
+    ``list_features`` result.
+
+    ``list_features`` returns a single flat list — see
+    ``openspec/changes/assembly-aware-list-features/design.md`` for why:
+    several existing callers (feature-tree diffing, feature-family
+    classification, the MCP tool's ``count`` field) assume
+    ``AdapterResult.data`` is a flat ``list[dict]`` unconditionally, so the
+    adapter contract stays flat. Each descriptor carries ``component``
+    (owning component, or ``None`` for the document's own features) and
+    ``component_parent`` (that component's immediate parent component, or
+    ``None`` for a top-level component), which is enough to rebuild the
+    tree a caller actually wants to *look at* without changing what the
+    adapter returns.
+
+    Args:
+        features: The flat list returned in an ``AdapterResult.data`` from
+            ``list_features``. Rows without a ``component_parent`` key
+            (older data, or non-component rows) are treated as top-level.
+
+    Returns:
+        dict[str, Any]: ``{"features": [...], "components": {name: {"path":
+        ..., "features": [...], "components": {...nested...}}}}``. For a
+        Part document (no rows carry a ``component``), this is just
+        ``{"features": [...all rows...], "components": {}}``.
+    """
+    rows = list(features or [])
+
+    own_features = [dict(r) for r in rows if r.get("component") is None]
+    root: dict[str, Any] = {"features": own_features, "components": {}}
+
+    nodes: dict[str, dict[str, Any]] = {}
+    parent_of: dict[str, str | None] = {}
+
+    for row in rows:
+        component = row.get("component")
+        if component is None:
+            continue
+        node = nodes.setdefault(
+            component,
+            {"path": row.get("component_path"), "features": [], "components": {}},
+        )
+        if row.get("type") not in ("UnresolvedComponent", "Component"):
+            node["features"].append(dict(row))
+        if row.get("component_path") and not node.get("path"):
+            node["path"] = row["component_path"]
+        parent_of[component] = row.get("component_parent")
+
+    for name, node in nodes.items():
+        parent = parent_of.get(name)
+        parent_node = nodes.get(parent) if parent else None
+        target = parent_node["components"] if parent_node is not None else root["components"]
+        target[name] = node
+
+    return root

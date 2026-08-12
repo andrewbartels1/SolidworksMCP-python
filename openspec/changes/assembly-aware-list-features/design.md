@@ -118,17 +118,62 @@ who want to override it. Default of 2 matches the issue's ask and covers
 the common one-level-of-sub-assembly case without unbounded recursion risk
 on deeply nested assemblies.
 
+### Decision: `component_parent` tag + a derived nested-tree helper, not a nested adapter contract
+
+**Chosen** (added after initial review): the flat list stays the adapter
+contract (see the first Decision above — that constraint didn't change),
+but every descriptor gains a third tag, `component_parent`: the immediate
+parent component's name, or `None` for a top-level component or a
+document's own feature. This is enough information to reconstruct real
+parent/child structure between components — e.g. that `crank-arm-1` is
+nested *inside* `crank sub-1`, not merely "also present somewhere in this
+assembly" — which the two-tag (`component`/`component_path`) version
+could not express.
+
+`build_component_tree(features)` in
+`solidworks_mcp.utils.feature_tree_classifier` is a pure function that
+walks the flat list once and rebuilds
+`{"features": [...], "components": {name: {"path", "features",
+"components"}}}` using `component_parent` as the parent-link. It's exposed
+as an additive `assembly_tree` field on the `list_features` MCP tool
+response, alongside the unchanged `features`/`count` fields — so a
+consumer that wants the flat tag-and-scan view still gets it unmodified,
+and a consumer that wants to look at assembly structure (the ask this
+decision responds to) gets a real tree without the adapter contract itself
+depending on document type.
+
+**Rejected alternative**: infer parent/child structure after the fact by
+matching `component_path` prefixes or by assuming a sub-assembly's
+features always appear contiguously with its children in the flat list.
+Rejected because it's fragile (relies on traversal order as an implicit
+data channel) where an explicit tag is one field and one line of
+propagation through the existing recursion.
+
 ## Risks / Trade-offs
 
-- [Risk] The exact COM accessor for "get an `IComponent2`'s underlying
-  document" (`GetModelDoc2` vs. a differently-cased or differently-shaped
-  member under late binding) can't be verified without a live SolidWorks
-  session — this environment has none. → Mitigation: implement using the
-  same `_get_attr_or_call`/`_attempt` defensive pattern already used
-  throughout `pywin32_adapter.py` for COM members with binding ambiguity,
-  add a mock-adapter fixture that exercises the intended shape, and flag
-  this explicitly for verification on `dev-test-full` (real SolidWorks)
-  before merge, per CLAUDE.md's testing guidance.
+- [Risk — RESOLVED 2026-08-11] The exact COM accessor for "get an
+  `IComponent2`'s underlying document" couldn't be verified without a live
+  SolidWorks session when this was written. A SolidWorks 2026 instance
+  became available mid-implementation; verified live against the built-in
+  U-Joint sample (`UJoint.SLDASM`, with nested sub-assembly `crank
+  sub.SLDASM`). `GetModelDoc2` is the correct member name, but two real,
+  live-only bugs surfaced that no mock-adapter test could have caught —
+  both property-vs-method late-binding ambiguities, now documented as
+  `docs/agents/com-api-pitfalls.md` items #11 and #12:
+  1. `document.GetType()` called with bare parens raised `TypeError:
+     'int' object is not callable` on a freshly-fetched `swApp.ActiveDoc`
+     (resolves as a property there, unlike a document just returned by
+     `OpenDoc6`) — silently swallowed by `_attempt`, so the doc-type check
+     always fell back to `0` and the assembly branch never ran.
+  2. `IComponent2.GetModelDoc2` raised `com_error: Member not found` on
+     every component because `IComponent2` was never flagged via
+     `sw_type_info.flag_methods` before calling it.
+  Both fixed by routing through `_get_attr_or_call` / adding the missing
+  `flag_methods(component, "IComponent2")` call. After the fix, a live run
+  resolved all 11 real components across 2 levels of nesting with zero
+  `UnresolvedComponent` rows. This validates the original mitigation
+  (defensive `_get_attr_or_call`/`_attempt` pattern) as the right shape —
+  it just hadn't been applied to these two specific call sites yet.
 - [Risk] Deeply nested or very large assemblies could make `list_features`
   slow (resolving and traversing many component documents). →
   Mitigation: `max_assembly_depth` default of 2 bounds recursion; this is

@@ -7,6 +7,7 @@ from solidworks_mcp.utils.feature_tree_classifier import (
     _feature_text,
     _has_any,
     _match_examples,
+    build_component_tree,
     classify_feature_tree_snapshot,
 )
 
@@ -178,3 +179,102 @@ def test_classify_mixed_sketch_and_reference_not_sketch_only() -> None:
     result = classify_feature_tree_snapshot({}, features)
     # non_reference_count == 2 but sketch_like_count == 1, so != → unknown
     assert result["family"] == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# build_component_tree
+# ---------------------------------------------------------------------------
+
+
+def test_build_component_tree_handles_none_and_empty() -> None:
+    assert build_component_tree(None) == {"features": [], "components": {}}
+    assert build_component_tree([]) == {"features": [], "components": {}}
+
+
+def test_build_component_tree_part_only_has_no_components() -> None:
+    """A Part's flat list (no component tags at all) becomes root features only."""
+    features = [
+        {"name": "Boss-Extrude1", "type": "Boss", "component": None},
+        {"name": "Sketch1", "type": "ProfileFeature", "component": None},
+    ]
+    tree = build_component_tree(features)
+    assert len(tree["features"]) == 2
+    assert tree["components"] == {}
+
+
+def test_build_component_tree_flat_top_level_components() -> None:
+    """Two top-level components (component_parent=None) become sibling nodes."""
+    features = [
+        {"name": "Mates", "type": "MateGroup", "component": None, "component_path": None},
+        {
+            "name": "Boss1",
+            "type": "Boss",
+            "component": "PartA",
+            "component_path": "C:/PartA.sldprt",
+            "component_parent": None,
+        },
+        {
+            "name": "Cut1",
+            "type": "Cut",
+            "component": "PartB",
+            "component_path": "C:/PartB.sldprt",
+            "component_parent": None,
+        },
+    ]
+    tree = build_component_tree(features)
+    assert len(tree["features"]) == 1
+    assert set(tree["components"].keys()) == {"PartA", "PartB"}
+    assert tree["components"]["PartA"]["path"] == "C:/PartA.sldprt"
+    assert [f["name"] for f in tree["components"]["PartA"]["features"]] == ["Boss1"]
+    assert tree["components"]["PartA"]["components"] == {}
+
+
+def test_build_component_tree_nests_subassembly_components() -> None:
+    """A component whose component_parent points at another component nests under it."""
+    features = [
+        {
+            "name": "Mate1",
+            "type": "Mate",
+            "component": "SubAssem-1",
+            "component_path": "C:/SubAssem.sldasm",
+            "component_parent": None,
+        },
+        {
+            "name": "Boss1",
+            "type": "Boss",
+            "component": "PartC",
+            "component_path": "C:/PartC.sldprt",
+            "component_parent": "SubAssem-1",
+        },
+    ]
+    tree = build_component_tree(features)
+    assert set(tree["components"].keys()) == {"SubAssem-1"}
+    sub = tree["components"]["SubAssem-1"]
+    assert [f["name"] for f in sub["features"]] == ["Mate1"]
+    assert set(sub["components"].keys()) == {"PartC"}
+    assert [f["name"] for f in sub["components"]["PartC"]["features"]] == ["Boss1"]
+
+
+def test_build_component_tree_excludes_marker_rows_from_features() -> None:
+    """UnresolvedComponent/Component marker rows create a node but aren't feature entries."""
+    features = [
+        {
+            "name": "Missing-1",
+            "type": "UnresolvedComponent",
+            "component": "Missing-1",
+            "component_path": None,
+            "component_parent": None,
+        },
+        {
+            "name": "DeepSub-1",
+            "type": "Component",
+            "component": "DeepSub-1",
+            "component_path": "C:/DeepSub.sldasm",
+            "component_parent": None,
+        },
+    ]
+    tree = build_component_tree(features)
+    assert set(tree["components"].keys()) == {"Missing-1", "DeepSub-1"}
+    assert tree["components"]["Missing-1"]["features"] == []
+    assert tree["components"]["DeepSub-1"]["features"] == []
+    assert tree["components"]["DeepSub-1"]["path"] == "C:/DeepSub.sldasm"

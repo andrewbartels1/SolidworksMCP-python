@@ -131,10 +131,58 @@ new, unstarted scope (new external dependency, new tool, router wiring)
 well beyond this branch's issue #21 work, so I stopped short of drafting
 it without checking first.
 
+## Live SolidWorks verification (2026-08-11, later same session)
+
+A real SolidWorks 2026 instance turned out to be running on this machine
+after all — closed task 2.6's gap for real instead of leaving it
+theoretical:
+
+- Connected to the live session, ran the actual `SolidWorksDocsDiscovery`
+  tool (the "read docs" MCP tooling) to cross-check `GetComponents`/
+  `IComponent2`/`GetModelDoc2` against the installed SW 2026 (build
+  34.3.0) type library before trusting the implementation.
+- Exercised `list_features` against the built-in U-Joint sample —
+  `UJoint.SLDASM`, which conveniently already contains a nested
+  sub-assembly (`crank sub.SLDASM`) — and found **two real bugs neither
+  the mock adapter nor any unit test could have caught**, both late-binding
+  property-vs-method ambiguities: `document.GetType()` failing on a
+  freshly-fetched `ActiveDoc`, and `IComponent2.GetModelDoc2` needing
+  explicit `flag_methods` before it resolves. Fixed both; documented as
+  `docs/agents/com-api-pitfalls.md` items #11/#12. After the fix, a live
+  run resolved all 11 real components across 2 levels of nesting (271
+  features total) with zero `UnresolvedComponent` rows.
+- **Design refinement from your feedback**: the flat list-with-tags shape
+  was right for backward compatibility, but didn't capture actual
+  parent/child structure between components. Added a `component_parent`
+  tag (still additive/backward-compatible) plus
+  `build_component_tree()` — a pure function that reconstructs the real
+  nested tree from the flat list — exposed additively as `assembly_tree`
+  on the `list_features` MCP tool response. Verified live: `crank sub-1`'s
+  three child parts now nest correctly under it instead of sitting flat
+  alongside its top-level siblings.
+- Added a runnable demo script,
+  `docs/getting-started/tutorial-parts/list_features_assembly_demo.py`,
+  matching this repo's existing tutorial-script conventions.
+- Ran the full mock-only suite again (1903 passed, 0 failed, coverage
+  99.96%) and `dev-test-full` against the live SolidWorks session (1925
+  passed, 42 skipped, 49 failed, coverage 99.91% — gate passed). Every
+  `list_features`/assembly test passed. The 49 failures are all
+  `create_part: Failed to create new part` and are **confirmed
+  pre-existing and unrelated** to this change — they reproduce identically
+  with this branch's commits `git stash`-ed, and persist even with every
+  document closed, so it's not a too-many-open-docs issue either. Looks
+  like degraded state in the long-running `SLDWORKS.exe` process itself
+  after hours of automation churn this session. Flagging for you — a
+  SolidWorks restart is the likely fix, but I didn't restart your live
+  application unprompted.
+
 ## Next steps
 
 1. Open the PR for `assembly-aware-list-features` referencing issue #21
-   and this OpenSpec change, noting task 2.6 as a live-SolidWorks
-   follow-up.
-2. Decide whether to draft a second OpenSpec change for #43 now or later
+   and this OpenSpec change. Task 2.6 is now fully closed (verified live,
+   not just theoretical).
+2. Separately: `create_part` is currently failing in your live SolidWorks
+   session for reasons unrelated to this branch — worth a SolidWorks
+   restart before your next real-integration test run.
+3. Decide whether to draft a second OpenSpec change for #43 now or later
    (separate branch either way, since #42 is its prerequisite).

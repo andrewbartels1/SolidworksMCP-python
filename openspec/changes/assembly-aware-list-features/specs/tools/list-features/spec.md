@@ -99,3 +99,46 @@ an error that discards results already gathered for other components.
 - **THEN** the result still includes feature descriptors for the
   components that resolved successfully, plus one descriptor identifying
   the unresolved component by name
+
+### Requirement: Feature descriptors identify their component's parent component
+Each feature descriptor SHALL carry a `component_parent` field: the
+immediate parent component's name when `component` is itself nested inside
+another component (a sub-assembly), or `None` when `component` is a
+top-level component, or when `component` is itself `None` (the document's
+own feature). This SHALL be sufficient to reconstruct the real
+parent/child structure between components, distinguishing "nested inside"
+from "also present somewhere in this assembly."
+
+#### Scenario: Nested component identifies its parent
+- **WHEN** `list_features` is called on an Assembly containing a
+  sub-assembly component, and that sub-assembly's own component has
+  features in the result
+- **THEN** each of those features' `component_parent` equals the
+  sub-assembly component's name
+
+#### Scenario: Top-level component has no parent
+- **WHEN** `list_features` is called on an Assembly and a feature belongs
+  to a top-level component (not nested inside another component)
+- **THEN** that feature's `component_parent` is `None`
+
+### Requirement: A nested component tree can be derived from the flat result
+A pure function SHALL be available that reconstructs a nested
+component/sub-component tree — each node holding its own features and a
+mapping of its child components — from the flat list `list_features`
+returns, using `component`/`component_path`/`component_parent`. This
+SHALL NOT change `list_features`' own return shape; it is a derived view
+for callers that want to inspect assembly structure directly.
+
+#### Scenario: Building the tree from a nested assembly result
+- **WHEN** the tree-building function is given the flat result of
+  `list_features` on an Assembly containing a sub-assembly component with
+  its own child components
+- **THEN** the sub-assembly's child components appear nested under the
+  sub-assembly's node in the tree, not as siblings of the sub-assembly at
+  the top level
+
+#### Scenario: Building the tree from a Part result
+- **WHEN** the tree-building function is given the flat result of
+  `list_features` on a Part (no descriptor has a non-`None` `component`)
+- **THEN** the tree's top-level `components` mapping is empty and all
+  descriptors appear in the tree's own `features` list

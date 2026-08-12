@@ -1221,14 +1221,24 @@ class _FeatureSelectionService:
         document = self._adapter.currentModel
         features = self._list_document_features(document, include_suppressed)
 
+        # GetType resolves as a property (not a method) on some COM dispatch
+        # instances - notably a freshly-fetched swApp.ActiveDoc, as opposed
+        # to a document just returned by OpenDoc6/NewDocument. Calling it
+        # with parens unconditionally raises "'int' object is not callable"
+        # on those, silently swallowed by _attempt, which would otherwise
+        # make every Assembly document look like doc_type 0. Route through
+        # _get_attr_or_call so both forms work regardless of flagging state.
         doc_type = self._adapter._attempt(
-            lambda: int(document.GetType() or 0),  # type: ignore[union-attr]
+            lambda: int(
+                self._adapter._get_attr_or_call(document, "GetType") or 0
+            ),
             default=0,
         )
         if doc_type == self._adapter.constants.get("swDocASSEMBLY", 2):
+            sw_type_info.flag_doc(document, doc_type)
             features.extend(
                 self._list_assembly_component_features(
-                    document, include_suppressed, max_assembly_depth - 1
+                    document, include_suppressed, max_assembly_depth - 1, None
                 )
             )
 
@@ -1240,6 +1250,7 @@ class _FeatureSelectionService:
         include_suppressed: bool,
         component: str | None = None,
         component_path: str | None = None,
+        component_parent: str | None = None,
     ) -> list[dict[str, Any]]:
         """Enumerate one document's own features using primary and fallback
         traversal paths.
@@ -1251,6 +1262,11 @@ class _FeatureSelectionService:
                 or ``None`` for the document's own (non-component) features.
             component_path: Owning component's resolved document path, or
                 ``None`` to match ``component``.
+            component_parent: Immediate parent component's name (the
+                sub-assembly instance ``component`` is nested inside), or
+                ``None`` when ``component`` is a top-level component (or
+                itself ``None``). Lets callers reconstruct the component
+                tree from the flat result — see ``build_component_tree``.
 
         Returns:
             list[dict[str, Any]]: Ordered feature descriptors.
@@ -1276,6 +1292,7 @@ class _FeatureSelectionService:
                 include_suppressed,
                 component=component,
                 component_path=component_path,
+                component_parent=component_parent,
             )
             pos += 1
             guard += 1
@@ -1318,6 +1335,7 @@ class _FeatureSelectionService:
                 include_suppressed,
                 component=component,
                 component_path=component_path,
+                component_parent=component_parent,
             )
 
         return features
@@ -1327,6 +1345,7 @@ class _FeatureSelectionService:
         assembly_doc: Any,
         include_suppressed: bool,
         depth_remaining: int,
+        parent_component: str | None,
     ) -> list[dict[str, Any]]:
         """Traverse an assembly's top-level components and flatten their
         features into the same shape ``_list_document_features`` produces.
@@ -1343,6 +1362,10 @@ class _FeatureSelectionService:
                 object whose top-level components to traverse.
             include_suppressed: Include suppressed features when ``True``.
             depth_remaining: Sub-assembly recursion budget remaining.
+            parent_component: Name of the component ``assembly_doc`` itself
+                is nested inside, or ``None`` when ``assembly_doc`` is the
+                top-level document. Tags every descriptor produced here
+                with this as ``component_parent``.
 
         Returns:
             list[dict[str, Any]]: Flattened, component-tagged descriptors.
@@ -1365,6 +1388,16 @@ class _FeatureSelectionService:
                 or ""
             )
 
+            # IComponent2.GetModelDoc2 raises "Member not found" on an
+            # unflagged component dispatch under late binding - dynamic
+            # dispatch returns a speculative callable for unknown attribute
+            # names that only fails once actually invoked. Flag before
+            # resolving, per the CLAUDE.md convention of flagging every
+            # intermediate dispatch this code acquires.
+            self._adapter._attempt(
+                lambda c=component: sw_type_info.flag_methods(c, "IComponent2"),
+                default=0,
+            )
             resolved_doc = self._adapter._attempt(
                 lambda c=component: self._adapter._get_attr_or_call(
                     c, "GetModelDoc2"
@@ -1380,12 +1413,19 @@ class _FeatureSelectionService:
                         "position": -1,
                         "component": component_name,
                         "component_path": None,
+                        "component_parent": parent_component,
                     }
                 )
                 continue
 
+            # Same property-vs-method ambiguity as the top-level GetType
+            # check above - route through _get_attr_or_call rather than
+            # calling GetType() directly.
             resolved_doc_type = self._adapter._attempt(
-                lambda d=resolved_doc: int(d.GetType() or 0), default=0
+                lambda d=resolved_doc: int(
+                    self._adapter._get_attr_or_call(d, "GetType") or 0
+                ),
+                default=0,
             )
             sw_type_info.flag_doc(resolved_doc, resolved_doc_type)
             component_path, _title = self._adapter._document_routing.document_identity(
@@ -1403,6 +1443,7 @@ class _FeatureSelectionService:
                         "position": -1,
                         "component": component_name,
                         "component_path": component_path,
+                        "component_parent": parent_component,
                     }
                 )
                 continue
@@ -1413,13 +1454,17 @@ class _FeatureSelectionService:
                     include_suppressed,
                     component=component_name,
                     component_path=component_path,
+                    component_parent=parent_component,
                 )
             )
 
             if resolved_doc_type == assembly_swdoc_type:
                 results.extend(
                     self._list_assembly_component_features(
-                        resolved_doc, include_suppressed, depth_remaining - 1
+                        resolved_doc,
+                        include_suppressed,
+                        depth_remaining - 1,
+                        component_name,
                     )
                 )
 
@@ -1434,6 +1479,7 @@ class _FeatureSelectionService:
         include_suppressed: bool,
         component: str | None = None,
         component_path: str | None = None,
+        component_parent: str | None = None,
     ) -> None:
         """Append one feature descriptor when dedupe and suppression rules allow.
 
@@ -1447,6 +1493,9 @@ class _FeatureSelectionService:
                 own (non-component) feature.
             component_path: Owning component's resolved document path, or
                 ``None`` to match ``component``.
+            component_parent: Immediate parent component's name, or
+                ``None`` for a top-level component or a document's own
+                feature.
         """
         name = str(getattr(feature, "Name", ""))
         feature_type = str(
@@ -1472,6 +1521,7 @@ class _FeatureSelectionService:
                 "position": position,
                 "component": component,
                 "component_path": component_path,
+                "component_parent": component_parent,
             }
         )
 
