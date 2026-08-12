@@ -396,20 +396,26 @@ async def register_drawing_tools(
                             - Multiple views can reference the same model file
         """
         try:
-            # For now, simulate drawing view creation
+            if hasattr(adapter, "create_drawing_view"):
+                result = await adapter.create_drawing_view(input_data.model_dump())
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Created {input_data.view_type} view of {input_data.model_path}",
+                        "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to create drawing view",
+                }
+
             return {
-                "status": "success",
-                "message": f"Created {input_data.view_type} view of {input_data.model_path}",
-                "drawing_view": {
-                    "model_path": input_data.model_path,
-                    "view_type": input_data.view_type,
-                    "position": {
-                        "x": input_data.position_x,
-                        "y": input_data.position_y,
-                    },
-                    "scale": input_data.scale,
-                    "orientation": input_data.orientation,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support create_drawing_view; no "
+                    f"{input_data.view_type} view of {input_data.model_path} was created."
+                ),
             }
 
         except Exception as e:
@@ -467,7 +473,6 @@ async def register_drawing_tools(
             entity2 = payload.get("entity2")
             position_x = payload.get("position_x")
             position_y = payload.get("position_y")
-            precision = payload.get("precision", 2)
 
             if (entity1 is None or entity2 is None) and payload.get("entities"):
                 entities = payload["entities"]
@@ -484,6 +489,14 @@ async def register_drawing_tools(
                     if position_y is None:
                         position_y = position[1]
 
+            # Feed the alias-normalized values back into the payload so the
+            # adapter call sees entity1/entity2/position_x/position_y even
+            # when the caller only supplied entities/position.
+            payload["entity1"] = entity1
+            payload["entity2"] = entity2
+            payload["position_x"] = position_x
+            payload["position_y"] = position_y
+
             if hasattr(adapter, "add_dimension"):
                 result = await adapter.add_dimension(payload)
                 if result.is_success:
@@ -498,20 +511,12 @@ async def register_drawing_tools(
                     "message": result.error or "Failed to add dimension",
                 }
 
-            # For now, simulate dimension creation
             return {
-                "status": "success",
-                "message": f"Added {dimension_type} dimension",
-                "dimension": {
-                    "type": dimension_type,
-                    "entity1": entity1,
-                    "entity2": entity2,
-                    "position": {
-                        "x": position_x,
-                        "y": position_y,
-                    },
-                    "precision": precision,
-                },
+                "status": "error",
+                "message": (
+                    f"Active adapter does not support add_dimension; no "
+                    f"{dimension_type} dimension was added."
+                ),
             }
 
         except Exception as e:
@@ -559,19 +564,23 @@ async def register_drawing_tools(
                                     - Position carefully to avoid dimension conflicts
         """
         try:
-            # For now, simulate note creation
+            if hasattr(adapter, "add_note"):
+                result = await adapter.add_note(input_data.model_dump())
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Added note: {input_data.text[:30]}...",
+                        "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to add note",
+                }
+
             return {
-                "status": "success",
-                "message": f"Added note: {input_data.text[:30]}...",
-                "note": {
-                    "text": input_data.text,
-                    "position": {
-                        "x": input_data.position_x,
-                        "y": input_data.position_y,
-                    },
-                    "font_size": input_data.font_size,
-                    "leader_attachment": input_data.leader_attachment,
-                },
+                "status": "error",
+                "message": "Active adapter does not support add_note; no note was added.",
             }
 
         except Exception as e:
@@ -619,22 +628,14 @@ async def register_drawing_tools(
                             - Essential for showing internal features and assemblies
         """
         try:
-            # For now, simulate section view creation
             return {
-                "status": "success",
-                "message": f"Created section view {input_data.label}",
-                "section_view": {
-                    "section_line": {
-                        "start": input_data.section_line_start,
-                        "end": input_data.section_line_end,
-                    },
-                    "view_position": {
-                        "x": input_data.view_position_x,
-                        "y": input_data.view_position_y,
-                    },
-                    "scale": input_data.scale,
-                    "label": input_data.label,
-                },
+                "status": "error",
+                "message": (
+                    "No adapter capability exists for cutting a section view "
+                    "along a section line; create_section_view cannot compute "
+                    "the cut geometry, so no view was created. Use SolidWorks "
+                    "directly (Insert > Drawing View > Section) instead."
+                ),
             }
 
         except Exception as e:
@@ -682,22 +683,15 @@ async def register_drawing_tools(
                             - Essential for communicating tight tolerance requirements
         """
         try:
-            # For now, simulate detail view creation
             return {
-                "status": "success",
-                "message": f"Created detail view {input_data.label}",
-                "detail_view": {
-                    "detail_circle": {
-                        "center": {"x": input_data.center_x, "y": input_data.center_y},
-                        "radius": input_data.radius,
-                    },
-                    "view_position": {
-                        "x": input_data.view_position_x,
-                        "y": input_data.view_position_y,
-                    },
-                    "scale": input_data.scale,
-                    "label": input_data.label,
-                },
+                "status": "error",
+                "message": (
+                    "No adapter capability exists for magnifying the "
+                    "geometry inside a detail circle; create_detail_view "
+                    "cannot compute the detail geometry, so no view was "
+                    "created. Use SolidWorks directly (Insert > Drawing "
+                    "View > Detail) instead."
+                ),
             }
 
         except Exception as e:
@@ -747,21 +741,26 @@ async def register_drawing_tools(
                             - Essential for drawing control and document management systems
         """
         try:
-            # For now, simulate sheet format update
+            if hasattr(adapter, "update_sheet_format"):
+                result = await adapter.update_sheet_format(input_data.model_dump())
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Updated sheet format to {input_data.sheet_size}",
+                        "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to update sheet format",
+                }
+
             return {
-                "status": "success",
-                "message": f"Updated sheet format to {input_data.sheet_size}",
-                "sheet_format": {
-                    "format_file": input_data.format_file,
-                    "sheet_size": input_data.sheet_size,
-                    "title_block": {
-                        "title": input_data.title,
-                        "drawn_by": getattr(input_data, "drawn_by", ""),
-                        "checked_by": getattr(input_data, "checked_by", ""),
-                        "approved_by": getattr(input_data, "approved_by", ""),
-                        "drawing_number": getattr(input_data, "drawing_number", ""),
-                    },
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support update_sheet_format; the "
+                    "sheet format and title block were not changed."
+                ),
             }
 
         except Exception as e:
@@ -809,15 +808,26 @@ async def register_drawing_tools(
                             - Significantly reduces manual dimensioning time
         """
         try:
-            # For now, simulate auto-dimensioning
+            if hasattr(adapter, "auto_dimension_view"):
+                result = await adapter.auto_dimension_view(input_data)
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": "Auto-dimensioned drawing view",
+                        "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to auto-dimension view",
+                }
+
             return {
-                "status": "success",
-                "message": "Auto-dimensioned drawing view",
-                "auto_dimensions": {
-                    "dimensions_added": 12,
-                    "dimension_types": ["linear", "radial", "diameter"],
-                    "coverage": "85%",
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support auto_dimension_view; no "
+                    "dimensions were added."
+                ),
             }
 
         except Exception as e:  # pragma: no cover - defensive guard for future logic
@@ -865,23 +875,14 @@ async def register_drawing_tools(
                             - Essential for quality management and ISO certification
         """
         try:
-            # For now, simulate standards checking
             return {
-                "status": "success",
-                "message": "Drawing standards check completed",
-                "standards_check": {
-                    "standard": "ANSI Y14.5",
-                    "compliance_score": 92,
-                    "warnings": [
-                        "Missing general tolerance note",
-                        "Some dimensions lack required precision",
-                    ],
-                    "errors": [],
-                    "recommendations": [
-                        "Add material specification",
-                        "Include finish symbols where appropriate",
-                    ],
-                },
+                "status": "error",
+                "message": (
+                    "No adapter capability exists for checking drafting "
+                    "standards compliance; check_drawing_standards cannot "
+                    "inspect the drawing, so no compliance score was "
+                    "computed. Use SolidWorks Design Checker for this."
+                ),
             }
 
         except Exception as e:  # pragma: no cover - defensive guard for future logic
@@ -922,17 +923,11 @@ async def register_drawing_tools(
                 }
 
             return {
-                "status": "success",
-                "message": "Technical drawing created successfully",
-                "data": {
-                    "drawing_path": input_data.output_path,
-                    "template_used": input_data.template,
-                    "views_created": ["Front", "Right", "Top"]
-                    if input_data.auto_populate_views
-                    else [],
-                    "sheet_format": input_data.sheet_format,
-                    "scale": input_data.scale,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support create_technical_drawing; "
+                    "no drawing was created."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in create_technical_drawing tool: {e}")
@@ -967,14 +962,11 @@ async def register_drawing_tools(
                 }
 
             return {
-                "status": "success",
-                "message": "Drawing view added successfully",
-                "data": {
-                    "view_name": input_data.view_name,
-                    "view_type": input_data.view_type,
-                    "position": input_data.position,
-                    "scale": input_data.scale,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support add_drawing_view; no "
+                    "view was added."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in add_drawing_view tool: {e}")
@@ -1009,14 +1001,11 @@ async def register_drawing_tools(
                 }
 
             return {
-                "status": "success",
-                "message": "Annotation added successfully",
-                "data": {
-                    "annotation_text": input_data.text,
-                    "annotation_type": input_data.annotation_type,
-                    "position": [input_data.position_x, input_data.position_y],
-                    "font_size": input_data.font_size,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support add_annotation; no "
+                    "annotation was added."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in add_annotation tool: {e}")
@@ -1051,9 +1040,11 @@ async def register_drawing_tools(
                 }
 
             return {
-                "status": "success",
-                "message": "Title block updated successfully",
-                "data": input_data,
+                "status": "error",
+                "message": (
+                    "Active adapter does not support update_title_block; the "
+                    "title block was not changed."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in update_title_block tool: {e}")

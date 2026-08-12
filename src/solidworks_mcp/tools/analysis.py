@@ -296,14 +296,14 @@ async def register_analysis_tools(
                     "message": result.error or "Interference check failed",
                 }
 
-            # Simulated interference check - would use actual analysis
             return {
-                "status": "success",
-                "message": "Interference check completed",
-                "interference_found": False,  # Would be actual result
-                "components_checked": input_data.components,
-                "tolerance": input_data.tolerance,
-                "interferences": [],  # Would contain actual interference data
+                "status": "error",
+                "message": (
+                    "Active adapter does not support check_interference; no "
+                    "interference analysis was performed. Use SolidWorks "
+                    "directly (Tools > Interference Detection) to check this "
+                    "assembly."
+                ),
             }
 
         except Exception as e:
@@ -327,16 +327,26 @@ async def register_analysis_tools(
             dict[str, Any]: A dictionary containing the resulting values.
         """
         try:
-            # Simulated geometry analysis
+            if hasattr(adapter, "analyze_geometry"):
+                result = await adapter.analyze_geometry(input_data.model_dump())
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": f"Geometry analysis ({input_data.analysis_type}) completed",
+                        "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to analyze geometry",
+                }
+
             return {
-                "status": "success",
-                "message": f"Geometry analysis ({input_data.analysis_type}) completed",
-                "analysis_type": input_data.analysis_type,
-                "results": {
-                    "summary": f"Analysis of type {input_data.analysis_type} completed",
-                    "parameters": input_data.parameters,
-                    "findings": ["No issues found"],  # Would be actual results
-                },
+                "status": "error",
+                "message": (
+                    f"Active adapter does not support analyze_geometry; no "
+                    f"{input_data.analysis_type} analysis was performed."
+                ),
             }
 
         except Exception as e:
@@ -356,20 +366,31 @@ async def register_analysis_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        # Simulated material properties
-        return {
-            "status": "success",
-            "material": {
-                "name": "Steel, Plain Carbon",
-                "density": {"value": 7850, "units": "kg/m³"},
-                "elastic_modulus": {"value": 200000, "units": "MPa"},
-                "yield_strength": {"value": 250, "units": "MPa"},
-                "ultimate_tensile_strength": {"value": 400, "units": "MPa"},
-                "poissons_ratio": 0.29,
-                "thermal_conductivity": {"value": 50, "units": "W/(m·K)"},
-                "specific_heat": {"value": 460, "units": "J/(kg·K)"},
-            },
-        }
+        try:
+            if hasattr(adapter, "get_material_properties"):
+                result = await adapter.get_material_properties()
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "message": "Material properties retrieved successfully",
+                        "data": result.data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to get material properties",
+                }
+
+            return {
+                "status": "error",
+                "message": "Active adapter does not support get_material_properties",
+            }
+        except Exception as e:
+            logger.error(f"Error in get_material_properties tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
 
     # Future analysis tools:
     # - perform_fea_analysis (if FEA capabilities are available)

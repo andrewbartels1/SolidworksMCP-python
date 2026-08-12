@@ -681,9 +681,8 @@ async def register_file_management_tools(
                 }
 
             return {
-                "status": "success",
-                "message": "File saved successfully",
-                "timestamp": "2024-03-14T00:00:00Z",  # Would be actual timestamp
+                "status": "error",
+                "message": "Active adapter does not support save_file; the file was not saved.",
             }
 
         except Exception as e:
@@ -770,12 +769,12 @@ async def register_file_management_tools(
                     "message": result.error or "Failed to export file",
                 }
 
-            # Fallback for adapters without save/export support.
             return {
-                "status": "success",
-                "message": f"File saved as: {input_data.file_path}",
-                "file_path": input_data.file_path,
-                "format": input_data.format_type,
+                "status": "error",
+                "message": (
+                    "Active adapter does not support save_file or export_file; "
+                    f"no file was saved as {input_data.file_path}."
+                ),
             }
 
         except Exception as e:
@@ -1090,12 +1089,11 @@ async def register_file_management_tools(
                     "message": result.error or "Failed to manage file properties",
                 }
             return {
-                "status": "success",
-                "message": "File properties managed successfully",
-                "data": {
-                    "file_path": input_data.file_path,
-                    "operation": input_data.operation,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support manage_file_properties; "
+                    f"no {input_data.operation} operation was performed."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in manage_file_properties tool: {e}")
@@ -1130,13 +1128,11 @@ async def register_file_management_tools(
                     "message": result.error or "Failed to convert file format",
                 }
             return {
-                "status": "success",
-                "message": "File converted successfully",
-                "data": {
-                    "source_file": input_data.source_file,
-                    "target_file": input_data.target_file or input_data.output_path,
-                    "format_to": input_data.target_format,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support convert_file_format; "
+                    f"{input_data.source_file} was not converted."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in convert_file_format tool: {e}")
@@ -1171,12 +1167,11 @@ async def register_file_management_tools(
                     "message": result.error or "Failed to run batch file operations",
                 }
             return {
-                "status": "success",
-                "message": "Batch file operations completed successfully",
-                "data": {
-                    "file_path": input_data.file_path,
-                    "operation": input_data.operation,
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support batch_file_operations; "
+                    f"no {input_data.operation} batch operation was performed."
+                ),
             }
         except Exception as e:
             logger.error(f"Error in batch_file_operations tool: {e}")
