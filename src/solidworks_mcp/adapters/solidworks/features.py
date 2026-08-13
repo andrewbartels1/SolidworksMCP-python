@@ -340,33 +340,42 @@ def _create_revolve_impl(
         import math
 
         if revolve_sw_major == 33:  # pragma: no cover
-            # IFeatureManager.FeatureRevolve2 (20 params) per gen_py SW 2025
-            # SingleDir, IsSolid, IsThin, IsCut, ReverseDir, BothDirUpToSame,
-            # Dir1Type, Dir2Type, Dir1Angle(rad), Dir2Angle(rad),
-            # OffsetRev1/2, OffsetDist1/2, Merge, ThinThick1/2(m), AutoSelect, Propagate
+            # IFeatureManager.FeatureRevolve2 - exact 20-parameter signature
+            # read from the live gen_py type library for SW 2025:
+            #   SingleDir, IsSolid, IsThin, IsCut, ReverseDir,
+            #   BothDirectionUpToSameEntity, Dir1Type, Dir2Type,
+            #   Dir1Angle(rad), Dir2Angle(rad), OffsetReverse1, OffsetReverse2,
+            #   OffsetDistance1, OffsetDistance2, ThinType,
+            #   ThinThickness1(m), ThinThickness2(m), Merge,
+            #   UseFeatScope, UseAutoSelect
+            # This call passed 19 arguments and put Merge where ThinType
+            # belongs, so SolidWorks rejected every revolve with
+            # "Parameter not optional".
             feature_manager = adapter.currentModel.FeatureManager
+            is_thin = bool(params.thin_feature and params.thin_thickness)
             feature = feature_manager.FeatureRevolve2(
-                True,  # SingleDir
+                not params.both_directions,  # SingleDir
                 True,  # IsSolid
-                False,  # IsThin
+                is_thin,  # IsThin
                 False,  # IsCut
                 params.reverse_direction,  # ReverseDir
-                params.both_directions,  # BothDirUpToSame
-                0,
-                0,  # Dir1Type, Dir2Type
+                False,  # BothDirectionUpToSameEntity
+                0,  # Dir1Type (swEndCondBlind)
+                0,  # Dir2Type
                 params.angle * math.pi / 180.0,  # Dir1Angle (rad)
                 (params.angle * math.pi / 180.0)
                 if params.both_directions
                 else 0.0,  # Dir2Angle
-                False,
-                False,  # OffsetRev1/2
-                0.0,
-                0.0,  # OffsetDist1/2
+                False,  # OffsetReverse1
+                False,  # OffsetReverse2
+                0.0,  # OffsetDistance1
+                0.0,  # OffsetDistance2
+                0,  # ThinType
+                (params.thin_thickness or 0.0) / 1000.0,  # ThinThickness1
+                0.0,  # ThinThickness2
                 params.merge_result,  # Merge
-                (params.thin_thickness or 0.0) / 1000.0,
-                0.0,  # ThinThick1/2
-                True,  # AutoSelect
-                False,  # Propagate
+                False,  # UseFeatScope
+                True,  # UseAutoSelect
             )
         else:
             feature_manager = adapter.currentModel.FeatureManager
@@ -940,7 +949,9 @@ def _create_cut_extrude_impl(
                 sw_major = 0
 
         # 1. FeatureCut4 (SW 2015+)
-        # SW 2025 (major=33): 27 params (verified by VBA macro).
+        # SW 2025 (major=33): 27 params, the 27th being OptimizeGeometry.
+        # It was omitted here, so the call passed 26 and SolidWorks answered
+        # "Parameter not optional" for every cut.
         # SW 2026+ (major>=34): 28 params — adds OptimizeGeometry + PFeat.
         if sw_major == 33:
             feature, cut4_error = adapter._attempt_with_error(
@@ -971,6 +982,7 @@ def _create_cut_extrude_impl(
                     t0,  # T0
                     0.0,  # StartOffset
                     False,  # FlipStartOffset
+                    True,  # OptimizeGeometry
                 )
             )
         elif sw_major >= 34:
