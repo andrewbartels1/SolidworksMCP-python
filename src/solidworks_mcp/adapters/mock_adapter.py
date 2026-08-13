@@ -30,6 +30,44 @@ from .base import (
 )
 from .solidworks.sketch import RELATION_NAME_MAP
 
+#: Canned assembly component tree used by ``list_features`` when a mock
+#: Assembly's ``_assembly_components`` hasn't been configured by a test.
+#: Two top-level Part components plus one nested sub-assembly one level
+#: deep, per ``docs/agents`` / OpenSpec change ``assembly-aware-list-features``.
+_DEFAULT_ASSEMBLY_COMPONENTS: dict[str, dict[str, Any]] = {
+    "PartA": {
+        "type": "Part",
+        "path": "Mock://PartA.sldprt",
+        "features": [
+            {"name": "Boss-Extrude1", "type": "Extrusion", "suppressed": False},
+            {"name": "Fillet1", "type": "Fillet", "suppressed": False},
+        ],
+    },
+    "PartB": {
+        "type": "Part",
+        "path": "Mock://PartB.sldprt",
+        "features": [
+            {"name": "Cut-Extrude1", "type": "Cut", "suppressed": False},
+        ],
+    },
+    "SubAssembly1": {
+        "type": "Assembly",
+        "path": "Mock://SubAssembly1.sldasm",
+        "features": [
+            {"name": "Mate1", "type": "Mate", "suppressed": False},
+        ],
+        "components": {
+            "PartC": {
+                "type": "Part",
+                "path": "Mock://PartC.sldprt",
+                "features": [
+                    {"name": "Boss-Extrude1", "type": "Extrusion", "suppressed": False},
+                ],
+            },
+        },
+    },
+}
+
 
 class _BoolCallable:
     """Compatibility shim that behaves as both bool and callable.
@@ -98,6 +136,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._current_model: SolidWorksModel | None = None
         self._models: dict[str, SolidWorksModel] = {}
         self._features: dict[str, SolidWorksFeature] = {}
+        # Component tree for an Assembly-type current model, keyed by
+        # component name. See ``_flatten_assembly_components`` for shape.
+        # Empty means "use the canned default fixture" (see list_features).
+        self._assembly_components: dict[str, dict[str, Any]] = {}
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
         # Tracks IDs returned by add_line/add_arc/add_circle/add_centerline/
@@ -318,12 +360,22 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def list_features(
-        self, include_suppressed: bool = False
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
     ) -> AdapterResult[list[dict[str, Any]]]:
         """Mock feature tree listing for the active model.
 
+        For an Assembly model, flattens in every configured component's
+        features (see ``_assembly_components``) alongside the document's own
+        features, tagged with ``component``/``component_path`` the same way
+        the real adapter does. Falls back to a small canned two-component
+        fixture (plus one nested sub-assembly) when no components have been
+        configured, mirroring the existing "seed realistic feature names"
+        behavior for an empty Part.
+
         Args:
             include_suppressed (bool): The include suppressed value. Defaults to False.
+            max_assembly_depth (int): Sub-assembly recursion budget. Ignored
+                for non-Assembly models. Defaults to 2.
 
         Returns:
             AdapterResult[list[dict[str, Any]]]: The result produced by the operation.
@@ -337,15 +389,59 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["feature_operation"] / 2)
         self._operation_count += 1
 
+        is_assembly = self._current_model.type == "Assembly"
+
         # Seed realistic feature names for empty mock state.
         if not self._features:
-            seeded = [
-                {"name": "Origin", "type": "OriginProfileFeature", "suppressed": False},
-                {"name": "Front Plane", "type": "RefPlane", "suppressed": False},
-                {"name": "Right Plane", "type": "RefPlane", "suppressed": False},
-                {"name": "Top Plane", "type": "RefPlane", "suppressed": False},
-                {"name": "Sketch1", "type": "ProfileFeature", "suppressed": False},
+            seeded: list[dict[str, Any]] = [
+                {
+                    "name": "Origin",
+                    "type": "OriginProfileFeature",
+                    "suppressed": False,
+                    "component": None,
+                    "component_path": None,
+                    "component_parent": None,
+                },
+                {
+                    "name": "Front Plane",
+                    "type": "RefPlane",
+                    "suppressed": False,
+                    "component": None,
+                    "component_path": None,
+                    "component_parent": None,
+                },
+                {
+                    "name": "Right Plane",
+                    "type": "RefPlane",
+                    "suppressed": False,
+                    "component": None,
+                    "component_path": None,
+                    "component_parent": None,
+                },
+                {
+                    "name": "Top Plane",
+                    "type": "RefPlane",
+                    "suppressed": False,
+                    "component": None,
+                    "component_path": None,
+                    "component_parent": None,
+                },
+                {
+                    "name": "Sketch1",
+                    "type": "ProfileFeature",
+                    "suppressed": False,
+                    "component": None,
+                    "component_path": None,
+                    "component_parent": None,
+                },
             ]
+            if is_assembly:
+                components = self._assembly_components or _DEFAULT_ASSEMBLY_COMPONENTS
+                seeded.extend(
+                    self._flatten_assembly_components(
+                        components, include_suppressed, max_assembly_depth - 1, None
+                    )
+                )
             return AdapterResult(
                 status=AdapterResultStatus.SUCCESS,
                 data=seeded,
@@ -359,15 +455,119 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "type": feature.type,
                 "suppressed": bool((feature.properties or {}).get("suppressed", False)),
                 "position": i,
+                "component": None,
+                "component_path": None,
+                "component_parent": None,
             }
             if include_suppressed or not row["suppressed"]:
                 feature_rows.append(row)
+
+        if is_assembly:
+            components = self._assembly_components or _DEFAULT_ASSEMBLY_COMPONENTS
+            feature_rows.extend(
+                self._flatten_assembly_components(
+                    components,
+                    include_suppressed,
+                    max_assembly_depth - 1,
+                    None,
+                )
+            )
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data=feature_rows,
             execution_time=self._delays["feature_operation"] / 2,
         )
+
+    def _flatten_assembly_components(
+        self,
+        components: dict[str, dict[str, Any]],
+        include_suppressed: bool,
+        depth_remaining: int,
+        parent_component: str | None,
+    ) -> list[dict[str, Any]]:
+        """Flatten a mock component tree into tagged feature descriptors.
+
+        Mirrors the real adapter's recursion rules: a sub-assembly component
+        is expanded (its own features plus a recursive pass over its
+        components) only while ``depth_remaining > 0``; beyond that it is
+        represented by a single bare descriptor. An unresolvable component
+        (``type: "Unresolved"`` in the fixture) always produces one
+        ``UnresolvedComponent`` descriptor.
+
+        Args:
+            components: Mapping of component name to a fixture dict with
+                ``type`` ("Part", "Assembly", or "Unresolved"), ``path``,
+                ``features`` (list of ``{name, type, suppressed}``), and,
+                for "Assembly" components, a nested ``components`` mapping.
+            include_suppressed: Include suppressed entries when ``True``.
+            depth_remaining: Sub-assembly recursion budget remaining.
+            parent_component: Name of the component this level of
+                ``components`` is nested inside, or ``None`` for top-level.
+
+        Returns:
+            list[dict[str, Any]]: Flattened, component-tagged descriptors.
+        """
+        results: list[dict[str, Any]] = []
+        for name, comp in components.items():
+            comp_type = comp.get("type")
+            path = comp.get("path")
+
+            if comp_type == "Unresolved":
+                results.append(
+                    {
+                        "name": name,
+                        "type": "UnresolvedComponent",
+                        "suppressed": False,
+                        "position": -1,
+                        "component": name,
+                        "component_path": None,
+                        "component_parent": parent_component,
+                    }
+                )
+                continue
+
+            if comp_type == "Assembly" and depth_remaining <= 0:
+                results.append(
+                    {
+                        "name": name,
+                        "type": "Component",
+                        "suppressed": False,
+                        "position": -1,
+                        "component": name,
+                        "component_path": path,
+                        "component_parent": parent_component,
+                    }
+                )
+                continue
+
+            for i, feature in enumerate(comp.get("features", [])):
+                suppressed = bool(feature.get("suppressed", False))
+                if not include_suppressed and suppressed:
+                    continue
+                results.append(
+                    {
+                        "name": feature["name"],
+                        "type": feature["type"],
+                        "suppressed": suppressed,
+                        "position": i,
+                        "component": name,
+                        "component_path": path,
+                        "component_parent": parent_component,
+                    }
+                )
+
+            if comp_type == "Assembly":
+                results.extend(
+                    self._flatten_assembly_components(
+                        comp.get("components", {}),
+                        include_suppressed,
+                        depth_remaining - 1,
+                        name,
+                    )
+                )
+
+        return results
 
     async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
         """Mock feature selection/highlight — succeeds without COM side-effects.

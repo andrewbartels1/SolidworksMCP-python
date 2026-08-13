@@ -189,6 +189,52 @@ async def connected_adapter():
         await adapter.disconnect()
 
 
+def _resolve_active_sketch(adapter):
+    """Resolve the live ISketch object, tolerant of a stale adapter cache.
+
+    ``adapter.currentSketch`` is cached at sketch-creation time in
+    ``create_sketch`` (``sketch.py``), which already falls back through
+    ``InsertSketch`` -> ``currentModel.GetActiveSketch2`` ->
+    ``swApp.ActiveDoc.GetActiveSketch2`` if the first call comes back
+    falsy. Empirically that chain can still land on ``None`` on some COM
+    binding passes even though SW genuinely has an active sketch open —
+    seen live as ``AttributeError: 'NoneType' object has no attribute
+    'GetSketchSegments'`` in ``test_sketch_circular_pattern_creates_real_
+    pattern`` / ``test_sketch_mirror_reflects_lines_about_centerline``,
+    despite half a dozen other tests using the identical
+    ``adapter.currentSketch`` read passing in the same run — i.e. this is
+    intermittent, not a deterministic "this environment always returns
+    bool" case, so patching only the two tests that happened to fail
+    would leave the same latent bug in every other call site.
+
+    Queries SW directly instead of trusting the cache: verification
+    always happens after the sketch operations under test have already
+    completed, so asking ``SketchManager.ActiveSketch`` (falling back to
+    ``GetActiveSketch2``) fresh at that point is strictly more reliable
+    than an early cached pointer.
+    """
+    from solidworks_mcp.adapters import sw_type_info
+
+    active_sketch = adapter.currentSketch
+    if active_sketch is None:
+        sketch_manager = adapter.currentModel.SketchManager
+        adapter._attempt(
+            lambda: sw_type_info.flag_methods(sketch_manager, "ISketchManager"),
+            default=0,
+        )
+        active_sketch = adapter._attempt(lambda: sketch_manager.ActiveSketch)
+    if active_sketch is None:
+        active_sketch = adapter._attempt(
+            lambda: adapter.currentModel.GetActiveSketch2()
+        )
+    assert active_sketch is not None, (
+        "no active sketch resolvable via currentSketch, "
+        "SketchManager.ActiveSketch, or GetActiveSketch2"
+    )
+    sw_type_info.flag_methods(active_sketch, "ISketch")
+    return active_sketch
+
+
 async def test_connect_acquires_late_bound_swapp(connected_adapter) -> None:
     """After connect(), swApp is a pywin32 late-bound CDispatch.
 
@@ -708,8 +754,7 @@ async def test_add_polygon_creates_real_polygon(connected_adapter) -> None:
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         segments = active_sketch.GetSketchSegments()
 
         line_segments = []
@@ -815,8 +860,7 @@ async def test_sketch_linear_pattern_creates_real_pattern(connected_adapter) -> 
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         segments = active_sketch.GetSketchSegments()
         # Each instance is a circle; SW does not insert auxiliary
         # construction geometry for a linear pattern.
@@ -954,8 +998,7 @@ async def test_sketch_circular_pattern_creates_real_pattern(
         # GetCenterPoint as zero-arg properties returning a tuple.
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         segments = active_sketch.GetSketchSegments()
         assert len(segments) == 6, (
             f"expected 6 sketch segments after pattern, got {len(segments)}"
@@ -1073,8 +1116,7 @@ async def test_sketch_mirror_reflects_lines_about_centerline(
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         segments = active_sketch.GetSketchSegments()
 
         # Expect N source lines + N mirrored lines + 1 centerline.
@@ -1214,8 +1256,7 @@ async def test_sketch_offset_creates_real_offset(connected_adapter) -> None:
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         segments = active_sketch.GetSketchSegments()
 
         # 2 sources + 2 offsets = 4 line segments, no construction.
@@ -1335,8 +1376,7 @@ async def test_add_centerline_creates_real_centerline(connected_adapter) -> None
 
         from solidworks_mcp.adapters import sw_type_info
 
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         segments = active_sketch.GetSketchSegments()
         assert len(segments) == 1, (
             f"expected 1 sketch segment after add_centerline, got {len(segments)}"
@@ -1528,10 +1568,7 @@ async def test_polygon_id_flows_into_circular_pattern_live(
         # produces 6 polygon edges + 1 inscribed construction circle in
         # SW 2026, but the exact count varies by SW version — measure
         # empirically rather than hard-coding.
-        from solidworks_mcp.adapters import sw_type_info
-
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         seed_segments = len(active_sketch.GetSketchSegments())
         assert seed_segments >= 6, (
             f"expected at least 6 polygon edges, got {seed_segments}"
@@ -1587,10 +1624,7 @@ async def test_rectangle_id_flows_into_circular_pattern_live(
         seed = await adapter.add_rectangle(20.0, -5.0, 40.0, 5.0)
         assert seed.is_success, f"add_rectangle failed: {seed.error}"
 
-        from solidworks_mcp.adapters import sw_type_info
-
-        active_sketch = adapter.currentSketch
-        sw_type_info.flag_methods(active_sketch, "ISketch")
+        active_sketch = _resolve_active_sketch(adapter)
         seed_segments = len(active_sketch.GetSketchSegments())
         # SW 2026's corner-rectangle tool emits 4 line edges + 2 implicit
         # construction segments (the diagonal markers). Just guard the
@@ -2068,3 +2102,142 @@ async def test_create_loft_too_few_profiles_returns_error(connected_adapter) -> 
         assert "at least 2 profile" in (bad.error or "")
     finally:
         await adapter.close_model(save=False)
+
+
+# ---- list_features assembly-aware live regression (GitHub issue #21) ----
+#
+# openspec/changes/assembly-aware-list-features/ has the full proposal/
+# design/spec/tasks. Uses SolidWorks' own built-in U-Joint sample, which
+# ships with every SW install under samples/learn/U-Joint/ and conveniently
+# already contains a two-level assembly (UJoint.SLDASM containing a nested
+# sub-assembly, "crank sub.SLDASM") - no fixture part/assembly needed.
+
+_UJOINT_SAMPLE_DIR = (
+    r"C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint"
+)
+
+
+def _ujoint_assembly_path() -> str:
+    """Return the shipped U-Joint assembly path, or "" if not installed."""
+    import os as _os
+
+    path = _os.path.join(_UJOINT_SAMPLE_DIR, "UJoint.SLDASM")
+    return path if _os.path.exists(path) else ""
+
+
+async def test_list_features_assembly_resolves_real_components_and_subassembly(
+    connected_adapter,
+) -> None:
+    """End-to-end: ``list_features`` on a real, multi-level assembly
+    resolves every component's features, including one level of
+    sub-assembly recursion, tagged and nestable correctly.
+
+    Regression history this test guards against:
+
+    1. ``document.GetType()`` called with bare parens raised ``"'int'
+       object is not callable"`` on a freshly-fetched ``swApp.ActiveDoc``
+       (unflagged dispatch resolves it as a property there, unlike a
+       document just returned by ``OpenDoc6``) — silently swallowed by
+       ``_attempt``, so the doc-type check always fell back to ``0`` and
+       the assembly branch never ran at all.
+    2. ``IComponent2.GetModelDoc2`` raised ``com_error: Member not
+       found`` on every component because ``IComponent2`` was never
+       flagged via ``sw_type_info.flag_methods`` before calling it —
+       every component silently became ``UnresolvedComponent``.
+
+    Both bugs passed every mock-adapter unit test in
+    ``tests/solidworks_mcp/adapters/test_list_features_assembly.py`` —
+    the traversal logic itself was correct — and only surfaced against a
+    real, unflagged COM dispatch. This is the only test in the suite that
+    would catch either regression coming back. See
+    ``docs/agents/com-api-pitfalls.md`` items #11/#12 and
+    ``docs/getting-started/tutorial-parts/list_features_assembly_demo.py``
+    for the interactive/manual version of this same check.
+    """
+    assembly_path = _ujoint_assembly_path()
+    if not assembly_path:
+        pytest.skip(
+            f"U-Joint sample not found under {_UJOINT_SAMPLE_DIR} — install "
+            "the SolidWorks sample library to run this test"
+        )
+
+    adapter = connected_adapter
+
+    # A prior run may have left the sample open; start clean so
+    # open_model definitely produces a fresh ActiveDoc.
+    adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+    try:
+        result = await adapter.open_model(assembly_path)
+        assert result.is_success, f"open_model failed: {result.error}"
+
+        feat_result = await adapter.list_features(
+            include_suppressed=False, max_assembly_depth=2
+        )
+        assert feat_result.is_success, f"list_features failed: {feat_result.error}"
+
+        data = feat_result.data
+        assert isinstance(data, list), (
+            "list_features must stay a flat list even for an Assembly - "
+            "see design.md's rejected nested-response alternative"
+        )
+
+        own_features = [r for r in data if r["component"] is None]
+        assert own_features, "assembly's own top-level features must be present"
+
+        # Top-level components in the shipped U-Joint sample: five parts
+        # plus the "crank sub" sub-assembly.
+        top_level = {
+            "bracket-1",
+            "Yoke_male-1",
+            "Yoke_female-1",
+            "spider-1",
+            "pin-1",
+            "pin-2",
+            "pin-3",
+            "crank sub-1",
+        }
+        components_seen = {r["component"] for r in data if r["component"]}
+        missing = top_level - components_seen
+        assert not missing, f"expected top-level components missing: {missing}"
+
+        # Sub-assembly recursion (max_assembly_depth=2, the default):
+        # crank sub-1's own three part components must be resolved too,
+        # not left as a single bare Component marker.
+        sub_assembly_parts = {"crank-arm-1", "crank-knob-1", "crank-shaft-1"}
+        missing_nested = sub_assembly_parts - components_seen
+        assert not missing_nested, (
+            f"sub-assembly recursion did not surface nested parts: {missing_nested}"
+        )
+
+        # The whole point of bug #2 above: nothing should come back
+        # UnresolvedComponent on a real, fully-resolvable assembly.
+        unresolved = [r for r in data if r["type"] == "UnresolvedComponent"]
+        assert not unresolved, f"unresolved components: {unresolved}"
+
+        # component_parent must link crank sub-1's children back to it.
+        crank_children = [r for r in data if r["component"] in sub_assembly_parts]
+        assert crank_children, "expected features tagged to crank sub-1's children"
+        assert all(r["component_parent"] == "crank sub-1" for r in crank_children), (
+            f"crank sub-1 children missing correct component_parent: "
+            f"{crank_children[:3]}"
+        )
+
+        # build_component_tree must nest those children under crank
+        # sub-1's own node, not flatten them alongside its top-level
+        # siblings.
+        from solidworks_mcp.utils.feature_tree_classifier import build_component_tree
+
+        tree = build_component_tree(data)
+        assert "crank sub-1" in tree["components"], sorted(tree["components"])
+        nested = tree["components"]["crank sub-1"]["components"]
+        assert sub_assembly_parts <= set(nested), (
+            f"expected {sub_assembly_parts} nested under crank sub-1, "
+            f"got {sorted(nested)}"
+        )
+        assert not (sub_assembly_parts & set(tree["components"])), (
+            "sub-assembly parts leaked into the top-level tree instead of "
+            "nesting under crank sub-1"
+        )
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))

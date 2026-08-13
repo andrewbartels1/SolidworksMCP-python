@@ -83,7 +83,9 @@ class _DummyAdapter(SolidWorksAdapter):
             },
         )
 
-    async def list_features(self, include_suppressed: bool = False):
+    async def list_features(
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
+    ):
         """Test helper for list features."""
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,

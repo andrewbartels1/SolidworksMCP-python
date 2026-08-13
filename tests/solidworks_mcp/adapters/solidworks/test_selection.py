@@ -16,7 +16,7 @@ class _SelectionHarness(SolidWorksSelectionMixin):
     def __init__(self, *, has_model: bool) -> None:
         self.currentModel = object() if has_model else None
         self._feature_selector = SimpleNamespace(
-            list_features=lambda _include: [{"name": "Feat1"}],
+            list_features=lambda _include, _depth=2: [{"name": "Feat1"}],
             select_feature=lambda _name: {"selected": True},
         )
 

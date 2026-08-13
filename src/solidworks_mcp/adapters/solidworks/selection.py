@@ -23,7 +23,7 @@ class SolidWorksSelectionMixin:
         ) -> AdapterResult[Any]: ...
 
     async def list_features(
-        self, include_suppressed: bool = False
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
     ) -> AdapterResult[list[dict[str, Any]]]:
         sw_app = getattr(self, "swApp", None)
         active_model = getattr(sw_app, "ActiveDoc", None) if sw_app else None
@@ -35,7 +35,10 @@ class SolidWorksSelectionMixin:
                 error="No active model",
             )
         return self._handle_com_operation(
-            "list_features", self._feature_selector.list_features, include_suppressed
+            "list_features",
+            self._feature_selector.list_features,
+            include_suppressed,
+            max_assembly_depth,
         )
 
     @staticmethod
