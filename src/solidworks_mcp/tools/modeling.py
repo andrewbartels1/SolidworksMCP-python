@@ -383,6 +383,76 @@ class CreateAssemblyInput(CompatInput):
     components: list[str] = Field(default_factory=list, description="Component list")
 
 
+class InsertComponentInput(CompatInput):
+    """Input schema for inserting a component into an assembly.
+
+    Attributes:
+        file_path (str): Path to the part or sub-assembly.
+        x (float): X position in millimetres.
+        y (float): Y position in millimetres.
+        z (float): Z position in millimetres.
+    """
+
+    file_path: str = Field(
+        description="Absolute path to the .sldprt or .sldasm to insert"
+    )
+    x: float = Field(default=0.0, description="X position in millimetres")
+    y: float = Field(default=0.0, description="Y position in millimetres")
+    z: float = Field(default=0.0, description="Z position in millimetres")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.file_path.strip():
+            raise ValueError("file_path is required")
+
+
+class AddMateInput(CompatInput):
+    """Input schema for mating two assembly components.
+
+    Attributes:
+        component_a (str): First component instance name.
+        component_b (str): Second component instance name.
+        entity_a (str): Named feature on the first component.
+        entity_b (str): Named feature on the second component.
+        mate_type (str): Mate type.
+        alignment (str): Mate alignment.
+        distance (float): Distance in millimetres for a distance mate.
+        angle (float): Angle in degrees for an angle mate.
+    """
+
+    component_a: str = Field(
+        description="First component instance name, as reported by list_components"
+    )
+    component_b: str = Field(description="Second component instance name")
+    entity_a: str = Field(
+        default="Front Plane",
+        description=(
+            "Named feature on the first component. Only tree features "
+            "(reference planes and axes) can be selected"
+        ),
+    )
+    entity_b: str = Field(
+        default="Front Plane", description="Named feature on the second component"
+    )
+    mate_type: str = Field(
+        default="coincident",
+        description=(
+            "coincident, concentric, perpendicular, parallel, tangent, "
+            "distance or angle"
+        ),
+    )
+    alignment: str = Field(
+        default="aligned", description="aligned, anti_aligned or closest"
+    )
+    distance: float = Field(
+        default=0.0, description="Distance in millimetres, for a distance mate"
+    )
+    angle: float = Field(default=0.0, description="Angle in degrees, for an angle mate")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.component_a.strip() or not self.component_b.strip():
+            raise ValueError("component_a and component_b are required")
+
+
 class CreateDrawingInput(CompatInput):
     """Input schema for creating a new drawing.
 
@@ -1224,5 +1294,143 @@ async def register_modeling_tools(
             logger.error(f"Error in create_loft tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 12  # Number of tools registered
+    @mcp.tool()
+    async def insert_component(input_data: InsertComponentInput) -> dict[str, Any]:
+        """Insert a part or sub-assembly into the active assembly.
+
+        Call ``create_assembly`` first. Position is in millimetres from the
+        assembly origin.
+
+        **The component file must contain solid geometry** — SolidWorks
+        silently refuses to insert an empty part, so a missing or empty
+        component surfaces as an error rather than a fabricated success.
+
+        Args:
+            input_data (InsertComponentInput): File path and position.
+
+        Returns:
+            dict[str, Any]: Status, the component's instance name and counts.
+
+        Example:
+            ```python
+            await create_assembly({"name": "bracket_asm"})
+            await insert_component({"file_path": "C:/parts/plate.sldprt"})
+            await insert_component({"file_path": "C:/parts/plate.sldprt", "x": 100.0})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, InsertComponentInput)
+            result = await adapter.insert_component(
+                input_data.file_path, input_data.x, input_data.y, input_data.z
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                return {
+                    "status": "success",
+                    "message": f"Inserted {data.get('component', 'component')}",
+                    "component": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to insert component: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in insert_component tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def add_mate(input_data: AddMateInput) -> dict[str, Any]:
+        """Mate two components in the active assembly.
+
+        Positions components relative to one another — coincident planes to
+        stack or align them, concentric to line up axes, distance to hold a
+        gap.
+
+        Entities are selected by feature name, so only each component's
+        reference planes and axes can be mated. Mating to a specific face or
+        edge needs entity names this adapter cannot enumerate.
+
+        Args:
+            input_data (AddMateInput): Components, entities and mate type.
+
+        Returns:
+            dict[str, Any]: Status and mate details.
+
+        Example:
+            ```python
+            components = await list_components()
+            await add_mate({
+                "component_a": components["components"][0],
+                "component_b": components["components"][1],
+                "mate_type": "coincident",
+            })
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, AddMateInput)
+            result = await adapter.add_mate(
+                input_data.component_a,
+                input_data.component_b,
+                input_data.entity_a,
+                input_data.entity_b,
+                input_data.mate_type,
+                input_data.alignment,
+                input_data.distance,
+                input_data.angle,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                message = (
+                    f"Added {input_data.mate_type} mate between "
+                    f"{input_data.component_a} and {input_data.component_b}"
+                )
+                # SolidWorks accepts a mate whose constraint is already
+                # satisfied and moves nothing. That is a real success, but
+                # saying so plainly beats leaving the caller to infer it.
+                if data.get("geometry_moved") is False:
+                    message += (
+                        " (no component moved - the constraint was already "
+                        "satisfied)"
+                    )
+                return {
+                    "status": "success",
+                    "message": message,
+                    "mate": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to add mate: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in add_mate tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def list_components() -> dict[str, Any]:
+        """List the top-level components of the active assembly.
+
+        Returns:
+            dict[str, Any]: Status and the component instance names.
+        """
+        try:
+            result = await adapter.list_components()
+            if result.is_success:
+                components = result.data if isinstance(result.data, list) else []
+                return {
+                    "status": "success",
+                    "message": f"{len(components)} component(s) in the assembly",
+                    "components": components,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to list components: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in list_components tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 15  # Number of tools registered
     return tool_count
