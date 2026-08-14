@@ -102,7 +102,20 @@ When the user is ready to implement, they must start the apply workflow explicit
       - Apply `context` and `rules` as constraints - but do NOT copy them into the file
       - Show brief progress: "Created <artifact-id>"
 
-   b. **Continue until every artifact in the required set exists (not just `apply.requires`)**
+   b. **Design review checkpoint - only when the artifact just created is `design`**:
+
+      Immediately after writing `design.md` for the first time this run (skip if it was already `done` from a prior session, or `skipped`), re-read it from disk and self-review it against this checklist:
+      - **Unstated assumptions**: decisions the doc treats as given without saying why, or that depend on something not yet confirmed.
+      - **Ambiguity**: vague terms ("should", "typically", "some", "as needed", "handle appropriately") standing in for a concrete rule, threshold, or interface.
+      - **Missing detail**: interfaces, data shapes, error/edge cases, or failure/rollback modes the doc gestures at but doesn't pin down.
+      - **Unresolved rejected alternatives**: a nontrivial design choice made without recording why the obvious alternative was rejected.
+      - **Verification gap**: no stated way to confirm the design works (tests, live checks, a concrete acceptance signal).
+
+      Report findings as a short numbered list - "Design review found N item(s) worth clarifying" (or "Design review: no gaps found" if genuinely none). For each item, name the specific gap and a concrete suggested fix or question, referencing the section of `design.md` it applies to. Then ask the user directly: "Revise design.md to address these, or proceed to tasks.md as-is?"
+
+      Wait for their answer before creating `tasks.md` or any artifact that depends on `design`. If they choose to revise, apply the edits, then move on without re-running the full checklist over unrelated sections. If they choose to proceed as-is, continue immediately - do not ask again later in the same run.
+
+   c. **Continue until every artifact in the required set exists (not just `apply.requires`)**
       - After creating each artifact, re-run `openspec status --change "<name>" --json`
       - The required set is `applyRequires` plus every artifact reachable from those by following the `requires` edges in `status --json` - walk them transitively (spec-driven closes over proposal, specs, design, tasks). Leave artifacts outside that set alone
       - `status` is file-existence only, so an `applyRequires` artifact reading `done` does NOT mean its dependencies exist - writing `tasks.md` early marks `tasks` done while `specs` was never written. Use each artifact's `requires` edges, not its `status`, to build the required set: a `done` artifact still lists what it depends on
@@ -112,7 +125,7 @@ When the user is ready to implement, they must start the apply workflow explicit
       - Dependencies are enablers, not gates: if a required artifact is still `blocked` only because you skipped a conditional dependency, write it anyway
       - Stop when every artifact in the required set is `done`, `skipped`, or was deliberately skipped
 
-   c. **If an artifact requires user input** (unclear context):
+   d. **If an artifact requires user input** (unclear context):
       - Ask the user to clarify
       - Then continue with creation
 
@@ -142,6 +155,7 @@ After completing all artifacts, summarize:
 
 **Guardrails**
 - The request that invoked this workflow authorizes planning only. Any implementation or apply instruction in that request does not carry forward. Do NOT implement the change, start the apply workflow, or edit project code during this workflow. After presenting the artifacts, stop and wait for a new user request to start the apply workflow
+- Run the design review checkpoint (step 5b) immediately after `design.md` is first created, and wait for the user's answer before creating `tasks.md` or any other artifact that depends on `design`
 - Create every artifact the apply phase transitively depends on, not just the ids listed in `apply.requires`
 - Always read dependency artifacts before creating a new one - re-read from disk, not from conversation memory (files may have changed since you last saw them)
 - Ask about ambiguities that would materially change scope, externally observable behavior, compatibility, or acceptance criteria; for minor details, make reasonable assumptions and record them
