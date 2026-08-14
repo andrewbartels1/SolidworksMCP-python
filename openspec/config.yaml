@@ -40,6 +40,12 @@ rules:
   specs:
     - Express behavior in terms of the adapter interface (base.py) and
       response payload shape, not raw COM calls.
+  design:
+    - Once design.md is drafted, /opsx:propose runs a design review
+      checkpoint (unstated assumptions, ambiguity, missing detail,
+      unresolved rejected alternatives, verification gap) and gets explicit
+      user sign-off before tasks.md is created. Do not skip this by writing
+      tasks.md in the same pass as design.md.
   tasks:
     - Every task that adds or changes adapter behavior must include a
       corresponding mock_adapter.py update and test as its own step, not
