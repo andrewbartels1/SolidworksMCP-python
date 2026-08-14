@@ -863,19 +863,22 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     async def list_features(
-        self, include_suppressed: bool = False
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
     ) -> AdapterResult[list[dict[str, object]]]:
         """List model features using pool.
 
         Args:
             include_suppressed (bool): The include suppressed value. Defaults to False.
+            max_assembly_depth (int): Sub-assembly recursion depth. Defaults to 2.
 
         Returns:
             AdapterResult[list[dict[str, object]]]: The result produced by the operation.
         """
         return await self._execute_with_pool(
             "list_features",
-            lambda adapter: adapter.list_features(include_suppressed),
+            lambda adapter: adapter.list_features(
+                include_suppressed, max_assembly_depth
+            ),
         )
 
     async def list_configurations(self) -> AdapterResult[list[str]]:

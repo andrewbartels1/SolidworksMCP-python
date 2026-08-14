@@ -1,0 +1,56 @@
+schema: spec-driven
+
+context: |
+  SolidWorks MCP Server (Python 3.13+). MCP server exposing SolidWorks CAD
+  automation as tools for LLM agents, via COM automation on Windows.
+
+  Architecture:
+  - Server entrypoint: src/solidworks_mcp/server.py
+  - Adapters (src/solidworks_mcp/adapters/): pywin32_adapter.py (real SW COM),
+    mock_adapter.py (tests/CI), factory.py (adapter selection). Tool modules
+    must go through the adapter abstraction, never call COM directly.
+  - Tools (src/solidworks_mcp/tools/): modeling, sketching, drawing, export,
+    analysis, automation, templates, VBA, docs discovery.
+  - Agent harness (src/solidworks_mcp/agents/): prompt schemas, smoke tests,
+    run/error persistence.
+
+  Conventions:
+  - Tool response payloads keep a stable shape: status, message,
+    execution_time, plus a data payload.
+  - Real SolidWorks COM is single-threaded apartment (STA); all COM calls run
+    on a dedicated executor thread (see "COM threading architecture" in
+    CLAUDE.md) - never touch swApp/currentModel off that thread.
+  - Late binding is forced (win32com.client.dynamic.Dispatch); zero-arg SW
+    methods need explicit method-flagging via sw_type_info, or they resolve
+    as properties and raise TypeError.
+  - Mock adapter must mirror any new real-adapter behavior so tests run
+    without SolidWorks installed.
+  - Tests: `.\dev-commands.ps1 dev-test` (mock-only, default) vs
+    `dev-test-full` (real SolidWorks integration, Windows only). CI runs the
+    mock-only path.
+  - Full COM pitfall catalogue: docs/agents/com-api-pitfalls.md. Read it
+    before writing any new COM-touching adapter code.
+
+rules:
+  proposal:
+    - Reference the GitHub issue number this change addresses, if any.
+    - Call out whether the change touches COM/adapter code (pywin32_adapter,
+      base adapter interface, mock_adapter) since those changes carry extra
+      COM-threading and late-binding risk per CLAUDE.md.
+  specs:
+    - Express behavior in terms of the adapter interface (base.py) and
+      response payload shape, not raw COM calls.
+  tasks:
+    - Every task that adds or changes adapter behavior must include a
+      corresponding mock_adapter.py update and test as its own step, not
+      bundled silently into the pywin32_adapter task.
+
+operations:
+  apply:
+    guidance:
+      - Run `.\dev-commands.ps1 dev-lint` and `.\dev-commands.ps1 dev-test`
+        before considering an apply step done.
+      - Keep test summaries concise; report counts, not full pytest output.
+  archive:
+    guidance:
+      - Summarize the archive outcome before finishing.

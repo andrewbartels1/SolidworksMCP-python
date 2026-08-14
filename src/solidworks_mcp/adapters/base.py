@@ -433,12 +433,32 @@ class SolidWorksAdapter(ABC):
 
     @abstractmethod
     async def list_features(
-        self, include_suppressed: bool = False
+        self, include_suppressed: bool = False, max_assembly_depth: int = 2
     ) -> AdapterResult[list[dict[str, Any]]]:
         """List model features from the feature tree.
 
+        For a Part document, returns that document's own feature list,
+        unchanged from prior behavior. For an Assembly document, returns a
+        single flat list containing the assembly's own top-level features
+        plus every resolved component's features, recursing into
+        sub-assemblies up to ``max_assembly_depth``. Every descriptor gains
+        ``component``, ``component_path``, and ``component_parent`` keys:
+        ``None`` for a document's own features (Part features, or an Assembly's
+        top-level features), or the owning component's name/path for a
+        component-derived feature. ``component_parent`` is the immediate parent
+        component name when the component is nested inside a sub-assembly,
+        otherwise ``None``. A component that cannot be resolved (suppressed,
+        lightweight-and-unloaded, missing file) is represented by one descriptor
+        with ``type: "UnresolvedComponent"`` instead of being silently dropped.
+
         Args:
             include_suppressed (bool): The include suppressed value. Defaults to False.
+                Applied independently to the assembly's own features and to
+                each component's features.
+            max_assembly_depth (int): How many levels of sub-assembly to
+                recurse into. Defaults to 2. Ignored for Part documents. A
+                component beyond the configured depth still appears in the
+                result as a single descriptor (name + path), not expanded.
 
         Returns:
             AdapterResult[list[dict[str, Any]]]: The result produced by the operation.

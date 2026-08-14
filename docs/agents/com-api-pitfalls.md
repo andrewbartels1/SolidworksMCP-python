@@ -245,6 +245,68 @@ await adapter.create_cut_extrude(
 
 ---
 
+## 11. `GetType()` resolves as a property, not a method, on a freshly-fetched `ActiveDoc`
+
+**Symptom:** `TypeError: 'int' object is not callable` when calling `document.GetType()` —
+but the *identical* call on a document just returned by `OpenDoc6`/`NewDocument` works fine.
+If this exception is caught by a broad `except Exception: return default` (e.g. this
+codebase's `_attempt` helper), the failure is silent: the caller just sees `doc_type == 0`
+and takes the wrong branch (e.g. treating an Assembly as unrecognized).
+
+**Root cause:** Late-bound COM dispatch resolves an unknown member name speculatively —
+sometimes as a callable method wrapper, sometimes by eagerly invoking it and returning the
+*value* (property semantics). Which one you get depends on whether the specific dispatch
+object has been flagged for its real interface via `sw_type_info.flag_doc`/`flag_methods`
+(`_FlagAsMethod`). A document object returned directly by `OpenDoc6` in this codebase's
+adapter is flagged immediately after open. A document re-fetched via `swApp.ActiveDoc` in a
+later call (e.g. a resync-before-traversal step) is a **new, unflagged** dispatch wrapping
+the same underlying document — `GetType` on it resolves as a property, and calling it with
+`()` tries to call the returned `int`.
+
+**Fix:** Never call a zero-arg accessor on a document/feature/component with bare
+parentheses unless you know it has just been flagged. Route through the existing
+`_get_attr_or_call(obj, "MethodName")` helper, which handles both property and method
+resolution:
+
+```python
+doc_type = adapter._attempt(
+    lambda: int(adapter._get_attr_or_call(document, "GetType") or 0), default=0
+)
+```
+
+Found and fixed 2026-08-11 while verifying assembly-aware `list_features`
+(`_FeatureSelectionService.list_features` in `pywin32_adapter.py`) against a live
+SolidWorks session — see `openspec/changes/assembly-aware-list-features/`.
+
+## 12. `IComponent2.GetModelDoc2` raises "Member not found" unless `IComponent2` is flagged first
+
+**Symptom:** `pywintypes.com_error: (-2147352573, 'Member not found.', None, None)` when
+calling `component.GetModelDoc2()` on an `IComponent2` object returned by
+`IAssemblyDoc.GetComponents`, even though `getattr(component, "GetModelDoc2", None)`
+returns something that looks callable.
+
+**Root cause:** Same late-binding ambiguity as #11 and #5, but manifesting as a COM error
+instead of a Python `TypeError`: dynamic dispatch returns a speculative callable wrapper for
+an attribute name it hasn't resolved a real DISPID for yet, and that wrapper only fails once
+actually invoked. `IComponent2` is never flagged anywhere else in the traversal — components
+come from `GetComponents`, not from `flag_doc` (which only knows about document-level
+interfaces: `IPartDoc`/`IAssemblyDoc`/`IDrawingDoc`).
+
+**Fix:** Flag the component for `IComponent2` before calling any of its methods:
+
+```python
+sw_type_info.flag_methods(component, "IComponent2")
+resolved_doc = adapter._get_attr_or_call(component, "GetModelDoc2")
+```
+
+Found and fixed 2026-08-11 alongside #11, in the same live-verification pass. Before this
+fix, every component in a real assembly resolved as `UnresolvedComponent` — the traversal
+logic itself was correct (confirmed by unit tests against mock COM fakes), but nothing had
+ever exercised it against a real, unflagged `IComponent2` dispatch until then. A reminder
+that mock-adapter tests validate the *shape* of a fix, not COM binding behavior itself.
+
+---
+
 ## Reference: Where to look things up
 
 | Question | Where to look |

@@ -14,7 +14,10 @@ from loguru import logger
 from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
-from ..utils.feature_tree_classifier import classify_feature_tree_snapshot
+from ..utils.feature_tree_classifier import (
+    build_component_tree,
+    classify_feature_tree_snapshot,
+)
 from .input_compat import CompatInput
 
 # swPackAndGoSaveStatus_e — returned (per-file) by IModelDocExtension::SavePackAndGo.
@@ -222,11 +225,21 @@ class ListFeaturesInput(CompatInput):
 
     Attributes:
         include_suppressed (bool): The include suppressed value.
+        max_assembly_depth (int): Sub-assembly recursion depth for Assembly
+            documents.
     """
 
     include_suppressed: bool = Field(
         default=False,
         description="Include suppressed features in the returned list",
+    )
+    max_assembly_depth: int = Field(
+        default=2,
+        description=(
+            "For Assembly documents, how many levels of sub-assembly to "
+            "recurse into when flattening component features. Ignored for "
+            "Part documents."
+        ),
     )
 
 
@@ -933,13 +946,20 @@ async def register_file_management_tools(
             input_data = _coerce_input(ListFeaturesInput, input_data)
             if hasattr(adapter, "list_features"):
                 result = await adapter.list_features(
-                    include_suppressed=input_data.include_suppressed
+                    include_suppressed=input_data.include_suppressed,
+                    max_assembly_depth=input_data.max_assembly_depth,
                 )
                 if result.is_success:
                     return {
                         "status": "success",
                         "features": result.data or [],
                         "count": len(result.data or []),
+                        # Additive, derived view of the same flat "features"
+                        # list above - grouped by component/sub-component
+                        # for callers that want the assembly structure
+                        # rather than a flat tag-and-scan. Does not change
+                        # the meaning of "features"/"count".
+                        "assembly_tree": build_component_tree(result.data),
                         "execution_time": result.execution_time,
                     }
                 return {
