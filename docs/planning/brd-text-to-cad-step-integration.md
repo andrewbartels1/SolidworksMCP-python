@@ -101,7 +101,9 @@ This is scoped as a standalone, shippable capability. It does **not** require is
 
 Issue #43's own text says the tool should be "wired as the text-to-cad branch in the #42 router," and lists that as an acceptance criterion. But issue #42 (the router) is still open and unimplemented — its own acceptance criteria explicitly allow `text-to-cad` and `mesh-concept` branches to be "stubbed/feature-flagged until #43 lands," meaning #42 does not block on #43. There is no equivalent statement in #43 saying it doesn't block on #42, which creates a one-directional dependency risk: if this BRD's scope is read literally, #43 can't be marked fully done until #42 exists.
 
-**Resolution adopted by this BRD:** decouple the two.
+**Update (2026-08-13):** superseded by maintainer decision — #42 will be built first, as an upstream dependency of this change, specifically so #43 can satisfy the router-wiring acceptance criterion directly instead of deferring it. The decoupling analysis below is kept for the record (it's still the right fallback if #42 stalls), but the active plan is: implement #42, then return to this BRD/change with the router available.
+
+**Original resolution (fallback if #42 is delayed):** decouple the two.
 
 - `import_generated_step` ships as a directly callable MCP tool, usable today without any router — this satisfies the actual business goal (users can generate-then-edit right now) independent of #42's timeline.
 - The `allowed_tools` allowlist for the text-to-cad branch is still defined and documented as part of this change (satisfies #43's intent), but it's a static list living in this change's spec, not a live integration with a router that doesn't exist yet.
