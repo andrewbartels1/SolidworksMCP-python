@@ -967,6 +967,79 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "set_dimension", lambda adapter: adapter.set_dimension(name, value)
         )
 
+    # Assembly operations
+
+    async def insert_component(
+        self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert component using pool.
+
+        Args:
+            file_path (str): Path to the target file.
+            x (float): X position in millimetres. Defaults to 0.0.
+            y (float): Y position in millimetres. Defaults to 0.0.
+            z (float): Z position in millimetres. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "insert_component",
+            lambda adapter: adapter.insert_component(file_path, x, y, z),
+        )
+
+    async def list_components(self) -> AdapterResult[list[str]]:
+        """List components using pool.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "list_components", lambda adapter: adapter.list_components()
+        )
+
+    async def add_mate(
+        self,
+        component_a: str,
+        component_b: str,
+        entity_a: str = "Front Plane",
+        entity_b: str = "Front Plane",
+        mate_type: str = "coincident",
+        alignment: str = "aligned",
+        distance: float = 0.0,
+        angle: float = 0.0,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add mate using pool.
+
+        Args:
+            component_a (str): First component instance name.
+            component_b (str): Second component instance name.
+            entity_a (str): Named feature on the first component. Defaults to
+                "Front Plane".
+            entity_b (str): Named feature on the second component. Defaults to
+                "Front Plane".
+            mate_type (str): Mate type. Defaults to "coincident".
+            alignment (str): Mate alignment. Defaults to "aligned".
+            distance (float): Distance in millimetres. Defaults to 0.0.
+            angle (float): Angle in degrees. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_mate",
+            lambda adapter: adapter.add_mate(
+                component_a,
+                component_b,
+                entity_a,
+                entity_b,
+                mate_type,
+                alignment,
+                distance,
+                angle,
+            ),
+        )
+
 
 class ConnectionPool:
     """Legacy alias class expected by tests.
