@@ -2319,3 +2319,106 @@ async def test_assembly_insert_list_and_mate_change_real_geometry(connected_adap
         )
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_feature_editing_changes_the_model(connected_adapter):
+    """Suppress, unsuppress, delete and undo, verified by volume and count.
+
+    Each of these COM calls reports success without necessarily doing
+    anything, so none of them are trusted here:
+
+    - suppress must both read back IsSuppressed True *and* drop the volume
+    - unsuppress must restore the volume
+    - delete must make the feature unresolvable by name and drop the count
+    - undo must bring it back
+    - undo on a fresh document must report tree_changed False rather than a
+      fabricated success
+    """
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+
+    async def volume():
+        result = await adapter.get_mass_properties()
+        assert result.is_success, result.error
+        return result.data.volume
+
+    try:
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        await adapter.add_rectangle(-40.0, -20.0, 40.0, 20.0)
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+        base_volume = await volume()
+
+        # A second boss clear of the first, so it adds material.
+        await adapter.create_sketch("Front")
+        await adapter.add_rectangle(-10.0, 30.0, 10.0, 50.0)
+        await adapter.exit_sketch()
+        boss = await adapter.create_extrusion(ExtrusionParameters(depth=15.0))
+        assert boss.is_success, boss.error
+
+        with_boss = await volume()
+        assert with_boss > base_volume, (with_boss, base_volume)
+
+        listed = await adapter.list_features()
+        assert listed.is_success, listed.error
+        names = [
+            (f.get("name") if isinstance(f, dict) else getattr(f, "name", None))
+            for f in listed.data or []
+        ]
+        target = next((n for n in names if n and "Extrude" in n), None)
+        assert target, names
+
+        # ---- suppress: state reads back AND geometry goes away ----
+        suppressed = await adapter.suppress_feature(target, True)
+        assert suppressed.is_success, suppressed.error
+        assert suppressed.data["suppressed"] is True, suppressed.data
+        assert await volume() < with_boss
+
+        # ---- unsuppress: geometry comes back ----
+        unsuppressed = await adapter.suppress_feature(target, False)
+        assert unsuppressed.is_success, unsuppressed.error
+        assert unsuppressed.data["suppressed"] is False, unsuppressed.data
+        assert await volume() == pytest.approx(with_boss, rel=1e-9)
+
+        # ---- delete: unresolvable by name, and the count drops ----
+        deleted = await adapter.delete_feature(target)
+        assert deleted.is_success, deleted.error
+        assert deleted.data["features_after"] < deleted.data["features_before"], (
+            deleted.data
+        )
+
+        after_delete = await adapter.list_features()
+        remaining = [
+            (f.get("name") if isinstance(f, dict) else getattr(f, "name", None))
+            for f in (after_delete.data or [])
+        ]
+        assert target not in remaining, remaining
+
+        # ---- undo: the feature comes back ----
+        undone = await adapter.undo(1)
+        assert undone.is_success, undone.error
+        assert undone.data["tree_changed"] is True, undone.data
+
+        restored = await adapter.list_features()
+        restored_names = [
+            (f.get("name") if isinstance(f, dict) else getattr(f, "name", None))
+            for f in (restored.data or [])
+        ]
+        assert target in restored_names, restored_names
+
+        # ---- a feature that does not exist is an error, not a no-op ----
+        missing = await adapter.delete_feature("NoSuchFeature")
+        assert not missing.is_success
+
+        # ---- nothing to undo must not be dressed up as success ----
+        await adapter.create_part()
+        nothing = await adapter.undo(1)
+        assert nothing.is_success, nothing.error
+        assert nothing.data["tree_changed"] is False, (
+            f"undo on a fresh document reported a tree change: {nothing.data}"
+        )
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))

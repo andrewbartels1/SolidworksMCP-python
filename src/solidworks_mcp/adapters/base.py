@@ -1032,6 +1032,52 @@ class SolidWorksAdapter(ABC):
             error="add_mate is not implemented by this adapter",
         )
 
+    # Feature Editing
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete a named feature or sketch from the active model.
+
+        Args:
+            name (str): Feature or sketch name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was deleted, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="delete_feature is not implemented by this adapter",
+        )
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Suppress or unsuppress a named feature.
+
+        Args:
+            name (str): Feature name.
+            suppress (bool): True to suppress, False to unsuppress.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The resulting state, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="suppress_feature is not implemented by this adapter",
+        )
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        """Undo the last operations in the active model.
+
+        Args:
+            count (int): Number of steps to undo.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Whether the tree changed, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="undo is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch editing mode.

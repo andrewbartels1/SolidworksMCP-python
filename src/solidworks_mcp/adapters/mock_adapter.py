@@ -136,6 +136,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._current_model: SolidWorksModel | None = None
         self._models: dict[str, SolidWorksModel] = {}
         self._features: dict[str, SolidWorksFeature] = {}
+        # Names suppressed via suppress_feature. Kept beside _features rather
+        # than on SolidWorksFeature, which has no suppression field.
+        self._suppressed_features: set[str] = set()
         # Component tree for an Assembly-type current model, keyed by
         # component name. See ``_flatten_assembly_components`` for shape.
         # Empty means "use the canned default fixture" (see list_features).
@@ -1965,6 +1968,123 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data=list(self._components),
             execution_time=self._delays["model_operation"] / 2,
+        )
+
+    # Feature Editing
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock deleting a named feature from the active model.
+
+        Args:
+            name (str): Feature or sketch name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+
+        # _features is keyed by an internal id, so resolve by feature name.
+        before = [f.name for f in self._features.values()]
+        key = next((k for k, f in self._features.items() if f.name == name), None)
+        if key is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Feature not found: {name}. "
+                    f"Available: {', '.join(before) or 'none'}"
+                ),
+            )
+
+        del self._features[key]
+        self._suppressed_features.discard(name)
+        self._operation_count += 1
+        after = [f.name for f in self._features.values()]
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "deleted": name,
+                "removed_features": [n for n in before if n not in after],
+                "features_before": len(before),
+                "features_after": len(after),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock suppressing or unsuppressing a named feature.
+
+        Args:
+            name (str): Feature name.
+            suppress (bool): True to suppress, False to unsuppress.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+
+        known = any(f.name == name for f in self._features.values())
+        if not known:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"Feature not found: {name}"
+            )
+
+        was = name in self._suppressed_features
+        if suppress:
+            self._suppressed_features.add(name)
+        else:
+            self._suppressed_features.discard(name)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "feature": name,
+                "requested": suppress,
+                "suppressed": bool(suppress),
+                "was_suppressed": was,
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        """Mock undoing the last operations in the active model.
+
+        Removes the most recently added features, mirroring what an undo of
+        feature-creation steps does to the tree. ``tree_changed`` is ``False``
+        when there was nothing left to undo, which is what the real adapter
+        reports too - SolidWorks accepts an undo on an empty stack quietly.
+
+        Args:
+            count (int): Number of steps to undo.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        steps = max(1, int(count))
+
+        keys = list(self._features)
+        before = [self._features[k].name for k in keys]
+        doomed = keys[-steps:] if steps <= len(keys) else list(keys)
+        removed = [self._features[k].name for k in doomed]
+        for key in doomed:
+            self._suppressed_features.discard(self._features[key].name)
+            del self._features[key]
+        self._operation_count += 1
+        after = [f.name for f in self._features.values()]
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "requested_steps": steps,
+                "features_before": len(before),
+                "features_after": len(after),
+                "removed_features": removed,
+                "tree_changed": before != after,
+            },
+            execution_time=self._delays["model_operation"],
         )
 
     async def add_mate(

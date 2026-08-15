@@ -998,6 +998,49 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "list_components", lambda adapter: adapter.list_components()
         )
 
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete a feature using pool.
+
+        Args:
+            name (str): Feature or sketch name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "delete_feature", lambda adapter: adapter.delete_feature(name)
+        )
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Suppress or unsuppress a feature using pool.
+
+        Args:
+            name (str): Feature name.
+            suppress (bool): True to suppress, False to unsuppress.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "suppress_feature",
+            lambda adapter: adapter.suppress_feature(name, suppress),
+        )
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        """Undo using pool.
+
+        Args:
+            count (int): Number of steps to undo.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "undo", lambda adapter: adapter.undo(count)
+        )
+
     async def add_mate(
         self,
         component_a: str,
