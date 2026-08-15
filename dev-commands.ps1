@@ -206,11 +206,37 @@ function dev-test-full {
     Write-Host "Running full test suite (including real SolidWorks integration)..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
+
+    # Phase 1: everything that doesn't need a live SolidWorks instance runs
+    # in parallel across workers - this is the bulk of the suite and the
+    # only part that benefits from -n auto.
+    Write-Host "Phase 1/2: non-SolidWorks tests (parallel)..." -ForegroundColor Cyan
     Invoke-Pytest @(
         "tests/",
+        "-m", "not solidworks_only",
+        "-n", "auto",
+        "--cov=src/solidworks_mcp",
+        "--cov-config=.coveragerc.full",
+        "--durations=10",
+        "-v"
+    )
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Phase 1 (non-SolidWorks) tests failed." -ForegroundColor Red
+        return
+    }
+
+    # Phase 2: real SolidWorks COM tests. SolidWorks is a single STA-bound
+    # application instance, so these must run serially (-n 1); running them
+    # after phase 1 (rather than interleaved with it) also means the SW
+    # process is only driven by one worker at a time for the whole phase.
+    Write-Host "Phase 2/2: real SolidWorks integration tests (serial)..." -ForegroundColor Cyan
+    Invoke-Pytest @(
+        "tests/",
+        "-m", "solidworks_only",
         "-n", "1",
         "--cov=src/solidworks_mcp",
         "--cov-config=.coveragerc.full",
+        "--cov-append",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
         "--cov-report=xml:coverage.xml",

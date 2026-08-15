@@ -214,7 +214,15 @@ async def run_validation() -> int:
 
     finally:
         try:
-            await adapter.close_model(save=False)
+            close_all = getattr(adapter, "close_all_session_docs", None)
+            if callable(close_all):
+                # This script creates both a part and an assembly - a single
+                # close_model() call only closes whichever is currently
+                # "active" and leaks the other for the rest of the
+                # SolidWorks session.
+                await close_all()
+            else:
+                await adapter.close_model(save=False)
         except Exception:  # noqa: BLE001
             pass
         try:

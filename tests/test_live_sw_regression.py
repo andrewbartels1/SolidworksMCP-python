@@ -186,6 +186,10 @@ async def connected_adapter():
     try:
         yield adapter
     finally:
+        try:
+            await adapter.close_all_session_docs()
+        except Exception:
+            pass
         await adapter.disconnect()
 
 

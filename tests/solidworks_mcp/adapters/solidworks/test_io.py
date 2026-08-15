@@ -16,8 +16,10 @@ from solidworks_mcp.adapters.solidworks.io import (
 class _IOHarness(SolidWorksIOMixin):
     """Minimal harness for IO mixin."""
 
-    def __init__(self, current_model) -> None:
+    def __init__(self, current_model, sw_app=None, session_docs=None) -> None:
         self.currentModel = current_model
+        self.swApp = sw_app
+        self._session_docs = session_docs if session_docs is not None else []
 
     def _attempt(self, callback, default=None):
         try:
@@ -25,11 +27,18 @@ class _IOHarness(SolidWorksIOMixin):
         except Exception:
             return default
 
+    def _get_attr_or_call(self, obj, attr_name):
+        attr = getattr(obj, attr_name, None)
+        return attr() if callable(attr) else attr
+
     def _handle_com_operation(self, _name, callback, *args):
         try:
             return AdapterResult(status=AdapterResultStatus.SUCCESS, data=callback())
         except Exception as exc:
             return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+
+    def is_connected(self) -> bool:
+        return self.swApp is not None
 
 
 import pytest
@@ -81,3 +90,124 @@ def test_get_sw_comtypes_lib_returns_none_when_comtypes_unavailable() -> None:
     ):
         result = _get_sw_comtypes_lib()
     assert result is None
+
+
+def _fake_doc(title: str, *, dirty: bool = False, on_close=None) -> SimpleNamespace:
+    """Build a SimpleNamespace standing in for a SolidWorks document."""
+    return SimpleNamespace(
+        GetTitle=lambda: title,
+        GetSaveFlag=lambda: dirty,
+        _on_close=on_close,
+    )
+
+
+@pytest.mark.asyncio
+async def test_close_model_discards_changes_without_saving() -> None:
+    """close_model(save=False) closes the active doc without calling Save."""
+    closed_titles: list[str] = []
+    doc = _fake_doc("Part1", dirty=False)
+    sw_app = SimpleNamespace(CloseDoc=lambda title: closed_titles.append(title))
+    harness = _IOHarness(current_model=doc, sw_app=sw_app, session_docs=[doc])
+
+    result = await harness.close_model(save=False)
+
+    assert result.is_success
+    assert closed_titles == ["Part1"]
+    assert harness.currentModel is None
+    assert harness._session_docs == []
+
+
+@pytest.mark.asyncio
+async def test_close_all_session_docs_closes_only_session_tracked_documents() -> None:
+    """Only documents this session opened/created get closed - never a blanket sweep.
+
+    Regression guard: close_all_session_docs must NOT use
+    ISldWorks.GetDocuments() (closing every open document in the shared
+    SolidWorks instance), since that would also close documents the user
+    opened by hand outside of this automation session.
+    """
+    closed_titles: list[str] = []
+    docs = [_fake_doc("Part1"), _fake_doc("Assem1"), _fake_doc("Drawing1")]
+    user_doc = _fake_doc("UsersOwnFile")
+    sw_app = SimpleNamespace(
+        # Deliberately no GetDocuments - if the implementation calls it,
+        # this test fails loudly instead of silently closing everything.
+        CloseDoc=lambda title: closed_titles.append(title),
+    )
+    harness = _IOHarness(current_model=docs[0], sw_app=sw_app, session_docs=list(docs))
+
+    result = await harness.close_all_session_docs()
+
+    assert result.is_success
+    assert result.data["closed"] == ["Part1", "Assem1", "Drawing1"]
+    assert result.data["failed"] == {}
+    assert harness.currentModel is None
+    assert harness._session_docs == []
+    assert user_doc.GetTitle() not in closed_titles
+
+
+@pytest.mark.asyncio
+async def test_close_all_session_docs_records_failures_without_aborting() -> None:
+    """A failure closing one document doesn't prevent closing the rest."""
+
+    def _close_doc(title: str) -> None:
+        if title == "Broken":
+            raise Exception("RPC server unavailable")
+
+    docs = [_fake_doc("Broken"), _fake_doc("Fine")]
+    sw_app = SimpleNamespace(CloseDoc=_close_doc)
+    harness = _IOHarness(current_model=None, sw_app=sw_app, session_docs=list(docs))
+
+    result = await harness.close_all_session_docs()
+
+    assert result.is_success
+    assert result.data["closed"] == ["Fine"]
+    assert "Broken" in result.data["failed"]
+
+
+@pytest.mark.asyncio
+async def test_create_part_tracks_the_new_document_for_session_close() -> None:
+    """create_part() must record the new doc so close_all_session_docs finds it."""
+    new_doc = _fake_doc("Part1")
+    sw_app = SimpleNamespace(NewPart=lambda: new_doc)
+    harness = _IOHarness(current_model=None, sw_app=sw_app)
+
+    result = await harness.create_part()
+
+    assert result.is_success
+    assert harness._session_docs == [new_doc]
+
+
+@pytest.mark.asyncio
+async def test_open_model_does_not_duplicate_an_already_tracked_document() -> None:
+    """Re-opening the same live doc object must not double-track it."""
+    doc = _fake_doc("Part1")
+    harness = _IOHarness(current_model=None, sw_app=SimpleNamespace())
+
+    harness._track_session_doc(harness, doc)
+    harness._track_session_doc(harness, doc)
+
+    assert harness._session_docs == [doc]
+
+
+@pytest.mark.asyncio
+async def test_close_all_session_docs_empty_when_nothing_tracked() -> None:
+    """No session-tracked documents means nothing to close, not an error."""
+    sw_app = SimpleNamespace(CloseDoc=lambda title: None)
+    harness = _IOHarness(current_model=None, sw_app=sw_app)
+
+    result = await harness.close_all_session_docs()
+
+    assert result.is_success
+    assert result.data == {"closed": [], "failed": {}}
+
+
+@pytest.mark.asyncio
+async def test_close_all_session_docs_requires_connected_app() -> None:
+    """Without a live swApp, close_all_session_docs reports an error instead of crashing."""
+    harness = _IOHarness(current_model=None, sw_app=None)
+
+    result = await harness.close_all_session_docs()
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "not connected" in (result.error or "").lower()
