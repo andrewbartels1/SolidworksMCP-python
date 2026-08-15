@@ -240,6 +240,38 @@ def flag_methods(obj: Any, *interfaces: str) -> int:
     return flagged
 
 
+def flag_members(obj: Any, *names: str) -> int:
+    """Flag a specific handful of method names on ``obj``.
+
+    ``flag_methods`` flags *every* method of an interface — around 100 names
+    for ``IFeature`` — and its cache is keyed by ``id(obj)``, so a loop over
+    many short-lived dispatches (walking a feature tree, iterating components)
+    pays that cost once per object and never hits the cache.
+
+    When the caller knows exactly which members it is about to read, flagging
+    just those is far cheaper and behaves identically for them.
+
+    Args:
+        obj: A pywin32 ``CDispatch`` wrapping a SolidWorks COM object.
+        *names: Method names to flag.
+
+    Returns:
+        int: Number of names flagged.
+    """
+    if obj is None:
+        return 0
+
+    flagged_count = 0
+    for name in names:
+        try:
+            obj._FlagAsMethod(name)
+            flagged_count += 1
+        except Exception:
+            # Not on this dispatch's real interface — skip silently.
+            pass
+    return flagged_count
+
+
 def flagged(obj: Any, *interfaces: str) -> Any:
     """Flag ``obj``'s methods then return ``obj`` — call-chain friendly.
 
