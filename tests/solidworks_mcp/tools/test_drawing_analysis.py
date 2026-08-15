@@ -548,15 +548,15 @@ class TestDrawingAnalysisTools:
         assert "corrupted or invalid" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_drawing_analysis_fallback_paths(self, mcp_server, mock_config):
-        """Test fallback simulation payloads for uncovered drawing analysis tools."""
+    async def test_drawing_analysis_fallback_paths_refuse(self, mcp_server, mock_config):
+        """Drawing analysis tools refuse rather than inventing results when the
+        adapter has no matching capability."""
         await register_drawing_analysis_tools(mcp_server, object(), mock_config)
 
         comprehensive_tool = None
         dimension_tool = None
         annotation_tool = None
         compliance_tool = None
-        compare_tool = None
         completeness_tool = None
 
         for tool in await mcp_server.list_tools():
@@ -568,8 +568,6 @@ class TestDrawingAnalysisTools:
                 annotation_tool = tool.fn
             if tool.name == "check_drawing_compliance":
                 compliance_tool = tool.fn
-            if tool.name == "compare_drawing_versions":
-                compare_tool = tool.fn
             if tool.name == "validate_drawing_completeness":
                 completeness_tool = tool.fn
 
@@ -577,47 +575,39 @@ class TestDrawingAnalysisTools:
         assert dimension_tool is not None
         assert annotation_tool is not None
         assert compliance_tool is not None
-        assert compare_tool is not None
         assert completeness_tool is not None
 
         comprehensive_result = await comprehensive_tool(
             input_data=DrawingAnalysisInput(drawing_path="demo.slddrw")
         )
-        assert comprehensive_result["status"] == "success"
-        assert comprehensive_result["overall_quality_score"] == 87
+        assert comprehensive_result["status"] == "error"
+        assert "does not support analyze_drawing_comprehensive" in (
+            comprehensive_result["message"]
+        )
 
         dimension_result = await dimension_tool(
             input_data=DimensionAnalysisInput(drawing_path="demo.slddrw")
         )
-        assert dimension_result["status"] == "success"
-        assert (
-            dimension_result["dimension_analysis"]["dimension_inventory"][
-                "total_dimensions"
-            ]
-            == 52
+        assert dimension_result["status"] == "error"
+        assert "does not support analyze_drawing_dimensions" in (
+            dimension_result["message"]
         )
 
         annotation_result = await annotation_tool(
             input_data=AnnotationAnalysisInput(drawing_path="demo.slddrw")
         )
-        assert annotation_result["status"] == "success"
-        assert annotation_result["quality_scores"]["overall_score"] == 86
+        assert annotation_result["status"] == "error"
+        assert "does not support analyze_drawing_annotations" in (
+            annotation_result["message"]
+        )
 
         compliance_result = await compliance_tool(
             input_data=ComplianceCheckInput(drawing_path="demo.slddrw", standard="ISO")
         )
-        assert compliance_result["status"] == "success"
-        assert compliance_result["overall_compliance"]["score"] == 82
-
-        compare_result = await compare_tool(
-            input_data={
-                "drawing_version_1": "rev_a.slddrw",
-                "drawing_version_2": "rev_b.slddrw",
-                "comparison_type": "full",
-            }
+        assert compliance_result["status"] == "error"
+        assert "does not support check_drawing_compliance" in (
+            compliance_result["message"]
         )
-        assert compare_result["status"] == "success"
-        assert compare_result["change_summary"]["total_changes"] == 8
 
         completeness_result = await completeness_tool(
             input_data={
@@ -625,8 +615,68 @@ class TestDrawingAnalysisTools:
                 "manufacturing_type": "machining",
             }
         )
-        assert completeness_result["status"] == "success"
-        assert completeness_result["validation_results"]["completeness_score"] == 87
+        assert completeness_result["status"] == "error"
+        assert "does not support validate_drawing_completeness" in (
+            completeness_result["message"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_compare_drawing_versions_reads_real_files(
+        self, mcp_server, mock_config, tmp_path
+    ):
+        """compare_drawing_versions reports honest filesystem facts instead of
+        a fabricated geometric/dimension/annotation diff."""
+        await register_drawing_analysis_tools(mcp_server, object(), mock_config)
+
+        compare_tool = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "compare_drawing_versions"
+        )
+
+        # Missing paths refuse outright.
+        missing_paths = await compare_tool(input_data={})
+        assert missing_paths["status"] == "error"
+        assert "requires both" in missing_paths["message"]
+
+        # Non-existent files refuse with a clear message naming them.
+        rev_a = tmp_path / "rev_a.slddrw"
+        rev_b = tmp_path / "rev_b.slddrw"
+        not_found = await compare_tool(
+            input_data={
+                "drawing_version_1": str(rev_a),
+                "drawing_version_2": str(rev_b),
+            }
+        )
+        assert not_found["status"] == "error"
+        assert "not found on disk" in not_found["message"]
+
+        # Two identical files compare as identical.
+        rev_a.write_bytes(b"same content")
+        rev_b.write_bytes(b"same content")
+        identical = await compare_tool(
+            input_data={
+                "drawing_version_1": str(rev_a),
+                "drawing_version_2": str(rev_b),
+            }
+        )
+        assert identical["status"] == "success"
+        assert identical["comparison"]["identical"] is True
+        assert identical["comparison"]["size_delta_bytes"] == 0
+
+        # Two different files compare as different, with an honest size delta.
+        rev_b.write_bytes(b"different content, longer")
+        different = await compare_tool(
+            input_data={
+                "drawing_version_1": str(rev_a),
+                "drawing_version_2": str(rev_b),
+            }
+        )
+        assert different["status"] == "success"
+        assert different["comparison"]["identical"] is False
+        assert different["comparison"]["size_delta_bytes"] == len(
+            b"different content, longer"
+        ) - len(b"same content")
 
     @pytest.mark.asyncio
     async def test_drawing_analysis_adapter_error_and_exception_paths(
@@ -669,15 +719,24 @@ class TestDrawingAnalysisTools:
         assert report_error["status"] == "error"
         assert "report generation failed" in report_error["message"]
 
-        compare_ok = await compare_tool(
+        # "a" and "b" are not real files on disk, so compare_drawing_versions
+        # must refuse rather than inventing a diff.
+        compare_missing_files = await compare_tool(
             input_data={"drawing_version_1": "a", "drawing_version_2": "b"}
         )
-        assert compare_ok["status"] == "success"
+        assert compare_missing_files["status"] == "error"
+        assert "not found on disk" in compare_missing_files["message"]
 
-        completeness_ok = await completeness_tool(
+        # mock_adapter has no validate_drawing_completeness method, so the
+        # tool must refuse rather than inventing a completeness score.
+        completeness_refuses = await completeness_tool(
             input_data={"drawing_path": "demo.slddrw"}
         )
-        assert completeness_ok["status"] == "success"
+        assert completeness_refuses["status"] == "error"
+        assert (
+            "does not support validate_drawing_completeness"
+            in completeness_refuses["message"]
+        )
 
     @pytest.mark.asyncio
     async def test_drawing_analysis_annotation_and_compliance_adapter_errors(

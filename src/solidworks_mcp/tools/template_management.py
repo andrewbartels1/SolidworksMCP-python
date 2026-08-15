@@ -4,7 +4,8 @@ Provides tools for managing SolidWorks templates including extraction, applicati
 comparison, and library management.
 """
 
-import time
+import hashlib
+import pathlib
 from typing import Any
 
 from fastmcp import FastMCP
@@ -13,6 +14,30 @@ from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+
+
+def _file_fact_snapshot(path_str: str) -> dict[str, Any] | None:
+    """Read basic, honest filesystem facts about a file: size, mtime, hash.
+
+    Returns None if the path is empty or does not point at an existing file.
+    """
+    if not path_str:
+        return None
+    path = pathlib.Path(path_str)
+    if not path.is_file():
+        return None
+    stat = path.stat()
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "path": str(path),
+        "size_bytes": stat.st_size,
+        "modified_time": stat.st_mtime,
+        "sha256": digest.hexdigest(),
+    }
+
 
 # Input schemas for template management
 
@@ -153,47 +178,12 @@ async def register_template_management_tools(
                     "message": result.error or "Failed to extract template",
                 }
 
-            # For now, return a structured response that describes what would be done
-            # In full implementation, this would use the SolidWorks API to extract settings
-
-            extracted_properties = {
-                "document_properties": {
-                    "units": "mm-kg-s",
-                    "precision": 2,
-                    "annotation_font": "Century Gothic",
-                    "dimension_style": "ISO",
-                },
-                "custom_properties": [
-                    {"name": "Material", "type": "text", "value": "Steel"},
-                    {"name": "Weight", "type": "number", "expression": "SW-Mass"},
-                    {"name": "DrawingNo", "type": "text", "value": ""},
-                    {"name": "RevisionLevel", "type": "text", "value": "A"},
-                ],
-                "dimension_settings": {
-                    "decimal_places": input_data.include_dimensions,
-                    "trailing_zeros": True,
-                    "units_display": True,
-                },
-            }
-
             return {
-                "status": "success",
-                "message": f"Template '{input_data.template_name}' extracted from {input_data.source_model}",
-                "template": {
-                    "name": input_data.template_name,
-                    "type": input_data.template_type,
-                    "save_path": input_data.save_path,
-                    "extracted_properties": extracted_properties,
-                    "property_count": len(extracted_properties["custom_properties"]),
-                    "includes_dimensions": input_data.include_dimensions,
-                    "includes_custom_properties": input_data.include_custom_properties,
-                },
-                "usage_instructions": [
-                    "1. Template file saved to specified path",
-                    "2. Use apply_template to apply to other models",
-                    "3. Template includes document formatting and properties",
-                    "4. Can be added to template library for reuse",
-                ],
+                "status": "error",
+                "message": (
+                    "Active adapter does not support extract_template; no "
+                    f"template was extracted from {input_data.source_model}."
+                ),
             }
 
         except Exception as e:
@@ -234,41 +224,12 @@ async def register_template_management_tools(
                     "message": result.error or "Failed to apply template",
                 }
 
-            # Simulate template application process
-            applied_changes = {
-                "properties_updated": [
-                    "Material → Steel",
-                    "DrawingNo → DRW-001",
-                    "RevisionLevel → A",
-                ],
-                "dimension_formatting": {
-                    "precision_updated": True,
-                    "units_format_applied": True,
-                    "font_updated": "Century Gothic",
-                },
-                "document_settings": {
-                    "units_system": "mm-kg-s",
-                    "drafting_standard": "ISO",
-                },
-            }
-
             return {
-                "status": "success",
-                "message": f"Template applied to {input_data.target_model}",
-                "template_application": {
-                    "template_path": input_data.template_path,
-                    "target_model": input_data.target_model,
-                    "changes_applied": applied_changes,
-                    "overwrite_mode": input_data.overwrite_existing,
-                    "material_applied": input_data.apply_materials,
-                    "dimensions_applied": input_data.apply_dimensions,
-                },
-                "recommendations": [
-                    "Rebuild the model to update all features",
-                    "Check custom properties in File > Properties",
-                    "Verify dimension formatting in drawings",
-                    "Save the model to preserve changes",
-                ],
+                "status": "error",
+                "message": (
+                    "Active adapter does not support apply_template; "
+                    f"{input_data.target_model} was not changed."
+                ),
             }
 
         except Exception as e:
@@ -309,44 +270,12 @@ async def register_template_management_tools(
                     "message": result.error or "Failed batch template application",
                 }
 
-            # Simulate batch processing
-            processed_files: list[dict[str, Any]] = [
-                {"file": "part001.sldprt", "status": "success", "changes": 5},
-                {"file": "part002.sldprt", "status": "success", "changes": 4},
-                {"file": "assembly001.sldasm", "status": "success", "changes": 3},
-                {
-                    "file": "drawing001.slddrw",
-                    "status": "skipped",
-                    "reason": "Wrong file type",
-                },
-            ]
-
-            summary = {
-                "total_processed": len(
-                    [f for f in processed_files if f["status"] == "success"]
-                ),
-                "total_scanned": len(processed_files),
-                "total_changes": sum(f.get("changes", 0) for f in processed_files),
-                "backup_created": input_data.backup_originals,
-            }
-
             return {
-                "status": "success",
-                "message": f"Batch template application completed on {summary['total_processed']} files",
-                "batch_operation": {
-                    "template_path": input_data.template_path,
-                    "source_folder": input_data.source_folder,
-                    "file_pattern": input_data.file_pattern,
-                    "recursive": input_data.recursive,
-                    "summary": summary,
-                    "processed_files": processed_files,
-                },
-                "performance": {
-                    "efficiency": f"{summary['total_changes']} changes across {summary['total_processed']} files",
-                    "backup_status": "Created"
-                    if input_data.backup_originals
-                    else "Not created",
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support batch_apply_template; "
+                    f"no files in {input_data.source_folder} were changed."
+                ),
             }
 
         except Exception as e:
@@ -371,6 +300,12 @@ async def register_template_management_tools(
 
         Example:
                             >>> result = await compare_templates(comparison_input)
+
+        Note:
+            When no adapter can parse template internals, this falls back to
+            a filesystem-level comparison only (existence, size, modified
+            time, byte-identical check) — it does not report property,
+            dimension, or formatting differences it cannot actually read.
         """
         try:
             if hasattr(adapter, "compare_templates"):
@@ -387,70 +322,49 @@ async def register_template_management_tools(
                     "message": result.error or "Failed to compare templates",
                 }
 
-            # Simulate template comparison
-            differences = {
-                "document_properties": {
-                    "units": {
-                        "template1": "mm-kg-s",
-                        "template2": "in-lbm-s",
-                        "different": True,
-                    },
-                    "precision": {"template1": 2, "template2": 3, "different": True},
-                    "font": {
-                        "template1": "Arial",
-                        "template2": "Century Gothic",
-                        "different": True,
-                    },
-                },
-                "custom_properties": {
-                    "added_in_template2": ["RevisionDate", "Designer"],
-                    "removed_from_template1": ["OldProperty"],
-                    "modified": [
-                        {
-                            "property": "Material",
-                            "template1": "Steel",
-                            "template2": "Aluminum",
-                        }
-                    ],
-                },
-                "dimension_formatting": {
-                    "decimal_places": {
-                        "template1": 2,
-                        "template2": 2,
-                        "different": False,
-                    },
-                    "units_display": {
-                        "template1": True,
-                        "template2": False,
-                        "different": True,
-                    },
-                },
-            }
+            file_1 = _file_fact_snapshot(input_data.template1_path)
+            file_2 = _file_fact_snapshot(input_data.template2_path)
 
-            similarity_score = 85.5  # Simulated similarity percentage
+            missing = [
+                path
+                for path, snapshot in (
+                    (input_data.template1_path, file_1),
+                    (input_data.template2_path, file_2),
+                )
+                if snapshot is None
+            ]
+            if missing:
+                return {
+                    "status": "error",
+                    "message": (
+                        "Cannot compare templates; file(s) not found on "
+                        f"disk: {', '.join(missing)}. No template-property "
+                        "diff was performed."
+                    ),
+                }
 
-            comparison_report = {
-                "template1": input_data.template1_path,
-                "template2": input_data.template2_path,
-                "comparison_type": input_data.comparison_type,
-                "similarity_score": similarity_score,
-                "differences_found": differences,
-                "recommendations": [
-                    "Consider standardizing units system across templates",
-                    "Review custom property naming conventions",
-                    "Align dimension formatting for consistency",
-                ],
-            }
+            assert file_1 is not None
+            assert file_2 is not None
+            identical = file_1["sha256"] == file_2["sha256"]
 
             return {
                 "status": "success",
-                "message": f"Template comparison completed - {similarity_score}% similar",
-                "comparison": comparison_report,
-                "analysis": {
-                    "major_differences": 3,
-                    "minor_differences": 2,
-                    "compatibility": "High" if similarity_score > 80 else "Medium",
+                "message": (
+                    "Template files are byte-identical"
+                    if identical
+                    else "Template files differ on disk"
+                ),
+                "comparison": {
+                    "file_1": file_1,
+                    "file_2": file_2,
+                    "identical": identical,
+                    "size_delta_bytes": file_2["size_bytes"] - file_1["size_bytes"],
                 },
+                "note": (
+                    "This is a filesystem-level comparison only; template "
+                    "properties, dimensions, and formatting were not "
+                    "analyzed."
+                ),
             }
 
         except Exception as e:
@@ -492,53 +406,16 @@ async def register_template_management_tools(
                     "message": result.error or "Failed to save to library",
                 }
 
-            template_path = input_data.get("template_path", "")
-            library_category = input_data.get("category", "uncategorized")
-            version = input_data.get("version", "1.0")
-            description = input_data.get("description", "")
-            author = input_data.get("author", "Unknown")
-
-            library_entry = {
-                "template_id": f"TPL-{library_category.upper()}-{int(time.time()) % 10000}",
-                "name": input_data.get("template_name", "Unnamed Template"),
-                "category": library_category,
-                "version": version,
-                "author": author,
-                "description": description,
-                "created_date": "2024-01-15",  # Would be current date
-                "file_path": template_path,
-                "usage_count": 0,
-                "tags": input_data.get("tags", []),
-                "compatible_versions": [
-                    "SW2020",
-                    "SW2021",
-                    "SW2022",
-                    "SW2023",
-                    "SW2024",
-                ],
-            }
+            template_name = input_data.get("template_name", "")
 
             return {
-                "status": "success",
-                "message": f"Template saved to library as {library_entry['template_id']}",
-                "library_entry": library_entry,
-                "library_stats": {
-                    "total_templates": 47,  # Simulated library stats
-                    "category_count": {
-                        "parts": 15,
-                        "assemblies": 12,
-                        "drawings": 8,
-                        "custom": 12,
-                    },
-                    "most_popular": "STD-PART-001",
-                    "latest_addition": library_entry["template_id"],
-                },
-                "usage_instructions": [
-                    "Template is now available in library browser",
-                    "Use template_id for quick access",
-                    "Template will appear in category filters",
-                    "Version control enabled for updates",
-                ],
+                "status": "error",
+                "message": (
+                    "Active adapter does not support save_to_template_library; "
+                    f"'{template_name}' was not saved to any library. There is "
+                    "no local template registry — this tool needs a real "
+                    "adapter-backed library service."
+                ),
             }
 
         except Exception as e:
@@ -579,90 +456,12 @@ async def register_template_management_tools(
                     "message": result.error or "Failed to list template library",
                 }
 
-            category_filter = input_data.get("category", "all")
-            search_term = input_data.get("search_term", "")
-            sort_by = input_data.get("sort_by", "name")  # name, date, usage
-
-            # Simulated template library
-            library_templates: list[dict[str, Any]] = [
-                {
-                    "template_id": "STD-PART-001",
-                    "name": "Standard Part Template",
-                    "category": "parts",
-                    "version": "2.1",
-                    "author": "Engineering Team",
-                    "description": "Standard template for mechanical parts with ISO properties",
-                    "usage_count": 145,
-                    "last_updated": "2024-01-10",
-                    "tags": ["standard", "mechanical", "iso"],
-                },
-                {
-                    "template_id": "ASM-MAIN-002",
-                    "name": "Main Assembly Template",
-                    "category": "assemblies",
-                    "version": "1.5",
-                    "author": "Design Team",
-                    "description": "Template for main assembly documentation and BOM",
-                    "usage_count": 87,
-                    "last_updated": "2024-01-08",
-                    "tags": ["assembly", "bom", "documentation"],
-                },
-                {
-                    "template_id": "DRW-ISO-003",
-                    "name": "ISO Drawing Template",
-                    "category": "drawings",
-                    "version": "3.0",
-                    "author": "Drafting Team",
-                    "description": "ISO standard drawing template with title block",
-                    "usage_count": 203,
-                    "last_updated": "2024-01-12",
-                    "tags": ["drawing", "iso", "title-block"],
-                },
-            ]
-
-            # Apply filters
-            filtered_templates = library_templates
-            if category_filter != "all":
-                filtered_templates = [
-                    t for t in filtered_templates if t["category"] == category_filter
-                ]
-
-            if search_term:
-                filtered_templates = [
-                    t
-                    for t in filtered_templates
-                    if search_term.lower() in t["name"].lower()
-                    or search_term.lower() in t["description"].lower()
-                ]
-
-            # Apply sorting
-            if sort_by == "usage":
-                filtered_templates.sort(key=lambda x: x["usage_count"], reverse=True)
-            elif sort_by == "date":
-                filtered_templates.sort(key=lambda x: x["last_updated"], reverse=True)
-            else:  # name
-                filtered_templates.sort(key=lambda x: x["name"])
-
             return {
-                "status": "success",
-                "message": f"Found {len(filtered_templates)} templates matching criteria",
-                "library_search": {
-                    "category_filter": category_filter,
-                    "search_term": search_term,
-                    "sort_by": sort_by,
-                    "total_results": len(filtered_templates),
-                },
-                "templates": filtered_templates,
-                "categories_available": ["parts", "assemblies", "drawings", "custom"],
-                "library_summary": {
-                    "total_templates": len(library_templates),
-                    "most_used": max(library_templates, key=lambda x: x["usage_count"])[
-                        "name"
-                    ],
-                    "newest": max(library_templates, key=lambda x: x["last_updated"])[
-                        "name"
-                    ],
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support list_template_library; "
+                    "there is no local template registry to list."
+                ),
             }
 
         except Exception as e:
