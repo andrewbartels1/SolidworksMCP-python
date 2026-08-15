@@ -998,6 +998,21 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "list_components", lambda adapter: adapter.list_components()
         )
 
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check interference using pool.
+
+        Args:
+            params (Any): Optional interference-detection settings.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "check_interference", lambda adapter: adapter.check_interference(params)
+        )
+
     async def add_mate(
         self,
         component_a: str,

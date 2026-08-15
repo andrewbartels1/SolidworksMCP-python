@@ -1061,6 +1061,23 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={},
         )
 
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check interference through circuit breaker.
+
+        Args:
+            params (Any): Optional interference-detection settings.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "check_interference",
+            lambda: self.adapter.check_interference(params),
+            input_dict=params if isinstance(params, dict) else {},
+        )
+
     async def add_mate(
         self,
         component_a: str,

@@ -1032,6 +1032,22 @@ class SolidWorksAdapter(ABC):
             error="add_mate is not implemented by this adapter",
         )
 
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check the active assembly for interfering components.
+
+        Args:
+            params (Any): Optional settings; ``coincident``, ``components``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Interference details, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="check_interference is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch editing mode.

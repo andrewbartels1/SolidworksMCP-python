@@ -202,6 +202,89 @@ def _doc_type(adapter: Any) -> int | None:
     return int(value) if isinstance(value, (int, float)) else None
 
 
+def _payload_dict(data: Any) -> dict[str, Any]:
+    """Coerce a tool payload into a plain dict.
+
+    ``tools/analysis.py`` hands the adapter ``input_data.model_dump()``, but a
+    direct call from a test or script may pass the model itself or nothing.
+
+    Args:
+        data: A dict, a Pydantic model, or ``None``.
+
+    Returns:
+        dict[str, Any]: The payload as a dict; empty when nothing was given.
+    """
+    if data is None:
+        return {}
+    if isinstance(data, dict):
+        return data
+    dump = getattr(data, "model_dump", None)
+    if callable(dump):
+        return cast("dict[str, Any]", dump())
+    return {key: value for key, value in vars(data).items() if not key.startswith("_")}
+
+
+def _interference_details(adapter: Any, interferences: Any) -> list[dict[str, Any]]:
+    """Describe each interference: the components involved and the overlap.
+
+    ``IInterference::Volume`` is in cubic metres and is converted to mm^3 to
+    match every other volume this adapter reports.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        interferences: The sequence returned by ``GetInterferences``.
+
+    Returns:
+        list[dict[str, Any]]: One entry per interference. Empty when the
+        sequence is absent, which is what SolidWorks returns for a clean
+        assembly.
+    """
+    if not isinstance(interferences, (list, tuple)):
+        return []
+
+    details: list[dict[str, Any]] = []
+    for item in interferences:
+        wrapped = _as_com(adapter, item, "IInterference")
+        if wrapped is None:
+            continue
+
+        volume_m3 = adapter._attempt(lambda w=wrapped: w.Volume, default=None)
+        try:
+            volume_mm3 = (
+                round(float(volume_m3) * 1e9, 6) if volume_m3 is not None else None
+            )
+        except (TypeError, ValueError):
+            volume_mm3 = None
+
+        component_count = adapter._attempt(
+            lambda w=wrapped: w.GetComponentCount(), default=None
+        )
+        # ``Components`` is a property, not a method. ``GetComponents()``
+        # does not exist on IInterference and ``IGetComponents(n)`` rejects
+        # its own documented argument with "Invalid number of parameters".
+        raw_components = adapter._attempt(
+            lambda w=wrapped: w.Components, default=None
+        )
+
+        names: list[str] = []
+        if isinstance(raw_components, (list, tuple)):
+            for component in raw_components:
+                comp = _as_com(adapter, component, "IComponent2")
+                if comp is None:
+                    continue
+                name = adapter._attempt(lambda c=comp: c.Name2, default=None)
+                names.append(str(name) if name else "<unnamed>")
+
+        details.append(
+            {
+                "components": names,
+                "component_count": int(component_count) if component_count else len(names),
+                "volume_mm3": volume_mm3,
+            }
+        )
+    return details
+
+
 def _component_pairs(adapter: Any, assembly: Any) -> list[tuple[str, Any]]:
     """Return an assembly's top-level components as ``(name, dispatch)``.
 
@@ -1509,3 +1592,131 @@ class SolidWorksIOMixin:
                 AdapterResult[list[str]],
                 adapter._handle_com_operation("list_components", _list),
             )
+
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Run SolidWorks' interference detection on the active assembly.
+
+        Uses ``IAssemblyDoc::InterferenceDetectionManager``
+        (``IInterferenceDetectionMgr``), **not** the older
+        ``ToolsCheckInterference2``. That call is declared ``Sub`` with two
+        ``ByRef`` out-parameters, and on SW 2025 through pywin32 late binding
+        it could not be made to report anything: ``pythoncom.Missing`` raises
+        ``PyOleMissing can not be converted to a COM VARIANT``, a plain
+        ``None`` or a typed array VARIANT raises ``Type mismatch``, passing a
+        component array throws server-side, and a byref ``VT_VARIANT`` pair is
+        accepted but leaves both out-parameters ``None`` for an assembly that
+        demonstrably interferes. An inspection tool that always answers "no
+        interference" is worse than one that refuses.
+
+        ``GetInterferenceCount`` is an ordinary return value, so ``0`` is a
+        real measurement rather than a swallowed failure, and each
+        ``IInterference`` carries the overlap ``Volume``.
+
+        Args:
+            params (Any): Optional settings. ``coincident`` (bool, default
+                ``False``) treats touching faces as interference;
+                ``include_multibody`` (bool, default ``True``);
+                ``ignore_hidden`` (bool, default ``False``). A ``components``
+                list filters which interferences are reported. ``tolerance``
+                is accepted and ignored - SolidWorks' interference detection
+                has no tolerance setting - and the payload says so.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``interference_found``,
+            ``interference_count``, and per-interference component pairs with
+            overlap volumes in mm^3. ``ERROR`` when there is no active model
+            or the active document is not an assembly.
+
+        Raises:
+            Exception: Propagated through ``_handle_com_operation``.
+
+        Example::
+
+            await adapter.check_interference({"coincident": False})
+        """
+        adapter = self._adapter(self)
+        options = _payload_dict(params)
+
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        doc_type = _doc_type(adapter)
+        if doc_type != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Interference detection requires an assembly document "
+                    f"(active document type is {doc_type!r}, expected 2)"
+                ),
+            )
+
+        coincident = bool(options.get("coincident", False))
+        include_multibody = bool(options.get("include_multibody", True))
+        ignore_hidden = bool(options.get("ignore_hidden", False))
+        wanted = options.get("components") or []
+        wanted_names = {str(name) for name in wanted} if wanted else set()
+
+        def _check() -> dict[str, Any]:
+            assembly = _sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
+            manager = adapter._attempt(
+                lambda: assembly.InterferenceDetectionManager, default=None
+            )
+            if manager is None:
+                raise Exception(
+                    "InterferenceDetectionManager is unavailable on this "
+                    "assembly, so no interference check was performed."
+                )
+            manager = _sw_type_info.flagged(manager, "IInterferenceDetectionMgr")
+
+            for name, value in (
+                ("TreatCoincidenceAsInterference", coincident),
+                ("IncludeMultibodyPartInterferences", include_multibody),
+                ("IgnoreHiddenBodies", ignore_hidden),
+                ("MakeInterferingPartsTransparent", False),
+            ):
+                adapter._attempt(
+                    lambda n=name, v=value: setattr(manager, n, v), default=None
+                )
+
+            try:
+                # A real return value: 0 means SolidWorks found nothing, and a
+                # COM failure raises instead of flattening into a false clean
+                # result.
+                count = int(manager.GetInterferenceCount() or 0)
+                interferences = (
+                    adapter._attempt(lambda: manager.GetInterferences(), default=None)
+                    if count
+                    else None
+                )
+                details = _interference_details(adapter, interferences)
+            finally:
+                # Leaves the assembly out of interference-display mode even
+                # when the read above fails.
+                adapter._attempt(lambda: manager.Done(), default=None)
+
+            if wanted_names:
+                details = [
+                    item
+                    for item in details
+                    if wanted_names & set(item.get("components", []))
+                ]
+
+            return {
+                "interference_found": bool(details) if wanted_names else count > 0,
+                "interference_count": len(details) if wanted_names else count,
+                "interferences": details,
+                "coincident_treated_as_interference": coincident,
+                "scope": sorted(wanted_names) if wanted_names else "whole assembly",
+                # Said plainly rather than silently dropped: a caller passing a
+                # tolerance would otherwise assume it was applied.
+                "tolerance_applied": None,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("check_interference", _check),
+        )

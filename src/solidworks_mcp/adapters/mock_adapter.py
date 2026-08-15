@@ -1967,6 +1967,50 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"] / 2,
         )
 
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock checking the active assembly for interfering components.
+
+        Args:
+            params (Any): Optional settings; ``coincident``, ``components``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        options = params if isinstance(params, dict) else {}
+
+        if len(self._components) < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Interference detection needs at least two components; the "
+                    f"assembly has {len(self._components)}."
+                ),
+            )
+
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                # The real adapter gets this from SolidWorks' interference
+                # engine. The mock has no geometry, so it cannot know whether
+                # anything overlaps and says so rather than reporting a clean
+                # assembly it never checked - a mock that always answered
+                # False would make this tool useless wherever mock mode runs.
+                "interference_found": None,
+                "interference_count": None,
+                "interferences": [],
+                "coincident_treated_as_interference": bool(
+                    options.get("coincident", False)
+                ),
+                "scope": "whole assembly",
+                "tolerance_applied": None,
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
     async def add_mate(
         self,
         component_a: str,
