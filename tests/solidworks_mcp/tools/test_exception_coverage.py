@@ -274,9 +274,11 @@ class TestAutomationExceptionPaths:
                 create=True,
                 new=AsyncMock(side_effect=RuntimeError("stop")),
             ):
-                # Just verify stop_macro_recording returns a success dict normally
+                # stop_macro_recording refuses unconditionally: no adapter
+                # capability exists for it, so it never fabricates a
+                # "recording stopped" result.
                 result = await fn({})
-                assert result["status"] == "success"
+                assert result["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_batch_process_files_exception(self):
@@ -560,7 +562,8 @@ class TestAnalysisCoverage:
 
     @pytest.mark.asyncio
     async def test_get_material_properties_returns_success(self):
-        """Lines 358-371 — get_material_properties returns static material data."""
+        """get_material_properties refuses when the adapter has no matching
+        capability, rather than returning static material data."""
         from solidworks_mcp.tools.analysis import register_analysis_tools
 
         mcp = _make_mcp()
@@ -569,5 +572,5 @@ class TestAnalysisCoverage:
 
         fn = await _get_tool(mcp, "get_material_properties")
         result = await fn()
-        assert result["status"] == "success"
-        assert "material" in result
+        assert result["status"] == "error"
+        assert "does not support get_material_properties" in result["message"]

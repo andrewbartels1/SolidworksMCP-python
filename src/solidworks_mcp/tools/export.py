@@ -855,15 +855,11 @@ async def register_export_tools(
                 }
 
             return {
-                "status": "success",
-                "message": f"Exported image: {input_data.file_path}",
-                "export": {
-                    "file_path": input_data.file_path,
-                    "format": input_data.format_type.upper(),
-                    "dimensions": f"{input_data.width}x{input_data.height}",
-                    "view": input_data.view_orientation,
-                    "use_case": "Documentation and presentations",
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support export_image or "
+                    "export_file; no image was exported."
+                ),
             }
 
         except Exception as e:
@@ -927,17 +923,11 @@ async def register_export_tools(
                 }
 
             return {
-                "status": "success",
-                "message": f"Batch export completed to {input_data.format_type} format",
-                "batch_export": {
-                    "source_directory": input_data.source_directory,
-                    "output_directory": input_data.output_directory,
-                    "format": (input_data.format_type or "").upper(),
-                    "files_processed": 0,  # Would be actual count
-                    "files_successful": 0,
-                    "files_failed": 0,
-                    "errors": [],
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support batch_export; no files "
+                    "were exported."
+                ),
             }
 
         except Exception as e:

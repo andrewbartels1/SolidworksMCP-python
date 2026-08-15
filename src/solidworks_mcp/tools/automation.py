@@ -319,7 +319,9 @@ async def register_automation_tools(
                     "message": result.error or "Failed to generate VBA code",
                 }
 
-            # Simulate VBA code generation based on operation description
+            # Build a VBA code skeleton from the operation description. This
+            # is real, usable output (a labelled template), not a stand-in
+            # for a SolidWorks operation that was supposed to run.
             sample_vba = f"""
 ' Generated VBA code for: {input_data.operation_description}
 ' Target: {input_data.target_document}
@@ -402,16 +404,12 @@ End Sub
                     "message": result.error or "Failed to start macro recording",
                 }
 
-            # For now, simulate macro recording start
             return {
-                "status": "success",
-                "message": f"Started recording macro: {input_data.macro_name}",
-                "macro_recording": {
-                    "macro_name": input_data.macro_name,
-                    "description": input_data.description,
-                    "status": "recording",
-                    "start_time": "2024-01-01T10:00:00Z",
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support start_macro_recording; "
+                    f"no recording of {input_data.macro_name} was started."
+                ),
             }
 
         except Exception as e:
@@ -434,17 +432,13 @@ End Sub
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        # For now, simulate macro recording stop
         return {
-            "status": "success",
-            "message": "Stopped macro recording",
-            "macro_recording": {
-                "status": "stopped",
-                "end_time": "2024-01-01T10:05:00Z",
-                "duration": "5 minutes",
-                "actions_recorded": 15,
-                "file_location": "C:\\Users\\User\\AppData\\Local\\SolidWorks\\Macros\\recorded_macro.swp",
-            },
+            "status": "error",
+            "message": (
+                "No adapter capability exists for stopping a macro "
+                "recording; this tool never started a real recording "
+                "session, so there is nothing to stop or save."
+            ),
         }
 
     @mcp.tool()
@@ -475,24 +469,12 @@ End Sub
                     "message": result.error or "Batch processing failed",
                 }
 
-            # Simulate batch processing
             return {
-                "status": "success",
-                "message": f"Batch {input_data.operation_type} completed",
-                "batch_process": {
-                    "source_directory": input_data.source_directory,
-                    "operation": input_data.operation_type,
-                    "target_format": input_data.target_format,
-                    "files_found": 25,
-                    "files_processed": 23,
-                    "files_successful": 21,
-                    "files_failed": 2,
-                    "processing_time": "12.5 minutes",
-                    "failed_files": [
-                        {"file": "corrupted_part.sldprt", "error": "File corrupted"},
-                        {"file": "locked_assembly.sldasm", "error": "File locked"},
-                    ],
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support batch_process_files; no "
+                    f"files in {input_data.source_directory} were processed."
+                ),
             }
 
         except Exception as e:
@@ -530,18 +512,12 @@ End Sub
                     "message": result.error or "Design table management failed",
                 }
 
-            # Simulate design table management
             return {
-                "status": "success",
-                "message": f"Design table {input_data.table_type} completed",
-                "design_table": {
-                    "operation": input_data.table_type,
-                    "excel_file": input_data.excel_file,
-                    "parameters": input_data.parameters,
-                    "configurations": input_data.configurations,
-                    "total_configurations": len(input_data.configurations),
-                    "parameters_controlled": len(input_data.parameters),
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support manage_design_table; no "
+                    f"{input_data.table_type} operation was performed."
+                ),
             }
 
         except Exception as e:
@@ -579,23 +555,12 @@ End Sub
                     "message": result.error or "Workflow execution failed",
                 }
 
-            # Simulate workflow execution
             return {
-                "status": "success",
-                "message": f"Workflow '{input_data.workflow_name}' completed",
-                "workflow": {
-                    "name": input_data.workflow_name,
-                    "total_steps": len(input_data.steps),
-                    "completed_steps": len(input_data.steps) - 1,
-                    "failed_steps": 1,
-                    "parallel_execution": input_data.parallel_execution,
-                    "execution_time": "8.3 minutes",
-                    "step_results": [
-                        {"step": 1, "status": "success", "duration": "2.1s"},
-                        {"step": 2, "status": "success", "duration": "1.8s"},
-                        {"step": 3, "status": "failed", "error": "File not found"},
-                    ],
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support execute_workflow; "
+                    f"workflow '{input_data.workflow_name}' was not run."
+                ),
             }
 
         except Exception as e:
@@ -633,17 +598,13 @@ End Sub
                     "message": result.error or "Template creation failed",
                 }
 
-            # Simulate template creation
             return {
-                "status": "success",
-                "message": f"Created {input_data.template_type} template: {input_data.template_name}",
-                "template": {
-                    "type": input_data.template_type,
-                    "name": input_data.template_name,
-                    "base_file": input_data.base_file,
-                    "metadata": input_data.metadata,
-                    "file_location": f"C:\\ProgramData\\SolidWorks\\templates\\{input_data.template_name}.{'sldprt' if input_data.template_type == 'part' else 'sldasm' if input_data.template_type == 'assembly' else 'slddrw'}t",
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support create_template; no "
+                    f"{input_data.template_type} template "
+                    f"'{input_data.template_name}' was created."
+                ),
             }
 
         except Exception as e:
@@ -681,26 +642,12 @@ End Sub
                     "message": result.error or "Performance optimization failed",
                 }
 
-            # Simulate performance optimization
             return {
-                "status": "success",
-                "message": "Performance optimization completed",
-                "optimization": {
-                    "settings_analyzed": 45,
-                    "settings_optimized": 12,
-                    "estimated_performance_gain": "25%",
-                    "optimizations": [
-                        "Disabled real-time visualization for large assemblies",
-                        "Increased graphics cache size",
-                        "Optimized rebuild frequency",
-                        "Enabled lightweight components for large assemblies",
-                    ],
-                    "recommendations": [
-                        "Consider upgrading graphics card",
-                        "Increase available RAM",
-                        "Use Pack and Go for better file management",
-                    ],
-                },
+                "status": "error",
+                "message": (
+                    "Active adapter does not support optimize_performance; "
+                    "no settings were analyzed or changed."
+                ),
             }
 
         except Exception as e:

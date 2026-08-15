@@ -413,7 +413,10 @@ class TestAutomationTools:
     async def test_automation_fallback_paths_without_adapter_methods(
         self, mcp_server, mock_config
     ):
-        """Test fallback simulation branches for all automation tools."""
+        """Automation tools refuse rather than inventing a result when the
+        adapter has no matching capability. generate_vba_code is the one
+        exception: it produces real VBA text from the operation description,
+        so it still succeeds without an adapter."""
         await register_automation_tools(mcp_server, object(), mock_config)
 
         by_name = {tool.name: tool.fn for tool in await mcp_server.list_tools()}
@@ -455,20 +458,20 @@ class TestAutomationTools:
 
         assert vba["status"] == "success"
         assert "vba_code" in vba
-        assert start["status"] == "success"
-        assert start["macro_recording"]["status"] == "recording"
-        assert stop["status"] == "success"
-        assert stop["macro_recording"]["status"] == "stopped"
-        assert batch["status"] == "success"
-        assert batch["batch_process"]["files_found"] == 25
-        assert table["status"] == "success"
-        assert table["design_table"]["operation"] == "create"
-        assert workflow["status"] == "success"
-        assert workflow["workflow"]["total_steps"] == 1
-        assert template["status"] == "success"
-        assert template["template"]["type"] == "part"
-        assert optimize["status"] == "success"
-        assert optimize["optimization"]["settings_optimized"] == 12
+        assert start["status"] == "error"
+        assert "does not support start_macro_recording" in start["message"]
+        assert stop["status"] == "error"
+        assert stop["message"]  # unconditional refusal, no adapter to check
+        assert batch["status"] == "error"
+        assert "does not support batch_process_files" in batch["message"]
+        assert table["status"] == "error"
+        assert "does not support manage_design_table" in table["message"]
+        assert workflow["status"] == "error"
+        assert "does not support execute_workflow" in workflow["message"]
+        assert template["status"] == "error"
+        assert "does not support create_template" in template["message"]
+        assert optimize["status"] == "error"
+        assert "does not support optimize_performance" in optimize["message"]
 
     @pytest.mark.asyncio
     async def test_automation_exception_paths_from_adapter_methods(

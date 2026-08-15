@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from solidworks_mcp.tools.analysis import (
+    GeometryAnalysisInput,
     InterferenceCheckInput,
     MassPropertiesInput,
     register_analysis_tools,
@@ -261,12 +262,13 @@ class TestAnalysisTools:
         assert geometry_tool is not None
         assert material_tool is not None
 
-        # Fallback branch when adapter has no check_interference method.
+        # Fallback branch when adapter has no check_interference method: must
+        # refuse rather than invent an interference result.
         if hasattr(mock_adapter, "check_interference"):
             delattr(mock_adapter, "check_interference")
         fallback = await check_tool(input_data=InterferenceCheckInput())
-        assert fallback["status"] == "success"
-        assert fallback["interference_found"] is False
+        assert fallback["status"] == "error"
+        assert "does not support check_interference" in fallback["message"]
 
         # Exception branch for adapter check_interference.
         mock_adapter.check_interference = AsyncMock(side_effect=RuntimeError("boom"))
@@ -288,6 +290,67 @@ class TestAnalysisTools:
         assert bad_geo["status"] == "error"
         assert "bad analysis type" in bad_geo["message"]
 
+        # get_material_properties must refuse rather than invent a material,
+        # since mock_adapter has no get_material_properties method.
         material = await material_tool()
-        assert material["status"] == "success"
-        assert material["material"]["name"]
+        assert material["status"] == "error"
+        assert "does not support get_material_properties" in material["message"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_geometry_and_material_properties_adapter_paths(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Cover the real-adapter success/error paths once analyze_geometry and
+        get_material_properties are wired to an adapter that implements them."""
+        await register_analysis_tools(mcp_server, mock_adapter, mock_config)
+
+        geometry_tool = None
+        material_tool = None
+        for tool in await mcp_server.list_tools():
+            if tool.name == "analyze_geometry":
+                geometry_tool = tool.fn
+            if tool.name == "get_material_properties":
+                material_tool = tool.fn
+
+        assert geometry_tool is not None
+        assert material_tool is not None
+
+        mock_adapter.analyze_geometry = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"analysis_type": "draft", "findings": []},
+                execution_time=0.1,
+            )
+        )
+        geometry_success = await geometry_tool(
+            input_data=GeometryAnalysisInput(analysis_type="draft")
+        )
+        assert geometry_success["status"] == "success"
+        assert geometry_success["data"]["analysis_type"] == "draft"
+
+        mock_adapter.analyze_geometry = AsyncMock(
+            return_value=Mock(is_success=False, error="geometry analysis failed")
+        )
+        geometry_error = await geometry_tool(
+            input_data=GeometryAnalysisInput(analysis_type="draft")
+        )
+        assert geometry_error["status"] == "error"
+        assert "geometry analysis failed" in geometry_error["message"]
+
+        mock_adapter.get_material_properties = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"name": "Steel"},
+                execution_time=0.1,
+            )
+        )
+        material_success = await material_tool()
+        assert material_success["status"] == "success"
+        assert material_success["data"]["name"] == "Steel"
+
+        mock_adapter.get_material_properties = AsyncMock(
+            return_value=Mock(is_success=False, error="no material assigned")
+        )
+        material_error = await material_tool()
+        assert material_error["status"] == "error"
+        assert "no material assigned" in material_error["message"]

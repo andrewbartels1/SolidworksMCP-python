@@ -597,15 +597,15 @@ class TestExportToolsBranchCoverage:
         assert file_error["status"] == "error"
         assert "file export failed" in file_error["message"]
 
-        no_method_server = FastMCP("Export Simulated Test")
+        no_method_server = FastMCP("Export Refusal Test")
         await register_export_tools(no_method_server, object(), mock_config)
         no_method_tools = {t.name: t.fn for t in await no_method_server.list_tools()}
-        simulated = await no_method_tools["export_image"](
+        refused = await no_method_tools["export_image"](
             input_data=ExportImageInput(
                 file_path="model.sldprt",
                 model_path="model.sldprt",
                 output_path="model.png",
             )
         )
-        assert simulated["status"] == "success"
-        assert simulated["export"]["file_path"] == "model.sldprt"
+        assert refused["status"] == "error"
+        assert "does not support export_image" in refused["message"]

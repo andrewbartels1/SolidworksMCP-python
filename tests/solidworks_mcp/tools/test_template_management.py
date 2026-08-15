@@ -408,8 +408,13 @@ class TestTemplateManagementTools:
         assert "Source model file not found" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_template_management_fallback_paths(self, mcp_server, mock_config):
-        """Test fallback simulation payloads when adapter methods are unavailable."""
+    async def test_template_management_fallback_paths_refuse(
+        self, mcp_server, mock_config
+    ):
+        """Template management tools refuse rather than inventing a result
+        when the adapter has no matching capability. compare_templates is
+        the one exception below with real files on disk: it reports honest
+        filesystem facts instead."""
         await register_template_management_tools(mcp_server, object(), mock_config)
 
         extract_tool = None
@@ -448,8 +453,8 @@ class TestTemplateManagementTools:
                 save_path="templates/fallback.prtdot",
             )
         )
-        assert extract_result["status"] == "success"
-        assert extract_result["template"]["name"] == "Fallback Template"
+        assert extract_result["status"] == "error"
+        assert "does not support extract_template" in extract_result["message"]
 
         apply_result = await apply_tool(
             input_data=TemplateApplicationInput(
@@ -458,8 +463,8 @@ class TestTemplateManagementTools:
                 overwrite_existing=True,
             )
         )
-        assert apply_result["status"] == "success"
-        assert apply_result["template_application"]["target_model"] == "target.sldprt"
+        assert apply_result["status"] == "error"
+        assert "does not support apply_template" in apply_result["message"]
 
         batch_result = await batch_tool(
             input_data=TemplateBatchInput(
@@ -470,9 +475,11 @@ class TestTemplateManagementTools:
                 backup_originals=False,
             )
         )
-        assert batch_result["status"] == "success"
-        assert batch_result["batch_operation"]["summary"]["total_scanned"] == 4
+        assert batch_result["status"] == "error"
+        assert "does not support batch_apply_template" in batch_result["message"]
 
+        # compare_templates falls back to a real filesystem comparison, not a
+        # fabricated similarity score — nonexistent paths refuse cleanly.
         compare_result = await compare_tool(
             input_data=TemplateComparisonInput(
                 template1_path="templates/a.prtdot",
@@ -480,8 +487,8 @@ class TestTemplateManagementTools:
                 comparison_type="full",
             )
         )
-        assert compare_result["status"] == "success"
-        assert compare_result["comparison"]["similarity_score"] == 85.5
+        assert compare_result["status"] == "error"
+        assert "not found on disk" in compare_result["message"]
 
         save_result = await save_tool(
             input_data={
@@ -491,14 +498,51 @@ class TestTemplateManagementTools:
                 "author": "QA",
             }
         )
-        assert save_result["status"] == "success"
-        assert "library_entry" in save_result
+        assert save_result["status"] == "error"
+        assert "does not support save_to_template_library" in save_result["message"]
 
         list_result = await list_tool(
             input_data={"category": "all", "search_term": "", "sort_by": "name"}
         )
-        assert list_result["status"] == "success"
-        assert len(list_result["templates"]) >= 1
+        assert list_result["status"] == "error"
+        assert "does not support list_template_library" in list_result["message"]
+
+    @pytest.mark.asyncio
+    async def test_compare_templates_reads_real_files(
+        self, mcp_server, mock_config, tmp_path
+    ):
+        """compare_templates reports honest filesystem facts (existence,
+        size, byte-identical check) instead of a fabricated similarity
+        score, when no adapter can parse template internals."""
+        await register_template_management_tools(mcp_server, object(), mock_config)
+
+        compare_tool = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "compare_templates"
+        )
+
+        tpl_a = tmp_path / "a.prtdot"
+        tpl_b = tmp_path / "b.prtdot"
+        tpl_a.write_bytes(b"template content")
+        tpl_b.write_bytes(b"template content")
+
+        identical = await compare_tool(
+            input_data=TemplateComparisonInput(
+                template1_path=str(tpl_a), template2_path=str(tpl_b)
+            )
+        )
+        assert identical["status"] == "success"
+        assert identical["comparison"]["identical"] is True
+
+        tpl_b.write_bytes(b"different template content")
+        different = await compare_tool(
+            input_data=TemplateComparisonInput(
+                template1_path=str(tpl_a), template2_path=str(tpl_b)
+            )
+        )
+        assert different["status"] == "success"
+        assert different["comparison"]["identical"] is False
 
     @pytest.mark.asyncio
     async def test_template_management_adapter_error_and_exception_paths(
@@ -671,10 +715,11 @@ class TestTemplateManagementBranchCoverage:
         assert "batch apply failed" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_list_template_library_sort_and_filter_branches(
+    async def test_list_template_library_refuses_without_adapter(
         self, mcp_server, mock_config
     ):
-        """Cover category/search/sort fallback branches in list_template_library."""
+        """list_template_library has no local registry to filter/sort, so it
+        must refuse rather than inventing a filtered/sorted template list."""
         await register_template_management_tools(mcp_server, object(), mock_config)
         tool = next(
             t.fn
@@ -697,13 +742,10 @@ class TestTemplateManagementBranchCoverage:
             }
         )
 
-        assert usage_sorted["status"] == "success"
-        assert usage_sorted["library_search"]["category_filter"] == "drawings"
-        assert usage_sorted["library_search"]["sort_by"] == "usage"
-        assert all(t["category"] == "drawings" for t in usage_sorted["templates"])
-
-        assert date_sorted["status"] == "success"
-        assert date_sorted["library_search"]["sort_by"] == "date"
+        assert usage_sorted["status"] == "error"
+        assert "does not support list_template_library" in usage_sorted["message"]
+        assert date_sorted["status"] == "error"
+        assert "does not support list_template_library" in date_sorted["message"]
 
     @pytest.mark.asyncio
     async def test_library_adapter_error_result_paths(

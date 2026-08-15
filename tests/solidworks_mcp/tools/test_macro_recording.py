@@ -478,7 +478,8 @@ class TestMacroRecordingTools:
 
     @pytest.mark.asyncio
     async def test_stop_macro_recording_fallback_path(self, mcp_server, mock_config):
-        """Test stop_macro_recording fallback branch."""
+        """stop_macro_recording refuses (no recording was ever started) when
+        the adapter has no stop_macro_recording capability."""
         await register_macro_recording_tools(mcp_server, object(), mock_config)
 
         stop_tool = None
@@ -495,8 +496,7 @@ class TestMacroRecordingTools:
                 "clean_code": False,
             }
         )
-        assert result["status"] == "success"
-        assert result["recorded_macro"]["session_id"] == "REC-12345"
+        assert result["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_stop_macro_recording_exception_path(
@@ -523,7 +523,8 @@ class TestMacroRecordingTools:
     async def test_macro_tools_fallback_without_adapter_methods(
         self, mcp_server, mock_config
     ):
-        """Test simulated fallback branches when adapter methods are unavailable."""
+        """Tools refuse rather than inventing a result when the adapter has
+        no matching capability."""
         adapter_without_methods = object()
         await register_macro_recording_tools(
             mcp_server, adapter_without_methods, mock_config
@@ -550,8 +551,8 @@ class TestMacroRecordingTools:
                 output_file="fallback.swp",
             )
         )
-        assert start_result["status"] == "success"
-        assert start_result["recording_session"]["status"] == "recording"
+        assert start_result["status"] == "error"
+        assert "does not support start_macro_recording" in start_result["message"]
 
         execute_result = await execute_tool(
             input_data=MacroPlaybackInput(
@@ -560,8 +561,8 @@ class TestMacroRecordingTools:
                 pause_between_runs=0,
             )
         )
-        assert execute_result["status"] == "success"
-        assert execute_result["data"]["repeat_count"] == 2
+        assert execute_result["status"] == "error"
+        assert "does not support execute_macro" in execute_result["message"]
 
         batch_result = await batch_tool(
             input_data=MacroBatchInput(
@@ -569,8 +570,8 @@ class TestMacroRecordingTools:
                 stop_on_error=True,
             )
         )
-        assert batch_result["status"] == "partial_success"
-        assert batch_result["data"]["failed_macros"] == 1
+        assert batch_result["status"] == "error"
+        assert "does not support batch_execute_macros" in batch_result["message"]
 
     @pytest.mark.asyncio
     async def test_execute_macro_exception_path(
@@ -620,10 +621,12 @@ class TestMacroRecordingTools:
         assert "macro syntax error" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_execute_macro_fallback_pause_between_runs_invokes_sleep(
-        self, mcp_server, mock_config, monkeypatch
+    async def test_execute_macro_fallback_refuses_without_running_anything(
+        self, mcp_server, mock_config
     ):
-        """Fallback execute path should sleep between runs when pause is configured."""
+        """execute_macro refuses without an adapter capability, regardless of
+        repeat_count/pause_between_runs — it never fabricates run details or
+        a "features_created" count for a macro that never ran."""
         await register_macro_recording_tools(mcp_server, object(), mock_config)
 
         execute_tool = None
@@ -634,12 +637,6 @@ class TestMacroRecordingTools:
 
         assert execute_tool is not None
 
-        sleep_calls: list[float] = []
-        monkeypatch.setattr(
-            "solidworks_mcp.tools.macro_recording.time.sleep",
-            lambda seconds: sleep_calls.append(float(seconds)),
-        )
-
         result = await execute_tool(
             input_data=MacroPlaybackInput(
                 macro_file="fallback.swp",
@@ -648,12 +645,13 @@ class TestMacroRecordingTools:
             )
         )
 
-        assert result["status"] == "success"
-        assert len(sleep_calls) == 2
+        assert result["status"] == "error"
+        assert "does not support execute_macro" in result["message"]
 
     @pytest.mark.asyncio
     async def test_analyze_macro_fallback_path(self, mcp_server, mock_config):
-        """Test analyze_macro fallback branch."""
+        """analyze_macro refuses rather than inventing code metrics when the
+        adapter has no analyze_macro capability."""
         await register_macro_recording_tools(mcp_server, object(), mock_config)
 
         analyze_tool = None
@@ -668,8 +666,8 @@ class TestMacroRecordingTools:
                 macro_file="analysis.swp", analysis_depth="Full"
             )
         )
-        assert result["status"] == "success"
-        assert result["analysis"]["code_metrics"]["total_lines"] == 67
+        assert result["status"] == "error"
+        assert "does not support analyze_macro" in result["message"]
 
     @pytest.mark.asyncio
     async def test_analyze_macro_adapter_error_path(
@@ -727,7 +725,9 @@ class TestMacroRecordingTools:
 
     @pytest.mark.asyncio
     async def test_optimize_and_library_fallback_paths(self, mcp_server, mock_config):
-        """Test optimize_macro and create_macro_library fallback payload branches."""
+        """optimize_macro and create_macro_library refuse rather than
+        inventing an optimization report or a library layout when the
+        adapter has no matching capability."""
         await register_macro_recording_tools(mcp_server, object(), mock_config)
 
         optimize_tool = None
@@ -744,10 +744,8 @@ class TestMacroRecordingTools:
         optimize_result = await optimize_tool(
             input_data={"macro_file": "legacy.swp", "level": "aggressive"}
         )
-        assert optimize_result["status"] == "success"
-        assert (
-            optimize_result["optimization_report"]["optimization_level"] == "aggressive"
-        )
+        assert optimize_result["status"] == "error"
+        assert "does not support optimize_macro" in optimize_result["message"]
 
         library_result = await library_tool(
             input_data={
@@ -757,8 +755,8 @@ class TestMacroRecordingTools:
                 "include_templates": False,
             }
         )
-        assert library_result["status"] == "success"
-        assert library_result["data"]["library_name"] == "Team Library"
+        assert library_result["status"] == "error"
+        assert "does not support create_macro_library" in library_result["message"]
 
     @pytest.mark.asyncio
     async def test_optimize_and_library_adapter_error_paths(
