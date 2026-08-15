@@ -88,6 +88,12 @@ async def real_server() -> AsyncGenerator[SolidWorksMCPServer]:
         server.state.is_connected = True
     yield server
     if server.adapter and server.adapter.is_connected():
+        close_all = getattr(server.adapter, "close_all_session_docs", None)
+        if callable(close_all):
+            try:
+                await close_all()
+            except Exception:
+                pass
         await server.adapter.disconnect()
         server.state.is_connected = False
 

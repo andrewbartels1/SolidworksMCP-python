@@ -6,6 +6,8 @@ import ctypes
 import os
 import re
 import shutil
+import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -75,6 +77,154 @@ def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:  # pragma: no 
     return ct_unk.QueryInterface(iface)
 
 
+_USER32 = ctypes.WinDLL("user32", use_last_error=True) if os.name == "nt" else None
+_BM_CLICK = 0x00F5
+_SAVE_PROMPT_DISMISS_WORDS = ("no", "don't save", "dont save")
+
+
+def _win_text(hwnd: int) -> str:
+    """Read a window's title/label text via the Win32 API.
+
+    Args:
+        hwnd: Native window handle.
+
+    Returns:
+        str: Window text, or ``""`` if the window has none.
+    """
+    length = _USER32.GetWindowTextLengthW(hwnd)
+    if length <= 0:
+        return ""
+    buf = ctypes.create_unicode_buffer(length + 1)
+    _USER32.GetWindowTextW(hwnd, buf, length + 1)
+    return buf.value
+
+
+def _win_class(hwnd: int) -> str:
+    """Read a window's class name via the Win32 API.
+
+    Args:
+        hwnd: Native window handle.
+
+    Returns:
+        str: Window class name.
+    """
+    buf = ctypes.create_unicode_buffer(256)
+    _USER32.GetClassNameW(hwnd, buf, 256)
+    return buf.value
+
+
+def _find_and_dismiss_save_prompt() -> bool:
+    """Find a visible "Save changes?" modal dialog and click its "No" button.
+
+    SolidWorks shows this as a standard ``#32770`` dialog box titled
+    "SolidWorks" whenever ``CloseDoc``/``CloseAllDocuments`` is called on a
+    document with unsaved changes (``GetSaveFlag() == True``). There is no
+    public API to suppress it (see CLAUDE.md CloseDoc troubleshooting note),
+    so this walks top-level windows looking for the dialog and simulates a
+    click on its "Don't Save"/"No" button - the same effect a user gets by
+    hand, without blocking the automation session on a modal that nobody is
+    watching.
+
+    Returns:
+        bool: ``True`` if a dialog was found and dismissed.
+    """
+    dialog_hwnds: list[int] = []
+
+    def _enum_top(hwnd: int, _lparam: int) -> bool:
+        if _USER32.IsWindowVisible(hwnd) and _win_class(hwnd) == "#32770":
+            dialog_hwnds.append(hwnd)
+        return True
+
+    _USER32.EnumWindows(
+        ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(
+            _enum_top
+        ),
+        0,
+    )
+
+    for dialog_hwnd in dialog_hwnds:
+        clicked = False
+
+        def _enum_child(hwnd: int, _lparam: int) -> bool:
+            nonlocal clicked
+            if _win_class(hwnd) == "Button":
+                label = _win_text(hwnd).replace("&", "").strip().lower()
+                if label in _SAVE_PROMPT_DISMISS_WORDS:
+                    _USER32.SendMessageW(hwnd, _BM_CLICK, 0, 0)
+                    clicked = True
+                    return False
+            return True
+
+        _USER32.EnumChildWindows(
+            dialog_hwnd,
+            ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(
+                _enum_child
+            ),
+            0,
+        )
+        if clicked:
+            return True
+
+    return False
+
+
+def _watch_for_save_prompt(stop_event: threading.Event, timeout: float = 5.0) -> None:
+    """Poll for the save-changes dialog until dismissed, stopped, or timed out.
+
+    Runs on a background thread started just before a blocking ``CloseDoc``
+    call so the modal (if SolidWorks raises one) gets dismissed without a
+    human at the keyboard.
+
+    Args:
+        stop_event: Set by the caller once ``CloseDoc`` returns, so the
+            watcher can exit promptly instead of running the full timeout.
+        timeout: Maximum seconds to keep polling.
+    """
+    if _USER32 is None:
+        return
+    deadline = time.monotonic() + timeout
+    while not stop_event.is_set() and time.monotonic() < deadline:
+        if _find_and_dismiss_save_prompt():
+            return
+        stop_event.wait(0.1)
+
+
+def _close_document_discarding_changes(app: Any, model: Any, title: str) -> None:
+    """Close ``model`` via ``CloseDoc``, discarding any unsaved changes.
+
+    Starts a watcher thread before calling ``CloseDoc`` whenever the document
+    is dirty, since a dirty document makes SolidWorks raise a blocking
+    "Save changes?" dialog that would otherwise stall the automation thread
+    indefinitely.
+
+    Args:
+        app: The live ``SldWorks.Application`` COM object.
+        model: The document to close.
+        title: The document's title, as required by ``CloseDoc``.
+    """
+    is_dirty = False
+    get_save_flag = getattr(model, "GetSaveFlag", None)
+    if callable(get_save_flag):
+        try:
+            is_dirty = bool(get_save_flag())
+        except Exception:
+            is_dirty = False
+
+    stop_event = threading.Event()
+    watcher: threading.Thread | None = None
+    if is_dirty:
+        watcher = threading.Thread(
+            target=_watch_for_save_prompt, args=(stop_event,), daemon=True
+        )
+        watcher.start()
+    try:
+        app.CloseDoc(title)
+    finally:
+        stop_event.set()
+        if watcher is not None:
+            watcher.join(timeout=1.0)
+
+
 class SolidWorksIOMixin:
     """Expose model open/save/create/configuration methods through a mixin."""
 
@@ -134,6 +284,28 @@ class SolidWorksIOMixin:
                 break
 
         return existing_match or first_non_empty
+
+    @staticmethod
+    def _track_session_doc(adapter: Any, model: Any) -> None:
+        """Record a document this adapter session opened or created.
+
+        ``close_all_session_docs`` only closes documents captured here, so
+        it can never touch a document the user opened by hand in the same
+        shared SolidWorks instance - COM automation binds to whatever
+        instance is already running rather than spinning up a private,
+        disposable one, so a blanket "close every open document" would be
+        unsafe (it would also close the user's own unrelated work).
+
+        Args:
+            adapter: The owning ``PyWin32Adapter`` instance.
+            model: The document COM object that was just opened/created.
+        """
+        docs: list[Any] | None = getattr(adapter, "_session_docs", None)
+        if docs is None:
+            docs = []
+            adapter._session_docs = docs
+        if not any(existing is model for existing in docs):
+            docs.append(model)
 
     def _read_model_title(self, model: Any) -> str:
         """Read a model title regardless of COM exposing method or property.
@@ -205,6 +377,7 @@ class SolidWorksIOMixin:
             )
 
             adapter.currentModel = model
+            self._track_session_doc(adapter, model)
             title = self._read_model_title(model)
             active_config = adapter._attempt(lambda: model.GetActiveConfiguration())
             config = (
@@ -257,14 +430,70 @@ class SolidWorksIOMixin:
 
         def _close() -> None:
             """Close the model document."""
+            title = self._read_model_title(model)
             if save:
                 model.Save()
-            app.CloseDoc(model.GetTitle())
+                app.CloseDoc(title)
+            else:
+                _close_document_discarding_changes(app, model, title)
             adapter.currentModel = None
+            docs: list[Any] | None = getattr(adapter, "_session_docs", None)
+            if docs:
+                adapter._session_docs = [doc for doc in docs if doc is not model]
 
         return cast(
             AdapterResult[None],
             adapter._handle_com_operation("close_model", _close),
+        )
+
+    async def close_all_session_docs(self) -> AdapterResult[dict[str, Any]]:
+        """Close every document this adapter session opened or created.
+
+        ``close_model`` only closes the single active document
+        (``adapter.currentModel``). A test or automation run that opens or
+        creates several documents in sequence otherwise leaks every
+        non-active one for the remainder of the process, growing memory use
+        and slowing SolidWorks down over a long run.
+
+        Deliberately scoped to ``adapter._session_docs`` (populated by
+        ``open_model``/``create_part``/``create_assembly``/``create_drawing``)
+        rather than ``ISldWorks.GetDocuments()``. SolidWorks COM automation
+        binds to whatever instance is already running rather than a private
+        disposable one, so a blanket "close everything currently open" would
+        also close documents the user opened by hand outside of this
+        session - unacceptable if that includes unsaved real work.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``{"closed": [...], "failed": {...}}``
+            title lists/errors for each document this session had tracked.
+        """
+        adapter = self._adapter(self)
+        app = adapter.swApp
+        if app is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="SolidWorks application is not connected",
+            )
+
+        def _close_all() -> dict[str, Any]:
+            """Close every session-tracked document, discarding changes."""
+            closed: list[str] = []
+            failed: dict[str, str] = {}
+            documents: list[Any] = list(getattr(adapter, "_session_docs", None) or [])
+            for doc in documents:
+                title = self._read_model_title(doc)
+                try:
+                    _close_document_discarding_changes(app, doc, title)
+                    closed.append(title)
+                except Exception as exc:
+                    failed[title] = str(exc)
+            adapter.currentModel = None
+            adapter._session_docs = []
+            return {"closed": closed, "failed": failed}
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("close_all_session_docs", _close_all),
         )
 
     async def create_part(
@@ -308,6 +537,7 @@ class SolidWorksIOMixin:
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 1), default=0)
             adapter.currentModel = model
+            self._track_session_doc(adapter, model)
             title = self._read_model_title(model)
             return SolidWorksModel(
                 path="",
@@ -363,6 +593,7 @@ class SolidWorksIOMixin:
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 2), default=0)
             adapter.currentModel = model
+            self._track_session_doc(adapter, model)
             title = self._read_model_title(model)
             return SolidWorksModel(
                 path="",
@@ -414,6 +645,7 @@ class SolidWorksIOMixin:
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 3), default=0)
             adapter.currentModel = model
+            self._track_session_doc(adapter, model)
             title = self._read_model_title(model)
             return SolidWorksModel(
                 path="",

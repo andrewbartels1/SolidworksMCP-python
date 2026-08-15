@@ -319,6 +319,7 @@ class _ComSessionCoordinator:
         """
         try:
             self._adapter.currentModel = None
+            self._adapter._session_docs = []
             self._adapter.currentSketch = None
             self._adapter.currentSketchManager = None
             self._adapter._reset_sketch_entity_registry()
@@ -1614,6 +1615,14 @@ class PyWin32Adapter(
 
         self.swApp: Any | None = None
         self.currentModel: Any | None = None
+        # Documents this adapter session opened/created via open_model /
+        # create_part / create_assembly / create_drawing. Scopes
+        # close_all_session_docs() so it only ever closes what this session
+        # is responsible for - never a blanket "close everything open in
+        # SolidWorks", since COM automation binds to whatever instance is
+        # already running and that instance may also hold the user's own
+        # unrelated documents.
+        self._session_docs: list[Any] = []
         self.currentSketch: Any | None = None
         self.currentSketchManager: Any | None = None
         self._last_sketch_name: str | None = None

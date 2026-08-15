@@ -200,7 +200,11 @@ async def run_analysis_demo(out_dir: Path) -> None:
 
     finally:
         try:
-            await adapter.close_model(save=False)
+            close_all = getattr(adapter, "close_all_session_docs", None)
+            if callable(close_all):
+                await close_all()
+            else:
+                await adapter.close_model(save=False)
         except Exception:  # noqa: BLE001
             pass
         try:
