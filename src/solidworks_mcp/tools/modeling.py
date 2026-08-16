@@ -453,6 +453,55 @@ class AddMateInput(CompatInput):
             raise ValueError("component_a and component_b are required")
 
 
+class CreateReferencePlaneInput(CompatInput):
+    """Input schema for creating a reference plane.
+
+    Attributes:
+        reference (str): Name of the reference plane or planar face.
+        offset (float): Offset distance in millimetres.
+        angle (float): Angle in degrees.
+        flip (bool): Reverse the offset or angle direction.
+    """
+
+    reference: str = Field(
+        description="Name of the reference plane or planar face to offset "
+        "from, e.g. 'Front Plane'"
+    )
+    offset: float = Field(
+        default=0.0,
+        description="Offset distance in millimetres. Must be non-zero — a "
+        "plane coincident with its reference is not useful",
+    )
+    angle: float = Field(
+        default=0.0,
+        description="Angle in degrees. Not yet supported: an angled plane "
+        "needs a second reference this tool cannot take, so a non-zero "
+        "value errors. Use offset for parallel planes",
+    )
+    flip: bool = Field(default=False, description="Reverse the offset direction")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.reference.strip():
+            raise ValueError("reference is required")
+
+
+class CreateAxisInput(CompatInput):
+    """Input schema for creating a reference axis.
+
+    Attributes:
+        reference (str): Principal axis direction.
+    """
+
+    reference: str = Field(
+        description="Principal axis direction: 'x', 'y' or 'z' "
+        "(case-insensitive; a leading +/- is stripped)"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.reference.strip():
+            raise ValueError("reference is required")
+
+
 class CreateDrawingInput(CompatInput):
     """Input schema for creating a new drawing.
 
@@ -1432,5 +1481,104 @@ async def register_modeling_tools(
             logger.error(f"Error in list_components tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 15  # Number of tools registered
+    @mcp.tool()
+    async def create_reference_plane(
+        input_data: CreateReferencePlaneInput,
+    ) -> dict[str, Any]:
+        """Create a reference plane offset from an existing plane or planar face.
+
+        Adds a new plane to the feature tree, parallel to and offset from the
+        named reference. The returned plane name can be passed straight to
+        ``create_sketch`` to sketch anywhere other than the six built-in
+        planes.
+
+        Angled planes are not supported by this tool: an angled plane needs a
+        second reference (an axis or edge) to rotate about, which this
+        signature cannot take. Use ``offset`` for parallel planes. An
+        ``offset`` of zero is rejected — a plane coincident with its
+        reference is not useful.
+
+        Args:
+            input_data (CreateReferencePlaneInput): Reference name, offset,
+                angle and flip.
+
+        Returns:
+            dict[str, Any]: Status and the new plane's details.
+
+        Example:
+            ```python
+            plane = await create_reference_plane(
+                {"reference": "Front Plane", "offset": 76.2}
+            )
+            await create_sketch({"plane": plane["plane"]["name"]})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, CreateReferencePlaneInput)
+            result = await adapter.create_reference_plane(
+                input_data.reference,
+                input_data.offset,
+                input_data.angle,
+                input_data.flip,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                return {
+                    "status": "success",
+                    "message": f"Created reference plane: {data.get('name', 'Plane')}",
+                    "plane": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to create reference plane: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in create_reference_plane tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def create_axis(input_data: CreateAxisInput) -> dict[str, Any]:
+        """Create a reference axis along a principal direction.
+
+        Builds an axis from the intersection of two built-in planes: x from
+        Top + Front, y from Front + Right, z from Top + Right.
+
+        Args:
+            input_data (CreateAxisInput): The principal direction ('x', 'y'
+                or 'z').
+
+        Returns:
+            dict[str, Any]: Status and the axis details (planes used).
+
+        Example:
+            ```python
+            result = await create_axis({"reference": "z"})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, CreateAxisInput)
+            result = await adapter.create_axis(input_data.reference)
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                axis_name = data.get("reference", input_data.reference)
+                return {
+                    "status": "success",
+                    "message": f"Created {axis_name} axis",
+                    "axis": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to create axis: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in create_axis tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    # Counted from the registry rather than hand-maintained. The literal that
+    # used to live here had drifted: it read 15 while 16 tools were actually
+    # registered, so the function misreported its own work and the test
+    # enshrined the wrong number.
+    tool_count = len(await mcp.list_tools())
     return tool_count

@@ -965,6 +965,43 @@ class SolidWorksAdapter(ABC):
             error="add_fillet is not implemented by this adapter",
         )
 
+    async def create_reference_plane(
+        self,
+        reference: str,
+        offset: float = 0.0,
+        angle: float = 0.0,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a reference plane offset from, or angled to, an existing plane.
+
+        Args:
+            reference (str): Name of the reference plane or planar face.
+            offset (float): Offset distance in millimetres. Defaults to 0.0.
+            angle (float): Angle in degrees. Defaults to 0.0.
+            flip (bool): Reverse the offset or angle direction. Defaults to False.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new plane's name and parameters, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_reference_plane is not implemented by this adapter",
+        )
+
+    async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
+        """Create a reference axis along a principal direction.
+
+        Args:
+            reference (str): "x", "y" or "z" (case-insensitive, leading +/- stripped).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The plane pair used and feature counts, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_axis is not implemented by this adapter",
+        )
+
     # Assembly Operations
     async def insert_component(
         self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0

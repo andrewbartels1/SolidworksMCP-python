@@ -532,6 +532,33 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"radius": radius, "edge_names": edge_names},
         )
 
+    async def create_reference_plane(
+        self,
+        reference: str,
+        offset: float = 0.0,
+        angle: float = 0.0,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create reference plane through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_reference_plane",
+            lambda: self.adapter.create_reference_plane(reference, offset, angle, flip),
+            input_dict={
+                "reference": reference,
+                "offset": offset,
+                "angle": angle,
+                "flip": flip,
+            },
+        )
+
+    async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
+        """Create reference axis through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_axis",
+            lambda: self.adapter.create_axis(reference),
+            input_dict={"reference": reference},
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:

@@ -28,6 +28,7 @@ from .base import (
     SolidWorksModel,
     SweepParameters,
 )
+from .solidworks.features import _AXIS_PLANE_PAIRS
 from .solidworks.sketch import RELATION_NAME_MAP
 
 #: Canned assembly component tree used by ``list_features`` when a mock
@@ -151,6 +152,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # Assembly components inserted via insert_component, keyed by
         # insertion order. See insert_component/list_components/add_mate.
         self._components: list[str] = []
+        # Reference planes created via create_reference_plane, in creation
+        # order, used to invent sequential "PlaneN" names. Shared feature
+        # tree counter with create_axis mirrors the live adapter's
+        # features_before/features_after pair (see _feature_count in
+        # solidworks/features.py).
+        self._reference_planes: list[str] = []
+        self._feature_tree_count = 0
         self._operation_count = 0
 
         # Configurable simulation delays (in seconds)
@@ -2037,4 +2045,125 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "geometry_moved": None,
             },
             execution_time=self._delays["model_operation"],
+        )
+
+    async def create_reference_plane(
+        self,
+        reference: str,
+        offset: float = 0.0,
+        angle: float = 0.0,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock creating a reference plane offset from an existing plane.
+
+        Mirrors the live adapter's refusals rather than fabricating a
+        result it cannot know: an angled plane needs a second reference this
+        signature cannot supply, and an offset of zero would be coincident
+        with its reference. See ``_create_reference_plane_impl`` in
+        ``solidworks/features.py`` for the live contract this mirrors.
+
+        On success, invents a sequential ``PlaneN`` name tracked on
+        ``self._reference_planes`` and advances the shared mock feature-tree
+        counter so ``features_before``/``features_after`` differ by exactly
+        one, the same signal the live adapter derives from
+        ``IFeatureManager::GetFeatureCount``.
+
+        Args:
+            reference (str): Name of the reference plane or planar face.
+            offset (float): Offset distance in millimetres. Defaults to 0.0.
+            angle (float): Angle in degrees; unsupported (non-zero errors).
+                Defaults to 0.0.
+            flip (bool): Reverse the offset direction. Defaults to False.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new plane's name and
+            parameters, or error.
+        """
+        if angle:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "create_reference_plane does not support 'angle' yet: an "
+                    "angled plane needs a second reference (an axis or edge "
+                    "to rotate about) which this signature cannot take. Use "
+                    "'offset' for parallel planes."
+                ),
+            )
+
+        if not offset:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "create_reference_plane requires a non-zero offset - a "
+                    "plane coincident with its reference is not useful"
+                ),
+            )
+
+        await asyncio.sleep(self._delays["feature_operation"])
+        self._operation_count += 1
+
+        before = self._feature_tree_count
+        self._feature_tree_count += 1
+        after = self._feature_tree_count
+
+        self._reference_planes.append(f"Plane{len(self._reference_planes) + 1}")
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": self._reference_planes[-1],
+                "reference": reference,
+                "offset": offset,
+                "angle": None,
+                "flip": flip,
+                "features_before": before,
+                "features_after": after,
+            },
+            execution_time=self._delays["feature_operation"],
+        )
+
+    async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
+        """Mock creating a reference axis along a principal direction.
+
+        Mirrors the live adapter's plane-pair mapping (``_AXIS_PLANE_PAIRS``
+        in ``solidworks/features.py``, imported here directly so the two can
+        never drift apart) and validation: only ``x``/``y``/``z``
+        (case-insensitive, leading +/- stripped) are accepted.
+
+        Args:
+            reference (str): "x", "y" or "z" (case-insensitive; leading +/-
+                stripped).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The plane pair used and the
+            feature counter before/after, or error for an unknown reference.
+        """
+        key = str(reference or "").strip().lower().lstrip("+-")
+        if key not in _AXIS_PLANE_PAIRS:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown axis reference '{reference}'. "
+                    f"Use one of: {', '.join(sorted(_AXIS_PLANE_PAIRS))}."
+                ),
+            )
+
+        await asyncio.sleep(self._delays["feature_operation"])
+        self._operation_count += 1
+
+        before = self._feature_tree_count
+        self._feature_tree_count += 1
+        after = self._feature_tree_count
+
+        plane_a, plane_b = _AXIS_PLANE_PAIRS[key]
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "reference": key,
+                "planes": [plane_a, plane_b],
+                "features_before": before,
+                "features_after": after,
+            },
+            execution_time=self._delays["feature_operation"],
         )

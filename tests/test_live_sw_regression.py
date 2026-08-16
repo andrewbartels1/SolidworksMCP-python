@@ -32,6 +32,7 @@ Run only these tests locally on Windows with SW::
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import platform
 import threading
@@ -2317,5 +2318,80 @@ async def test_assembly_insert_list_and_mate_change_real_geometry(connected_adap
             "the mate changed the assembly's volume, so it moved more than "
             "position"
         )
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_reference_plane_can_be_sketched_on(connected_adapter):
+    """A created plane must be usable by create_sketch, or it is worthless.
+
+    This is the whole point of the capability: sketches could previously only
+    open on the six built-in planes, so any workflow needing a station plane -
+    lofting a wing between airfoil sections, for instance - was impossible.
+
+    Verified by geometry rather than by return code: a circle sketched on the
+    new plane and extruded must produce exactly the expected volume.
+    """
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+
+        plane = await adapter.create_reference_plane("Front Plane", offset=76.2)
+        assert plane.is_success, plane.error
+        name = plane.data["name"]
+        assert name, plane.data
+        assert plane.data["features_after"] > plane.data["features_before"], plane.data
+
+        # The name must be one create_sketch accepts.
+        sketch = await adapter.create_sketch(name)
+        assert sketch.is_success, (
+            f"create_sketch({name!r}) failed, so the plane cannot be used: "
+            f"{sketch.error}"
+        )
+
+        await adapter.add_circle(0.0, 0.0, 20.0)
+        await adapter.exit_sketch()
+        extruded = await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+        assert extruded.is_success, extruded.error
+
+        props = await adapter.get_mass_properties()
+        assert props.is_success, props.error
+        assert props.data.volume == pytest.approx(math.pi * 20.0**2 * 5.0, rel=1e-6), (
+            f"geometry on the new plane measured {props.data.volume} mm3"
+        )
+
+        # A plane coincident with its reference is refused, not silently made.
+        nothing = await adapter.create_reference_plane("Front Plane")
+        assert not nothing.is_success
+
+        # Angle is refused explicitly rather than reporting a plane that was
+        # never added - InsertRefPlane needs a second reference for that.
+        angled = await adapter.create_reference_plane("Right Plane", angle=30.0)
+        assert not angled.is_success
+        assert "angle" in (angled.error or "").lower()
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_create_axis_adds_an_axis(connected_adapter):
+    """InsertAxis2 returns only a boolean, so the tree is what is checked."""
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+
+        for direction in ("x", "y", "z"):
+            result = await adapter.create_axis(direction)
+            assert result.is_success, f"{direction}: {result.error}"
+            assert result.data["features_after"] > result.data["features_before"], (
+                result.data
+            )
+            assert len(result.data["planes"]) == 2
+
+        unknown = await adapter.create_axis("diagonal")
+        assert not unknown.is_success
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))

@@ -55,6 +55,18 @@ class SolidWorksFeaturesMixin:
     ) -> AdapterResult[SolidWorksFeature]:
         return _add_chamfer_impl(self, distance, edge_names)
 
+    async def create_reference_plane(
+        self,
+        reference: str,
+        offset: float = 0.0,
+        angle: float = 0.0,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        return _create_reference_plane_impl(self, reference, offset, angle, flip)
+
+    async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
+        return _create_axis_impl(self, reference)
+
 
 def _create_extrusion_impl(
     adapter: Any, params: ExtrusionParameters
@@ -1580,4 +1592,316 @@ def _add_chamfer_impl(
     return cast(
         AdapterResult[SolidWorksFeature],
         adapter._handle_com_operation("add_chamfer", _chamfer_operation),
+    )
+
+
+#: ``swRefPlaneReferenceConstraints_e`` members used by ``InsertRefPlane``.
+_REF_PLANE_DISTANCE = 8
+_REF_PLANE_ANGLE = 16
+_REF_PLANE_OPTION_FLIP = 256
+
+#: Plane pairs whose intersection defines each principal axis. ``InsertAxis2``
+#: builds an axis from two selected planes, so "x" means the line where the
+#: Top and Front planes meet.
+_AXIS_PLANE_PAIRS: dict[str, tuple[str, str]] = {
+    "x": ("Top Plane", "Front Plane"),
+    "y": ("Front Plane", "Right Plane"),
+    "z": ("Top Plane", "Right Plane"),
+}
+
+
+def _null_callout() -> Any:
+    """Return a VT_DISPATCH null for ``SelectByID2``'s ``Callout`` parameter.
+
+    A plain Python ``None`` marshals as ``VT_NULL``, which SolidWorks rejects
+    with ``DISP_E_TYPEMISMATCH`` - measured as
+    ``(-2147352571, 'Type mismatch.', None, 8)``. See runbook item 11.
+
+    Returns:
+        Any: A ``VARIANT(VT_DISPATCH, None)``, or ``None`` when pywin32 is
+        unavailable (mock/Linux runs, where no COM call will be made anyway).
+    """
+    try:
+        import pythoncom
+        import win32com.client as _win32com
+    except ImportError:  # pragma: no cover - Windows-only path
+        return None
+    return _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
+
+
+def _feature_count(adapter: Any) -> int | None:
+    """Return how many features the active model has, or ``None``.
+
+    Used to confirm an edit changed the tree rather than trusting a COM call
+    that reports success without doing anything.
+
+    ``IFeatureManager::GetFeatureCount`` is used rather than walking
+    ``FirstFeature``/``GetNextFeature``: on SW 2025 that walk yields nothing
+    even with each dispatch flagged for ``IFeature``, which makes the tree
+    look empty instead of raising - so a "did anything change" check built on
+    it would silently answer "no" every time.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+
+    Returns:
+        int | None: The feature count, or ``None`` when it cannot be read -
+        deliberately distinct from ``0``.
+    """
+    from .. import sw_type_info
+
+    manager = adapter._attempt(
+        lambda: adapter.currentModel.FeatureManager, default=None
+    )
+    if manager is None:
+        return None
+    flagged = sw_type_info.flagged(manager, "IFeatureManager")
+    count = adapter._attempt(lambda: flagged.GetFeatureCount(True), default=None)
+    return int(count) if isinstance(count, (int, float)) else None
+
+
+def _select_reference_entity(adapter: Any, reference: str, mark: int, append: bool) -> bool:
+    """Select a named plane or planar face under a given selection mark.
+
+    Prefers ``FeatureByName`` + ``IFeature::Select2``, which is reliable
+    across builds, and falls back to ``SelectByID2`` for planar faces that are
+    not named tree features.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        reference: Plane or face name, e.g. ``"Front Plane"`` or ``"Plane1"``.
+        mark: Selection mark the SolidWorks call expects for this role.
+        append: Add to the current selection rather than replacing it.
+
+    Returns:
+        bool: True when the entity was selected.
+    """
+    if _select_named_feature(adapter, reference, mark, append=append):
+        return True
+
+    callout = _null_callout()
+    for entity_type in ("PLANE", "FACE"):
+        selected = adapter._attempt(
+            lambda t=entity_type: adapter.currentModel.Extension.SelectByID2(
+                reference, t, 0.0, 0.0, 0.0, append, mark, callout, 0
+            ),
+            default=False,
+        )
+        if selected:
+            return True
+    return False
+
+
+def _create_reference_plane_impl(
+    adapter: Any,
+    reference: str,
+    offset: float,
+    angle: float,
+    flip: bool,
+) -> AdapterResult[dict[str, Any]]:
+    """Create a reference plane offset from, or angled to, an existing plane.
+
+    Wraps ``IFeatureManager::InsertRefPlane(FirstConstraint,
+    FirstConstraintAngleOrDistance, Second, 0, Third, 0)``. The reference
+    entity must be selected under **mark 0** first, which is what the
+    SolidWorks documentation example does before the identical call.
+
+    This is what lets a sketch be opened anywhere other than the six built-in
+    planes. ``create_sketch`` already accepts a plane by its tree name, so the
+    name returned here can be passed straight to it - verified live: a plane
+    76.2 mm off the Front Plane came back as ``"Plane1"``, and a circle
+    sketched on it extruded to exactly the expected volume.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter`` with a valid ``currentModel``.
+        reference: Name of the reference plane or planar face.
+        offset: Offset distance in **millimetres**, converted to metres.
+        angle: Angle in **degrees**; used instead of ``offset`` when non-zero.
+        flip: Reverse the offset or angle direction.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: The new plane's name and the parameters
+        used. ``ERROR`` when there is no model, the reference cannot be
+        selected, or no plane was added to the tree.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+
+    Example::
+
+        plane = await adapter.create_reference_plane("Front Plane", offset=76.2)
+        await adapter.create_sketch(plane.data["name"])
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    if not reference:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_reference_plane requires a reference plane/face name",
+        )
+
+    if angle:
+        # Measured on SW 2025: InsertRefPlane with the angle constraint and a
+        # single selected plane adds nothing to the tree and reports no error.
+        # An angled plane is under-defined by one reference - SolidWorks needs
+        # a second entity (an axis or edge) under mark 1 to rotate about.
+        # Refusing is better than returning a plane name that does not exist.
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=(
+                "create_reference_plane does not support 'angle' yet: an "
+                "angled plane needs a second reference (an axis or edge to "
+                "rotate about) which this signature cannot take. Use 'offset' "
+                "for parallel planes."
+            ),
+        )
+
+    if not offset:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=(
+                "create_reference_plane requires a non-zero offset - a plane "
+                "coincident with its reference is not useful"
+            ),
+        )
+
+    def _plane_operation() -> dict[str, Any]:
+        before = _feature_count(adapter)
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
+
+        if not _select_reference_entity(adapter, reference, 0, append=False):
+            raise Exception(
+                f"Failed to select reference plane/face: {reference}. "
+                "Use an existing plane name (e.g. 'Front Plane') or a planar "
+                "face."
+            )
+
+        constraint = _REF_PLANE_DISTANCE
+        value = float(offset) / 1000.0
+        if flip:
+            constraint |= _REF_PLANE_OPTION_FLIP
+
+        from .. import sw_type_info
+
+        feature_manager = sw_type_info.flagged(
+            adapter.currentModel.FeatureManager, "IFeatureManager"
+        )
+        plane = adapter._attempt(
+            lambda: feature_manager.InsertRefPlane(constraint, value, 0, 0.0, 0, 0.0),
+            default=None,
+        )
+
+        after = _feature_count(adapter)
+        if before is not None and after is not None and after <= before:
+            raise Exception(
+                f"No reference plane was added from '{reference}' - the "
+                f"feature tree still has {after} feature(s)."
+            )
+        if plane is None:
+            raise Exception(
+                f"InsertRefPlane returned nothing for reference '{reference}'"
+            )
+
+        name = adapter._attempt(
+            lambda: adapter._get_attr_or_call(plane, "Name"), default=None
+        )
+        if not name:
+            # No invented fallback: a caller needs the real name to sketch on
+            # the plane, and a made-up one fails later and further away.
+            raise Exception(
+                "The reference plane was created but its name could not be "
+                "read, so it cannot be referenced by create_sketch."
+            )
+
+        return {
+            "name": str(name),
+            "reference": reference,
+            "offset": offset or None,
+            "angle": angle or None,
+            "flip": flip,
+            "features_before": before,
+            "features_after": after,
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("create_reference_plane", _plane_operation),
+    )
+
+
+def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, Any]]:
+    """Create a reference axis along a principal direction.
+
+    Wraps ``IModelDoc2::InsertAxis2(AutoSize)`` - note the interface: it is on
+    ``IModelDoc2``, **not** ``IFeatureManager``. It builds an axis from two
+    selected planes, so an axis is requested by naming the direction and the
+    matching plane pair is selected here.
+
+    ``InsertAxis2`` returns a plain boolean rather than the axis, so success is
+    confirmed by the feature count rising.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter`` with a valid ``currentModel``.
+        reference: ``"x"``, ``"y"`` or ``"z"``.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: The planes used and how the tree
+        changed. ``ERROR`` for an unknown direction or when no axis appeared.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    key = str(reference or "").strip().lower().lstrip("+-")
+    if key not in _AXIS_PLANE_PAIRS:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=(
+                f"Unknown axis reference '{reference}'. "
+                f"Use one of: {', '.join(sorted(_AXIS_PLANE_PAIRS))}."
+            ),
+        )
+
+    plane_a, plane_b = _AXIS_PLANE_PAIRS[key]
+
+    def _axis_operation() -> dict[str, Any]:
+        before = _feature_count(adapter)
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
+
+        for index, plane in enumerate((plane_a, plane_b)):
+            if not _select_reference_entity(adapter, plane, 0, append=index > 0):
+                raise Exception(f"Failed to select '{plane}' for the axis")
+
+        adapter._attempt(lambda: adapter.currentModel.InsertAxis2(True), default=None)
+
+        after = _feature_count(adapter)
+        if before is None or after is None:
+            raise Exception(
+                "The feature count could not be read, so whether an axis was "
+                "created is unknown."
+            )
+        if after <= before:
+            raise Exception(
+                f"No reference axis was created from {plane_a} + {plane_b}. "
+                "InsertAxis2 reports only a boolean and the feature tree is "
+                "unchanged."
+            )
+
+        return {
+            "reference": key,
+            "planes": [plane_a, plane_b],
+            "features_before": before,
+            "features_after": after,
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("create_axis", _axis_operation),
     )
