@@ -67,6 +67,92 @@ class SolidWorksFeaturesMixin:
     async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
         return _create_axis_impl(self, reference)
 
+    async def mirror_feature(
+        self,
+        features: list[str],
+        mirror_plane: str,
+        merge: bool = True,
+        mirror_bodies: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mirror solid bodies or features about a plane.
+
+        ``InsertMirrorFeature`` returns a Feature object even when it mirrored
+        nothing, so the model's volume is measured before and after and the
+        call is reported as failed if the volume did not grow. That check runs
+        here rather than inside the COM closure because ``get_mass_properties``
+        is the read path known to work - reading ``CreateMassProperty().Volume``
+        inline returns ``None`` when a plane is still in the selection set,
+        which silently disables the check.
+
+        Args:
+            features: Names of the bodies (or features) to mirror. For a body
+                mirror these are the names as they appear under Solid Bodies,
+                which for a lofted wing is the loft's own name.
+            mirror_plane: Plane to mirror about, e.g. ``"Right Plane"``.
+            merge: Merge the mirrored result with the original.
+            mirror_bodies: Mirror whole solid bodies rather than features.
+                Defaults to ``True``, which is what works for anything built
+                from a loft or sweep: SolidWorks only resolves a *feature*
+                mirror when the feature's own sketch sits on the mirror plane,
+                so a wing lofted between stations offset from the centreline
+                cannot be feature-mirrored. Measured on SW 2025: body mirroring
+                a 1819569 mm^3 wing about the Right Plane gave 3636460 mm^3.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was mirrored, and the volume
+            before and after. ``ERROR`` when nothing was selected, the call
+            failed, or the volume did not grow.
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        before = await self.get_mass_properties()
+        volume_before = before.data.volume if before.is_success and before.data else None
+
+        result = _mirror_feature_impl(
+            self, features, mirror_plane, merge, mirror_bodies
+        )
+        if not result.is_success:
+            return result
+
+        after = await self.get_mass_properties()
+        volume_after = after.data.volume if after.is_success and after.data else None
+
+        if volume_before is None or volume_after is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "The mirror call returned a feature but the volume could "
+                    "not be read before and after, so whether any geometry was "
+                    "produced is unknown."
+                ),
+            )
+        if volume_after <= volume_before * 1.001:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"The mirror produced no new geometry (volume "
+                    f"{volume_before:.1f} -> {volume_after:.1f} mm3). "
+                    "SolidWorks returned a feature but mirrored nothing. With "
+                    "mirror_bodies=False this happens whenever the feature's "
+                    "own sketch does not sit on the mirror plane; try "
+                    "mirror_bodies=True to mirror the solid body instead."
+                ),
+            )
+
+        data = dict(result.data or {})
+        data["volume_before"] = volume_before
+        data["volume_after"] = volume_after
+        data["volume_ratio"] = round(volume_after / volume_before, 6)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=data,
+            execution_time=result.execution_time,
+        )
+
 
 def _create_extrusion_impl(
     adapter: Any, params: ExtrusionParameters
@@ -1904,4 +1990,133 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
     return cast(
         AdapterResult[dict[str, Any]],
         adapter._handle_com_operation("create_axis", _axis_operation),
+    )
+
+
+#: Selection marks ``InsertMirrorFeature`` expects, per the SolidWorks API
+#: reference: features 1, faces 128, bodies 256, and the mirror plane 2.
+#: Wrong marks and the call reports a feature while mirroring nothing.
+_MIRROR_MARK_FEATURES = 1
+_MIRROR_MARK_BODIES = 256
+_MIRROR_MARK_PLANE = 2
+
+
+def _mirror_feature_impl(
+    adapter: Any,
+    features: list[str],
+    mirror_plane: str,
+    merge: bool,
+    mirror_bodies: bool,
+) -> AdapterResult[dict[str, Any]]:
+    """Select the sources and the plane, then call InsertMirrorFeature.
+
+    Wraps ``IFeatureManager::InsertMirrorFeature(BMirrorBody,
+    BGeometryPattern, BMerge, BKnit)``. There is no ``...2`` overload of this
+    call. Everything it acts on must be pre-selected under the right mark, so
+    the marks are the whole game - see ``_MIRROR_MARK_*``.
+
+    Whether the mirror actually produced geometry is checked by the caller,
+    which can read volume through ``get_mass_properties``.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter`` with a valid ``currentModel``.
+        features: Body or feature names to mirror.
+        mirror_plane: Plane name to mirror about.
+        merge: Merge the result with the original.
+        mirror_bodies: Select and mirror whole bodies rather than features.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: The mirror feature's name and inputs.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    names = [n for n in (features or []) if n]
+    if not names:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="mirror_feature requires at least one body or feature name",
+        )
+    if not mirror_plane:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="mirror_feature requires a mirror plane name",
+        )
+
+    source_mark = _MIRROR_MARK_BODIES if mirror_bodies else _MIRROR_MARK_FEATURES
+    entity_type = "SOLIDBODY" if mirror_bodies else None
+
+    def _mirror_operation() -> dict[str, Any]:
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
+        callout = _null_callout()
+
+        for index, name in enumerate(names):
+            append = index > 0
+            selected = False
+            if entity_type is not None:
+                selected = bool(
+                    adapter._attempt(
+                        lambda n=name, a=append: (
+                            adapter.currentModel.Extension.SelectByID2(
+                                n, entity_type, 0.0, 0.0, 0.0, a, source_mark,
+                                callout, 0,
+                            )
+                        ),
+                        default=False,
+                    )
+                )
+            if not selected:
+                selected = _select_named_feature(
+                    adapter, name, source_mark, append=append
+                )
+            if not selected:
+                kind = "body" if mirror_bodies else "feature"
+                raise Exception(f"Failed to select {kind} to mirror: {name}")
+
+        if not _select_reference_entity(
+            adapter, mirror_plane, _MIRROR_MARK_PLANE, append=True
+        ):
+            raise Exception(f"Failed to select mirror plane: {mirror_plane}")
+
+        from .. import sw_type_info
+
+        feature_manager = sw_type_info.flagged(
+            adapter.currentModel.FeatureManager, "IFeatureManager"
+        )
+        feature = adapter._attempt(
+            lambda: feature_manager.InsertMirrorFeature(
+                bool(mirror_bodies),  # BMirrorBody
+                False,  # BGeometryPattern - solve the whole feature
+                bool(merge),  # BMerge
+                False,  # BKnit
+            ),
+            default=None,
+        )
+        if feature is None:
+            raise Exception(
+                f"InsertMirrorFeature returned nothing (sources={names}, "
+                f"plane={mirror_plane})"
+            )
+
+        name = adapter._attempt(
+            lambda: adapter._get_attr_or_call(feature, "Name"), default=None
+        )
+        return {
+            # No invented fallback: an unreadable name is reported as None
+            # rather than as the literal "Mirror", which would not resolve.
+            "name": str(name) if name else None,
+            "mirrored": names,
+            "mirror_plane": mirror_plane,
+            "merge": bool(merge),
+            "mirror_bodies": bool(mirror_bodies),
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("mirror_feature", _mirror_operation),
     )

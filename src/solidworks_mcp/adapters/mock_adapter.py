@@ -159,6 +159,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # solidworks/features.py).
         self._reference_planes: list[str] = []
         self._feature_tree_count = 0
+        # Volume tracked for mirror_feature, in mm^3. Seeded at the
+        # live-measured 1819569.1 mm^3 wing volume from
+        # _mirror_feature_impl in solidworks/features.py, then doubled on
+        # each successful mirror so volume_before/volume_after/volume_ratio
+        # stay self-consistent without a real geometry engine.
+        self._mirror_volume: float = 1819569.1
         self._operation_count = 0
 
         # Configurable simulation delays (in seconds)
@@ -2164,6 +2170,100 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "planes": [plane_a, plane_b],
                 "features_before": before,
                 "features_after": after,
+            },
+            execution_time=self._delays["feature_operation"],
+        )
+
+    #: Built-in planes every SolidWorks part starts with. Combined with
+    #: ``self._reference_planes`` (planes created via create_reference_plane)
+    #: this is the set of plane names ``mirror_feature`` will accept.
+    _BUILTIN_PLANES = frozenset({"Front Plane", "Top Plane", "Right Plane"})
+
+    async def mirror_feature(
+        self,
+        features: list[str],
+        mirror_plane: str,
+        merge: bool = True,
+        mirror_bodies: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock mirroring solid bodies or features about a plane.
+
+        The mock has no geometry engine, so it cannot measure a real volume
+        change - it mirrors the live adapter's refusals instead of
+        fabricating a result it cannot know. An empty source list or plane
+        name is rejected outright (matching ``_mirror_feature_impl`` in
+        ``solidworks/features.py`` verbatim), and a source or plane name
+        that was never created in this session is rejected the same way
+        ``_select_named_feature`` / ``_select_reference_entity`` would fail
+        to select it there.
+
+        On success, the tracked ``self._mirror_volume`` figure (seeded at
+        the live-measured 1819569.1 mm^3 wing volume) is doubled, matching
+        the ~2.0 ratio a correct mirror produces (measured live: 1.998528
+        for a lofted wing, exactly 2.0 for a boss whose sketch sits on the
+        plane).
+
+        Args:
+            features (list[str]): Body or feature names to mirror.
+            mirror_plane (str): Plane name to mirror about.
+            merge (bool): Merge the mirrored result with the original. Defaults to True.
+            mirror_bodies (bool): Mirror whole bodies rather than features. Defaults to True.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The mirror feature's name, inputs
+            and volume before/after, or error.
+        """
+        names = [n for n in (features or []) if n]
+        if not names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="mirror_feature requires at least one body or feature name",
+            )
+        if not mirror_plane:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="mirror_feature requires a mirror plane name",
+            )
+
+        known_sources = {feature.name for feature in self._features.values()} | set(
+            self._components
+        )
+        for name in names:
+            if name not in known_sources:
+                kind = "body" if mirror_bodies else "feature"
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=f"Failed to select {kind} to mirror: {name}",
+                )
+
+        known_planes = self._BUILTIN_PLANES | set(self._reference_planes)
+        if mirror_plane not in known_planes:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Failed to select mirror plane: {mirror_plane}",
+            )
+
+        await asyncio.sleep(self._delays["feature_operation"])
+        self._operation_count += 1
+
+        volume_before = self._mirror_volume
+        volume_after = volume_before * 2
+        self._mirror_volume = volume_after
+
+        self._feature_tree_count += 1
+        feature_name = f"Mirror{self._feature_tree_count}"
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": feature_name,
+                "mirrored": names,
+                "mirror_plane": mirror_plane,
+                "merge": bool(merge),
+                "mirror_bodies": bool(mirror_bodies),
+                "volume_before": volume_before,
+                "volume_after": volume_after,
+                "volume_ratio": round(volume_after / volume_before, 6),
             },
             execution_time=self._delays["feature_operation"],
         )

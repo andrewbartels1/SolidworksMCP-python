@@ -559,6 +559,27 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"reference": reference},
         )
 
+    async def mirror_feature(
+        self,
+        features: list[str],
+        mirror_plane: str,
+        merge: bool = True,
+        mirror_bodies: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mirror solid bodies or features through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "mirror_feature",
+            lambda: self.adapter.mirror_feature(
+                features, mirror_plane, merge, mirror_bodies
+            ),
+            input_dict={
+                "features": features,
+                "mirror_plane": mirror_plane,
+                "merge": merge,
+                "mirror_bodies": mirror_bodies,
+            },
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
