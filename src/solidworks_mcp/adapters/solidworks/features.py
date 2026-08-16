@@ -67,6 +67,90 @@ class SolidWorksFeaturesMixin:
     async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
         return _create_axis_impl(self, reference)
 
+    async def pattern_circular(
+        self,
+        features: list[str],
+        axis: str,
+        count: int,
+        angle: float = 360.0,
+        equal_spacing: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Pattern features around an axis.
+
+        ``FeatureCircularPattern5`` returns a Feature object whether or not it
+        produced anything, so the model volume is measured before and after
+        here - in the async layer, using ``get_mass_properties``, which is the
+        read path that works. Reading volume inline inside the COM closure
+        returns ``None`` while a selection is active.
+
+        Note that instances landing off the parent body are silently dropped
+        by SolidWorks, so the volume rises by less than ``count - 1`` times the
+        seed. That is correct behaviour, not a failure - only *no* growth at
+        all means the pattern did nothing.
+
+        Args:
+            features: Names of the features to pattern.
+            axis: Name of the axis to rotate about, e.g. ``"Axis1"`` from
+                ``create_axis``.
+            count: Total number of instances including the original.
+            angle: Total angle in degrees to spread them over. Defaults to a
+                full 360.
+            equal_spacing: Space instances evenly across ``angle``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was patterned and the volume
+            before and after. ``ERROR`` when nothing could be selected or the
+            volume did not grow.
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        before = await self.get_mass_properties()
+        volume_before = (
+            before.data.volume if before.is_success and before.data else None
+        )
+
+        result = _pattern_circular_impl(self, features, axis, count, angle, equal_spacing)
+        if not result.is_success:
+            return result
+
+        after = await self.get_mass_properties()
+        volume_after = after.data.volume if after.is_success and after.data else None
+
+        if volume_before is None or volume_after is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "The pattern call returned a feature but the volume could "
+                    "not be read before and after, so whether any instances "
+                    "were created is unknown."
+                ),
+            )
+        if volume_after <= volume_before * 1.0001:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"The circular pattern produced no geometry (volume "
+                    f"{volume_before:.1f} -> {volume_after:.1f} mm3). "
+                    f"SolidWorks returned a feature but patterned nothing. "
+                    f"Check that '{axis}' is a real axis in the tree and that "
+                    f"the instances land on the parent body."
+                ),
+            )
+
+        data = dict(result.data or {})
+        data["volume_before"] = volume_before
+        data["volume_after"] = volume_after
+        data["volume_ratio"] = round(volume_after / volume_before, 6)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=data,
+            execution_time=result.execution_time,
+        )
+
     async def mirror_feature(
         self,
         features: list[str],
@@ -2119,4 +2203,153 @@ def _mirror_feature_impl(
     return cast(
         AdapterResult[dict[str, Any]],
         adapter._handle_com_operation("mirror_feature", _mirror_operation),
+    )
+
+
+#: Selection marks ``FeatureCircularPattern5`` expects, per the SolidWorks API
+#: reference: the direction axis is mark 1 and the features to pattern are
+#: mark 4. These differ from the mirror marks - reusing those silently
+#: produces a feature that patterns nothing.
+_PATTERN_MARK_AXIS = 1
+_PATTERN_MARK_FEATURES = 4
+
+
+def _pattern_circular_impl(
+    adapter: Any,
+    features: list[str],
+    axis: str,
+    count: int,
+    angle: float,
+    equal_spacing: bool,
+) -> AdapterResult[dict[str, Any]]:
+    """Select the axis and features, then call FeatureCircularPattern5.
+
+    This build exposes FeatureCircularPattern through ...5; v5 is used, with
+    the 14 arguments it declares. ``DName`` is a direction *name string*, so
+    the axis is both selected under mark 1 and named in the call.
+
+    Whether anything was produced is checked by the caller, which can read
+    volume through ``get_mass_properties``.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter`` with a valid ``currentModel``.
+        features: Feature names to pattern.
+        axis: Axis name to rotate about.
+        count: Total instances including the original.
+        angle: Total spread in degrees.
+        equal_spacing: Space instances evenly across ``angle``.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: The pattern's name and inputs.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    names = [n for n in (features or []) if n]
+    if not names:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="pattern_circular requires at least one feature name",
+        )
+    if not axis:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="pattern_circular requires an axis name to rotate about",
+        )
+    if int(count) < 2:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=(
+                f"pattern_circular needs a count of at least 2 (got {count}); "
+                "a pattern of one is just the original feature"
+            ),
+        )
+
+    def _pattern_operation() -> dict[str, Any]:
+        import math
+
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
+        callout = _null_callout()
+
+        axis_selected = bool(
+            adapter._attempt(
+                lambda: adapter.currentModel.Extension.SelectByID2(
+                    axis, "AXIS", 0.0, 0.0, 0.0, False, _PATTERN_MARK_AXIS, callout, 0
+                ),
+                default=False,
+            )
+        )
+        if not axis_selected:
+            raise Exception(
+                f"Failed to select axis '{axis}'. Create one with create_axis "
+                "first, and pass the name it returns."
+            )
+
+        for name in names:
+            selected = bool(
+                adapter._attempt(
+                    lambda n=name: adapter.currentModel.Extension.SelectByID2(
+                        n, "BODYFEATURE", 0.0, 0.0, 0.0, True,
+                        _PATTERN_MARK_FEATURES, callout, 0,
+                    ),
+                    default=False,
+                )
+            )
+            if not selected:
+                selected = _select_named_feature(
+                    adapter, name, _PATTERN_MARK_FEATURES, append=True
+                )
+            if not selected:
+                raise Exception(f"Failed to select feature to pattern: {name}")
+
+        from .. import sw_type_info
+
+        feature_manager = sw_type_info.flagged(
+            adapter.currentModel.FeatureManager, "IFeatureManager"
+        )
+        feature = adapter._attempt(
+            lambda: feature_manager.FeatureCircularPattern5(
+                int(count),                      # Number
+                math.radians(float(angle)),      # Spacing (radians)
+                False,                           # FlipDirection
+                axis,                            # DName
+                False,                           # GeometryPattern
+                bool(equal_spacing),             # EqualSpacing
+                False,                           # VaryInstance
+                False,                           # SyncSubAssemblies
+                False,                           # BDir2
+                False,                           # BSymmetric
+                0,                               # Number2
+                0.0,                             # Spacing2
+                "",                              # DName2
+                False,                           # EqualSpacing2
+            ),
+            default=None,
+        )
+        if feature is None:
+            raise Exception(
+                f"FeatureCircularPattern5 returned nothing (features={names}, "
+                f"axis={axis})"
+            )
+
+        pattern_name = adapter._attempt(
+            lambda: adapter._get_attr_or_call(feature, "Name"), default=None
+        )
+        return {
+            "name": str(pattern_name) if pattern_name else None,
+            "patterned": names,
+            "axis": axis,
+            "count": int(count),
+            "angle": float(angle),
+            "equal_spacing": bool(equal_spacing),
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("pattern_circular", _pattern_operation),
     )

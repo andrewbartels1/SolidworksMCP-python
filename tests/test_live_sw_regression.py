@@ -2489,3 +2489,78 @@ async def test_mirror_refuses_bad_input(connected_adapter):
         assert "NoSuchBody" in (unknown.error or "")
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_circular_pattern_builds_a_propeller(connected_adapter):
+    """A pattern must add instances, proven by volume arithmetic.
+
+    ``FeatureCircularPattern5`` returns a Feature object whether or not it
+    produced anything. The geometry here is chosen so every instance lands on
+    the hub, which makes the sum exact: patterning one blade to four must add
+    precisely three blades' worth of material.
+    """
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        await adapter.add_circle(0.0, 0.0, 25.0)
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=20.0))
+        hub = await adapter.get_mass_properties()
+        assert hub.is_success, hub.error
+
+        await adapter.create_sketch("Top")
+        await adapter.add_rectangle(20.0, -8.0, 120.0, 8.0)
+        await adapter.exit_sketch()
+        blade = await adapter.create_extrusion(ExtrusionParameters(depth=6.0))
+        assert blade.is_success, blade.error
+        blade_name = getattr(blade.data, "name", None) or "Boss-Extrude2"
+
+        one = await adapter.get_mass_properties()
+        seed = one.data.volume - hub.data.volume
+        assert seed > 0, (one.data.volume, hub.data.volume)
+
+        axis = await adapter.create_axis("y")
+        assert axis.is_success, axis.error
+        listed = await adapter.list_features()
+        names = [
+            (f.get("name") if isinstance(f, dict) else getattr(f, "name", None))
+            for f in (listed.data or [])
+        ]
+        axis_name = next((n for n in names if n and n.startswith("Axis")), "Axis1")
+
+        patterned = await adapter.pattern_circular([blade_name], axis_name, count=4)
+        assert patterned.is_success, patterned.error
+
+        added = patterned.data["volume_after"] - patterned.data["volume_before"]
+        assert added / seed == pytest.approx(3.0, rel=0.02), (
+            f"expected three extra blades, got {added / seed:.2f}: "
+            f"{patterned.data}"
+        )
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_circular_pattern_refuses_bad_input(connected_adapter):
+    """Empty inputs, a count of one, and an unknown axis are all errors."""
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+
+        assert not (await adapter.pattern_circular([], "Axis1", 4)).is_success
+        assert not (await adapter.pattern_circular(["Boss-Extrude1"], "", 4)).is_success
+        assert not (
+            await adapter.pattern_circular(["Boss-Extrude1"], "Axis1", 1)
+        ).is_success
+
+        unknown = await adapter.pattern_circular(
+            ["Boss-Extrude1"], "NoSuchAxis", 4
+        )
+        assert not unknown.is_success
+        assert "NoSuchAxis" in (unknown.error or "")
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
