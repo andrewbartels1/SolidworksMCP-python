@@ -636,16 +636,6 @@ class SolidWorksIOMixin:
             docs: list[Any] | None = getattr(adapter, "_session_docs", None)
             if docs:
                 adapter._session_docs = [doc for doc in docs if doc is not model]
-            # The closed model (and its child sketch/feature dispatches) are
-            # about to be garbage-collected. sw_type_info's flag cache is
-            # keyed by id(obj); if CPython reuses that address for a new
-            # dispatch on the next open, flag_methods would wrongly treat it
-            # as already-flagged and skip _FlagAsMethod, reintroducing the
-            # exact "Member not found" / property-vs-method failures the
-            # flagging system exists to prevent (see com-api-pitfalls.md
-            # #11/#12). Clear the cache so nothing after this point can hit
-            # a stale id() collision.
-            _sw_type_info.invalidate_flag_cache()
 
         return cast(
             AdapterResult[None],
@@ -695,10 +685,6 @@ class SolidWorksIOMixin:
                     failed[title] = str(exc)
             adapter.currentModel = None
             adapter._session_docs = []
-            # See close_model's _close() for why this must run after every
-            # document close - stale id(obj) flag-cache entries cause
-            # intermittent "Member not found" errors on the next document.
-            _sw_type_info.invalidate_flag_cache()
             return {"closed": closed, "failed": failed}
 
         return cast(
