@@ -965,6 +965,73 @@ class SolidWorksAdapter(ABC):
             error="add_fillet is not implemented by this adapter",
         )
 
+    # Assembly Operations
+    async def insert_component(
+        self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a part or sub-assembly into the active assembly.
+
+        Args:
+            file_path (str): Absolute path to the ``.sldprt`` or ``.sldasm``.
+            x (float): X position in millimetres. Defaults to 0.0.
+            y (float): Y position in millimetres. Defaults to 0.0.
+            z (float): Z position in millimetres. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Component name and counts, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="insert_component is not implemented by this adapter",
+        )
+
+    async def list_components(self) -> AdapterResult[list[str]]:
+        """List the top-level components of the active assembly.
+
+        Returns:
+            AdapterResult[list[str]]: Component instance names, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_components is not implemented by this adapter",
+        )
+
+    async def add_mate(
+        self,
+        component_a: str,
+        component_b: str,
+        entity_a: str = "Front Plane",
+        entity_b: str = "Front Plane",
+        mate_type: str = "coincident",
+        alignment: str = "aligned",
+        distance: float = 0.0,
+        angle: float = 0.0,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mate two components together in the active assembly.
+
+        Args:
+            component_a (str): First component instance name.
+            component_b (str): Second component instance name.
+            entity_a (str): Named feature on the first component. Defaults to
+                "Front Plane".
+            entity_b (str): Named feature on the second component. Defaults to
+                "Front Plane".
+            mate_type (str): Mate type, e.g. ``coincident``. Defaults to
+                "coincident".
+            alignment (str): ``aligned``, ``anti_aligned`` or ``closest``.
+                Defaults to "aligned".
+            distance (float): Distance in millimetres, for a distance mate.
+                Defaults to 0.0.
+            angle (float): Angle in degrees, for an angle mate. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Mate details, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_mate is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch editing mode.

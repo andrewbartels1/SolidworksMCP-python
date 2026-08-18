@@ -1027,6 +1027,92 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"name": name, "value": value},
         )
 
+    # Assembly operations
+
+    async def insert_component(
+        self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert component through circuit breaker.
+
+        Args:
+            file_path (str): Path to the target file.
+            x (float): X position in millimetres. Defaults to 0.0.
+            y (float): Y position in millimetres. Defaults to 0.0.
+            z (float): Z position in millimetres. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "insert_component",
+            lambda: self.adapter.insert_component(file_path, x, y, z),
+            input_dict={"file_path": file_path, "x": x, "y": y, "z": z},
+        )
+
+    async def list_components(self) -> AdapterResult[list[str]]:
+        """List components through circuit breaker.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "list_components",
+            lambda: self.adapter.list_components(),
+            input_dict={},
+        )
+
+    async def add_mate(
+        self,
+        component_a: str,
+        component_b: str,
+        entity_a: str = "Front Plane",
+        entity_b: str = "Front Plane",
+        mate_type: str = "coincident",
+        alignment: str = "aligned",
+        distance: float = 0.0,
+        angle: float = 0.0,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add mate through circuit breaker.
+
+        Args:
+            component_a (str): First component instance name.
+            component_b (str): Second component instance name.
+            entity_a (str): Named feature on the first component. Defaults to
+                "Front Plane".
+            entity_b (str): Named feature on the second component. Defaults to
+                "Front Plane".
+            mate_type (str): Mate type. Defaults to "coincident".
+            alignment (str): Mate alignment. Defaults to "aligned".
+            distance (float): Distance in millimetres. Defaults to 0.0.
+            angle (float): Angle in degrees. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "add_mate",
+            lambda: self.adapter.add_mate(
+                component_a,
+                component_b,
+                entity_a,
+                entity_b,
+                mate_type,
+                alignment,
+                distance,
+                angle,
+            ),
+            input_dict={
+                "component_a": component_a,
+                "component_b": component_b,
+                "entity_a": entity_a,
+                "entity_b": entity_b,
+                "mate_type": mate_type,
+                "alignment": alignment,
+                "distance": distance,
+                "angle": angle,
+            },
+        )
+
     # SolidWorks-as-Code checkpoint
 
     async def soc_create_checkpoint(

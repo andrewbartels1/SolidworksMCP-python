@@ -2245,3 +2245,81 @@ async def test_list_features_assembly_resolves_real_components_and_subassembly(
         )
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_assembly_insert_list_and_mate_change_real_geometry(connected_adapter):
+    """Insert two components, list them, and mate them - verified by geometry.
+
+    A tool returning ``status: "success"`` proves nothing here: AddComponent5
+    returns a component object even when it placed nothing, and AddMate5
+    reports success for a mate SolidWorks then ignores. So this asserts on
+    measurements instead:
+
+    - the assembly's volume is exactly twice the part's, which is what a
+      "successful" insert that placed nothing fails
+    - ``list_components`` reports exactly the two that were inserted
+    - the mate changes a component's ``Transform2`` matrix, which is what an
+      accepted-but-ignored mate fails
+    """
+    import tempfile
+    from pathlib import Path
+
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    part_path = Path(tempfile.mkdtemp(prefix="swmcp_asm_")) / "block.SLDPRT"
+
+    try:
+        # 80 x 40 x 10 mm = 32000 mm^3
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        await adapter.add_rectangle(-40.0, -20.0, 40.0, 20.0)
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+
+        part_props = await adapter.get_mass_properties()
+        assert part_props.is_success, part_props.error
+        part_volume = part_props.data.volume
+        assert part_volume == pytest.approx(32000.0, rel=1e-6), part_volume
+
+        saved = await adapter.save_file(str(part_path))
+        assert saved.is_success, saved.error
+        assert part_path.exists()
+
+        created = await adapter.create_assembly()
+        assert created.is_success, created.error
+
+        first = await adapter.insert_component(str(part_path), 0.0, 0.0, 0.0)
+        assert first.is_success, first.error
+        second = await adapter.insert_component(str(part_path), 0.1, 0.0, 0.06)
+        assert second.is_success, second.error
+
+        listed = await adapter.list_components()
+        assert listed.is_success, listed.error
+        assert len(listed.data) == 2, listed.data
+
+        asm_props = await adapter.get_mass_properties()
+        assert asm_props.is_success, asm_props.error
+        assert asm_props.data.volume == pytest.approx(2 * part_volume, rel=1e-6), (
+            f"assembly volume {asm_props.data.volume} is not twice the part "
+            f"volume {part_volume} - an insert reported success but placed "
+            f"nothing"
+        )
+
+        mated = await adapter.add_mate(listed.data[0], listed.data[1])
+        assert mated.is_success, mated.error
+        assert mated.data["geometry_moved"] is True, (
+            f"add_mate reported success but no component transform changed: "
+            f"{mated.data}"
+        )
+        assert mated.data["moved_components"], mated.data
+
+        after = await adapter.get_mass_properties()
+        assert after.is_success, after.error
+        assert after.data.volume == pytest.approx(2 * part_volume, rel=1e-6), (
+            "the mate changed the assembly's volume, so it moved more than "
+            "position"
+        )
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
