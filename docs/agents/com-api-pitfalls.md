@@ -307,46 +307,41 @@ that mock-adapter tests validate the *shape* of a fix, not COM binding behavior 
 
 ---
 
-## 13. `sw_type_info`'s flag cache can go stale when a dispatch is fetched fresh on every call
+## 13. `sw_type_info`'s flag cache used to go stale on a recycled address (fixed structurally - don't reintroduce the workaround)
 
-**Symptom:** `pywintypes.com_error: (-2147352573, 'Member not found.', None, None)` on a
+**Symptom (historical):** `pywintypes.com_error: (-2147352573, 'Member not found.', None, None)` on a
 method that *is* genuinely declared on the interface being flagged — intermittent, and the
-specific call site that trips it varies between runs (`sketch_mirror` one run,
-`sketch_circular_pattern` the next, both by way of the same helper).
+specific call site that tripped it varied between runs (`sketch_mirror` one run,
+`sketch_circular_pattern` the next, both by way of `_select_sketch_entities` fetching a fresh
+`SelectionManager` wrapper on every call).
 
-**Root cause:** `sw_type_info._flag_cache` is keyed by `id(obj)` and records which
-interfaces have already been flagged for that address. That's safe for dispatches stored in
-a long-lived adapter attribute (`adapter.currentModel`, `adapter.swApp`,
-`adapter.currentSketchManager`) — the same Python object is reused across calls, so the
-cache hit is correct. It is **not** safe for a dispatch obtained via a fresh property fetch
-on every call (e.g. `adapter.currentModel.SelectionManager` inside a helper function) —
-pywin32 hands back a new Python-side wrapper object each time, even though it wraps the same
-underlying COM pointer. Once the old wrapper is garbage-collected, CPython is free to reuse
-its address for the next call's wrapper. If that happens, `flag_methods` sees a cache hit for
-an object that was never actually flagged, skips `_FlagAsMethod`, and the member resolves
-through the ordinary speculative path — which fails for methods needing disambiguation
+**Root cause:** `sw_type_info._flag_cache` is keyed by `id(obj)`. An id is only unique among
+*live* objects — CPython hands a freed block straight back to the next allocation of the same
+size. A dispatch obtained via a fresh property fetch on every call (e.g.
+`adapter.currentModel.SelectionManager` inside a helper) gets a new Python-side wrapper each
+time even though it wraps the same underlying COM pointer; once the old wrapper is
+garbage-collected, a later call's wrapper can land on the same address, get judged
+"already flagged", and never actually get `_FlagAsMethod`'d — after which its methods resolve
+through the ordinary speculative path, which fails for members needing disambiguation
 (`CreateSelectData`, etc.).
 
-**Fix:** For any dispatch fetched fresh on every call (not stored in a persistent adapter
-attribute), invalidate its cache entry before flagging so a stale id-collision can never
-suppress the real `_FlagAsMethod` call:
+**Fixed structurally in `sw_type_info.py` (2026-08-13, PR #54 "Stop the flag cache trusting a
+recycled address"):** `_flag_cache` entries now store a `weakref.ref` alongside the flagged-interface
+set. `_flagged_interfaces(obj)` only trusts a cache hit when the stored weakref still resolves to
+*that same object*; a stale entry (weakref dead, or resolves to something else) is dropped and the
+new occupant is flagged for real. Objects that can't be weak-referenced simply aren't cached — flagged
+every call, correct if slower — rather than risking the stale-entry bug. This makes every `flag_methods`
+call site safe automatically, including ones that fetch a fresh dispatch every call.
 
-```python
-sel_mgr = adapter.currentModel.SelectionManager  # fresh wrapper every call
-sw_type_info.invalidate_flag_cache(sel_mgr)       # force a real re-flag, ignore any stale hit
-sw_type_info.flag_methods(sel_mgr, "ISelectionMgr")
-```
-
-**Applies to:** `_select_sketch_entities` in `sketch.py` (shared by `sketch_mirror`,
-`sketch_offset`, `sketch_circular_pattern`) — fixed 2026-08-15. Any other call site that
-flags a dispatch obtained from a bare property/method access rather than a cached adapter
-attribute is at the same risk and should apply the same pre-invalidate.
-
-Separately: `close_model`/`close_all_session_docs` now call
-`sw_type_info.invalidate_flag_cache()` (full clear, no args) after closing a document, since
-the closed document's own child dispatches (sketch, feature, selection-manager objects) are
-about to be freed and could otherwise collide with the *next* document's freshly-opened
-dispatches.
+**Do not reintroduce per-call-site `invalidate_flag_cache()` workarounds** (e.g. calling it before
+`flag_methods` in a hot helper, or clearing the whole cache in `close_model`) — an earlier fix attempt
+during the same debugging session did exactly that, and once PR #54 landed those calls became pure
+overhead: forcing a real `_FlagAsMethod` COM round-trip on every call, or blowing away cache entries for
+still-alive, still-valid objects like `adapter.swApp` on every document close, for zero remaining
+correctness benefit. They were reverted (2026-08-18) once the structural fix was found on `main`. If a
+similar-looking "Member not found" surfaces again, verify first whether it's actually this bug (check
+that `_flagged_interfaces`'s weakref check is intact) before adding a new manual invalidation - the cache
+is supposed to be safe on its own now.
 
 ---
 
