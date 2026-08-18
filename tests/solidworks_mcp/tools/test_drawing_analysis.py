@@ -9,8 +9,16 @@ from solidworks_mcp.tools.drawing_analysis import (
     ComplianceCheckInput,
     DimensionAnalysisInput,
     DrawingAnalysisInput,
+    _file_fact_snapshot,
     register_drawing_analysis_tools,
 )
+
+
+class TestFileFactSnapshot:
+    """_file_fact_snapshot's early-return guard (line 25)."""
+
+    def test_empty_path_returns_none(self):
+        assert _file_fact_snapshot("") is None
 
 
 class TestDrawingAnalysisTools:
@@ -619,6 +627,52 @@ class TestDrawingAnalysisTools:
         assert "does not support validate_drawing_completeness" in (
             completeness_result["message"]
         )
+
+    @pytest.mark.asyncio
+    async def test_validate_drawing_completeness_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Lines 568-575 — hasattr branch success path returns adapter data."""
+        await register_drawing_analysis_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.validate_drawing_completeness = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"complete": True, "missing_items": []},
+                execution_time=0.01,
+            )
+        )
+        completeness_tool = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "validate_drawing_completeness"
+        )
+
+        result = await completeness_tool(
+            input_data={"drawing_path": "demo.slddrw", "manufacturing_type": "machining"}
+        )
+        assert result["status"] == "success"
+        assert result["data"]["complete"] is True
+
+    @pytest.mark.asyncio
+    async def test_validate_drawing_completeness_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Line 576 — hasattr branch surfaces an adapter-reported error."""
+        await register_drawing_analysis_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.validate_drawing_completeness = AsyncMock(
+            return_value=Mock(is_success=False, error="drawing is corrupt")
+        )
+        completeness_tool = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "validate_drawing_completeness"
+        )
+
+        result = await completeness_tool(input_data={"drawing_path": "demo.slddrw"})
+        assert result["status"] == "error"
+        assert "drawing is corrupt" in result["message"]
 
     @pytest.mark.asyncio
     async def test_compare_drawing_versions_reads_real_files(

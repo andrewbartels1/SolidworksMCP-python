@@ -85,7 +85,18 @@ class SolidWorksMCPServer:
         """
         self.config = config
         self.state = MCPServerState(config=config)
-        self.mcp = FastMCP("SolidWorks MCP Server")
+        self.mcp = FastMCP(
+            "SolidWorks MCP Server",
+            instructions=(
+                "Before doing any CAD-generation work (creating a new part, editing "
+                "an existing one, or producing concept geometry), call "
+                "get_skill_route first with the family that fits the request: "
+                "solidworks-native, text-to-cad, or mesh-concept. It returns the "
+                "allowed tools, required validation steps, and expected outputs for "
+                "that family - use it to decide which tools are in-bounds before "
+                "calling any of them."
+            ),
+        )
         self.server: FastMCP | None = None
         self._setup_complete = False
         self._db_logging_enabled = self._env_truthy(

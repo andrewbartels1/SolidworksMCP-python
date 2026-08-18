@@ -1415,6 +1415,17 @@ def _select_sketch_entities(  # pragma: no cover
 
     sel_mgr = adapter.currentModel.SelectionManager
     if _sw_type_info is not None:
+        # ``SelectionManager`` is a fresh property fetch on every call, not a
+        # cached adapter attribute - pywin32 hands back a new Python-side
+        # wrapper object each time, even though it wraps the same underlying
+        # COM interface pointer. sw_type_info's flag cache is keyed by
+        # id(obj); if CPython reuses a freed wrapper's address for this
+        # call's sel_mgr, flag_methods would wrongly see it as "already
+        # flagged" from an unrelated earlier call and skip _FlagAsMethod,
+        # leaving CreateSelectData unresolved as a method -> "Member not
+        # found." Force a fresh flag every call rather than trusting the
+        # cross-call cache for this specific object.
+        _sw_type_info.invalidate_flag_cache(sel_mgr)
         adapter._attempt(
             lambda: _sw_type_info.flag_methods(sel_mgr, "ISelectionMgr"),
             default=0,

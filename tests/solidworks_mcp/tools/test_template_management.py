@@ -9,8 +9,19 @@ from solidworks_mcp.tools.template_management import (
     TemplateBatchInput,
     TemplateComparisonInput,
     TemplateExtractionInput,
+    _file_fact_snapshot,
     register_template_management_tools,
 )
+
+
+class TestFileFactSnapshot:
+    """_file_fact_snapshot's early-return guard (line 25)."""
+
+    def test_empty_path_returns_none(self):
+        assert _file_fact_snapshot("") is None
+
+    def test_nonexistent_path_returns_none(self, tmp_path):
+        assert _file_fact_snapshot(str(tmp_path / "does_not_exist.sldprt")) is None
 
 
 class TestTemplateManagementTools:

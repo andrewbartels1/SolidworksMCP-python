@@ -28,6 +28,7 @@ from solidworks_mcp.agents.history_db import (
     list_plan_checkpoints,
     list_sketch_graph_snapshots,
     list_tool_call_records,
+    replace_plan_checkpoints,
     update_plan_checkpoint,
     update_plan_checkpoint_planned_action,
     upsert_design_session,
@@ -578,11 +579,66 @@ class TestInteractiveDesignSessionStore:
         assert "line" in graphs[0]["nodes_json"]
 
 
+def test_get_design_session_returns_none_for_missing_session(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    init_db(db_path=db)
+    assert get_design_session("no-such-session", db_path=db) is None
+
+
 def test_update_plan_checkpoint_missing_row_is_noop(tmp_path: Path) -> None:
     db = _db(tmp_path)
     upsert_design_session(session_id="sess-missing", user_goal="x", db_path=db)
     update_plan_checkpoint(9999, executed=True, db_path=db)
     assert list_plan_checkpoints("sess-missing", db_path=db) == []
+
+
+def test_update_plan_checkpoint_sets_approved_by_user(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    upsert_design_session(session_id="sess-approve", user_goal="x", db_path=db)
+    checkpoint_id = insert_plan_checkpoint(
+        session_id="sess-approve",
+        checkpoint_index=1,
+        title="step",
+        planned_action_json="{}",
+        db_path=db,
+    )
+
+    update_plan_checkpoint(checkpoint_id, approved_by_user=True, db_path=db)
+
+    rows = list_plan_checkpoints("sess-approve", db_path=db)
+    assert rows[0]["approved_by_user"] is True
+
+
+def test_replace_plan_checkpoints_swaps_out_existing_rows(tmp_path: Path) -> None:
+    db = _db(tmp_path)
+    upsert_design_session(session_id="sess-replace", user_goal="x", db_path=db)
+    insert_plan_checkpoint(
+        session_id="sess-replace",
+        checkpoint_index=1,
+        title="old-step",
+        planned_action_json="{}",
+        db_path=db,
+    )
+
+    replace_plan_checkpoints(
+        session_id="sess-replace",
+        checkpoints=[
+            {"checkpoint_index": 1, "title": "new-step-1"},
+            {
+                "checkpoint_index": 2,
+                "title": "new-step-2",
+                "planned_action_json": '{"tool":"create_sketch"}',
+                "approved_by_user": False,
+            },
+        ],
+        db_path=db,
+    )
+
+    rows = list_plan_checkpoints("sess-replace", db_path=db)
+    assert [row["title"] for row in rows] == ["new-step-1", "new-step-2"]
+    assert rows[0]["approved_by_user"] is True
+    assert rows[1]["approved_by_user"] is False
+    assert rows[1]["planned_action_json"] == '{"tool":"create_sketch"}'
 
 
 def test_update_plan_checkpoint_sets_rollback_snapshot_id(tmp_path: Path) -> None:

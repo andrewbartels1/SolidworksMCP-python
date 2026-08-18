@@ -627,23 +627,15 @@ async def register_drawing_tools(
                             - Label follows ANSI/ISO drafting standards (A-A, B-B, etc.)
                             - Essential for showing internal features and assemblies
         """
-        try:
-            return {
-                "status": "error",
-                "message": (
-                    "No adapter capability exists for cutting a section view "
-                    "along a section line; create_section_view cannot compute "
-                    "the cut geometry, so no view was created. Use SolidWorks "
-                    "directly (Insert > Drawing View > Section) instead."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in create_section_view tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        return {
+            "status": "error",
+            "message": (
+                "No adapter capability exists for cutting a section view "
+                "along a section line; create_section_view cannot compute "
+                "the cut geometry, so no view was created. Use SolidWorks "
+                "directly (Insert > Drawing View > Section) instead."
+            ),
+        }
 
     @mcp.tool()
     async def create_detail_view(input_data: CreateDetailViewInput) -> dict[str, Any]:
@@ -682,24 +674,16 @@ async def register_drawing_tools(
                             - Label follows standard drafting conventions (Detail A, etc.)
                             - Essential for communicating tight tolerance requirements
         """
-        try:
-            return {
-                "status": "error",
-                "message": (
-                    "No adapter capability exists for magnifying the "
-                    "geometry inside a detail circle; create_detail_view "
-                    "cannot compute the detail geometry, so no view was "
-                    "created. Use SolidWorks directly (Insert > Drawing "
-                    "View > Detail) instead."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in create_detail_view tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        return {
+            "status": "error",
+            "message": (
+                "No adapter capability exists for magnifying the "
+                "geometry inside a detail circle; create_detail_view "
+                "cannot compute the detail geometry, so no view was "
+                "created. Use SolidWorks directly (Insert > Drawing "
+                "View > Detail) instead."
+            ),
+        }
 
     @mcp.tool()
     async def update_sheet_format(input_data: UpdateSheetFormatInput) -> dict[str, Any]:

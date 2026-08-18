@@ -120,15 +120,12 @@ function dev-help {
     Write-Host "Available Commands:" -ForegroundColor Green
     Write-Host ""
     Write-Host "  dev-install         Install/sync dependencies via uv (creates/repairs .venv)"
-    Write-Host "  dev-install-ui      Install/repair UI extras in .venv only"
     Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only)"
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
     Write-Host "  dev-format          Format code only (ruff format)"
     Write-Host "  dev-build           Build package for distribution"
     Write-Host "  dev-run             Start the MCP server"
-    Write-Host "  dev-ui              Start FastAPI backend + Prefab dashboard"
-    Write-Host "  dev-ui-probe        Start FastAPI backend + Prefab probe target"
     Write-Host "  dev-docs-build      Build documentation once (mkdocs build --clean)"
     Write-Host "  dev-docs-strict     Build documentation in strict mode"
     Write-Host "  dev-docs-audit      Run verbose + strict docs audit and write summary"
@@ -152,25 +149,11 @@ function dev-install {
     if (-not $ready) { return }
 
     $venvPy = Get-VenvPython
-    & $uvCmd pip install --python $venvPy -e ".[dev,test,docs,ui,rag]"
+    & $uvCmd pip install --python $venvPy -e ".[dev,test,docs,rag]"
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Installation complete!" -ForegroundColor Green
     } else {
         Write-Host "Installation failed." -ForegroundColor Red
-    }
-}
-
-function dev-install-ui {
-    Write-Host "Installing/repairing UI extras in .venv..." -ForegroundColor Cyan
-    $ready = Ensure-Venv
-    if (-not $ready) { return }
-
-    $venvPy = Get-VenvPython
-    & $venvPy -m pip install "prefab-ui>=0.19.0" "fastapi>=0.115.0" "uvicorn>=0.24.0" -q
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "UI extras installed." -ForegroundColor Green
-    } else {
-        Write-Host "Failed to install UI extras." -ForegroundColor Red
     }
 }
 
@@ -184,7 +167,13 @@ function dev-test {
     Invoke-Pytest @(
         "tests/",
         "-m", "not solidworks_only and not smoke",
-        "-n", "auto",
+        # -n auto spawns one worker per logical CPU; on a 24-core machine
+        # with other heavy apps (VSCode, SolidWorks) running, each worker
+        # loading the full package + deps (sentence-transformers etc. in
+        # some tests) can exhaust RAM and crash with "can't start new
+        # thread" (that's a Windows thread-creation failure from memory
+        # exhaustion, not a real test bug). Fixed at 4 - verified reliable.
+        "-n", "4",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
@@ -208,13 +197,17 @@ function dev-test-full {
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
 
     # Phase 1: everything that doesn't need a live SolidWorks instance runs
-    # in parallel across workers - this is the bulk of the suite and the
-    # only part that benefits from -n auto.
+    # in parallel across workers. Fixed worker count, NOT -n auto: this
+    # machine has 24 logical CPUs but limited free RAM once VSCode and
+    # SolidWorks are also running, and -n auto (or too high a fixed count)
+    # reliably OOMs mid-run - surfaces as "RuntimeError: can't start new
+    # thread" inside a worker and an xdist INTERNALERROR, not a real test
+    # failure. 4 workers verified reliable (clean, ~55s, twice in a row).
     Write-Host "Phase 1/2: non-SolidWorks tests (parallel)..." -ForegroundColor Cyan
     Invoke-Pytest @(
         "tests/",
         "-m", "not solidworks_only",
-        "-n", "auto",
+        "-n", "4",
         "--cov=src/solidworks_mcp",
         "--cov-config=.coveragerc.full",
         "--durations=10",
@@ -279,16 +272,6 @@ function dev-build {
 function dev-run {
     Write-Host "Starting MCP server..." -ForegroundColor Cyan
     Invoke-Venv @("-m", "solidworks_mcp.server")
-}
-
-function dev-ui {
-    Write-Host "Starting UI (FastAPI + Prefab dashboard)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "run-ui.ps1") -FrontendTarget "src/solidworks_mcp/ui/prefab_dashboard.py"
-}
-
-function dev-ui-probe {
-    Write-Host "Starting UI probe alias (FastAPI + Prefab dashboard)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "run-ui.ps1") -FrontendTarget "src/solidworks_mcp/ui/prefab_dashboard.py"
 }
 
 function dev-docs {

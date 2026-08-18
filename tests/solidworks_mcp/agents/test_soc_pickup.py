@@ -9,6 +9,7 @@ import pytest
 
 from solidworks_mcp.agents.soc_pickup import (
     _classify,
+    _feature_names,
     _feature_type,
     diff_feature_trees,
     emit_feature_lines,
@@ -116,6 +117,21 @@ def test_diff_ignores_removed_features():
     new = [_feat("A", "Sketch")]  # B removed
     result = diff_feature_trees(old, new)
     assert result == []
+
+
+def test_feature_names_returns_only_named_features():
+    """_feature_names extracts the name column, skipping nameless rows."""
+    tree = [_feat("Boss-Extrude1", "Boss-Extrude"), {"type": "Sketch"}, _feat("A", "A")]
+    assert _feature_names(tree) == ["Boss-Extrude1", "A"]
+
+
+def test_diff_ignores_old_features_without_a_name():
+    """A feature row missing 'name' can't be keyed (_feature_key returns None);
+    it must not crash the comparison or count as an existing feature."""
+    old = [{"type": "Sketch"}, _feat("Existing", "Sketch")]
+    new = [_feat("Existing", "Sketch"), _feat("Boss-Extrude1", "Boss-Extrude")]
+    result = diff_feature_trees(old, new)
+    assert [r["name"] for r in result] == ["Boss-Extrude1"]
 
 
 def test_diff_disambiguates_same_name_across_components():

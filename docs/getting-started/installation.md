@@ -58,13 +58,13 @@ python -m venv .venv
     C:\Users\<you>\micromamba\envs\solidworks_mcp\python.exe -m venv .venv
     .\.venv\Scripts\python.exe -m ensurepip --upgrade
     .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
-    .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs,ui]"
+    .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
     ```
 
     Or use the all-in-one dev command after setup:
 
     ```powershell
-    .\dev-commands.ps1 dev-install-ui
+    .\dev-commands.ps1 dev-install
     ```
 
 This installs both `solidworks_mcp` and runtime dependencies such as `fastmcp` in the same interpreter used by the MCP server.
@@ -115,7 +115,7 @@ Healthy startup logs include:
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
 - `Adapter Mode: Real SolidWorks`
-- `Registered 109 SolidWorks tools`
+- `Registered 113 SolidWorks tools`
 - `Connected to SolidWorks`
 
 If you see `Adapter Mode: Mock`, the `--real` flag was not received — verify it
@@ -209,43 +209,19 @@ your `mcp.json` after the `.ps1` path, then restart the server.
     ```powershell
     python -m venv .venv
     .\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
-    .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs,ui]"
+    .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
     ```
 
-### `prefab.exe` not found when running `dev-ui-probe` or `dev-ui`
+### `.venv\Scripts\python.exe` fails with "No pyvenv.cfg file"
 
-!!! note "Install UI extras to get prefab-ui into .venv"
-    **Error:** `Prefab executable not found: .venv\Scripts\prefab.exe`
-
-    This means the `.venv` was created without the `ui` optional dependency group, or `pip` skipped writing the console-script wrapper on initial install.
-
-    **Option 1 — Let `run-ui.ps1` fix it automatically:**
-
-    `run-ui.ps1` detects when `prefab.exe` is missing and auto-reinstalls `prefab-ui` before starting. Just run:
-
-    ```powershell
-    .\dev-commands.ps1 dev-ui-probe
-    ```
-
-    **Option 2 — Use the UI install helper:**
-
-    ```powershell
-    .\dev-commands.ps1 dev-install-ui
-    ```
-
-    **Option 3 — Manual fix:**
-
-    ```powershell
-    .\.venv\Scripts\python.exe -m pip install --force-reinstall "prefab-ui>=0.19.0" "fastapi>=0.115.0" "uvicorn>=0.24.0"
-    ```
-
+!!! note "Corrupted venv"
     If `.venv\Scripts\python.exe` fails with **"No pyvenv.cfg file"**, the venv is corrupted. Delete and recreate it:
 
     ```powershell
     Remove-Item -Recurse -Force .venv
     python -m venv .venv
     .\.venv\Scripts\python.exe -m ensurepip --upgrade   # if pip missing (conda Python)
-    .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs,ui]"
+    .\.venv\Scripts\python.exe -m pip install -e ".[dev,test,docs]"
     ```
 
 ### GitHub CLI (`gh`) not installed or not authenticated

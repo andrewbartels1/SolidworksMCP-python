@@ -13,11 +13,11 @@
 
 **AI-Assisted SolidWorks Automation with MCP**
 
-🚀 **109 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
+🚀 **113 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
 
 ## Overview
 
-An attempt to practical MCP server for SolidWorks focused on faster iteration with AI: describe intent, generate a plan, execute tools, inspect results, and iterate. This is a differentiating tool from some other really great projects since I still want to use Solidworks, and don't want to change to another 3D modeling engine. This leads to the following project that can work with Solidworks to update/design/create parts in a somewhat interactive manner, and helps add tooling etc. to LLMs to help making designing faster and easier, with the intent of removing the boring and repetitive parts of the 3D modeling process while enhancing designs with canonical  
+An attempt at a practical MCP server for SolidWorks focused on faster iteration with AI: describe intent, generate a plan, execute tools, inspect results, and iterate. This is a differentiating tool from some other really great projects since I still want to use SolidWorks, and don't want to switch to another 3D modeling engine. This project works with SolidWorks to update, design, and create parts in a somewhat interactive manner, adding tooling to LLMs to make designing faster and easier - removing the boring, repetitive parts of the 3D modeling process while keeping designs as canonical, editable SolidWorks data instead of throwaway meshes.
 
 It supports both experienced CAD users and newer makers who want a tutor-like assistant for 3D-printable design workflows.
 
@@ -43,7 +43,7 @@ The project emphasizes an inspect -> classify -> delegate loop instead of blind 
 
 ### 2) Broad Tool Surface with Practical Coverage
 
-- 109 tools across modeling, sketching, drawing, analysis, export, automation, templates, macros, and docs discovery
+- 113 tools across modeling, sketching, drawing, analysis, export, automation, templates, macros, and docs discovery
 - one server API surface for both simple operations and advanced workflows
 
 ### 3) Reliable Execution Path for Complex Operations
@@ -114,7 +114,7 @@ Healthy startup logs include:
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
 - `Adapter Mode: Real SolidWorks`
-- `Registered 109 SolidWorks tools`
+- `Registered 113 SolidWorks tools`
 - `Connected to SolidWorks`
 
 ### Linux / WSL only
@@ -193,7 +193,7 @@ Ready to automate your SolidWorks workflows? Check out our comprehensive guides:
 - [**VS Code MCP Setup**](getting-started/vscode-mcp-setup.md) - Connect VS Code and GitHub Copilot to this server
 - [**Claude Code MCP Setup**](getting-started/claude-code-setup.md) - Connect Claude Code to this server
 - [**Architecture Overview**](user-guide/architecture.md) - Understand the system design
-- [**Tools Overview**](user-guide/tools-overview.md) - Explore all 109 available tools
+- [**Tools Overview**](user-guide/tools-overview.md) - Explore all 113 available tools
 - [**Agent UI Workflows**](agents/agent-ui-workflows.md) - Plan visual decision workflows for hinges, sourcing, and printability
 - [**Agent Memory and Recovery**](agents/agent-memory-and-recovery.md) - Use local SQLite history to troubleshoot and recover from failure states
 

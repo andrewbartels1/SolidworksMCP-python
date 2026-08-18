@@ -574,3 +574,69 @@ class TestAnalysisCoverage:
         result = await fn()
         assert result["status"] == "error"
         assert "does not support get_material_properties" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_get_material_properties_exception_handler(self):
+        """Lines 388-390 — adapter.get_material_properties raising → error dict."""
+        from solidworks_mcp.tools.analysis import register_analysis_tools
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("get_material_properties")
+        await register_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "get_material_properties")
+        result = await fn()
+        assert result["status"] == "error"
+        assert "Unexpected error" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# drawing.py
+# ---------------------------------------------------------------------------
+
+
+class TestDrawingExceptionPaths:
+    """Test drawing tool exception paths."""
+
+    @pytest.mark.asyncio
+    async def test_add_note_exception_handler(self):
+        """Lines 586-588 — add_note exception → error dict."""
+        from solidworks_mcp.tools.drawing import AddNoteInput, register_drawing_tools
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("add_note")
+        await register_drawing_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "add_note")
+        result = await fn(
+            AddNoteInput(text="Note", position_x=0.0, position_y=0.0)
+        )
+        assert result["status"] == "error"
+        assert "Unexpected error" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_update_sheet_format_exception_handler(self):
+        """Lines 766-768 — update_sheet_format exception → error dict."""
+        from solidworks_mcp.tools.drawing import (
+            UpdateSheetFormatInput,
+            register_drawing_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("update_sheet_format")
+        await register_drawing_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "update_sheet_format")
+        result = await fn(
+            UpdateSheetFormatInput(
+                format_file="C:/Templates/company.slddrt",
+                sheet_size="A3",
+                title="Bracket",
+                drawn_by="J. Smith",
+                checked_by="M. Johnson",
+                approved_by="R. Wilson",
+                drawing_number="DWG-001",
+            )
+        )
+        assert result["status"] == "error"
+        assert "Unexpected error" in result["message"]
