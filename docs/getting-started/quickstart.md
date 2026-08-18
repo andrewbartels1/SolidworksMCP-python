@@ -104,7 +104,7 @@ Expected log markers:
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
 - `Adapter Mode: Real SolidWorks`
-- `Registered 109 SolidWorks tools`
+- `Registered 113 SolidWorks tools`
 - `Connected to SolidWorks`
 
 If you see `Adapter Mode: Mock` in the logs, `--real` was not picked up — check

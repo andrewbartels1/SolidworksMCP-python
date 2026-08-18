@@ -70,6 +70,11 @@ ADAPTER_FREE_TOOLS = {
     # stat the referenced template files. No SolidWorks session involved.
     "list_template_library",
     "save_to_template_library",
+    # Returns the CAD-generation skill-route contract for a family the caller
+    # already decided on. Pure introspection of the SolidWorksAdapter class
+    # itself (its public method names) - never needs a live adapter instance,
+    # and never claims to have done any SolidWorks work.
+    "get_skill_route",
 }
 
 

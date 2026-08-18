@@ -1,90 +1,69 @@
-## 1. Core types and module scaffold
+## Revision note (2026-08-15)
 
-- [ ] 1.1 Create `src/solidworks_mcp/ui/services/skill_router.py` with a frozen
-      `SkillRoute` dataclass: `family: Literal["solidworks-native", "text-to-cad", "mesh-concept"]`,
-      `allowed_tools: list[str]`, `validation_steps: list[str]`,
-      `expected_outputs: list[str]`, `fallback: str | None`, `confidence: float`.
-- [ ] 1.2 Add the `async def classify_generation_route(...)` signature (session_id,
-      user_goal, plus the same `db_path`/`model_name` override pattern
-      `inspect_family` already uses) returning `SkillRoute`.
+This change was originally implemented against a dashboard/LLM-driven design (see `proposal.md`'s Revision note and `design.md` for why). That design was rebuilt from scratch as a plain MCP tool after `src/solidworks_mcp/ui/` was deleted from the repo. The task list below reflects the **current** (tool-based) implementation, done in a single pass rather than the original six-section plan — recorded here as what was actually done, not a checklist to re-walk.
+
+## 1. Core module and MCP tool
+
+- [x] 1.1 Create `src/solidworks_mcp/tools/skill_router.py` following this
+      repo's standard tool-module pattern (`async def register_skill_router_tools(mcp, adapter, config) -> int`,
+      registered in `src/solidworks_mcp/tools/__init__.py`).
+- [x] 1.2 Define `SkillRouteInput` (a `CompatInput` subclass) with a single
+      `family: Literal["solidworks-native", "text-to-cad", "mesh-concept"]`
+      field, whose description covers what each branch means so the calling
+      model can classify correctly without a nested LLM call.
+- [x] 1.3 Register a single `@mcp.tool() get_skill_route(input_data: SkillRouteInput) -> dict[str, Any]`
+      tool returning this repo's standard `{status, message, execution_time, data}`
+      payload shape, with `data` holding `family`/`allowed_tools`/
+      `validation_steps`/`expected_outputs`/`fallback`.
 
 ## 2. Adapter-capability validation
 
-- [ ] 2.1 Implement a helper that introspects `SolidWorksAdapter`
-      (`src/solidworks_mcp/adapters/base.py`) for its public capability names
-      (no running process, no network call — a plain class introspection).
-- [ ] 2.2 Implement allowlist filtering: given a proposed list of tool names,
-      return only the ones that are real adapter capabilities; never raise on
-      an unknown name, just exclude it (fail closed per design.md Decision 3).
-- [ ] 2.3 Mock-adapter-independent unit test: a real adapter method name
-      passes through unchanged; a made-up name is silently excluded.
+- [x] 2.1 `_adapter_capability_names()`: plain class introspection over
+      `SolidWorksAdapter` (`src/solidworks_mcp/adapters/base.py`) — every
+      public, callable, non-underscore-prefixed attribute. No running
+      process, no network call.
+- [x] 2.2 `filter_to_adapter_capabilities()`: fail-closed allowlist filter —
+      given a proposed list of tool names, returns only the ones that are
+      real adapter capabilities, order preserved, never raises on an
+      unknown name.
+- [x] 2.3 Unit tests: a real adapter method name passes through unchanged;
+      a made-up name is silently excluded; a mixed list keeps only the real
+      names in original order.
 
-## 3. Classification implementation
+## 3. Per-branch route construction
 
-- [ ] 3.1 Implement the LLM classification call, reusing `llm_service.py`'s
-      existing model-call/provider-resolution infrastructure (the same
-      pattern `inspect_family` already uses) — do not add a new provider or
-      config path.
-- [ ] 3.2 Apply a confidence threshold (initial value documented as tunable
-      per design.md's Open Questions — pick one, e.g. 0.6, and note it's not
-      load-bearing for the spec). Below threshold: populate `fallback` and
-      treat the request as unresolved rather than committing to a branch.
-- [ ] 3.3 Handle the LLM call itself failing (timeout/provider error): return
-      `SkillRoute(confidence=0.0, fallback=<failure message>, allowed_tools=[])`
-      per design.md Decision 7 — same shape as every other case, no separate
-      exception type.
+- [x] 3.1 `solidworks-native` branch: `allowed_tools` is
+      `sorted(_adapter_capability_names())` (the full adapter capability
+      set, per design.md Decision 4 — no curated subset), with
+      `validation_steps`/`expected_outputs` populated from the integration
+      report's Workflow A guardrails (inspect before execute, verify by
+      artifact), `fallback: None`.
+- [x] 3.2 `text-to-cad` / `mesh-concept` branches (stubs): `allowed_tools: []`,
+      `fallback` states explicitly that the branch has no backing
+      implementation yet (`text-to-cad`'s message references issue #43).
 
-## 4. Per-branch route construction
+## 4. Tests
 
-- [ ] 4.1 `solidworks-native` branch: `allowed_tools` is the full adapter
-      capability set from Task 2.1's helper (per design.md Decision 5 — no
-      curated subset); populate `validation_steps`/`expected_outputs` from
-      the report's Workflow A guardrails (inspect before execute, verify by
-      artifact).
-- [ ] 4.2 `text-to-cad` branch (stub): `allowed_tools: []`, `fallback` states
-      explicitly that the branch is not yet implemented (references issue
-      #43), `confidence` reflects the stub state rather than a real
-      classification.
-- [ ] 4.3 `mesh-concept` branch (stub): same stub pattern as 4.2, `fallback`
-      states no backing implementation exists yet.
+- [x] 4.1 `tests/solidworks_mcp/tools/test_skill_router.py`: tool
+      registration count, `solidworks-native` returns the full live adapter
+      capability set (regression-guarded against `SolidWorksAdapter`
+      directly, so a future adapter-interface change can't silently drift),
+      `text-to-cad`/`mesh-concept` return correctly-flagged stubs, plus the
+      adapter-capability-filter unit tests from Task 2.3.
+- [x] 4.2 Added `get_skill_route` to `ADAPTER_FREE_TOOLS` in
+      `tests/solidworks_mcp/tools/test_no_fabricated_payloads.py` (PR #52's
+      AST-based guard against tools that never reach the adapter) — this
+      tool legitimately never touches a live adapter instance, only the
+      `SolidWorksAdapter` class itself, and does real, correct work either
+      way.
 
-## 5. Integration with the orchestration pipeline
+## 5. Documentation and verification
 
-- [ ] 5.1 Call `classify_generation_route` from `llm_service.py`'s pipeline,
-      positioned between the existing `inspect_family` step and
-      `run_go_orchestration` (per design.md Context).
-- [ ] 5.2 Confirm the exact point in `ui/services/checkpoint_service.py`
-      (around its `create_adapter()` call, `checkpoint_service.py:219-220`)
-      where the resulting route's `allowed_tools` should constrain what gets
-      executed, and wire it there. This is genuinely new integration surface
-      per design.md — verify against the real file structure before wiring,
-      don't assume the exact call shape from this task list alone.
-- [ ] 5.3 Verify `inspect_family`'s existing `family`/`proposed_family`
-      naming (SolidWorks feature-tree classification) is untouched and
-      remains unambiguous next to the new route's `family` field (design.md
-      Decision 2) — no renames to the existing feature-tree classifier.
-
-## 6. Tests
-
-- [ ] 6.1 Unit tests for `classify_generation_route` covering all three
-      branches with mocked LLM responses.
-- [ ] 6.2 Unit test for the low-confidence fallback case.
-- [ ] 6.3 Unit test for the LLM-call-failure fallback case.
-- [ ] 6.4 Unit test for adapter-capability validation excluding a nonexistent
-      tool name (Task 2.3, formalized as part of the suite).
-- [ ] 6.5 Regression test asserting `solidworks-native`'s `allowed_tools`
-      tracks the live `SolidWorksAdapter` capability set, so a future
-      adapter-interface change can't silently drift from this route.
-
-## 7. Documentation and verification
-
-- [ ] 7.1 Run `.\dev-commands.ps1 dev-lint` and `.\dev-commands.ps1 dev-test`;
-      confirm the mock-only suite passes with the existing coverage gate.
-- [ ] 7.2 Document the `classify_generation_route`/`SkillRoute` contract
-      (three branches, fallback semantics, adapter-capability validation) so
-      #43 can wire a real `text-to-cad` branch against this change's shape
-      instead of redefining it.
-- [ ] 7.3 Note design.md's deferred open question (a future MCP-protocol
-      caller needing MCP-tool-level validation instead of adapter-capability
-      validation) near `classify_generation_route`, so it's discoverable if
-      #43 or #44 ever need it.
+- [x] 5.1 Ran the full mock test suite
+      (`pytest tests/ -m "not solidworks_only and not smoke" -n 4`) after
+      this change plus the `ui/` deletion it landed alongside: 1409 passed,
+      21 skipped, 0 failures. Lint clean on every changed file.
+- [x] 5.2 Rewrote `proposal.md`/`design.md`/`specs/agents/skill-router/spec.md`
+      to describe the tool-based design rather than leaving them describing
+      the deleted dashboard integration — an OpenSpec change's artifacts
+      are supposed to be the source of truth for what was actually built.

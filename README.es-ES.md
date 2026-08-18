@@ -1,4 +1,9 @@
-
+```
+   ____     ___    ___      __         __          __  ___________
+  / __/__  / (_)__/ / | /| / /__  ____/ /__ ___   /  |/  / ___/ _ \
+ _\ \/ _ \/ / / _  /| |/ |/ / _ \/ __/  '_/(_-<  / /|_/ / /__/ ___/
+/___/\___/_/_/\_,_/ |__/|__/\___/_/ /_/\_\/___/ /_/  /_/\___/_/
+```
 
 **Idiomas:** [English](README.md) | [Español](README.es-ES.md)
 
@@ -10,11 +15,17 @@
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Servidor MCP de Python para la automatización de SolidWorks con 109 herramientas, más una capa opcional de agente/pruebas de prompts para flujos de trabajo asistidos por IA.
+Servidor MCP de Python para la automatización de SolidWorks con 113 herramientas, más una capa opcional de agente/pruebas de prompts para flujos de trabajo asistidos por IA.
+
+<!--
+Marcador de posición para demo: coloca una grabación en
+docs/assets/demo.gif y descomenta la línea de abajo.
+![Demo](docs/assets/demo.gif)
+-->
 
 ## Descripción General
 
-> ⚠️ **Estado del proyecto:** Este proyecto está en construcción activa. Las características, API, documentación y pasos de configuración pueden cambiar a medida que se finalicen las implementaciones de Python y la interfaz de usuario. Este es un producto de pasatiempo/investigación, ¡no dudes en crear un issue si tienes preguntas o comentarios! ⚠️
+> ⚠️ **Estado del proyecto:** Este proyecto está en construcción activa. Las características, API, documentación y pasos de configuración pueden cambiar a medida que se finalice la implementación de Python. Este es un producto de pasatiempo/investigación, ¡no dudes en crear un issue si tienes preguntas o comentarios! ⚠️
 
 Este proyecto se centra en la automatización práctica de SolidWorks con un ciclo amigable para la IA:
 
@@ -35,13 +46,10 @@ Incluye:
 
 - Automatización COM de Windows + SolidWorks para el ciclo principal de CAD.
 - Herramientas de modelado, bocetos, planos, análisis, exportación, automatización, plantillas y macros.
-- Sincronización de la vista previa de la interfaz Prefab desde la ventana de visualización activa como PNG.
 
 ## No disponible aún / Simulado
 
 - La salida del adaptador simulado es ficticia y no debe considerarse como un dato técnico de ingeniería.
-- Transmisión en vivo de la ventana de visualización 3D en la interfaz.
-- Validación de interferencias a nivel de punto de control en el ejecutor de la interfaz.
 
 ## Funcionamiento Verificado (Configuración en Windows)
 
@@ -232,7 +240,6 @@ Enlaces directos:
 - [Inicio Rápido](docs/getting-started/quickstart.md)
 - [Tutorial: Construcción de ensamblaje de junta universal](docs/getting-started/tutorials/u-joint-assembly-build.md)
 - [Rutas de tutoriales](docs/getting-started/tutorial-tracks.md)
-- [Panel de control de la interfaz Prefab](docs/getting-started/prefab-ui-dashboard.md)
 - [Configuración de MCP para VS Code](docs/getting-started/vscode-mcp-setup.md)
 - [Arquitectura](docs/user-guide/architecture.md)
 - [Agentes y pruebas de prompts](docs/agents/agents-and-testing.md)

@@ -323,3 +323,27 @@ def test_build_component_tree_excludes_marker_rows_from_features() -> None:
     assert tree["components"]["Missing-1"]["features"] == []
     assert tree["components"]["DeepSub-1"]["features"] == []
     assert tree["components"]["DeepSub-1"]["path"] == "C:/DeepSub.sldasm"
+
+
+def test_build_component_tree_backfills_path_from_a_later_row() -> None:
+    """A component's first-seen row can lack component_path (e.g. the marker
+    row created for a bare descriptor); a later feature row that does carry
+    it should backfill the node's path instead of leaving it unset."""
+    features = [
+        {
+            "name": "Boss1",
+            "type": "Boss",
+            "component": "PartX",
+            "component_path": None,
+            "component_parent": None,
+        },
+        {
+            "name": "Fillet1",
+            "type": "Fillet",
+            "component": "PartX",
+            "component_path": "C:/PartX.sldprt",
+            "component_parent": None,
+        },
+    ]
+    tree = build_component_tree(features)
+    assert tree["components"]["PartX"]["path"] == "C:/PartX.sldprt"

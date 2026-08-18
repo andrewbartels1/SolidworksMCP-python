@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 109 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+The SolidWorks MCP Server provides 113 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
 
 ## Read this first
 
@@ -115,7 +115,7 @@ The SolidWorks MCP Server provides 109 specialized tools for CAD automation. Thi
 | **Macro Recording** | 7 | High | Workflow capture and optimization |
 | **Docs Discovery** | 2 | Medium | API and COM discovery workflows |
 
-**Total: 109 Tools**
+**Total: 113 Tools**
 
 ## Tool Design Principles
 
@@ -237,7 +237,7 @@ result = await batch_process_files(
 
 #### Development (All Tools)
 
-Full access to all 109 tools for local development.
+Full access to all 113 tools for local development.
 
 #### Restricted (74 Tools)
 
@@ -565,4 +565,4 @@ await export_stl(
     Ready to explore? Jump to any tool category above or check out the [Quick Start Guide](../getting-started/quickstart.md) for hands-on examples.
 
 !!! info "Development Status"
-    All 109 tools are implemented and ready for use. Documentation and examples are continuously being expanded.
+    All 113 tools are implemented and ready for use. Documentation and examples are continuously being expanded.

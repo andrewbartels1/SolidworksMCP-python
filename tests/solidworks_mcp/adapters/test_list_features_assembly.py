@@ -269,6 +269,22 @@ async def test_subassembly_beyond_depth_limit_is_not_expanded(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_assembly_with_no_components_returns_only_own_features(
+    monkeypatch,
+) -> None:
+    """GetComponents() returning an empty list yields no component rows."""
+    adapter = _build_adapter(monkeypatch)
+    adapter.currentModel = _assembly_doc(
+        "C:\\mock\\Empty.sldasm", "Empty.SLDASM", [], _Feature("Mate1", "Mate")
+    )
+
+    result = await adapter.list_features(include_suppressed=False)
+
+    assert result.is_success
+    assert [row["name"] for row in result.data] == ["Mate1"]
+
+
+@pytest.mark.asyncio
 async def test_unresolvable_component_does_not_fail_the_call(monkeypatch) -> None:
     """A component that can't be resolved yields one UnresolvedComponent row."""
     adapter = _build_adapter(monkeypatch)

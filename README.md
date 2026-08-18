@@ -1,4 +1,9 @@
-# SolidWorks CAD Assistant & MCP Server
+```
+   ____     ___    ___      __         __          __  ___________
+  / __/__  / (_)__/ / | /| / /__  ____/ /__ ___   /  |/  / ___/ _ \
+ _\ \/ _ \/ / / _  /| |/ |/ / _ \/ __/  '_/(_-<  / /|_/ / /__/ ___/
+/___/\___/_/_/\_,_/ |__/|__/\___/_/ /_/\_\/___/ /_/  /_/\___/_/
+```
 
 **Languages:** [English](README.md) | [Español](README.es-ES.md)
 
@@ -8,11 +13,20 @@
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 109 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 113 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+
+<!--
+Demo placeholder: drop a recording at docs/assets/demo.gif and uncomment
+the line below. A quick way to capture one on Windows: ShareX or the
+built-in Xbox Game Bar (Win+Alt+R) recording a prompt-driven modeling
+session, then convert to gif with ffmpeg:
+  ffmpeg -i demo.mp4 -vf "fps=12,scale=960:-1:flags=lanczos" docs/assets/demo.gif
+![Demo](docs/assets/demo.gif)
+-->
 
 ## Overview
 
-> ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python and UI implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
+> ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
 
 This project focuses on practical SolidWorks automation with an AI-friendly loop:
 
@@ -33,13 +47,10 @@ It includes:
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
 - Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
-- Prefab UI preview sync from the active viewport as PNG.
 
 ## Not Yet / Simulated
 
 - Mock adapter output is simulated and should not be treated as engineering truth.
-- Live 3D viewport streaming in the UI.
-- Checkpoint-level interference validation in the UI runner.
 
 ## What Works (Verified Windows Setup)
 
@@ -230,7 +241,6 @@ Direct links:
 - [Quick Start](docs/getting-started/quickstart.md)
 - [Tutorial: U-Joint Assembly Build](docs/getting-started/tutorials/u-joint-assembly-build.md)
 - [Tutorial Tracks](docs/getting-started/tutorial-tracks.md)
-- [Prefab UI Dashboard](docs/getting-started/prefab-ui-dashboard.md)
 - [VS Code MCP Setup](docs/getting-started/vscode-mcp-setup.md)
 - [Architecture](docs/user-guide/architecture.md)
 - [Agents and Prompt Testing](docs/agents/agents-and-testing.md)

@@ -307,6 +307,49 @@ that mock-adapter tests validate the *shape* of a fix, not COM binding behavior 
 
 ---
 
+## 13. `sw_type_info`'s flag cache can go stale when a dispatch is fetched fresh on every call
+
+**Symptom:** `pywintypes.com_error: (-2147352573, 'Member not found.', None, None)` on a
+method that *is* genuinely declared on the interface being flagged — intermittent, and the
+specific call site that trips it varies between runs (`sketch_mirror` one run,
+`sketch_circular_pattern` the next, both by way of the same helper).
+
+**Root cause:** `sw_type_info._flag_cache` is keyed by `id(obj)` and records which
+interfaces have already been flagged for that address. That's safe for dispatches stored in
+a long-lived adapter attribute (`adapter.currentModel`, `adapter.swApp`,
+`adapter.currentSketchManager`) — the same Python object is reused across calls, so the
+cache hit is correct. It is **not** safe for a dispatch obtained via a fresh property fetch
+on every call (e.g. `adapter.currentModel.SelectionManager` inside a helper function) —
+pywin32 hands back a new Python-side wrapper object each time, even though it wraps the same
+underlying COM pointer. Once the old wrapper is garbage-collected, CPython is free to reuse
+its address for the next call's wrapper. If that happens, `flag_methods` sees a cache hit for
+an object that was never actually flagged, skips `_FlagAsMethod`, and the member resolves
+through the ordinary speculative path — which fails for methods needing disambiguation
+(`CreateSelectData`, etc.).
+
+**Fix:** For any dispatch fetched fresh on every call (not stored in a persistent adapter
+attribute), invalidate its cache entry before flagging so a stale id-collision can never
+suppress the real `_FlagAsMethod` call:
+
+```python
+sel_mgr = adapter.currentModel.SelectionManager  # fresh wrapper every call
+sw_type_info.invalidate_flag_cache(sel_mgr)       # force a real re-flag, ignore any stale hit
+sw_type_info.flag_methods(sel_mgr, "ISelectionMgr")
+```
+
+**Applies to:** `_select_sketch_entities` in `sketch.py` (shared by `sketch_mirror`,
+`sketch_offset`, `sketch_circular_pattern`) — fixed 2026-08-15. Any other call site that
+flags a dispatch obtained from a bare property/method access rather than a cached adapter
+attribute is at the same risk and should apply the same pre-invalidate.
+
+Separately: `close_model`/`close_all_session_docs` now call
+`sw_type_info.invalidate_flag_cache()` (full clear, no args) after closing a document, since
+the closed document's own child dispatches (sketch, feature, selection-manager objects) are
+about to be freed and could otherwise collide with the *next* document's freshly-opened
+dispatches.
+
+---
+
 ## Reference: Where to look things up
 
 | Question | Where to look |

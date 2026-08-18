@@ -107,7 +107,7 @@ Healthy logs should include:
 
 - `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Registered 109 SolidWorks tools`
+- `Registered 113 SolidWorks tools`
 - `Connected to SolidWorks`
 - `Adapter Mode: Real SolidWorks` (confirms `--real` was picked up)
 

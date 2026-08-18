@@ -461,6 +461,29 @@ class TestMockAdapterDelayBranches:
         assert "Unknown sketch entity" in (result.error or "")
 
     @pytest.mark.asyncio
+    async def test_list_features_assembly_after_features_already_seeded(
+        self, mock_adapter
+    ) -> None:
+        """list_features flattens assembly components on the non-seed path too.
+
+        The first list_features() call on an empty model seeds canned
+        features (a separate branch). Once _features is non-empty, a
+        second call for an Assembly model takes the later branch (lines
+        465-474 in mock_adapter.py) which must also append the flattened
+        assembly component rows.
+        """
+        await mock_adapter.connect()
+        await mock_adapter.create_assembly()
+        await mock_adapter.create_extrusion("Sketch1", 10.0, "blind")
+
+        result = await mock_adapter.list_features()
+
+        assert result.is_success
+        names = {row["name"] for row in result.data}
+        assert any(row.get("component") is not None for row in result.data)
+        assert names  # sanity: the own-feature rows are still present
+
+    @pytest.mark.asyncio
     async def test_check_sketch_fully_defined_success(self, mock_adapter) -> None:
         """check_sketch_fully_defined success path returns is_fully_defined=True (line 1466)."""
         await mock_adapter.connect()

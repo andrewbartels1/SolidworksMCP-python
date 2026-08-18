@@ -90,8 +90,6 @@ test = [
     "pytest-timeout>=2.1.0",
     "pytest-xdist>=3.3.0",
     "coverage[toml]>=7.3.0",
-    "fastapi>=0.115.0",
-    "prefab-ui>=0.19.0",
     "numpy>=1.26.0",
 ]
 docs = [
@@ -108,10 +106,6 @@ docs = [
     "mkdocs-minify-plugin>=0.7.0",
     "mike>=2.0.0",  # For versioning
     "pygments>=2.16.0",  # For syntax highlighting
-]
-ui = [
-    "prefab-ui>=0.19.0",
-    "fastapi>=0.115.0",
 ]
 vision = [
     "pillow>=10.0.0",
@@ -201,7 +195,6 @@ omit = [
     "*/test_*",
     "*/__pycache__/*",
     "*/migrations/*",
-    "*/solidworks_mcp/ui/*",
 ]
 
 [tool.coverage.report]
@@ -245,18 +238,6 @@ module = [
     "win32con",
 ]
 ignore_missing_imports = true
-
-# UI prefab files are slated for removal — suppress all errors.
-[[tool.mypy.overrides]]
-module = [
-    "solidworks_mcp.ui.prefab_dashboard",
-    "solidworks_mcp.ui.prefab_trace_probe",
-    "solidworks_mcp.ui.local_llm",
-    "solidworks_mcp.ui.service",
-    "solidworks_mcp.ui.server",
-    "solidworks_mcp.ui.services.llm_service",
-]
-ignore_errors = true
 
 
 [tool.black]

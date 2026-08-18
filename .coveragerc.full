@@ -1,6 +1,5 @@
 # Coverage config for dev-test-full (real SolidWorks integration run).
 #
-# ui/ is excluded (needs a full rework; tracked in docs/planning).
 # pragma: no cover IS in exclude_lines for the same reasons as pyproject.toml:
 # non-Windows import fallbacks, pack-and-go paths that require an assembly
 # file (SOLIDWORKS_MCP_TEST_ASSEMBLY), and other unreachable branches.
@@ -13,7 +12,6 @@ omit =
     */test_*
     */__pycache__/*
     */migrations/*
-    */solidworks_mcp/ui/*
 
 [report]
 exclude_lines =
