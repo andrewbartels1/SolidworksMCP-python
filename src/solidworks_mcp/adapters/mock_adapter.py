@@ -148,6 +148,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # its sketch-entity registry.
         self._sketch_entity_ids: set[str] = set()
         self._dimensions: dict[str, float] = {}
+        # Assembly components inserted via insert_component, keyed by
+        # insertion order. See insert_component/list_components/add_mate.
+        self._components: list[str] = []
         self._operation_count = 0
 
         # Configurable simulation delays (in seconds)
@@ -1913,4 +1916,125 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS, data=None, execution_time=0.1
+        )
+
+    async def insert_component(
+        self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock inserting a component into the active assembly.
+
+        Records the component in ``self._components`` so repeated inserts
+        accumulate and ``list_components`` reflects them.
+
+        Args:
+            file_path (str): Path to the part or sub-assembly to insert.
+            x (float): X position in millimetres. Defaults to 0.0.
+            y (float): Y position in millimetres. Defaults to 0.0.
+            z (float): Z position in millimetres. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        self._operation_count += 1
+
+        self._components.append(f"component-{len(self._components) + 1}")
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "component": self._components[-1],
+                "file_path": file_path,
+                "position": {"x": x, "y": y, "z": z},
+                "components_before": len(self._components) - 1,
+                "components_after": len(self._components),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def list_components(self) -> AdapterResult[list[str]]:
+        """Mock listing the top-level components of the active assembly.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=list(self._components),
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
+    async def add_mate(
+        self,
+        component_a: str,
+        component_b: str,
+        entity_a: str = "Front Plane",
+        entity_b: str = "Front Plane",
+        mate_type: str = "coincident",
+        alignment: str = "aligned",
+        distance: float = 0.0,
+        angle: float = 0.0,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock mating two components in the active assembly.
+
+        Args:
+            component_a (str): First component instance name.
+            component_b (str): Second component instance name.
+            entity_a (str): Named feature on the first component. Defaults to
+                "Front Plane".
+            entity_b (str): Named feature on the second component. Defaults to
+                "Front Plane".
+            mate_type (str): Mate type. Defaults to "coincident".
+            alignment (str): Mate alignment. Defaults to "aligned".
+            distance (float): Distance in millimetres, for a distance mate.
+                Defaults to 0.0.
+            angle (float): Angle in degrees, for an angle mate. Defaults to 0.0.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        known_mate_types = {
+            "coincident",
+            "concentric",
+            "perpendicular",
+            "parallel",
+            "tangent",
+            "distance",
+            "angle",
+        }
+        if mate_type not in known_mate_types:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown mate type '{mate_type}'. "
+                    f"Use one of: {', '.join(sorted(known_mate_types))}."
+                ),
+            )
+
+        await asyncio.sleep(self._delays["model_operation"])
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "mate_type": mate_type,
+                "alignment": alignment,
+                "components": [component_a, component_b],
+                "entities": [entity_a, entity_b],
+                "distance": distance or None,
+                "angle": angle or None,
+                # The real adapter fills these by comparing every component's
+                # Transform2 before and after the mate. The mock has no
+                # geometry to move, so it reports "not determinable" rather
+                # than True: this field exists precisely so a caller can tell
+                # a mate that positioned something from one SolidWorks
+                # accepted and ignored, and a mock that always answers True
+                # would make that check useless wherever mock mode is used.
+                "moved_components": [],
+                "geometry_moved": None,
+            },
+            execution_time=self._delays["model_operation"],
         )

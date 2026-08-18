@@ -6,6 +6,7 @@ import pytest
 
 from solidworks_mcp.tools.modeling import (
     AddFilletInput,
+    AddMateInput,
     CloseModelInput,
     CreateAssemblyInput,
     CreateCutExtrudeInput,
@@ -16,6 +17,7 @@ from solidworks_mcp.tools.modeling import (
     CreateRevolveInput,
     CreateSweepInput,
     GetDimensionInput,
+    InsertComponentInput,
     OpenModelInput,
     SetDimensionInput,
     _result_value,
@@ -32,10 +34,12 @@ class TestModelingTools:
         tool_count = await register_modeling_tools(
             mcp_server, mock_adapter, mock_config
         )
-        assert tool_count == 12
+        assert tool_count == 15
         # The Phase 1 sweep/loft tools must be registered alongside the rest.
         names = {tool.name for tool in await mcp_server.list_tools()}
         assert {"create_sweep", "create_loft"} <= names
+        # Assembly component/mate tools must be registered too.
+        assert {"insert_component", "add_mate", "list_components"} <= names
 
     @pytest.mark.asyncio
     async def test_open_model_success(self, mcp_server, mock_adapter, mock_config):
@@ -429,6 +433,16 @@ class TestModelingTools:
                 depth=-5.0,  # Negative depth should be invalid
             )
 
+        # InsertComponentInput requires a non-empty file_path
+        with pytest.raises(ValueError):
+            InsertComponentInput(file_path="")
+
+        # AddMateInput requires non-empty component names
+        with pytest.raises(ValueError):
+            AddMateInput(component_a="", component_b="part-2")
+        with pytest.raises(ValueError):
+            AddMateInput(component_a="part-1", component_b="")
+
     @pytest.mark.asyncio
     async def test_performance_monitoring(
         self, mcp_server, mock_adapter, mock_config, perf_monitor
@@ -666,3 +680,159 @@ class TestModelingTools:
         )
         assert fillet_result["status"] == "error"
         assert "fillet radius too large" in fillet_result["message"]
+
+
+class TestAssemblyTools:
+    """Test suite for insert_component / list_components / add_mate tools."""
+
+    @pytest.mark.asyncio
+    async def test_insert_component_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """insert_component returns success with the expected payload shape."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_assembly()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "insert_component"
+        )
+        result = await tool_func(InsertComponentInput(file_path="C:/parts/a.sldprt"))
+
+        assert result["status"] == "success"
+        assert result["component"]["component"] == "component-1"
+        assert result["component"]["components_before"] == 0
+        assert result["component"]["components_after"] == 1
+        assert "execution_time" in result
+
+    @pytest.mark.asyncio
+    async def test_add_mate_success(self, mcp_server, mock_adapter, mock_config):
+        """add_mate returns success with mate details in the payload."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_assembly()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_mate"
+        )
+        result = await tool_func(
+            AddMateInput(
+                component_a="part-1", component_b="part-2", mate_type="coincident"
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["mate"]["components"] == ["part-1", "part-2"]
+        assert result["mate"]["mate_type"] == "coincident"
+
+    @pytest.mark.asyncio
+    async def test_list_components_success_and_reflects_inserts(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """list_components returns exactly what insert_component actually inserted."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_assembly()
+
+        tool = {
+            registered.name: registered.fn
+            for registered in await mcp_server.list_tools()
+        }
+
+        await tool["insert_component"](InsertComponentInput(file_path="C:/parts/a.sldprt"))
+        await tool["insert_component"](InsertComponentInput(file_path="C:/parts/b.sldprt"))
+
+        result = await tool["list_components"]()
+
+        assert result["status"] == "success"
+        assert result["components"] == ["component-1", "component-2"]
+        assert result["message"] == "2 component(s) in the assembly"
+
+    @pytest.mark.asyncio
+    async def test_insert_component_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no insert_component - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "insert_component"
+        )
+        result = await tool_func(InsertComponentInput(file_path="C:/parts/a.sldprt"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_add_mate_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no add_mate - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_mate"
+        )
+        result = await tool_func(AddMateInput(component_a="a-1", component_b="b-1"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_list_components_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no list_components - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "list_components"
+        )
+        result = await tool_func()
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_insert_component_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.insert_component = AsyncMock(
+            return_value=Mock(is_success=False, error="no solid geometry")
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "insert_component"
+        )
+        result = await tool_func(InsertComponentInput(file_path="C:/parts/empty.sldprt"))
+
+        assert result["status"] == "error"
+        assert "no solid geometry" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_add_mate_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed add_mate adapter result surfaces the adapter's own error."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.add_mate = AsyncMock(
+            return_value=Mock(is_success=False, error="mate rejected by SolidWorks")
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_mate"
+        )
+        result = await tool_func(
+            AddMateInput(component_a="part-1", component_b="part-2")
+        )
+
+        assert result["status"] == "error"
+        assert "mate rejected by SolidWorks" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_list_components_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed list_components adapter result surfaces the adapter's own error."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.list_components = AsyncMock(
+            return_value=Mock(is_success=False, error="not an assembly document")
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "list_components"
+        )
+        result = await tool_func()
+
+        assert result["status"] == "error"
+        assert "not an assembly document" in result["message"]

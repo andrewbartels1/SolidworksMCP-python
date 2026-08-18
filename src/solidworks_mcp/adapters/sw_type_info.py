@@ -34,6 +34,7 @@ works.
 from __future__ import annotations
 
 import inspect
+import weakref
 from typing import Any
 
 from loguru import logger
@@ -56,7 +57,9 @@ _interface_methods: dict[str, frozenset[str]] = {}
 # Per-object record of which interfaces have already been flagged. Keyed by
 # id(obj) so ``flag_methods(doc, 'IModelDoc2')`` followed by
 # ``flag_methods(doc, 'IAssemblyDoc')`` does incremental work, not a no-op.
-_flag_cache: dict[int, set[str]] = {}
+# Value is (weak reference to the object, interfaces already flagged). The
+# weakref is what makes the id() key safe to trust — see _flagged_interfaces.
+_flag_cache: dict[int, tuple[weakref.ref[Any] | None, set[str]]] = {}
 
 
 def _load_wrapper() -> None:
@@ -156,6 +159,40 @@ DOC_TYPE_TO_INTERFACES: dict[int, tuple[str, ...]] = {
 }
 
 
+def _flagged_interfaces(obj: Any) -> set[str]:
+    """Return the set of interfaces already flagged on ``obj``.
+
+    The entry is keyed by ``id(obj)`` for speed, but is only trusted when the
+    stored weak reference still resolves to *this same object*. Without that
+    check the cache is unsound: ids are only unique among live objects, and
+    CPython reuses addresses eagerly. A fresh dispatch landing on a dead one's
+    address was judged "already flagged", so ``flag_methods`` returned without
+    flagging anything and its members then resolved as properties — surfacing
+    from SolidWorks as "Member not found".
+
+    Objects that do not support weak references (some test doubles) simply are
+    not cached; they are flagged every time, which is correct if slower.
+    """
+    key = id(obj)
+    entry = _flag_cache.get(key)
+    if entry is not None:
+        ref, names = entry
+        if ref is None or ref() is obj:
+            return names
+        # Stale: the object this entry described is gone and its address has
+        # been recycled. Drop it and start fresh for the new occupant.
+        del _flag_cache[key]
+
+    names = set()
+    try:
+        _flag_cache[key] = (weakref.ref(obj), names)
+    except TypeError:
+        # Not weak-referenceable, so we cannot detect a later address reuse.
+        # Skip caching rather than risk the stale-entry bug.
+        pass
+    return names
+
+
 def flag_methods(obj: Any, *interfaces: str) -> int:
     """Flag SW methods on ``obj`` so pywin32 dispatches them as methods,
     not properties.
@@ -178,8 +215,7 @@ def flag_methods(obj: Any, *interfaces: str) -> int:
     if not _interface_methods or obj is None:  # pragma: no cover
         return 0
 
-    obj_id = id(obj)
-    already = _flag_cache.setdefault(obj_id, set())
+    already = _flagged_interfaces(obj)
 
     # Only flag methods from interfaces we haven't already processed for
     # this object. Repeats are a no-op; novel interfaces add incrementally.
@@ -202,6 +238,38 @@ def flag_methods(obj: Any, *interfaces: str) -> int:
 
     already.update(new_interfaces)
     return flagged
+
+
+def flag_members(obj: Any, *names: str) -> int:
+    """Flag a specific handful of method names on ``obj``.
+
+    ``flag_methods`` flags *every* method of an interface — around 100 names
+    for ``IFeature`` — and its cache is keyed by ``id(obj)``, so a loop over
+    many short-lived dispatches (walking a feature tree, iterating components)
+    pays that cost once per object and never hits the cache.
+
+    When the caller knows exactly which members it is about to read, flagging
+    just those is far cheaper and behaves identically for them.
+
+    Args:
+        obj: A pywin32 ``CDispatch`` wrapping a SolidWorks COM object.
+        *names: Method names to flag.
+
+    Returns:
+        int: Number of names flagged.
+    """
+    if obj is None:
+        return 0
+
+    flagged_count = 0
+    for name in names:
+        try:
+            obj._FlagAsMethod(name)
+            flagged_count += 1
+        except Exception:
+            # Not on this dispatch's real interface — skip silently.
+            pass
+    return flagged_count
 
 
 def flagged(obj: Any, *interfaces: str) -> Any:
