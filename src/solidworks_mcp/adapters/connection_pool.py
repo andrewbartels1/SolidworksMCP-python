@@ -998,6 +998,75 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "list_components", lambda adapter: adapter.list_components()
         )
 
+    async def create_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a drawing view using pool.
+
+        Args:
+            payload (Any): Tool payload for the drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "create_drawing_view", lambda adapter: adapter.create_drawing_view(payload)
+        )
+
+    async def add_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a drawing view using pool.
+
+        Args:
+            payload (Any): Tool payload for the drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_drawing_view", lambda adapter: adapter.add_drawing_view(payload)
+        )
+
+    async def create_technical_drawing(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create standard views using pool.
+
+        Args:
+            payload (Any): Tool payload for the technical drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "create_technical_drawing",
+            lambda adapter: adapter.create_technical_drawing(payload),
+        )
+
+    async def add_note(self, payload: Any = None) -> AdapterResult[dict[str, Any]]:
+        """Add a drawing note using pool.
+
+        Args:
+            payload (Any): Tool payload for the note.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_note", lambda adapter: adapter.add_note(payload)
+        )
+
+    async def list_drawing_views(self) -> AdapterResult[list[str]]:
+        """List drawing views using pool.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "list_drawing_views", lambda adapter: adapter.list_drawing_views()
+        )
+
     async def add_mate(
         self,
         component_a: str,

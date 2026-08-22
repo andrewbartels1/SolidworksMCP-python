@@ -436,14 +436,24 @@ class TestDrawingToolsBranchCoverage:
     # ── create_technical_drawing: no-adapter path with auto_populate_views=False ──
 
     @pytest.mark.asyncio
-    async def test_create_technical_drawing_no_adapter_no_views(
-        self, mcp_server, mock_adapter, mock_config
+    async def test_create_technical_drawing_reports_the_real_outcome(
+        self, mcp_server, mock_adapter, mock_config, monkeypatch
     ):
-        """Create_technical_drawing refuses when the adapter has no
-        create_technical_drawing capability, rather than inventing a drawing."""
+        """An adapter that cannot do the job produces an error, not a fake success.
+
+        This asserted the tool's own refusal message, which is reached only
+        when the adapter has no ``create_technical_drawing`` at all. The base
+        adapter now defines a default for it, so the ``hasattr`` gate always
+        passes and the adapter's error surfaces instead — still an error, and
+        still naming the capability, just raised one layer deeper.
+
+        Hiding the method on the mock leaves that inherited base default in
+        place, which is exactly the path being asserted.
+        """
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        if hasattr(mock_adapter, "create_technical_drawing"):
-            del mock_adapter.create_technical_drawing
+        monkeypatch.delattr(
+            type(mock_adapter), "create_technical_drawing", raising=False
+        )
 
         input_data = DrawingCreationInput(
             model_file="part.sldprt",
@@ -460,7 +470,7 @@ class TestDrawingToolsBranchCoverage:
         )
         result = await tool_func(input_data=input_data)
         assert result["status"] == "error"
-        assert "does not support create_technical_drawing" in result["message"]
+        assert "create_technical_drawing" in result["message"]
 
     @pytest.mark.asyncio
     async def test_create_technical_drawing_adapter_success(
@@ -493,14 +503,19 @@ class TestDrawingToolsBranchCoverage:
     # ── add_drawing_view: no-adapter simulation path ──────────────────────
 
     @pytest.mark.asyncio
-    async def test_add_drawing_view_no_adapter_simulation(
-        self, mcp_server, mock_adapter, mock_config
+    async def test_add_drawing_view_reports_the_real_outcome(
+        self, mcp_server, mock_adapter, mock_config, monkeypatch
     ):
-        """Add_drawing_view refuses when adapter lacks add_drawing_view,
-        rather than inventing a view."""
+        """A view that was never placed is an error, not an echo of the input.
+
+        The base adapter now defines a default for ``add_drawing_view``, so
+        the tool's ``hasattr`` gate always passes and the adapter's own error
+        surfaces rather than the tool's refusal message. Both are errors and
+        both name the capability; the assertion is narrowed to the part that
+        still holds either way.
+        """
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        if hasattr(mock_adapter, "add_drawing_view"):
-            del mock_adapter.add_drawing_view
+        monkeypatch.delattr(type(mock_adapter), "add_drawing_view", raising=False)
 
         input_data = DrawingViewInput(
             drawing_path="part.slddrw",
@@ -517,7 +532,7 @@ class TestDrawingToolsBranchCoverage:
         )
         result = await tool_func(input_data=input_data)
         assert result["status"] == "error"
-        assert "does not support add_drawing_view" in result["message"]
+        assert "add_drawing_view" in result["message"]
 
     # ── add_annotation: adapter error + no-adapter simulation paths ────────
 
@@ -756,7 +771,11 @@ class TestDrawingToolsBranchCoverage:
         """Legacy drawing utility tools refuse rather than inventing a result
         when the adapter has no matching capability (or, for
         create_section_view/create_detail_view/check_drawing_standards, has
-        no capability at all to compute the answer)."""
+        no capability at all to compute the answer).
+
+        ``create_drawing_view`` and ``add_note`` are excluded from that list:
+        the adapter implements them, so they are asserted to reach it.
+        """
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
         by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
@@ -789,10 +808,13 @@ class TestDrawingToolsBranchCoverage:
         auto_dim = await by_name["auto_dimension_view"]({"view_name": "Front"})
         std = await by_name["check_drawing_standards"]({"standard": "ANSI"})
 
-        assert view["status"] == "error"
-        assert "does not support create_drawing_view" in view["message"]
-        assert note["status"] == "error"
-        assert "does not support add_note" in note["message"]
+        # create_drawing_view and add_note are implemented now, so they reach
+        # the adapter instead of being refused. That is the stronger
+        # assertion: the tool's hasattr gate resolves to a real capability.
+        assert view["status"] == "success", view
+        assert "does not support" not in str(view)
+        assert note["status"] == "success", note
+        assert "does not support" not in str(note)
         assert section["status"] == "error"
         assert "section line" in section["message"].lower()
         assert detail["status"] == "error"
