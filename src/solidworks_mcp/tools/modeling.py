@@ -538,6 +538,44 @@ class CreateAxisInput(CompatInput):
             raise ValueError("reference is required")
 
 
+class MirrorFeatureInput(CompatInput):
+    """Input schema for mirroring solid bodies or features.
+
+    Attributes:
+        features (list[str]): Body or feature names to mirror.
+        mirror_plane (str): Plane name to mirror about.
+        merge (bool): Merge the mirrored result with the original.
+        mirror_bodies (bool): Mirror whole bodies rather than features.
+    """
+
+    features: list[str] = Field(
+        default_factory=list,
+        description="Body or feature names to mirror. At least one required. "
+        "For a body mirror these are the names as they appear under Solid "
+        "Bodies, which for a lofted wing is the loft's own name",
+    )
+    mirror_plane: str = Field(
+        description="Plane name to mirror about, e.g. 'Right Plane'"
+    )
+    merge: bool = Field(
+        default=True,
+        description="Merge the mirrored result with the original body",
+    )
+    mirror_bodies: bool = Field(
+        default=True,
+        description="Mirror whole solid bodies rather than individual "
+        "features. Defaults to True, which is what works for anything "
+        "built from a loft or sweep - a feature mirror only resolves when "
+        "the feature's own sketch sits on the mirror plane",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.features:
+            raise ValueError("features must contain at least one name")
+        if not self.mirror_plane.strip():
+            raise ValueError("mirror_plane is required")
+
+
 class CreateDrawingInput(CompatInput):
     """Input schema for creating a new drawing.
 
@@ -1746,6 +1784,56 @@ async def register_modeling_tools(
             }
         except Exception as e:
             logger.error(f"Error in create_axis tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def mirror_feature(input_data: MirrorFeatureInput) -> dict[str, Any]:
+        """Mirror solid bodies or features about a plane.
+
+        Selects the named sources and the mirror plane, then mirrors them.
+        The mirror is verified by comparing model volume before and after:
+        SolidWorks can report a feature even when it mirrored nothing, so a
+        volume that did not grow is reported as an error rather than a
+        false success.
+
+        Args:
+            input_data (MirrorFeatureInput): Source names, mirror plane, and
+                merge/mirror_bodies flags.
+
+        Returns:
+            dict[str, Any]: Status and the mirror feature's details,
+            including volume before/after and the resulting ratio.
+
+        Example:
+            ```python
+            result = await mirror_feature(
+                {"features": ["Loft1"], "mirror_plane": "Right Plane"}
+            )
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, MirrorFeatureInput)
+            result = await adapter.mirror_feature(
+                input_data.features,
+                input_data.mirror_plane,
+                input_data.merge,
+                input_data.mirror_bodies,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                return {
+                    "status": "success",
+                    "message": f"Mirrored {', '.join(input_data.features)} "
+                    f"about {input_data.mirror_plane}",
+                    "mirror": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to mirror feature: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in mirror_feature tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     # Counted from the registry rather than hand-maintained. The literal that

@@ -1002,6 +1002,30 @@ class SolidWorksAdapter(ABC):
             error="create_axis is not implemented by this adapter",
         )
 
+    async def mirror_feature(
+        self,
+        features: list[str],
+        mirror_plane: str,
+        merge: bool = True,
+        mirror_bodies: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mirror solid bodies or features about a plane.
+
+        Args:
+            features (list[str]): Body or feature names to mirror.
+            mirror_plane (str): Plane name to mirror about.
+            merge (bool): Merge the mirrored result with the original. Defaults to True.
+            mirror_bodies (bool): Mirror whole bodies rather than features. Defaults to True.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The mirror feature's name, inputs and volume
+            before/after, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="mirror_feature is not implemented by this adapter",
+        )
+
     # Assembly Operations
     async def insert_component(
         self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0

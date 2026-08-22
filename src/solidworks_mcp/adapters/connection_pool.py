@@ -638,6 +638,21 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "create_axis", lambda adapter: adapter.create_axis(reference)
         )
 
+    async def mirror_feature(
+        self,
+        features: list[str],
+        mirror_plane: str,
+        merge: bool = True,
+        mirror_bodies: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mirror solid bodies or features using pool."""
+        return await self._execute_with_pool(
+            "mirror_feature",
+            lambda adapter: adapter.mirror_feature(
+                features, mirror_plane, merge, mirror_bodies
+            ),
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:

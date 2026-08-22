@@ -2649,3 +2649,97 @@ async def test_create_axis_adds_an_axis(connected_adapter):
         assert not unknown.is_success
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_mirror_body_doubles_a_lofted_wing(connected_adapter):
+    """Mirroring must be proven by volume, not by the returned feature.
+
+    ``InsertMirrorFeature`` hands back a Feature object even when it mirrored
+    nothing, so the only real evidence is that the solid got bigger. A wing
+    lofted between stations offset from the centreline cannot be
+    *feature*-mirrored - SolidWorks resolves that only when the feature's own
+    sketch sits on the mirror plane - so this mirrors the body.
+    """
+    from solidworks_mcp.adapters.base import LoftParameters
+
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+
+        profiles = []
+        for offset, radius in ((0.0, 40.0), (300.0, 20.0)):
+            plane = "Right Plane"
+            if offset:
+                made = await adapter.create_reference_plane("Right Plane", offset=offset)
+                assert made.is_success, made.error
+                plane = made.data["name"]
+            sketch = await adapter.create_sketch(plane)
+            assert sketch.is_success, sketch.error
+            await adapter.add_circle(0.0, 0.0, radius)
+            await adapter.exit_sketch()
+            profiles.append(sketch.data)
+
+        loft = await adapter.create_loft(LoftParameters(profiles=profiles))
+        assert loft.is_success, loft.error
+        body = getattr(loft.data, "name", None) or "Loft1"
+
+        one = await adapter.get_mass_properties()
+        assert one.is_success, one.error
+        assert one.data.volume > 0
+
+        mirrored = await adapter.mirror_feature([body], "Right Plane")
+        assert mirrored.is_success, mirrored.error
+        assert mirrored.data["volume_ratio"] == pytest.approx(2.0, rel=0.02), (
+            f"mirror did not double the solid: {mirrored.data}"
+        )
+        assert mirrored.data["mirror_bodies"] is True
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_mirror_feature_when_the_sketch_is_on_the_plane(connected_adapter):
+    """The feature-mirror path, on the geometry where SolidWorks allows it."""
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+        await adapter.create_sketch("Right Plane")
+        await adapter.add_rectangle(10.0, 0.0, 40.0, 30.0)
+        await adapter.exit_sketch()
+        boss = await adapter.create_extrusion(ExtrusionParameters(depth=20.0))
+        assert boss.is_success, boss.error
+        name = getattr(boss.data, "name", None) or "Boss-Extrude1"
+
+        mirrored = await adapter.mirror_feature(
+            [name], "Right Plane", mirror_bodies=False
+        )
+        assert mirrored.is_success, mirrored.error
+        assert mirrored.data["volume_ratio"] == pytest.approx(2.0, rel=0.02), (
+            mirrored.data
+        )
+        assert mirrored.data["mirror_bodies"] is False
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
+@pytest.mark.asyncio
+async def test_mirror_refuses_bad_input(connected_adapter):
+    """Empty inputs and unknown sources are errors, not silent no-ops."""
+    adapter = connected_adapter
+    try:
+        await adapter.create_part()
+
+        no_sources = await adapter.mirror_feature([], "Right Plane")
+        assert not no_sources.is_success
+
+        no_plane = await adapter.mirror_feature(["Boss-Extrude1"], "")
+        assert not no_plane.is_success
+
+        unknown = await adapter.mirror_feature(["NoSuchBody"], "Right Plane")
+        assert not unknown.is_success
+        assert "NoSuchBody" in (unknown.error or "")
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
