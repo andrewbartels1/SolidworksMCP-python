@@ -25,6 +25,8 @@ from solidworks_mcp.adapters.solidworks.features import (
 )
 from solidworks_mcp.adapters.solidworks.io import (
     SolidWorksIOMixin,
+    _byref_int,
+    _ByrefFallback,
     _payload,
     _payload_dict,
 )
@@ -782,6 +784,45 @@ class TestCreateDrawingNoTemplateConfigured:
 
         assert result.is_error
         assert "No drawing template configured" in (result.error or "")
+
+
+class TestByrefFallback:
+    """Cover ``_ByrefFallback``'s dunder methods directly.
+
+    Earlier assessment (mine, inherited from an automated survey) called
+    this "dead code on Windows+pywin32". That was wrong: it's a plain
+    Python class, reachable any time ``win32com.client.VARIANT`` is
+    unavailable - the exact same monkeypatch already used a few classes up
+    in this file (``test_open_model_uses_int_errors_when_variant_ctor_missing``).
+    No mocking is even needed to cover the dunders themselves.
+    """
+
+    def test_equality_against_seeded_value_and_another_instance(self) -> None:
+        holder = _ByrefFallback(1)
+        assert holder == 1
+        assert holder == _ByrefFallback(1)
+        assert holder != 2
+        assert holder != _ByrefFallback(2)
+
+    def test_hash_and_bool_follow_the_seeded_value(self) -> None:
+        assert hash(_ByrefFallback(5)) == hash(5)
+        assert bool(_ByrefFallback(0)) is False
+        assert bool(_ByrefFallback(1)) is True
+
+    def test_repr_shows_the_seeded_value(self) -> None:
+        assert repr(_ByrefFallback(3)) == "_ByrefFallback(3)"
+
+    def test_byref_int_falls_back_when_variant_ctor_unavailable(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io.win32com",
+            SimpleNamespace(client=SimpleNamespace(VARIANT=None)),
+            raising=False,
+        )
+        result = _byref_int()
+        assert isinstance(result, _ByrefFallback)
+        assert result.value == 0
 
 
 class TestSaveFileLegacyFallback:
