@@ -32,6 +32,7 @@ Run only these tests locally on Windows with SW::
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import platform
 import threading
