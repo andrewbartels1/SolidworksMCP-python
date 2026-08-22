@@ -1026,6 +1026,32 @@ class SolidWorksAdapter(ABC):
             error="mirror_feature is not implemented by this adapter",
         )
 
+    async def pattern_circular(
+        self,
+        features: list[str],
+        axis: str,
+        count: int,
+        angle: float = 360.0,
+        equal_spacing: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Pattern features around an axis.
+
+        Args:
+            features (list[str]): Names of the features to pattern.
+            axis (str): Name of the axis to rotate about.
+            count (int): Total number of instances including the original.
+            angle (float): Total angle in degrees to spread them over. Defaults to 360.0.
+            equal_spacing (bool): Space instances evenly across ``angle``. Defaults to True.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was patterned and the volume
+            before/after, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="pattern_circular is not implemented by this adapter",
+        )
+
     # Assembly Operations
     async def insert_component(
         self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0

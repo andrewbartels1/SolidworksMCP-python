@@ -576,6 +576,48 @@ class MirrorFeatureInput(CompatInput):
             raise ValueError("mirror_plane is required")
 
 
+class PatternCircularInput(CompatInput):
+    """Input schema for patterning features around an axis.
+
+    Attributes:
+        features (list[str]): Names of the features to pattern.
+        axis (str): Name of the axis to rotate about.
+        count (int): Total number of instances including the original.
+        angle (float): Total angle in degrees to spread instances over.
+        equal_spacing (bool): Space instances evenly across angle.
+    """
+
+    features: list[str] = Field(
+        default_factory=list,
+        description="Names of the features to pattern. At least one required.",
+    )
+    axis: str = Field(
+        description="Name of the axis to rotate about, e.g. 'Axis1' as "
+        "created by create_axis"
+    )
+    count: int = Field(
+        description="Total number of instances including the original. "
+        "Must be at least 2 - a pattern of one is just the original feature"
+    )
+    angle: float = Field(
+        default=360.0,
+        description="Total angle in degrees to spread the instances over. "
+        "Defaults to a full 360",
+    )
+    equal_spacing: bool = Field(
+        default=True,
+        description="Space instances evenly across 'angle'",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.features:
+            raise ValueError("features must contain at least one name")
+        if not self.axis.strip():
+            raise ValueError("axis is required")
+        if self.count < 2:
+            raise ValueError("count must be at least 2")
+
+
 class CreateDrawingInput(CompatInput):
     """Input schema for creating a new drawing.
 
@@ -1834,6 +1876,57 @@ async def register_modeling_tools(
             }
         except Exception as e:
             logger.error(f"Error in mirror_feature tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def pattern_circular(input_data: PatternCircularInput) -> dict[str, Any]:
+        """Pattern features around an axis.
+
+        Selects the named axis and features, then creates a circular
+        pattern. The pattern is verified by comparing model volume before
+        and after: SolidWorks can report a feature even when it patterned
+        nothing, so a volume that did not grow is reported as an error
+        rather than a false success.
+
+        Args:
+            input_data (PatternCircularInput): Feature names, axis, count,
+                angle, and equal_spacing.
+
+        Returns:
+            dict[str, Any]: Status and the pattern's details, including
+            volume before/after and the resulting ratio.
+
+        Example:
+            ```python
+            result = await pattern_circular(
+                {"features": ["Boss-Extrude1"], "axis": "Axis1", "count": 4}
+            )
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, PatternCircularInput)
+            result = await adapter.pattern_circular(
+                input_data.features,
+                input_data.axis,
+                input_data.count,
+                input_data.angle,
+                input_data.equal_spacing,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                return {
+                    "status": "success",
+                    "message": f"Patterned {', '.join(input_data.features)} "
+                    f"around {input_data.axis} ({input_data.count} instances)",
+                    "pattern": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to pattern feature: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in pattern_circular tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     # Counted from the registry rather than hand-maintained. The literal that

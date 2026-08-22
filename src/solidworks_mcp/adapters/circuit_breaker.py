@@ -580,6 +580,29 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
+    async def pattern_circular(
+        self,
+        features: list[str],
+        axis: str,
+        count: int,
+        angle: float = 360.0,
+        equal_spacing: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Pattern features around an axis through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "pattern_circular",
+            lambda: self.adapter.pattern_circular(
+                features, axis, count, angle, equal_spacing
+            ),
+            input_dict={
+                "features": features,
+                "axis": axis,
+                "count": count,
+                "angle": angle,
+                "equal_spacing": equal_spacing,
+            },
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:

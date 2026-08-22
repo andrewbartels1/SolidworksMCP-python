@@ -185,6 +185,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # features_before/features_after pair (see _feature_count in
         # solidworks/features.py).
         self._reference_planes: list[str] = []
+        # Axes created via create_axis, in creation order, used to invent
+        # sequential "AxisN" names the same way self._reference_planes
+        # invents "PlaneN" names, and to validate the axis name passed to
+        # pattern_circular the same way known_sources validates mirror
+        # sources.
+        self._axes: list[str] = []
         self._feature_tree_count = 0
         # Volume tracked for mirror_feature, in mm^3. Seeded at the
         # live-measured 1819569.1 mm^3 wing volume from
@@ -192,6 +198,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # each successful mirror so volume_before/volume_after/volume_ratio
         # stay self-consistent without a real geometry engine.
         self._mirror_volume: float = 1819569.1
+        # Volume tracked for pattern_circular, in mm^3. Seeded at the
+        # live-measured 48431.5 mm^3 hub+blade volume from
+        # _pattern_circular_impl in solidworks/features.py, then grown by
+        # _PATTERN_BLADE_VOLUME per extra instance on each successful
+        # pattern so volume_before/volume_after/volume_ratio stay
+        # self-consistent without a real geometry engine.
+        self._pattern_volume: float = 48431.5
         self._operation_count = 0
 
         # Configurable simulation delays (in seconds)
@@ -2520,9 +2533,18 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         plane_a, plane_b = _AXIS_PLANE_PAIRS[key]
 
+        # Invent a sequential "AxisN" name, tracked on self._axes, the same
+        # way create_reference_plane invents "PlaneN" names on
+        # self._reference_planes. InsertAxis2 returns only a bool, so the
+        # live adapter cannot report a name either - but pattern_circular
+        # needs some name to validate the axis argument against, and this
+        # keeps the mock's bookkeeping consistent with the plane convention.
+        self._axes.append(f"Axis{len(self._axes) + 1}")
+
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={
+                "name": self._axes[-1],
                 "reference": key,
                 "planes": [plane_a, plane_b],
                 "features_before": before,
@@ -2618,6 +2640,108 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "mirror_plane": mirror_plane,
                 "merge": bool(merge),
                 "mirror_bodies": bool(mirror_bodies),
+                "volume_before": volume_before,
+                "volume_after": volume_after,
+                "volume_ratio": round(volume_after / volume_before, 6),
+            },
+            execution_time=self._delays["feature_operation"],
+        )
+
+    #: Live-measured "volume added per extra circular-pattern instance", in
+    #: mm^3: a hub+blade part measured 48431.5 mm3 for hub + 1 blade, and
+    #: 75916.4 mm3 once patterned to 4 blades (3 extra instances) - see
+    #: ``_pattern_circular_impl`` in ``solidworks/features.py``. Dividing the
+    #: growth by the 3 extra instances gives the per-instance figure used
+    #: below to scale ``self._pattern_volume`` by roughly ``count`` without a
+    #: real geometry engine.
+    _PATTERN_BLADE_VOLUME = (75916.4 - 48431.5) / 3
+
+    async def pattern_circular(
+        self,
+        features: list[str],
+        axis: str,
+        count: int,
+        angle: float = 360.0,
+        equal_spacing: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock patterning features around an axis.
+
+        The mock has no geometry engine, so it cannot measure a real volume
+        change - it mirrors the live adapter's refusals instead of
+        fabricating a result it cannot know (matching
+        ``_pattern_circular_impl`` in ``solidworks/features.py`` verbatim
+        for the three argument checks below). An axis name that was never
+        created via ``create_axis`` in this session is rejected the same
+        way ``SelectByID2`` would fail to select it there.
+
+        On success, the tracked ``self._pattern_volume`` figure (seeded at
+        the live-measured 48431.5 mm^3 hub+blade volume) grows by
+        ``_PATTERN_BLADE_VOLUME * (count - 1)``, the live-derived
+        per-instance volume, so volume_before/volume_after/volume_ratio
+        stay self-consistent and scale with ``count`` roughly the way
+        adding more blades to the hub would - reproducing the live
+        48431.5 -> 75916.4 mm^3 measurement exactly for ``count=4``.
+
+        Args:
+            features (list[str]): Names of the features to pattern.
+            axis (str): Name of the axis to rotate about.
+            count (int): Total number of instances including the original.
+            angle (float): Total angle in degrees to spread them over. Defaults to 360.0.
+            equal_spacing (bool): Space instances evenly across ``angle``. Defaults to True.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The pattern's name, inputs and
+            volume before/after, or error.
+        """
+        names = [n for n in (features or []) if n]
+        if not names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="pattern_circular requires at least one feature name",
+            )
+        if not axis:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="pattern_circular requires an axis name to rotate about",
+            )
+        if int(count) < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"pattern_circular needs a count of at least 2 (got {count}); "
+                    "a pattern of one is just the original feature"
+                ),
+            )
+
+        known_axes = set(self._axes)
+        if axis not in known_axes:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Failed to select axis '{axis}'. Create one with "
+                    "create_axis first, and pass the name it returns."
+                ),
+            )
+
+        await asyncio.sleep(self._delays["feature_operation"])
+        self._operation_count += 1
+
+        volume_before = self._pattern_volume
+        volume_after = volume_before + self._PATTERN_BLADE_VOLUME * (int(count) - 1)
+        self._pattern_volume = volume_after
+
+        self._feature_tree_count += 1
+        pattern_name = f"CirPattern{self._feature_tree_count}"
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": pattern_name,
+                "patterned": names,
+                "axis": axis,
+                "count": int(count),
+                "angle": float(angle),
+                "equal_spacing": bool(equal_spacing),
                 "volume_before": volume_before,
                 "volume_after": volume_after,
                 "volume_ratio": round(volume_after / volume_before, 6),
