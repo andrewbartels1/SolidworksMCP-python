@@ -1069,6 +1069,146 @@ class SolidWorksAdapter(ABC):
             error="add_mate is not implemented by this adapter",
         )
 
+    # Drawing Operations
+    async def create_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Place a view of a model on the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path, orientation,
+                position in millimetres and optional view scale.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new view's details, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_drawing_view is not implemented by this adapter",
+        )
+
+    async def add_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a view of a model to the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path, orientation,
+                position in millimetres and optional view scale.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new view's details, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_drawing_view is not implemented by this adapter",
+        )
+
+    async def create_technical_drawing(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Lay out the standard views of a model on the active sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and the
+                projection angle.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The view names created, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_technical_drawing is not implemented by this adapter",
+        )
+
+    async def add_note(self, payload: Any = None) -> AdapterResult[dict[str, Any]]:
+        """Place a text note on the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the note text, its position in
+                millimetres and an optional font size in points.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The note's details, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_note is not implemented by this adapter",
+        )
+
+    async def list_drawing_views(self) -> AdapterResult[list[str]]:
+        """List the views on the active drawing.
+
+        Returns:
+            AdapterResult[list[str]]: View names, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_drawing_views is not implemented by this adapter",
+        )
+
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check the active assembly for interfering components.
+
+        Args:
+            params (Any): Optional settings; ``coincident``, ``components``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Interference details, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="check_interference is not implemented by this adapter",
+        )
+
+    # Feature Editing
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete a named feature or sketch from the active model.
+
+        Args:
+            name (str): Feature or sketch name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was deleted, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="delete_feature is not implemented by this adapter",
+        )
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Suppress or unsuppress a named feature.
+
+        Args:
+            name (str): Feature name.
+            suppress (bool): True to suppress, False to unsuppress.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The resulting state, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="suppress_feature is not implemented by this adapter",
+        )
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        """Undo the last operations in the active model.
+
+        Args:
+            count (int): Number of steps to undo.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Whether the tree changed, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="undo is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def exit_sketch(self) -> AdapterResult[None]:
         """Exit sketch editing mode.

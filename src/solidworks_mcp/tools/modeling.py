@@ -405,6 +405,42 @@ class InsertComponentInput(CompatInput):
             raise ValueError("file_path is required")
 
 
+class DeleteFeatureInput(CompatInput):
+    """Input schema for deleting a feature.
+
+    Attributes:
+        name (str): Feature or sketch name to delete.
+    """
+
+    name: str = Field(
+        description="Feature or sketch name, e.g. 'Boss-Extrude1' or 'Sketch1'"
+    )
+
+
+class SuppressFeatureInput(CompatInput):
+    """Input schema for suppressing or unsuppressing a feature.
+
+    Attributes:
+        name (str): Feature name to toggle.
+        suppress (bool): True to suppress, False to unsuppress.
+    """
+
+    name: str = Field(description="Feature name, e.g. 'Fillet1'")
+    suppress: bool = Field(
+        default=True, description="True to suppress, False to unsuppress"
+    )
+
+
+class UndoInput(CompatInput):
+    """Input schema for undoing model operations.
+
+    Attributes:
+        count (int): Number of operations to undo.
+    """
+
+    count: int = Field(default=1, ge=1, description="Number of operations to undo")
+
+
 class AddMateInput(CompatInput):
     """Input schema for mating two assembly components.
 
@@ -1481,6 +1517,142 @@ async def register_modeling_tools(
             logger.error(f"Error in list_components tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
+    @mcp.tool()
+    async def delete_feature(input_data: DeleteFeatureInput) -> dict[str, Any]:
+        """Delete a feature or sketch from the active model.
+
+        Deleting a parent feature also removes everything that depends on it —
+        SolidWorks' normal cascade — so the response lists every feature that
+        went, not just the one named.
+
+        Args:
+            input_data (DeleteFeatureInput): The feature to delete.
+
+        Returns:
+            dict[str, Any]: Status and what was removed.
+
+        Example:
+            ```python
+            await delete_feature({"name": "Boss-Extrude1"})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, DeleteFeatureInput)
+            result = await adapter.delete_feature(input_data.name)
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                removed = data.get("removed_features") or [input_data.name]
+                return {
+                    "status": "success",
+                    "message": (
+                        f"Deleted {input_data.name}"
+                        + (
+                            f" and {len(removed) - 1} dependent feature(s)"
+                            if len(removed) > 1
+                            else ""
+                        )
+                    ),
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to delete feature: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in delete_feature tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def suppress_feature(input_data: SuppressFeatureInput) -> dict[str, Any]:
+        """Suppress or unsuppress a feature in the active model.
+
+        Suppressing rolls a feature and its children out of the model without
+        deleting it — the reversible way to turn off a feature that is causing
+        trouble.
+
+        Args:
+            input_data (SuppressFeatureInput): The feature and desired state.
+
+        Returns:
+            dict[str, Any]: Status and the resulting suppression state.
+
+        Example:
+            ```python
+            await suppress_feature({"name": "Fillet1"})
+            await suppress_feature({"name": "Fillet1", "suppress": False})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, SuppressFeatureInput)
+            result = await adapter.suppress_feature(
+                input_data.name, input_data.suppress
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                verb = "Suppressed" if input_data.suppress else "Unsuppressed"
+                message = f"{verb} {input_data.name}"
+                if data.get("suppressed") is None:
+                    message += " (state could not be read back)"
+                return {
+                    "status": "success",
+                    "message": message,
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to suppress feature: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in suppress_feature tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def undo(input_data: UndoInput | None = None) -> dict[str, Any]:
+        """Undo the last operations in the active model.
+
+        SolidWorks accepts an undo with nothing left to undo without
+        complaining, so the response reports whether the feature tree actually
+        changed rather than assuming it did.
+
+        Args:
+            input_data (UndoInput | None): How many steps to undo.
+
+        Returns:
+            dict[str, Any]: Status and whether the tree changed.
+
+        Example:
+            ```python
+            await undo({"count": 1})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data or UndoInput(), UndoInput)
+            result = await adapter.undo(input_data.count)
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                changed = data.get("tree_changed")
+                if changed is False:
+                    message = (
+                        f"Undo of {input_data.count} step(s) left the feature "
+                        "tree unchanged - there was nothing to undo"
+                    )
+                else:
+                    message = f"Undid {input_data.count} step(s)"
+                return {
+                    "status": "success",
+                    "message": message,
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to undo: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in undo tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
     @mcp.tool()
     async def create_reference_plane(
         input_data: CreateReferencePlaneInput,

@@ -55,6 +55,17 @@ class SolidWorksFeaturesMixin:
     ) -> AdapterResult[SolidWorksFeature]:
         return _add_chamfer_impl(self, distance, edge_names)
 
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        return _delete_feature_impl(self, name)
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        return _suppress_feature_impl(self, name, suppress)
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        return _undo_impl(self, count)
+
     async def create_reference_plane(
         self,
         reference: str,
@@ -449,7 +460,7 @@ def _select_named_feature(
     Sweep and loft rely on selection marks to tell SolidWorks which selection
     is the profile (1), guide curve (2), or sweep path (4).  We resolve the
     feature with ``IModelDoc2::FeatureByName`` and select it with
-    ``IFeature::Select2(append, mark)`` — the same proven path the rest of the
+    ``IFeature::Select2(append, mark)`` â€” the same proven path the rest of the
     adapter uses for plane/sketch selection.  ``IModelDocExtension::SelectByID2``
     is avoided deliberately: late-bound ``SelectByID2`` raises
     ``Type mismatch`` on some SolidWorks builds, whereas ``FeatureByName`` +
@@ -460,7 +471,7 @@ def _select_named_feature(
         adapter: A connected adapter with a valid ``currentModel``.
         name: Feature name (e.g. ``"Sketch1"`` or ``"Helix/Spiral1"``).  Any
             ``@document`` qualifier is stripped before lookup.
-        mark: Selection mark — 1=profile, 2=guide curve, 4=sweep path.
+        mark: Selection mark â€” 1=profile, 2=guide curve, 4=sweep path.
         append: ``True`` to add to the current selection set, ``False`` to
             replace it.
 
@@ -525,7 +536,7 @@ def _read_member(obj: Any, name: str) -> Any:  # pragma: no cover
 
     Late-bound pywin32 dispatches are inconsistent: an unflagged zero-arg
     accessor may come back as a bound method (needing a call) *or* as the
-    already-resolved value — and when that value is itself a COM object it is
+    already-resolved value â€” and when that value is itself a COM object it is
     also callable, so a naive "call if callable" check wrongly invokes its
     default dispatch (``Member not found``).  This helper calls the member and
     falls back to the raw member if the call raises, so it yields the value in
@@ -751,7 +762,7 @@ def _create_loft_impl(
     """Create a lofted boss/protrusion between two or more profile sketches.
 
     Uses ``IFeatureManager::InsertProtrusionBlend2``.  Each profile named in
-    ``params.profiles`` is selected under mark 1 (in order — the selection
+    ``params.profiles`` is selected under mark 1 (in order â€” the selection
     order determines the loft direction), and any ``params.guide_curves`` are
     selected under mark 2.  Because a solid is produced, every profile must be
     a closed contour.
@@ -886,9 +897,9 @@ def _create_cut_extrude_impl(
 
     Three COM API variants are attempted in order of preference:
 
-    1. ``FeatureCut4`` ΓÇö most modern (SolidWorks 2015+).
-    2. ``FeatureCut3`` modern signature ΓÇö SolidWorks 2010ΓÇô2014.
-    3. ``FeatureCut3`` legacy argument order ΓÇö older installs.
+    1. ``FeatureCut4`` — most modern (SolidWorks 2015+).
+    2. ``FeatureCut3`` modern signature — SolidWorks 2010–2014.
+    3. ``FeatureCut3`` legacy argument order — older installs.
 
     All depth values are in millimetres and converted to metres internally.
 
@@ -1024,7 +1035,7 @@ def _create_cut_extrude_impl(
             )
         elif sw_major >= 34:
             # SW 2026+ adds OptimizeGeometry as a 27th INPUT param.
-            # PFeat is an OUT param (PARAMFLAG_FOUT|FRETVAL) — not passed by caller.
+            # PFeat is an OUT param (PARAMFLAG_FOUT|FRETVAL) â€” not passed by caller.
             feature, cut4_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut4(
                     is_through,  # Sd
@@ -1213,8 +1224,8 @@ def _parse_edge_spec(  # pragma: no cover
     """Parse an edge specification string into (SelectByID2 name, x, y, z).
 
     Supports two formats:
-    - ``"Edge<1>"`` — name-based selection (x=y=z=0.0, SW looks up by topology name)
-    - ``"x,y,z"`` — coordinate-based selection (name="", coordinate hint in metres)
+    - ``"Edge<1>"`` â€” name-based selection (x=y=z=0.0, SW looks up by topology name)
+    - ``"x,y,z"`` â€” coordinate-based selection (name="", coordinate hint in metres)
     """
     parts = edge_name.split(",")
     if len(parts) == 3:
@@ -1242,7 +1253,7 @@ def _select_edge_by_coord(  # pragma: no cover
     improve hit probability on curved edges.
 
     The ``Callout`` parameter of ``SelectByID2`` requires a VT_DISPATCH null
-    VARIANT — passing plain Python ``None`` triggers DISP_E_TYPEMISMATCH.
+    VARIANT â€” passing plain Python ``None`` triggers DISP_E_TYPEMISMATCH.
 
     Returns True if an edge was successfully selected; False otherwise.
     """
@@ -1274,7 +1285,7 @@ def _select_edge_by_coord(  # pragma: no cover
             (x, y * 1.001, z),
         ]
 
-    # VT_DISPATCH null pointer — required by SelectByID2's Callout parameter.
+    # VT_DISPATCH null pointer â€” required by SelectByID2's Callout parameter.
     # Plain Python None marshals as VT_NULL which SW rejects with DISP_E_TYPEMISMATCH.
     try:
         import pythoncom
@@ -1381,7 +1392,7 @@ def _add_fillet_impl(
                 raise Exception(f"Failed to select edge: {edge_name}")
 
         # SW 2025+ (major >= 33): IModelDoc2.FeatureFillet3 (9 params).
-        # Returns a non-zero int on success — NOT an IFeature — so we look up
+        # Returns a non-zero int on success â€” NOT an IFeature â€” so we look up
         # the last modified feature afterwards to get the name/id.
         # Older builds: IFeatureManager.FeatureFillet3 (15 params, returns IFeature).
         if fillet_sw_major >= 33:
@@ -1389,7 +1400,7 @@ def _add_fillet_impl(
                 radius / 1000.0,  # R1 in meters
                 True,  # Propagate (VT_BOOL)
                 0,  # Ftyp (VT_I4)
-                False,  # VarRadTyp (VT_BOOL — must be bool, not int)
+                False,  # VarRadTyp (VT_BOOL â€” must be bool, not int)
                 0,  # OverflowType (VT_I4)
                 0,  # NRadii (VT_I4)
                 None,  # Radii (VT_VARIANT)
@@ -1400,7 +1411,7 @@ def _add_fillet_impl(
                 raise Exception(
                     "Failed to create fillet (IModelDoc2.FeatureFillet3 returned 0)"
                 )
-            feature = None  # int return — retrieve feature object below
+            feature = None  # int return â€” retrieve feature object below
         else:
             feature_manager = adapter.currentModel.FeatureManager
             feature = feature_manager.FeatureFillet3(
@@ -1423,7 +1434,7 @@ def _add_fillet_impl(
             if not feature:
                 raise Exception("Failed to create fillet")
 
-        # Resolve the feature name — FeatureFillet3 on SW 2025+ returns an int,
+        # Resolve the feature name â€” FeatureFillet3 on SW 2025+ returns an int,
         # not an IFeature, so we can only report a default name here.
         feature_name = "Fillet"
         if feature is not None and hasattr(feature, "Name"):
@@ -1545,7 +1556,7 @@ def _add_chamfer_impl(
             adapter.currentModel.FeatureChamferType(
                 0,  # ChamferType: 0 = swChamferType_EqualDistance
                 distance / 1000.0,  # Width in metres
-                math.pi / 4,  # 45° angle
+                math.pi / 4,  # 45Â° angle
                 False,  # Flip
                 0.0,  # OtherDist
                 0.0,  # VertexChamDist1
@@ -1567,7 +1578,7 @@ def _add_chamfer_impl(
                     1,  # Options
                     1,  # ChamferType = equal distance
                     distance / 1000.0,  # Width in metres
-                    math.pi / 4,  # 45° angle
+                    math.pi / 4,  # 45Â° angle
                     0.0,
                     0.0,
                     0.0,
@@ -1592,6 +1603,294 @@ def _add_chamfer_impl(
     return cast(
         AdapterResult[SolidWorksFeature],
         adapter._handle_com_operation("add_chamfer", _chamfer_operation),
+    )
+
+
+def _select_feature_by_name(adapter: Any, name: str) -> Any:
+    """Select a feature or sketch by name and return it.
+
+    Resolves the entity with ``IModelDoc2::FeatureByName`` and selects it with
+    ``IFeature::Select2(False, 0)`` - the same path used elsewhere in this
+    adapter. ``SelectByID2`` is avoided here because it needs an entity-type
+    string that differs between sketches and solid features, and because its
+    ``Callout`` argument raises ``Type mismatch`` unless passed an explicit
+    ``VT_DISPATCH`` null. Any ``name@document`` qualifier is stripped first.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        name: Feature or sketch name, e.g. ``"Boss-Extrude1"`` or ``"Sketch1"``.
+
+    Returns:
+        Any: The selected ``IFeature``, or ``None`` when it does not exist or
+        could not be selected.
+    """
+    bare = name.split("@", 1)[0]
+    adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+    feature = adapter._attempt(
+        lambda: adapter.currentModel.FeatureByName(bare), default=None
+    )
+    if not feature:
+        return None
+    selected = adapter._attempt(lambda: feature.Select2(False, 0), default=False)
+    return feature if selected else None
+
+
+def _feature_count(adapter: Any) -> int | None:
+    """Return how many features the active model has, or ``None``.
+
+    Used to confirm an edit changed the tree rather than trusting a COM call
+    that reports success without doing anything.
+
+    ``IFeatureManager::GetFeatureCount`` is used rather than walking
+    ``FirstFeature``/``GetNextFeature``: the walk needs each dispatch flagged
+    for ``IFeature`` before ``Name`` and ``GetNextFeature`` resolve, and on
+    SW 2025 it still yields nothing, while the count is a single reliable
+    call. ``FeatureByPositionReverse`` was measured returning nothing usable
+    on the same document.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+
+    Returns:
+        int | None: The feature count, or ``None`` when it cannot be read -
+        which is deliberately distinct from ``0``.
+    """
+    from .. import sw_type_info
+
+    manager = adapter._attempt(
+        lambda: adapter.currentModel.FeatureManager, default=None
+    )
+    if manager is None:
+        return None
+    flagged = sw_type_info.flagged(manager, "IFeatureManager")
+    count = adapter._attempt(lambda: flagged.GetFeatureCount(True), default=None)
+    return int(count) if isinstance(count, (int, float)) else None
+
+
+def _is_suppressed(adapter: Any, feature: Any) -> bool | None:
+    """Return a feature's suppression state, or ``None`` when unreadable.
+
+    ``None`` is deliberately distinct from ``False``: it means the state could
+    not be read, which is not evidence that the feature is unsuppressed.
+
+    Args:
+        adapter: A connected adapter.
+        feature: An ``IFeature`` dispatch.
+
+    Returns:
+        bool | None: ``True`` suppressed, ``False`` not, ``None`` unknown.
+    """
+    state = adapter._attempt(
+        lambda: adapter._get_attr_or_call(feature, "IsSuppressed"), default=None
+    )
+    if isinstance(state, bool):
+        return state
+    if isinstance(state, (list, tuple)) and state:
+        return bool(state[0])
+    if isinstance(state, int):
+        return bool(state)
+    return None
+
+
+def _delete_feature_impl(adapter: Any, name: str) -> AdapterResult[dict[str, Any]]:
+    """Delete a named feature or sketch from the active model.
+
+    Selects the feature, then removes it with ``IModelDoc2::EditDelete``.
+    Deleting a parent also removes its children, which is SolidWorks' normal
+    cascade and the intended "erase this and what depends on it" behaviour -
+    so the number of features removed is reported, not assumed to be one.
+
+    ``EditDelete`` returns nothing useful, so success is confirmed by the
+    feature being absent from the tree afterwards.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        name: Name of the feature or sketch to delete.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: What was deleted and how the tree
+        changed. ``ERROR`` when there is no model or the feature is absent.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    def _delete_operation() -> dict[str, Any]:
+        before = _feature_count(adapter)
+        if _select_feature_by_name(adapter, name) is None:
+            raise Exception(f"Feature not found: {name}")
+
+        adapter._attempt(
+            lambda: adapter._get_attr_or_call(adapter.currentModel, "EditDelete"),
+            default=None,
+        )
+        adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
+
+        # EditDelete reports nothing useful, so confirm by lookup: the
+        # feature must no longer resolve by name.
+        bare = name.split("@", 1)[0]
+        still_there = adapter._attempt(
+            lambda: adapter.currentModel.FeatureByName(bare), default=None
+        )
+        if still_there:
+            raise Exception(f"EditDelete did not remove feature: {name}")
+
+        after = _feature_count(adapter)
+        return {
+            "deleted": name,
+            "features_before": before,
+            "features_after": after,
+            # Deleting a parent takes its children too, so this is often
+            # more than one.
+            "features_removed": (
+                before - after if before is not None and after is not None else None
+            ),
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("delete_feature", _delete_operation),
+    )
+
+
+def _suppress_feature_impl(
+    adapter: Any, name: str, suppress: bool
+) -> AdapterResult[dict[str, Any]]:
+    """Suppress or unsuppress a named feature in the active model.
+
+    Suppressing rolls a feature and its children out of the model without
+    deleting it - the reversible way to turn off a bad feature.
+
+    ``EditSuppress2`` and ``EditUnsuppress2`` report through the error channel
+    only, so the resulting state is read back from ``IFeature::IsSuppressed``
+    rather than inferred from the call returning quietly.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        name: Feature name to toggle.
+        suppress: ``True`` to suppress, ``False`` to unsuppress.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: The feature and its state afterwards.
+        ``suppressed`` is ``None`` when the state could not be read back,
+        which is not the same as "not suppressed".
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    def _suppress_operation() -> dict[str, Any]:
+        feature = _select_feature_by_name(adapter, name)
+        if feature is None:
+            raise Exception(f"Feature not found: {name}")
+
+        was = _is_suppressed(adapter, feature)
+        # EditSuppress2/EditUnsuppress2 take no arguments, and late binding
+        # resolves them as properties on some dispatches: calling with ()
+        # performs the edit and *then* raises "'bool' object is not callable",
+        # so the operation succeeds while the caller sees a failure.
+        member = "EditSuppress2" if suppress else "EditUnsuppress2"
+        _, err = adapter._attempt_with_error(
+            lambda: adapter._get_attr_or_call(adapter.currentModel, member)
+        )
+        if err is not None:
+            action = "suppress" if suppress else "unsuppress"
+            raise Exception(f"Failed to {action} {name}: {err}")
+
+        adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
+
+        # Re-resolve: the dispatch held above can go stale across a rebuild.
+        refreshed = adapter._attempt(
+            lambda: adapter.currentModel.FeatureByName(name.split("@", 1)[0]),
+            default=None,
+        )
+        now = _is_suppressed(adapter, refreshed) if refreshed is not None else None
+        if now is not None and now != suppress:
+            action = "suppressed" if suppress else "unsuppressed"
+            raise Exception(
+                f"{name} reports suppressed={now} after being {action}; the "
+                "call was accepted but the feature state did not change."
+            )
+
+        return {
+            "feature": name,
+            "requested": suppress,
+            "suppressed": now,
+            "was_suppressed": was,
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("suppress_feature", _suppress_operation),
+    )
+
+
+def _undo_impl(adapter: Any, count: int) -> AdapterResult[dict[str, Any]]:
+    """Undo the last ``count`` operations in the active model.
+
+    ``IModelDoc2::EditUndo2(Steps)`` is a ``Sub`` - it returns nothing - so a
+    quiet call means only that it was made, not that anything was undone.
+    SolidWorks accepts an undo with an empty stack without complaint. The
+    feature tree is therefore compared before and after, and the payload says
+    plainly whether it changed.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        count: Number of operations to undo; values below 1 are clamped.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: How many steps were requested and
+        whether the feature tree actually changed.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    steps = max(1, int(count))
+
+    def _undo_operation() -> dict[str, Any]:
+        before = _feature_count(adapter)
+
+        _, err = adapter._attempt_with_error(
+            lambda: adapter.currentModel.EditUndo2(steps)
+        )
+        if err is not None:
+            # Older builds expose only the unsuffixed overload.
+            _, legacy_err = adapter._attempt_with_error(
+                lambda: adapter.currentModel.EditUndo(steps)
+            )
+            if legacy_err is not None:
+                raise Exception(f"Undo failed: {err} | legacy: {legacy_err}")
+
+        adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
+        after = _feature_count(adapter)
+
+        # None means the count could not be read, which is not evidence that
+        # nothing happened - so tree_changed stays None rather than False.
+        changed = (
+            None
+            if before is None or after is None
+            else before != after
+        )
+        return {
+            "requested_steps": steps,
+            "features_before": before,
+            "features_after": after,
+            # False means the call was accepted and the tree is unchanged -
+            # an undo with nothing left to undo. Reported rather than dressed
+            # up as a success.
+            "tree_changed": changed,
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("undo", _undo_operation),
     )
 
 
@@ -1627,37 +1926,6 @@ def _null_callout() -> Any:
     except ImportError:  # pragma: no cover - Windows-only path
         return None
     return _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
-
-
-def _feature_count(adapter: Any) -> int | None:
-    """Return how many features the active model has, or ``None``.
-
-    Used to confirm an edit changed the tree rather than trusting a COM call
-    that reports success without doing anything.
-
-    ``IFeatureManager::GetFeatureCount`` is used rather than walking
-    ``FirstFeature``/``GetNextFeature``: on SW 2025 that walk yields nothing
-    even with each dispatch flagged for ``IFeature``, which makes the tree
-    look empty instead of raising - so a "did anything change" check built on
-    it would silently answer "no" every time.
-
-    Args:
-        adapter: A connected adapter with a valid ``currentModel``.
-
-    Returns:
-        int | None: The feature count, or ``None`` when it cannot be read -
-        deliberately distinct from ``0``.
-    """
-    from .. import sw_type_info
-
-    manager = adapter._attempt(
-        lambda: adapter.currentModel.FeatureManager, default=None
-    )
-    if manager is None:
-        return None
-    flagged = sw_type_info.flagged(manager, "IFeatureManager")
-    count = adapter._attempt(lambda: flagged.GetFeatureCount(True), default=None)
-    return int(count) if isinstance(count, (int, float)) else None
 
 
 def _select_reference_entity(adapter: Any, reference: str, mark: int, append: bool) -> bool:

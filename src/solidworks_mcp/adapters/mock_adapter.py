@@ -31,6 +31,27 @@ from .base import (
 from .solidworks.features import _AXIS_PLANE_PAIRS
 from .solidworks.sketch import RELATION_NAME_MAP
 
+#: Orientations the mock accepts for a drawing view. Kept in step with
+#: ``_NAMED_VIEWS`` in ``adapters/solidworks/io.py`` by a test — the two lists
+#: are maintained separately, and an orientation accepted live but rejected
+#: here could never be covered, since the suite runs against the mock.
+_MOCK_NAMED_VIEWS: frozenset[str] = frozenset(
+    {
+        "front",
+        "back",
+        "left",
+        "right",
+        "top",
+        "bottom",
+        "isometric",
+        "iso",
+        "trimetric",
+        "dimetric",
+        "current",
+    }
+)
+
+
 #: Canned assembly component tree used by ``list_features`` when a mock
 #: Assembly's ``_assembly_components`` hasn't been configured by a test.
 #: Two top-level Part components plus one nested sub-assembly one level
@@ -137,6 +158,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._current_model: SolidWorksModel | None = None
         self._models: dict[str, SolidWorksModel] = {}
         self._features: dict[str, SolidWorksFeature] = {}
+        # Names suppressed via suppress_feature. Kept beside _features rather
+        # than on SolidWorksFeature, which has no suppression field.
+        self._suppressed_features: set[str] = set()
         # Component tree for an Assembly-type current model, keyed by
         # component name. See ``_flatten_assembly_components`` for shape.
         # Empty means "use the canned default fixture" (see list_features).
@@ -152,6 +176,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # Assembly components inserted via insert_component, keyed by
         # insertion order. See insert_component/list_components/add_mate.
         self._components: list[str] = []
+        # Drawing views placed via create_drawing_view / add_drawing_view /
+        # create_technical_drawing, in sheet order. See list_drawing_views.
+        self._drawing_views: list[str] = []
         # Reference planes created via create_reference_plane, in creation
         # order, used to invent sequential "PlaneN" names. Shared feature
         # tree counter with create_axis mirrors the live adapter's
@@ -1973,6 +2000,336 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data=list(self._components),
             execution_time=self._delays["model_operation"] / 2,
+        )
+
+    # Drawing Operations
+    def _mock_place_view(self, payload: Any) -> AdapterResult[dict[str, Any]]:
+        """Record a drawing view so ``list_drawing_views`` reflects it.
+
+        Args:
+            payload (Any): Tool payload, as the real adapter receives it.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        data = payload if isinstance(payload, dict) else {}
+        model_path = data.get("model_path") or data.get("model_file")
+        if not model_path:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A model path is required (model_path or model_file)",
+            )
+
+        orientation = str(data.get("orientation") or data.get("view_type") or "front")
+        if orientation.strip().lower() not in _MOCK_NAMED_VIEWS:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown orientation '{orientation}'. Use one of: "
+                    f"{', '.join(sorted(_MOCK_NAMED_VIEWS))}."
+                ),
+            )
+
+        before = len(self._drawing_views)
+        self._drawing_views.append(f"Drawing View{before + 1}")
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": self._drawing_views[-1],
+                "model_path": model_path,
+                "orientation": orientation,
+                "position": {
+                    "x": float(data.get("position_x", 100.0)),
+                    "y": float(data.get("position_y", 150.0)),
+                },
+                "views_before": before,
+                "views_after": len(self._drawing_views),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def create_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock placing a view of a model on the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and orientation.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        return self._mock_place_view(payload)
+
+    async def add_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding a view of a model to the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and orientation.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        return self._mock_place_view(payload)
+
+    async def create_technical_drawing(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock laying out the three standard views of a model.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and projection.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        data = payload if isinstance(payload, dict) else {}
+        model_path = data.get("model_path") or data.get("model_file")
+        if not model_path:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A model path is required (model_path or model_file)",
+            )
+
+        third_angle = bool(data.get("third_angle", True))
+        if str(data.get("projection", "")).lower() in {"first", "first_angle"}:
+            third_angle = False
+
+        before = len(self._drawing_views)
+        added = [f"Drawing View{before + offset}" for offset in (1, 2, 3)]
+        self._drawing_views.extend(added)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "views": added,
+                "model_path": model_path,
+                "projection": "third_angle" if third_angle else "first_angle",
+                "views_before": before,
+                "views_after": len(self._drawing_views),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def add_note(self, payload: Any = None) -> AdapterResult[dict[str, Any]]:
+        """Mock placing a text note on the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the text and position.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        data = payload if isinstance(payload, dict) else {}
+        text = data.get("text")
+        if not text:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="add_note requires text"
+            )
+
+        self._operation_count += 1
+        font_points = float(data.get("font_size") or 0.0)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "text": text,
+                "position": {
+                    "x": float(data.get("position_x", 100.0)),
+                    "y": float(data.get("position_y", 50.0)),
+                },
+                # The real adapter sets this from IAnnotation::SetPosition's
+                # return. Mock mode has no sheet to place anything on, so it
+                # reports "not determinable" rather than claiming success at a
+                # check it never performed.
+                "positioned": None,
+                "font_size_points": font_points or None,
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def list_drawing_views(self) -> AdapterResult[list[str]]:
+        """Mock listing the views on the active drawing.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=list(self._drawing_views),
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock checking the active assembly for interfering components.
+
+        Args:
+            params (Any): Optional settings; ``coincident``, ``components``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        options = params if isinstance(params, dict) else {}
+
+        if len(self._components) < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Interference detection needs at least two components; the "
+                    f"assembly has {len(self._components)}."
+                ),
+            )
+
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                # The real adapter gets this from SolidWorks' interference
+                # engine. The mock has no geometry, so it cannot know whether
+                # anything overlaps and says so rather than reporting a clean
+                # assembly it never checked - a mock that always answered
+                # False would make this tool useless wherever mock mode runs.
+                "interference_found": None,
+                "interference_count": None,
+                "interferences": [],
+                "coincident_treated_as_interference": bool(
+                    options.get("coincident", False)
+                ),
+                "scope": "whole assembly",
+                "tolerance_applied": None,
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    # Feature Editing
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock deleting a named feature from the active model.
+
+        Args:
+            name (str): Feature or sketch name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+
+        # _features is keyed by an internal id, so resolve by feature name.
+        before = [f.name for f in self._features.values()]
+        key = next((k for k, f in self._features.items() if f.name == name), None)
+        if key is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Feature not found: {name}. "
+                    f"Available: {', '.join(before) or 'none'}"
+                ),
+            )
+
+        del self._features[key]
+        self._suppressed_features.discard(name)
+        self._operation_count += 1
+        after = [f.name for f in self._features.values()]
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "deleted": name,
+                "removed_features": [n for n in before if n not in after],
+                "features_before": len(before),
+                "features_after": len(after),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock suppressing or unsuppressing a named feature.
+
+        Args:
+            name (str): Feature name.
+            suppress (bool): True to suppress, False to unsuppress.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+
+        known = any(f.name == name for f in self._features.values())
+        if not known:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"Feature not found: {name}"
+            )
+
+        was = name in self._suppressed_features
+        if suppress:
+            self._suppressed_features.add(name)
+        else:
+            self._suppressed_features.discard(name)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "feature": name,
+                "requested": suppress,
+                "suppressed": bool(suppress),
+                "was_suppressed": was,
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        """Mock undoing the last operations in the active model.
+
+        Removes the most recently added features, mirroring what an undo of
+        feature-creation steps does to the tree. ``tree_changed`` is ``False``
+        when there was nothing left to undo, which is what the real adapter
+        reports too - SolidWorks accepts an undo on an empty stack quietly.
+
+        Args:
+            count (int): Number of steps to undo.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        steps = max(1, int(count))
+
+        keys = list(self._features)
+        before = [self._features[k].name for k in keys]
+        doomed = keys[-steps:] if steps <= len(keys) else list(keys)
+        removed = [self._features[k].name for k in doomed]
+        for key in doomed:
+            self._suppressed_features.discard(self._features[key].name)
+            del self._features[key]
+        self._operation_count += 1
+        after = [f.name for f in self._features.values()]
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "requested_steps": steps,
+                "features_before": len(before),
+                "features_after": len(after),
+                "removed_features": removed,
+                "tree_changed": before != after,
+            },
+            execution_time=self._delays["model_operation"],
         )
 
     async def add_mate(

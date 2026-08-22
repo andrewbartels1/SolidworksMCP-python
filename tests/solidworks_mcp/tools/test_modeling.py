@@ -46,6 +46,8 @@ class TestModelingTools:
         assert {"create_sweep", "create_loft"} <= names
         # Assembly component/mate tools must be registered too.
         assert {"insert_component", "add_mate", "list_components"} <= names
+        # Feature editing.
+        assert {"delete_feature", "suppress_feature", "undo"} <= names
 
     @pytest.mark.asyncio
     async def test_open_model_success(self, mcp_server, mock_adapter, mock_config):

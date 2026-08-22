@@ -1088,6 +1088,149 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={},
         )
 
+    async def create_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a drawing view through circuit breaker.
+
+        Args:
+            payload (Any): Tool payload for the drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "create_drawing_view",
+            lambda: self.adapter.create_drawing_view(payload),
+            input_dict=payload if isinstance(payload, dict) else {},
+        )
+
+    async def add_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a drawing view through circuit breaker.
+
+        Args:
+            payload (Any): Tool payload for the drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "add_drawing_view",
+            lambda: self.adapter.add_drawing_view(payload),
+            input_dict=payload if isinstance(payload, dict) else {},
+        )
+
+    async def create_technical_drawing(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create standard views through circuit breaker.
+
+        Args:
+            payload (Any): Tool payload for the technical drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "create_technical_drawing",
+            lambda: self.adapter.create_technical_drawing(payload),
+            input_dict=payload if isinstance(payload, dict) else {},
+        )
+
+    async def add_note(self, payload: Any = None) -> AdapterResult[dict[str, Any]]:
+        """Add a drawing note through circuit breaker.
+
+        Args:
+            payload (Any): Tool payload for the note.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "add_note",
+            lambda: self.adapter.add_note(payload),
+            input_dict=payload if isinstance(payload, dict) else {},
+        )
+
+    async def list_drawing_views(self) -> AdapterResult[list[str]]:
+        """List drawing views through circuit breaker.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "list_drawing_views",
+            lambda: self.adapter.list_drawing_views(),
+            input_dict={},
+        )
+
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Check interference through circuit breaker.
+
+        Args:
+            params (Any): Optional interference-detection settings.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "check_interference",
+            lambda: self.adapter.check_interference(params),
+            input_dict=params if isinstance(params, dict) else {},
+        )
+
+    async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete a feature through circuit breaker.
+
+        Args:
+            name (str): Feature or sketch name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "delete_feature",
+            lambda: self.adapter.delete_feature(name),
+            input_dict={"name": name},
+        )
+
+    async def suppress_feature(
+        self, name: str, suppress: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Suppress or unsuppress a feature through circuit breaker.
+
+        Args:
+            name (str): Feature name.
+            suppress (bool): True to suppress, False to unsuppress.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "suppress_feature",
+            lambda: self.adapter.suppress_feature(name, suppress),
+            input_dict={"name": name, "suppress": suppress},
+        )
+
+    async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
+        """Undo through circuit breaker.
+
+        Args:
+            count (int): Number of steps to undo.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "undo",
+            lambda: self.adapter.undo(count),
+            input_dict={"count": count},
+        )
+
     async def add_mate(
         self,
         component_a: str,
