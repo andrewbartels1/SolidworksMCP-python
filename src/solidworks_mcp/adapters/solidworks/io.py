@@ -95,6 +95,109 @@ _MATE_ALIGNMENTS: dict[str, int] = {
 }
 
 
+#: SolidWorks named views. The leading asterisk is part of the name and
+#: ``CreateDrawViewFromModelView3`` rejects the name without it.
+_NAMED_VIEWS: dict[str, str] = {
+    "front": "*Front",
+    "back": "*Back",
+    "left": "*Left",
+    "right": "*Right",
+    "top": "*Top",
+    "bottom": "*Bottom",
+    "isometric": "*Isometric",
+    "iso": "*Isometric",
+    "trimetric": "*Trimetric",
+    "dimetric": "*Dimetric",
+    "current": "*Current",
+}
+
+
+#: Points to millimetres. Note schemas express text height in points.
+_POINTS_TO_MM = 25.4 / 72.0
+
+
+def _payload(data: Any) -> dict[str, Any]:
+    """Coerce a tool payload into a plain dict.
+
+    The drawing tools hand the adapter either a ``model_dump()`` result or a
+    raw dict, depending on the tool. Accept a Pydantic model too, so a direct
+    adapter call from a test or script behaves the same as one through a tool.
+
+    Args:
+        data: A dict, a Pydantic model, or an object with attributes.
+
+    Returns:
+        dict[str, Any]: The payload as a dict; empty when nothing was given.
+    """
+    if data is None:
+        return {}
+    if isinstance(data, dict):
+        return data
+    dump = getattr(data, "model_dump", None)
+    if callable(dump):
+        return cast("dict[str, Any]", dump())
+    return {
+        key: value for key, value in vars(data).items() if not key.startswith("_")
+    }
+
+
+def _first(payload: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Return the first key present and not None.
+
+    The drawing tools disagree on field names for the same thing — a model is
+    ``model_path`` on one schema and ``model_file`` on another — so each
+    adapter method accepts every spelling its callers use.
+
+    Args:
+        payload: The tool payload.
+        *keys: Candidate key names, in priority order.
+        default: Returned when no key is present.
+
+    Returns:
+        Any: The first value found, otherwise ``default``.
+    """
+    for key in keys:
+        value = payload.get(key)
+        if value is not None:
+            return value
+    return default
+
+
+def _view_names(adapter: Any, drawing: Any) -> list[str]:
+    """Return the drawing's view names, excluding sheet formats.
+
+    ``CreateDrawViewFromModelView3`` returns ``None`` for a model SolidWorks
+    could not resolve, and ``Create3rdAngleViews2`` returns a bare boolean, so
+    the view list is the ground truth for whether views were really added.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        drawing: The drawing document, flagged for ``IDrawingDoc``.
+
+    Returns:
+        list[str]: View names in sheet order.
+    """
+    sheets = adapter._attempt(lambda: drawing.GetViews(), default=None)
+    if not isinstance(sheets, (list, tuple)):
+        return []
+
+    names: list[str] = []
+    for sheet in sheets:
+        views = sheet if isinstance(sheet, (list, tuple)) else [sheet]
+        for index, view in enumerate(views):
+            # GetViews returns (sheet, view, view, ...) per sheet; entry 0 is
+            # the sheet itself, not a drawing view.
+            if index == 0 and isinstance(sheet, (list, tuple)):
+                continue
+            wrapped = _as_com(adapter, view, "IView")
+            if wrapped is None:
+                continue
+            name = adapter._attempt(lambda w=wrapped: w.GetName2(), default=None)
+            if name:
+                names.append(str(name))
+    return names
+
+
 def _component_transforms(adapter: Any, assembly: Any) -> dict[str, tuple[float, ...]]:
     """Snapshot every component's placement, for before/after comparison.
 
@@ -200,6 +303,89 @@ def _doc_type(adapter: Any) -> int | None:
         default=None,
     )
     return int(value) if isinstance(value, (int, float)) else None
+
+
+def _payload_dict(data: Any) -> dict[str, Any]:
+    """Coerce a tool payload into a plain dict.
+
+    ``tools/analysis.py`` hands the adapter ``input_data.model_dump()``, but a
+    direct call from a test or script may pass the model itself or nothing.
+
+    Args:
+        data: A dict, a Pydantic model, or ``None``.
+
+    Returns:
+        dict[str, Any]: The payload as a dict; empty when nothing was given.
+    """
+    if data is None:
+        return {}
+    if isinstance(data, dict):
+        return data
+    dump = getattr(data, "model_dump", None)
+    if callable(dump):
+        return cast("dict[str, Any]", dump())
+    return {key: value for key, value in vars(data).items() if not key.startswith("_")}
+
+
+def _interference_details(adapter: Any, interferences: Any) -> list[dict[str, Any]]:
+    """Describe each interference: the components involved and the overlap.
+
+    ``IInterference::Volume`` is in cubic metres and is converted to mm^3 to
+    match every other volume this adapter reports.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        interferences: The sequence returned by ``GetInterferences``.
+
+    Returns:
+        list[dict[str, Any]]: One entry per interference. Empty when the
+        sequence is absent, which is what SolidWorks returns for a clean
+        assembly.
+    """
+    if not isinstance(interferences, (list, tuple)):
+        return []
+
+    details: list[dict[str, Any]] = []
+    for item in interferences:
+        wrapped = _as_com(adapter, item, "IInterference")
+        if wrapped is None:
+            continue
+
+        volume_m3 = adapter._attempt(lambda w=wrapped: w.Volume, default=None)
+        try:
+            volume_mm3 = (
+                round(float(volume_m3) * 1e9, 6) if volume_m3 is not None else None
+            )
+        except (TypeError, ValueError):
+            volume_mm3 = None
+
+        component_count = adapter._attempt(
+            lambda w=wrapped: w.GetComponentCount(), default=None
+        )
+        # ``Components`` is a property, not a method. ``GetComponents()``
+        # does not exist on IInterference and ``IGetComponents(n)`` rejects
+        # its own documented argument with "Invalid number of parameters".
+        raw_components = adapter._attempt(
+            lambda w=wrapped: w.Components, default=None
+        )
+
+        names: list[str] = []
+        if isinstance(raw_components, (list, tuple)):
+            for component in raw_components:
+                comp = _as_com(adapter, component, "IComponent2")
+                if comp is None:
+                    continue
+                name = adapter._attempt(lambda c=comp: c.Name2, default=None)
+                names.append(str(name) if name else "<unnamed>")
+
+        details.append(
+            {
+                "components": names,
+                "component_count": int(component_count) if component_count else len(names),
+                "volume_mm3": volume_mm3,
+            }
+        )
+    return details
 
 
 def _component_pairs(adapter: Any, assembly: Any) -> list[tuple[str, Any]]:
@@ -600,15 +786,23 @@ class SolidWorksIOMixin:
             if app is None:
                 raise Exception("SolidWorks application is not connected")
 
-            drw_template = app.GetUserPreferenceStringValue(1)
+            # Slot 10 is swDefaultTemplateDrawing. Slot 1 was read here
+            # before and comes back empty on SW 2025, after which the
+            # fallback did GetUserPreferenceStringValue(0).replace("Part",
+            # "Drawing") on another empty string - so NewDocument got "" and
+            # every drawing operation was unreachable. Measured live on
+            # SW 2025: 8=Part.prtdot, 9=Assembly.asmdot, 10=Drawing.drwdot,
+            # 0-3 all empty.
+            drw_template = self._resolve_template_path([10, 1, 0, 2, 3], ".drwdot")
             if not drw_template:
-                drw_template = app.GetUserPreferenceStringValue(0).replace(
-                    "Part", "Drawing"
-                )
+                raise Exception("No drawing template configured in SolidWorks")
 
             model = app.NewDocument(drw_template, 12, 0.2794, 0.2159)
             if not model:
-                raise Exception("Failed to create new drawing")
+                raise Exception(
+                    f"Failed to create new drawing from template "
+                    f"'{drw_template}'"
+                )
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 3), default=0)
             adapter.currentModel = model
@@ -1509,3 +1703,537 @@ class SolidWorksIOMixin:
                 AdapterResult[list[str]],
                 adapter._handle_com_operation("list_components", _list),
             )
+
+    def _require_drawing(self) -> AdapterResult[Any] | None:
+        """Return an error result unless the active document is a drawing.
+
+        Returns:
+            AdapterResult[Any] | None: ``None`` when the active document is a
+            drawing, otherwise the error to hand back.
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        doc_type = _doc_type(adapter)
+        if doc_type != 3:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "This operation requires a drawing document "
+                    f"(active document type is {doc_type!r}, expected 3). "
+                    "Call create_drawing first."
+                ),
+            )
+        return None
+
+    def _place_view(self, payload: Any) -> AdapterResult[dict[str, Any]]:
+        """Place one named view of a model on the active drawing sheet.
+
+        Shared by ``create_drawing_view`` and ``add_drawing_view``, which are
+        two registered tools reaching the same operation through different
+        input schemas.
+
+        Wraps ``IDrawingDoc::CreateDrawViewFromModelView3(ModelName, ViewName,
+        LocX, LocY, LocZ)``. Position is accepted in millimetres and converted
+        to metres. Success is confirmed by the sheet's view count going up:
+        the call returns ``None`` for a model SolidWorks could not resolve, so
+        its return value proves nothing on its own.
+
+        Args:
+            payload: Tool payload. Reads ``model_path``/``model_file``,
+                ``orientation``/``view_type``, ``position_x``/``position_y``
+                (or a two-element ``position``), and ``scale``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new view's name and position.
+        """
+        adapter = self._adapter(self)
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+
+        data = _payload(payload)
+        model_path = _first(data, "model_path", "model_file", "path")
+        if not model_path:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A model path is required (model_path or model_file)",
+            )
+
+        path = os.path.abspath(str(model_path))
+        if not os.path.exists(path):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Model file not found: {model_path}",
+            )
+
+        position = data.get("position")
+        if isinstance(position, (list, tuple)) and len(position) >= 2:
+            x, y = float(position[0]), float(position[1])
+        else:
+            x = float(_first(data, "position_x", "x", default=100.0))
+            y = float(_first(data, "position_y", "y", default=150.0))
+
+        requested = str(_first(data, "orientation", "view_type", default="front"))
+        view_name = _NAMED_VIEWS.get(requested.strip().lower())
+        if view_name is None and requested.startswith("*"):
+            view_name = requested
+        if view_name is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown orientation '{requested}'. Use one of: "
+                    f"{', '.join(sorted(_NAMED_VIEWS))}, or a raw '*Name'."
+                ),
+            )
+
+        try:
+            scale = float(_first(data, "scale", default=0.0) or 0.0)
+        except (TypeError, ValueError):
+            # The DrawingCreationInput schema types scale as a string ratio
+            # ("1:1"), which is not a view scale factor. Ignore it rather than
+            # failing the whole call over a display preference.
+            scale = 0.0
+
+        def _add() -> dict[str, Any]:
+            drawing = _sw_type_info.flagged(adapter.currentModel, "IDrawingDoc")
+            before = _view_names(adapter, drawing)
+
+            # The model has to be loaded before a view of it can be placed,
+            # and OpenDoc6's errors/warnings out-params must be byref VARIANTs
+            # - with pythoncom.Missing it returns None, the model stays
+            # unloaded, and CreateDrawViewFromModelView3 then silently makes
+            # no view.
+            app = adapter.swApp
+            doc_type = 2 if path.lower().endswith(".sldasm") else 1
+            opened = adapter._attempt(
+                lambda: app.OpenDoc6(
+                    path, doc_type, 1, "", _byref_int(), _byref_int()
+                ),
+                default=None,
+            )
+            if not opened:
+                raise Exception(
+                    f"Could not load '{model_path}' - OpenDoc6 returned nothing."
+                )
+
+            # Opening the model made it active; the drawing has to be active
+            # again before a view can be added to it.
+            drawing_title = adapter._attempt(
+                lambda: _sw_type_info.flagged(
+                    adapter.currentModel, "IModelDoc2"
+                ).GetTitle(),
+                default=None,
+            )
+            if drawing_title:
+                adapter._attempt(
+                    lambda: app.ActivateDoc3(drawing_title, False, 0, _byref_int()),
+                    default=None,
+                )
+
+            view = adapter._attempt(
+                lambda: drawing.CreateDrawViewFromModelView3(
+                    path, view_name, x / 1000.0, y / 1000.0, 0.0
+                ),
+                default=None,
+            )
+
+            after = _view_names(adapter, drawing)
+            if len(after) <= len(before):
+                raise Exception(
+                    f"View was not created - the sheet still has {len(after)} "
+                    f"view(s). Check that '{model_path}' opens on its own and "
+                    f"that '{view_name}' is a valid named view for it."
+                )
+
+            added = [n for n in after if n not in before]
+            new_view = added[-1] if added else after[-1]
+
+            scale_applied = False
+            if scale and view is not None:
+                wrapped = _as_com(adapter, view, "IView")
+                if wrapped is not None:
+                    scale_applied = (
+                        adapter._attempt(
+                            lambda: setattr(wrapped, "ScaleRatio", [scale, 1.0]),
+                            default=None,
+                        )
+                        is not None
+                    )
+
+            return {
+                "name": new_view,
+                "model_path": path,
+                "orientation": view_name,
+                "position": {"x": x, "y": y},
+                "scale": scale or None,
+                "scale_applied": scale_applied if scale else None,
+                "views_before": len(before),
+                "views_after": len(after),
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("create_drawing_view", _add),
+        )
+
+    async def create_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Place a view of a model on the active drawing sheet.
+
+        Args:
+            payload: Tool payload; see ``_place_view``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new view's name and position.
+
+        Example::
+
+            await adapter.create_drawing_view(
+                {"model_path": r"C:\\parts\\bracket.sldprt", "orientation": "front"}
+            )
+        """
+        return self._place_view(payload)
+
+    async def add_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a view of a model to the active drawing sheet.
+
+        The same operation as ``create_drawing_view``; both tool entry points
+        exist upstream and reach this one implementation.
+
+        Args:
+            payload: Tool payload; see ``_place_view``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new view's name and position.
+        """
+        return self._place_view(payload)
+
+    async def create_technical_drawing(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Lay out the three standard views of a model on the active sheet.
+
+        Wraps ``IDrawingDoc::Create3rdAngleViews2`` (or
+        ``Create1stAngleViews2``), which places front, top and side in one
+        call. Both return a bare boolean, so the view list before and after is
+        what actually confirms the views exist.
+
+        Args:
+            payload: Tool payload. Reads ``model_path``/``model_file`` and
+                ``third_angle`` (default ``True``; ``projection`` set to
+                ``"first_angle"`` selects the other).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The view names that appeared.
+
+        Example::
+
+            await adapter.create_technical_drawing(
+                {"model_file": r"C:\\parts\\bracket.sldprt"}
+            )
+        """
+        adapter = self._adapter(self)
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+
+        data = _payload(payload)
+        model_path = _first(data, "model_path", "model_file", "path")
+        if not model_path:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A model path is required (model_path or model_file)",
+            )
+
+        path = os.path.abspath(str(model_path))
+        if not os.path.exists(path):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Model file not found: {model_path}",
+            )
+
+        third_angle = bool(data.get("third_angle", True))
+        if str(data.get("projection", "")).lower() in {"first", "first_angle"}:
+            third_angle = False
+
+        def _standard() -> dict[str, Any]:
+            drawing = _sw_type_info.flagged(adapter.currentModel, "IDrawingDoc")
+            before = _view_names(adapter, drawing)
+
+            created = adapter._attempt(
+                lambda: (
+                    drawing.Create3rdAngleViews2(path)
+                    if third_angle
+                    else drawing.Create1stAngleViews2(path)
+                ),
+                default=False,
+            )
+
+            after = _view_names(adapter, drawing)
+            added = [n for n in after if n not in before]
+            if not added:
+                raise Exception(
+                    f"No views were created from '{model_path}' (the call "
+                    f"returned {created!r}). Check the model has solid "
+                    "geometry and opens on its own."
+                )
+
+            return {
+                "views": added,
+                "model_path": path,
+                "projection": "third_angle" if third_angle else "first_angle",
+                "views_before": len(before),
+                "views_after": len(after),
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("create_technical_drawing", _standard),
+        )
+
+    async def add_note(self, payload: Any = None) -> AdapterResult[dict[str, Any]]:
+        """Place a text note on the active drawing sheet.
+
+        Wraps ``IModelDoc2::InsertNote(Text)`` and then positions the returned
+        annotation: ``InsertNote`` places the note wherever SolidWorks likes,
+        so the position is applied afterwards via ``IAnnotation::SetPosition``.
+
+        Args:
+            payload: Tool payload. Reads ``text``, ``position_x``/``position_y``
+                (or a two-element ``position``) in millimetres, and
+                ``font_size`` in **points**, matching the tool schema.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The note text and where it landed.
+
+        Example::
+
+            await adapter.add_note(
+                {"text": "MATERIAL: AISI 1018", "position_x": 200.0,
+                 "position_y": 50.0}
+            )
+        """
+        adapter = self._adapter(self)
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+
+        data = _payload(payload)
+        text = _first(data, "text", "note", default="")
+        if not text:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="add_note requires text",
+            )
+
+        position = data.get("position")
+        if isinstance(position, (list, tuple)) and len(position) >= 2:
+            x, y = float(position[0]), float(position[1])
+        else:
+            x = float(_first(data, "position_x", "x", default=100.0))
+            y = float(_first(data, "position_y", "y", default=50.0))
+
+        # The schema expresses font size in points, not millimetres.
+        font_points = float(_first(data, "font_size", default=0.0) or 0.0)
+        font_mm = font_points * _POINTS_TO_MM
+
+        def _add_note() -> dict[str, Any]:
+            model = adapter.currentModel
+            adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+
+            note = adapter._attempt(
+                lambda: model.InsertNote(str(text)), default=None
+            )
+            if note is None:
+                raise Exception(
+                    "InsertNote returned nothing - the note was not created."
+                )
+
+            positioned = False
+            annotation = adapter._attempt(
+                lambda: _sw_type_info.flagged(note, "INote").GetAnnotation(),
+                default=None,
+            )
+            if annotation is not None:
+                positioned = bool(
+                    adapter._attempt(
+                        lambda: _sw_type_info.flagged(
+                            annotation, "IAnnotation"
+                        ).SetPosition(x / 1000.0, y / 1000.0, 0.0),
+                        default=False,
+                    )
+                )
+
+            if font_mm:
+                adapter._attempt(
+                    lambda: _sw_type_info.flagged(note, "INote").SetTextFormat(
+                        0, False, font_mm / 1000.0
+                    ),
+                    default=None,
+                )
+
+            adapter._attempt(lambda: model.EditRebuild3(), default=None)
+            return {
+                "text": text,
+                "position": {"x": x, "y": y},
+                "positioned": positioned,
+                "font_size_points": font_points or None,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("add_note", _add_note),
+        )
+
+    async def list_drawing_views(self) -> AdapterResult[list[str]]:
+        """List the views on the active drawing.
+
+        Returns:
+            AdapterResult[list[str]]: View names, sheet formats excluded.
+        """
+        adapter = self._adapter(self)
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[list[str]]", guard)
+
+        def _list_views() -> list[str]:
+            drawing = _sw_type_info.flagged(adapter.currentModel, "IDrawingDoc")
+            return _view_names(adapter, drawing)
+
+        return cast(
+            AdapterResult[list[str]],
+            adapter._handle_com_operation("list_drawing_views", _list_views),
+        )
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Run SolidWorks' interference detection on the active assembly.
+
+        Uses ``IAssemblyDoc::InterferenceDetectionManager``
+        (``IInterferenceDetectionMgr``), **not** the older
+        ``ToolsCheckInterference2``. That call is declared ``Sub`` with two
+        ``ByRef`` out-parameters, and on SW 2025 through pywin32 late binding
+        it could not be made to report anything: ``pythoncom.Missing`` raises
+        ``PyOleMissing can not be converted to a COM VARIANT``, a plain
+        ``None`` or a typed array VARIANT raises ``Type mismatch``, passing a
+        component array throws server-side, and a byref ``VT_VARIANT`` pair is
+        accepted but leaves both out-parameters ``None`` for an assembly that
+        demonstrably interferes. An inspection tool that always answers "no
+        interference" is worse than one that refuses.
+
+        ``GetInterferenceCount`` is an ordinary return value, so ``0`` is a
+        real measurement rather than a swallowed failure, and each
+        ``IInterference`` carries the overlap ``Volume``.
+
+        Args:
+            params (Any): Optional settings. ``coincident`` (bool, default
+                ``False``) treats touching faces as interference;
+                ``include_multibody`` (bool, default ``True``);
+                ``ignore_hidden`` (bool, default ``False``). A ``components``
+                list filters which interferences are reported. ``tolerance``
+                is accepted and ignored - SolidWorks' interference detection
+                has no tolerance setting - and the payload says so.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``interference_found``,
+            ``interference_count``, and per-interference component pairs with
+            overlap volumes in mm^3. ``ERROR`` when there is no active model
+            or the active document is not an assembly.
+
+        Raises:
+            Exception: Propagated through ``_handle_com_operation``.
+
+        Example::
+
+            await adapter.check_interference({"coincident": False})
+        """
+        adapter = self._adapter(self)
+        options = _payload_dict(params)
+
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        doc_type = _doc_type(adapter)
+        if doc_type != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Interference detection requires an assembly document "
+                    f"(active document type is {doc_type!r}, expected 2)"
+                ),
+            )
+
+        coincident = bool(options.get("coincident", False))
+        include_multibody = bool(options.get("include_multibody", True))
+        ignore_hidden = bool(options.get("ignore_hidden", False))
+        wanted = options.get("components") or []
+        wanted_names = {str(name) for name in wanted} if wanted else set()
+
+        def _check() -> dict[str, Any]:
+            assembly = _sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
+            manager = adapter._attempt(
+                lambda: assembly.InterferenceDetectionManager, default=None
+            )
+            if manager is None:
+                raise Exception(
+                    "InterferenceDetectionManager is unavailable on this "
+                    "assembly, so no interference check was performed."
+                )
+            manager = _sw_type_info.flagged(manager, "IInterferenceDetectionMgr")
+
+            for name, value in (
+                ("TreatCoincidenceAsInterference", coincident),
+                ("IncludeMultibodyPartInterferences", include_multibody),
+                ("IgnoreHiddenBodies", ignore_hidden),
+                ("MakeInterferingPartsTransparent", False),
+            ):
+                adapter._attempt(
+                    lambda n=name, v=value: setattr(manager, n, v), default=None
+                )
+
+            try:
+                # A real return value: 0 means SolidWorks found nothing, and a
+                # COM failure raises instead of flattening into a false clean
+                # result.
+                count = int(manager.GetInterferenceCount() or 0)
+                interferences = (
+                    adapter._attempt(lambda: manager.GetInterferences(), default=None)
+                    if count
+                    else None
+                )
+                details = _interference_details(adapter, interferences)
+            finally:
+                # Leaves the assembly out of interference-display mode even
+                # when the read above fails.
+                adapter._attempt(lambda: manager.Done(), default=None)
+
+            if wanted_names:
+                details = [
+                    item
+                    for item in details
+                    if wanted_names & set(item.get("components", []))
+                ]
+
+            return {
+                "interference_found": bool(details) if wanted_names else count > 0,
+                "interference_count": len(details) if wanted_names else count,
+                "interferences": details,
+                "coincident_treated_as_interference": coincident,
+                "scope": sorted(wanted_names) if wanted_names else "whole assembly",
+                # Said plainly rather than silently dropped: a caller passing a
+                # tolerance would otherwise assume it was applied.
+                "tolerance_applied": None,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("check_interference", _check),
+        )

@@ -30,6 +30,27 @@ from .base import (
 )
 from .solidworks.sketch import RELATION_NAME_MAP
 
+#: Orientations the mock accepts for a drawing view. Kept in step with
+#: ``_NAMED_VIEWS`` in ``adapters/solidworks/io.py`` by a test — the two lists
+#: are maintained separately, and an orientation accepted live but rejected
+#: here could never be covered, since the suite runs against the mock.
+_MOCK_NAMED_VIEWS: frozenset[str] = frozenset(
+    {
+        "front",
+        "back",
+        "left",
+        "right",
+        "top",
+        "bottom",
+        "isometric",
+        "iso",
+        "trimetric",
+        "dimetric",
+        "current",
+    }
+)
+
+
 #: Canned assembly component tree used by ``list_features`` when a mock
 #: Assembly's ``_assembly_components`` hasn't been configured by a test.
 #: Two top-level Part components plus one nested sub-assembly one level
@@ -154,6 +175,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # Assembly components inserted via insert_component, keyed by
         # insertion order. See insert_component/list_components/add_mate.
         self._components: list[str] = []
+        # Drawing views placed via create_drawing_view / add_drawing_view /
+        # create_technical_drawing, in sheet order. See list_drawing_views.
+        self._drawing_views: list[str] = []
         self._operation_count = 0
 
         # Configurable simulation delays (in seconds)
@@ -1968,6 +1992,219 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data=list(self._components),
             execution_time=self._delays["model_operation"] / 2,
+        )
+
+    # Drawing Operations
+    def _mock_place_view(self, payload: Any) -> AdapterResult[dict[str, Any]]:
+        """Record a drawing view so ``list_drawing_views`` reflects it.
+
+        Args:
+            payload (Any): Tool payload, as the real adapter receives it.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        data = payload if isinstance(payload, dict) else {}
+        model_path = data.get("model_path") or data.get("model_file")
+        if not model_path:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A model path is required (model_path or model_file)",
+            )
+
+        orientation = str(data.get("orientation") or data.get("view_type") or "front")
+        if orientation.strip().lower() not in _MOCK_NAMED_VIEWS:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown orientation '{orientation}'. Use one of: "
+                    f"{', '.join(sorted(_MOCK_NAMED_VIEWS))}."
+                ),
+            )
+
+        before = len(self._drawing_views)
+        self._drawing_views.append(f"Drawing View{before + 1}")
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": self._drawing_views[-1],
+                "model_path": model_path,
+                "orientation": orientation,
+                "position": {
+                    "x": float(data.get("position_x", 100.0)),
+                    "y": float(data.get("position_y", 150.0)),
+                },
+                "views_before": before,
+                "views_after": len(self._drawing_views),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def create_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock placing a view of a model on the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and orientation.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        return self._mock_place_view(payload)
+
+    async def add_drawing_view(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding a view of a model to the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and orientation.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        return self._mock_place_view(payload)
+
+    async def create_technical_drawing(
+        self, payload: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock laying out the three standard views of a model.
+
+        Args:
+            payload (Any): Tool payload carrying the model path and projection.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        data = payload if isinstance(payload, dict) else {}
+        model_path = data.get("model_path") or data.get("model_file")
+        if not model_path:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A model path is required (model_path or model_file)",
+            )
+
+        third_angle = bool(data.get("third_angle", True))
+        if str(data.get("projection", "")).lower() in {"first", "first_angle"}:
+            third_angle = False
+
+        before = len(self._drawing_views)
+        added = [f"Drawing View{before + offset}" for offset in (1, 2, 3)]
+        self._drawing_views.extend(added)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "views": added,
+                "model_path": model_path,
+                "projection": "third_angle" if third_angle else "first_angle",
+                "views_before": before,
+                "views_after": len(self._drawing_views),
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def add_note(self, payload: Any = None) -> AdapterResult[dict[str, Any]]:
+        """Mock placing a text note on the active drawing sheet.
+
+        Args:
+            payload (Any): Tool payload carrying the text and position.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        data = payload if isinstance(payload, dict) else {}
+        text = data.get("text")
+        if not text:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="add_note requires text"
+            )
+
+        self._operation_count += 1
+        font_points = float(data.get("font_size") or 0.0)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "text": text,
+                "position": {
+                    "x": float(data.get("position_x", 100.0)),
+                    "y": float(data.get("position_y", 50.0)),
+                },
+                # The real adapter sets this from IAnnotation::SetPosition's
+                # return. Mock mode has no sheet to place anything on, so it
+                # reports "not determinable" rather than claiming success at a
+                # check it never performed.
+                "positioned": None,
+                "font_size_points": font_points or None,
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def list_drawing_views(self) -> AdapterResult[list[str]]:
+        """Mock listing the views on the active drawing.
+
+        Returns:
+            AdapterResult[list[str]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=list(self._drawing_views),
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
+    async def check_interference(
+        self, params: Any = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock checking the active assembly for interfering components.
+
+        Args:
+            params (Any): Optional settings; ``coincident``, ``components``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+        options = params if isinstance(params, dict) else {}
+
+        if len(self._components) < 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Interference detection needs at least two components; the "
+                    f"assembly has {len(self._components)}."
+                ),
+            )
+
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                # The real adapter gets this from SolidWorks' interference
+                # engine. The mock has no geometry, so it cannot know whether
+                # anything overlaps and says so rather than reporting a clean
+                # assembly it never checked - a mock that always answered
+                # False would make this tool useless wherever mock mode runs.
+                "interference_found": None,
+                "interference_count": None,
+                "interferences": [],
+                "coincident_treated_as_interference": bool(
+                    options.get("coincident", False)
+                ),
+                "scope": "whole assembly",
+                "tolerance_applied": None,
+            },
+            execution_time=self._delays["model_operation"],
         )
 
     # Feature Editing

@@ -307,6 +307,270 @@ that mock-adapter tests validate the *shape* of a fix, not COM binding behavior 
 
 ---
 
+## 13. `ToolsCheckInterference2` cannot report a result under late binding
+
+**Symptom:** the call either raises, or succeeds while telling you nothing — both
+out-parameters come back `None` on an assembly that visibly interferes.
+
+**Root cause:** `IAssemblyDoc::ToolsCheckInterference2` is declared `Sub` — it returns
+nothing — and reports through two `ByRef` out-parameters, `PComp` and `PFace`. Under
+pywin32 late binding there is no call form that populates them. Every variant, measured
+against a two-component assembly built from the same part twice:
+
+| Call form | Result |
+|---|---|
+| `pythoncom.Missing` for both out-params | `TypeError: Objects of type 'PyOleMissing' can not be converted to a COM VARIANT` |
+| three arguments, out-params omitted | `com_error: (-2147352561, 'Parameter not optional.', None, None)` |
+| plain Python `None` for both | `com_error: (-2147352571, 'Type mismatch.', None, 4)` |
+| `VARIANT(VT_BYREF \| VT_ARRAY \| VT_DISPATCH, None)` | `com_error: (-2147352571, 'Type mismatch.', None, 4)` |
+| component array as `LpComponents` | `com_error: (-2147417851, 'The server threw an exception.', None, None)` |
+| `VARIANT(VT_BYREF \| VT_VARIANT, None)` for both | **accepted** — returns `None`, and `PComp.value` / `PFace.value` are both `None`, for an interfering *and* a non-interfering assembly alike |
+
+The last row is the dangerous one: nothing raises, so it reads as a clean result.
+
+**The mistake this invites:** treating the return value as a count.
+
+```python
+# WRONG — ToolsCheckInterference2 is a Sub; there is no return value to read.
+raw = model.ToolsCheckInterference2(0, None, coincident, missing, missing)
+count = int(raw[0]) if raw else 0     # -> 0, i.e. "no interference", always
+```
+
+An inspection routine that always answers "nothing found" is worse than one that
+refuses, because a caller has no way to tell the two apart.
+
+**Fix:** use the interference-detection manager instead. `GetInterferenceCount` is an
+ordinary return value, so `0` is a measurement rather than a swallowed failure:
+
+```python
+manager = sw_type_info.flagged(
+    assembly.InterferenceDetectionManager, "IInterferenceDetectionMgr"
+)
+manager.TreatCoincidenceAsInterference = False
+manager.IncludeMultibodyPartInterferences = True
+try:
+    count = int(manager.GetInterferenceCount() or 0)
+    interferences = manager.GetInterferences() if count else None
+finally:
+    manager.Done()      # leaves the assembly out of interference-display mode
+```
+
+Measured on the same two assemblies: two coincident copies of a 32000 mm³ block gave
+`GetInterferenceCount() -> 1` and `GetInterferences()` a 1-tuple; moving one copy 100 mm
+away gave `0` and `None`.
+
+Call `Done()` from a `finally` — a failed read otherwise leaves the assembly in
+interference-display mode.
+
+Found 2026-08-14 while implementing `check_interference` against a live SolidWorks 2025
+session (gen_py wrapper `83A33D31-…x0x33x0`).
+
+---
+
+## 14. `IInterference.Components` is a property, not a method
+
+**Symptom:** `AttributeError: GetInterferences.GetComponents`, or
+`com_error: (-2147352562, 'Invalid number of parameters.', None, None)` from
+`IGetComponents`.
+
+**Root cause:** `IInterference` exposes its components as the **property**
+`Components`. There is no `GetComponents()` on the interface at all, and
+`IGetComponents(n)` — which the type library declares as taking a component count —
+rejects that argument. Same late-binding member ambiguity as #5, reached from the
+opposite direction.
+
+**Fix:**
+
+```python
+item = sw_type_info.flagged(raw_interference, "IInterference")
+
+volume_m3 = item.Volume                 # property, cubic metres
+component_count = item.GetComponentCount()   # method, takes ()
+components = item.Components            # property — no (), and not GetComponents()
+
+for component in components:
+    name = sw_type_info.flagged(component, "IComponent2").Name2
+```
+
+`Volume` is worth reading: it is the overlap volume in cubic metres and makes an
+independent check possible. Two exactly coincident copies of a 32000 mm³ part reported
+`3.2000000000000005e-05` m³ — the whole part volume, as it must be.
+
+Found 2026-08-14 alongside #13.
+
+---
+
+## 15. Default template slots are 8, 9 and 10 — slots 0–3 are empty
+
+**Symptom:** `NewDocument` fails, or a new-document helper reports "failed to create"
+with no further detail.
+
+**Root cause:** `ISldWorks::GetUserPreferenceStringValue` returns an empty string for the
+low slot numbers on SW 2025. Code that reads slot `0` or `1` for a template path passes
+`""` straight into `NewDocument`, and every operation downstream of it fails at the first
+step. Measured on SW 2025:
+
+| Slot | Value |
+|---|---|
+| 0, 1, 2, 3 | `''` (empty) |
+| 6 | `…\SOLIDWORKS 2025\templates\` (directory) |
+| 7 | `…\lang\english\sheetformat` (directory) |
+| **8** | `…\templates\Part.prtdot` |
+| **9** | `…\templates\Assembly.asmdot` |
+| **10** | `…\templates\Drawing.drwdot` |
+
+**Fix:** probe the document-specific slot first and fall back, and check the extension
+and that the file exists rather than trusting the first non-empty string:
+
+```python
+for index in (10, 1, 0, 2, 3):        # drawing; use (8, …) part, (9, …) assembly
+    template = app.GetUserPreferenceStringValue(index)
+    if template and template.lower().endswith(".drwdot") and os.path.exists(template):
+        break
+else:
+    raise Exception("No drawing template configured in SolidWorks")
+```
+
+A fallback of the form `GetUserPreferenceStringValue(0).replace("Part", "Drawing")` is
+worth calling out as a trap: on SW 2025 slot 0 is empty, so the replace runs on `""` and
+produces `""`, and the failure surfaces far from its cause.
+
+Found 2026-08-14 while implementing drawing-view placement against live SolidWorks 2025.
+
+---
+
+## 16. `AddComponent5` places nothing unless the component document is already loaded
+
+**Symptom:** the call returns a component object, the assembly is unchanged, and nothing
+raises.
+
+**Root cause:** two independent failures that look identical.
+
+1. The component document must be open in memory before it can be inserted. `OpenDoc6`
+   has to run first.
+2. `OpenDoc6`'s `errors`/`warnings` out-parameters must be **byref VARIANTs**. Passing
+   `pythoncom.Missing` makes it return `None`, the document stays unloaded, and every
+   `AddComponent` overload then does nothing — while still handing back a component
+   object, so the return value looks like success. (Runbook item 1 in `CLAUDE.md` at the
+   repository root recommends `pythoncom.Missing` for `OpenDoc6`; that works for opening a
+   document to read it, but not on this path.)
+
+A third cause produces the same silence: SolidWorks refuses to insert a part with no
+solid body, again without raising.
+
+**Fix:** load first with byref out-params, then verify by component count rather than by
+the return value:
+
+```python
+def _byref_int():
+    return win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
+
+opened = app.OpenDoc6(path, doc_type, 1, "", _byref_int(), _byref_int())
+if not opened:
+    raise Exception(f"Could not load {path!r} — OpenDoc6 returned nothing.")
+
+before = len(assembly.GetComponents(True) or ())
+assembly.AddComponent5(path, 0, "", False, "", x_m, y_m, z_m)
+after = len(assembly.GetComponents(True) or ())
+if after <= before:
+    raise Exception("Component was not inserted — check the part has a solid body.")
+```
+
+Found 2026-08-14 while implementing assembly component insertion against live
+SolidWorks 2025.
+
+---
+
+## 17. Use `AddMate5` on SW 2025, not `AddMate3`
+
+**Symptom:** older mate examples and third-party plans call `IAssemblyDoc::AddMate3`.
+
+**What works:** `AddMate5` — 15 arguments, with `ErrorStatus` as a byref out-parameter
+(use the same `_byref_int()` helper as #16). Verified live on SW 2025 by confirming the
+mate moved geometry, not by its return value: snapshot every component's
+`IComponent2::Transform2` before and after and compare. SolidWorks accepts a mate it then
+ignores, so the return value alone does not tell you whether anything moved.
+
+Found 2026-08-14 while implementing assembly mates against live SolidWorks 2025.
+
+---
+
+## 18. `InsertModelAnnotations3` inserts nothing — unresolved
+
+**Status: open question.** Recorded so the next person does not repeat the search. If you
+know the missing ingredient, please correct this entry.
+
+**Symptom:** `IDrawingDoc::InsertModelAnnotations3` returns `None` and no dimensions
+appear, on a drawing view of a part that carries a real sketch dimension.
+`IView::GetDisplayDimensionCount()` stays `0`.
+
+**What was tried**, all on SW 2025, all returning `None`:
+
+- `Types` as `swInsertDimensions` (8) and as `swInsertDimensionsMarkedForDrawing` (32768),
+  and the two OR'd together
+- `AllViews` both `True` and `False`
+- with the view selected via `SelectByID2(name, "DRAWINGVIEW", …)` — using a
+  `VT_DISPATCH` null callout per #1, which is what makes the selection return `True` —
+  and then activated with `ActivateView`, following the sequence in the official example
+- against both a `*Front` and a `*Top` view, in case the dimension's sketch plane could
+  not be shown in the chosen view
+- against a part with an explicit sketch dimension added through
+  `ISketchManager`, not just an undimensioned profile
+- after `ForceRebuild3(True)`
+- called raw rather than through a helper that swallows exceptions, confirming it
+  genuinely returns `None` rather than raising
+
+**Do not** infer a count from the return value if you get one: the method returns an
+**array of inserted `IAnnotation` objects**, so `int(result)` is meaningless and
+`len(result)` is the count. A reference implementation read it as an integer and
+therefore always computed `0`.
+
+Found 2026-08-14 while implementing drawing annotation against live SolidWorks 2025.
+
+---
+
+## Adapter wiring traps — not COM, same silent-failure shape
+
+These are not SolidWorks issues, but they fail the same way: the code imports, the tests
+pass, and the thing you wrote never runs.
+
+### A method written at module scope in a mixin file is unreachable
+
+`adapters/solidworks/io.py` defines `SolidWorksIOMixin`. A method accidentally left at
+module scope — one indentation level out — still imports cleanly, still passes every
+mock-adapter test, and still satisfies "does this capability exist on every layer" checks.
+But `PyWin32Adapter` then resolves the name to `SolidWorksAdapter`'s "not implemented"
+default, so every call returns that error and the COM implementation never executes.
+
+Nothing in a normal test run catches this. Assert the owning class directly:
+
+```python
+owner = next(
+    (klass.__name__ for klass in PyWin32Adapter.__mro__ if name in vars(klass)),
+    None,
+)
+assert owner == "SolidWorksIOMixin"
+```
+
+### `_attempt(..., default=X)` hides the difference between "returned nothing" and "raised"
+
+The adapter's `_attempt` helper swallows the exception and hands back the default, so a
+`None` result has two very different meanings. When diagnosing a COM call that "returns
+`None`", call it raw and catch explicitly before drawing any conclusion:
+
+```python
+try:
+    raw = drawing.InsertModelAnnotations3(0, 8, True, True, False, False)
+    print("returned", type(raw).__name__, raw)
+except Exception as exc:
+    print("raised", type(exc).__name__, exc)
+```
+
+Both investigations behind #13 and #18 came close to the wrong conclusion because a
+swallowed `TypeError` was indistinguishable from a genuine empty result.
+
+---
+
 ## Reference: Where to look things up
 
 | Question | Where to look |

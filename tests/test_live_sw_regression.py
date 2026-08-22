@@ -2322,6 +2322,161 @@ async def test_assembly_insert_list_and_mate_change_real_geometry(connected_adap
 
 
 @pytest.mark.asyncio
+async def test_drawing_views_and_notes_produce_real_artifacts(connected_adapter):
+    """Place views and a note on a drawing - verified by what is on the sheet.
+
+    ``CreateDrawViewFromModelView3`` returns ``None`` for a model SolidWorks
+    could not resolve and ``Create3rdAngleViews2`` returns a bare boolean, so
+    neither return value proves a view exists. This asserts on the sheet's
+    view list instead.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    part_path = Path(tempfile.mkdtemp(prefix="swmcp_dwg_")) / "plate.SLDPRT"
+
+    try:
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        await adapter.add_rectangle(-40.0, -20.0, 40.0, 20.0)
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+        saved = await adapter.save_file(str(part_path))
+        assert saved.is_success, saved.error
+        assert part_path.exists()
+
+        # create_drawing reads template slot 10; slot 1 comes back empty on
+        # SW 2025 and used to leave NewDocument with an empty path.
+        created = await adapter.create_drawing()
+        assert created.is_success, created.error
+
+        empty = await adapter.list_drawing_views()
+        assert empty.is_success, empty.error
+        assert empty.data == [], empty.data
+
+        placed = await adapter.create_drawing_view(
+            {
+                "model_path": str(part_path),
+                "orientation": "front",
+                "position_x": 100.0,
+                "position_y": 150.0,
+            }
+        )
+        assert placed.is_success, placed.error
+        assert placed.data["views_before"] == 0
+        assert placed.data["views_after"] == 1
+        assert placed.data["name"], placed.data
+
+        one = await adapter.list_drawing_views()
+        assert one.is_success, one.error
+        assert len(one.data) == 1, one.data
+        assert one.data[0] == placed.data["name"]
+
+        note = await adapter.add_note(
+            {
+                "text": "MATERIAL: AISI 1018",
+                "position_x": 200.0,
+                "position_y": 50.0,
+                "font_size": 12.0,
+            }
+        )
+        assert note.is_success, note.error
+        assert note.data["positioned"] is True, (
+            f"the note was created but SetPosition did not place it: "
+            f"{note.data}"
+        )
+
+        # Standard views, on a second sheet so the count is unambiguous.
+        second = await adapter.create_drawing()
+        assert second.is_success, second.error
+
+        standard = await adapter.create_technical_drawing(
+            {"model_file": str(part_path)}
+        )
+        assert standard.is_success, standard.error
+        assert len(standard.data["views"]) == 3, standard.data
+
+        three = await adapter.list_drawing_views()
+        assert three.is_success, three.error
+        assert len(three.data) == 3, three.data
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+async def test_check_interference_answers_both_ways(connected_adapter):
+    """Interference detection must discriminate, not just return a number.
+
+    A method that always reports "no interference" passes any test that only
+    inspects a clean assembly, so both directions are asserted here against
+    the same part: two blocks at the same position must interfere, the same
+    two 100 mm apart must not. The overlap volume of the first case must equal
+    the part volume, since the blocks are exactly coincident.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    part_path = Path(tempfile.mkdtemp(prefix="swmcp_interf_")) / "block.SLDPRT"
+
+    async def build_assembly(offset_mm):
+        created = await adapter.create_assembly()
+        assert created.is_success, created.error
+        first = await adapter.insert_component(str(part_path), 0.0, 0.0, 0.0)
+        assert first.is_success, first.error
+        second = await adapter.insert_component(str(part_path), offset_mm, 0.0, 0.0)
+        assert second.is_success, second.error
+        listed = await adapter.list_components()
+        assert listed.is_success, listed.error
+        assert len(listed.data) == 2, listed.data
+        return listed.data
+
+    try:
+        # 80 x 40 x 10 mm = 32000 mm^3
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        await adapter.add_rectangle(-40.0, -20.0, 40.0, 20.0)
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+        props = await adapter.get_mass_properties()
+        assert props.is_success, props.error
+        part_volume = props.data.volume
+        # Measured rather than hardcoded: the assertion that matters is that
+        # the reported overlap equals this part's volume, whatever it is.
+        assert part_volume > 0, part_volume
+        saved = await adapter.save_file(str(part_path))
+        assert saved.is_success, saved.error
+
+        # A part document is not an assembly: refuse rather than answer.
+        refused = await adapter.check_interference({})
+        assert not refused.is_success
+        assert "assembly" in (refused.error or "").lower()
+
+        # ---- coincident: must interfere ----
+        names = await build_assembly(0.0)
+        overlapping = await adapter.check_interference({"coincident": False})
+        assert overlapping.is_success, overlapping.error
+        assert overlapping.data["interference_found"] is True, overlapping.data
+        assert overlapping.data["interference_count"] >= 1, overlapping.data
+
+        detail = overlapping.data["interferences"][0]
+        assert set(detail["components"]) == set(names), detail
+        assert detail["volume_mm3"] == pytest.approx(part_volume, rel=1e-6), (
+            f"two exactly coincident blocks must overlap by the whole part "
+            f"volume; got {detail['volume_mm3']} against {part_volume}"
+        )
+
+        # ---- 100 mm apart: must not interfere ----
+        await build_assembly(100.0)
+        separated = await adapter.check_interference({"coincident": False})
+        assert separated.is_success, separated.error
+        assert separated.data["interference_found"] is False, separated.data
+        assert separated.data["interference_count"] == 0, separated.data
+        assert separated.data["interferences"] == [], separated.data
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
 async def test_feature_editing_changes_the_model(connected_adapter):
     """Suppress, unsuppress, delete and undo, verified by volume and count.
 
