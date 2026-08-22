@@ -2322,6 +2322,88 @@ async def test_assembly_insert_list_and_mate_change_real_geometry(connected_adap
 
 
 @pytest.mark.asyncio
+async def test_drawing_views_and_notes_produce_real_artifacts(connected_adapter):
+    """Place views and a note on a drawing - verified by what is on the sheet.
+
+    ``CreateDrawViewFromModelView3`` returns ``None`` for a model SolidWorks
+    could not resolve and ``Create3rdAngleViews2`` returns a bare boolean, so
+    neither return value proves a view exists. This asserts on the sheet's
+    view list instead.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    adapter = connected_adapter
+    part_path = Path(tempfile.mkdtemp(prefix="swmcp_dwg_")) / "plate.SLDPRT"
+
+    try:
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        await adapter.add_rectangle(-40.0, -20.0, 40.0, 20.0)
+        await adapter.exit_sketch()
+        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+        saved = await adapter.save_file(str(part_path))
+        assert saved.is_success, saved.error
+        assert part_path.exists()
+
+        # create_drawing reads template slot 10; slot 1 comes back empty on
+        # SW 2025 and used to leave NewDocument with an empty path.
+        created = await adapter.create_drawing()
+        assert created.is_success, created.error
+
+        empty = await adapter.list_drawing_views()
+        assert empty.is_success, empty.error
+        assert empty.data == [], empty.data
+
+        placed = await adapter.create_drawing_view(
+            {
+                "model_path": str(part_path),
+                "orientation": "front",
+                "position_x": 100.0,
+                "position_y": 150.0,
+            }
+        )
+        assert placed.is_success, placed.error
+        assert placed.data["views_before"] == 0
+        assert placed.data["views_after"] == 1
+        assert placed.data["name"], placed.data
+
+        one = await adapter.list_drawing_views()
+        assert one.is_success, one.error
+        assert len(one.data) == 1, one.data
+        assert one.data[0] == placed.data["name"]
+
+        note = await adapter.add_note(
+            {
+                "text": "MATERIAL: AISI 1018",
+                "position_x": 200.0,
+                "position_y": 50.0,
+                "font_size": 12.0,
+            }
+        )
+        assert note.is_success, note.error
+        assert note.data["positioned"] is True, (
+            f"the note was created but SetPosition did not place it: "
+            f"{note.data}"
+        )
+
+        # Standard views, on a second sheet so the count is unambiguous.
+        second = await adapter.create_drawing()
+        assert second.is_success, second.error
+
+        standard = await adapter.create_technical_drawing(
+            {"model_file": str(part_path)}
+        )
+        assert standard.is_success, standard.error
+        assert len(standard.data["views"]) == 3, standard.data
+
+        three = await adapter.list_drawing_views()
+        assert three.is_success, three.error
+        assert len(three.data) == 3, three.data
+    finally:
+        adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
 async def test_check_interference_answers_both_ways(connected_adapter):
     """Interference detection must discriminate, not just return a number.
 
