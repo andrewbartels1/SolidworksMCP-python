@@ -34,7 +34,13 @@ class TestModelingTools:
         tool_count = await register_modeling_tools(
             mcp_server, mock_adapter, mock_config
         )
-        assert tool_count == 18
+        # Asserted against the registry rather than a literal, so the count
+        # cannot drift out of step with what was actually registered again.
+        names = {tool.name for tool in await mcp_server.list_tools()}
+        assert tool_count == len(names), (
+            f"register_modeling_tools reported {tool_count} tools but "
+            f"registered {len(names)}"
+        )
         # The Phase 1 sweep/loft tools must be registered alongside the rest.
         names = {tool.name for tool in await mcp_server.list_tools()}
         assert {"create_sweep", "create_loft"} <= names

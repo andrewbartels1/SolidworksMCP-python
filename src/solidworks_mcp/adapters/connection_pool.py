@@ -619,6 +619,25 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "add_fillet", lambda adapter: adapter.add_fillet(radius, edge_names)
         )
 
+    async def create_reference_plane(
+        self,
+        reference: str,
+        offset: float = 0.0,
+        angle: float = 0.0,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create reference plane using pool."""
+        return await self._execute_with_pool(
+            "create_reference_plane",
+            lambda adapter: adapter.create_reference_plane(reference, offset, angle, flip),
+        )
+
+    async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
+        """Create reference axis using pool."""
+        return await self._execute_with_pool(
+            "create_axis", lambda adapter: adapter.create_axis(reference)
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
