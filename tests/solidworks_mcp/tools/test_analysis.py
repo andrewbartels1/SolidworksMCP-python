@@ -262,13 +262,18 @@ class TestAnalysisTools:
         assert geometry_tool is not None
         assert material_tool is not None
 
-        # Fallback branch when adapter has no check_interference method: must
-        # refuse rather than invent an interference result.
-        if hasattr(mock_adapter, "check_interference"):
-            delattr(mock_adapter, "check_interference")
+        # This asserted the tool's own refusal message, reached only when the
+        # adapter has no check_interference at all. The adapter implements it
+        # now, so the hasattr gate resolves to a real capability and the
+        # adapter's answer surfaces instead. Still an error, and still never
+        # a fabricated clean result: the mock refuses because the assembly
+        # has fewer than two components, which is the honest answer.
         fallback = await check_tool(input_data=InterferenceCheckInput())
         assert fallback["status"] == "error"
-        assert "does not support check_interference" in fallback["message"]
+        assert "at least two components" in fallback["message"]
+        # The critical property: never a clean bill of health for an assembly
+        # nothing examined.
+        assert fallback.get("interference_found") is not False
 
         # Exception branch for adapter check_interference.
         mock_adapter.check_interference = AsyncMock(side_effect=RuntimeError("boom"))
