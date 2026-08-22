@@ -610,6 +610,14 @@ class TestPayloadCoercionFallbacks:
         result = _payload_dict(_Obj())
         assert result == {"coincident": True}
 
+    def test_payload_dict_passes_through_a_plain_dict(self) -> None:
+        given = {"coincident": True}
+        assert _payload_dict(given) is given
+
+    def test_payload_dict_uses_model_dump_for_pydantic_style_objects(self) -> None:
+        model = SimpleNamespace(model_dump=lambda: {"coincident": False})
+        assert _payload_dict(model) == {"coincident": False}
+
 
 class TestRequireDrawingGuard:
     """Cover ``SolidWorksIOMixin._require_drawing``'s two error branches."""
@@ -679,6 +687,33 @@ class TestPlaceViewErrors:
 
         assert result.is_error
         assert "Unknown orientation" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_accepts_an_explicit_position_list_and_a_raw_star_view_name(
+        self, monkeypatch
+    ) -> None:
+        """An explicit [x, y] position and a raw '*Name' orientation both parse.
+
+        Doesn't assert success - reaching the raw-name branch means the call
+        proceeds to a real (mocked) OpenDoc6, which this bare MagicMock
+        currentModel can't satisfy. What matters here is that both parsing
+        branches (position-as-list, and the '*'-prefixed raw view name) run
+        without raising, rather than falling into their "not given" defaults.
+        """
+        adapter = self._drawing_adapter(monkeypatch)
+
+        result = await adapter.create_drawing_view(
+            {
+                "model_path": __file__,
+                "position": [200.0, 75.0],
+                "orientation": "*CustomView1",
+            }
+        )
+
+        # However it resolves, it must have gotten past both the
+        # "model path required" and "Unknown orientation" checks.
+        assert "Unknown orientation" not in (result.error or "")
+        assert "A model path is required" not in (result.error or "")
 
 
 class TestCreateTechnicalDrawingNoViewsCreated:
