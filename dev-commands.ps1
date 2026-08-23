@@ -123,6 +123,7 @@ function dev-help {
     Write-Host "  dev-install-ui      Install/repair UI extras in .venv only"
     Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only)"
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
+    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (serial) as 2 runs, merged into one true coverage report"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
     Write-Host "  dev-format          Format code only (ruff format)"
     Write-Host "  dev-build           Build package for distribution"
@@ -181,10 +182,13 @@ function dev-test {
     # Keep generated integration artifacts from previous runs from accumulating.
     Invoke-IntegrationCleanup
 
+    # -n 4, not "auto": this machine has 24 logical CPUs but only ~10GB free
+    # RAM once VSCode + SolidWorks are running - "auto" spawns a worker per
+    # CPU, each loading the full package + deps, and OOMs the machine.
     Invoke-Pytest @(
         "tests/",
         "-m", "not solidworks_only and not smoke",
-        "-n", "auto",
+        "-n", "4",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
@@ -223,6 +227,74 @@ function dev-test-full {
         Write-Host "Full tests passed!" -ForegroundColor Green
     } else {
         Write-Host "Full tests failed." -ForegroundColor Red
+    }
+}
+
+function dev-test-combined {
+    # dev-test-full runs everything serially in one ~30-50min pytest session
+    # (-n 1 for the whole tree, since real COM needs single-threaded). This
+    # runs the mock suite in parallel and the real-SolidWorks suite serially
+    # as two SEPARATE pytest sessions, each writing to its own coverage data
+    # file, then combines them with `coverage combine` into one true report -
+    # the union of what mock tests AND real-SolidWorks tests each cover.
+    #
+    # Why this matters: a line only reachable via real COM (e.g. a defensive
+    # "SolidWorks returned nothing" raise inside add_mate) will always show
+    # as "missing" in a mock-only report, even once test_live_sw_regression.py
+    # genuinely exercises it. Chasing that gap with more mock tests either
+    # means skipping it (leaving a misleading "uncovered" line) or writing a
+    # redundant fake-COM test for something already proven live. Combined
+    # coverage answers "is this covered by ANY test" instead, so new tests
+    # only get written for lines neither suite actually reaches.
+    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (serial), merged into one true report..." -ForegroundColor Cyan
+    $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
+
+    Remove-Item -Path .coverage.mock, .coverage.real, .coverage.combined -Force -ErrorAction SilentlyContinue
+
+    # -n 4, not "auto": this machine has 24 logical CPUs but only ~10GB free
+    # RAM once VSCode + SolidWorks are running, and "auto" spawns a worker
+    # per CPU - each loading the full package + deps. Already learned the
+    # hard way once this session (see TODO_SESSION.md's 2026-08-14 entry) -
+    # "auto" OOM'd the machine again when this command first ran.
+    Write-Host "Phase 1/3: mock suite (parallel, -n 4)..." -ForegroundColor Cyan
+    $env:COVERAGE_FILE = ".coverage.mock"
+    Invoke-Pytest @(
+        "tests/",
+        "-m", "not solidworks_only",
+        "-n", "4",
+        "--cov=src/solidworks_mcp",
+        "--cov-report=",
+        "--cov-fail-under=0",
+        "-q"
+    )
+    $mockExit = $LASTEXITCODE
+
+    Write-Host "Phase 2/3: real SolidWorks suite (serial, -n 1 - requires SolidWorks running)..." -ForegroundColor Cyan
+    $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
+    $env:COVERAGE_FILE = ".coverage.real"
+    Invoke-Pytest @(
+        "tests/",
+        "-m", "solidworks_only",
+        "-n", "1",
+        "--cov=src/solidworks_mcp",
+        "--cov-report=",
+        "--cov-fail-under=0",
+        "-q"
+    )
+    $realExit = $LASTEXITCODE
+    Remove-Item Env:\COVERAGE_FILE -ErrorAction SilentlyContinue
+
+    Write-Host "Phase 3/3: combining coverage data..." -ForegroundColor Cyan
+    Invoke-Venv -Args @("-m", "coverage", "combine", "--data-file=.coverage.combined", "--keep", ".coverage.mock", ".coverage.real")
+    Invoke-Venv -Args @("-m", "coverage", "html", "--data-file=.coverage.combined", "-d", "htmlcov")
+    Invoke-Venv -Args @("-m", "coverage", "xml", "--data-file=.coverage.combined", "-o", "coverage.xml")
+    Invoke-Venv -Args @("-m", "coverage", "report", "--data-file=.coverage.combined", "-m", "--fail-under=99")
+    $reportExit = $LASTEXITCODE
+
+    if ($mockExit -eq 0 -and $realExit -eq 0 -and $reportExit -eq 0) {
+        Write-Host "Combined suite passed! True combined coverage written to htmlcov/index.html" -ForegroundColor Green
+    } else {
+        Write-Host "Combined suite failed (mock exit=$mockExit, real exit=$realExit, coverage gate exit=$reportExit)." -ForegroundColor Red
     }
 }
 
