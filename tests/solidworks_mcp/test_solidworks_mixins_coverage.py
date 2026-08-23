@@ -1155,6 +1155,25 @@ class TestSuppressFeatureImplMoreErrors:
         assert result.is_error
         assert "Feature not found: Ghost1" in (result.error or "")
 
+    def test_errors_when_edit_suppress_raises(self, monkeypatch) -> None:
+        """Late binding can resolve EditSuppress2 as a property that performs
+        the edit and *then* raises "'bool' object is not callable" - the
+        operation succeeds while the caller sees a failure. Reproduced here
+        via a plain raise, which _attempt_with_error reports the same way."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True, IsSuppressed=False
+        )
+        adapter.currentModel.EditSuppress2.side_effect = TypeError(
+            "'bool' object is not callable"
+        )
+
+        result = _suppress_feature_impl(adapter, "Fillet1", True)
+
+        assert result.is_error
+        assert "Failed to suppress Fillet1" in (result.error or "")
+
 
 class TestUndoImplMoreErrors:
     def test_errors_when_no_active_model(self, monkeypatch) -> None:
