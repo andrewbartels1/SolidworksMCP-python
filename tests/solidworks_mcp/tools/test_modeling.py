@@ -4,22 +4,30 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from solidworks_mcp.adapters.base import ExtrusionParameters
 from solidworks_mcp.tools.modeling import (
     AddFilletInput,
     AddMateInput,
     CloseModelInput,
     CreateAssemblyInput,
+    CreateAxisInput,
     CreateCutExtrudeInput,
     CreateDrawingInput,
     CreateExtrusionInput,
     CreateLoftInput,
     CreatePartInput,
+    CreateReferencePlaneInput,
     CreateRevolveInput,
     CreateSweepInput,
+    DeleteFeatureInput,
     GetDimensionInput,
     InsertComponentInput,
+    MirrorFeatureInput,
     OpenModelInput,
+    PatternCircularInput,
     SetDimensionInput,
+    SuppressFeatureInput,
+    UndoInput,
     _result_value,
     register_modeling_tools,
 )
@@ -843,4 +851,468 @@ class TestAssemblyTools:
         result = await tool_func()
 
         assert result["status"] == "error"
-        assert "not an assembly document" in result["message"]
+
+
+class TestFeatureEditingTools:
+    """Test suite for delete_feature / suppress_feature / undo tools."""
+
+    async def _part_with_extrusion(self, mock_adapter) -> str:
+        """Create a part with one extrusion feature; return the feature name."""
+        await mock_adapter.create_part()
+        result = await mock_adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+        return result.data.name
+
+    @pytest.mark.asyncio
+    async def test_delete_feature_success(self, mcp_server, mock_adapter, mock_config):
+        """delete_feature removes the named feature and reports it."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        name = await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "delete_feature"
+        )
+        result = await tool_func(DeleteFeatureInput(name=name))
+
+        assert result["status"] == "success"
+        assert name in result["message"]
+        assert result["data"]["deleted"] == name
+        assert "execution_time" in result
+
+    @pytest.mark.asyncio
+    async def test_delete_feature_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no delete_feature - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "delete_feature"
+        )
+        result = await tool_func(DeleteFeatureInput(name="Boss-Extrude1"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_delete_feature_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.delete_feature = AsyncMock(
+            return_value=Mock(is_success=False, error="Feature not found: Ghost1")
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "delete_feature"
+        )
+        result = await tool_func(DeleteFeatureInput(name="Ghost1"))
+
+        assert result["status"] == "error"
+        assert "Feature not found: Ghost1" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_suppress_feature_success(self, mcp_server, mock_adapter, mock_config):
+        """suppress_feature suppresses a known feature and reports the verb used."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        name = await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "suppress_feature"
+        )
+        result = await tool_func(SuppressFeatureInput(name=name, suppress=True))
+
+        assert result["status"] == "success"
+        assert result["message"] == f"Suppressed {name}"
+        assert result["data"]["suppressed"] is True
+
+    @pytest.mark.asyncio
+    async def test_unsuppress_feature_success_reports_unsuppress_verb(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """suppress_feature(suppress=False) reports 'Unsuppressed', not 'Suppressed'."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        name = await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "suppress_feature"
+        )
+        result = await tool_func(SuppressFeatureInput(name=name, suppress=False))
+
+        assert result["status"] == "success"
+        assert result["message"] == f"Unsuppressed {name}"
+
+    @pytest.mark.asyncio
+    async def test_suppress_feature_reports_when_state_unreadable(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A None 'suppressed' readback appends the disclosure to the message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.suppress_feature = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"feature": "Fillet1", "suppressed": None},
+                execution_time=0.1,
+            )
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "suppress_feature"
+        )
+        result = await tool_func(SuppressFeatureInput(name="Fillet1"))
+
+        assert result["status"] == "success"
+        assert "state could not be read back" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_suppress_feature_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no suppress_feature - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "suppress_feature"
+        )
+        result = await tool_func(SuppressFeatureInput(name="Fillet1"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_suppress_feature_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.suppress_feature = AsyncMock(
+            return_value=Mock(is_success=False, error="Feature not found: Ghost1")
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "suppress_feature"
+        )
+        result = await tool_func(SuppressFeatureInput(name="Ghost1"))
+
+        assert result["status"] == "error"
+        assert "Feature not found: Ghost1" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_undo_success_reports_steps_undone(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """undo removes the last feature and reports the step count."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        result = await tool_func(UndoInput(count=1))
+
+        assert result["status"] == "success"
+        assert result["message"] == "Undid 1 step(s)"
+        assert result["data"]["tree_changed"] is True
+
+    @pytest.mark.asyncio
+    async def test_undo_with_nothing_to_undo_reports_unchanged_tree(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """undo on an empty feature tree succeeds but reports nothing changed."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        result = await tool_func(UndoInput(count=1))
+
+        assert result["status"] == "success"
+        assert "nothing to undo" in result["message"]
+        assert result["data"]["tree_changed"] is False
+
+    @pytest.mark.asyncio
+    async def test_undo_defaults_to_one_step_when_no_input_given(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """undo() with no input_data still works, defaulting count to 1."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        result = await tool_func(None)
+
+        assert result["status"] == "success"
+        assert result["data"]["requested_steps"] == 1
+
+    @pytest.mark.asyncio
+    async def test_undo_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no undo - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        result = await tool_func(UndoInput())
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_undo_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.undo = AsyncMock(
+            return_value=Mock(is_success=False, error="nothing to undo here")
+        )
+
+        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        result = await tool_func(UndoInput())
+
+        assert result["status"] == "error"
+        assert "nothing to undo here" in result["message"]
+
+
+class TestReferenceGeometryTools:
+    """Test suite for create_reference_plane / create_axis tools."""
+
+    @pytest.mark.asyncio
+    async def test_create_reference_plane_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """create_reference_plane returns the new plane's details."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_reference_plane"
+        )
+        result = await tool_func(
+            CreateReferencePlaneInput(reference="Front Plane", offset=76.2)
+        )
+
+        assert result["status"] == "success"
+        assert result["plane"]["name"] == "Plane1"
+        assert result["plane"]["offset"] == 76.2
+        assert "Plane1" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_create_reference_plane_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no create_reference_plane - report error."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_reference_plane"
+        )
+        result = await tool_func(
+            CreateReferencePlaneInput(reference="Front Plane", offset=10.0)
+        )
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_create_reference_plane_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result (e.g. zero offset) surfaces the adapter's own error."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_reference_plane"
+        )
+        result = await tool_func(
+            CreateReferencePlaneInput(reference="Front Plane", offset=0.0)
+        )
+
+        assert result["status"] == "error"
+        assert "non-zero offset" in result["message"]
+
+    def test_create_reference_plane_input_rejects_blank_reference(self):
+        """CreateReferencePlaneInput.model_post_init rejects a blank reference."""
+        with pytest.raises(ValueError, match="reference is required"):
+            CreateReferencePlaneInput(reference="   ", offset=10.0)
+
+    @pytest.mark.asyncio
+    async def test_create_axis_success(self, mcp_server, mock_adapter, mock_config):
+        """create_axis returns the new axis's plane pair."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "create_axis"
+        )
+        result = await tool_func(CreateAxisInput(reference="z"))
+
+        assert result["status"] == "success"
+        assert result["axis"]["name"] == "Axis1"
+        assert result["axis"]["planes"] == ["Top Plane", "Right Plane"]
+        assert "z axis" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_create_axis_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no create_axis - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "create_axis"
+        )
+        result = await tool_func(CreateAxisInput(reference="x"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_create_axis_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """An unknown axis reference surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "create_axis"
+        )
+        result = await tool_func(CreateAxisInput(reference="w"))
+
+        assert result["status"] == "error"
+        assert "Unknown axis reference" in result["message"]
+
+    def test_create_axis_input_rejects_blank_reference(self):
+        """CreateAxisInput.model_post_init rejects a blank reference."""
+        with pytest.raises(ValueError, match="reference is required"):
+            CreateAxisInput(reference="   ")
+
+
+class TestMirrorAndPatternTools:
+    """Test suite for mirror_feature / pattern_circular tools."""
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_success(self, mcp_server, mock_adapter, mock_config):
+        """mirror_feature mirrors a known body about a built-in plane."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+        extruded = await mock_adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "mirror_feature"
+        )
+        result = await tool_func(
+            MirrorFeatureInput(
+                features=[extruded.data.name], mirror_plane="Right Plane"
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["mirror"]["mirror_plane"] == "Right Plane"
+        assert result["mirror"]["volume_ratio"] == pytest.approx(2.0)
+        assert extruded.data.name in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no mirror_feature - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "mirror_feature"
+        )
+        result = await tool_func(
+            MirrorFeatureInput(features=["Loft1"], mirror_plane="Right Plane")
+        )
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """An unknown source name surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "mirror_feature"
+        )
+        result = await tool_func(
+            MirrorFeatureInput(features=["Ghost1"], mirror_plane="Right Plane")
+        )
+
+        assert result["status"] == "error"
+        assert "Failed to select" in result["message"]
+
+    def test_mirror_feature_input_rejects_empty_features(self):
+        """MirrorFeatureInput.model_post_init rejects an empty features list."""
+        with pytest.raises(ValueError, match="features must contain at least one name"):
+            MirrorFeatureInput(features=[], mirror_plane="Right Plane")
+
+    def test_mirror_feature_input_rejects_blank_mirror_plane(self):
+        """MirrorFeatureInput.model_post_init rejects a blank mirror_plane."""
+        with pytest.raises(ValueError, match="mirror_plane is required"):
+            MirrorFeatureInput(features=["Loft1"], mirror_plane="   ")
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """pattern_circular patterns a feature around a known axis."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+        extruded = await mock_adapter.create_extrusion(ExtrusionParameters(depth=10.0))
+        axis = await mock_adapter.create_axis("z")
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "pattern_circular"
+        )
+        result = await tool_func(
+            PatternCircularInput(
+                features=[extruded.data.name], axis=axis.data["name"], count=4
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["pattern"]["axis"] == axis.data["name"]
+        assert result["pattern"]["count"] == 4
+        assert "4 instances" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no pattern_circular - report error, not a fabrication."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "pattern_circular"
+        )
+        result = await tool_func(
+            PatternCircularInput(features=["Boss-Extrude1"], axis="Axis1", count=4)
+        )
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """An unknown axis name surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "pattern_circular"
+        )
+        result = await tool_func(
+            PatternCircularInput(
+                features=["Boss-Extrude1"], axis="NoSuchAxis", count=4
+            )
+        )
+
+        assert result["status"] == "error"
+        assert "Failed to select axis" in result["message"]
+
+    def test_pattern_circular_input_rejects_empty_features(self):
+        """PatternCircularInput.model_post_init rejects an empty features list."""
+        with pytest.raises(ValueError, match="features must contain at least one name"):
+            PatternCircularInput(features=[], axis="Axis1", count=4)
+
+    def test_pattern_circular_input_rejects_blank_axis(self):
+        """PatternCircularInput.model_post_init rejects a blank axis."""
+        with pytest.raises(ValueError, match="axis is required"):
+            PatternCircularInput(features=["Boss-Extrude1"], axis="   ", count=4)
+
+    def test_pattern_circular_input_rejects_count_below_two(self):
+        """PatternCircularInput.model_post_init rejects a count under 2."""
+        with pytest.raises(ValueError, match="count must be at least 2"):
+            PatternCircularInput(features=["Boss-Extrude1"], axis="Axis1", count=1)
