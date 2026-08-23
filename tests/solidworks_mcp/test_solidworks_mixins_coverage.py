@@ -18,17 +18,25 @@ from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 from solidworks_mcp.adapters.solidworks.features import (
     _create_axis_impl,
     _create_reference_plane_impl,
+    _delete_feature_impl,
+    _feature_count,
+    _is_suppressed,
     _mirror_feature_impl,
     _pattern_circular_impl,
     _select_reference_entity,
     _suppress_feature_impl,
+    _undo_impl,
 )
 from solidworks_mcp.adapters.solidworks.io import (
     SolidWorksIOMixin,
     _byref_int,
     _ByrefFallback,
+    _component_pairs,
+    _component_transforms,
+    _interference_details,
     _payload,
     _payload_dict,
+    _view_names,
 )
 from solidworks_mcp.adapters.solidworks.sketch import SolidWorksSketchMixin
 
@@ -1024,3 +1032,770 @@ class TestSaveFileLegacyFallback:
         assert result.is_error
         assert "File not written after save" in (result.error or "")
         model.Save.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Second pass: every remaining line from the combined (mock + real-SW)
+# coverage report, closed one by one per the user's explicit request.
+# ---------------------------------------------------------------------------
+
+
+class TestFeatureCountAndSuppressedHelpers:
+    """Direct unit tests for the small module-level helpers in features.py."""
+
+    def test_feature_count_returns_none_when_manager_unreadable(self) -> None:
+        class _Adapter:
+            currentModel = SimpleNamespace(FeatureManager=None)
+
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+        assert _feature_count(_Adapter()) is None
+
+    def test_feature_count_returns_none_when_count_not_numeric(self) -> None:
+        class _Adapter:
+            currentModel = SimpleNamespace(
+                FeatureManager=SimpleNamespace(
+                    GetFeatureCount=lambda include_hidden: "not-a-number"
+                )
+            )
+
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+        assert _feature_count(_Adapter()) is None
+
+    def test_is_suppressed_reads_list_state(self) -> None:
+        class _Adapter:
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+            def _get_attr_or_call(self, obj, attr_name):
+                attr = getattr(obj, attr_name, None)
+                return attr() if callable(attr) else attr
+
+        feature = SimpleNamespace(IsSuppressed=[True])
+        assert _is_suppressed(_Adapter(), feature) is True
+
+    def test_is_suppressed_reads_int_state(self) -> None:
+        class _Adapter:
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+            def _get_attr_or_call(self, obj, attr_name):
+                attr = getattr(obj, attr_name, None)
+                return attr() if callable(attr) else attr
+
+        feature = SimpleNamespace(IsSuppressed=1)
+        assert _is_suppressed(_Adapter(), feature) is True
+
+    def test_is_suppressed_returns_none_for_unrecognized_type(self) -> None:
+        class _Adapter:
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+            def _get_attr_or_call(self, obj, attr_name):
+                attr = getattr(obj, attr_name, None)
+                return attr() if callable(attr) else attr
+
+        feature = SimpleNamespace(IsSuppressed="unexpected")
+        assert _is_suppressed(_Adapter(), feature) is None
+
+
+class TestDeleteFeatureImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _delete_feature_impl(adapter, "Boss-Extrude1")
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_edit_delete_did_not_remove_feature(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.FeatureByName.return_value = feature
+
+        result = _delete_feature_impl(adapter, "Boss-Extrude1")
+
+        assert result.is_error
+        assert "EditDelete did not remove feature" in (result.error or "")
+
+
+class TestSuppressFeatureImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _suppress_feature_impl(adapter, "Fillet1", True)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_feature_not_found(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = None
+
+        result = _suppress_feature_impl(adapter, "Ghost1", True)
+
+        assert result.is_error
+        assert "Feature not found: Ghost1" in (result.error or "")
+
+
+class TestUndoImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _undo_impl(adapter, 1)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_both_undo_overloads_fail(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.EditUndo2.side_effect = RuntimeError("not supported")
+        adapter.currentModel.EditUndo.side_effect = RuntimeError("legacy gone too")
+
+        result = _undo_impl(adapter, 1)
+
+        assert result.is_error
+        assert "Undo failed" in (result.error or "")
+
+
+class TestCreateReferencePlaneImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_reference_blank(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+
+        result = _create_reference_plane_impl(adapter, "", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "requires a reference plane/face name" in (result.error or "")
+
+    def test_flip_true_combines_the_option_flag_on_success(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.side_effect = [5, 6]
+        feature_manager.InsertRefPlane.return_value = SimpleNamespace(Name="Plane1")
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, True)
+
+        assert result.is_success
+        no_flip_constraint = feature_manager.InsertRefPlane.call_args.args[0]
+        assert no_flip_constraint & 256  # _REF_PLANE_OPTION_FLIP bit is set
+
+    def test_errors_when_no_plane_added_to_tree(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.return_value = 5  # unchanged before/after
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "No reference plane was added" in (result.error or "")
+
+    def test_errors_when_insert_ref_plane_returns_nothing(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.side_effect = [5, 6]
+        feature_manager.InsertRefPlane.return_value = None
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "InsertRefPlane returned nothing" in (result.error or "")
+
+
+class TestCreateAxisImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _create_axis_impl(adapter, "z")
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_plane_selection_fails(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = None
+        adapter.currentModel.Extension.SelectByID2.return_value = False
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.is_error
+        assert "Failed to select" in (result.error or "")
+
+    def test_errors_when_no_axis_created_but_counts_readable(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.return_value = 5  # unchanged
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.is_error
+        assert "No reference axis was created" in (result.error or "")
+
+
+class TestMirrorFeatureImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _mirror_feature_impl(adapter, ["Loft1"], "Right Plane", True, True)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_plane_selection_fails_but_source_succeeds(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+
+        def feature_by_name(name):
+            if name == "Loft1":
+                return SimpleNamespace(Select2=lambda append, mark: True)
+            return None
+
+        adapter.currentModel.FeatureByName.side_effect = feature_by_name
+        adapter.currentModel.Extension.SelectByID2.return_value = False
+
+        result = _mirror_feature_impl(
+            adapter, ["Loft1"], "Right Plane", True, False
+        )
+
+        assert result.is_error
+        assert "Failed to select mirror plane: Right Plane" in (result.error or "")
+
+
+class TestPatternCircularImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _pattern_circular_impl(
+            adapter, ["Boss-Extrude1"], "Axis1", 4, 360.0, True
+        )
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_falls_back_to_named_feature_selection_and_then_fails(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+
+        def select_by_id2(name, kind, x, y, z, append, mark, callout, opt):
+            return kind == "AXIS"
+
+        adapter.currentModel.Extension.SelectByID2.side_effect = select_by_id2
+        adapter.currentModel.FeatureByName.return_value = None
+
+        result = _pattern_circular_impl(
+            adapter, ["Boss-Extrude1"], "Axis1", 4, 360.0, True
+        )
+
+        assert result.is_error
+        assert "Failed to select feature to pattern" in (result.error or "")
+
+
+class TestMirrorAndPatternWrapperNoActiveModel:
+    """The async wrapper methods' own early 'no active model' guard."""
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_errors_when_no_active_model(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.mirror_feature(["Body1"], "Right Plane")
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_errors_when_no_active_model(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.pattern_circular(["Boss-Extrude1"], "Axis1", 4)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# io.py: module-level helper functions
+# ---------------------------------------------------------------------------
+
+
+class TestViewNamesHelper:
+    def test_skips_unwrappable_views(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: None),
+        )
+        drawing = SimpleNamespace(GetViews=lambda: [["sheet_obj", "view_obj1"]])
+
+        result = _view_names(adapter, drawing)
+
+        assert result == []
+
+
+class TestComponentTransformsHelper:
+    def test_skips_component_that_is_none(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: None),
+        )
+        assembly = MagicMock()
+        assembly.GetComponents.return_value = [object()]
+
+        result = _component_transforms(adapter, assembly)
+
+        assert result == {}
+
+    def test_skips_non_list_transform_data(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        component = SimpleNamespace(
+            Name2="part-1", Transform2=SimpleNamespace(ArrayData="not-a-list")
+        )
+        assembly = MagicMock()
+        assembly.GetComponents.return_value = [component]
+
+        result = _component_transforms(adapter, assembly)
+
+        assert result == {}
+
+    def test_skips_transform_with_unconvertible_values(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        component = SimpleNamespace(
+            Name2="part-1",
+            Transform2=SimpleNamespace(ArrayData=["not-a-number"] * 16),
+        )
+        assembly = MagicMock()
+        assembly.GetComponents.return_value = [component]
+
+        result = _component_transforms(adapter, assembly)
+
+        assert result == {}
+
+
+class TestInterferenceDetailsHelper:
+    def test_skips_unwrappable_interference(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: None),
+        )
+
+        result = _interference_details(adapter, [object()])
+
+        assert result == []
+
+    def test_volume_conversion_failure_reports_none(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        item = SimpleNamespace(
+            Volume="not-a-number", GetComponentCount=lambda: 2, Components=[]
+        )
+
+        result = _interference_details(adapter, [item])
+
+        assert result[0]["volume_mm3"] is None
+
+    def test_skips_unwrappable_nested_component(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(
+                Dispatch=lambda obj: None if isinstance(obj, str) else obj
+            ),
+        )
+        item = SimpleNamespace(
+            Volume=1e-6, GetComponentCount=lambda: 1, Components=["raw-string"]
+        )
+
+        result = _interference_details(adapter, [item])
+
+        assert result[0]["components"] == []
+
+
+class TestComponentPairsHelper:
+    def test_unwrappable_component_reported_as_unnamed(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: None),
+        )
+        assembly = MagicMock()
+        assembly.GetComponents.return_value = [object()]
+
+        result = _component_pairs(adapter, assembly)
+
+        assert result == [("<unnamed>", None)]
+
+    def test_falls_back_to_get_path_name_when_name2_empty(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        component = SimpleNamespace(Name2="", GetPathName=lambda: "C:/parts/a.sldprt")
+        assembly = MagicMock()
+        assembly.GetComponents.return_value = [component]
+
+        result = _component_pairs(adapter, assembly)
+
+        assert result == [("C:/parts/a.sldprt", component)]
+
+
+# ---------------------------------------------------------------------------
+# io.py: insert_component / list_components
+# ---------------------------------------------------------------------------
+
+
+class TestInsertComponentMoreErrors:
+    @pytest.mark.asyncio
+    async def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.insert_component("C:/parts/a.sldprt", 0, 0, 0)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_file_not_found(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        result = await adapter.insert_component(
+            "C:/definitely/not/real.sldprt", 0, 0, 0
+        )
+        assert result.is_error
+        assert "Component file not found" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_not_an_assembly(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 1
+
+        result = await adapter.insert_component(__file__, 0, 0, 0)
+
+        assert result.is_error
+        assert "requires an assembly document" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_opendoc6_returns_nothing(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 2
+        adapter.swApp = MagicMock()
+        adapter.swApp.OpenDoc6.return_value = None
+
+        result = await adapter.insert_component(__file__, 0, 0, 0)
+
+        assert result.is_error
+        assert "OpenDoc6 returned nothing" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_add_component5_and_still_fails(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 2
+        adapter.currentModel.GetComponents.return_value = []
+        adapter.swApp = MagicMock()
+        adapter.swApp.OpenDoc6.return_value = MagicMock()
+        adapter.currentModel.AddComponent4.return_value = None
+        adapter.currentModel.AddComponent5.return_value = None
+
+        result = await adapter.insert_component(__file__, 0, 0, 0)
+
+        assert result.is_error
+        adapter.currentModel.AddComponent5.assert_called_once()
+        assert "Component was not inserted" in (result.error or "")
+
+
+class TestListComponentsMoreErrors:
+    @pytest.mark.asyncio
+    async def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.list_components()
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_not_an_assembly(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 1
+
+        result = await adapter.list_components()
+
+        assert result.is_error
+        assert "requires an assembly document" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# io.py: _place_view / create_drawing_view / add_drawing_view
+# ---------------------------------------------------------------------------
+
+
+class TestPlaceViewMoreErrors:
+    @pytest.mark.asyncio
+    async def test_guard_passthrough_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.create_drawing_view({"model_path": __file__})
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_scale_parse_failure_is_absorbed_not_raised(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.currentModel.GetViews.return_value = None
+
+        # "1:1" cannot convert via float() - if the except branch (1794-1798)
+        # did not absorb it, this would raise ValueError instead of
+        # returning a normal AdapterResult.
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "scale": "1:1"}
+        )
+
+        assert result.is_error  # a normal error result, not an exception
+
+    @pytest.mark.asyncio
+    async def test_errors_when_view_count_unchanged(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.swApp = MagicMock()
+        adapter.swApp.OpenDoc6.return_value = MagicMock()
+        adapter.currentModel.GetViews.return_value = None
+
+        result = await adapter.create_drawing_view({"model_path": __file__})
+
+        assert result.is_error
+        assert "View was not created" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_applies_scale_when_view_is_created(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.swApp = MagicMock()
+        adapter.swApp.OpenDoc6.return_value = MagicMock()
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        view_names_calls = iter([[], ["Drawing View1"]])
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._view_names",
+            lambda adapter, drawing: next(view_names_calls),
+        )
+        adapter.currentModel.CreateDrawViewFromModelView3.return_value = (
+            SimpleNamespace()
+        )
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "scale": "2.0"}
+        )
+
+        assert result.is_success
+        assert result.data["name"] == "Drawing View1"
+
+
+class TestAddDrawingViewDelegates:
+    @pytest.mark.asyncio
+    async def test_add_drawing_view_reaches_place_view(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+
+        result = await adapter.add_drawing_view({"model_path": __file__})
+
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+
+class TestCreateTechnicalDrawingMoreErrors:
+    @pytest.mark.asyncio
+    async def test_guard_passthrough_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.create_technical_drawing({"model_path": __file__})
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_model_path_missing(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+
+        result = await adapter.create_technical_drawing({})
+
+        assert result.is_error
+        assert "A model path is required" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_model_file_not_found(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+
+        result = await adapter.create_technical_drawing(
+            {"model_path": "C:/definitely/not/real.sldprt"}
+        )
+
+        assert result.is_error
+        assert "Model file not found" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_first_angle_projection_calls_the_first_angle_overload(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.currentModel.GetViews.return_value = None
+
+        result = await adapter.create_technical_drawing(
+            {"model_path": __file__, "projection": "first_angle"}
+        )
+
+        assert result.is_error  # no views appear either way; that's fine here
+        adapter.currentModel.Create1stAngleViews2.assert_called_once()
+        adapter.currentModel.Create3rdAngleViews2.assert_not_called()
+
+
+class TestAddNoteMoreErrors:
+    @pytest.mark.asyncio
+    async def test_errors_when_text_missing(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+
+        result = await adapter.add_note({})
+
+        assert result.is_error
+        assert "add_note requires text" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_accepts_an_explicit_position_list(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.currentModel.InsertNote.return_value = None
+
+        result = await adapter.add_note({"text": "hi", "position": [10.0, 20.0]})
+
+        assert result.is_error
+        assert "InsertNote returned nothing" in (result.error or "")
+
+
+class TestListDrawingViewsGuard:
+    @pytest.mark.asyncio
+    async def test_guard_passthrough_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.list_drawing_views()
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+
+class TestCheckInterferenceMoreErrors:
+    @pytest.mark.asyncio
+    async def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.check_interference()
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_filters_by_wanted_component_names(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 2
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        manager = MagicMock()
+        manager.GetInterferenceCount.return_value = 1
+        item = SimpleNamespace(
+            Volume=1e-6,
+            GetComponentCount=lambda: 2,
+            Components=[
+                SimpleNamespace(Name2="part-1"),
+                SimpleNamespace(Name2="part-2"),
+            ],
+        )
+        manager.GetInterferences.return_value = [item]
+        adapter.currentModel.InterferenceDetectionManager = manager
+
+        result = await adapter.check_interference({"components": ["part-1"]})
+
+        assert result.is_success
+        assert result.data["interference_found"] is True
+        assert result.data["scope"] == ["part-1"]
