@@ -825,6 +825,183 @@ class TestByrefFallback:
         assert result.value == 0
 
 
+class TestAddMateErrorBranches:
+    """Cover ``add_mate``'s remaining error branches - pre-existing PR #56
+    code, not one of the 7 new-capability PRs this coverage sprint targeted,
+    but closed anyway since the technique generalizes directly.
+
+    ``_as_com`` wraps every component/feature through the real
+    ``win32com.client.dynamic.Dispatch`` before flagging it, which raises on
+    a plain test double (it expects a real COM PyIDispatch). Monkeypatching
+    io.py's module-level ``_dynamic`` alias to an identity passthrough
+    (mirroring its own non-Windows fallback shape, ``SimpleNamespace(Dispatch=...)``)
+    lets ``SimpleNamespace`` components flow through unchanged, the same way
+    the real object would after wrapping.
+    """
+
+    @staticmethod
+    def _identity_dynamic(monkeypatch) -> None:
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+
+    @staticmethod
+    def _assembly_adapter(monkeypatch) -> PyWin32Adapter:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 2  # Assembly
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_errors_when_not_an_assembly_document(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 1  # Part, not an assembly
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "requires an assembly document" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_on_unknown_mate_type(self, monkeypatch) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+
+        result = await adapter.add_mate("part-1", "part-2", mate_type="not_a_type")
+
+        assert result.is_error
+        assert "Unknown mate type" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_on_unknown_alignment(self, monkeypatch) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+
+        result = await adapter.add_mate("part-1", "part-2", alignment="not_an_alignment")
+
+        assert result.is_error
+        assert "Unknown alignment" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_components_unreadable(self, monkeypatch) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+        adapter.currentModel.GetComponents.return_value = None
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "Could not read the assembly's components" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_every_component_fails_to_wrap(
+        self, monkeypatch
+    ) -> None:
+        """Exercises both the per-component 'continue' and the resulting
+        'not found' raise: nothing wraps, so nothing can ever match."""
+        adapter = self._assembly_adapter(monkeypatch)
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: None),
+        )
+        adapter.currentModel.GetComponents.return_value = [object(), object()]
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "Component(s) not found" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_named_components_are_not_in_the_assembly(
+        self, monkeypatch
+    ) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="other-part-1"),
+            SimpleNamespace(Name2="other-part-2"),
+        ]
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "Component(s) not found: part-1, part-2" in (result.error or "")
+        assert "other-part-1" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_entity_not_found_on_component(
+        self, monkeypatch
+    ) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: None),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: None),
+        ]
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "not found on part-1" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_entity_selection_fails(self, monkeypatch) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        feature = SimpleNamespace(Select2=lambda append, mark: False)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: feature),
+        ]
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "Failed to select" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_selected_count_is_not_two(self, monkeypatch) -> None:
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 1
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "Expected 2 selected entities" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_errors_when_solidworks_rejects_the_mate(self, monkeypatch) -> None:
+        """error_status=2 mirrors the documented real measurement: this build
+        reports 1 for success, so anything else (including a successful-looking
+        object with an unhelpful status) is treated as a rejection."""
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+
+        def fake_byref_int():
+            return SimpleNamespace(value=2)  # not 1 == success per the docstring
+
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._byref_int", fake_byref_int
+        )
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_error
+        assert "SolidWorks rejected the coincident mate" in (result.error or "")
+
+
 class TestSaveFileLegacyFallback:
     """Cover ``save_file``'s legacy ``Save()`` fallback and unwritten-file raise."""
 
