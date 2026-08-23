@@ -2553,6 +2553,14 @@ class TestPyWin32AdapterBranches:
             SimpleNamespace(Dispatch=Mock(return_value=None)),
             raising=False,
         )
+        # The 8-cycle acquire_solidworks_application retry loop sleeps 1s
+        # between attempts; every attempt here is mocked to fail, so the
+        # real 8s wait is pure overhead - skip it without changing the
+        # retry-count/exception logic under test.
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep",
+            AsyncMock(),
+        )
 
         with pytest.raises(SolidWorksMCPError, match="instance is None"):
             await adapter.connect()

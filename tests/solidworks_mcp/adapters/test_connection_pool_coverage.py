@@ -407,7 +407,9 @@ class TestConnectionPoolAdapterCoverage:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_execute_with_pool_logs_when_replacement_adapter_fails(self):
+    async def test_execute_with_pool_logs_when_replacement_adapter_fails(
+        self, monkeypatch
+    ):
         """When the operation keeps failing and replacement adapter creation also."""
 
         bad_factory_calls = 0
@@ -438,6 +440,23 @@ class TestConnectionPoolAdapterCoverage:
             """Test always fail."""
 
             raise RuntimeError("operation failed")
+
+        # After the seed adapter fails and the bad_factory replacement also
+        # fails to connect, the retry loop's second _get_adapter() call
+        # blocks on an empty queue for its hardcoded 30s default timeout.
+        # Shrink that to keep the real wait_for/TimeoutError logic intact
+        # without the test actually waiting 30 real seconds.
+        real_get_adapter = pool._get_adapter
+
+        async def fast_get_adapter(timeout: float = 0.01):
+            return await real_get_adapter(timeout=timeout)
+
+        monkeypatch.setattr(pool, "_get_adapter", fast_get_adapter)
+        # Also skip the retry loop's 1s-per-retry exponential backoff sleep
+        # (max_retries=1 here, so this alone was worth 1 real second).
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.connection_pool.asyncio.sleep", AsyncMock()
+        )
 
         with patch("solidworks_mcp.adapters.connection_pool.logger") as mock_logger:
             result = await pool._execute_with_pool("test_op", always_fail)

@@ -676,11 +676,13 @@ class TestPlaceViewErrors:
         assert "A model path is required" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_errors_when_model_file_not_found(self, monkeypatch) -> None:
+    async def test_errors_when_model_file_not_found(
+        self, monkeypatch, tmp_path
+    ) -> None:
         adapter = self._drawing_adapter(monkeypatch)
 
         result = await adapter.create_drawing_view(
-            {"model_path": "C:/definitely/does/not/exist.sldprt"}
+            {"model_path": str(tmp_path / "does-not-exist.sldprt")}
         )
 
         assert result.is_error
@@ -1536,11 +1538,11 @@ class TestInsertComponentMoreErrors:
         assert "No active model" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_errors_when_file_not_found(self, monkeypatch) -> None:
+    async def test_errors_when_file_not_found(self, monkeypatch, tmp_path) -> None:
         adapter = _build_adapter(monkeypatch)
         adapter.currentModel = MagicMock()
         result = await adapter.insert_component(
-            "C:/definitely/not/real.sldprt", 0, 0, 0
+            str(tmp_path / "does-not-exist.sldprt"), 0, 0, 0
         )
         assert result.is_error
         assert "Component file not found" in (result.error or "")
@@ -1717,13 +1719,15 @@ class TestCreateTechnicalDrawingMoreErrors:
         assert "A model path is required" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_errors_when_model_file_not_found(self, monkeypatch) -> None:
+    async def test_errors_when_model_file_not_found(
+        self, monkeypatch, tmp_path
+    ) -> None:
         adapter = _build_adapter(monkeypatch)
         adapter.currentModel = MagicMock()
         adapter.currentModel.GetType.return_value = 3
 
         result = await adapter.create_technical_drawing(
-            {"model_path": "C:/definitely/not/real.sldprt"}
+            {"model_path": str(tmp_path / "does-not-exist.sldprt")}
         )
 
         assert result.is_error

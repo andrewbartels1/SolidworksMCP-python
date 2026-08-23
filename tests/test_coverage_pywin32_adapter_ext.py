@@ -207,7 +207,10 @@ class TestPyWin32AdapterMockCOM:
                 from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
                 # Mock pythoncom and win32com
-                with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom"):
+                with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom"), patch(
+                    "solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep",
+                    new=AsyncMock(),
+                ):
                     with patch(
                         "solidworks_mcp.adapters.pywin32_adapter.win32com.client"
                     ) as mock_client:
@@ -216,15 +219,26 @@ class TestPyWin32AdapterMockCOM:
                         mock_client.GetObject.return_value = mock_app
                         mock_client.Dispatch.return_value = mock_app
 
-                        adapter = PyWin32Adapter({"timeout": 30})
+                        # acquire_solidworks_application() late-binds through
+                        # the module-level _dynamic_module reference, not
+                        # win32com.client - unless this is stubbed too, it
+                        # falls through to the *real* pywin32
+                        # dynamic.Dispatch("SldWorks.Application") on any
+                        # dev box with real SolidWorks installed.
+                        with patch(
+                            "solidworks_mcp.adapters.pywin32_adapter._dynamic_module"
+                        ) as mock_dynamic:
+                            mock_dynamic.Dispatch.return_value = mock_app
 
-                        # Mock the COM model
-                        mock_model = MagicMock()
-                        mock_app.OpenDoc6.return_value = mock_model
+                            adapter = PyWin32Adapter({"timeout": 30})
 
-                        # Try to connect (might fail but should reach COM calls)
-                        try:
-                            await adapter.connect()
-                        except Exception:
-                            # Expected to fail without real SolidWorks
-                            pass
+                            # Mock the COM model
+                            mock_model = MagicMock()
+                            mock_app.OpenDoc6.return_value = mock_model
+
+                            # Try to connect (might fail but should reach COM calls)
+                            try:
+                                await adapter.connect()
+                            except Exception:
+                                # Expected to fail without real SolidWorks
+                                pass
