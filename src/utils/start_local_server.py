@@ -5,24 +5,59 @@ This script provides easy local testing and development of the SolidWorks MCP se
 with configurable security, deployment modes, and comprehensive logging.
 """
 
-import argparse
-import asyncio
-import io
-import json
-import logging
-import signal
+import os
 import sys
-import time
-from pathlib import Path
+import time as _time
 
-from solidworks_mcp.config import (
-    AdapterType,
-    DeploymentMode,
-    SecurityLevel,
-    SolidWorksMCPConfig,
+# Boot trace: appends one flushed line per checkpoint to a fixed file, using
+# only stdlib that cannot itself fail to import. This exists to diagnose
+# MCP-host launch failures that kill the process before the normal
+# loguru/stderr pipeline is even up - see CLAUDE.md runbook item 9a. A crash
+# here would defeat the diagnostic, so every path swallows its own errors.
+_BOOT_TRACE_PATH = os.path.join(
+    os.environ.get("TEMP") or os.environ.get("TMP") or ".",
+    "solidworks_mcp_boot_trace.log",
 )
-from solidworks_mcp.server import SolidWorksMCPServer
-from solidworks_mcp.utils.logging import setup_logging
+
+
+def _boot_trace(msg: str) -> None:
+    try:
+        with open(_BOOT_TRACE_PATH, "a", encoding="utf-8") as f:
+            f.write(f"{_time.time():.3f} pid={os.getpid()} {msg}\n")
+    except Exception:
+        pass
+
+
+_boot_trace(f"process started argv={sys.argv!r} cwd={os.getcwd()!r}")
+
+import argparse  # noqa: E402
+import asyncio  # noqa: E402
+import io  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import signal  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+_boot_trace("stdlib imports complete")
+
+try:
+    from solidworks_mcp.config import (
+        AdapterType,
+        DeploymentMode,
+        SecurityLevel,
+        SolidWorksMCPConfig,
+    )
+    from solidworks_mcp.server import SolidWorksMCPServer
+    from solidworks_mcp.utils.logging import setup_logging
+except BaseException as _import_exc:  # pragma: no cover - diagnostic path only
+    import traceback
+
+    _boot_trace(f"solidworks_mcp import FAILED: {_import_exc!r}")
+    _boot_trace(traceback.format_exc())
+    raise
+
+_boot_trace("solidworks_mcp imports complete")
 
 # Add src to path for development
 project_root = Path(__file__).resolve().parents[2]
@@ -383,6 +418,7 @@ async def main():
     )
 
     args = parser.parse_args()
+    _boot_trace(f"args parsed: {vars(args)!r}")
 
     # Determine mock mode
     mock_mode = not args.real  # Default to mock unless --real specified
@@ -407,6 +443,8 @@ async def main():
         eprint("\n✅ Configuration displayed. Use --help for startup options.")
         return
 
+    _boot_trace("config created, logging configured")
+
     server: SolidWorksMCPServer | None = None
     try:
         # Create and start server
@@ -414,11 +452,14 @@ async def main():
         setup_signal_handlers(server)
 
         logger.info("Initializing server...")
+        _boot_trace("calling server.setup()")
         await server.setup()
+        _boot_trace("server.setup() returned")
 
         logger.info(
             f"Starting server (deployment_mode={config.deployment_mode.value})..."
         )
+        _boot_trace("calling server.start() (blocks for the stdio session)")
         # NOTE: for DeploymentMode.LOCAL (the only mode this script's config uses,
         # see create_local_config()) this call blocks for the entire lifetime of
         # the MCP stdio session - it only returns once the client disconnects.
@@ -428,6 +469,7 @@ async def main():
         # stream once the session ends, so a bare print() here raises
         # "ValueError: I/O operation on closed file" and crashes the process.
         await server.start()
+        _boot_trace("server.start() returned (stdio session ended)")
 
         if config.deployment_mode == DeploymentMode.LOCAL:
             logger.info("MCP stdio session ended")
@@ -458,7 +500,11 @@ async def main():
                 logger.error("Server health check failed")
 
     except Exception as e:
+        import traceback
+
         logger.error(f"Server startup failed: {e}")
+        _boot_trace(f"main() try block raised: {e!r}")
+        _boot_trace(traceback.format_exc())
         sys.exit(1)
 
     finally:
@@ -468,9 +514,16 @@ async def main():
                 logger.info("Server stopped gracefully")
             except Exception as e:
                 logger.error(f"Error during shutdown: {e}")
+                _boot_trace(f"server.stop() raised: {e!r}")
+        _boot_trace("main() finally block complete")
 
 
-if __name__ == "__main__":
+def _run_main() -> None:
+    """Run main() under the appropriate event loop, tracing anything that escapes.
+
+    Returns:
+        None: None.
+    """
     if sys.platform == "win32":
         # Use ProactorEventLoop for Windows compatibility (modern approach)
         # set_event_loop_policy is deprecated in Python 3.14+
@@ -490,3 +543,18 @@ if __name__ == "__main__":
             asyncio.run(main())
     else:
         asyncio.run(main())
+
+
+if __name__ == "__main__":
+    try:
+        _run_main()
+        _boot_trace("_run_main() returned normally, process exiting 0")
+    except SystemExit as _exc:
+        _boot_trace(f"SystemExit code={_exc.code!r}")
+        raise
+    except BaseException as _exc:  # pragma: no cover - diagnostic path only
+        import traceback
+
+        _boot_trace(f"_run_main() raised unhandled: {_exc!r}")
+        _boot_trace(traceback.format_exc())
+        raise
