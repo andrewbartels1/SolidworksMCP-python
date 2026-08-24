@@ -128,21 +128,19 @@ The first run builds the image. Re-run without rebuild when only executing tests
 
 ## MCP Client Configuration (Windows)
 
-**Recommended: point the client directly at the venv's `python.exe`.** MCP hosts
-(Claude Desktop, VS Code, LM Studio) spawn servers over raw stdio pipes with no
-console attached. Windows PowerShell's native-command invocation is unreliable
-in that exact scenario — `run-mcp.ps1`'s own venv-detection step has been
-observed both to throw (`Cannot run a document in the middle of a pipeline`)
-and to silently fail (empty `$LASTEXITCODE`) specifically because of this, even
-though the identical command works fine from an interactive terminal. Direct
-`python.exe` invocation skips PowerShell entirely and has no such failure
-mode. See [CLAUDE.md runbook item 9b](CLAUDE.md#troubleshooting-runbook) for
-the full diagnosis.
-
-`run-mcp.ps1` still works and remains available below for anyone who wants its
-automatic venv/`uv` detection — it received the same hardening (a
-`Start-Process`-based check instead of a piped one) — but if you hit
-connection failures with it, switch to the direct form first.
+MCP hosts (Claude Desktop, VS Code, LM Studio) spawn servers over raw stdio
+pipes with no console attached. Windows PowerShell's native-command invocation
+is unreliable in that exact scenario — `run-mcp.ps1`'s own venv-detection step
+has been observed both to throw (`Cannot run a document in the middle of a
+pipeline`) and to silently fail (empty `$LASTEXITCODE`) specifically because
+of this, even though the identical command works fine from an interactive
+terminal. `run-mcp.ps1` received hardening for this (a `Start-Process`-based
+check instead of a piped one) and still works, but if you hit connection
+failures with it, **point the client directly at the venv's `python.exe`
+instead** — that skips PowerShell entirely and has no such failure mode. See
+[CLAUDE.md runbook item 9b](CLAUDE.md#troubleshooting-runbook) for the full
+diagnosis. Each section below documents which form is recommended for that
+client, plus the alternative.
 
 ### Claude Desktop
 
@@ -186,6 +184,35 @@ Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
   "servers": {
     "solidworks-mcp-server": {
       "type": "stdio",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
+      ]
+  },
+  "inputs": []
+}
+```
+
+Replace the script path with your local repository path.  The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks open).  Omit them for mock mode.
+
+#### Development alternative: direct Python
+
+For local development iteration (or if you hit the `run-mcp.ps1`/PowerShell
+issue described above), point VS Code directly at the venv's `python.exe`
+instead, bypassing PowerShell entirely:
+
+```json
+{
+  "servers": {
+    "solidworks-mcp-server": {
+      "type": "stdio",
       "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
       "args": [
         "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
@@ -198,8 +225,6 @@ Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
   "inputs": []
 }
 ```
-
-Replace the paths with your local repository path.  The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks open).  Omit them for mock mode.
 
 ### LM Studio
 

@@ -342,42 +342,55 @@ def print_connection_info(config: SolidWorksMCPConfig) -> None:
         None: None.
     """
     eprint("\n" + "=" * 60)
-    eprint("🔌 CLAUDE DESKTOP CONFIGURATION")
+    eprint("🔌 MCP CLIENT CONFIGURATION")
     eprint("=" * 60)
 
-    run_mcp_script = project_root / "run-mcp.ps1"
-    claude_config = {
+    # Mirror the flags this instance actually started with, rather than a
+    # fixed/guessed set - and use sys.executable so the snippet is correct
+    # on whatever platform/interpreter is actually running it, not just a
+    # Windows venv path. No fallback year: an unset config.solidworks_year
+    # means the adapter auto-detects it, so forcing a specific year here
+    # would misrepresent the running config.
+    server_args = [
+        str(Path(__file__).resolve()),
+        "--mock" if config.mock_solidworks else "--real",
+        "--port",
+        str(config.port),
+        "--security",
+        config.security_level.value,
+        "--log-level",
+        config.log_level,
+    ]
+    if config.solidworks_year:
+        server_args.extend(["--year", str(config.solidworks_year)])
+
+    client_config = {
         "mcpServers": {
             "solidworks": {
-                "command": "powershell",
-                "args": [
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    str(run_mcp_script),
-                    "--mock" if config.mock_solidworks else "--real",
-                    "--year",
-                    str(config.solidworks_year) if config.solidworks_year else "2026",
-                ],
+                "command": sys.executable,
+                "args": server_args,
             }
         }
     }
 
-    eprint("Add this to your Claude Desktop config file:")
-    eprint(json.dumps(claude_config, indent=2))
+    eprint("Add this to your MCP client config file (Claude Desktop, VS Code, LM Studio):")
+    eprint(json.dumps(client_config, indent=2))
+    eprint(
+        "\n(Windows users can alternatively invoke run-mcp.ps1 for automatic "
+        "venv/uv detection - see README.md)"
+    )
 
     config_locations = {
-        "Windows (classic install)": "%APPDATA%\\Claude\\claude_desktop_config.json",
-        "Windows (packaged install)": (
+        "Claude Desktop - Windows (classic install)": "%APPDATA%\\Claude\\claude_desktop_config.json",
+        "Claude Desktop - Windows (packaged install)": (
             "%LOCALAPPDATA%\\Packages\\Claude_<hash>\\LocalCache\\Roaming\\Claude\\"
             "claude_desktop_config.json"
         ),
-        "macOS": "~/Library/Application Support/Claude/claude_desktop_config.json",
-        "Linux": "~/.config/Claude/claude_desktop_config.json",
+        "Claude Desktop - macOS": "~/Library/Application Support/Claude/claude_desktop_config.json",
+        "Claude Desktop - Linux": "~/.config/Claude/claude_desktop_config.json",
     }
 
-    eprint("\nConfig file locations:")
+    eprint("\nClaude Desktop config file locations:")
     for os_name, path in config_locations.items():
         eprint(f"  {os_name}: {path}")
 
