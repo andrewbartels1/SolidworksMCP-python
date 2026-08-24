@@ -42,6 +42,19 @@ if sys.platform == "win32":
         )
 
 
+def eprint(*args, **kwargs) -> None:  # noqa: ANN002, ANN003 - thin print() passthrough
+    """Print to stderr instead of stdout.
+
+    MCP stdio hosts (Claude Desktop, VS Code, LM Studio) treat this process'
+    stdout as a pure JSON-RPC channel once the FastMCP stdio transport takes
+    over. Any decorative/human-readable output written to stdout is invalid
+    framing from the client's point of view and can cause it to tear down the
+    connection. All banner/status text in this script must go to stderr.
+    """
+    kwargs.setdefault("file", sys.stderr)
+    print(*args, **kwargs)
+
+
 def create_local_config(
     mock_mode: bool = True,
     security_level: str = "minimal",
@@ -133,9 +146,9 @@ async def demonstrate_tools(server: SolidWorksMCPServer) -> None:
     Returns:
         None: None.
     """
-    print("\n" + "=" * 60)
-    print("🛠️ AVAILABLE SOLIDWORKS MCP TOOLS")
-    print("=" * 60)
+    eprint("\n" + "=" * 60)
+    eprint("🛠️ AVAILABLE SOLIDWORKS MCP TOOLS")
+    eprint("=" * 60)
 
     # Get tool registry
     tools = server.get_available_tools()
@@ -150,19 +163,19 @@ async def demonstrate_tools(server: SolidWorksMCPServer) -> None:
 
     # Display tools by category
     for category, category_tools in sorted(categories.items()):
-        print(f"\n📁 {category} ({len(category_tools)} tools)")
-        print("-" * 40)
+        eprint(f"\n📁 {category} ({len(category_tools)} tools)")
+        eprint("-" * 40)
 
         for tool in category_tools[:5]:  # Show first 5 tools per category
             name = tool.get("name", "Unknown")
             description = tool.get("description", "No description")
-            print(f"  🔧 {name}")
-            print(f"     {description[:80]}...")
+            eprint(f"  🔧 {name}")
+            eprint(f"     {description[:80]}...")
 
         if len(category_tools) > 5:
-            print(f"     ... and {len(category_tools) - 5} more tools")
+            eprint(f"     ... and {len(category_tools) - 5} more tools")
 
-    print(f"\n📊 Total Tools Available: {len(tools)}")
+    eprint(f"\n📊 Total Tools Available: {len(tools)}")
 
 
 async def run_example_workflow(server: SolidWorksMCPServer) -> None:
@@ -174,13 +187,13 @@ async def run_example_workflow(server: SolidWorksMCPServer) -> None:
     Returns:
         None: None.
     """
-    print("\n" + "=" * 60)
-    print("🎬 EXAMPLE WORKFLOW DEMONSTRATION")
-    print("=" * 60)
+    eprint("\n" + "=" * 60)
+    eprint("🎬 EXAMPLE WORKFLOW DEMONSTRATION")
+    eprint("=" * 60)
 
     try:
         # Example: Create a simple part
-        print("\n1. Creating new part...")
+        eprint("\n1. Creating new part...")
         create_result = await server.call_tool(
             "create_part",
             {
@@ -190,35 +203,35 @@ async def run_example_workflow(server: SolidWorksMCPServer) -> None:
                 "material": "Steel",
             },
         )
-        print(f"   ✅ Part creation: {create_result.get('status', 'unknown')}")
+        eprint(f"   ✅ Part creation: {create_result.get('status', 'unknown')}")
 
         # Example: Add sketch
-        print("\n2. Creating sketch...")
+        eprint("\n2. Creating sketch...")
         sketch_result = await server.call_tool(
             "create_sketch", {"plane": "Front Plane", "sketch_name": "Base Sketch"}
         )
-        print(f"   ✅ Sketch creation: {sketch_result.get('status', 'unknown')}")
+        eprint(f"   ✅ Sketch creation: {sketch_result.get('status', 'unknown')}")
 
         # Example: Add rectangle
-        print("\n3. Adding rectangle...")
+        eprint("\n3. Adding rectangle...")
         rect_result = await server.call_tool(
             "sketch_rectangle",
             {"width": 50.0, "height": 30.0, "center_x": 0.0, "center_y": 0.0},
         )
-        print(f"   ✅ Rectangle creation: {rect_result.get('status', 'unknown')}")
+        eprint(f"   ✅ Rectangle creation: {rect_result.get('status', 'unknown')}")
 
         # Example: Create extrusion
-        print("\n4. Creating extrusion...")
+        eprint("\n4. Creating extrusion...")
         extrude_result = await server.call_tool(
             "create_extrusion",
             {"sketch_name": "Base Sketch", "depth": 25.0, "direction": "Blind"},
         )
-        print(f"   ✅ Extrusion: {extrude_result.get('status', 'unknown')}")
+        eprint(f"   ✅ Extrusion: {extrude_result.get('status', 'unknown')}")
 
-        print("\n🎉 Example workflow completed successfully!")
+        eprint("\n🎉 Example workflow completed successfully!")
 
     except Exception as e:
-        print(f"❌ Example workflow failed: {e}")
+        eprint(f"❌ Example workflow failed: {e}")
 
 
 def setup_signal_handlers(server: SolidWorksMCPServer) -> None:
@@ -242,7 +255,7 @@ def setup_signal_handlers(server: SolidWorksMCPServer) -> None:
             Any: The result produced by the operation.
         """
 
-        print(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+        eprint(f"\n🛑 Received signal {signum}, shutting down gracefully...")
         asyncio.create_task(server.stop())
         sys.exit(0)
 
@@ -259,17 +272,17 @@ def print_startup_banner(config: SolidWorksMCPConfig) -> None:
     Returns:
         None: None.
     """
-    print("\n" + "=" * 60)
-    print("🚀 SOLIDWORKS MCP SERVER - LOCAL DEVELOPMENT")
-    print("=" * 60)
-    print(f"📡 Server URL: http://{config.host}:{config.port}")
-    print(f"🔒 Security Level: {config.security_level.value}")
-    print(f"🎭 Adapter Mode: {'Mock' if config.mock_solidworks else 'Real SolidWorks'}")
-    print(f"📊 Log Level: {config.log_level}")
+    eprint("\n" + "=" * 60)
+    eprint("🚀 SOLIDWORKS MCP SERVER - LOCAL DEVELOPMENT")
+    eprint("=" * 60)
+    eprint(f"📡 Server URL: http://{config.host}:{config.port}")
+    eprint(f"🔒 Security Level: {config.security_level.value}")
+    eprint(f"🎭 Adapter Mode: {'Mock' if config.mock_solidworks else 'Real SolidWorks'}")
+    eprint(f"📊 Log Level: {config.log_level}")
     if getattr(config, "solidworks_year", None):
-        print(f"📅 SolidWorks Year: {config.solidworks_year}")
-    print(f"⏰ Started: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 60)
+        eprint(f"📅 SolidWorks Year: {config.solidworks_year}")
+    eprint(f"⏰ Started: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    eprint("=" * 60)
 
 
 def print_connection_info(config: SolidWorksMCPConfig) -> None:
@@ -281,36 +294,45 @@ def print_connection_info(config: SolidWorksMCPConfig) -> None:
     Returns:
         None: None.
     """
-    print("\n" + "=" * 60)
-    print("🔌 CLAUDE DESKTOP CONFIGURATION")
-    print("=" * 60)
+    eprint("\n" + "=" * 60)
+    eprint("🔌 CLAUDE DESKTOP CONFIGURATION")
+    eprint("=" * 60)
 
+    run_mcp_script = project_root / "run-mcp.ps1"
     claude_config = {
         "mcpServers": {
             "solidworks": {
-                "command": "python",
+                "command": "powershell",
                 "args": [
-                    str(project_root / "src" / "utils" / "start_local_server.py"),
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(run_mcp_script),
                     "--mock" if config.mock_solidworks else "--real",
-                    f"--port={config.port}",
-                    f"--security={config.security_level.value}",
+                    "--year",
+                    str(config.solidworks_year) if config.solidworks_year else "2026",
                 ],
             }
         }
     }
 
-    print("Add this to your Claude Desktop config file:")
-    print(json.dumps(claude_config, indent=2))
+    eprint("Add this to your Claude Desktop config file:")
+    eprint(json.dumps(claude_config, indent=2))
 
     config_locations = {
-        "Windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+        "Windows (classic install)": "%APPDATA%\\Claude\\claude_desktop_config.json",
+        "Windows (packaged install)": (
+            "%LOCALAPPDATA%\\Packages\\Claude_<hash>\\LocalCache\\Roaming\\Claude\\"
+            "claude_desktop_config.json"
+        ),
         "macOS": "~/Library/Application Support/Claude/claude_desktop_config.json",
         "Linux": "~/.config/Claude/claude_desktop_config.json",
     }
 
-    print("\nConfig file locations:")
+    eprint("\nConfig file locations:")
     for os_name, path in config_locations.items():
-        print(f"  {os_name}: {path}")
+        eprint(f"  {os_name}: {path}")
 
 
 async def main():
@@ -382,59 +404,70 @@ async def main():
     print_connection_info(config)
 
     if args.config_only:
-        print("\n✅ Configuration displayed. Use --help for startup options.")
+        eprint("\n✅ Configuration displayed. Use --help for startup options.")
         return
 
+    server: SolidWorksMCPServer | None = None
     try:
         # Create and start server
         server = SolidWorksMCPServer(config)
         setup_signal_handlers(server)
 
-        print("\n🔧 Initializing server...")
+        logger.info("Initializing server...")
         await server.setup()
 
-        print(f"🚀 Starting server on port {config.port}...")
+        logger.info(
+            f"Starting server (deployment_mode={config.deployment_mode.value})..."
+        )
+        # NOTE: for DeploymentMode.LOCAL (the only mode this script's config uses,
+        # see create_local_config()) this call blocks for the entire lifetime of
+        # the MCP stdio session - it only returns once the client disconnects.
+        # Nothing below this line may touch stdout: the MCP host (Claude Desktop,
+        # VS Code, LM Studio) treats stdout as a pure JSON-RPC channel while the
+        # stdio transport is live, and stdio_server() closes the wrapped stdout
+        # stream once the session ends, so a bare print() here raises
+        # "ValueError: I/O operation on closed file" and crashes the process.
         await server.start()
 
-        # Wait for server to be ready
-        print("🔍 Checking server health...")
-        health_ok = await test_server_health(config.port)
-
-        if health_ok:
-            print("✅ Server is healthy and ready!")
-
-            # Show available tools
-            await demonstrate_tools(server)
-
-            # Run example workflow if not disabled
-            if not args.no_demo:
-                await run_example_workflow(server)
-
-            print(f"\n📡 Server running at http://{config.host}:{config.port}")
-            print(f"📊 Health check: http://{config.host}:{config.port}/health")
-            print(f"📖 API docs: http://{config.host}:{config.port}/docs")
-            print("\n💡 Press Ctrl+C to stop the server")
-
-            # Keep server running
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                print("\n🛑 Shutting down server...")
+        if config.deployment_mode == DeploymentMode.LOCAL:
+            logger.info("MCP stdio session ended")
         else:
-            print("❌ Server health check failed")
+            # Remote/HTTP mode: start() returns as soon as the HTTP server is
+            # bound, so it's safe to poll readiness and run the demo workflow.
+            logger.info("Checking server health...")
+            health_ok = await test_server_health(config.port)
+
+            if health_ok:
+                logger.info("Server is healthy and ready")
+                await demonstrate_tools(server)
+
+                if not args.no_demo:
+                    await run_example_workflow(server)
+
+                eprint(f"\n📡 Server running at http://{config.host}:{config.port}")
+                eprint(f"📊 Health check: http://{config.host}:{config.port}/health")
+                eprint(f"📖 API docs: http://{config.host}:{config.port}/docs")
+                eprint("\n💡 Press Ctrl+C to stop the server")
+
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                except KeyboardInterrupt:
+                    logger.info("Shutting down server...")
+            else:
+                logger.error("Server health check failed")
 
     except Exception as e:
         logger.error(f"Server startup failed: {e}")
-        print(f"❌ Server failed to start: {e}")
         sys.exit(1)
 
     finally:
-        try:
-            await server.stop()
-            print("✅ Server stopped gracefully")
-        except Exception as e:
-            print(f"⚠️ Error during shutdown: {e}")
+        if server is not None:
+            try:
+                await server.stop()
+                logger.info("Server stopped gracefully")
+            except Exception as e:
+                logger.error(f"Error during shutdown: {e}")
 
 
 if __name__ == "__main__":

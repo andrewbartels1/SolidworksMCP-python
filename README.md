@@ -153,6 +153,43 @@ Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
 
 Replace the script path with your local repository path.  The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks open).  Omit them for mock mode.
 
+## Claude Desktop MCP Configuration (Windows)
+
+Claude Desktop reads its MCP server list from a `claude_desktop_config.json` file. The path depends on how the app was installed:
+
+- Classic/legacy installs: `%APPDATA%\Claude\claude_desktop_config.json`
+- Packaged (MSIX-style) installs: `%LOCALAPPDATA%\Packages\Claude_<hash>\LocalCache\Roaming\Claude\claude_desktop_config.json` — look under `%LOCALAPPDATA%\Packages\` for a folder starting with `Claude_` if the classic path doesn't exist.
+
+Create the file if it doesn't exist yet, and use the server key `solidworks` (the troubleshooting runbook in [CLAUDE.md](CLAUDE.md) and the app's own log filenames assume this name). If the file already has other top-level keys (preferences, etc.), just add `mcpServers` alongside them — don't replace the file:
+
+```json
+{
+  "mcpServers": {
+    "solidworks": {
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "--real",
+        "--year",
+        "2026"
+      ]
+    }
+  }
+}
+```
+
+Replace the script path with your local repository path. The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks already open). Omit them for mock mode.
+
+After saving, **fully quit Claude Desktop** (not just close the window — use File > Exit or the tray icon) and relaunch it so it reloads the MCP server list. To confirm it picked up the server:
+
+- In the app, open **Settings > Developer** and check that `solidworks` is listed and connected.
+- Or check `%APPDATA%\Claude\logs\main.log` for a `Launching MCP Server: solidworks` line.
+- Tool-call errors are logged separately; see [Troubleshooting Runbook](CLAUDE.md#troubleshooting-runbook) in CLAUDE.md if the server appears but tool calls fail.
+
 ## LM Studio MCP Configuration (Windows)
 
 Set your LM Studio MCP config file to include this server (LM Studio expects `mcpServers`):

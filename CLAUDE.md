@@ -188,6 +188,44 @@ updated 2026-04-24.
   `%LOCALAPPDATA%\solidworks_mcp\logs\` directory and the FastMCP install
   dir for a separate Python log.
 
+### 9a. Server exits right after `initialize` — stdout pollution + crash-on-close (fixed 2026-08-23)
+
+- **Symptom:** Claude Desktop's `main.log` shows `Message from client:
+  method="initialize"` followed within ~1-2s by `Server transport closed
+  unexpectedly, this is likely due to the process exiting early` and
+  `Couldn't start this server for Cowork and Code sessions ... Connection
+  closed`.
+- **Root cause:** `src/utils/start_local_server.py` (the script `run-mcp.ps1`
+  invokes) is a local dev/demo harness — before item 9's banner noise was
+  even understood to be more than cosmetic, it turned out to compound with a
+  real crash. `main()` used bare `print()` for startup banners, the printed
+  Claude Desktop config sample, and post-startup status — all going to real
+  stdout, which an MCP stdio host treats as a pure JSON-RPC channel from the
+  moment it spawns the process. Separately, `create_local_config()` hardcodes
+  `DeploymentMode.LOCAL`, so `server.start()` always blocks for the entire
+  stdio session and only returns once the client disconnects (for any
+  reason, including a parse error from the stdout pollution above). Code
+  after that point assumed HTTP/remote mode — it called `test_server_health()`
+  against a `/health` endpoint that was never started, and printed more
+  status text. By then `mcp.server.stdio.stdio_server()`'s teardown had
+  already closed the wrapped stdout stream, so every subsequent `print()`
+  raised `ValueError: I/O operation on closed file`, cascading through the
+  `except`/`finally` blocks (each handler's own `print()` re-raised the same
+  error) until the process died with a confusing multi-traceback dump.
+- **Fix:** all decorative/status output in `start_local_server.py` now goes
+  through an `eprint()` helper that writes to `stderr`, never `stdout`.
+  Routine startup/shutdown status uses `logger.info`/`logger.error` (already
+  stderr-bound via loguru) instead of `print()`. The HTTP-health-check /
+  demo-workflow code path (`test_server_health`, `demonstrate_tools`,
+  `run_example_workflow`) is now gated on `config.deployment_mode !=
+  DeploymentMode.LOCAL`, so it can no longer run after a stdio session ends.
+- **Verify:** run
+  `.\.venv\Scripts\python.exe src\utils\start_local_server.py --real --year 2026 < NUL`
+  (simulates a client that connects then immediately disconnects) — stdout
+  must be completely empty and the process must exit 0 with only stderr log
+  lines.
+  dir for a separate Python log.
+
 ### 10. Claude Code `settings.json` UTF-8 BOM (host-side, not SW)
 
 - A BOM on `~/.claude/settings.json` makes Claude Code silently drop **all**
