@@ -14,18 +14,30 @@ import time as _time
 # MCP-host launch failures that kill the process before the normal
 # loguru/stderr pipeline is even up - see CLAUDE.md runbook item 9a. A crash
 # here would defeat the diagnostic, so every path swallows its own errors.
-_BOOT_TRACE_PATH = os.path.join(
-    os.environ.get("TEMP") or os.environ.get("TMP") or ".",
-    "solidworks_mcp_boot_trace.log",
-)
+#
+# Per the MCP spec, stdio servers only inherit a limited, host-controlled
+# subset of environment variables - %TEMP%/%TMP% are NOT guaranteed to be
+# set, and the process' cwd is not guaranteed to be writable either. Do not
+# rely on either: anchor the trace file to this script's own directory
+# (always exists, always writable - it's the user's own repo checkout), and
+# only use TEMP/TMP as a best-effort secondary copy.
+try:
+    _BOOT_TRACE_CANDIDATES = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "solidworks_mcp_boot_trace.log")]
+except Exception:
+    _BOOT_TRACE_CANDIDATES = []
+for _env_dir in (os.environ.get("TEMP"), os.environ.get("TMP")):
+    if _env_dir:
+        _BOOT_TRACE_CANDIDATES.append(os.path.join(_env_dir, "solidworks_mcp_boot_trace.log"))
 
 
 def _boot_trace(msg: str) -> None:
-    try:
-        with open(_BOOT_TRACE_PATH, "a", encoding="utf-8") as f:
-            f.write(f"{_time.time():.3f} pid={os.getpid()} {msg}\n")
-    except Exception:
-        pass
+    line = f"{_time.time():.3f} pid={os.getpid()} {msg}\n"
+    for path in _BOOT_TRACE_CANDIDATES:
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except Exception:
+            pass
 
 
 _boot_trace(f"process started argv={sys.argv!r} cwd={os.getcwd()!r}")
