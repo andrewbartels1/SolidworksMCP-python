@@ -12,7 +12,16 @@
 # PREREQUISITE: Open SolidWorks BEFORE restarting the server.  The adapter connects to an
 #               already-running SLDWORKS.exe at startup and will not launch it for you.
 #
-# mcp.json example (Claude Code / VS Code):
+# NOTE FOR MCP HOST CONFIGS (Claude Desktop, VS Code, LM Studio): prefer pointing
+# the host directly at ".venv\Scripts\python.exe" with "src\utils\start_local_server.py"
+# as the script argument instead of this wrapper. MCP hosts spawn servers over raw
+# stdio pipes with no console attached, and Windows PowerShell's native-command
+# invocation has been observed to misbehave in exactly that scenario (see CLAUDE.md
+# runbook item 9b) even though this script works fine from an interactive terminal.
+# This wrapper is still useful for manual terminal use, since it auto-detects the
+# venv (or falls back to uv) instead of requiring a hardcoded python.exe path.
+#
+# mcp.json example (Claude Code / VS Code) if you do use this wrapper:
 #   "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\\run-mcp.ps1",
 #            "--real", "--year", "2026"]
 
@@ -59,15 +68,36 @@ function Test-PythonExecutable {
 		return $false
 	}
 
+	# NOTE: do not invoke this via PowerShell's own pipeline/redirection
+	# engine (`| Out-Null`, `*>$null`, `2>&1`, etc). When there is no real
+	# console attached to the host process - exactly the case when an MCP
+	# client (Claude Desktop, VS Code, LM Studio) spawns this script over
+	# raw stdio pipes with no pty - PowerShell's native-command invocation
+	# misbehaves in this class of scenario: `| Out-Null` throws "Cannot run
+	# a document in the middle of a pipeline", and even `*>$null`
+	# redirection has been observed to silently leave $LASTEXITCODE unset
+	# instead of throwing. Start-Process bypasses PowerShell's pipeline
+	# engine entirely and goes straight to Win32 CreateProcess, which does
+	# not have this problem. See CLAUDE.md runbook item 9b.
+	$stdoutFile = $null
+	$stderrFile = $null
 	try {
-		& $PythonPath -c "import sys" | Out-Null
-		$ok = $LASTEXITCODE -eq 0
-		Write-BootTrace "Test-PythonExecutable: ran $PythonPath -c 'import sys', exitcode=$LASTEXITCODE, ok=$ok"
+		$stdoutFile = [System.IO.Path]::GetTempFileName()
+		$stderrFile = [System.IO.Path]::GetTempFileName()
+		$proc = Start-Process -FilePath $PythonPath -ArgumentList @('-c', '"import sys"') `
+			-NoNewWindow -Wait -PassThru `
+			-RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+		$ok = $proc.ExitCode -eq 0
+		Write-BootTrace "Test-PythonExecutable: Start-Process $PythonPath -c 'import sys', exitcode=$($proc.ExitCode), ok=$ok"
 		return $ok
 	}
 	catch {
 		Write-BootTrace "Test-PythonExecutable: exception invoking $PythonPath : $($_.Exception.Message)"
 		return $false
+	}
+	finally {
+		if ($stdoutFile) { Remove-Item $stdoutFile -ErrorAction SilentlyContinue }
+		if ($stderrFile) { Remove-Item $stderrFile -ErrorAction SilentlyContinue }
 	}
 }
 

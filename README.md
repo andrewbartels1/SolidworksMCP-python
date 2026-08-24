@@ -126,34 +126,25 @@ The first run builds the image. Re-run without rebuild when only executing tests
 .\run-ci-local.ps1 -NoBuild
 ```
 
-## VS Code MCP Configuration (Windows)
+## MCP Client Configuration (Windows)
 
-Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
+**Recommended: point the client directly at the venv's `python.exe`.** MCP hosts
+(Claude Desktop, VS Code, LM Studio) spawn servers over raw stdio pipes with no
+console attached. Windows PowerShell's native-command invocation is unreliable
+in that exact scenario — `run-mcp.ps1`'s own venv-detection step has been
+observed both to throw (`Cannot run a document in the middle of a pipeline`)
+and to silently fail (empty `$LASTEXITCODE`) specifically because of this, even
+though the identical command works fine from an interactive terminal. Direct
+`python.exe` invocation skips PowerShell entirely and has no such failure
+mode. See [CLAUDE.md runbook item 9b](CLAUDE.md#troubleshooting-runbook) for
+the full diagnosis.
 
-```json
-{
-  "servers": {
-    "solidworks-mcp-server": {
-      "type": "stdio",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
-        "--real",
-        "--year",
-        "2026"
-      ]
-  },
-  "inputs": []
-}
-```
+`run-mcp.ps1` still works and remains available below for anyone who wants its
+automatic venv/`uv` detection — it received the same hardening (a
+`Start-Process`-based check instead of a piped one) — but if you hit
+connection failures with it, switch to the direct form first.
 
-Replace the script path with your local repository path.  The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks open).  Omit them for mock mode.
-
-## Claude Desktop MCP Configuration (Windows)
+### Claude Desktop
 
 Claude Desktop reads its MCP server list from a `claude_desktop_config.json` file. The path depends on how the app was installed:
 
@@ -166,13 +157,9 @@ Create the file if it doesn't exist yet, and use the server key `solidworks` (th
 {
   "mcpServers": {
     "solidworks": {
-      "command": "powershell",
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
       "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
         "--real",
         "--year",
         "2026"
@@ -182,15 +169,39 @@ Create the file if it doesn't exist yet, and use the server key `solidworks` (th
 }
 ```
 
-Replace the script path with your local repository path. The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks already open). Omit them for mock mode.
+Replace the paths with your local repository path. The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks already open). Omit them for mock mode.
 
 After saving, **fully quit Claude Desktop** (not just close the window — use File > Exit or the tray icon) and relaunch it so it reloads the MCP server list. To confirm it picked up the server:
 
 - In the app, open **Settings > Developer** and check that `solidworks` is listed and connected.
-- Or check `%APPDATA%\Claude\logs\main.log` for a `Launching MCP Server: solidworks` line.
+- Or check `%LOCALAPPDATA%\Claude\Logs\mcp-server-solidworks.log` for a full `initialize` / `tools/list` round trip.
 - Tool-call errors are logged separately; see [Troubleshooting Runbook](CLAUDE.md#troubleshooting-runbook) in CLAUDE.md if the server appears but tool calls fail.
 
-## LM Studio MCP Configuration (Windows)
+### VS Code
+
+Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
+
+```json
+{
+  "servers": {
+    "solidworks-mcp-server": {
+      "type": "stdio",
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
+        "--real",
+        "--year",
+        "2026"
+      ]
+    }
+  },
+  "inputs": []
+}
+```
+
+Replace the paths with your local repository path.  The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks open).  Omit them for mock mode.
+
+### LM Studio
 
 Set your LM Studio MCP config file to include this server (LM Studio expects `mcpServers`):
 
@@ -198,27 +209,13 @@ Set your LM Studio MCP config file to include this server (LM Studio expects `mc
 {
   "mcpServers": {
     "solidworks-mcp-server": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
-      ]
-    }
-  }
-}
-```
-
-Alternative direct-python entry:
-
-```json
-{
-  "mcpServers": {
-    "solidworks-mcp-server": {
       "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "solidworks_mcp.server"]
+      "args": [
+        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
+        "--real",
+        "--year",
+        "2026"
+      ]
     }
   }
 }

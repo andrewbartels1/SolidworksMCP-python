@@ -224,7 +224,66 @@ updated 2026-04-24.
   (simulates a client that connects then immediately disconnects) — stdout
   must be completely empty and the process must exit 0 with only stderr log
   lines.
-  dir for a separate Python log.
+
+### 9b. Server never starts at all under an MCP host, even though `run-mcp.ps1` works fine from a terminal (fixed 2026-08-23)
+
+- **Symptom:** identical to 9a's (`Server transport closed unexpectedly ...
+  process exiting early`, ~0.3-1.5s after `initialize`), but **no output at
+  all** appears anywhere - not `mcp-server-solidworks.log`
+  (`%LOCALAPPDATA%\Claude\Logs\`), not a boot-trace file written as the very
+  first statement of `start_local_server.py`, not even one written as the
+  very first statement of `run-mcp.ps1` itself, anchored to the script's own
+  directory (so it can't be a missing/unwritable `%TEMP%`). Every manual
+  reproduction of the *exact same* `powershell -NoProfile -ExecutionPolicy
+  Bypass -File run-mcp.ps1 --real --year 2026` command, run from an
+  interactive terminal, works perfectly.
+- **Root cause:** `run-mcp.ps1`'s `Test-PythonExecutable` function ran `&
+  $PythonPath -c "import sys" | Out-Null` to sanity-check the venv before
+  using it. Piping a native executable's output makes it a pipeline stage,
+  and Windows PowerShell 5.1 throws `Cannot run a document in the middle of
+  a pipeline` for that specific pattern when the host process has no real
+  console attached - exactly the case when an MCP client (Claude Desktop,
+  VS Code, LM Studio) spawns a server over raw stdio pipes with no pty. An
+  interactive terminal always provides a console (directly, or via a pty),
+  so the bug never reproduces there. `Test-PythonExecutable` caught the
+  exception and returned `$false`, so `run-mcp.ps1` silently fell through to
+  its `uv run` fallback path - which also doesn't work for this project (it
+  isn't `uv`-managed) and exits in milliseconds without ever touching
+  `start_local_server.py`, hence zero output from it anywhere. A first fix
+  attempt (redirecting with `*> $null` instead of piping to `Out-Null`,
+  which avoids constructing a pipeline) stopped the exception but was
+  observed, under a real MCP-host spawn, to leave `$LASTEXITCODE` silently
+  unset instead - a quieter failure in the same family. `Start-Process` was
+  also tried and initially got the arguments wrong: `-ArgumentList @('-c',
+  'import sys')` gets joined into a command line where `import sys` isn't
+  quoted, so Windows' argument parser splits it into two separate argv
+  entries and `python -c import` fails with a syntax error on a truncated
+  program.
+- **Fix:** `Test-PythonExecutable` now uses `Start-Process -NoNewWindow
+  -Wait -PassThru` with `-RedirectStandardOutput`/`-RedirectStandardError`
+  pointed at real temp files (not `$null`) and reads `$proc.ExitCode`, which
+  bypasses PowerShell's pipeline/redirection engine entirely and goes
+  straight to Win32 `CreateProcess` - the class of bug above doesn't apply
+  to it. The `-ArgumentList` array quotes the `-c` payload explicitly
+  (`'"import sys"'`) so Windows' command-line parser keeps it as one
+  argument. **However:** the config change that was actually confirmed
+  working end-to-end in this environment's live Claude Desktop was
+  sidestepping PowerShell entirely - pointing the MCP host directly at
+  `.venv\Scripts\python.exe` with `src\utils\start_local_server.py` as the
+  script argument (see the README's MCP client configuration section, now
+  documented as the recommended approach for every host). Prefer that form
+  for any MCP client config; `run-mcp.ps1` remains available (with the
+  `Start-Process` hardening above) for people who want its automatic
+  venv/`uv` detection, e.g. manual terminal use.
+- **Diagnostic technique used:** dependency-free "boot trace" helpers
+  (stdlib-only, anchored to a known-writable directory next to the script,
+  never `%TEMP%`/cwd since an MCP host's environment is not guaranteed to
+  set either - see the MCP spec's debugging guide) were added to both
+  `start_local_server.py` and `run-mcp.ps1`, each appending one flushed
+  line per checkpoint. Getting a trace to fire *at all* under the real
+  failing launch - as opposed to every local reproduction, which always
+  worked - is what isolated the bug to `run-mcp.ps1`'s PowerShell layer
+  instead of anything in the Python server itself.
 
 ### 10. Claude Code `settings.json` UTF-8 BOM (host-side, not SW)
 
