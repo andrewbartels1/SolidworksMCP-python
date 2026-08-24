@@ -15,10 +15,37 @@
 # mcp.json example (Claude Code / VS Code):
 #   "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\\run-mcp.ps1",
 #            "--real", "--year", "2026"]
+
+# Get the directory where this script is located. This must succeed before
+# anything else, including $ErrorActionPreference, so the boot trace below
+# can always find a writable location next to the script itself - see
+# CLAUDE.md runbook item 9a for why %TEMP%/cwd cannot be trusted when this
+# is spawned by an MCP host.
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$bootTracePath = Join-Path $scriptDir "src\utils\solidworks_mcp_boot_trace.log"
+
+function Write-BootTrace {
+	param([string]$Message)
+	try {
+		$timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+		Add-Content -Path $bootTracePath -Value "$timestamp [run-mcp.ps1] pid=$PID $Message" -Encoding utf8 -ErrorAction Stop
+	}
+	catch {
+		# Never let tracing itself take down the server.
+	}
+}
+
+Write-BootTrace "script started; scriptDir=$scriptDir; args=$($args -join ' ')"
+
+trap {
+	Write-BootTrace "UNHANDLED ERROR: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+	Write-BootTrace "at: $($_.InvocationInfo.PositionMessage -replace '\r?\n', ' | ')"
+	Write-BootTrace "stack: $($_.ScriptStackTrace -replace '\r?\n', ' | ')"
+	break
+}
+
 $ErrorActionPreference = "Stop"
 
-# Get the directory where this script is located
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
 $startServerScript = Join-Path $scriptDir "src\utils\start_local_server.py"
 
@@ -28,14 +55,18 @@ function Test-PythonExecutable {
 	)
 
 	if (-not (Test-Path $PythonPath)) {
+		Write-BootTrace "Test-PythonExecutable: not found at $PythonPath"
 		return $false
 	}
 
 	try {
 		& $PythonPath -c "import sys" | Out-Null
-		return $LASTEXITCODE -eq 0
+		$ok = $LASTEXITCODE -eq 0
+		Write-BootTrace "Test-PythonExecutable: ran $PythonPath -c 'import sys', exitcode=$LASTEXITCODE, ok=$ok"
+		return $ok
 	}
 	catch {
+		Write-BootTrace "Test-PythonExecutable: exception invoking $PythonPath : $($_.Exception.Message)"
 		return $false
 	}
 }
@@ -63,21 +94,30 @@ function Get-UvExecutable {
 	return $null
 }
 
+Write-BootTrace "checking startServerScript at $startServerScript"
 if (-not (Test-Path $startServerScript)) {
+	Write-BootTrace "FATAL: start server script not found: $startServerScript"
 	Write-Error "Start server script not found: $startServerScript"
 	exit 1
 }
 
+Write-BootTrace "checking venv python at $venvPython"
 if (Test-PythonExecutable $venvPython) {
+	Write-BootTrace "launching: $venvPython $startServerScript $($args -join ' ')"
 	& $venvPython $startServerScript @args
+	Write-BootTrace "venv python process exited with code $LASTEXITCODE"
 	exit $LASTEXITCODE
 }
 
-	$uvExecutable = Get-UvExecutable
+Write-BootTrace "venv python not usable, checking for uv"
+$uvExecutable = Get-UvExecutable
 if ($uvExecutable) {
+	Write-BootTrace "launching via uv: $uvExecutable run --project $scriptDir python $startServerScript $($args -join ' ')"
 	& $uvExecutable run --project $scriptDir python $startServerScript @args
+	Write-BootTrace "uv-launched python process exited with code $LASTEXITCODE"
 	exit $LASTEXITCODE
 }
 
+Write-BootTrace "FATAL: no usable python runtime found (checked venv and uv)"
 Write-Error "No usable Python runtime found. Checked $venvPython and uv. Recreate the environment with 'uv venv' and reinstall dependencies if needed."
 exit 1
