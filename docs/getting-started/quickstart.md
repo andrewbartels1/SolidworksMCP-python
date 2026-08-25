@@ -39,7 +39,7 @@ Set `%APPDATA%\Code\User\mcp.json`:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
         "--real",
         "--year",
         "2026"
@@ -66,7 +66,7 @@ If you want LM Studio to call SolidWorks tools directly, use an MCP config with 
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
         "--real",
         "--year",
         "2026"
@@ -96,7 +96,7 @@ Restart LM Studio after updating the file.
 Open SolidWorks first, then:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
 ```
 
 Expected log markers:

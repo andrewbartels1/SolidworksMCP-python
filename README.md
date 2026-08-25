@@ -86,7 +86,7 @@ Start server manually:
 Or use the helper script (open SolidWorks first):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
 ```
 
 > **Mock mode warning** — running `run-mcp.ps1` without `--real` starts the
@@ -128,19 +128,26 @@ The first run builds the image. Re-run without rebuild when only executing tests
 
 ## MCP Client Configuration (Windows)
 
-MCP hosts (Claude Desktop, VS Code, LM Studio) spawn servers over raw stdio
-pipes with no console attached. Windows PowerShell's native-command invocation
-is unreliable in that exact scenario — `run-mcp.ps1`'s own venv-detection step
-has been observed both to throw (`Cannot run a document in the middle of a
-pipeline`) and to silently fail (empty `$LASTEXITCODE`) specifically because
-of this, even though the identical command works fine from an interactive
-terminal. `run-mcp.ps1` received hardening for this (a `Start-Process`-based
-check instead of a piped one) and still works, but if you hit connection
-failures with it, **point the client directly at the venv's `python.exe`
-instead** — that skips PowerShell entirely and has no such failure mode. See
-[CLAUDE.md runbook item 9b](CLAUDE.md#troubleshooting-runbook) for the full
-diagnosis. Each section below documents which form is recommended for that
-client, plus the alternative.
+There are two parallel sets of launch scripts, both in `deployment/`:
+
+- `deployment/run-mcp.ps1` / `src/utils/start_local_server.py` — the local
+  dev/demo harness: decorative startup banners, an HTTP health-check step,
+  and an example tool-call workflow. Good for running by hand in a terminal
+  to see what the server does. **Not recommended for MCP host configs** — a
+  stdio MCP host treats a spawned server's stdout as a pure JSON-RPC
+  channel, and this script's banner output goes to stdout.
+- `deployment/run-mcp-claude.ps1` / `src/utils/start_local_server_claude.py`
+  — a minimal entrypoint with no decorative output, meant specifically for
+  MCP host configs (Claude Desktop, Claude Code, VS Code, LM Studio). Use
+  these for any host config below.
+
+MCP hosts spawn servers over raw stdio pipes with no console attached.
+Windows PowerShell's native-command invocation is unreliable in that exact
+scenario — `run-mcp-claude.ps1`'s venv-detection step has been hardened
+against this (see [CLAUDE.md runbook item 9b](CLAUDE.md#troubleshooting-runbook)
+for the full diagnosis), but if you still hit connection failures with it,
+point the client directly at the venv's `python.exe` instead, which skips
+PowerShell entirely.
 
 ### Claude Desktop
 
@@ -157,7 +164,7 @@ Create the file if it doesn't exist yet, and use the server key `solidworks` (th
     "solidworks": {
       "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
       "args": [
-        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
+        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server_claude.py",
         "--real",
         "--year",
         "2026"
@@ -190,7 +197,7 @@ Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
         "--real",
         "--year",
         "2026"
@@ -202,25 +209,26 @@ Set your user MCP config (`%APPDATA%\Code\User\mcp.json`) to:
 
 Replace the script path with your local repository path.  The `--real --year 2026` flags start the server in live COM automation mode (requires SolidWorks open).  Omit them for mock mode.
 
-#### Development alternative: direct Python
+If this doesn't connect (see the note above about stdio hosts and stdout), switch to the MCP-host-safe wrapper below.
 
-For local development iteration (or if you hit the `run-mcp.ps1`/PowerShell
-issue described above), point VS Code directly at the venv's `python.exe`
-instead, bypassing PowerShell entirely:
+#### Recommended for MCP use: run-mcp-claude.ps1
 
 ```json
 {
   "servers": {
     "solidworks-mcp-server": {
       "type": "stdio",
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
+      "command": "powershell",
       "args": [
-        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp-claude.ps1",
         "--real",
         "--year",
         "2026"
       ]
-    }
   },
   "inputs": []
 }
@@ -236,7 +244,7 @@ Set your LM Studio MCP config file to include this server (LM Studio expects `mc
     "solidworks-mcp-server": {
       "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
       "args": [
-        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server.py",
+        "C:\\path\\to\\SolidworksMCP-python\\src\\utils\\start_local_server_claude.py",
         "--real",
         "--year",
         "2026"

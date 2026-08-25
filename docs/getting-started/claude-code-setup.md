@@ -64,7 +64,7 @@ Use this when Claude Code, the MCP server, and SolidWorks all run on the same Wi
 Run this from the project root:
 
 ```powershell
-claude mcp add --transport stdio --scope project solidworks-mcp -- powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+claude mcp add --transport stdio --scope project solidworks-mcp -- powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp-claude.ps1 --real --year 2026
 ```
 
 Change `2026` to match your installed SolidWorks year if different.
@@ -232,7 +232,7 @@ repository root.  A correct `stdio` example for real SolidWorks automation:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        ".\\run-mcp.ps1",
+        ".\\deployment\\run-mcp-claude.ps1",
         "--real",
         "--year",
         "2026"

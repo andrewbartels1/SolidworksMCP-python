@@ -7,7 +7,7 @@
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        ".\\run-mcp.ps1",
+        ".\\deployment\\run-mcp-claude.ps1",
         "--real",
         "--year",
         "2026"

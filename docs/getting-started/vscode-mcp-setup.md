@@ -37,7 +37,7 @@ This page reflects the verified Windows setup that works with Python from python
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
         "--real",
         "--year",
         "2026"
