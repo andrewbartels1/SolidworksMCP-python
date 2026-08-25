@@ -141,13 +141,24 @@ There are two parallel sets of launch scripts, both in `deployment/`:
   MCP host configs (Claude Desktop, Claude Code, VS Code, LM Studio). Use
   these for any host config below.
 
+> **If a tool call fails with an error like `invalid_union` / "expected
+> object, received string"** — that's the client's JSON-RPC parser choking
+> on non-JSON text. It almost always means the config's `args` point at
+> `start_local_server.py` (or `run-mcp.ps1`) instead of the `_claude`
+> variant. This is easy to hit after editing a config by hand or letting a
+> client's own "fix it for me" assistant rewrite the command: it may resolve
+> the path to the plain script by filename guess. Check the exact filename
+> in your config against the list above.
+
 MCP hosts spawn servers over raw stdio pipes with no console attached.
 Windows PowerShell's native-command invocation is unreliable in that exact
-scenario — `run-mcp-claude.ps1`'s venv-detection step has been hardened
-against this (see [CLAUDE.md runbook item 9b](CLAUDE.md#troubleshooting-runbook)
-for the full diagnosis), but if you still hit connection failures with it,
-point the client directly at the venv's `python.exe` instead, which skips
-PowerShell entirely.
+scenario — `run-mcp-claude.ps1`'s venv-detection step uses `Start-Process`
+instead of piping to `Out-Null` to avoid it (piping a native command's
+output makes it a pipeline stage, which throws `Cannot run a document in
+the middle of a pipeline` when there's no console attached to the host
+process). If you still hit connection failures with it, point the client
+directly at the venv's `python.exe` instead, which skips PowerShell
+entirely.
 
 ### Claude Desktop
 
