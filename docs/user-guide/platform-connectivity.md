@@ -28,7 +28,7 @@ Equivalent local stdio start (open SolidWorks first):
 
 === "Windows (PowerShell)"
     ```powershell
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
     ```
 
 !!! warning "Mock mode"

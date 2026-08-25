@@ -89,7 +89,7 @@ Open `%APPDATA%\Code\User\mcp.json` and configure:
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
         "--real",
         "--year",
         "2026"
@@ -107,7 +107,7 @@ Change `2026` to match your installed SolidWorks year if different.
 Open SolidWorks first, then start the server:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
 ```
 
 Healthy startup logs include:

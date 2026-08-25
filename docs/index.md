@@ -103,7 +103,7 @@ python -m venv .venv
 Open SolidWorks, then start the server:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
 ```
 
 > **`--real` is required.** Without it the server runs in mock mode — all tool

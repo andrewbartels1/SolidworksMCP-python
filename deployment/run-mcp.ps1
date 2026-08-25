@@ -13,14 +13,15 @@
 #               already-running SLDWORKS.exe at startup and will not launch it for you.
 #
 # mcp.json example (Claude Code / VS Code):
-#   "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\\run-mcp.ps1",
+#   "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\\deployment\\run-mcp.ps1",
 #            "--real", "--year", "2026"]
 $ErrorActionPreference = "Stop"
 
-# Get the directory where this script is located
+# This script lives in deployment/; the repo root (venv, src/) is one level up.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
-$startServerScript = Join-Path $scriptDir "src\utils\start_local_server.py"
+$repoRoot = Split-Path -Parent $scriptDir
+$venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+$startServerScript = Join-Path $repoRoot "src\utils\start_local_server.py"
 
 function Test-PythonExecutable {
 	param(
@@ -46,7 +47,7 @@ function Get-UvExecutable {
 		(Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages\astral-sh.uv_Microsoft.Winget.Source_8wekyb3d8bbwe\uv.exe"),
 		(Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe"),
 		(Join-Path $env:APPDATA "Python\Scripts\uv.exe"),
-		(Join-Path $scriptDir ".venv\Scripts\uv.exe")
+		(Join-Path $repoRoot ".venv\Scripts\uv.exe")
 	)
 
 	$uvCommand = Get-Command uv -ErrorAction SilentlyContinue
@@ -75,7 +76,7 @@ if (Test-PythonExecutable $venvPython) {
 
 	$uvExecutable = Get-UvExecutable
 if ($uvExecutable) {
-	& $uvExecutable run --project $scriptDir python $startServerScript @args
+	& $uvExecutable run --project $repoRoot python $startServerScript @args
 	exit $LASTEXITCODE
 }
 

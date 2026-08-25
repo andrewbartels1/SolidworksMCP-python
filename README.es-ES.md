@@ -88,7 +88,7 @@ Iniciar servidor manualmente:
 O usar el script de ayuda (abre SolidWorks primero):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-mcp.ps1 --real --year 2026
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
 ```
 
 > **Advertencia de modo simulado** — ejecutar `run-mcp.ps1` sin `--real` inicia el
@@ -143,7 +143,7 @@ Establece tu configuración de MCP de usuario (`%APPDATA%\Code\User\mcp.json`) e
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1",
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
         "--real",
         "--year",
         "2026"
@@ -169,7 +169,7 @@ Configura tu archivo de configuración de MCP de LM Studio para incluir este ser
         "-ExecutionPolicy",
         "Bypass",
         "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\run-mcp.ps1"
+        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1"
       ]
     }
   }
