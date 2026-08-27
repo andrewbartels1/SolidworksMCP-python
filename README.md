@@ -33,13 +33,14 @@ It includes:
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
 - Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
-- Prefab UI preview sync from the active viewport as PNG.
 
 ## Not Yet / Simulated
 
 - Mock adapter output is simulated and should not be treated as engineering truth.
-- Live 3D viewport streaming in the UI.
-- Checkpoint-level interference validation in the UI runner.
+- Live 3D viewport streaming in a UI.
+- Checkpoint-level interference validation.
+- Simple simulation and fluid workflows
+- Simple Topology Optimization via SimulationXpress etc.
 
 ## What Works (Verified Windows Setup)
 
