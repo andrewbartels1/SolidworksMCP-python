@@ -5,7 +5,7 @@ After this script runs, compare the exported images against
   C:\\Users\\Public\\Documents\\SOLIDWORKS\\SOLIDWORKS 2026\\samples\\learn\\U-Joint\\bracket.sldprt
 to verify dimensional alignment.
 
-Spec summary (docs/getting-started/prefab-ui-u-joint-bracket-runbook.md):
+Spec summary:
   Outer envelope : 78 mm (X) × 52 mm (Y) × 36 mm (Z depth)
   Inner clearance: 60 mm wide × 34 mm tall  →  9 mm walls on all four sides
   Corner fillets : 9 mm on outer vertical edges of extrusion
