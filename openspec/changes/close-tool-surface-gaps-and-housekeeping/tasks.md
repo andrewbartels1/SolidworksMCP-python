@@ -158,12 +158,26 @@ batch warrants. Tracked as a backlog item in `SWChecklist.md`.
 
 ## 12. #81 — Remove root-level debug scripts
 
-- [ ] 12.1 Decide per-file: delete `test_api_response.py` and
+- [x] 12.1 Decide per-file: delete `test_api_response.py` and
        `test_workflow_fields.py` (historical template-literal check, no
        open issue references it), or port the check into a real
-       `tests/`-based assertion test if still wanted
-- [ ] 12.2 Delete `test_docs_discovery_run.py` or relocate it to
+       `tests/`-based assertion test if still wanted. Done 2026-09-02:
+       deleted both — the bug they checked for (`build_dashboard_state()`
+       leaking `{{ }}`/`$result` template literals) is historical, no open
+       issue references it, and no regression coverage was requested.
+       Also deleted the stray `api_state_response.json` output artifact
+       `test_api_response.py` used to write, plus three more ad-hoc,
+       hardcoded-local-sqlite-path debug scripts found in the same sweep
+       that weren't in the issue's original list but are the same category
+       of clutter: `check_schema.py`, `inspect_checkpoints.py`,
+       `show_l_bracket_script.py` — none referenced anywhere else in the
+       repo (confirmed via grep).
+- [x] 12.2 Delete `test_docs_discovery_run.py` or relocate it to
        `tests/scripts/` (renamed off the `test_` prefix) if the manual
-       live-SolidWorks smoke run still has value
-- [ ] 12.3 Verify no `test_*.py` files remain in repo root and `dev-test`
-       still passes
+       live-SolidWorks smoke run still has value. Done 2026-09-02:
+       relocated to `tests/scripts/docs_discovery_smoke.py`, dropped the
+       `sys.path` hack in favor of the editable install, and reworked it
+       to the `main()`/`if __name__ == "__main__"` shape used by
+       `tests/scripts/cleanup_generated_integration_artifacts.py`.
+- [x] 12.3 Verify no `test_*.py` files remain in repo root and `dev-test`
+       still passes. Verified 2026-09-02.
