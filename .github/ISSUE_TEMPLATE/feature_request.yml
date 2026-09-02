@@ -24,21 +24,15 @@ body:
       required: true
 
   - type: dropdown
-    id: roadmap_phase
+    id: roadmap_status
     attributes:
-      label: Roadmap phase
-      description: Which roadmap phase does this belong to? (See docs/planning/ROADMAP_2026_2027.md)
+      label: Roadmap status
+      description: Where does this sit relative to the current backlog? (See docs/planning/roadmap.md)
       options:
-        - "Q2 2026 – Foundation & Bug Fixes"
-        - "Q2 2026 – Phase 1A: GUI Visualization MVP"
-        - "Q2 2026 – Phase 1B: Database Design"
-        - "Q2 2026 – Phase 1C: PydanticAI Agent PoC"
-        - "Q3 2026 – Phase 2A: GUI Dashboard"
-        - "Q3 2026 – Phase 2B: Workflow Database"
-        - "Q3 2026 – Phase 2C: PydanticAI Core Agent"
-        - "Q4 2026 – Phase 3: Integration & Polish"
-        - "Q1 2027 – Enhanced Features"
-        - "Backlog / Unscheduled"
+        - "Ready now — no known blockers"
+        - "Gated — depends on another open issue"
+        - "Needs a scoping decision before it can be ordered"
+        - "Backlog / unscheduled"
 
   - type: textarea
     id: problem
