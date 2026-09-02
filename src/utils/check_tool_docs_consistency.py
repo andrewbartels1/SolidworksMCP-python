@@ -214,6 +214,19 @@ def check_categories(per_file: dict[str, int]) -> list[str]:
             problems.append(
                 f"CATEGORY DRIFT: '{label}' card says {found} tools, actual is {true_count}"
             )
+
+    # Catch the opposite drift too: a card left behind for a category whose
+    # source file no longer has any tools (renamed/emptied/removed), rather
+    # than only checking that every real category *has* a card.
+    for label in CATEGORY_LABELS.values():
+        if label in seen_labels:
+            continue
+        heading_pattern = rf"\*\*{re.escape(label)}( Tools)?\*\*"
+        if re.search(heading_pattern, text) is not None:
+            problems.append(
+                f"ORPHANED CARD: '{label}' has a card in tools-overview.md but "
+                f"its source file has zero tools (renamed, emptied, or removed?)"
+            )
     return problems
 
 
