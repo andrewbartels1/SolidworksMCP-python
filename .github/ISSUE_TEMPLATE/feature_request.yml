@@ -15,7 +15,6 @@ body:
       options:
         - MCP Server (tools / adapters)
         - FastAPI UI Backend (service.py / server.py)
-        - Prefab Dashboard (prefab_dashboard.py)
         - Agent Harness (agents/)
         - CI / Build
         - Documentation

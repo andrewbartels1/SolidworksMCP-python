@@ -309,7 +309,6 @@ Direct links:
 - [Quick Start](docs/getting-started/quickstart.md)
 - [Tutorial: U-Joint Assembly Build](docs/getting-started/tutorials/u-joint-assembly-build.md)
 - [Tutorial Tracks](docs/getting-started/tutorial-tracks.md)
-- [Prefab UI Dashboard](docs/getting-started/prefab-ui-dashboard.md)
 - [VS Code MCP Setup](docs/getting-started/vscode-mcp-setup.md)
 - [Architecture](docs/user-guide/architecture.md)
 - [Agents and Prompt Testing](docs/agents/agents-and-testing.md)
