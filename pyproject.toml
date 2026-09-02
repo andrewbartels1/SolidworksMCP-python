@@ -91,7 +91,6 @@ test = [
     "pytest-xdist>=3.3.0",
     "coverage[toml]>=7.3.0",
     "fastapi>=0.115.0",
-    "prefab-ui>=0.19.0",
     "numpy>=1.26.0",
 ]
 docs = [
@@ -110,7 +109,6 @@ docs = [
     "pygments>=2.16.0",  # For syntax highlighting
 ]
 ui = [
-    "prefab-ui>=0.19.0",
     "fastapi>=0.115.0",
 ]
 vision = [
@@ -246,11 +244,10 @@ module = [
 ]
 ignore_missing_imports = true
 
-# UI prefab files are slated for removal — suppress all errors.
+# Prefab UI files (solidworks_mcp.ui.prefab_dashboard, .prefab_trace_probe) were
+# removed - dead code for a UI approach superseded by SolidWorks-as-Code.
 [[tool.mypy.overrides]]
 module = [
-    "solidworks_mcp.ui.prefab_dashboard",
-    "solidworks_mcp.ui.prefab_trace_probe",
     "solidworks_mcp.ui.local_llm",
     "solidworks_mcp.ui.service",
     "solidworks_mcp.ui.server",

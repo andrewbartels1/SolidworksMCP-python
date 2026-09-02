@@ -128,8 +128,7 @@ function dev-help {
     Write-Host "  dev-format          Format code only (ruff format)"
     Write-Host "  dev-build           Build package for distribution"
     Write-Host "  dev-run             Start the MCP server"
-    Write-Host "  dev-ui              Start FastAPI backend + Prefab dashboard"
-    Write-Host "  dev-ui-probe        Start FastAPI backend + Prefab probe target"
+    Write-Host "  dev-ui              Start the FastAPI UI backend"
     Write-Host "  dev-docs-build      Build documentation once (mkdocs build --clean)"
     Write-Host "  dev-docs-strict     Build documentation in strict mode"
     Write-Host "  dev-docs-audit      Run verbose + strict docs audit and write summary"
@@ -167,7 +166,7 @@ function dev-install-ui {
     if (-not $ready) { return }
 
     $venvPy = Get-VenvPython
-    & $venvPy -m pip install "prefab-ui>=0.19.0" "fastapi>=0.115.0" "uvicorn>=0.24.0" -q
+    & $venvPy -m pip install "fastapi>=0.115.0" "uvicorn>=0.24.0" -q
     if ($LASTEXITCODE -eq 0) {
         Write-Host "UI extras installed." -ForegroundColor Green
     } else {
@@ -328,13 +327,12 @@ function dev-run {
 }
 
 function dev-ui {
-    Write-Host "Starting UI (FastAPI + Prefab dashboard)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "run-ui.ps1") -FrontendTarget "src/solidworks_mcp/ui/prefab_dashboard.py"
-}
-
-function dev-ui-probe {
-    Write-Host "Starting UI probe alias (FastAPI + Prefab dashboard)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "run-ui.ps1") -FrontendTarget "src/solidworks_mcp/ui/prefab_dashboard.py"
+    # The prefab-based frontend dashboard was removed (dead code for a UI
+    # approach superseded by SolidWorks-as-Code). This starts just the
+    # FastAPI backend (solidworks_mcp.ui.server:app) - still real,
+    # independent infrastructure other things build on.
+    Write-Host "Starting UI backend (FastAPI)..." -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "run-ui.ps1")
 }
 
 function dev-docs {

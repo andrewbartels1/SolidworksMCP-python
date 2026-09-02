@@ -232,7 +232,6 @@ Enlaces directos:
 - [Inicio Rápido](docs/getting-started/quickstart.md)
 - [Tutorial: Construcción de ensamblaje de junta universal](docs/getting-started/tutorials/u-joint-assembly-build.md)
 - [Rutas de tutoriales](docs/getting-started/tutorial-tracks.md)
-- [Panel de control de la interfaz Prefab](docs/getting-started/prefab-ui-dashboard.md)
 - [Configuración de MCP para VS Code](docs/getting-started/vscode-mcp-setup.md)
 - [Arquitectura](docs/user-guide/architecture.md)
 - [Agentes y pruebas de prompts](docs/agents/agents-and-testing.md)
