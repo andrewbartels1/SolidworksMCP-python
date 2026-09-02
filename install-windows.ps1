@@ -254,22 +254,6 @@ if (-not (Test-PythonLauncher -Launcher @($venvPython))) {
 & $venvPython -m pip install --upgrade pip setuptools wheel
 & $venvPython -m pip install -e ".[dev,test,docs,ui,rag]"
 
-# Verify prefab.exe was installed (pip occasionally skips console scripts on first install)
-$venvPrefab = Join-Path (Get-Location) ".venv\Scripts\prefab.exe"
-if (-not (Test-Path $venvPrefab)) {
-    Write-Host "prefab.exe not found after install — force-reinstalling prefab-ui..." -ForegroundColor Yellow
-    if ($script:useUv) {
-        Invoke-Uv pip install --python $venvPython --force-reinstall "prefab-ui>=0.19.0"
-    } else {
-        & $venvPython -m pip install --force-reinstall "prefab-ui>=0.19.0"
-    }
-}
-if (Test-Path $venvPrefab) {
-    Write-Host "prefab.exe verified at $venvPrefab" -ForegroundColor Green
-} else {
-    Write-Host "WARNING: prefab.exe still missing. Run '.\run-ui.ps1' — it will fall back automatically." -ForegroundColor Yellow
-}
-
 Write-Host "Dependencies installed (including UI extras)." -ForegroundColor Green
 
 Step "[5/6] Configuring VS Code MCP settings..."
@@ -331,9 +315,8 @@ Write-Host "1. Start SolidWorks on this Windows machine."
 Write-Host "2. Restart VS Code so MCP config reloads."
 Write-Host "3. In VS Code, start server solidworks-mcp-server."
 Write-Host ""
-Write-Host "To start the SolidWorks UI dashboard:" -ForegroundColor Cyan
-Write-Host "  .\dev-commands.ps1 dev-ui-probe   # Debug probe"
-Write-Host "  .\run-ui.ps1                       # Full dashboard"
+Write-Host "To start the SolidWorks UI backend:" -ForegroundColor Cyan
+Write-Host "  .\dev-commands.ps1 dev-ui         # or: .\run-ui.ps1"
 Write-Host ""
 Write-Host "Manual MCP start command:" -ForegroundColor Cyan
 Write-Host ".\\.venv\\Scripts\\python.exe -m solidworks_mcp.server"
