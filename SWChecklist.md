@@ -104,8 +104,9 @@ Non-Goals): #13, #22, #23, #29, #30, #31, #42, #43, #44, #57, #75,
 
 - [ ] Add a workflow for recommendations for ESP32, Raspberry Pis, and other electronics that might go into sensors and other parts. Like an expert of 3d printing and simple electrical projects and research for this.
 
-- [ ] Remove ad-hoc debug scripts from repo root (`test_api_response.py`, `test_docs_discovery_run.py`, `test_workflow_fields.py`) — not collected by pytest (`testpaths = ["tests"]`), just clutter
+- [x] Remove ad-hoc debug scripts from repo root (`test_api_response.py`, `test_docs_discovery_run.py`, `test_workflow_fields.py`) — not collected by pytest (`testpaths = ["tests"]`), just clutter
   - **Tracked**: issue #81, task 12 of `openspec/changes/close-tool-surface-gaps-and-housekeeping/`
+  - **Done 2026-09-02**: `test_api_response.py`/`test_workflow_fields.py` deleted (historical check, no open issue references it); `test_docs_discovery_run.py` relocated to `tests/scripts/docs_discovery_smoke.py`. Also swept up three more root-level debug scripts in the same category (`check_schema.py`, `inspect_checkpoints.py`, `show_l_bracket_script.py`) and the stale `api_state_response.json` artifact they produced.
 
 - [ ] Add MCP tool coverage for Motion Study (`IMotionStudyManager`), Routing (`IRoutingManager`), and Mold tools (`IMoldToolsFeatureData`) — confirmed fully missing per the #79 API-domain audit
   - **Status**: Not scoped into any change yet; larger lift than the current housekeeping batch, candidate for its own future change
