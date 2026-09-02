@@ -2649,8 +2649,10 @@ async def test_reference_plane_can_be_sketched_on(connected_adapter):
         for plane_name in (pos_plane.data["name"], neg_plane.data["name"]):
             prof_sketch = await adapter.create_sketch(plane_name)
             assert prof_sketch.is_success, prof_sketch.error
-            await adapter.add_circle(0.0, 0.0, 15.0)
-            await adapter.exit_sketch()
+            circle = await adapter.add_circle(0.0, 0.0, 15.0)
+            assert circle.is_success, circle.error
+            exited = await adapter.exit_sketch()
+            assert exited.is_success, exited.error
             profiles.append(prof_sketch.data)
 
         loft = await adapter.create_loft(LoftParameters(profiles=profiles))
