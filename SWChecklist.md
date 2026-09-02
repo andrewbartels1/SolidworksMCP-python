@@ -1,19 +1,20 @@
 # SolidWorks MCP Server Tools Checklist
 
-> ⚠️ **Historical document.** Everything below `## 🔧 Recent Fixes Applied
-> (2025-01-11)` describes the original Node.js + `winax` implementation of
-> this server (76 tools, COM automation via the winax npm package). The
-> server was rewritten in Python (pywin32 + FastMCP) — see `CLAUDE.md` for
-> the current architecture. The old tool tables and the entire
+> ⚠️ **Historical document.** Everything below `## 🔧 Recent Fixes Applied (2025-01-11)`
+> describes the original Node.js + `winax` implementation of this server
+> (76 tools, COM automation via the winax npm package). The server was
+> rewritten in Python (pywin32 + FastMCP) — see `CLAUDE.md` for the
+> current architecture. The old tool tables and the entire
 > `## Drawing Operations` → `## Design Table Functions` manual QA log
 > (lines below "Last Updated: 2025-01-12") reference tool names, error
 > messages, and a dependency (`winax`) that no longer exist in this repo.
-> Kept for history, not as a current reference. For current tool counts and
-> per-domain API coverage, see `docs/api-coverage.md` (added by GitHub
-> issue #79 — in progress, see
-> `openspec/changes/close-tool-surface-gaps-and-housekeeping/`) once it
-> lands; until then, the live count is whatever `grep -rc "@mcp.tool"
-> src/solidworks_mcp/tools/` reports.
+> Kept for history, not as a current reference. For current, per-domain
+> API coverage, see [`docs/planning/solidworks-api-coverage.md`](docs/planning/solidworks-api-coverage.md)
+> (a future `docs/api-coverage.md`, tracked by GitHub issue #79, will
+> supersede it once that lands — see
+> `openspec/changes/close-tool-surface-gaps-and-housekeeping/`). The
+> current tool total is 122, kept accurate by `dev-check-tool-count`
+> (`src/utils/check_tool_docs_consistency.py`).
 
 ## 📊 Tool Status Overview (as of 2025-01-11, Node.js era — see notice above)
 
