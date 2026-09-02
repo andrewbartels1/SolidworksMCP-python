@@ -125,6 +125,7 @@ function dev-help {
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
     Write-Host "  dev-test-combined   Mock (parallel) + real-SW (serial) as 2 runs, merged into one true coverage report"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
+    Write-Host "  dev-check-tool-count  Verify 'N tools' claims across docs match the real AST-counted total"
     Write-Host "  dev-format          Format code only (ruff format)"
     Write-Host "  dev-build           Build package for distribution"
     Write-Host "  dev-run             Start the MCP server"
@@ -305,6 +306,16 @@ function dev-lint {
     Invoke-Venv @("-m", "ruff", "check", "src/", "tests/")
     if ($LASTEXITCODE -eq 0) { Write-Host "Format + lint passed!" -ForegroundColor Green }
     else { Write-Host "Lint issues found." -ForegroundColor Yellow }
+}
+
+function dev-check-tool-count {
+    Write-Host "Checking tool-count consistency across docs..." -ForegroundColor Cyan
+    Invoke-Venv @("src/utils/check_tool_docs_consistency.py", "--category")
+    if ($LASTEXITCODE -eq 0) { Write-Host "All tool-count references are consistent." -ForegroundColor Green }
+    else {
+        Write-Host "Tool-count drift found. Re-run with --fix for the auto-fixable ones:" -ForegroundColor Yellow
+        Write-Host "  .venv\Scripts\python.exe src/utils/check_tool_docs_consistency.py --fix" -ForegroundColor Yellow
+    }
 }
 
 function dev-format {

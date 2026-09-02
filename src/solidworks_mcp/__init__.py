@@ -1,7 +1,7 @@
 """SolidWorks MCP Server - Python Implementation with FastMCP and PydanticAI.
 
 This is a comprehensive Python implementation of the SolidWorks MCP server, providing
-88+ tools for SolidWorks automation with enhanced security, configurability, and modern
+122 tools for SolidWorks automation with enhanced security, configurability, and modern
 Python architectures.
 
 Original TypeScript implementation rights and IP remain with the original author. This

@@ -1,6 +1,6 @@
 site_name: SolidWorks MCP Server
 site_url: https://andrewbartels1.github.io/SolidworksMCP-python
-site_description: Python MCP server for SolidWorks automation with 109 tools
+site_description: Python MCP server for SolidWorks automation with 122 tools
 strict: false
 
 # Repository
@@ -35,6 +35,8 @@ nav:
       - Prompting Best Practices: user-guide/prompting-best-practices.md
       - Integration Testing: user-guide/integration-testing.md
       - Real Tool Validation Matrix: user-guide/real-tool-validation-matrix.md
+      - SolidWorks UI + LLM Tutorial: user-guide/solidworks-ui-llm-tutorial.md
+      - Screenshot Equivalence Workflow: user-guide/screenshot-equivalence.md
   - Tool Catalog:
       - All Tools: user-guide/tool-catalog/index.md
       - Modeling: user-guide/tool-catalog/modeling.md
@@ -53,6 +55,8 @@ nav:
       - Agents and Prompt Testing: agents/agents-and-testing.md
       - Family-Gated Tool Routing: agents/family-gated-tool-routing.md
       - PydanticAI and Schemas: agents/pydantic-ai-and-schemas.md
+      - Agent Memory and Recovery: agents/agent-memory-and-recovery.md
+      - Agent UI Workflows: agents/agent-ui-workflows.md
       - Logging and Agent Invocation: agents/logging-and-agent-invocation.md
       - Reverse-Engineering Workflow: agents/reverse-engineering-workflow.md
       - Sample Models Guide: agents/sample-models-guide.md
