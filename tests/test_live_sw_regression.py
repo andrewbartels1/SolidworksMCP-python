@@ -2627,6 +2627,57 @@ async def test_reference_plane_can_be_sketched_on(connected_adapter):
         angled = await adapter.create_reference_plane("Right Plane", angle=30.0)
         assert not angled.is_success
         assert "angle" in (angled.error or "").lower()
+
+        # Issue #84: a negative offset must land on the opposite side of the
+        # reference, not collapse onto it. InsertRefPlane's Distance
+        # constraint takes a positive magnitude only - the side comes from
+        # OptionFlip - so a naive negative distance gets silently clamped to
+        # 0 by SolidWorks, producing a plane coincident with Front Plane
+        # instead of one 50mm on the far side. A plane *name* existing is not
+        # proof of *position* (InsertRefPlane still adds a tree entry even
+        # when clamped) - measured by loft volume instead, the same
+        # "trust geometry, not return codes" discipline as the rest of this
+        # file: two same-radius circles on planes at offset=+50 and
+        # offset=-50 are 100mm apart if both offsets are honored, or only
+        # 50mm apart if the negative one collapsed to 0.
+        pos_plane = await adapter.create_reference_plane("Front Plane", offset=50.0)
+        assert pos_plane.is_success, pos_plane.error
+        neg_plane = await adapter.create_reference_plane("Front Plane", offset=-50.0)
+        assert neg_plane.is_success, neg_plane.error
+
+        profiles = []
+        for plane_name in (pos_plane.data["name"], neg_plane.data["name"]):
+            prof_sketch = await adapter.create_sketch(plane_name)
+            assert prof_sketch.is_success, prof_sketch.error
+            await adapter.add_circle(0.0, 0.0, 15.0)
+            await adapter.exit_sketch()
+            profiles.append(prof_sketch.data)
+
+        loft = await adapter.create_loft(LoftParameters(profiles=profiles))
+        assert loft.is_success, loft.error
+
+        loft_props = await adapter.get_mass_properties()
+        assert loft_props.is_success, loft_props.error
+        # A loft between two circles isn't necessarily a perfect right
+        # cylinder (plane-local coordinate systems can differ enough to
+        # taper it slightly), so this doesn't assert an exact predicted
+        # volume - it asserts the measured volume is unambiguously on the
+        # "100mm apart" side, not the "collapsed to 50mm apart" side. The
+        # two scenarios differ by 2x, so the midpoint is a wide, safe
+        # threshold either way:
+        #   collapsed (bug):  pi * 15^2 * 50  ~= 35343 mm3
+        #   correct (fixed):  pi * 15^2 * 100 ~= 70686 mm3
+        collapsed_volume = math.pi * 15.0**2 * 50.0
+        correct_volume = math.pi * 15.0**2 * 100.0
+        threshold = (collapsed_volume + correct_volume) / 2
+        assert loft_props.data.volume > threshold, (
+            f"loft between offset=+50 and offset=-50 measured "
+            f"{loft_props.data.volume} mm3, expected comfortably above "
+            f"{threshold:.0f} mm3 (the midpoint between a correct ~100mm "
+            f"separation and a buggy ~50mm one) - a volume at or below this "
+            f"means the negative offset collapsed onto Front Plane instead "
+            f"of landing on the far side (issue #84)"
+        )
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
 

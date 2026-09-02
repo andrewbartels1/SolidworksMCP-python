@@ -2079,6 +2079,39 @@ _AXIS_PLANE_PAIRS: dict[str, tuple[str, str]] = {
 }
 
 
+def _offset_plane_distance(offset_mm: float, base_flip: bool) -> tuple[float, int]:
+    """Resolve an offset-plane Distance constraint to ``(distance_m, flip_bits)``.
+
+    ``IFeatureManager.InsertRefPlane``'s Distance constraint takes a positive
+    magnitude; the *side* of the base plane is chosen by the ``OptionFlip``
+    bit, not by the sign of the distance. Passing a negative distance does
+    not place the plane on the opposite side - SolidWorks clamps it to 0,
+    collapsing the new plane onto the base. So a negative ``offset_mm`` must
+    be converted to a positive magnitude with the flip bit toggled relative
+    to the caller's ``flip`` request (a negative offset plus ``flip=True``
+    cancel out).
+
+    Credit: this fix (and the pure-helper extraction for direct unit
+    coverage) ports the sign-resolution logic independently found and fixed
+    by contributor @pedropaulovc in their fork (commit ``3c091fd``). See
+    issue #84.
+
+    Args:
+        offset_mm: Signed offset from the base plane, in millimetres.
+        base_flip: Whether the caller requested ``flip``.
+
+    Returns:
+        tuple[float, int]: A non-negative distance in metres, and the flip
+        bits (``_REF_PLANE_OPTION_FLIP`` or 0) to OR into the constraint.
+    """
+    distance_m = float(offset_mm) / 1000.0
+    flip_bits = _REF_PLANE_OPTION_FLIP if base_flip else 0
+    if distance_m < 0.0:
+        distance_m = -distance_m
+        flip_bits ^= _REF_PLANE_OPTION_FLIP
+    return distance_m, flip_bits
+
+
 def _null_callout() -> Any:
     """Return a VT_DISPATCH null for ``SelectByID2``'s ``Callout`` parameter.
 
@@ -2217,10 +2250,8 @@ def _create_reference_plane_impl(
                 "face."
             )
 
-        constraint = _REF_PLANE_DISTANCE
-        value = float(offset) / 1000.0
-        if flip:
-            constraint |= _REF_PLANE_OPTION_FLIP
+        value, flip_bits = _offset_plane_distance(offset, flip)
+        constraint = _REF_PLANE_DISTANCE | flip_bits
 
         from .. import sw_type_info
 
