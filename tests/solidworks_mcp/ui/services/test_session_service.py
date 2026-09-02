@@ -274,13 +274,17 @@ def test_build_checkpoint_rows_executed_approved_queued(monkeypatch) -> None:
 
 def test_build_checkpoint_rows_mocked_tools_in_tools_text(monkeypatch) -> None:
     """Mocked tools should appear in the tools text."""
+    # Synthetic stored rows - only exercises _build_checkpoint_rows' rendering,
+    # not real dispatch, so the tool name is an arbitrary label (not an example
+    # of a genuinely-always-mocked tool - check_interference dispatches for
+    # real now, see issue #6).
     rows = [
         {
             "checkpoint_index": 1,
             "title": "Check",
-            "planned_action_json": json.dumps({"tools": ["check_interference"]}),
+            "planned_action_json": json.dumps({"tools": ["some_unrecognized_tool"]}),
             "result_json": json.dumps(
-                {"status": "success", "mocked_tools": ["check_interference"]}
+                {"status": "success", "mocked_tools": ["some_unrecognized_tool"]}
             ),
             "executed": True,
             "approved_by_user": True,

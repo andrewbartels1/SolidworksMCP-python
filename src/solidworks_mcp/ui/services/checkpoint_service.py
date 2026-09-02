@@ -606,7 +606,7 @@ def _render_checkpoint_script(
 # Direct-execution helpers
 # ---------------------------------------------------------------------------
 
-_MOCKED_TOOLS: frozenset[str] = frozenset({"check_interference"})
+_MOCKED_TOOLS: frozenset[str] = frozenset()
 
 
 def _pf(planned: dict[str, Any], *keys: str, default: float = 0.0) -> float:
@@ -868,6 +868,18 @@ async def _execute_tool(
             raise ValueError("export_image must be an object payload")
         _ok(await adapter.export_image(payload), "export_image")
         return {"tool": tool, "status": "success", "message": "Exported image"}
+
+    if tool == "check_interference":
+        payloads = tool_payloads
+        payload = payloads[0] if payloads else ctx.get("check_interference") or {}
+        if not isinstance(payload, dict):
+            raise ValueError("check_interference must be an object payload")
+        _ok(await adapter.check_interference(payload), "check_interference")
+        return {
+            "tool": tool,
+            "status": "success",
+            "message": "Checked assembly interference",
+        }
 
     return None  # Unknown tool → caller mocks it
 

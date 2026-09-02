@@ -324,11 +324,11 @@ async def test_execute_tool_export_requires_object_payload() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_checkpoint_tools_handles_mocked_and_unknown(
-    tmp_path, monkeypatch
-) -> None:
-    """Mocked or unknown tools should be recorded without failures."""
-    # Exercise the mocked tool and unknown tool paths in _run_checkpoint_tools.
+async def test_run_checkpoint_tools_handles_unknown(tmp_path, monkeypatch) -> None:
+    """Unrecognized tool names should be recorded as mocked without failing."""
+    # Exercise the unknown-tool path in _run_checkpoint_tools. check_interference
+    # used to be an always-mocked example here (issue #6) - it now dispatches for
+    # real, see test_run_checkpoint_tools_dispatches_check_interference below.
     adapter = StubAdapter()
 
     async def _create_adapter(_cfg):
@@ -338,14 +338,45 @@ async def test_run_checkpoint_tools_handles_mocked_and_unknown(
     monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
     monkeypatch.setattr(service, "_checkpoint_script_dir", lambda _sid: tmp_path)
 
-    planned = {"tools": ["check_interference", "unknown_tool"]}
+    planned = {"tools": ["unknown_tool"]}
     summary = await service._run_checkpoint_tools(
         planned, session_id="s1", checkpoint_index=1
     )
 
     assert summary["failed_tools"] == []
-    assert set(summary["mocked_tools"]) == {"check_interference", "unknown_tool"}
+    assert set(summary["mocked_tools"]) == {"unknown_tool"}
     assert Path(summary["script_path"]).exists()
+
+
+@pytest.mark.asyncio
+async def test_run_checkpoint_tools_dispatches_check_interference(
+    tmp_path, monkeypatch
+) -> None:
+    """check_interference should dispatch to the adapter, not report as mocked.
+
+    Regression test for issue #6: the checkpoint dashboard used to special-case
+    check_interference as permanently mocked even though the adapter/tool layer
+    (analysis.py, PR #66) fully implements it - the service layer just wasn't
+    routing to it.
+    """
+    adapter = StubAdapter()
+
+    async def _create_adapter(_cfg):
+        return adapter
+
+    monkeypatch.setattr(service, "create_adapter", _create_adapter)
+    monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(service, "_checkpoint_script_dir", lambda _sid: tmp_path)
+
+    planned = {"tools": ["check_interference"]}
+    summary = await service._run_checkpoint_tools(
+        planned, session_id="s1", checkpoint_index=1
+    )
+
+    assert summary["failed_tools"] == []
+    assert summary["mocked_tools"] == []
+    assert ("check_interference", {}) in adapter.calls
+    assert summary["tool_runs"][0]["status"] == "success"
 
 
 @pytest.mark.asyncio
@@ -564,7 +595,10 @@ async def test_execute_next_checkpoint_all_executed(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_execute_next_checkpoint_mocked_only_message(monkeypatch) -> None:
     """Mocked-only runs should produce the MOCKED message, not the success message."""
-    # Use check_interference (a mocked tool) to trigger the mocked-only branch.
+    # _run_checkpoint is monkeypatched below to return a synthetic all-mocked
+    # summary directly, so the tool name here is arbitrary - it no longer needs
+    # to be a genuinely-always-mocked tool (check_interference isn't one anymore,
+    # see issue #6).
     session_row = {
         "user_goal": "demo",
         "source_mode": "plan",

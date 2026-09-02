@@ -105,6 +105,13 @@ class _DummyAdapter:
             is_success=True, data={"file_path": str(file_path)}, execution_time=0.01
         )
 
+    async def check_interference(self, payload: dict[str, object]) -> Any:
+        """Test check_interference (issue #6: no longer permanently mocked)."""
+
+        return SimpleNamespace(
+            is_success=True, data={"interferences": []}, execution_time=0.01
+        )
+
     async def create_sketch(self, plane: str) -> Any:
         """Test create sketch."""
 
@@ -989,15 +996,19 @@ async def test_run_checkpoint_tools_tool_failure(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_checkpoint_tools_check_interference_mocked(tmp_path: Path) -> None:
-    """Check_interference is always mocked (no adapter binding)."""
+async def test_run_checkpoint_tools_check_interference_dispatches(
+    tmp_path: Path,
+) -> None:
+    """check_interference dispatches to the adapter (issue #6), not mocked."""
     planned = {"goal": "test", "tools": ["check_interference"]}
     with patch("solidworks_mcp.ui.service.create_adapter") as mock_factory:
         mock_factory.return_value = _DummyAdapter()
         summary = await service._run_checkpoint_tools(planned)
 
-    assert "check_interference" in summary["mocked_tools"]
+    assert "check_interference" not in summary["mocked_tools"]
+    assert summary["mocked_tools"] == []
     assert summary["failed_tools"] == []
+    assert summary["tool_runs"][0]["status"] == "success"
 
 
 @pytest.mark.asyncio
@@ -1006,7 +1017,9 @@ async def test_execute_next_checkpoint_mocked_tools_path(tmp_path: Path) -> None
     db_path = tmp_path / "test.db"
     ensure_dashboard_session(DEFAULT_SESSION_ID, db_path=db_path)
 
-    # Insert a checkpoint that uses only check_interference (always mocked)
+    # Insert a checkpoint that uses only an unrecognized tool name (always
+    # mocked - check_interference stopped being an example of this in issue #6,
+    # it now dispatches for real; see test_run_checkpoint_tools_check_interference_dispatches).
     checkpoints = list_plan_checkpoints(DEFAULT_SESSION_ID, db_path=db_path)
     for cp in checkpoints:
         update_plan_checkpoint(int(cp["id"]), executed=True, db_path=db_path)
@@ -1016,7 +1029,7 @@ async def test_execute_next_checkpoint_mocked_tools_path(tmp_path: Path) -> None
         checkpoint_index=99,
         title="Mocked-only checkpoint",
         planned_action_json=json.dumps(
-            {"goal": "verify fit", "tools": ["check_interference"]}
+            {"goal": "verify fit", "tools": ["some_unrecognized_tool"]}
         ),
         approved_by_user=True,
         db_path=db_path,
@@ -1321,14 +1334,18 @@ def test_build_dashboard_state_checkpoint_with_mocked_tools(tmp_path: Path) -> N
     if checkpoints:
         from solidworks_mcp.agents.history_db import update_plan_checkpoint
 
+        # Synthetic result_json written directly to the DB - this only exercises
+        # build_dashboard_state's rendering of a stored mocked-tools result, not
+        # real dispatch, so the tool name is an arbitrary label (not an example
+        # of a genuinely-always-mocked tool - see issue #6).
         update_plan_checkpoint(
             int(checkpoints[0]["id"]),
             executed=True,
             result_json=json.dumps(
                 {
                     "status": "success",
-                    "tools": ["check_interference"],
-                    "mocked_tools": ["check_interference"],
+                    "tools": ["some_unrecognized_tool"],
+                    "mocked_tools": ["some_unrecognized_tool"],
                     "failed_tools": [],
                 }
             ),

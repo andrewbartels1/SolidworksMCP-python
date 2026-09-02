@@ -301,6 +301,9 @@ async def test_run_checkpoint_tools_success_and_mocked(
     monkeypatch.setattr(service, "load_config", lambda: SimpleNamespace())
     monkeypatch.setattr(service, "create_adapter", _create_adapter)
 
+    # check_interference used to be included here as an always-mocked example;
+    # it now dispatches for real (issue #6), so it's dropped from this adapter's
+    # supported-tools mix - unknown_tool alone covers the mocked path.
     summary = await service._run_checkpoint_tools(
         {
             "tools": [
@@ -308,14 +311,12 @@ async def test_run_checkpoint_tools_success_and_mocked(
                 "add_line",
                 "create_extrusion",
                 "create_cut",
-                "check_interference",
                 "unknown_tool",
             ]
         }
     )
 
     assert any(item["status"] == "success" for item in summary["tool_runs"])
-    assert "check_interference" in summary["mocked_tools"]
     assert "unknown_tool" in summary["mocked_tools"]
     assert summary["failed_tools"] == []
 

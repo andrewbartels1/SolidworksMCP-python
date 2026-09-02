@@ -421,7 +421,7 @@ async def _run_structured_agent(
         "  open_model, get_model_info, list_features(include_suppressed), get_mass_properties,\n"
         "  classify_feature_tree, create_sketch, add_line, add_arc, add_circle, add_rectangle,\n"
         "  create_extrusion, create_revolve, create_cut, export_image, export_step, export_stl,\n"
-        "  select_feature, check_interference [mocked until wired], analyze_geometry,\n"
+        "  select_feature, check_interference, analyze_geometry,\n"
         "  generate_vba_code, execute_macro\n"
         "Prefer tools in the order listed above (inspect → classify → plan → execute → verify).\n"
         "Do not invent tools not in this list."
