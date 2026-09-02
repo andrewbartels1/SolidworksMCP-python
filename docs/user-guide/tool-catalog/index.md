@@ -1,6 +1,6 @@
-# Tool Catalog — All 109 Tools
+# Tool Catalog — All 122 Tools
 
-This reference documents all **109 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **122 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
