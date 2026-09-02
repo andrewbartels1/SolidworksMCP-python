@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from solidworks_mcp.adapters.base import (
     AdapterResult,
     AdapterResultStatus,
@@ -284,3 +286,35 @@ def test_add_fillet_sw33_also_uses_new_path() -> None:
 
     assert result.is_success
     assert result.data.name == "Fillet"
+
+
+# ---------------------------------------------------------------------------
+# _offset_plane_distance — issue #84: InsertRefPlane's Distance constraint
+# takes a positive magnitude only; a negative offset must flip the
+# OptionFlip bit instead of going negative, or SolidWorks silently
+# collapses the plane onto its base (clamped to 0).
+# ---------------------------------------------------------------------------
+
+
+def test_offset_plane_distance_positive_offset_no_flip() -> None:
+    distance_m, flip_bits = features._offset_plane_distance(76.2, base_flip=False)
+    assert distance_m == pytest.approx(0.0762)
+    assert flip_bits == 0
+
+
+def test_offset_plane_distance_negative_offset_toggles_flip() -> None:
+    distance_m, flip_bits = features._offset_plane_distance(-76.2, base_flip=False)
+    assert distance_m == pytest.approx(0.0762)
+    assert flip_bits == features._REF_PLANE_OPTION_FLIP
+
+
+def test_offset_plane_distance_negative_offset_and_flip_cancel() -> None:
+    distance_m, flip_bits = features._offset_plane_distance(-76.2, base_flip=True)
+    assert distance_m == pytest.approx(0.0762)
+    assert flip_bits == 0
+
+
+def test_offset_plane_distance_positive_offset_with_flip() -> None:
+    distance_m, flip_bits = features._offset_plane_distance(76.2, base_flip=True)
+    assert distance_m == pytest.approx(0.0762)
+    assert flip_bits == features._REF_PLANE_OPTION_FLIP
