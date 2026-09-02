@@ -1,10 +1,55 @@
 # SolidWorks MCP Server Tools Checklist
 
-## 📊 Tool Status Overview
+> ⚠️ **Historical document.** Everything below `## 🔧 Recent Fixes Applied (2025-01-11)`
+> describes the original Node.js + `winax` implementation of this server
+> (76 tools, COM automation via the winax npm package). The server was
+> rewritten in Python (pywin32 + FastMCP) — see `CLAUDE.md` for the
+> current architecture. The old tool tables and the entire
+> `## Drawing Operations` → `## Design Table Functions` manual QA log
+> (lines below "Last Updated: 2025-01-12") reference tool names, error
+> messages, and a dependency (`winax`) that no longer exist in this repo.
+> Kept for history, not as a current reference. For current, per-domain
+> API coverage, see [`docs/planning/solidworks-api-coverage.md`](docs/planning/solidworks-api-coverage.md)
+> (a future `docs/api-coverage.md`, tracked by GitHub issue #79, will
+> supersede it once that lands — see
+> `openspec/changes/close-tool-surface-gaps-and-housekeeping/`). The
+> current tool total is 122, kept accurate by `dev-check-tool-count`
+> (`src/utils/check_tool_docs_consistency.py`).
+
+## 📊 Tool Status Overview (as of 2025-01-11, Node.js era — see notice above)
 
 - **Total Tools**: 76 tools
 - **Categories**: 11
 - **Status**: All Fixed and Operational (as of 2025-01-11)
+
+## 🔍 Current SolidWorks API Scope & Gaps (2026-08-26)
+
+Findings from auditing all 27 open GitHub issues against the current
+Python/pywin32 `main` branch and the 122-tool MCP surface it exposes
+(source: `gh issue list`, cross-checked with `grep`/`gh pr list` against
+`main` — see the batch below for the full audit trail).
+
+**Confirmed API-domain gaps** (from issue #79's COM-API-domain-vs-MCP-tools
+audit, `gh issue view 79`):
+
+| Domain | Key Interface | Status |
+|---|---|---|
+| Motion Study | `IMotionStudyManager` | ❌ Missing |
+| Routing | `IRoutingManager` | ❌ Missing |
+| Mold tools | `IMoldToolsFeatureData` | ❌ Missing |
+| PhotoView / Visualize | `IRenderManager` | ⚠️ Partial (`export_image` only) |
+| Sheet metal | — | ❌ Missing (tracked separately, issue #57) |
+| Equations / global variables | — | ❌ Missing (tracked in #23) |
+
+**Small tool-surface gaps being closed now** (issues #6, #28, #58–#64,
+#46, #79, #81 — bundled into one OpenSpec change rather than 12 one-off
+PRs, since several turned out to be partly shipped already by merged PRs
+#66/#68/#69 that never closed their issues):
+`openspec/changes/close-tool-surface-gaps-and-housekeeping/`
+
+**Larger backlog** not yet sequenced (see that change's design.md
+Non-Goals): #13, #22, #23, #29, #30, #31, #42, #43, #44, #57, #75,
+#76–78, #80.
 
 ## 📌 Backlog
 
@@ -58,6 +103,22 @@
 - [ ] Feature for "style" type inputs for natural generation or design preferences, like generating a stylized design part image and then have a workflow to break it into the parts that would be needed to actually design and print
 
 - [ ] Add a workflow for recommendations for ESP32, Raspberry Pis, and other electronics that might go into sensors and other parts. Like an expert of 3d printing and simple electrical projects and research for this.
+
+- [ ] Remove ad-hoc debug scripts from repo root (`test_api_response.py`, `test_docs_discovery_run.py`, `test_workflow_fields.py`) — not collected by pytest (`testpaths = ["tests"]`), just clutter
+  - **Tracked**: issue #81, task 12 of `openspec/changes/close-tool-surface-gaps-and-housekeeping/`
+
+- [ ] Add MCP tool coverage for Motion Study (`IMotionStudyManager`), Routing (`IRoutingManager`), and Mold tools (`IMoldToolsFeatureData`) — confirmed fully missing per the #79 API-domain audit
+  - **Status**: Not scoped into any change yet; larger lift than the current housekeeping batch, candidate for its own future change
+  - **Update 2026-08-30**: `@pedropaulovc`'s fork already has a substantial, tested Motion Study implementation (`adapters/solidworks/motion.py`, `tools/motion.py`, mock parity, a live-verified demo script) — worth reviewing for adaptation before building from scratch. See `docs/planning/roadmap.md`'s #23 section.
+
+- [ ] Broaden PhotoView/Visualize coverage beyond `export_image` (`IRenderManager`) — confirmed partial per the #79 API-domain audit
+  - **Status**: Not scoped into any change yet
+
+- [ ] Add per-tool license-tier tags (`[Maker]`/`[Standard]`/`[Professional]`/`[Simulation]`/`[PDM]`) to the README/API-coverage docs
+  - **Status**: Deferred out of the #79 work in `close-tool-surface-gaps-and-housekeeping` — needs a live check against SolidWorks's current Maker-plan feature list, not verifiable during planning. The COM-domain coverage table itself ships without tags first; tags are a follow-up.
+
+- [ ] Replace the default FastMCP startup banner with something fun — a small ASCII-art banner and/or a demo gif, instead of the generic FastMCP splash on server start
+  - **Status**: Idea only, not scoped into any change
 
 - [ ] Evaluate Pydantic/PydanticAI-backed caching strategy for `response_cache` and `intelligent_router` (append-only backlog item)
   - **Research notes (2026-04-06):**
