@@ -74,7 +74,7 @@ The server still provides multiple security/deployment modes for local developme
 
 - Best fit: AI-assisted SolidWorks automation and workflow acceleration
 - Also good for: reusable tutorials, team playbooks, and prompt-to-tool validation
-- Not positioned as: security middleware first (cupcake)
+- Not positioned as: Standalone Solidworks Agent etc.
 
 ## What You Can Do Quickly
 
