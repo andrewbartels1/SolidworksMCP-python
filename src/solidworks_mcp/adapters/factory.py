@@ -161,7 +161,27 @@ class AdapterFactory:
         if adapter_type != AdapterType.MOCK and config.enable_connection_pooling:
             adapter = self._wrap_with_connection_pool(adapter, config)
 
+        self._apply_soc_logging(adapter, config)
+
         return adapter
+
+    @staticmethod
+    def _apply_soc_logging(
+        adapter: SolidWorksAdapter, config: SolidWorksMCPConfig
+    ) -> None:
+        """Turn on SolidWorks-as-Code session logging when the config asks for it.
+
+        Sets ``soc_session_id`` / ``soc_db_path`` on the returned adapter from
+        config. Off unless ``config.soc_logging_enabled``. The actual
+        ``ToolCallRecord`` writes happen in ``CircuitBreakerAdapter._soc_log``,
+        so logging is effective only when the circuit breaker wrapper is in
+        play (the default for non-mock adapters).
+        """
+        if not getattr(config, "soc_logging_enabled", False):
+            return
+        adapter.soc_session_id = config.soc_session_id
+        if config.soc_db_path is not None:
+            adapter.soc_db_path = config.soc_db_path
 
     def _determine_adapter_type(self, config: SolidWorksMCPConfig) -> AdapterType:
         """Determine optimal adapter type based on environment and config.

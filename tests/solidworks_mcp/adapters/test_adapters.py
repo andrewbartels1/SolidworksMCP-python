@@ -76,6 +76,31 @@ class TestAdapterFactory:
         assert AdapterType.MOCK in factory._adapters
         assert AdapterType.PYWIN32 in factory._adapters
 
+    @pytest.mark.asyncio
+    async def test_soc_logging_off_by_default(self, mock_config):
+        """No SoC session id is set unless the config opts in."""
+        adapter = await create_adapter(mock_config)
+        assert adapter.soc_session_id is None
+
+    @pytest.mark.asyncio
+    async def test_soc_logging_enabled_generates_session_id(self, mock_config):
+        """soc_logging_enabled with no id -> a timestamped id, wired onto the adapter."""
+        mock_config.soc_logging_enabled = True
+        mock_config.soc_session_id = None
+        mock_config.model_post_init(None)  # re-run the derived-field step
+        adapter = await create_adapter(mock_config)
+        assert adapter.soc_session_id and adapter.soc_session_id.startswith("soc-")
+
+    @pytest.mark.asyncio
+    async def test_soc_logging_explicit_session_and_db_path(self, mock_config, tmp_path):
+        """An explicit session id and db path are passed straight through."""
+        mock_config.soc_logging_enabled = True
+        mock_config.soc_session_id = "my-bracket"
+        mock_config.soc_db_path = tmp_path / "soc.sqlite3"
+        adapter = await create_adapter(mock_config)
+        assert adapter.soc_session_id == "my-bracket"
+        assert adapter.soc_db_path == tmp_path / "soc.sqlite3"
+
 
 class TestMockAdapter:
     """Test suite for mock SolidWorks adapter."""

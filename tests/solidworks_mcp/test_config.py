@@ -182,3 +182,32 @@ def test_config_cache_and_log_path_passthrough(tmp_path) -> None:
     config = SolidWorksMCPConfig(cache_dir=cache_dir, log_file=log_file)
     assert config.cache_dir == cache_dir
     assert config.log_file == log_file
+
+
+def test_soc_and_docs_index_defaults() -> None:
+    """New knobs default to safe values: SoC logging off, index auto-refresh on."""
+    config = SolidWorksMCPConfig()
+    assert config.soc_logging_enabled is False
+    assert config.soc_session_id is None
+    assert config.soc_db_path is None
+    assert config.docs_index_auto_refresh is True
+    assert config.docs_index_max_age_days == 21
+
+
+def test_soc_logging_env_toggle_and_generated_session_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SOLIDWORKS_MCP_SOC_LOGGING_ENABLED=true flips it on; an id is generated."""
+    _clear_config_env(monkeypatch)
+    monkeypatch.setenv("SOLIDWORKS_MCP_SOC_LOGGING_ENABLED", "true")
+    config = SolidWorksMCPConfig.from_env()
+    assert config.soc_logging_enabled is True
+    assert config.soc_session_id and config.soc_session_id.startswith("soc-")
+
+
+def test_soc_logging_env_explicit_session_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_config_env(monkeypatch)
+    monkeypatch.setenv("SOLIDWORKS_MCP_SOC_LOGGING_ENABLED", "1")
+    monkeypatch.setenv("SOLIDWORKS_MCP_SOC_SESSION_ID", "my-bracket")
+    config = SolidWorksMCPConfig.from_env()
+    assert config.soc_session_id == "my-bracket"
