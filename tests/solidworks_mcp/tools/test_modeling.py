@@ -17,6 +17,7 @@ from solidworks_mcp.tools.modeling import (
     CreateLoftInput,
     CreatePartInput,
     CreateReferencePlaneInput,
+    CreateReferencePointInput,
     CreateRevolveInput,
     CreateSweepInput,
     DeleteFeatureInput,
@@ -1310,6 +1311,70 @@ class TestReferenceGeometryTools:
         """CreateAxisInput.model_post_init rejects a blank reference."""
         with pytest.raises(ValueError, match="reference is required"):
             CreateAxisInput(reference="   ")
+
+    @pytest.mark.asyncio
+    async def test_create_reference_point_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """create_reference_point (along_curve/percent) reports the point."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_reference_point"
+        )
+        result = await tool_func(
+            CreateReferencePointInput(
+                mode="along_curve", x=10, y=0, z=5, percent=50
+            )
+        )
+
+        assert result["status"] == "success"
+        assert "along a curve" in result["message"]
+        assert "50" in result["message"]
+        assert result["point"]["mode"] == "along_curve"
+
+    @pytest.mark.asyncio
+    async def test_create_reference_point_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A bad along-curve parameter combination surfaces the adapter error."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_reference_point"
+        )
+        result = await tool_func(
+            CreateReferencePointInput(mode="along_curve", x=0, y=0, z=0)
+        )
+        assert result["status"] == "error"
+        assert "exactly one of distance or percent" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_create_reference_point_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no create_reference_point - report error."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_reference_point"
+        )
+        result = await tool_func(
+            CreateReferencePointInput(mode="face_center", x=1, y=1, z=1)
+        )
+        assert result["status"] == "error"
+
+    def test_create_reference_point_input_rejects_bad_mode(self):
+        """CreateReferencePointInput.model_post_init rejects an unknown mode."""
+        with pytest.raises(ValueError, match="along_curve.*face_center"):
+            CreateReferencePointInput(mode="spiral", x=0, y=0, z=0)
 
 
 class TestMirrorAndPatternTools:

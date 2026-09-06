@@ -4,7 +4,7 @@ Create and edit 2-D technical drawings: add projected/section/detail views, plac
 
 > **Prerequisite:** An active SolidWorks Drawing (.slddrw) document.
 
-**Total tools in this category: 12**
+**Total tools in this category: 13**
 
 ---
 
@@ -311,6 +311,31 @@ Update title block fields for the active drawing.
 
 ```json
 {}
+```
+
+---
+
+### `auto_center_marks`
+
+Auto-insert centre marks on circular features in a drawing view. Runs SolidWorks' automatic centre-mark insertion for the named view. The API does not report how many marks it added, so the response gives the view's centre-mark count before and after and the delta — a run that added nothing is still a success.
+
+**Prerequisite:** Active drawing containing the named view
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `view_name` | `str` | ✅ | `` | Name of a view on the active drawing, e.g. 'Drawing View1' |
+| `mark_holes` | `bool` | — | `true` | Mark holes / bores |
+| `mark_fillets` | `bool` | — | `false` | Mark fillets |
+| `mark_slots` | `bool` | — | `true` | Mark slots |
+
+**Sample call:**
+
+```json
+{
+  "view_name": "Drawing View1"
+}
 ```
 
 ---

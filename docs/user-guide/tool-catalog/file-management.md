@@ -4,7 +4,7 @@ Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as 
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 17**
+**Total tools in this category: 18**
 
 ---
 
@@ -391,6 +391,30 @@ Switch which open document is the active one. Matches the argument against open 
 ```json
 {
   "title_or_path": "bracket.SLDPRT"
+}
+```
+
+---
+
+### `save_body_as_part`
+
+Extract one solid body from the active multibody part into its own standalone `.sldprt`. Runs SolidWorks' Save Bodies on a single named body; the body is matched by name against the active part's solid bodies (the response lists every solid body found, so an unknown name reports the real options). Success is confirmed by the file existing on disk afterwards.
+
+**Prerequisite:** Active multibody part
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `body_name` | `str` | ✅ | `` | Name of a solid body in the active part, e.g. 'Boss-Extrude1' |
+| `file_path` | `str` | ✅ | `` | Absolute path for the new .sldprt (parent directory must exist) |
+
+**Sample call:**
+
+```json
+{
+  "body_name": "Boss-Extrude1",
+  "file_path": "C:\parts\bracket_body.sldprt"
 }
 ```
 

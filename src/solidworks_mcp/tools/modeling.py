@@ -575,6 +575,45 @@ class CreateAxisInput(CompatInput):
             raise ValueError("reference is required")
 
 
+class CreateReferencePointInput(CompatInput):
+    """Input schema for creating a reference point.
+
+    Attributes:
+        mode (str): "along_curve" or "face_center".
+        x (float): X of a point on the target edge/face, in millimetres.
+        y (float): Y of a point on the target edge/face, in millimetres.
+        z (float): Z of a point on the target edge/face, in millimetres.
+        distance (float | None): For "along_curve", offset from the edge
+            start in millimetres.
+        percent (float | None): For "along_curve", position as 0-100 of the
+            edge length.
+    """
+
+    mode: str = Field(
+        description="'along_curve' (a point on an edge) or 'face_center' "
+        "(the centroid of a face)"
+    )
+    x: float = Field(description="X of a point on the target edge/face, in mm")
+    y: float = Field(description="Y of a point on the target edge/face, in mm")
+    z: float = Field(description="Z of a point on the target edge/face, in mm")
+    distance: float | None = Field(
+        default=None,
+        description="along_curve only: offset from the edge start in mm "
+        "(give exactly one of distance or percent)",
+    )
+    percent: float | None = Field(
+        default=None,
+        description="along_curve only: position as 0-100 of the edge length",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if str(self.mode or "").strip().lower() not in (
+            "along_curve",
+            "face_center",
+        ):
+            raise ValueError("mode must be 'along_curve' or 'face_center'")
+
+
 class MirrorFeatureInput(CompatInput):
     """Input schema for mirroring solid bodies or features.
 
@@ -1960,6 +1999,73 @@ async def register_modeling_tools(
             }
         except Exception as e:
             logger.error(f"Error in create_axis tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def create_reference_point(
+        input_data: CreateReferencePointInput,
+    ) -> dict[str, Any]:
+        """Create a reference point on the active part.
+
+        Two modes:
+
+        - ``along_curve`` — a point on the edge under ``(x, y, z)`` mm, placed
+          ``distance`` mm from the edge start, or at ``percent`` (0–100) of
+          its length. Give exactly one of ``distance`` / ``percent``.
+        - ``face_center`` — a point at the centroid of the face under
+          ``(x, y, z)`` mm.
+
+        The coordinate must lie on the target edge/face; SolidWorks resolves
+        it with a coordinate pick. ``InsertReferencePoint`` always returns a
+        feature, so success is confirmed by the feature tree growing.
+
+        Args:
+            input_data (CreateReferencePointInput): Mode, coordinate, and the
+                along-curve parameter.
+
+        Returns:
+            dict[str, Any]: Status and the point details (feature counts).
+
+        Example:
+            ```python
+            await create_reference_point({
+                "mode": "along_curve", "x": 25, "y": 0, "z": 10, "percent": 50
+            })
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, CreateReferencePointInput)
+            result = await adapter.create_reference_point(
+                input_data.mode,
+                input_data.x,
+                input_data.y,
+                input_data.z,
+                input_data.distance,
+                input_data.percent,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                where = (
+                    f"{data.get('percent')}% along a curve"
+                    if data.get("percent") is not None
+                    else (
+                        f"{data.get('distance_mm')} mm along a curve"
+                        if data.get("distance_mm") is not None
+                        else "a face centre"
+                    )
+                )
+                return {
+                    "status": "success",
+                    "message": f"Created a reference point at {where}",
+                    "point": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to create reference point: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in create_reference_point tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     @mcp.tool()

@@ -230,7 +230,8 @@ Extends `IModelDoc2` for parts: body operations, material assignment, sheet meta
 
 | Operation | Status | Tool / Notes |
 |---|---|---|
-| `GetBodies2` — list solid bodies | **Missing** (High) | Multi-body part inspection |
+| `GetBodies2` — list solid bodies | Partial | `save_body_as_part` enumerates solid bodies to resolve a body name; no standalone "list bodies" tool yet |
+| `CreateSaveBodyFeature` (Save Bodies) | Implemented | `save_body_as_part` — extract one solid body to a standalone part file |
 | `GetMaterialPropertyName2` | Simulated | `get_material_properties` returns hard-coded data |
 | `SetMaterialPropertyName2` | **Missing** (High) | Assign material by name |
 | `GetSurfaceBodies` | **Missing** (Medium) | Surface model inspection |
@@ -302,7 +303,8 @@ Extends `IModelDoc2` for drawings: sheets, views, annotations, BOM tables, revis
 | Weld symbol | **Missing** (Low) | Weld annotation |
 | Datum target | **Missing** (Low) | GD&T datum targets |
 | Balloon annotation | **Missing** (Medium) | Assembly balloon callouts |
-| Center mark / centerline | **Missing** (Medium) | Automatic center marks |
+| Center mark auto-insert (`IView::AutoInsertCenterMarks2`) | Implemented | `auto_center_marks` — holes / fillets / slots in a named view, before/after count reported |
+| Centerline auto-insert | **Missing** (Low) | `IView::InsertCenterLine` for slots and cylindrical faces |
 | Hole callout | **Missing** (High) | Automatic hole note generation |
 | Note (real) | Simulated | `add_note` (no real COM yet) |
 | Layer management | **Missing** (Low) | Drawing layers |
@@ -482,9 +484,10 @@ Extends `IModelDoc2` for drawings: sheets, views, annotations, BOM tables, revis
 | Operation | Status | Tool / Notes |
 |---|---|---|
 | Select named plane for sketch | Implemented | `create_sketch` resolves "Top/Front/Right" |
-| `InsertRefSurface` (reference plane) | **Missing** (High) | Create custom reference plane |
-| `InsertRefAxis` | **Missing** (Medium) | Create a reference axis |
-| `InsertRefPoint` | **Missing** (Low) | Create a reference point |
+| `InsertRefPlane` (reference plane) | Implemented | `create_reference_plane` — offset from a plane/face |
+| `InsertAxis2` (reference axis) | Implemented | `create_axis` — from two principal planes |
+| `InsertReferencePoint` | Implemented | `create_reference_point` — along an edge (distance / %) or at a face centre |
+| Mate references | **Missing** (Low) | Persistent mate references on a model |
 | Mate references | **Missing** (Low) | Persistent mate references on a model |
 | Bounding box reference | **Missing** (Low) | Auto bounding box reference geometry |
 
