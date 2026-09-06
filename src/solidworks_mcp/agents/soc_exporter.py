@@ -508,6 +508,33 @@ def _checkpoint_comment(cp: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_single(
+    tool_name: str,
+    input_json: str | None,
+    output_json: str | None,
+) -> str:
+    """Render one tool call's SolidWorks-as-Code Python, in isolation.
+
+    Runs a fresh ``_CodeGen`` over a single record and returns its emitted
+    line(s) with the script-body indent stripped, so the result is
+    copy-pasteable on its own. Read-only / bookkeeping calls that emit nothing
+    return ``""``.
+
+    Note: this is deliberately stateless — entity variables (``line_1``,
+    ``sketch_1`` …) that ``generate_script`` numbers across a whole session
+    all start from ``_1`` here. For a faithful multi-call script use
+    ``generate_script`` / ``export_session``; this is for reading one call.
+    """
+    gen = _CodeGen()
+    gen.process(
+        tool_name,
+        _parse_input(input_json),
+        _parse_output(output_json),
+    )
+    body = "\n".join(gen.body_lines())
+    return textwrap.dedent(body).strip("\n")
+
+
 def generate_script(
     records: list[dict[str, Any]],
     *,

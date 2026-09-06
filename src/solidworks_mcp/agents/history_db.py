@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import text as sa_text
 from sqlalchemy.pool import NullPool
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -222,6 +224,10 @@ class ToolCallRecord(SQLModel, table=True):
     success: bool = True
     latency_ms: float | None = None
     status: str | None = None
+    # Rendered SolidWorks-as-Code Python for this call, computed at write time
+    # (issue #28). None for rows written before the column existed — session
+    # export re-renders those on demand.
+    script_line: str | None = None
     created_at: str
 
 
@@ -360,9 +366,41 @@ def init_db(db_path: Path | None = None) -> Path:
     engine = _build_engine(resolved)
     try:
         SQLModel.metadata.create_all(engine)
+        _ensure_columns(engine)
     finally:
         engine.dispose()
     return resolved
+
+
+# Columns added to existing tables after their first release. This repo has no
+# migration framework (issue #28): create_all() makes new tables but never
+# alters an existing one, so a pre-existing local DB would raise
+# "no such column" on the next insert. Checked and patched on every init_db().
+_ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "toolcallrecord": {"script_line": "TEXT"},
+}
+
+
+def _ensure_columns(engine: Any) -> None:
+    """Add any missing post-release columns to already-existing tables."""
+    inspector = sa_inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    for table, columns in _ADDED_COLUMNS.items():
+        if table not in existing_tables:
+            continue  # create_all() just made it with every column
+        present = {col["name"] for col in inspector.get_columns(table)}
+        missing = {
+            name: sql_type
+            for name, sql_type in columns.items()
+            if name not in present
+        }
+        if not missing:
+            continue
+        with engine.begin() as conn:
+            for name, sql_type in missing.items():
+                conn.execute(
+                    sa_text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
+                )
 
 
 def insert_run(
@@ -980,6 +1018,7 @@ def insert_tool_call_record(
     output_json: str | None = None,
     success: bool = True,
     latency_ms: float | None = None,
+    script_line: str | None = None,
     db_path: Path | None = None,
 ) -> None:
     """Insert one tool call execution record.
@@ -993,11 +1032,24 @@ def insert_tool_call_record(
         output_json (str | None): The output json value. Defaults to None.
         success (bool): The success value. Defaults to True.
         latency_ms (float | None): The latency ms value. Defaults to None.
+        script_line (str | None): Rendered SolidWorks-as-Code Python for this
+            call (issue #28). Computed from the tool name and payloads when
+            not supplied. Defaults to None.
         db_path (Path | None): The db path value. Defaults to None.
 
     Returns:
         None: None.
     """
+    if script_line is None:
+        # Render at write time so every row is self-describing. Import here to
+        # avoid a module-level cycle (soc_exporter imports from history_db).
+        try:
+            from .soc_exporter import render_single
+
+            script_line = render_single(tool_name, input_json, output_json) or None
+        except Exception:  # noqa: BLE001 - never let rendering block a log write
+            script_line = None
+
     resolved = init_db(db_path)
     engine = _build_engine(resolved)
     with Session(engine) as session:
@@ -1011,6 +1063,7 @@ def insert_tool_call_record(
                 output_json=output_json,
                 success=success,
                 latency_ms=latency_ms,
+                script_line=script_line,
                 created_at=_utc_now_iso(),
             )
         )

@@ -14,6 +14,7 @@ from solidworks_mcp.agents.soc_exporter import (
     _parse_input,
     _parse_output,
     generate_script,
+    render_single,
 )
 
 # ---------------------------------------------------------------------------
@@ -596,3 +597,52 @@ def test_soc_exporter_cli_success_path(monkeypatch, tmp_path) -> None:
         soc_exporter._cli()
 
     mock_export.assert_called_once_with("sess-cli-test", output_file)
+
+
+# ---------------------------------------------------------------------------
+# render_single — one record's rendered line, in isolation (issue #28)
+# ---------------------------------------------------------------------------
+
+
+def test_render_single_create_part():
+    line = render_single("create_part", json.dumps({"name": "my_bracket"}), None)
+    assert "adapter.create_part(name='my_bracket')" in line
+    assert not line.startswith(" ")  # script-body indent stripped
+
+
+def test_render_single_add_line():
+    inp = json.dumps({"x1": 0.0, "y1": 0.0, "x2": 10.0, "y2": 0.0})
+    out = json.dumps({"data": {"entity_id": "Line_1"}})
+    line = render_single("add_line", inp, out)
+    assert "adapter.add_line(0, 0, 10, 0)" in line
+    assert line.startswith("line_1 = require(")
+
+
+def test_render_single_create_extrusion():
+    line = render_single("create_extrusion", json.dumps({"depth": 25.4}), None)
+    assert "ExtrusionParameters" in line
+    assert "depth=25.4" in line
+    assert not line.startswith(" ")
+
+
+def test_render_single_unknown_tool_uses_generic_fallback():
+    line = render_single(
+        "some_custom_tool", json.dumps({"foo": "bar", "n": 42}), None
+    )
+    assert "adapter.some_custom_tool(foo='bar', n=42)" in line
+
+
+def test_render_single_read_only_tool_returns_empty():
+    assert render_single("get_model_info", json.dumps({}), None) == ""
+
+
+def test_render_single_handles_missing_payloads():
+    line = render_single("close_model", None, None)
+    assert "adapter.close_model()" in line
+
+
+def test_render_single_matches_generate_script_for_stateless_call():
+    """A single stateless call renders identically standalone and in-script."""
+    standalone = render_single("create_part", json.dumps({"name": "widget"}), None)
+    in_script = generate_script([_rec("create_part", {"name": "widget"})])
+    assert standalone in in_script
