@@ -28,7 +28,10 @@ from solidworks_mcp.tools.docs_discovery import (
     _extract_year,
     _fallback_help_for_query,
     _find_index_file,
+    _find_related_api_members,
     _load_index_file,
+    _lookup_interface,
+    _lookup_method,
     _resolve_solidworks_year,
     _search_index,
     register_docs_discovery_tools,
@@ -1294,3 +1297,141 @@ async def test_discover_tool_top_level_exception_path(
     result = await discover_tool({})
     assert result["status"] == "error"
     assert "Discovery failed" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# #64 — granular API lookups (helpers are pure, no COM / no server)
+# ---------------------------------------------------------------------------
+
+_LOOKUP_INDEX = {
+    "com_objects": {
+        "ISldWorks": {
+            "methods": ["OpenDoc6", "CloseDoc", "ActivateDoc3"],
+            "properties": ["Visible", "ActiveDoc"],
+        },
+        "IModelDoc2": {
+            "methods": ["GetTitle", "CloseDoc"],
+            "properties": ["Visible"],
+        },
+    }
+}
+
+
+def test_lookup_interface_known_returns_all_members():
+    result = _lookup_interface(_LOOKUP_INDEX, "isldworks")  # case-insensitive
+    assert result["found"] is True
+    assert result["interface"] == "ISldWorks"
+    assert result["method_count"] == 3
+    assert result["property_count"] == 2
+    assert "OpenDoc6" in result["methods"]
+
+
+def test_lookup_interface_unknown_reports_not_found():
+    result = _lookup_interface(_LOOKUP_INDEX, "INotIndexed")
+    assert result["found"] is False
+
+
+def test_lookup_method_known_confirms_member_no_signature():
+    result = _lookup_method(_LOOKUP_INDEX, "ISldWorks", "opendoc6")
+    assert result["found"] is True
+    assert result["member"] == "OpenDoc6"
+    assert result["member_type"] == "method"
+    assert result["signature_indexed"] is False
+    assert result["parameters"] is None
+
+
+def test_lookup_method_resolves_a_property_too():
+    result = _lookup_method(_LOOKUP_INDEX, "ISldWorks", "visible")
+    assert result["found"] is True
+    assert result["member_type"] == "property"
+
+
+def test_lookup_method_unknown_member_reports_not_found():
+    result = _lookup_method(_LOOKUP_INDEX, "ISldWorks", "NoSuchMethod")
+    assert result["found"] is False
+
+
+def test_lookup_method_unknown_interface_reports_not_found():
+    result = _lookup_method(_LOOKUP_INDEX, "INope", "OpenDoc6")
+    assert result["found"] is False
+
+
+def test_find_related_from_interface_returns_its_members():
+    result = _find_related_api_members(_LOOKUP_INDEX, "IModelDoc2", 25)
+    assert result["resolved_as"] == "interface"
+    members = {(r["object"], r["member"]) for r in result["related"]}
+    assert ("IModelDoc2", "GetTitle") in members
+
+
+def test_find_related_from_member_returns_siblings_across_interfaces():
+    result = _find_related_api_members(_LOOKUP_INDEX, "CloseDoc", 25)
+    assert result["resolved_as"] == "member"
+    objs = {r["object"] for r in result["related"]}
+    # CloseDoc lives on both interfaces -> siblings from both come back
+    assert objs == {"ISldWorks", "IModelDoc2"}
+    assert all(r["member"] != "CloseDoc" for r in result["related"])
+
+
+def test_find_related_name_substring_match():
+    result = _find_related_api_members(_LOOKUP_INDEX, "Doc", 25)
+    assert result["resolved_as"] == "name-match"
+    assert any("Doc" in r["member"] for r in result["related"])
+
+
+def test_find_related_respects_max_results():
+    result = _find_related_api_members(_LOOKUP_INDEX, "ISldWorks", 2)
+    assert len(result["related"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_granular_lookup_tools_registered_and_callable(
+    mcp_server,
+    mock_config,
+    temp_dir: Path,
+) -> None:
+    """The three new tools register and answer against a synthetic index;
+    search_solidworks_api_help is unaffected."""
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+
+    tools = {t.name: t.fn for t in await mcp_server.list_tools()}
+    for name in (
+        "lookup_api_method",
+        "lookup_api_interface",
+        "find_related_api_members",
+        "search_solidworks_api_help",
+    ):
+        assert name in tools, f"{name} not registered"
+
+    index_path = temp_dir / "solidworks_docs_index_2026.json"
+    index_path.write_text(json.dumps(_LOOKUP_INDEX), encoding="utf-8")
+    common = {"year": 2026, "index_file": str(index_path)}
+
+    iface = await tools["lookup_api_interface"]({**common, "interface": "ISldWorks"})
+    assert iface["status"] == "success"
+    assert iface["result"]["found"] is True
+    assert iface["result"]["method_count"] == 3
+
+    method = await tools["lookup_api_method"](
+        {**common, "interface": "ISldWorks", "method": "CloseDoc"}
+    )
+    assert method["status"] == "success"
+    assert method["result"]["found"] is True
+
+    missing = await tools["lookup_api_method"](
+        {**common, "interface": "ISldWorks", "method": "Nope"}
+    )
+    assert missing["status"] == "success"
+    assert missing["result"]["found"] is False  # no-match, not an error
+
+    related = await tools["find_related_api_members"](
+        {**common, "name": "CloseDoc"}
+    )
+    assert related["status"] == "success"
+    assert related["result"]["related"]
+
+    # regression: full-text search still works
+    search = await tools["search_solidworks_api_help"](
+        {**common, "query": "open document", "max_results": 5}
+    )
+    assert search["status"] == "success"
+    assert isinstance(search["matches"], list)

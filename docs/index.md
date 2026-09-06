@@ -13,7 +13,7 @@
 
 **AI-Assisted SolidWorks Automation with MCP**
 
-🚀 **122 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
+🚀 **125 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
 
 ## Overview
 
@@ -43,7 +43,7 @@ The project emphasizes an inspect -> classify -> delegate loop instead of blind 
 
 ### 2) Broad Tool Surface with Practical Coverage
 
-- 122 tools across modeling, sketching, drawing, analysis, export, automation, templates, macros, and docs discovery
+- 125 tools across modeling, sketching, drawing, analysis, export, automation, templates, macros, and docs discovery
 - one server API surface for both simple operations and advanced workflows
 
 ### 3) Reliable Execution Path for Complex Operations

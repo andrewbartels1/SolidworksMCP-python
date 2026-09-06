@@ -660,6 +660,50 @@ class SearchApiHelpInput(CompatInput):
     )
 
 
+class LookupApiMethodInput(CompatInput):
+    """Input schema for a single method/property lookup."""
+
+    interface: str = Field(
+        description="COM interface name, e.g. 'IFeatureManager'", min_length=2
+    )
+    method: str = Field(
+        description="Method or property name, e.g. 'InsertFeatureChamfer'",
+        min_length=1,
+    )
+    year: int | None = Field(default=None, description="SolidWorks year override")
+    index_file: str | None = Field(
+        default=None, description="Optional explicit index file path (JSON)"
+    )
+
+
+class LookupApiInterfaceInput(CompatInput):
+    """Input schema for an interface member-list lookup."""
+
+    interface: str = Field(
+        description="COM interface name, e.g. 'ISldWorks'", min_length=2
+    )
+    year: int | None = Field(default=None, description="SolidWorks year override")
+    index_file: str | None = Field(
+        default=None, description="Optional explicit index file path (JSON)"
+    )
+
+
+class FindRelatedApiInput(CompatInput):
+    """Input schema for a related-members lookup."""
+
+    name: str = Field(
+        description="An indexed interface or member name to find relatives of",
+        min_length=2,
+    )
+    year: int | None = Field(default=None, description="SolidWorks year override")
+    max_results: int = Field(
+        default=25, ge=1, le=200, description="Maximum related members to return"
+    )
+    index_file: str | None = Field(
+        default=None, description="Optional explicit index file path (JSON)"
+    )
+
+
 CompatInputT = TypeVar("CompatInputT", bound=CompatInput)
 
 
@@ -890,6 +934,138 @@ def _search_index(
 
     results.sort(key=lambda item: item.get("score", 0), reverse=True)
     return results[:max_results]
+
+
+def _resolve_interface(index: dict[str, Any], name: str) -> tuple[str, dict[str, Any]] | None:
+    """Case-insensitively resolve an interface name to its (canonical_name, data)."""
+    com_objects = index.get("com_objects", {})
+    if name in com_objects:
+        return name, com_objects[name]
+    lowered = name.lower()
+    for obj_name, obj_data in com_objects.items():
+        if obj_name.lower() == lowered:
+            return obj_name, obj_data
+    return None
+
+
+def _lookup_interface(index: dict[str, Any], interface: str) -> dict[str, Any]:
+    """Return every indexed member of an interface, or a no-match marker.
+
+    The index stores member *names* only (no signatures), so this returns the
+    full method/property lists for the interface and nothing more.
+    """
+    resolved = _resolve_interface(index, interface)
+    if resolved is None:
+        return {"found": False, "interface": interface}
+    obj_name, obj_data = resolved
+    methods = [str(m) for m in obj_data.get("methods", [])]
+    properties = [str(p) for p in obj_data.get("properties", [])]
+    return {
+        "found": True,
+        "interface": obj_name,
+        "methods": methods,
+        "properties": properties,
+        "method_count": len(methods),
+        "property_count": len(properties),
+    }
+
+
+def _lookup_method(index: dict[str, Any], interface: str, method: str) -> dict[str, Any]:
+    """Confirm a method/property is indexed on an interface.
+
+    The index has no signatures, so ``parameters`` / ``return_type`` are always
+    reported as not indexed; the useful output is confirmation the member
+    exists on that interface plus its sibling members for context.
+    """
+    resolved = _resolve_interface(index, interface)
+    if resolved is None:
+        return {"found": False, "interface": interface, "method": method}
+    obj_name, obj_data = resolved
+    lowered = method.lower()
+    for member_type, key in (("method", "methods"), ("property", "properties")):
+        for member in obj_data.get(key, []):
+            if str(member).lower() == lowered:
+                return {
+                    "found": True,
+                    "interface": obj_name,
+                    "member": str(member),
+                    "member_type": member_type,
+                    "parameters": None,
+                    "return_type": None,
+                    "signature_indexed": False,
+                    "note": (
+                        "The local docs index stores member names only. Run "
+                        "search_solidworks_api_help or consult help.solidworks.com "
+                        "for the full signature."
+                    ),
+                }
+    return {
+        "found": False,
+        "interface": obj_name,
+        "method": method,
+        "note": f"{method!r} is not an indexed member of {obj_name}.",
+    }
+
+
+def _find_related_api_members(
+    index: dict[str, Any], name: str, max_results: int
+) -> dict[str, Any]:
+    """Given an indexed interface or member name, return related members.
+
+    - An interface name -> its own members.
+    - A member name -> the other members of every interface that also exposes
+      it (siblings commonly used together), plus name-substring matches
+      elsewhere in the index.
+    """
+    com_objects = index.get("com_objects", {})
+    related: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _add(obj_name: str, member: str, member_type: str, reason: str) -> None:
+        key = (obj_name, str(member))
+        if key in seen or str(member).lower() == name.lower():
+            return
+        seen.add(key)
+        related.append(
+            {
+                "object": obj_name,
+                "member": str(member),
+                "member_type": member_type,
+                "reason": reason,
+            }
+        )
+
+    resolved = _resolve_interface(index, name)
+    if resolved is not None:
+        obj_name, obj_data = resolved
+        for m in obj_data.get("methods", []):
+            _add(obj_name, m, "method", "same interface")
+        for p in obj_data.get("properties", []):
+            _add(obj_name, p, "property", "same interface")
+        return {"found": True, "query": name, "resolved_as": "interface", "related": related[:max_results]}
+
+    lowered = name.lower()
+    matched_member = False
+    for obj_name, obj_data in com_objects.items():
+        members = [(m, "method") for m in obj_data.get("methods", [])] + [
+            (p, "property") for p in obj_data.get("properties", [])
+        ]
+        names_lower = {str(m).lower() for m, _ in members}
+        if lowered in names_lower:
+            matched_member = True
+            for member, member_type in members:
+                _add(obj_name, member, member_type, f"sibling on {obj_name}")
+        else:
+            for member, member_type in members:
+                if lowered in str(member).lower():
+                    _add(obj_name, member, member_type, "name match")
+
+    return {
+        "found": matched_member or bool(related),
+        "query": name,
+        "resolved_as": "member" if matched_member else "name-match",
+        "related": related[:max_results],
+    }
 
 
 def _fallback_help_for_query(query: str) -> dict[str, Any]:
@@ -1152,5 +1328,126 @@ async def register_docs_discovery_tools(
                 "message": f"API help search failed: {str(e)}",
             }
 
-    tool_count = 2  # discover_solidworks_docs, search_solidworks_api_help
+    def _load_index_for_lookup(
+        requested_year: int | None, explicit_index_file: str | None
+    ) -> tuple[dict[str, Any] | None, Path | None, int | None]:
+        """Shared index resolution for the granular lookup tools."""
+        resolved_year = _resolve_solidworks_year(requested_year, config)
+        index_file = _find_index_file(resolved_year, explicit_index_file)
+        index = _load_index_file(index_file) if index_file else None
+        return index, index_file, resolved_year
+
+    @mcp.tool()  # type: ignore[untyped-decorator]
+    async def lookup_api_method(
+        input_data: LookupApiMethodInput | None = None,
+    ) -> dict[str, Any]:
+        """Look up one SolidWorks API method or property by interface + name.
+
+        Confirms the member is indexed on that interface and returns its
+        sibling members for context. The local index stores names only, so
+        full signatures (parameters, return type) are not available here - use
+        search_solidworks_api_help or help.solidworks.com for those.
+        """
+        import time
+
+        start = time.time()
+        try:
+            normalized = _normalize_input(input_data, LookupApiMethodInput)
+            index, index_file, year = _load_index_for_lookup(
+                normalized.year, normalized.index_file
+            )
+            result = _lookup_method(
+                index or {}, normalized.interface, normalized.method
+            )
+            return {
+                "status": "success",
+                "message": (
+                    "Method found"
+                    if result.get("found")
+                    else "No indexed match for that interface/method"
+                ),
+                "year": year,
+                "source_index_file": str(index_file) if index_file else None,
+                "result": result,
+                "execution_time": time.time() - start,
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Error during lookup_api_method: {e}")
+            return {"status": "error", "message": f"lookup_api_method failed: {e}"}
+
+    @mcp.tool()  # type: ignore[untyped-decorator]
+    async def lookup_api_interface(
+        input_data: LookupApiInterfaceInput | None = None,
+    ) -> dict[str, Any]:
+        """List every indexed member (methods + properties) of a COM interface."""
+        import time
+
+        start = time.time()
+        try:
+            normalized = _normalize_input(input_data, LookupApiInterfaceInput)
+            index, index_file, year = _load_index_for_lookup(
+                normalized.year, normalized.index_file
+            )
+            result = _lookup_interface(index or {}, normalized.interface)
+            return {
+                "status": "success",
+                "message": (
+                    f"{result['method_count']} methods, {result['property_count']} properties"
+                    if result.get("found")
+                    else "Interface not found in the indexed documentation"
+                ),
+                "year": year,
+                "source_index_file": str(index_file) if index_file else None,
+                "result": result,
+                "execution_time": time.time() - start,
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Error during lookup_api_interface: {e}")
+            return {
+                "status": "error",
+                "message": f"lookup_api_interface failed: {e}",
+            }
+
+    @mcp.tool()  # type: ignore[untyped-decorator]
+    async def find_related_api_members(
+        input_data: FindRelatedApiInput | None = None,
+    ) -> dict[str, Any]:
+        """Find API members related to a known interface or member name.
+
+        For an interface: its own members. For a member: the other members of
+        every interface that also exposes it, plus name-substring matches.
+        """
+        import time
+
+        start = time.time()
+        try:
+            normalized = _normalize_input(input_data, FindRelatedApiInput)
+            index, index_file, year = _load_index_for_lookup(
+                normalized.year, normalized.index_file
+            )
+            result = _find_related_api_members(
+                index or {}, normalized.name, normalized.max_results
+            )
+            return {
+                "status": "success",
+                "message": (
+                    f"{len(result['related'])} related member(s)"
+                    if result.get("found")
+                    else "No related members found"
+                ),
+                "year": year,
+                "source_index_file": str(index_file) if index_file else None,
+                "result": result,
+                "execution_time": time.time() - start,
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Error during find_related_api_members: {e}")
+            return {
+                "status": "error",
+                "message": f"find_related_api_members failed: {e}",
+            }
+
+    # discover_solidworks_docs, search_solidworks_api_help, lookup_api_method,
+    # lookup_api_interface, find_related_api_members
+    tool_count = 5
     return tool_count
