@@ -158,6 +158,28 @@ class UpdateSheetFormatInput(BaseModel):
     drawing_number: str = Field(default="", description="Drawing number")
 
 
+class AutoCenterMarksInput(CompatInput):
+    """Input schema for auto-inserting drawing centre marks.
+
+    Attributes:
+        view_name (str): Name of a view on the active drawing.
+        mark_holes (bool): Mark holes / bores.
+        mark_fillets (bool): Mark fillets.
+        mark_slots (bool): Mark slots.
+    """
+
+    view_name: str = Field(
+        description="Name of a view on the active drawing, e.g. 'Drawing View1'"
+    )
+    mark_holes: bool = Field(default=True, description="Mark holes / bores")
+    mark_fillets: bool = Field(default=False, description="Mark fillets")
+    mark_slots: bool = Field(default=True, description="Mark slots")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.view_name.strip():
+            raise ValueError("view_name is required")
+
+
 class DrawingCreationInput(CompatInput):
     """Input schema for creating a new drawing.
 
@@ -1050,5 +1072,67 @@ async def register_drawing_tools(
             logger.error(f"Error in update_title_block tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 8  # Number of tools registered
+    @mcp.tool()
+    async def auto_center_marks(
+        input_data: AutoCenterMarksInput,
+    ) -> dict[str, Any]:
+        """Auto-insert centre marks on circular features in a drawing view.
+
+        Runs SolidWorks' automatic centre-mark insertion for the named view.
+        The API does not report how many marks it added, so the response
+        gives the view's centre-mark count before and after and the delta.
+        A run that added nothing is still a success — the view may have no
+        un-marked holes.
+
+        Args:
+            input_data (AutoCenterMarksInput): The view and which feature
+                types to mark.
+
+        Returns:
+            dict[str, Any]: Status plus ``center_marks_before`` /
+            ``center_marks_after`` / ``center_marks_added``.
+
+        Example:
+            ```python
+            await auto_center_marks({"view_name": "Drawing View1"})
+            ```
+        """
+        try:
+            if not hasattr(adapter, "auto_center_marks"):
+                return {
+                    "status": "error",
+                    "message": (
+                        "Active adapter does not support auto_center_marks; "
+                        "no centre marks were inserted."
+                    ),
+                }
+            result = await adapter.auto_center_marks(
+                input_data.view_name,
+                input_data.mark_holes,
+                input_data.mark_fillets,
+                input_data.mark_slots,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                added = data.get("center_marks_added")
+                return {
+                    "status": "success",
+                    "message": (
+                        f"Inserted {added} centre mark(s) on "
+                        f"{input_data.view_name}"
+                        if isinstance(added, int)
+                        else f"Ran centre-mark insertion on {input_data.view_name}"
+                    ),
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to insert centre marks: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in auto_center_marks tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 13  # Number of tools registered
     return tool_count

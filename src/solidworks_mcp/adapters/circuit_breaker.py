@@ -559,6 +559,31 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"reference": reference},
         )
 
+    async def create_reference_point(
+        self,
+        mode: str,
+        x: float,
+        y: float,
+        z: float,
+        distance: float | None = None,
+        percent: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a reference point through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_reference_point",
+            lambda: self.adapter.create_reference_point(
+                mode, x, y, z, distance, percent
+            ),
+            input_dict={
+                "mode": mode,
+                "x": x,
+                "y": y,
+                "z": z,
+                "distance": distance,
+                "percent": percent,
+            },
+        )
+
     async def mirror_feature(
         self,
         features: list[str],
@@ -1254,6 +1279,37 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "list_drawing_views",
             lambda: self.adapter.list_drawing_views(),
             input_dict={},
+        )
+
+    async def auto_center_marks(
+        self,
+        view_name: str,
+        mark_holes: bool = True,
+        mark_fillets: bool = False,
+        mark_slots: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-insert drawing centre marks through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "auto_center_marks",
+            lambda: self.adapter.auto_center_marks(
+                view_name, mark_holes, mark_fillets, mark_slots
+            ),
+            input_dict={
+                "view_name": view_name,
+                "mark_holes": mark_holes,
+                "mark_fillets": mark_fillets,
+                "mark_slots": mark_slots,
+            },
+        )
+
+    async def save_body_as_part(
+        self, body_name: str, file_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Save a body to a new part through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "save_body_as_part",
+            lambda: self.adapter.save_body_as_part(body_name, file_path),
+            input_dict={"body_name": body_name, "file_path": file_path},
         )
 
     async def check_interference(

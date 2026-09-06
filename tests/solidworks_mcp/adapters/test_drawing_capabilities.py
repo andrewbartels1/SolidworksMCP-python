@@ -29,6 +29,7 @@ CAPABILITIES = [
     "create_technical_drawing",
     "add_note",
     "list_drawing_views",
+    "auto_center_marks",
 ]
 
 WRAPPERS = [
@@ -93,6 +94,7 @@ def test_wrappers_do_not_silently_fall_through_to_base(capability: str) -> None:
 GATED_ON_THIS_BRANCH = [
     "add_drawing_view",
     "create_technical_drawing",
+    "auto_center_marks",
 ]
 
 #: Capabilities whose tool gates arrive with the refuse-instead-of-fabricate
@@ -189,6 +191,53 @@ async def test_mock_first_angle_projection_is_honoured() -> None:
     )
     assert result.is_success
     assert result.data["projection"] == "first_angle"
+
+
+@pytest.mark.asyncio
+async def test_mock_auto_center_marks_adds_once_then_holds() -> None:
+    """First run on a view adds marks; a second run on it adds none."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_drawing()
+    await adapter.create_technical_drawing({"model_file": "C:/parts/a.sldprt"})
+    view = (await adapter.list_drawing_views()).data[0]
+
+    first = await adapter.auto_center_marks(view, mark_holes=True, mark_slots=False)
+    assert first.is_success
+    assert first.data["feature_types"] == ["holes"]
+    assert first.data["center_marks_before"] == 0
+    assert first.data["center_marks_added"] > 0
+
+    second = await adapter.auto_center_marks(view, mark_holes=True, mark_slots=False)
+    assert second.is_success
+    assert second.data["center_marks_added"] == 0
+    assert second.data["center_marks_before"] == first.data["center_marks_after"]
+
+
+@pytest.mark.asyncio
+async def test_mock_auto_center_marks_mirrors_the_live_refusals() -> None:
+    """Not a drawing, no feature type, and an unknown view are all errors."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    await adapter.create_part()
+    not_drawing = await adapter.auto_center_marks("Drawing View1")
+    assert not not_drawing.is_success
+    assert "requires an active drawing" in (not_drawing.error or "")
+
+    await adapter.create_drawing()
+    await adapter.create_technical_drawing({"model_file": "C:/parts/a.sldprt"})
+    view = (await adapter.list_drawing_views()).data[0]
+
+    none_selected = await adapter.auto_center_marks(
+        view, mark_holes=False, mark_fillets=False, mark_slots=False
+    )
+    assert not none_selected.is_success
+    assert "at least one feature type" in (none_selected.error or "")
+
+    unknown = await adapter.auto_center_marks("No Such View")
+    assert not unknown.is_success
+    assert "No view named" in (unknown.error or "")
 
 
 @pytest.mark.asyncio

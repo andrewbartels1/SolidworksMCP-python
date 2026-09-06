@@ -93,6 +93,33 @@ class SolidWorksFeaturesMixin:
     async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
         return _create_axis_impl(self, reference)
 
+    async def create_reference_point(
+        self,
+        mode: str,
+        x: float,
+        y: float,
+        z: float,
+        distance: float | None = None,
+        percent: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a reference point on the active part.
+
+        Args:
+            mode: ``"along_curve"`` or ``"face_center"``.
+            x: X of a point on the target edge/face, in millimetres.
+            y: Y of a point on the target edge/face, in millimetres.
+            z: Z of a point on the target edge/face, in millimetres.
+            distance: For ``along_curve``, offset from the edge start in mm.
+            percent: For ``along_curve``, position as 0-100 of edge length.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Delegates to
+            :func:`_create_reference_point_impl`; see it for the payload shape.
+        """
+        return _create_reference_point_impl(
+            self, mode, x, y, z, distance, percent
+        )
+
     async def pattern_circular(
         self,
         features: list[str],
@@ -2189,6 +2216,13 @@ _AXIS_PLANE_PAIRS: dict[str, tuple[str, str]] = {
     "z": ("Top Plane", "Right Plane"),
 }
 
+#: ``swRefPointType_e`` members used by ``IFeatureManager::InsertReferencePoint``.
+_SW_REF_POINT_ALONG_CURVE = 2
+_SW_REF_POINT_FACE_CENTER = 4
+#: ``swRefPointAlongCurveType_e``.
+_SW_REF_POINT_ALONG_CURVE_DISTANCE = 0
+_SW_REF_POINT_ALONG_CURVE_PERCENT = 1
+
 
 def _offset_plane_distance(offset_mm: float, base_flip: bool) -> tuple[float, int]:
     """Resolve an offset-plane Distance constraint to ``(distance_m, flip_bits)``.
@@ -2484,6 +2518,165 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
     return cast(
         AdapterResult[dict[str, Any]],
         adapter._handle_com_operation("create_axis", _axis_operation),
+    )
+
+
+def _create_reference_point_impl(
+    adapter: Any,
+    mode: str,
+    x: float,
+    y: float,
+    z: float,
+    distance: float | None,
+    percent: float | None,
+) -> AdapterResult[dict[str, Any]]:
+    """Create a reference point on the active part.
+
+    Two modes:
+
+    * ``"along_curve"`` - selects the edge under the millimetre coordinate
+      ``(x, y, z)`` and places a point ``distance`` mm, or ``percent``
+      (0-100) of the edge length, from the edge start.
+    * ``"face_center"`` - selects the face under ``(x, y, z)`` and places a
+      point at its centroid.
+
+    Coordinate selection uses ``IModelDocExtension::SelectByID2``; per this
+    repo's runbook a ``ForceRebuild3`` is issued first so freshly created
+    edges are tessellated, and the ``Callout`` argument is passed an explicit
+    ``VT_DISPATCH`` null. ``InsertReferencePoint`` returns a Feature whether
+    or not it produced anything, so the feature count is compared before and
+    after.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        mode: ``"along_curve"`` or ``"face_center"``.
+        x: X of a point on the target edge/face, in millimetres.
+        y: Y of a point on the target edge/face, in millimetres.
+        z: Z of a point on the target edge/face, in millimetres.
+        distance: For ``along_curve``, offset from the edge start in mm.
+        percent: For ``along_curve``, position as 0-100 of the edge length.
+            Exactly one of ``distance`` / ``percent`` is required.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: The mode, the coordinate and resolved
+        parameter, and how the feature tree changed. ``ERROR`` for an unknown
+        mode, a bad distance/percent combination, a failed selection, or when
+        no new feature appeared.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    key = str(mode or "").strip().lower()
+    if key not in ("along_curve", "face_center"):
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=f"Unknown mode {mode!r}. Use 'along_curve' or 'face_center'.",
+        )
+
+    along_type = 0
+    along_value = 0.0
+    if key == "along_curve":
+        if (distance is None) == (percent is None):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="along_curve needs exactly one of distance or percent",
+            )
+        if distance is not None:
+            if float(distance) <= 0.0:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error="distance must be positive",
+                )
+            along_type = _SW_REF_POINT_ALONG_CURVE_DISTANCE
+            along_value = float(distance) / 1000.0
+        else:
+            if not 0.0 < float(percent) < 100.0:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error="percent must be between 0 and 100 (exclusive)",
+                )
+            along_type = _SW_REF_POINT_ALONG_CURVE_PERCENT
+            along_value = float(percent) / 100.0
+
+    def _point_operation() -> dict[str, Any]:
+        from .. import sw_type_info
+
+        model = adapter.currentModel
+        before = _feature_count(adapter)
+        adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
+        adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+
+        entity_type = "EDGE" if key == "along_curve" else "FACE"
+        callout = _null_callout()
+        selected = adapter._attempt(
+            lambda: model.Extension.SelectByID2(
+                "",
+                entity_type,
+                float(x) / 1000.0,
+                float(y) / 1000.0,
+                float(z) / 1000.0,
+                False,
+                0,
+                callout,
+                0,
+            ),
+            default=False,
+        )
+        if not selected:
+            raise Exception(
+                f"No {entity_type.lower()} found at ({x}, {y}, {z}) mm - the "
+                "coordinate must lie on the target entity."
+            )
+
+        manager = sw_type_info.flagged(
+            adapter._attempt(lambda: model.FeatureManager, default=None),
+            "IFeatureManager",
+        )
+        if manager is None:
+            raise Exception("Part has no FeatureManager")
+
+        if key == "along_curve":
+            adapter._attempt(
+                lambda: manager.InsertReferencePoint(
+                    _SW_REF_POINT_ALONG_CURVE, along_type, along_value, 1
+                ),
+                default=None,
+            )
+        else:
+            adapter._attempt(
+                lambda: manager.InsertReferencePoint(
+                    _SW_REF_POINT_FACE_CENTER, 0, 0.0, 1
+                ),
+                default=None,
+            )
+
+        adapter._attempt(lambda: model.EditRebuild3(), default=None)
+        after = _feature_count(adapter)
+        if before is None or after is None:
+            raise Exception(
+                "The feature count could not be read, so whether a reference "
+                "point was created is unknown."
+            )
+        if after <= before:
+            raise Exception(
+                "InsertReferencePoint added no feature - the selected entity "
+                "may not support a reference point in this mode."
+            )
+        return {
+            "mode": key,
+            "at_mm": [x, y, z],
+            "distance_mm": distance if key == "along_curve" else None,
+            "percent": percent if key == "along_curve" else None,
+            "features_before": before,
+            "features_after": after,
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("create_reference_point", _point_operation),
     )
 
 

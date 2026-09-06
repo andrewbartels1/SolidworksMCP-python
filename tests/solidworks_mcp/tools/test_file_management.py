@@ -11,6 +11,7 @@ from solidworks_mcp.tools.file_management import (
     FileOperationInput,
     FormatConversionInput,
     SaveAsInput,
+    SaveBodyAsPartInput,
     register_file_management_tools,
 )
 from solidworks_mcp.utils.feature_tree_classifier import (
@@ -389,6 +390,68 @@ class TestFileManagementTools:
             ActivateDocumentInput(title_or_path="whatever.SLDPRT")
         )
         assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_save_body_as_part_success(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """save_body_as_part reports the written path and body list."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+        target = tmp_path / "body.sldprt"
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "save_body_as_part"
+        )
+        result = await tool_func(
+            SaveBodyAsPartInput(body_name="Boss-Extrude1", file_path=str(target))
+        )
+
+        assert result["status"] == "success"
+        assert "Boss-Extrude1" in result["message"]
+        assert result["data"]["solid_bodies"] == ["Boss-Extrude1"]
+        assert target.exists()
+
+    @pytest.mark.asyncio
+    async def test_save_body_as_part_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's error message."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.save_body_as_part = AsyncMock(
+            return_value=Mock(is_success=False, error="Body 'X' not found")
+        )
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "save_body_as_part"
+        )
+        result = await tool_func(
+            SaveBodyAsPartInput(body_name="X", file_path="C:/parts/x.sldprt")
+        )
+
+        assert result["status"] == "error"
+        assert "Body 'X' not found" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_save_body_as_part_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no save_body_as_part - report error."""
+        await register_file_management_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "save_body_as_part"
+        )
+        result = await tool_func(
+            SaveBodyAsPartInput(body_name="B1", file_path="C:/x.sldprt")
+        )
+        assert result["status"] == "error"
+        assert "does not support save_body_as_part" in result["message"]
 
     @pytest.mark.asyncio
     async def test_save_file_exception_path(

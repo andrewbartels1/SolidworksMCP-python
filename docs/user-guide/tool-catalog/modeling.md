@@ -4,7 +4,7 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 > **Prerequisite:** An active SolidWorks session. Most feature tools require an open Part document.
 
-**Total tools in this category: 11**
+**Total tools in this category: 12**
 
 ---
 
@@ -277,6 +277,35 @@ Rename a feature on the feature tree. SolidWorks silently refuses a rename onto 
 {
   "old_name": "Fillet1",
   "new_name": "EdgeBreak"
+}
+```
+
+---
+
+### `create_reference_point`
+
+Create a reference point on the active part. Two modes: `along_curve` places a point on the edge under `(x, y, z)` mm — either `distance` mm from the edge start or at `percent` (0–100) of its length; `face_center` places a point at the centroid of the face under `(x, y, z)` mm. The coordinate must lie on the target edge/face. `InsertReferencePoint` always returns a feature, so success is confirmed by the feature tree growing.
+
+**Prerequisite:** Active part with the target edge/face
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `mode` | `str` | ✅ | `` | `along_curve` or `face_center` |
+| `x` | `float` | ✅ | `` | X of a point on the target edge/face, in mm |
+| `y` | `float` | ✅ | `` | Y of a point on the target edge/face, in mm |
+| `z` | `float` | ✅ | `` | Z of a point on the target edge/face, in mm |
+| `distance` | `float?` | — | `None` | along_curve only: offset from the edge start in mm |
+| `percent` | `float?` | — | `None` | along_curve only: 0–100 of the edge length |
+
+**Sample call:**
+
+```json
+{
+  "mode": "along_curve",
+  "x": 25, "y": 0, "z": 10,
+  "percent": 50
 }
 ```
 

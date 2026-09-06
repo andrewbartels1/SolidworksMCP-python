@@ -8,6 +8,7 @@ from solidworks_mcp.tools.drawing import (
     AddDimensionInput,
     AddNoteInput,
     AnnotationInput,
+    AutoCenterMarksInput,
     CreateDetailViewInput,
     CreateDrawingViewInput,
     CreateSectionViewInput,
@@ -24,9 +25,10 @@ class TestDrawingTools:
 
     @pytest.mark.asyncio
     async def test_register_drawing_tools(self, mcp_server, mock_adapter, mock_config):
-        """Test that drawing tools register correctly."""
+        """The reported count matches the number of tools actually registered."""
         tool_count = await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        assert tool_count == 8
+        registered_tool_names = {tool.name for tool in await mcp_server.list_tools()}
+        assert tool_count == len(registered_tool_names)
 
     @pytest.mark.asyncio
     async def test_create_technical_drawing_success(
@@ -298,6 +300,87 @@ class TestDrawingTools:
         result = await tool_func(input_data=input_data)
         assert result["status"] == "error"
         assert "Parent view not found" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_auto_center_marks_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """auto_center_marks reports the before/after centre-mark delta."""
+        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.auto_center_marks = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={
+                    "view": "Drawing View1",
+                    "feature_types": ["holes"],
+                    "center_marks_before": 0,
+                    "center_marks_after": 4,
+                    "center_marks_added": 4,
+                },
+                execution_time=0.1,
+            )
+        )
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "auto_center_marks"
+        )
+        result = await tool_func(
+            input_data=AutoCenterMarksInput(view_name="Drawing View1")
+        )
+
+        assert result["status"] == "success"
+        assert "4 centre mark(s)" in result["message"]
+        assert result["data"]["center_marks_added"] == 4
+
+    @pytest.mark.asyncio
+    async def test_auto_center_marks_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """An unknown view surfaces the adapter's error message."""
+        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
+
+        mock_adapter.auto_center_marks = AsyncMock(
+            return_value=Mock(
+                is_success=False, error="No view named 'Ghost'", execution_time=0.0
+            )
+        )
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "auto_center_marks"
+        )
+        result = await tool_func(
+            input_data=AutoCenterMarksInput(view_name="Ghost")
+        )
+
+        assert result["status"] == "error"
+        assert "No view named 'Ghost'" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_auto_center_marks_error_without_adapter_method(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter reports an error, not a fabrication."""
+        await register_drawing_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "auto_center_marks"
+        )
+        result = await tool_func(
+            input_data=AutoCenterMarksInput(view_name="Drawing View1")
+        )
+        assert result["status"] == "error"
+        assert "does not support auto_center_marks" in result["message"]
+
+    def test_auto_center_marks_input_rejects_blank_view(self):
+        """AutoCenterMarksInput.model_post_init rejects a blank view name."""
+        with pytest.raises(ValueError, match="view_name is required"):
+            AutoCenterMarksInput(view_name="   ")
 
     @pytest.mark.unit
     def test_drawing_creation_input_validation(self):

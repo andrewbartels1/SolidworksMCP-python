@@ -637,6 +637,75 @@ def _apply_unit_system(adapter: Any, model: Any, unit_system: str) -> dict[str, 
 # --- Open-document enumeration ------------------------------------------
 _DOC_TYPE_NAMES: dict[int, str] = {1: "Part", 2: "Assembly", 3: "Drawing"}
 
+# --- Multibody / drawing detailing -------------------------------------
+# swBodyType_e.swSolidBody
+_SW_SOLID_BODY = 0
+# swAutoInsertCenterMarkTypes_e - bitmask for IView::AutoInsertCenterMarks2
+_SW_CM_TYPE_HOLE = 1
+_SW_CM_TYPE_FILLET = 2
+_SW_CM_TYPE_SLOT = 4
+# swCenterMarkStyle_e.swCenterMark_Single
+_SW_CM_STYLE_SINGLE = 2
+
+
+def _variant_array(element_vt: int, values: Any) -> Any:
+    """Wrap a Python sequence as a SAFEARRAY VARIANT for a SolidWorks call.
+
+    pywin32 late binding otherwise unpacks a bare list into positional
+    arguments, so SolidWorks array parameters (``CreateSaveBodyFeature``'s
+    bodies/paths, sketch entity lists, ...) need a single ``VT_ARRAY``
+    VARIANT.
+
+    Args:
+        element_vt: The element type flag, e.g. ``pythoncom.VT_DISPATCH`` or
+            ``pythoncom.VT_BSTR``.
+        values: The sequence of elements.
+
+    Returns:
+        Any: ``VARIANT(VT_ARRAY | element_vt, list(values))``, or the plain
+        list when pywin32 is unavailable (test/mock environments).
+    """
+    variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
+    array_flag = getattr(pythoncom, "VT_ARRAY", 0)
+    if not callable(variant_ctor) or not array_flag:
+        return list(values)
+    return variant_ctor(int(array_flag) | int(element_vt), list(values))
+
+
+def _resolve_drawing_view(adapter: Any, drawing: Any, view_name: str) -> Any:
+    """Return the ``IView`` on the active drawing whose name matches.
+
+    Walks ``IDrawingDoc::GetViews`` (a list of sheets, each shaped
+    ``(sheet, view, view, ...)``) the same way :func:`_view_names` does. The
+    match is case-insensitive.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        drawing: The drawing document, flagged for ``IDrawingDoc``.
+        view_name: The drawing-view name to look for.
+
+    Returns:
+        Any: The flagged ``IView`` dispatch, or ``None`` when nothing matches.
+    """
+    target = str(view_name or "").strip().lower()
+    if not target:
+        return None
+    sheets = adapter._attempt(lambda: drawing.GetViews(), default=None)
+    if not isinstance(sheets, (list, tuple)):
+        return None
+    for sheet in sheets:
+        views = sheet if isinstance(sheet, (list, tuple)) else [sheet]
+        for index, view in enumerate(views):
+            if index == 0 and isinstance(sheet, (list, tuple)):
+                continue
+            wrapped = _as_com(adapter, view, "IView")
+            if wrapped is None:
+                continue
+            name = adapter._attempt(lambda w=wrapped: w.GetName2(), default=None)
+            if name and str(name).lower() == target:
+                return wrapped
+    return None
+
 
 def _coerce_dispatch_sequence(raw: Any) -> list[Any]:
     """Normalise ``ISldWorks::GetDocuments`` output into a list of dispatches.
@@ -2658,6 +2727,260 @@ class SolidWorksIOMixin:
             AdapterResult[list[str]],
             adapter._handle_com_operation("list_drawing_views", _list_views),
         )
+
+    async def auto_center_marks(
+        self,
+        view_name: str,
+        mark_holes: bool = True,
+        mark_fillets: bool = False,
+        mark_slots: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-insert centre marks on circular features in a drawing view.
+
+        Wraps ``IView::AutoInsertCenterMarks2`` (falling back to
+        ``AutoInsertCenterMarks`` on older builds) using the document's
+        default size/gap/font. The call does not report how many marks it
+        added, so ``IView::GetCenterMarkCount`` is read before and after and
+        the delta is reported. Adding nothing is still a success - the view
+        may simply have no un-marked circular features.
+
+        Args:
+            view_name: Name of a view on the active drawing.
+            mark_holes: Mark holes / bores. Defaults to ``True``.
+            mark_fillets: Mark fillets. Defaults to ``False``.
+            mark_slots: Mark slots. Defaults to ``True``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The view, the feature types acted
+            on, and ``center_marks_before`` / ``center_marks_after`` /
+            ``center_marks_added``. ``ERROR`` when the active document is not
+            a drawing, no feature type is selected, or the view is not found.
+        """
+        adapter = self._adapter(self)
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+
+        insert_type = (
+            (_SW_CM_TYPE_HOLE if mark_holes else 0)
+            | (_SW_CM_TYPE_FILLET if mark_fillets else 0)
+            | (_SW_CM_TYPE_SLOT if mark_slots else 0)
+        )
+        if insert_type == 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Select at least one feature type: mark_holes, "
+                    "mark_fillets or mark_slots."
+                ),
+            )
+
+        def _auto_marks() -> dict[str, Any]:
+            drawing = _sw_type_info.flagged(adapter.currentModel, "IDrawingDoc")
+            view = _resolve_drawing_view(adapter, drawing, view_name)
+            if view is None:
+                raise Exception(
+                    f"No view named {view_name!r} on the active drawing. "
+                    f"Views: {', '.join(_view_names(adapter, drawing)) or 'none'}"
+                )
+
+            before_raw = adapter._attempt(
+                lambda: view.GetCenterMarkCount(), default=None
+            )
+            before = int(before_raw) if isinstance(before_raw, (int, float)) else 0
+
+            ran = adapter._attempt(
+                lambda: view.AutoInsertCenterMarks2(
+                    insert_type,
+                    _SW_CM_STYLE_SINGLE,
+                    True,  # LinearSlotCenter
+                    True,  # ArcSlotCenter
+                    True,  # UseDocumentDefaults
+                    0.0,   # Size (ignored when UseDocumentDefaults)
+                    0.0,   # Gap
+                    True,  # ExtendedLines
+                    False,  # CenterLineFont
+                    0.0,   # Angle
+                ),
+                default=None,
+            )
+            if ran is None:
+                ran = adapter._attempt(
+                    lambda: view.AutoInsertCenterMarks(
+                        insert_type,
+                        _SW_CM_STYLE_SINGLE,
+                        True,
+                        True,
+                        True,
+                        0.0,
+                        True,
+                        False,
+                        0.0,
+                    ),
+                    default=None,
+                )
+
+            adapter._attempt(
+                lambda: adapter.currentModel.EditRebuild3(), default=None
+            )
+
+            after_raw = adapter._attempt(
+                lambda: view.GetCenterMarkCount(), default=None
+            )
+            after = (
+                int(after_raw) if isinstance(after_raw, (int, float)) else before
+            )
+            return {
+                "view": view_name,
+                "feature_types": [
+                    label
+                    for label, on in (
+                        ("holes", mark_holes),
+                        ("fillets", mark_fillets),
+                        ("slots", mark_slots),
+                    )
+                    if on
+                ],
+                "center_marks_before": before,
+                "center_marks_after": after,
+                "center_marks_added": after - before,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("auto_center_marks", _auto_marks),
+        )
+
+    async def save_body_as_part(
+        self, body_name: str, file_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Extract one solid body from the active multibody part to a new file.
+
+        Wraps ``IFeatureManager::CreateSaveBodyFeature`` - the API behind
+        Insert > Features > Save Bodies. ``body_name`` is matched against
+        ``IPartDoc::GetBodies2(swSolidBody)`` by ``IBody2::Name``; a Save
+        Bodies feature is added and the standalone part is written to
+        ``file_path``. ``CreateSaveBodyFeature`` returns the feature (or
+        ``None``) but no write status, so success is confirmed by the file
+        existing afterwards.
+
+        Args:
+            body_name: Name of a solid body in the active part.
+            file_path: Absolute path for the new ``.sldprt``; its parent
+                directory must already exist.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The body, the written path, the new
+            feature's name, and every solid-body name found. ``ERROR`` when
+            the active document is not a part, the body is absent, the parent
+            directory is missing, or no file was written.
+        """
+        adapter = self._adapter(self)
+        self._sync_current_model_from_active()
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        if _doc_type(adapter) != 1:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="save_body_as_part requires an active part document",
+            )
+        if not str(body_name or "").strip():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="body_name is required"
+            )
+        target = str(file_path or "").strip()
+        if not target:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="file_path is required"
+            )
+        target = os.path.abspath(target)
+        parent = os.path.dirname(target)
+        if not os.path.isdir(parent):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Parent directory does not exist: {parent}",
+            )
+
+        def _save_body() -> dict[str, Any]:
+            model = adapter.currentModel
+            part = _sw_type_info.flagged(model, "IPartDoc")
+            raw_bodies = adapter._attempt(
+                lambda: part.GetBodies2(_SW_SOLID_BODY, False), default=None
+            )
+            bodies = (
+                list(raw_bodies)
+                if isinstance(raw_bodies, (list, tuple))
+                else ([raw_bodies] if raw_bodies else [])
+            )
+            if not bodies:
+                raise Exception("The active part has no solid bodies")
+
+            names: list[str] = []
+            match = None
+            for body in bodies:
+                flagged = _sw_type_info.flagged(body, "IBody2")
+                name = adapter._attempt(
+                    lambda f=flagged: adapter._get_attr_or_call(f, "Name"),
+                    default=None,
+                )
+                if name is not None:
+                    names.append(str(name))
+                    if str(name) == body_name:
+                        match = flagged
+            if match is None:
+                raise Exception(
+                    f"Body {body_name!r} not found. Solid bodies: "
+                    + (", ".join(names) or "none")
+                )
+
+            manager = adapter._attempt(lambda: model.FeatureManager, default=None)
+            if manager is None:
+                raise Exception("Part has no FeatureManager")
+            manager = _sw_type_info.flagged(manager, "IFeatureManager")
+
+            if os.path.exists(target):
+                os.remove(target)
+
+            feature = adapter._attempt(
+                lambda: manager.CreateSaveBodyFeature(
+                    _variant_array(pythoncom.VT_DISPATCH, [match]),
+                    _variant_array(pythoncom.VT_BSTR, [target]),
+                    "",
+                    False,
+                    True,
+                ),
+                default=None,
+            )
+            adapter._attempt(lambda: model.EditRebuild3(), default=None)
+
+            if not os.path.exists(target):
+                raise Exception(
+                    f"CreateSaveBodyFeature did not write a file to {target}; "
+                    "the Save Bodies feature was rejected."
+                )
+
+            feat_name = (
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(feature, "Name"),
+                    default=None,
+                )
+                if feature is not None
+                else None
+            )
+            return {
+                "body": body_name,
+                "file_path": target,
+                "feature": str(feat_name) if feat_name else None,
+                "solid_bodies": names,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("save_body_as_part", _save_body),
+        )
+
     async def check_interference(
         self, params: Any = None
     ) -> AdapterResult[dict[str, Any]]:

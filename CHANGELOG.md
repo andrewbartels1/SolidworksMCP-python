@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > pywin32 MCP server and restarted its own versioning at `1.0.0`; `1.x`
 > entries are the current line.
 
+## [Unreleased]
+
+### Added
+
+- **`create_reference_point` tool** (#58) — reference points on the active
+  part: `along_curve` (a point on the edge under a coordinate, at a distance
+  or percentage of its length) or `face_center`. Completes the reference-
+  geometry set alongside `create_reference_plane` / `create_axis`.
+- **`save_body_as_part` tool** (#62) — extract one named solid body from a
+  multibody part to a standalone `.sldprt` via `CreateSaveBodyFeature`; the
+  response lists every solid body found so an unknown name reports the real
+  options.
+- **`auto_center_marks` tool** (#63) — run SolidWorks' automatic centre-mark
+  insertion (holes / fillets / slots) on a named drawing view, reporting the
+  centre-mark count before and after.
+
+Tool count 129 → 132.
+
 ## [1.1.0] - 2026-09-06
 
 Minor release — new tools, all additive and backward compatible.
