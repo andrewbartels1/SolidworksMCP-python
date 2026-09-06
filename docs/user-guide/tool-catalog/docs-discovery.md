@@ -4,7 +4,7 @@ Introspect the live SolidWorks COM object library to discover available interfac
 
 > **Prerequisite:** SolidWorks running. win32com.client must be available (Windows only).
 
-**Total tools in this category: 2**
+**Total tools in this category: 5**
 
 ---
 
@@ -46,6 +46,68 @@ Search the SolidWorks API help index and return coherent guidance. Maps user int
   "max_results": 5,
   "auto_discover_if_missing": true
 }
+```
+
+---
+
+### `lookup_api_interface`
+
+List every indexed member (methods and properties) of a COM interface. Purpose-built for "give me the full surface of `IFeatureManager`" — more reliable than parsing full-text search results when you already know the interface name.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `interface` | `str` | ✅ | | COM interface name, e.g. `ISldWorks` |
+| `year` | `int?` | — | `null` | SolidWorks year override |
+| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
+
+**Sample call:**
+
+```json
+{ "interface": "IFeatureManager" }
+```
+
+---
+
+### `lookup_api_method`
+
+Confirm a method or property is indexed on an interface and return its sibling members for context. The local index stores member *names* only — full signatures (parameters, return type) are not available here; use `search_solidworks_api_help` or help.solidworks.com for those.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `interface` | `str` | ✅ | | COM interface name |
+| `method` | `str` | ✅ | | Method or property name |
+| `year` | `int?` | — | `null` | SolidWorks year override |
+| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
+
+**Sample call:**
+
+```json
+{ "interface": "IFeatureManager", "method": "InsertFeatureChamfer" }
+```
+
+---
+
+### `find_related_api_members`
+
+Given an indexed interface or member name, return related members: for an interface, its own members; for a member, the other members of every interface that also exposes it, plus name-substring matches elsewhere in the index.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | `str` | ✅ | | An indexed interface or member name |
+| `year` | `int?` | — | `null` | SolidWorks year override |
+| `max_results` | `int` | — | `25` | Maximum related members to return (1–200) |
+| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
+
+**Sample call:**
+
+```json
+{ "name": "InsertSketch" }
 ```
 
 ---

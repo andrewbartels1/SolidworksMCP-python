@@ -36,6 +36,10 @@ ADAPTER_FREE_TOOLS = {
     "stop_macro_recording",
     "discover_solidworks_docs",
     "search_solidworks_api_help",
+    # Same local-index reads as search_solidworks_api_help, narrower queries.
+    "lookup_api_method",
+    "lookup_api_interface",
+    "find_related_api_members",
     "generate_vba_part_modeling",
     "generate_vba_assembly_mates",
     "generate_vba_drawing_dimensions",
