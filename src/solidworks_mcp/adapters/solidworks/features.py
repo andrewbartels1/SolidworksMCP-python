@@ -63,6 +63,11 @@ class SolidWorksFeaturesMixin:
     ) -> AdapterResult[dict[str, Any]]:
         return _suppress_feature_impl(self, name, suppress)
 
+    async def rename_feature(
+        self, old_name: str, new_name: str
+    ) -> AdapterResult[dict[str, Any]]:
+        return _rename_feature_impl(self, old_name, new_name)
+
     async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
         return _undo_impl(self, count)
 
@@ -1996,6 +2001,102 @@ def _suppress_feature_impl(
     return cast(
         AdapterResult[dict[str, Any]],
         adapter._handle_com_operation("suppress_feature", _suppress_operation),
+    )
+
+
+def _rename_feature_impl(
+    adapter: Any, old_name: str, new_name: str
+) -> AdapterResult[dict[str, Any]]:
+    """Rename a named feature in the active model.
+
+    ``IFeature::Name`` is a settable property, not a method - it is assigned
+    directly, never called (see the property-vs-method flagging note in the
+    COM threading section of ``CLAUDE.md``). SolidWorks silently refuses a
+    rename onto a name another feature already uses, so a clash is checked
+    for first and the new name is read back afterwards; a mismatch is
+    reported as a failure rather than a quiet success.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        old_name: The feature's current name. Any ``name@document`` qualifier
+            is stripped.
+        new_name: The name to give it.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: ``renamed`` (bool), ``old_name`` and
+        ``new_name``. ``renamed`` is ``False`` with a ``reason`` when the two
+        names are the same. ``ERROR`` when there is no model, the feature is
+        absent, the target name is taken, or the rename did not take.
+
+    Raises:
+        Exception: Propagated through ``_handle_com_operation``.
+    """
+    # Resync from ActiveDoc: the user may have switched documents in the
+    # SolidWorks UI since the last tool call (issue #91).
+    sync = getattr(adapter, "_sync_current_model_from_active", None)
+    if callable(sync):
+        adapter._attempt(sync, default=None)
+    if not adapter.currentModel:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+
+    new = new_name.split("@", 1)[0].strip()
+    if not new:
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR, error="new_name must not be empty"
+        )
+
+    def _rename_operation() -> dict[str, Any]:
+        bare = old_name.split("@", 1)[0]
+        feature = adapter._attempt(
+            lambda: adapter.currentModel.FeatureByName(bare), default=None
+        )
+        if not feature:
+            raise Exception(f"Feature not found: {old_name}")
+
+        if new == bare:
+            return {
+                "renamed": False,
+                "old_name": bare,
+                "new_name": new,
+                "reason": "old and new names are the same",
+            }
+
+        # SolidWorks silently ignores a rename onto an existing feature name,
+        # which would otherwise look like a success. Catch it up front.
+        clash = adapter._attempt(
+            lambda: adapter.currentModel.FeatureByName(new), default=None
+        )
+        if clash:
+            raise Exception(
+                f"Cannot rename to {new!r}: a feature with that name already exists"
+            )
+
+        _, err = adapter._attempt_with_error(lambda: setattr(feature, "Name", new))
+        if err is not None:
+            raise Exception(f"Failed to rename {bare} to {new}: {err}")
+
+        adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
+
+        refreshed = adapter._attempt(
+            lambda: adapter.currentModel.FeatureByName(new), default=None
+        )
+        if refreshed is None:
+            raise Exception(
+                f"Rename to {new} was accepted but no feature resolves by that "
+                "name afterwards; the call did not take."
+            )
+        actual = adapter._attempt(
+            lambda: adapter._get_attr_or_call(refreshed, "Name"), default=None
+        )
+        return {
+            "renamed": True,
+            "old_name": bare,
+            "new_name": actual if isinstance(actual, str) and actual else new,
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("rename_feature", _rename_operation),
     )
 
 

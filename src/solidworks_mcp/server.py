@@ -1,6 +1,6 @@
 """Main SolidWorks MCP Server implementation using FastMCP and PydanticAI.
 
-This server provides 125 tools for comprehensive SolidWorks automation with configurable
+This server provides 129 tools for comprehensive SolidWorks automation with configurable
 deployment (local/remote) and security options.
 """
 

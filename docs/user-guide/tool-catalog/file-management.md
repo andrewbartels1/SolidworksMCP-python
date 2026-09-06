@@ -4,7 +4,7 @@ Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as 
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 14**
+**Total tools in this category: 16**
 
 ---
 
@@ -347,5 +347,51 @@ The active assembly (or `source_path`) is opened, every referenced component is 
 | `3` | `MissingSource` | Source reference file could not be found |
 
 All zeros in the per-file status array (`all_files_saved: true`) means SolidWorks confirmed every file was written successfully via its native Pack-and-Go engine.
+
+---
+
+### `list_open_documents`
+
+List every SolidWorks document currently open. Read-only — does not change which document is active. Use it to discover what is open (an assembly plus its parts, a drawing plus its model) before switching with `activate_document`.
+
+**Prerequisite:** SolidWorks running
+
+**Parameters:** none
+
+**Sample call:**
+
+```json
+{}
+```
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `str` | `"success"` or `"error"` |
+| `documents` | `list[dict]` | One `{title, path, type, is_active}` entry per open document |
+| `count` | `int` | Number of open documents |
+
+---
+
+### `activate_document`
+
+Switch which open document is the active one. Matches the argument against open documents by title, full path, or file name (case-insensitive), calls `ActivateDoc3`, and reads the active document back to confirm the switch took.
+
+**Prerequisite:** The target document is already open
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `title_or_path` | `str` | ✅ | `` | Window title, full path, or bare file name of an open document |
+
+**Sample call:**
+
+```json
+{
+  "title_or_path": "bracket.SLDPRT"
+}
+```
 
 ---

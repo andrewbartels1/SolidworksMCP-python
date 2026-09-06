@@ -16,7 +16,7 @@ from solidworks_mcp.adapters.circuit_breaker import CircuitBreakerAdapter
 from solidworks_mcp.adapters.connection_pool import ConnectionPoolAdapter
 from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
-CAPABILITIES = ["delete_feature", "suppress_feature", "undo"]
+CAPABILITIES = ["delete_feature", "suppress_feature", "rename_feature", "undo"]
 
 WRAPPERS = [
     SolidWorksAdapter,
@@ -159,6 +159,86 @@ async def test_mock_suppress_of_a_missing_feature_is_an_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_rename_round_trips() -> None:
+    """rename_feature changes the name and the feature resolves under it."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    await adapter.add_rectangle(0.0, 0.0, 10.0, 10.0)
+    await adapter.exit_sketch()
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    created = await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+    name = created.data.name
+
+    result = await adapter.rename_feature(name, "RenamedBoss")
+    assert result.is_success
+    assert result.data["renamed"] is True
+    assert result.data["new_name"] == "RenamedBoss"
+
+    listed = await adapter.list_features()
+    names = [
+        (f.get("name") if isinstance(f, dict) else getattr(f, "name", None))
+        for f in listed.data or []
+    ]
+    assert "RenamedBoss" in names
+    assert name not in names
+
+
+@pytest.mark.asyncio
+async def test_mock_rename_of_a_missing_feature_is_an_error() -> None:
+    """Renaming something absent must fail."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    result = await adapter.rename_feature("NoSuchFeature", "Whatever")
+    assert not result.is_success
+    assert "NoSuchFeature" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mock_rename_onto_an_existing_name_is_an_error() -> None:
+    """A name collision is silently ignored by SolidWorks, so it must error."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    await adapter.add_rectangle(0.0, 0.0, 10.0, 10.0)
+    await adapter.exit_sketch()
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    first = await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+    await adapter.create_sketch("Top")
+    await adapter.add_rectangle(0.0, 0.0, 4.0, 4.0)
+    await adapter.exit_sketch()
+    second = await adapter.create_extrusion(ExtrusionParameters(depth=2.0))
+
+    result = await adapter.rename_feature(second.data.name, first.data.name)
+    assert not result.is_success
+    assert "already exists" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mock_rename_to_same_name_is_a_noop_success() -> None:
+    """Renaming a feature to its current name changes nothing but does not fail."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    await adapter.add_rectangle(0.0, 0.0, 10.0, 10.0)
+    await adapter.exit_sketch()
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    created = await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+    name = created.data.name
+
+    result = await adapter.rename_feature(name, name)
+    assert result.is_success
+    assert result.data["renamed"] is False
+
+
+@pytest.mark.asyncio
 async def test_mock_undo_with_nothing_to_undo_reports_no_change() -> None:
     """An undo that changed nothing must say so.
 
@@ -199,9 +279,14 @@ async def test_mock_undo_removes_the_last_feature() -> None:
 async def test_base_defaults_report_missing_capability(capability: str) -> None:
     """The base defaults name the missing capability, not a fabrication."""
     method = getattr(SolidWorksAdapter, capability)
-    result = await (
-        method(None, 1) if capability == "undo" else method(None, "Feature1")
-    )
+    args: tuple[object, ...]
+    if capability == "undo":
+        args = (1,)
+    elif capability == "rename_feature":
+        args = ("Feature1", "Feature2")
+    else:
+        args = ("Feature1",)
+    result = await method(None, *args)
 
     assert not result.is_success
     assert capability in (result.error or "")

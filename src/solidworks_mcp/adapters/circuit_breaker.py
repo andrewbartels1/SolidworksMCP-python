@@ -1098,6 +1098,52 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"name": name, "value": value},
         )
 
+    async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
+        """Set document units through circuit breaker.
+
+        Args:
+            unit_system (str): One of ``mm``, ``cm``, ``m``, ``in``, ``ft``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "set_units",
+            lambda: self.adapter.set_units(unit_system),
+            input_dict={"unit_system": unit_system},
+        )
+
+    async def list_open_documents(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List open documents through circuit breaker.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: The result produced by the
+            operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "list_open_documents",
+            lambda: self.adapter.list_open_documents(),
+            input_dict={},
+        )
+
+    async def activate_document(
+        self, title_or_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Activate an open document through circuit breaker.
+
+        Args:
+            title_or_path (str): Title, full path, or file name of an open
+                document.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "activate_document",
+            lambda: self.adapter.activate_document(title_or_path),
+            input_dict={"title_or_path": title_or_path},
+        )
+
     # Assembly operations
 
     async def insert_component(
@@ -1258,6 +1304,24 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "suppress_feature",
             lambda: self.adapter.suppress_feature(name, suppress),
             input_dict={"name": name, "suppress": suppress},
+        )
+
+    async def rename_feature(
+        self, old_name: str, new_name: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rename a feature through circuit breaker.
+
+        Args:
+            old_name (str): Current feature name.
+            new_name (str): New feature name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "rename_feature",
+            lambda: self.adapter.rename_feature(old_name, new_name),
+            input_dict={"old_name": old_name, "new_name": new_name},
         )
 
     async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
