@@ -519,7 +519,17 @@ def _normalise_unit_system(unit_system: str) -> str | None:
 
 
 def _pref_int(adapter: Any, ext: Any, pref: int) -> int | None:
-    """Read one ``IModelDocExtension`` integer preference, or ``None``."""
+    """Read one ``IModelDocExtension`` integer user preference.
+
+    Args:
+        adapter: A connected adapter (for ``_attempt``).
+        ext: The document's ``IModelDocExtension`` dispatch.
+        pref: A ``swUserPreferenceIntegerValue_e`` value.
+
+    Returns:
+        int | None: The preference value, or ``None`` when the COM call
+        fails or returns a non-numeric result.
+    """
     value = adapter._attempt(
         lambda: ext.GetUserPreferenceInteger(pref, _SW_PREF_OPTION_NONE),
         default=None,
@@ -534,9 +544,9 @@ def _apply_unit_system(adapter: Any, model: Any, unit_system: str) -> dict[str, 
     ``swUnitSystem`` write and returns quietly even on builds where the
     document's unit system does not move (observed on SW 2026 / 3DEXPERIENCE
     against an assembly). The change is therefore verified by reading the
-    *unit-system preference itself* (``swUnitSystem``, slot 48) back after a
-    rebuild - not the ``swUnitsLinear`` slot that was just written, which
-    echoes the written value regardless of whether the document honoured it.
+    *unit-system preference itself* (``swUnitSystem`` = slot 263) back after
+    a rebuild - not the ``swUnitsLinear`` slot, which echoes whatever was
+    written regardless of whether the document honoured it.
 
     For the ``mm`` / ``cm`` / ``m`` / ``in`` presets only ``swUnitSystem`` is
     set and the preset drives the linear unit. ``ft`` has no preset, so it is
@@ -557,7 +567,7 @@ def _apply_unit_system(adapter: Any, model: Any, unit_system: str) -> dict[str, 
 
     Raises:
         Exception: When the extension is unavailable, or the readback shows
-        the document did not adopt the requested unit system.
+            the document did not adopt the requested unit system.
     """
     system_value, length_value = _SW_UNIT_SYSTEMS[unit_system]
     is_custom = system_value == _SW_UNIT_SYSTEM_CUSTOM

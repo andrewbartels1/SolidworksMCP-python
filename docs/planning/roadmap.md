@@ -1,6 +1,6 @@
 # Roadmap
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-09-06
 
 This page tracks the order the open backlog gets worked in. It replaces the
 old `docs/planning/ROADMAP_2026_2027.md`, which described a GUI-dashboard-first,
@@ -107,7 +107,7 @@ real diff is ~38k lines across 80 files):
 
 | Finding | Action taken |
 |---|---|
-| `rename_feature` (commit `bde0ff1`) already implements #59's task 2 | Noted as prior art in that task; not yet ported |
+| `rename_feature` (commit `bde0ff1`) already implements #59's task 2 | **Done** — implemented fresh on the same `IFeature.Name` setter approach, wired through every adapter layer with mock + live tests, verified against real SW; shipped with #60/#61 in the Wave 2 PR |
 | `create_reference_plane` negative-offset bug (commit `3c091fd`) — `InsertRefPlane`'s Distance constraint clamps a negative value to 0 instead of erroring, silently collapsing the plane onto its base | **Fixed directly** — filed as [#84](https://github.com/andrewbartels1/SolidworksMCP-python/issues/84), ported the sign-resolution fix (credited to `@pedropaulovc`) into `features.py`, added direct unit coverage, `dev-test`-verified |
 | Motion Study support (`motion.py`, `assembly.py` extensions, ~1200 lines, live-demo-verified) — matches this repo's own "Motion Study ❌ Missing" finding from the #79 audit | Confirmed we have **zero** existing Motion Study code to conflict with. Substantial enough (tested adapter + tools + mock parity + a working live demo) that it's a real candidate for its own future OpenSpec change, not a quick port |
 | DXF/DWG import, 3DEXPERIENCE-connector start/stop/recover, SolidWorks crash/hung-window health probes, `swdimxpert` auxiliary-typelib plumbing, `add_fillet` propagate option, a `SetEntitiesToMate` COM-typing fix | Catalogued, not yet reviewed for convention-fit or mergeability |

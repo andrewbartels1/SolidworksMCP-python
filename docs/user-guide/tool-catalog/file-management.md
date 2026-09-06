@@ -4,7 +4,7 @@ Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as 
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 16**
+**Total tools in this category: 17**
 
 ---
 

@@ -177,10 +177,10 @@ Covers top-level application control: document management, add-in registration, 
 | Create new document (`NewDocument`) | Implemented | `create_part`, `create_assembly`, `create_drawing` |
 | Close document (`CloseDoc`) | Implemented | `close_model` |
 | Get active document (`ActiveDoc`) | Implemented | Internal — used by all adapter ops |
-| List open documents (`GetDocuments`) | **Missing** (Medium) | Needed for multi-doc workflows |
-| Activate a specific document | **Missing** (Medium) | Needed for multi-doc workflows |
+| List open documents (`GetDocuments`) | Implemented | `list_open_documents` — read-only enumeration with per-doc `is_active` |
+| Activate a specific document (`ActivateDoc3`) | Implemented | `activate_document` — resolves by title / path / file name, verifies against `ActiveDoc` |
 | Run a VBA macro (`RunMacro2`) | Simulated | `automation_start_macro_recording` |
-| Get/set user preferences (`SetUserPreferenceIntegerValue`) | **Missing** (Low) | `optimize_performance` stubs this |
+| Get/set user preferences (`SetUserPreferenceInteger`) | Partial | `set_units` sets the document unit system (`swUnitSystem`, verified via read-back); `optimize_performance` still stubs the rest |
 | SolidWorks version info (`RevisionNumber`) | Implemented | Internal version detection in features.py |
 | Add-in management | **Missing** (Low) | `GetAddInObject`, etc. |
 | Application events (document open/close callbacks) | **Missing** (Low) | Event sink registration |
@@ -200,6 +200,10 @@ Covers operations on the active document regardless of type (part/assembly/drawi
 | `Parameter.SystemValue = x` (write dimension) | Implemented | `set_dimension` |
 | `FirstFeature` / `GetNextFeature` | Implemented | `list_features`, internal tree walks |
 | `FeatureByName` | Implemented | Internal — sweep/loft/selection |
+| `IFeature.Name = x` (rename feature) | Implemented | `rename_feature` — settable property, read-back verified, collision-guarded |
+| `EditSuppress2` / `EditUnsuppress2` | Implemented | `suppress_feature` |
+| `EditDelete` (delete feature) | Implemented | `delete_feature` |
+| `Extension.SetUserPreferenceInteger` (unit system) | Implemented | `set_units` — `swUnitSystem` set + read-back; `create_part(units=...)` routes through the same helper |
 | `GetPathName` | Implemented | Internal — pack-and-go reference resolution |
 | `GetTitle` | Implemented | Internal — model info |
 | `GetDependencies2` | Implemented | `save_assembly` with `include_references=True` |

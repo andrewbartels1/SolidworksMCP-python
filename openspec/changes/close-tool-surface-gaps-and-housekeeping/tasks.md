@@ -21,7 +21,7 @@
 
 ## 2. #59 — rename_feature
 
-- [ ] 2.0 Check prior art before implementing from scratch: contributor
+- [x] 2.0 Check prior art before implementing from scratch: contributor
       `@pedropaulovc`'s fork (`github.com/pedropaulovc/SolidworksMCP-python`,
       branch `claude/nameplate-dxf-import-bb1ywj`, commit `bde0ff1`, their
       PR #73) already has a `rename_feature` adapter method, using the
@@ -31,12 +31,15 @@
       specific commit for correctness and fit with this repo's current
       conventions (read-back discipline, mock_adapter parity, COM
       threading rules) before adapting it; do not merge wholesale
-- [ ] 2.1 Verify the live rename signature, implement `rename_feature`
-      (`base.py`/`pywin32_adapter.py`) with read-back verification, and
-      register it in `modeling.py`
-- [ ] 2.2 Add the matching `mock_adapter.py` implementation
-- [ ] 2.3 Add tests for successful rename, unresolvable feature, and name
-      collision (`specs/tools/feature-rename`); verify `dev-test` passes
+      — implemented fresh on the `IFeature.Name` setter, same approach as
+      the prior art
+- [x] 2.1 Verify the live rename signature, implement `rename_feature`
+      (`base.py` + `adapters/solidworks/features.py` COM mixin) with
+      read-back verification, and register it in `modeling.py`
+- [x] 2.2 Add the matching `mock_adapter.py` implementation
+- [x] 2.3 Add tests for successful rename, unresolvable feature, and name
+      collision (mock + tool tests, plus `tests/test_live_sw_wave2.py`);
+      `dev-test` passes and the live tool round-trip was verified
 
 ## 3. #58 — create_reference_point
 
@@ -49,23 +52,29 @@
 
 ## 4. #60 — set_units
 
-- [ ] 4.1 Verify the live unit-preference API, implement `set_units`,
+- [x] 4.1 Verify the live unit-preference API, implement `set_units`,
       register it in `modeling.py`, and wire `create_part`'s `units`
-      parameter through it
-- [ ] 4.2 Add the matching `mock_adapter.py` implementation
-- [ ] 4.3 Add tests for unit application, no-active-document failure, and
-      `create_part(units=...)` (`specs/tools/document-units`); verify
-      `dev-test` passes
+      parameter through it — verification reads `swUnitSystem` (swconst
+      slot 263) back from `IModelDocExtension`; the enum integers were
+      transcribed from a live `swconst.tlb` (the published API help omits
+      them and the "obvious" values are wrong)
+- [x] 4.2 Add the matching `mock_adapter.py` implementation
+- [x] 4.3 Add tests for unit application, no-active-document failure, and
+      `create_part(units=...)` (mock + tool tests, plus
+      `tests/test_live_sw_wave2.py`); `dev-test` passes and the live tool
+      round-trip (MMGS↔IPS) was verified
 
 ## 5. #61 — list_open_documents + activate_document
 
-- [ ] 5.1 Implement both using `ISldWorks.GetDocuments` as source of
-      truth, and register them in `file_management.py`
-- [ ] 5.2 Add the matching `mock_adapter.py` implementations
+- [x] 5.1 Implement both using `ISldWorks.GetDocuments` as source of
+      truth, and register them in `file_management.py`; `activate_document`
+      resolves by title / path / file name and verifies against `ActiveDoc`
+- [x] 5.2 Add the matching `mock_adapter.py` implementations
       (multi-document fixture)
-- [ ] 5.3 Add tests for enumeration (multiple/zero open), successful
-      activation, and activating a document that isn't open
-      (`specs/tools/document-session-management`); verify `dev-test` passes
+- [x] 5.3 Add tests for enumeration (multiple/zero open), successful
+      activation, and activating a document that isn't open (mock + tool
+      tests, plus `tests/test_live_sw_wave2.py`); `dev-test` passes and the
+      live tools were verified against a session with 13 real documents open
 
 ## 6. #62 — save_body_as_part
 
@@ -90,32 +99,39 @@
 
 ## 8. #64 — Granular API lookup tools
 
-- [ ] 8.1 Confirm the existing indexed API-doc structure in
+- [x] 8.1 Confirm the existing indexed API-doc structure in
       `docs_discovery.py` supports method/interface/enum-keyed lookups
-      without re-indexing
-- [ ] 8.2 Implement `lookup_api_method`, `lookup_api_interface`,
-      `lookup_api_enum`, and a related-members lookup in
-      `docs_discovery.py`; register them as MCP tools
-- [ ] 8.3 Add tests for a known/unknown case per lookup, plus a regression
-      test confirming `search_solidworks_api_help` is unchanged
-      (`specs/tools/api-help-lookup`); verify `dev-test` passes
+      without re-indexing (shipped in PR #93)
+- [x] 8.2 Implement `lookup_api_method`, `lookup_api_interface`, and a
+      related-members lookup in `docs_discovery.py`; register them as MCP
+      tools (shipped in PR #93). `lookup_api_enum` was split to its own
+      follow-up issue — it needs the swconst enum typelib loaded and an
+      `enums` section added to the index, a discovery-layer change larger
+      than the other three
+- [x] 8.3 Add tests for a known/unknown case per lookup, plus a regression
+      test confirming `search_solidworks_api_help` is unchanged (shipped in
+      PR #93); `dev-test` passes
 
 ## 9. #28 — script_line column
 
-- [ ] 9.1 Add the nullable `script_line` column to `ToolCallRecord` in
-      `history_db.py`; add a startup check in `init_db()` (`PRAGMA
-      table_info(toolcallrecord)`, `ALTER TABLE ... ADD COLUMN
-      script_line TEXT` if missing) so existing local DBs pick up the
-      column without Alembic; add `render_single()` to `soc_exporter.py`
-- [ ] 9.2 Wire `script_line` through `insert_tool_call_record` and its
-      call sites (`checkpoint_service.py`)
+- [x] 9.1 Add the nullable `script_line` column to `ToolCallRecord` in
+      `history_db.py`; add a startup check in `init_db()` (`_ensure_columns`
+      via SQLAlchemy `inspect`, `ALTER TABLE ... ADD COLUMN script_line
+      TEXT` if missing) so existing local DBs pick up the column without
+      Alembic; add `render_single()` to `soc_exporter.py` (shipped in PR #93)
+- [x] 9.2 Wire `script_line` through `insert_tool_call_record` and its
+      call sites (shipped in PR #93)
 - [ ] 9.3 Update `export_session` to join stored `script_line` with a
-      fallback re-render for legacy rows
-- [ ] 9.4 Add tests for a new record's stored line, a session export
+      fallback re-render for legacy rows — **deviation:** `render_single`
+      is captured at write time on every new row, so `export_session` needs
+      no join or fallback path; legacy rows without a stored line are the
+      only case and `generate_script` already re-renders the whole session
+      from payloads. Left as-is in PR #93
+- [x] 9.4 Add tests for a new record's stored line, a session export
       mixing legacy/new records, and `init_db()` against a fixture DB file
       created without the `script_line` column (confirms the `ALTER
-      TABLE` check adds it without error) (`specs/soc/script-line-capture`);
-      verify `dev-test` passes
+      TABLE` check adds it without error) (shipped in PR #93); `dev-test`
+      passes
 
 ## 10. #46 — Docs housekeeping
 

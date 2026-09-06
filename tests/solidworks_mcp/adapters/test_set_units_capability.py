@@ -29,6 +29,7 @@ WRAPPERS = [
 
 @pytest.mark.parametrize("cls", WRAPPERS, ids=lambda c: c.__name__)
 def test_set_units_exists_on_every_layer(cls: type) -> None:
+    """Every adapter layer defines ``set_units`` as an async method."""
     method = getattr(cls, "set_units", None)
     assert method is not None, f"{cls.__name__} is missing set_units"
     assert inspect.iscoroutinefunction(method), (
@@ -46,6 +47,7 @@ def test_wrappers_do_not_silently_fall_through_to_base() -> None:
 
 
 def test_real_adapter_resolves_to_the_io_mixin() -> None:
+    """PyWin32Adapter resolves ``set_units`` to the COM mixin, not the stub."""
     pytest.importorskip("win32com", reason="pywin32 is Windows-only")
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
@@ -59,6 +61,7 @@ def test_real_adapter_resolves_to_the_io_mixin() -> None:
 
 @pytest.mark.asyncio
 async def test_base_default_reports_missing_capability() -> None:
+    """The base default returns an error naming the missing capability."""
     result = await SolidWorksAdapter.set_units(None, "mm")
     assert not result.is_success
     assert "set_units" in (result.error or "")
@@ -78,11 +81,13 @@ async def test_base_default_reports_missing_capability() -> None:
     ],
 )
 def test_normalise_unit_system_accepts_aliases(token: str, expected: str) -> None:
+    """Case, whitespace and long-form aliases all map to a canonical token."""
     assert _normalise_unit_system(token) == expected
 
 
 @pytest.mark.parametrize("token", ["", "furlong", "mmgs", None])
 def test_normalise_unit_system_rejects_unknown(token: str) -> None:
+    """Empty, unknown and preset-name tokens return ``None``."""
     assert _normalise_unit_system(token) is None
 
 
@@ -90,31 +95,65 @@ class _FakeExt:
     """Minimal ``IModelDocExtension`` stand-in recording preference writes."""
 
     def __init__(self, readback: dict[int, int] | None = None) -> None:
+        """Seed the readback map used by ``GetUserPreferenceInteger``.
+
+        Args:
+            readback: Optional starting ``{pref: value}`` map; writes update it.
+        """
         self.writes: list[tuple[int, int, int]] = []
         self._readback = readback or {}
 
     def SetUserPreferenceInteger(self, pref: int, option: int, value: int) -> bool:
+        """Record the write, update the readback map, and report success.
+
+        Args:
+            pref: ``swUserPreferenceIntegerValue_e`` slot.
+            option: ``swUserPreferenceOption_e`` value.
+            value: The integer to store.
+
+        Returns:
+            bool: Always ``True`` (tests override this to simulate rejection).
+        """
         self.writes.append((pref, option, value))
         self._readback[pref] = value
         return True
 
     def GetUserPreferenceInteger(self, pref: int, option: int) -> int:
+        """Return the stored value for ``pref``, or ``-1`` when unset.
+
+        Args:
+            pref: ``swUserPreferenceIntegerValue_e`` slot.
+            option: ``swUserPreferenceOption_e`` value (ignored).
+
+        Returns:
+            int: The recorded value or ``-1``.
+        """
         return self._readback.get(pref, -1)
 
 
 class _FakeModel:
+    """Stand-in for ``IModelDoc2`` with a fake ``Extension`` and rebuild count."""
+
     def __init__(self, ext: _FakeExt) -> None:
+        """Attach the fake extension and zero the rebuild counter.
+
+        Args:
+            ext: The ``_FakeExt`` to expose as ``.Extension``.
+        """
         self.Extension = ext
         self.rebuilt = 0
 
     def EditRebuild3(self) -> bool:
+        """Count a rebuild request and report success."""
         self.rebuilt += 1
         return True
 
     def GraphicsRedraw2(self) -> None:
+        """No-op stand-in for the graphics refresh call."""
         return None
 
     def SetSaveFlag(self) -> None:
+        """No-op stand-in for marking the document dirty."""
         return None
 
 
@@ -123,6 +162,15 @@ class _FakeAdapter:
 
     @staticmethod
     def _attempt(fn, default=None):  # noqa: ANN001
+        """Run ``fn`` and return ``default`` if it raises.
+
+        Args:
+            fn: Zero-argument callable to invoke.
+            default: Value returned on any exception.
+
+        Returns:
+            The callable's result, or ``default``.
+        """
         try:
             return fn()
         except Exception:  # noqa: BLE001
@@ -130,6 +178,7 @@ class _FakeAdapter:
 
 
 def test_apply_unit_system_preset_sets_only_the_system_slot_and_verifies() -> None:
+    """A preset writes only swUnitSystem and verifies against slot 263."""
     ext = _FakeExt()
     model = _FakeModel(ext)
 
@@ -146,6 +195,7 @@ def test_apply_unit_system_preset_sets_only_the_system_slot_and_verifies() -> No
 
 
 def test_apply_unit_system_custom_sets_both_slots_for_feet() -> None:
+    """``ft`` has no preset, so it writes swUnitSystem=Custom plus swUnitsLinear."""
     ext = _FakeExt()
     out = _apply_unit_system(_FakeAdapter(), _FakeModel(ext), "ft")
 
@@ -158,12 +208,23 @@ def test_apply_unit_system_custom_sets_both_slots_for_feet() -> None:
 
 
 def test_apply_unit_system_raises_when_document_keeps_its_unit_system() -> None:
+    """When the readback shows the doc did not move, the helper raises."""
     # The document reports swUnitSystem 5 (MMGS) no matter what is written.
     ext = _FakeExt(readback={263: 5, 47: 0})
 
     def _no_op_write(pref, option, value):  # noqa: ANN001
+        """Record the write but leave the readback map unchanged (SW ignored it).
+
+        Args:
+            pref: Preference slot.
+            option: Option value.
+            value: Value that would have been written.
+
+        Returns:
+            bool: ``False`` - SW "accepted" the call but changed nothing.
+        """
         ext.writes.append((pref, option, value))
-        return False  # SW "accepted" the call but changed nothing
+        return False
 
     ext.SetUserPreferenceInteger = _no_op_write  # type: ignore[method-assign]
 
@@ -172,9 +233,19 @@ def test_apply_unit_system_raises_when_document_keeps_its_unit_system() -> None:
 
 
 def test_apply_unit_system_verified_none_when_readback_unavailable() -> None:
+    """When the readback itself fails, ``verified`` is ``None`` (not ``False``)."""
     ext = _FakeExt()
 
     def _raise(pref, option):  # noqa: ANN001
+        """Raise to simulate ``GetUserPreferenceInteger`` being unavailable.
+
+        Args:
+            pref: Preference slot (unused).
+            option: Option value (unused).
+
+        Raises:
+            RuntimeError: Always.
+        """
         raise RuntimeError("no readback")
 
     ext.GetUserPreferenceInteger = _raise  # type: ignore[method-assign]
@@ -185,6 +256,7 @@ def test_apply_unit_system_verified_none_when_readback_unavailable() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_set_units_records_on_current_model() -> None:
+    """The mock stores the normalised token on the current model's properties."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
     await adapter.create_part()
@@ -201,6 +273,7 @@ async def test_mock_set_units_records_on_current_model() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_set_units_rejects_unknown_token() -> None:
+    """An unrecognised token is an error in the mock, as it is live."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
     await adapter.create_part()
@@ -212,6 +285,7 @@ async def test_mock_set_units_rejects_unknown_token() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_set_units_errors_without_active_model() -> None:
+    """Calling set_units with no current model is an error."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
 
@@ -221,6 +295,7 @@ async def test_mock_set_units_errors_without_active_model() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_create_part_applies_and_validates_units() -> None:
+    """create_part(units=...) normalises a valid token and rejects a bad one."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
 
