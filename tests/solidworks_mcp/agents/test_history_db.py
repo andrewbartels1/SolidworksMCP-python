@@ -9,8 +9,10 @@ from solidworks_mcp.agents.history_db import (
     AgentRun,
     ErrorCatalog,
     ErrorRecord,
+    ToolCallRecord,
     ToolEvent,
     _build_engine,
+    _ensure_columns,
     _utc_now_iso,
     find_recent_errors,
     get_design_session,
@@ -741,3 +743,81 @@ def test_update_plan_checkpoint_planned_action_missing_row_is_noop(
         result_json="{}",
         db_path=db,
     )
+
+
+# ---------------------------------------------------------------------------
+# #28 — script_line column: write-time capture + legacy-DB migration
+# ---------------------------------------------------------------------------
+
+
+class TestScriptLineColumn:
+    """ToolCallRecord.script_line (issue #28)."""
+
+    def test_capture_rendered_line_at_write_time(self, tmp_path: Path):
+        db = _db(tmp_path)
+        insert_tool_call_record(
+            session_id="s-sl",
+            tool_name="create_part",
+            input_json='{"name": "widget"}',
+            db_path=db,
+        )
+        rows = _query_all(db, ToolCallRecord)
+        assert len(rows) == 1
+        assert rows[0].script_line is not None
+        assert "adapter.create_part(name='widget')" in rows[0].script_line
+
+    def test_read_only_tool_stores_empty_not_none(self, tmp_path: Path):
+        db = _db(tmp_path)
+        insert_tool_call_record(
+            session_id="s-sl",
+            tool_name="get_model_info",
+            input_json="{}",
+            db_path=db,
+        )
+        row = _query_all(db, ToolCallRecord)[0]
+        # get_model_info renders to nothing -> stays None, not ""
+        assert row.script_line is None
+
+    def test_explicit_script_line_is_kept_verbatim(self, tmp_path: Path):
+        db = _db(tmp_path)
+        insert_tool_call_record(
+            session_id="s-sl",
+            tool_name="create_part",
+            input_json='{"name": "widget"}',
+            script_line="# hand-written override",
+            db_path=db,
+        )
+        assert _query_all(db, ToolCallRecord)[0].script_line == "# hand-written override"
+
+    def test_init_db_adds_column_to_a_legacy_database(self, tmp_path: Path):
+        from sqlmodel import Session, text
+
+        db = _db(tmp_path)
+        init_db(db)  # fresh DB — has the column
+        engine = _build_engine(db)
+        with Session(engine) as session:
+            session.exec(
+                text("ALTER TABLE toolcallrecord DROP COLUMN script_line")
+            )
+            session.commit()
+        engine.dispose()
+
+        # Re-init must restore it without error, and inserts must work again.
+        init_db(db)
+        insert_tool_call_record(
+            session_id="s-legacy",
+            tool_name="create_part",
+            input_json='{"name": "x"}',
+            db_path=db,
+        )
+        row = _query_all(db, ToolCallRecord)[0]
+        assert "adapter.create_part(name='x')" in (row.script_line or "")
+
+    def test_ensure_columns_is_a_noop_on_a_fresh_database(self, tmp_path: Path):
+        db = _db(tmp_path)
+        init_db(db)
+        engine = _build_engine(db)
+        try:
+            _ensure_columns(engine)  # must not raise
+        finally:
+            engine.dispose()

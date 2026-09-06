@@ -8,7 +8,7 @@
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 122 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 125 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
 ## Overview
 
@@ -267,6 +267,47 @@ Set your LM Studio MCP config file to include this server (LM Studio expects `mc
 ```
 
 After saving, restart LM Studio so it reloads MCP servers.
+
+## Optional Features (environment toggles)
+
+All off/default unless set. Pass these as environment variables when launching
+the server (or in your MCP host config's `env` block); every
+`SOLIDWORKS_MCP_<FIELD>` maps to a config field of the same name.
+
+### SolidWorks-as-Code session logging — **off by default**
+
+Logs every adapter tool call to a local SQLite database so a session can be
+replayed or exported as a runnable Python script (see
+[docs/getting-started/solidworks-as-code.md](docs/getting-started/solidworks-as-code.md)).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SOLIDWORKS_MCP_SOC_LOGGING_ENABLED` | `false` | Turn logging on. |
+| `SOLIDWORKS_MCP_SOC_SESSION_ID` | *(generated)* | Session name to log under. If unset while logging is on, a `soc-YYYYMMDD-HHMMSS` id is generated at startup. |
+| `SOLIDWORKS_MCP_SOC_DB_PATH` | `.solidworks_mcp/agent_memory.sqlite3` | Override the database file. |
+
+```powershell
+$env:SOLIDWORKS_MCP_SOC_LOGGING_ENABLED = "true"
+$env:SOLIDWORKS_MCP_SOC_SESSION_ID = "my-bracket"
+.\.venv\Scripts\python.exe -m solidworks_mcp.server
+# ...work in your MCP client...
+.\.venv\Scripts\python.exe -m solidworks_mcp.agents.soc_exporter my-bracket my_bracket.py
+```
+
+Effective only with the circuit-breaker adapter wrapper (the default for real
+SolidWorks); the mock adapter does not log.
+
+### API docs index auto-refresh — **on by default**
+
+The granular API-lookup tools (`lookup_api_interface`, `lookup_api_method`,
+`find_related_api_members`) and `search_solidworks_api_help` read a JSON index
+built by `discover_solidworks_docs`. When that index is older than the
+threshold it is rebuilt automatically on the next lookup.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `SOLIDWORKS_MCP_DOCS_INDEX_AUTO_REFRESH` | `true` | Rebuild a stale index automatically. No-op without SolidWorks + win32com; a failed rebuild keeps serving the existing index. |
+| `SOLIDWORKS_MCP_DOCS_INDEX_MAX_AGE_DAYS` | `21` | Age after which the index counts as stale. |
 
 ## Common Windows Fixes
 

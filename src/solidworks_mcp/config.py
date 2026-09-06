@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import platform
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
@@ -340,6 +341,45 @@ class SolidWorksMCPConfig(BaseModel):
         default_factory=list, description="List of valid API keys"
     )
 
+    # === SolidWorks-as-Code (SoC) session logging ===
+    soc_logging_enabled: bool = Field(
+        default=False,
+        description=(
+            "Log every adapter tool call to the SoC SQLite database so the "
+            "session can be exported as a runnable Python script. Off by "
+            "default; enable with SOLIDWORKS_MCP_SOC_LOGGING_ENABLED=true."
+        ),
+    )
+    soc_session_id: str | None = Field(
+        default=None,
+        description=(
+            "SoC session name to log under. When logging is enabled and this "
+            "is unset, a timestamped id is generated at startup."
+        ),
+    )
+    soc_db_path: Path | None = Field(
+        default=None,
+        description=(
+            "Override the SoC SQLite database path "
+            "(default: .solidworks_mcp/agent_memory.sqlite3)."
+        ),
+    )
+
+    # === Docs index freshness ===
+    docs_index_auto_refresh: bool = Field(
+        default=True,
+        description=(
+            "Rebuild the SolidWorks API docs index automatically when it is "
+            "older than docs_index_max_age_days. No-op without SolidWorks + "
+            "win32com; falls back to the existing (stale) index on failure."
+        ),
+    )
+    docs_index_max_age_days: int = Field(
+        default=21,
+        ge=1,
+        description="Age in days after which the docs index is treated as stale.",
+    )
+
     # === Development & Testing ===
     debug: bool = Field(default=False, description="Enable debug mode")
 
@@ -611,6 +651,13 @@ class SolidWorksMCPConfig(BaseModel):
         if self.testing:
             self.mock_solidworks = True
             self.adapter_type = AdapterType.MOCK
+
+        # Give SoC logging a session id to write under when it's enabled
+        # without one being named explicitly.
+        if self.soc_logging_enabled and not self.soc_session_id:
+            self.soc_session_id = (
+                f"soc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+            )
 
     @property
     def is_windows(self) -> bool:
