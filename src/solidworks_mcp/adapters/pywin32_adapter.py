@@ -63,6 +63,27 @@ from loguru import logger  # noqa: E402
 T = TypeVar("T")
 
 
+def _byref_long(initial: int = 0) -> Any:
+    """Return a ``VT_BYREF | VT_I4`` VARIANT for a SolidWorks ByRef Long
+    out-parameter.
+
+    pywin32 late binding will not marshal a plain Python ``int`` into a
+    ``ByRef Long`` argument - the call fails with ``DISP_E_TYPEMISMATCH``
+    (``0x80020005``). ``RunMacro2``'s trailing ``nRetval`` needs the same
+    treatment as ``OpenDoc6``'s ``errors``/``warnings`` (issue #91).
+
+    Falls back to ``initial`` (a plain int) when pywin32 is unavailable so
+    the mock/CI test path keeps working.
+    """
+    variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
+    if not callable(variant_ctor):
+        return initial
+    return variant_ctor(
+        int(getattr(pythoncom, "VT_BYREF", 0)) | int(getattr(pythoncom, "VT_I4", 0)),
+        initial,
+    )
+
+
 def _parse_vb_module_name(macro_path: str) -> str:
     """Read ``Attribute VB_Name = "..."`` from a SolidWorks text macro file.
 
@@ -1863,6 +1884,11 @@ class PyWin32Adapter(
         except pywintypes.com_error as e:
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, False)
+            # Full traceback goes to the log file; the returned error string is
+            # necessarily flattened (runbook item #5). Without this, a
+            # late-binding AttributeError surfaces only as "Error in <op>: ..."
+            # with no way to see where it came from.
+            logger.exception("COM operation {} failed", operation_name)
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"COM error in {operation_name}: {e}",
@@ -1871,6 +1897,7 @@ class PyWin32Adapter(
         except Exception as e:
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, False)
+            logger.exception("Operation {} failed", operation_name)
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"Error in {operation_name}: {e}",
@@ -2451,11 +2478,17 @@ class PyWin32Adapter(
         Raises:
             SolidWorksMCPError: If RunMacro2 reports failure.
         """
-        result = self.swApp.RunMacro2(macro_path, module_name, proc_name, 0, 0)  # type: ignore[union-attr]
+        # nRetval (5th arg) is ByRef Long. Passing a plain 0 raises
+        # DISP_E_TYPEMISMATCH ('Type mismatch.', arg index 5) under pywin32
+        # late binding - it must be a VT_BYREF|VT_I4 VARIANT (issue #91).
+        retval = _byref_long(0)
+        result = self.swApp.RunMacro2(  # type: ignore[union-attr]
+            macro_path, module_name, proc_name, 0, retval
+        )
         if isinstance(result, (list, tuple)):
             success, errors = result[0], result[1]
         else:
-            success, errors = bool(result), 0
+            success, errors = bool(result), getattr(retval, "value", 0)
         if not success:
             raise SolidWorksMCPError(
                 f"RunMacro2 failed for {macro_path}, module={module_name!r}, errors={errors}"

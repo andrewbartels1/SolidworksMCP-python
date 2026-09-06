@@ -590,6 +590,22 @@ class SolidWorksIOMixin:
 
             adapter.currentModel = model
             title = self._read_model_title(model)
+
+            # OpenDoc6 with swOpenDocOptions_Silent opens the file but does not
+            # make it the active document - SolidWorks keeps the previously
+            # focused window active. Without this, get_model_info and every
+            # later tool call (exports especially) target the wrong document
+            # (issue #91). ActivateDoc3 takes the titlebar name, not the path.
+            if title:
+                activated = adapter._attempt(
+                    lambda: app.ActivateDoc3(title, False, 0, _byref_int())
+                )
+                if activated is not None:
+                    adapter._attempt(
+                        lambda: _sw_type_info.flag_doc(activated, int(doc_type)),
+                        default=0,
+                    )
+                    adapter.currentModel = activated
             active_config = adapter._attempt(lambda: model.GetActiveConfiguration())
             config = (
                 adapter._attempt(lambda: active_config.GetName(), default="Default")
@@ -640,10 +656,20 @@ class SolidWorksIOMixin:
             )
 
         def _close() -> None:
-            """Close the model document."""
+            """Close the model document.
+
+            ``currentModel`` may be a raw ``swApp.ActiveDoc`` dispatch that was
+            never run through ``flag_doc`` (``get_model_info`` assigns it
+            straight from ``ActiveDoc``). On such a dispatch, late binding
+            returns zero-arg accessors property-style, so ``model.GetTitle()``
+            tries to *call* the returned string and raises
+            ``'str' object is not callable`` (issue #91, COM pitfall #5).
+            Read them through ``_get_attr_or_call`` which works either way.
+            """
             if save:
-                model.Save()
-            app.CloseDoc(model.GetTitle())
+                adapter._get_attr_or_call(model, "Save")
+            title = adapter._get_attr_or_call(model, "GetTitle")
+            app.CloseDoc(title)
             adapter.currentModel = None
 
         return cast(
@@ -1038,6 +1064,15 @@ class SolidWorksIOMixin:
             getattr(adapter.swApp, "ActiveDoc", None) if adapter.swApp else None
         )
         if active_model is not None:
+            # ActiveDoc is a fresh, unflagged dispatch. Flag it now so every
+            # downstream tool that reads a zero-arg accessor off currentModel
+            # (GetTitle, Save, ...) gets a method, not a property value that
+            # then blows up when called (COM pitfall #5 / issue #91).
+            doc_type = adapter._get_attr_or_call(active_model, "GetType")
+            adapter._attempt(
+                lambda: _sw_type_info.flag_doc(active_model, int(doc_type or 1)),
+                default=0,
+            )
             adapter.currentModel = active_model
         if not adapter.currentModel:
             return AdapterResult(
