@@ -59,10 +59,16 @@ class _ScratchSession:
     """
 
     def __init__(self, adapter) -> None:  # noqa: ANN001
+        """Snapshot the currently open documents as the do-not-close baseline.
+
+        Args:
+            adapter: A connected ``PyWin32Adapter``.
+        """
         self.adapter = adapter
         self._baseline: set[str] = self._open_titles()
 
     def _open_docs(self) -> list:
+        """Return the currently open ``IModelDoc2`` dispatches (never ``None``)."""
         raw = self.adapter._attempt(
             lambda: self.adapter.swApp.GetDocuments(), default=None
         )
@@ -71,6 +77,7 @@ class _ScratchSession:
         return [raw] if raw else []
 
     def _open_titles(self) -> set[str]:
+        """Return the window titles of every currently open document."""
         titles: set[str] = set()
         for d in self._open_docs():
             t = self.adapter._attempt(
@@ -81,6 +88,12 @@ class _ScratchSession:
         return titles
 
     def cleanup(self) -> None:
+        """Close every scratch document this session opened, and nothing else.
+
+        A document is closed only when its title is new since construction
+        **and** it has no saved path, so a real file the user had open is
+        never touched even if the baseline snapshot came back empty.
+        """
         for d in self._open_docs():
             title = self.adapter._attempt(
                 lambda d=d: self.adapter._get_attr_or_call(d, "GetTitle"), default=None
@@ -135,6 +148,7 @@ async def test_set_units_round_trips_and_verifies_against_the_document(scratch):
     assert (await adapter.create_part()).is_success
 
     def _observed_system() -> int:
+        """Read the document's current ``swUnitSystem`` value straight from COM."""
         ext = adapter.currentModel.Extension
         return int(ext.GetUserPreferenceInteger(_SW_PREF_UNIT_SYSTEM, 0))
 
@@ -161,6 +175,7 @@ async def test_set_units_rejects_an_unknown_token_without_touching_the_document(
     assert (await adapter.create_part()).is_success
 
     def _system() -> int:
+        """Read the document's current ``swUnitSystem`` value straight from COM."""
         return int(
             adapter.currentModel.Extension.GetUserPreferenceInteger(
                 _SW_PREF_UNIT_SYSTEM, 0

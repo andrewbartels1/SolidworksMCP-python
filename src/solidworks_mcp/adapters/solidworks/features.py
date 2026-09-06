@@ -66,6 +66,16 @@ class SolidWorksFeaturesMixin:
     async def rename_feature(
         self, old_name: str, new_name: str
     ) -> AdapterResult[dict[str, Any]]:
+        """Rename a feature on the active model's tree.
+
+        Args:
+            old_name: The feature's current name.
+            new_name: The name to give it.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Delegates to
+            :func:`_rename_feature_impl`; see it for the payload shape.
+        """
         return _rename_feature_impl(self, old_name, new_name)
 
     async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:

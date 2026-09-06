@@ -32,6 +32,7 @@ WRAPPERS = [
 @pytest.mark.parametrize("capability", CAPABILITIES)
 @pytest.mark.parametrize("cls", WRAPPERS, ids=lambda c: c.__name__)
 def test_capability_exists_on_every_layer(capability: str, cls: type) -> None:
+    """Every adapter layer defines the capability as an async method."""
     method = getattr(cls, capability, None)
     assert method is not None, f"{cls.__name__} is missing {capability}"
     assert inspect.iscoroutinefunction(method), (
@@ -41,6 +42,7 @@ def test_capability_exists_on_every_layer(capability: str, cls: type) -> None:
 
 @pytest.mark.parametrize("capability", CAPABILITIES)
 def test_wrappers_do_not_silently_fall_through_to_base(capability: str) -> None:
+    """The breaker and pool define their own pass-through, not inherit the stub."""
     for cls in (CircuitBreakerAdapter, ConnectionPoolAdapter):
         assert capability in vars(cls), (
             f"{cls.__name__} inherits {capability} from the base adapter"
@@ -49,6 +51,7 @@ def test_wrappers_do_not_silently_fall_through_to_base(capability: str) -> None:
 
 @pytest.mark.parametrize("capability", CAPABILITIES)
 def test_real_adapter_resolves_to_the_io_mixin(capability: str) -> None:
+    """PyWin32Adapter resolves the capability to the COM mixin, not the stub."""
     pytest.importorskip("win32com", reason="pywin32 is Windows-only")
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
@@ -63,6 +66,7 @@ def test_real_adapter_resolves_to_the_io_mixin(capability: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("capability", CAPABILITIES)
 async def test_base_defaults_report_missing_capability(capability: str) -> None:
+    """The base default returns an error that names the missing capability."""
     method = getattr(SolidWorksAdapter, capability)
     result = await (
         method(None)
@@ -87,6 +91,7 @@ async def test_base_defaults_report_missing_capability(capability: str) -> None:
     ],
 )
 def test_coerce_dispatch_sequence(raw: object, expected_len: int) -> None:
+    """None, a bare dispatch and a tuple/list all normalise to a clean list."""
     assert len(_coerce_dispatch_sequence(raw)) == expected_len
 
 
@@ -94,24 +99,47 @@ def test_coerce_dispatch_sequence(raw: object, expected_len: int) -> None:
 
 
 class _FakeDoc:
+    """Stand-in for ``IModelDoc2`` exposing the three accessors used."""
+
     def __init__(self, title: str, path: str, doc_type: int) -> None:
+        """Store the values the fake's accessors return.
+
+        Args:
+            title: Value for ``GetTitle``.
+            path: Value for ``GetPathName``.
+            doc_type: Value for ``GetType`` (``swDocumentTypes_e``).
+        """
         self._title = title
         self._path = path
         self._type = doc_type
 
     def GetTitle(self) -> str:
+        """Return the document's window title."""
         return self._title
 
     def GetPathName(self) -> str:
+        """Return the document's full path (empty when unsaved)."""
         return self._path
 
     def GetType(self) -> int:
+        """Return the ``swDocumentTypes_e`` code for the document."""
         return self._type
 
 
 class _FakeAdapter:
+    """Minimal adapter surface: ``_attempt`` and ``_get_attr_or_call``."""
+
     @staticmethod
     def _attempt(fn, default=None):  # noqa: ANN001
+        """Run ``fn`` and return ``default`` if it raises.
+
+        Args:
+            fn: Zero-argument callable to invoke.
+            default: Value returned on any exception.
+
+        Returns:
+            The callable's result, or ``default``.
+        """
         try:
             return fn()
         except Exception:  # noqa: BLE001
@@ -119,11 +147,21 @@ class _FakeAdapter:
 
     @staticmethod
     def _get_attr_or_call(obj, name):  # noqa: ANN001
+        """Return ``obj.name``, calling it when it resolves to a method.
+
+        Args:
+            obj: Object to read the attribute from.
+            name: Attribute name.
+
+        Returns:
+            The attribute value, or its call result when callable.
+        """
         attr = getattr(obj, name)
         return attr() if callable(attr) else attr
 
 
 def test_describe_open_document_marks_active_by_title() -> None:
+    """A title that matches the active title yields the full active summary."""
     doc = _FakeDoc("bracket.SLDPRT", r"C:\p\bracket.SLDPRT", 1)
     out = _describe_open_document(_FakeAdapter(), doc, "bracket.SLDPRT", None)
     assert out == {
@@ -135,6 +173,7 @@ def test_describe_open_document_marks_active_by_title() -> None:
 
 
 def test_describe_open_document_inactive_and_unknown_type() -> None:
+    """A non-matching title is inactive; an unmapped type code is 'Unknown'."""
     doc = _FakeDoc("thing.SLDXXX", "", 99)
     out = _describe_open_document(_FakeAdapter(), doc, "other.SLDASM", None)
     assert out["is_active"] is False
@@ -142,6 +181,7 @@ def test_describe_open_document_inactive_and_unknown_type() -> None:
 
 
 def test_describe_open_document_falls_back_to_path_for_active_match() -> None:
+    """With no active title, a case-insensitive path match marks the doc active."""
     doc = _FakeDoc("asm.SLDASM", r"C:\P\Asm.SLDASM", 2)
     out = _describe_open_document(_FakeAdapter(), doc, None, r"c:\p\asm.sldasm")
     assert out["is_active"] is True
@@ -153,6 +193,7 @@ def test_describe_open_document_falls_back_to_path_for_active_match() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_list_open_documents_reports_active() -> None:
+    """The mock marks only the most recently created model active."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
     first = await adapter.create_part()
@@ -167,6 +208,7 @@ async def test_mock_list_open_documents_reports_active() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_activate_document_switches_active() -> None:
+    """activate_document makes the named model active in the mock."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
     first = await adapter.create_part()
@@ -183,6 +225,7 @@ async def test_mock_activate_document_switches_active() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_activate_document_unknown_is_an_error() -> None:
+    """Activating a model the mock never created is an error."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
     await adapter.create_part()
@@ -194,6 +237,7 @@ async def test_mock_activate_document_unknown_is_an_error() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_activate_document_blank_is_an_error() -> None:
+    """A blank target is rejected before any lookup."""
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
 

@@ -21,7 +21,7 @@ The SolidWorks MCP Server provides 129 specialized tools for CAD automation. Thi
 
     Core 3D modeling operations including part creation, features, assemblies, and configurations.
 
-    [**23 tools available** :octicons-arrow-right-24:](#modeling-tools)
+    [**25 tools available** :octicons-arrow-right-24:](#modeling-tools)
 
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
@@ -101,7 +101,7 @@ The SolidWorks MCP Server provides 129 specialized tools for CAD automation. Thi
 
     Document lifecycle, feature-tree inspection, configurations, custom properties, and pack-and-go.
 
-    [**15 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
+    [**17 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
 
 - :material-file-search:{ .lg .middle } **Docs Discovery**
 
@@ -117,14 +117,14 @@ The SolidWorks MCP Server provides 129 specialized tools for CAD automation. Thi
 
 | Category | Tool Count | Complexity Level | Primary Use Case |
 |----------|------------|------------------|------------------|
-| **Modeling** | 23 | High | Part/assembly creation and modification |
+| **Modeling** | 25 | High | Part/assembly creation and modification |
 | **Sketching** | 19 | Medium | 2D geometry and constraint management |
 | **Drawing** | 12 | Medium | Technical documentation creation |
 | **Drawing Analysis** | 8 | Medium | Quality assurance and compliance |
 | **Analysis** | 5 | High | Engineering validation and analysis |
 | **Export** | 7 | Low | File format conversion and sharing |
 | **Automation** | 8 | High | Workflow orchestration and batch processing |
-| **File Management** | 15 | Low | File operations and organization |
+| **File Management** | 17 | Low | File operations, session, and organization |
 | **VBA Generation** | 10 | Very High | Complex operation automation |
 | **Template Management** | 6 | Medium | Standardization and reuse |
 | **Macro Recording** | 7 | High | Workflow capture and optimization |
@@ -308,7 +308,7 @@ Minimal analysis tools for public interfaces:
 
 ## Modeling Tools {#modeling-tools}
 
-:material-cube-outline: **11 Tools** | 3D modeling and part creation
+:material-cube-outline: **13 Tools** | 3D modeling and part creation
 
 ### Core Tools
 
@@ -323,6 +323,8 @@ Minimal analysis tools for public interfaces:
 | `create_cut` | Create cut features | Medium | Material removal operations |
 | `create_fillet` | Apply fillet/round features | Low | Edge finishing |
 | `manage_configurations` | Handle design configurations | High | Design variant management |
+| `rename_feature` | Rename a feature on the tree (read-back verified) | Low | Design-variant / cleanup workflows |
+| `set_units` | Set the document linear unit system (mm/cm/m/in/ft) | Low | Aligning a model to a target unit system |
 
 ### Example Usage
 
