@@ -25,7 +25,9 @@ from solidworks_mcp.tools.modeling import (
     MirrorFeatureInput,
     OpenModelInput,
     PatternCircularInput,
+    RenameFeatureInput,
     SetDimensionInput,
+    SetUnitsInput,
     SuppressFeatureInput,
     UndoInput,
     _result_value,
@@ -414,6 +416,71 @@ class TestModelingTools:
         assert result["dimension_update"]["name"] == "D1@Sketch1"
         assert result["dimension_update"]["old_value"] == 15.5
         assert result["dimension_update"]["new_value"] == 20.0
+
+    @pytest.mark.asyncio
+    async def test_set_units_success(self, mcp_server, mock_adapter, mock_config):
+        """set_units applies a recognised unit token and reports it."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "set_units"
+        )
+        result = await tool_func(SetUnitsInput(unit_system="inch"))
+
+        assert result["status"] == "success"
+        assert result["message"] == "Set document units to in"
+        assert result["data"]["unit_system"] == "in"
+
+    @pytest.mark.asyncio
+    async def test_set_units_reports_when_unverified(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A None 'verified' readback is disclosed in the message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.set_units = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={"unit_system": "mm", "verified": None},
+                execution_time=0.1,
+            )
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "set_units"
+        )
+        result = await tool_func(SetUnitsInput(unit_system="mm"))
+
+        assert result["status"] == "success"
+        assert "could not be read back" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_set_units_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """An unrecognised token surfaces the adapter's error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "set_units"
+        )
+        result = await tool_func(SetUnitsInput(unit_system="parsecs"))
+
+        assert result["status"] == "error"
+        assert "Unrecognised" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_set_units_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no set_units - report error."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "set_units"
+        )
+        result = await tool_func(SetUnitsInput(unit_system="mm"))
+        assert result["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_error_handling(self, mcp_server, mock_adapter, mock_config):
@@ -987,6 +1054,73 @@ class TestFeatureEditingTools:
             t.fn for t in await mcp_server.list_tools() if t.name == "suppress_feature"
         )
         result = await tool_func(SuppressFeatureInput(name="Ghost1"))
+
+        assert result["status"] == "error"
+        assert "Feature not found: Ghost1" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_rename_feature_success(self, mcp_server, mock_adapter, mock_config):
+        """rename_feature renames a known feature and reports both names."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        name = await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "rename_feature"
+        )
+        result = await tool_func(
+            RenameFeatureInput(old_name=name, new_name="RenamedBoss")
+        )
+
+        assert result["status"] == "success"
+        assert result["message"] == f"Renamed {name} to RenamedBoss"
+        assert result["data"]["new_name"] == "RenamedBoss"
+
+    @pytest.mark.asyncio
+    async def test_rename_feature_to_same_name_reports_unchanged(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Renaming to the current name is a success that says nothing changed."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        name = await self._part_with_extrusion(mock_adapter)
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "rename_feature"
+        )
+        result = await tool_func(RenameFeatureInput(old_name=name, new_name=name))
+
+        assert result["status"] == "success"
+        assert "unchanged" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_rename_feature_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no rename_feature - report error."""
+        await register_modeling_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "rename_feature"
+        )
+        result = await tool_func(
+            RenameFeatureInput(old_name="Fillet1", new_name="Edge1")
+        )
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_rename_feature_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's own error message."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.rename_feature = AsyncMock(
+            return_value=Mock(is_success=False, error="Feature not found: Ghost1")
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "rename_feature"
+        )
+        result = await tool_func(
+            RenameFeatureInput(old_name="Ghost1", new_name="Ghost2")
+        )
 
         assert result["status"] == "error"
         assert "Feature not found: Ghost1" in result["message"]

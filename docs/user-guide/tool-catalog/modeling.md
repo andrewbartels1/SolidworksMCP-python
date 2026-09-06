@@ -4,7 +4,7 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 > **Prerequisite:** An active SolidWorks session. Most feature tools require an open Part document.
 
-**Total tools in this category: 9**
+**Total tools in this category: 11**
 
 ---
 
@@ -231,6 +231,52 @@ Set the value of a dimension in the current model.
 ```json
 {
   "value": 50.0
+}
+```
+
+---
+
+### `set_units`
+
+Set the active document's linear unit system (`mm`, `cm`, `m`, `in`, `ft`; aliases such as `inch` / `millimeters` accepted). The setting is applied and read back — a mismatch is reported as an error rather than a false success.
+
+**Prerequisite:** Active document
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `unit_system` | `str` | ✅ | `` | Linear unit system: mm, cm, m, in, or ft |
+
+**Sample call:**
+
+```json
+{
+  "unit_system": "in"
+}
+```
+
+---
+
+### `rename_feature`
+
+Rename a feature on the feature tree. SolidWorks silently refuses a rename onto a name another feature already uses, so the new name is read back and a mismatch is reported as an error. Renaming a feature to its current name is a no-op success.
+
+**Prerequisite:** Active document containing the named feature
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `old_name` | `str` | ✅ | `` | Current feature name, e.g. 'Fillet1' |
+| `new_name` | `str` | ✅ | `` | New feature name, e.g. 'MountingEdgeFillet' |
+
+**Sample call:**
+
+```json
+{
+  "old_name": "Fillet1",
+  "new_name": "EdgeBreak"
 }
 ```
 

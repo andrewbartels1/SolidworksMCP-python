@@ -1245,6 +1245,23 @@ class SolidWorksAdapter(ABC):
             error="suppress_feature is not implemented by this adapter",
         )
 
+    async def rename_feature(
+        self, old_name: str, new_name: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rename an existing feature on the feature tree.
+
+        Args:
+            old_name (str): Current feature name.
+            new_name (str): New feature name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The old and new names, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="rename_feature is not implemented by this adapter",
+        )
+
     async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
         """Undo the last operations in the active model.
 
@@ -1257,6 +1274,49 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="undo is not implemented by this adapter",
+        )
+
+    async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
+        """Set the active document's linear unit system.
+
+        Args:
+            unit_system (str): One of ``mm``, ``cm``, ``m``, ``in``, ``ft``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was applied, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_units is not implemented by this adapter",
+        )
+
+    async def list_open_documents(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Enumerate every document currently open in SolidWorks.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: One entry per open document
+            (``title``, ``path``, ``type``, ``is_active``), or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_open_documents is not implemented by this adapter",
+        )
+
+    async def activate_document(
+        self, title_or_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make an already-open document the active one.
+
+        Args:
+            title_or_path (str): Title, full path, or file name of an open
+                document.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was activated, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="activate_document is not implemented by this adapter",
         )
 
     @abstractmethod

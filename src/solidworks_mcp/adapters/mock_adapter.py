@@ -29,6 +29,7 @@ from .base import (
     SweepParameters,
 )
 from .solidworks.features import _AXIS_PLANE_PAIRS
+from .solidworks.io import _normalise_unit_system as _normalise_mock_unit_system
 from .solidworks.sketch import RELATION_NAME_MAP
 
 #: Orientations the mock accepts for a drawing view. Kept in step with
@@ -693,6 +694,18 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
+        token = "mm"
+        if units is not None and str(units).strip():
+            token = _normalise_mock_unit_system(str(units))
+            if token is None:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unrecognised units {units!r}. "
+                        "Expected one of: mm, cm, m, in, ft."
+                    ),
+                )
+
         await asyncio.sleep(self._delays["model_operation"])
         self._operation_count += 1
 
@@ -706,7 +719,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             properties={
                 "created": datetime.now().isoformat(),
                 "mock": True,
-                "units": units or "mm",
+                "units": token,
             },
         )
 
@@ -1972,6 +1985,127 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS, data=None, execution_time=0.1
         )
 
+    async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
+        """Mock setting the active document's linear unit system.
+
+        Mirrors the real adapter: an unrecognised token is an error, and the
+        applied token is recorded on the current model's ``properties``.
+
+        Args:
+            unit_system (str): One of ``mm``, ``cm``, ``m``, ``in``, ``ft``
+                (aliases such as ``inch`` / ``millimeters`` accepted).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(0.1)
+
+        token = _normalise_mock_unit_system(unit_system)
+        if token is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unrecognised unit system {unit_system!r}. "
+                    "Expected one of: mm, cm, m, in, ft."
+                ),
+            )
+        if self._current_model is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        self._operation_count += 1
+        props = dict(self._current_model.properties or {})
+        props["units"] = token
+        self._current_model.properties = props
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"unit_system": token, "verified": True},
+            execution_time=0.1,
+        )
+
+    async def list_open_documents(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Mock enumerating the currently open documents.
+
+        Returns every model the mock has created or opened this session, with
+        ``is_active`` reflecting ``self._current_model``.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: The result produced by the
+            operation.
+        """
+        await asyncio.sleep(0.05)
+        if not self._connected:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
+            )
+
+        active_path = (
+            self._current_model.path if self._current_model is not None else None
+        )
+        docs = [
+            {
+                "title": model.name,
+                "path": model.path,
+                "type": model.type,
+                "is_active": model.path == active_path,
+            }
+            for model in self._models.values()
+        ]
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data=docs, execution_time=0.05
+        )
+
+    async def activate_document(
+        self, title_or_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock making an already-open document active.
+
+        Args:
+            title_or_path (str): Title, full path, or file name of an open
+                document.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(0.05)
+        if not self._connected:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
+            )
+        target = (title_or_path or "").strip()
+        if not target:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="title_or_path is required"
+            )
+
+        needle = target.lower()
+        match = None
+        for model in self._models.values():
+            names = {
+                model.name.lower(),
+                model.path.lower(),
+                model.path.rsplit("/", 1)[-1].lower(),
+            }
+            if needle in names:
+                match = model
+                break
+        if match is None:
+            open_titles = ", ".join(m.name for m in self._models.values()) or "none"
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No open document matches {target!r}. Open: {open_titles}",
+            )
+
+        self._current_model = match
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"activated": match.name, "verified": True},
+            execution_time=0.05,
+        )
+
     async def insert_component(
         self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
     ) -> AdapterResult[dict[str, Any]]:
@@ -2309,6 +2443,70 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "suppressed": bool(suppress),
                 "was_suppressed": was,
             },
+            execution_time=self._delays["model_operation"],
+        )
+
+    async def rename_feature(
+        self, old_name: str, new_name: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock renaming a named feature in the active model.
+
+        Mirrors the real adapter: an empty target name, an unknown feature, or
+        a target name already in use are all errors; renaming to the current
+        name is a no-op success.
+
+        Args:
+            old_name (str): Current feature name.
+            new_name (str): New feature name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        await asyncio.sleep(self._delays["model_operation"])
+
+        new = new_name.split("@", 1)[0].strip()
+        if not new:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="new_name must not be empty"
+            )
+
+        key = next(
+            (k for k, f in self._features.items() if f.name == old_name), None
+        )
+        if key is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Feature not found: {old_name}",
+            )
+        if new == old_name:
+            return AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={
+                    "renamed": False,
+                    "old_name": old_name,
+                    "new_name": new,
+                    "reason": "old and new names are the same",
+                },
+                execution_time=self._delays["model_operation"],
+            )
+        if any(f.name == new for f in self._features.values()):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Cannot rename to '{new}': a feature with that name "
+                    "already exists"
+                ),
+            )
+
+        self._features[key].name = new
+        if old_name in self._suppressed_features:
+            self._suppressed_features.discard(old_name)
+            self._suppressed_features.add(new)
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"renamed": True, "old_name": old_name, "new_name": new},
             execution_time=self._delays["model_operation"],
         )
 
