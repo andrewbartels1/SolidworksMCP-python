@@ -610,6 +610,34 @@ Found 2026-09-05 doing per-part STL export from an assembly (issue #91 follow-up
 
 ---
 
+## `RunMacro2` — module name must match, and the `.swp` must be binary
+
+`ISldWorks::RunMacro2(FilePathName, ModuleName, ProcedureName, Options, Error)`:
+
+- **`Error` (5th arg) is `VT_BYREF | VT_I4` out**, not a plain int. Under pywin32 late
+  binding a bare `0` raises `DISP_E_TYPEMISMATCH` ('Type mismatch.', arg index 5) before
+  SolidWorks ever sees the file. Pass a `VARIANT(VT_BYREF|VT_I4, 0)` and read the code
+  back from `.value` (`_byref_long` in `pywin32_adapter.py`).
+- **The code it writes back is `swRunMacroError_e`** (not in the type library;
+  `_SW_RUN_MACRO_ERROR` maps it). `0` = `NoError`. **`22` = `Invalidindex`** — `RunMacro2`
+  could not resolve `ModuleName`/`ProcedureName` in the project.
+- **SolidWorks names the module `<stem>1`.** `Tools -> Macro -> New` on `sample_macro.swp`
+  creates module **`sample_macro1`**. SW's own doc example does the same
+  (`RunMacroSub.swp` -> module `RunMacroSub1`). Passing the file stem as `ModuleName`
+  gets you error 22. The real name is in the `.swp`'s plaintext `PROJECT` stream as
+  `Module=<name>` — `_parse_vb_module_name` reads it from the raw bytes when the file
+  starts with the OLE2 magic `D0 CF 11 E0`.
+- **A `.swp` `RunMacro2` can run must be a binary OLE compound file.** A hand-written
+  text file (even with the right `Attribute VB_Name` line, even renamed `.swp`) is
+  rejected with a modal **`Cannot open <path>`** dialog — which *blocks the COM STA
+  thread with no timeout* (a 2+ minute hang was observed). To get a runnable `.swp` you
+  currently have to author it inside SolidWorks (`Tools -> Macro -> New`, or Edit + Save
+  in the VBA IDE). Generating one from source text is an open gap.
+
+Found 2026-09-05 wiring `execute_macro` end-to-end against live SW 2026 (issue #91).
+
+---
+
 ## Reference: Where to look things up
 
 | Question | Where to look |

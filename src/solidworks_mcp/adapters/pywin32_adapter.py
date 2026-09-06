@@ -7,6 +7,7 @@ SolidWorks automation capabilities on Windows platforms.
 import asyncio
 import os
 import platform
+import re
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -84,11 +85,70 @@ def _byref_long(initial: int = 0) -> Any:
     )
 
 
-def _parse_vb_module_name(macro_path: str) -> str:
-    """Read ``Attribute VB_Name = "..."`` from a SolidWorks text macro file.
+# OLE2 / Compound File Binary Format magic. A real (SW-authored) ``.swp`` is a
+# compound file; a hand-written text macro is not.
+_OLE2_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
-    Falls back to the file stem (e.g. ``paper_airplane`` for ``paper_airplane.swp``), then
-    to ``"SolidWorksMacro"`` which is the name used by the macro recorder.
+# swRunMacroError_e - the code RunMacro2 writes into its ByRef error out-param.
+# Not exposed in the SW type library, transcribed from swconst. Lets a failure
+# say "22 (Invalidindex)" instead of a bare int.
+_SW_RUN_MACRO_ERROR = {
+    0: "NoError",
+    1: "InvalidArg",
+    2: "MacrosAreDisabled",
+    3: "NotInDesignMode",
+    4: "OnlyCodeModules",
+    5: "OutOfMemory",
+    6: "InvalidProcname",
+    7: "InvalidPropertyType",
+    8: "SuborfuncExpected",
+    9: "BadParmCount",
+    10: "BadVarType",
+    11: "UserInterrupt",
+    12: "Exception",
+    13: "Overflow",
+    14: "TypeMismatch",
+    15: "ParmNotOptional",
+    16: "UnknownLcid",
+    17: "Busy",
+    18: "ConnectionTerminated",
+    19: "CallRejected",
+    20: "CallFailed",
+    21: "Zombied",
+    22: "Invalidindex",
+    23: "NoPermission",
+    24: "Reverted",
+    25: "TooManyOpenFiles",
+    26: "DiskError",
+    27: "CantSave",
+    28: "OpenFileFailed",
+}
+
+
+def _run_macro_error_name(code: Any) -> str:
+    """Render a swRunMacroError_e code as ``"<n> (<Name>)"`` when known."""
+    try:
+        code_int = int(code)
+    except (TypeError, ValueError):
+        return str(code)
+    name = _SW_RUN_MACRO_ERROR.get(code_int)
+    return f"{code_int} ({name})" if name else str(code_int)
+
+
+def _parse_vb_module_name(macro_path: str) -> str:
+    """Resolve the VB module name ``RunMacro2`` needs for a macro file.
+
+    ``RunMacro2(path, ModuleName, ProcedureName, ...)`` fails with
+    ``swRunMacroError_Invalidindex`` (22) when ``ModuleName`` does not match a
+    module in the project, so the guess matters:
+
+    - A real ``.swp`` authored by SOLIDWORKS is an OLE compound file. Its
+      plaintext ``PROJECT`` stream carries ``Module=<name>``, and SW names that
+      module ``<stem>1`` (``sample_macro`` -> ``sample_macro1``) - the file stem
+      is the wrong guess. Read the real name out of the raw bytes.
+    - A hand-written text macro carries ``Attribute VB_Name = "..."``.
+    - Otherwise fall back to the file stem, then ``"SolidWorksMacro"`` (the name
+      the macro recorder uses).
 
     Args:
         macro_path (str): The macro path value.
@@ -97,15 +157,26 @@ def _parse_vb_module_name(macro_path: str) -> str:
         str: The resulting text value.
     """
     try:
-        with open(macro_path, encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                line = line.strip()
-                if line.lower().startswith("attribute vb_name"):
-                    # Attribute VB_Name = "SolidWorksMacro"
-                    _, _, rhs = line.partition("=")
-                    return rhs.strip().strip('"').strip("'")
+        with open(macro_path, "rb") as fh:
+            raw = fh.read()
     except OSError:
-        pass
+        raw = b""
+
+    if raw[:8] == _OLE2_MAGIC:
+        # PROJECT stream line: Module=<name>  (CRLF-delimited ASCII)
+        match = re.search(rb"[\r\n]Module=([^\r\n\x00]{1,255})", raw)
+        if match:
+            name = match.group(1).decode("latin-1", "replace").strip().strip('"')
+            if name:
+                return name
+    else:
+        for line in raw.decode("utf-8", "replace").splitlines():
+            line = line.strip()
+            if line.lower().startswith("attribute vb_name"):
+                # Attribute VB_Name = "SolidWorksMacro"
+                _, _, rhs = line.partition("=")
+                return rhs.strip().strip('"').strip("'")
+
     stem = os.path.splitext(os.path.basename(macro_path))[0]
     if stem and not stem.startswith(".") and stem.strip("."):
         return stem
@@ -2481,6 +2552,12 @@ class PyWin32Adapter(
         # nRetval (5th arg) is ByRef Long. Passing a plain 0 raises
         # DISP_E_TYPEMISMATCH ('Type mismatch.', arg index 5) under pywin32
         # late binding - it must be a VT_BYREF|VT_I4 VARIANT (issue #91).
+        logger.debug(
+            "RunMacro2: path={!r} module={!r} proc={!r}",
+            macro_path,
+            module_name,
+            proc_name,
+        )
         retval = _byref_long(0)
         result = self.swApp.RunMacro2(  # type: ignore[union-attr]
             macro_path, module_name, proc_name, 0, retval
@@ -2489,13 +2566,27 @@ class PyWin32Adapter(
             success, errors = result[0], result[1]
         else:
             success, errors = bool(result), getattr(retval, "value", 0)
+        logger.debug(
+            "RunMacro2 returned success={} error={}",
+            bool(success),
+            _run_macro_error_name(errors),
+        )
         if not success:
+            hint = ""
+            if _run_macro_error_name(errors).endswith("(Invalidindex)"):
+                hint = (
+                    " - RunMacro2 could not resolve the module/procedure; "
+                    f"check that module {module_name!r} and procedure "
+                    f"{proc_name!r} exist in the .swp"
+                )
             raise SolidWorksMCPError(
-                f"RunMacro2 failed for {macro_path}, module={module_name!r}, errors={errors}"
+                f"RunMacro2 failed for {macro_path}, module={module_name!r}, "
+                f"proc={proc_name!r}, errors={_run_macro_error_name(errors)}{hint}"
             )
         return {
             "macro_path": macro_path,
             "module_name": module_name,
+            "proc_name": proc_name,
             "errors": errors,
         }
 
