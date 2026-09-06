@@ -1924,6 +1924,84 @@ class TestPyWin32AdapterBranches:
         with pytest.raises(SolidWorksMCPError):
             adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
 
+    def test_invoke_run_macro2_passes_byref_retval(self, monkeypatch) -> None:
+        """Regression (issue #91): RunMacro2's nRetval is a ByRef Long. Passing
+        a plain int raises DISP_E_TYPEMISMATCH at arg index 5, so a 5th arg
+        must always be supplied (VARIANT on Windows, int on the mocked path)."""
+        adapter = self._build_adapter(monkeypatch)
+        run = Mock(return_value=True)
+        adapter.swApp = SimpleNamespace(RunMacro2=run)
+
+        adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
+
+        call = run.call_args
+        assert call.args[:4] == ("/macros/test.swp", "TestModule", "main", 0)
+        assert len(call.args) == 5
+
+    @pytest.mark.asyncio
+    async def test_close_model_reads_get_title_property_style(
+        self, monkeypatch
+    ) -> None:
+        """Regression (issue #91): currentModel can be an unflagged dispatch
+        where GetTitle resolves property-style to a str. close_model must read
+        it through _get_attr_or_call, not call the returned string."""
+        adapter = self._build_adapter(monkeypatch)
+        close_doc = Mock()
+        adapter.swApp = SimpleNamespace(CloseDoc=close_doc)
+        adapter.currentModel = SimpleNamespace(GetTitle="wifi_box_snapfit")
+
+        result = await adapter.close_model(save=False)
+
+        assert result.is_success
+        close_doc.assert_called_once_with("wifi_box_snapfit")
+        assert adapter.currentModel is None
+
+    @pytest.mark.asyncio
+    async def test_close_model_save_reads_save_property_style(
+        self, monkeypatch
+    ) -> None:
+        """save=True path also reaches Save through _get_attr_or_call (issue #91)."""
+        adapter = self._build_adapter(monkeypatch)
+        saved = Mock()
+        adapter.swApp = SimpleNamespace(CloseDoc=Mock())
+        adapter.currentModel = SimpleNamespace(GetTitle="Part1", Save=saved)
+
+        result = await adapter.close_model(save=True)
+
+        assert result.is_success
+        saved.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_open_model_activates_opened_document(self, monkeypatch) -> None:
+        """Regression (issue #91): open_model must ActivateDoc3 the freshly
+        opened document. OpenDoc6 with swOpenDocOptions_Silent opens the file
+        but leaves the previously focused document active, so without this
+        every later tool call targets the wrong document."""
+        adapter = self._build_adapter(monkeypatch)
+
+        opened_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="snapfit.SLDPRT"),
+            GetActiveConfiguration=Mock(return_value=None),
+            GetSaveTime=Mock(return_value="now"),
+        )
+        activated_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="snapfit.SLDPRT"),
+            GetActiveConfiguration=Mock(return_value=None),
+            GetSaveTime=Mock(return_value="now"),
+        )
+        activate = Mock(return_value=activated_doc)
+        adapter.swApp = SimpleNamespace(
+            OpenDoc6=Mock(return_value=opened_doc),
+            ActivateDoc3=activate,
+        )
+
+        result = await adapter.open_model("C:/parts/snapfit.SLDPRT")
+
+        assert result.is_success
+        # ActivateDoc3 takes the titlebar name, not the path.
+        assert activate.call_args.args[0] == "snapfit.SLDPRT"
+        assert adapter.currentModel is activated_doc
+
     @pytest.mark.asyncio
     async def test_export_image_returns_error_without_connection(
         self, monkeypatch
@@ -2123,9 +2201,11 @@ class TestPyWin32AdapterBranches:
         assert result.data["macro_path"] == str(macro_file)
         assert result.data["module_name"] == "MyMacroModule"
         assert result.data["errors"] == 0
-        adapter.swApp.RunMacro2.assert_called_once_with(
-            str(macro_file), "MyMacroModule", "main", 0, 0
-        )
+        call = adapter.swApp.RunMacro2.call_args
+        assert call.args[:4] == (str(macro_file), "MyMacroModule", "main", 0)
+        # 5th arg is the ByRef Long retval out-param (VARIANT on Windows,
+        # plain int on the mocked CI path).
+        assert len(call.args) == 5
 
     @pytest.mark.asyncio
     async def test_export_file_stl_errors_when_extension_missing(
