@@ -1938,6 +1938,69 @@ class TestPyWin32AdapterBranches:
         assert call.args[:4] == ("/macros/test.swp", "TestModule", "main", 0)
         assert len(call.args) == 5
 
+    def test_invoke_run_macro2_names_the_error_code(self, monkeypatch) -> None:
+        """A RunMacro2 failure reports the swRunMacroError_e name, not a bare int
+        (issue #91 follow-up: errors=22 -> 'Invalidindex')."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=(False, 22)))
+        with pytest.raises(SolidWorksMCPError) as excinfo:
+            adapter._invoke_run_macro2("/macros/x.swp", "wrongmod", "main")
+        msg = str(excinfo.value)
+        assert "22 (Invalidindex)" in msg
+        assert "proc='main'" in msg
+
+    def test_parse_vb_module_name_reads_binary_swp_project_stream(
+        self, tmp_path
+    ) -> None:
+        """A SW-authored .swp is an OLE compound file; the module name comes from
+        its plaintext PROJECT stream (Module=<name>), not the file stem - SW
+        names the module <stem>1 (issue #91 follow-up)."""
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+
+        swp = tmp_path / "sample_macro.swp"
+        swp.write_bytes(
+            b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+            + b"\x00" * 32
+            + b'\r\nID="{6F6DBAFC}"\r\nModule=sample_macro1\r\nName="sample_macro"\r\n'
+            + b"\x00" * 16
+        )
+        assert _parse_vb_module_name(str(swp)) == "sample_macro1"
+
+    def test_parse_vb_module_name_text_macro_uses_attribute(self, tmp_path) -> None:
+        """A hand-written text macro still resolves via Attribute VB_Name."""
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+
+        vb = tmp_path / "thing.vb"
+        vb.write_text('Attribute VB_Name = "MyModule"\nSub main()\nEnd Sub\n')
+        assert _parse_vb_module_name(str(vb)) == "MyModule"
+
+    def test_parse_vb_module_name_falls_back_to_stem(self, tmp_path) -> None:
+        """No usable name in the file -> file stem."""
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+
+        blank = tmp_path / "just_a_stem.swp"
+        blank.write_bytes(b"not ole, no attribute line\n")
+        assert _parse_vb_module_name(str(blank)) == "just_a_stem"
+
+    def test_run_macro_error_name_non_numeric_passes_through(self) -> None:
+        """A non-coercible error value renders as-is, not a crash."""
+        from solidworks_mcp.adapters.pywin32_adapter import _run_macro_error_name
+
+        assert _run_macro_error_name(None) == "None"
+        assert _run_macro_error_name("weird") == "weird"
+
+    def test_byref_long_falls_back_to_plain_int_without_pywin32(
+        self, monkeypatch
+    ) -> None:
+        """When win32com.client.VARIANT is unavailable (CI / non-Windows), the
+        ByRef helper hands back a plain int so callers still work."""
+        from types import SimpleNamespace as _NS
+
+        from solidworks_mcp.adapters import pywin32_adapter as _mod
+
+        monkeypatch.setattr(_mod, "win32com", _NS(client=_NS()), raising=False)
+        assert _mod._byref_long(7) == 7
+
     @pytest.mark.asyncio
     async def test_close_model_reads_get_title_property_style(
         self, monkeypatch
