@@ -571,6 +571,45 @@ swallowed `TypeError` was indistinguishable from a genuine empty result.
 
 ---
 
+## Operational: heavy documents can crash SolidWorks — throttle the loop
+
+Not a COM API pitfall, but it kills a batch run the same way: silently, mid-loop.
+
+**Symptom:** a batch that opens/exports/closes many parts runs fine for the small ones,
+then on a large part (observed ~1.5–1.7 MB `.SLDPRT`, 70+ features) the export fails —
+
+```text
+Failed to export STL: ... STL export failed for <path> (tried Extension.SaveAs2 and SaveAs3)
+```
+
+— and `SLDWORKS.exe` itself dies. Every call after that returns
+`(-2147023174, 'The RPC server is unavailable.')` and `get_model_info` comes back
+all-`null` / `type: "Unknown"`. Reopening SolidWorks does **not** fix it — the adapter
+still holds the dead COM pointer (see runbook item #3); the MCP server has to be
+restarted to reconnect.
+
+**Why:** back-to-back open → tessellate/export → close with no pause gives SolidWorks no
+time to release memory and finish background work between documents. Heavy parts
+(multibody, large feature trees, imported geometry) push it over.
+
+**What to do in a batch loop:**
+
+- **Throttle.** Put a real pause (~10 s worked here) between parts — after `close_model`,
+  before the next `load_part`. Small parts don't need it; you won't know which are heavy
+  up front, so pace the whole loop.
+- **Do the heavy files last** and don't retry-storm — if a big part fails its export,
+  record it and move on rather than reopening it immediately.
+- **Check the file size first.** A `.SLDPRT` over ~1 MB, or a component list with
+  imported/multibody parts, is the risk set — widen the pause or skip in an unattended run.
+- **Detect the crash and stop.** After a failed export, one `get_model_info` returning
+  `type: "Unknown"` with `null` path means the COM handle is gone. Abort the loop and
+  surface it — every remaining iteration will just fail. Do not report the run as
+  complete.
+
+Found 2026-09-05 doing per-part STL export from an assembly (issue #91 follow-up).
+
+---
+
 ## Reference: Where to look things up
 
 | Question | Where to look |
