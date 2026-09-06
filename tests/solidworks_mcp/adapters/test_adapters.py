@@ -1924,6 +1924,147 @@ class TestPyWin32AdapterBranches:
         with pytest.raises(SolidWorksMCPError):
             adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
 
+    def test_invoke_run_macro2_passes_byref_retval(self, monkeypatch) -> None:
+        """Regression (issue #91): RunMacro2's nRetval is a ByRef Long. Passing
+        a plain int raises DISP_E_TYPEMISMATCH at arg index 5, so a 5th arg
+        must always be supplied (VARIANT on Windows, int on the mocked path)."""
+        adapter = self._build_adapter(monkeypatch)
+        run = Mock(return_value=True)
+        adapter.swApp = SimpleNamespace(RunMacro2=run)
+
+        adapter._invoke_run_macro2("/macros/test.swp", "TestModule", "main")
+
+        call = run.call_args
+        assert call.args[:4] == ("/macros/test.swp", "TestModule", "main", 0)
+        assert len(call.args) == 5
+
+    def test_invoke_run_macro2_names_the_error_code(self, monkeypatch) -> None:
+        """A RunMacro2 failure reports the swRunMacroError_e name, not a bare int
+        (issue #91 follow-up: errors=22 -> 'Invalidindex')."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(RunMacro2=Mock(return_value=(False, 22)))
+        with pytest.raises(SolidWorksMCPError) as excinfo:
+            adapter._invoke_run_macro2("/macros/x.swp", "wrongmod", "main")
+        msg = str(excinfo.value)
+        assert "22 (Invalidindex)" in msg
+        assert "proc='main'" in msg
+
+    def test_parse_vb_module_name_reads_binary_swp_project_stream(
+        self, tmp_path
+    ) -> None:
+        """A SW-authored .swp is an OLE compound file; the module name comes from
+        its plaintext PROJECT stream (Module=<name>), not the file stem - SW
+        names the module <stem>1 (issue #91 follow-up)."""
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+
+        swp = tmp_path / "sample_macro.swp"
+        swp.write_bytes(
+            b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+            + b"\x00" * 32
+            + b'\r\nID="{6F6DBAFC}"\r\nModule=sample_macro1\r\nName="sample_macro"\r\n'
+            + b"\x00" * 16
+        )
+        assert _parse_vb_module_name(str(swp)) == "sample_macro1"
+
+    def test_parse_vb_module_name_text_macro_uses_attribute(self, tmp_path) -> None:
+        """A hand-written text macro still resolves via Attribute VB_Name."""
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+
+        vb = tmp_path / "thing.vb"
+        vb.write_text('Attribute VB_Name = "MyModule"\nSub main()\nEnd Sub\n')
+        assert _parse_vb_module_name(str(vb)) == "MyModule"
+
+    def test_parse_vb_module_name_falls_back_to_stem(self, tmp_path) -> None:
+        """No usable name in the file -> file stem."""
+        from solidworks_mcp.adapters.pywin32_adapter import _parse_vb_module_name
+
+        blank = tmp_path / "just_a_stem.swp"
+        blank.write_bytes(b"not ole, no attribute line\n")
+        assert _parse_vb_module_name(str(blank)) == "just_a_stem"
+
+    def test_run_macro_error_name_non_numeric_passes_through(self) -> None:
+        """A non-coercible error value renders as-is, not a crash."""
+        from solidworks_mcp.adapters.pywin32_adapter import _run_macro_error_name
+
+        assert _run_macro_error_name(None) == "None"
+        assert _run_macro_error_name("weird") == "weird"
+
+    def test_byref_long_falls_back_to_plain_int_without_pywin32(
+        self, monkeypatch
+    ) -> None:
+        """When win32com.client.VARIANT is unavailable (CI / non-Windows), the
+        ByRef helper hands back a plain int so callers still work."""
+        from types import SimpleNamespace as _NS
+
+        from solidworks_mcp.adapters import pywin32_adapter as _mod
+
+        monkeypatch.setattr(_mod, "win32com", _NS(client=_NS()), raising=False)
+        assert _mod._byref_long(7) == 7
+
+    @pytest.mark.asyncio
+    async def test_close_model_reads_get_title_property_style(
+        self, monkeypatch
+    ) -> None:
+        """Regression (issue #91): currentModel can be an unflagged dispatch
+        where GetTitle resolves property-style to a str. close_model must read
+        it through _get_attr_or_call, not call the returned string."""
+        adapter = self._build_adapter(monkeypatch)
+        close_doc = Mock()
+        adapter.swApp = SimpleNamespace(CloseDoc=close_doc)
+        adapter.currentModel = SimpleNamespace(GetTitle="wifi_box_snapfit")
+
+        result = await adapter.close_model(save=False)
+
+        assert result.is_success
+        close_doc.assert_called_once_with("wifi_box_snapfit")
+        assert adapter.currentModel is None
+
+    @pytest.mark.asyncio
+    async def test_close_model_save_reads_save_property_style(
+        self, monkeypatch
+    ) -> None:
+        """save=True path also reaches Save through _get_attr_or_call (issue #91)."""
+        adapter = self._build_adapter(monkeypatch)
+        saved = Mock()
+        adapter.swApp = SimpleNamespace(CloseDoc=Mock())
+        adapter.currentModel = SimpleNamespace(GetTitle="Part1", Save=saved)
+
+        result = await adapter.close_model(save=True)
+
+        assert result.is_success
+        saved.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_open_model_activates_opened_document(self, monkeypatch) -> None:
+        """Regression (issue #91): open_model must ActivateDoc3 the freshly
+        opened document. OpenDoc6 with swOpenDocOptions_Silent opens the file
+        but leaves the previously focused document active, so without this
+        every later tool call targets the wrong document."""
+        adapter = self._build_adapter(monkeypatch)
+
+        opened_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="snapfit.SLDPRT"),
+            GetActiveConfiguration=Mock(return_value=None),
+            GetSaveTime=Mock(return_value="now"),
+        )
+        activated_doc = SimpleNamespace(
+            GetTitle=Mock(return_value="snapfit.SLDPRT"),
+            GetActiveConfiguration=Mock(return_value=None),
+            GetSaveTime=Mock(return_value="now"),
+        )
+        activate = Mock(return_value=activated_doc)
+        adapter.swApp = SimpleNamespace(
+            OpenDoc6=Mock(return_value=opened_doc),
+            ActivateDoc3=activate,
+        )
+
+        result = await adapter.open_model("C:/parts/snapfit.SLDPRT")
+
+        assert result.is_success
+        # ActivateDoc3 takes the titlebar name, not the path.
+        assert activate.call_args.args[0] == "snapfit.SLDPRT"
+        assert adapter.currentModel is activated_doc
+
     @pytest.mark.asyncio
     async def test_export_image_returns_error_without_connection(
         self, monkeypatch
@@ -2123,9 +2264,11 @@ class TestPyWin32AdapterBranches:
         assert result.data["macro_path"] == str(macro_file)
         assert result.data["module_name"] == "MyMacroModule"
         assert result.data["errors"] == 0
-        adapter.swApp.RunMacro2.assert_called_once_with(
-            str(macro_file), "MyMacroModule", "main", 0, 0
-        )
+        call = adapter.swApp.RunMacro2.call_args
+        assert call.args[:4] == (str(macro_file), "MyMacroModule", "main", 0)
+        # 5th arg is the ByRef Long retval out-param (VARIANT on Windows,
+        # plain int on the mocked CI path).
+        assert len(call.args) == 5
 
     @pytest.mark.asyncio
     async def test_export_file_stl_errors_when_extension_missing(

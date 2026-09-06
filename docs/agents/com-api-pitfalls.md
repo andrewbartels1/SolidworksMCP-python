@@ -571,6 +571,73 @@ swallowed `TypeError` was indistinguishable from a genuine empty result.
 
 ---
 
+## Operational: heavy documents can crash SolidWorks — throttle the loop
+
+Not a COM API pitfall, but it kills a batch run the same way: silently, mid-loop.
+
+**Symptom:** a batch that opens/exports/closes many parts runs fine for the small ones,
+then on a large part (observed ~1.5–1.7 MB `.SLDPRT`, 70+ features) the export fails —
+
+```text
+Failed to export STL: ... STL export failed for <path> (tried Extension.SaveAs2 and SaveAs3)
+```
+
+— and `SLDWORKS.exe` itself dies. Every call after that returns
+`(-2147023174, 'The RPC server is unavailable.')` and `get_model_info` comes back
+all-`null` / `type: "Unknown"`. Reopening SolidWorks does **not** fix it — the adapter
+still holds the dead COM pointer (see runbook item #3); the MCP server has to be
+restarted to reconnect.
+
+**Why:** back-to-back open → tessellate/export → close with no pause gives SolidWorks no
+time to release memory and finish background work between documents. Heavy parts
+(multibody, large feature trees, imported geometry) push it over.
+
+**What to do in a batch loop:**
+
+- **Throttle.** Put a real pause (~10 s worked here) between parts — after `close_model`,
+  before the next `load_part`. Small parts don't need it; you won't know which are heavy
+  up front, so pace the whole loop.
+- **Do the heavy files last** and don't retry-storm — if a big part fails its export,
+  record it and move on rather than reopening it immediately.
+- **Check the file size first.** A `.SLDPRT` over ~1 MB, or a component list with
+  imported/multibody parts, is the risk set — widen the pause or skip in an unattended run.
+- **Detect the crash and stop.** After a failed export, one `get_model_info` returning
+  `type: "Unknown"` with `null` path means the COM handle is gone. Abort the loop and
+  surface it — every remaining iteration will just fail. Do not report the run as
+  complete.
+
+Found 2026-09-05 doing per-part STL export from an assembly (issue #91 follow-up).
+
+---
+
+## `RunMacro2` — module name must match, and the `.swp` must be binary
+
+`ISldWorks::RunMacro2(FilePathName, ModuleName, ProcedureName, Options, Error)`:
+
+- **`Error` (5th arg) is `VT_BYREF | VT_I4` out**, not a plain int. Under pywin32 late
+  binding a bare `0` raises `DISP_E_TYPEMISMATCH` ('Type mismatch.', arg index 5) before
+  SolidWorks ever sees the file. Pass a `VARIANT(VT_BYREF|VT_I4, 0)` and read the code
+  back from `.value` (`_byref_long` in `pywin32_adapter.py`).
+- **The code it writes back is `swRunMacroError_e`** (not in the type library;
+  `_SW_RUN_MACRO_ERROR` maps it). `0` = `NoError`. **`22` = `Invalidindex`** — `RunMacro2`
+  could not resolve `ModuleName`/`ProcedureName` in the project.
+- **SolidWorks names the module `<stem>1`.** `Tools -> Macro -> New` on `sample_macro.swp`
+  creates module **`sample_macro1`**. SW's own doc example does the same
+  (`RunMacroSub.swp` -> module `RunMacroSub1`). Passing the file stem as `ModuleName`
+  gets you error 22. The real name is in the `.swp`'s plaintext `PROJECT` stream as
+  `Module=<name>` — `_parse_vb_module_name` reads it from the raw bytes when the file
+  starts with the OLE2 magic `D0 CF 11 E0`.
+- **A `.swp` `RunMacro2` can run must be a binary OLE compound file.** A hand-written
+  text file (even with the right `Attribute VB_Name` line, even renamed `.swp`) is
+  rejected with a modal **`Cannot open <path>`** dialog — which *blocks the COM STA
+  thread with no timeout* (a 2+ minute hang was observed). To get a runnable `.swp` you
+  currently have to author it inside SolidWorks (`Tools -> Macro -> New`, or Edit + Save
+  in the VBA IDE). Generating one from source text is an open gap.
+
+Found 2026-09-05 wiring `execute_macro` end-to-end against live SW 2026 (issue #91).
+
+---
+
 ## Reference: Where to look things up
 
 | Question | Where to look |
