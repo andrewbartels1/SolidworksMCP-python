@@ -1435,3 +1435,53 @@ async def test_granular_lookup_tools_registered_and_callable(
     )
     assert search["status"] == "success"
     assert isinstance(search["matches"], list)
+
+
+# ---------------------------------------------------------------------------
+# Docs index auto-refresh on staleness (config-gated)
+# ---------------------------------------------------------------------------
+
+
+def test_index_is_stale_thresholds(tmp_path):
+    import os
+    import time as _time
+
+    from solidworks_mcp.tools.docs_discovery import _index_is_stale
+
+    assert _index_is_stale(None, 21) is False
+    assert _index_is_stale(tmp_path / "missing.json", 21) is False
+
+    fresh = tmp_path / "fresh.json"
+    fresh.write_text("{}")
+    assert _index_is_stale(fresh, 21) is False
+
+    old = tmp_path / "old.json"
+    old.write_text("{}")
+    old_mtime = _time.time() - 30 * 86400
+    os.utime(old, (old_mtime, old_mtime))
+    assert _index_is_stale(old, 21) is True
+    assert _index_is_stale(old, 60) is False
+
+
+def test_maybe_refresh_index_is_a_noop_when_disabled(tmp_path):
+    from types import SimpleNamespace
+
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
+
+    idx = {"com_objects": {}}
+    f = tmp_path / "i.json"
+    f.write_text("{}")
+    cfg = SimpleNamespace(docs_index_auto_refresh=False, docs_index_max_age_days=21)
+    assert _maybe_refresh_index(idx, f, 2026, cfg) == (idx, f)
+
+
+def test_maybe_refresh_index_leaves_fresh_index_untouched(tmp_path):
+    from types import SimpleNamespace
+
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
+
+    idx = {"com_objects": {"ISldWorks": {"methods": [], "properties": []}}}
+    f = tmp_path / "i.json"
+    f.write_text("{}")  # just written -> fresh
+    cfg = SimpleNamespace(docs_index_auto_refresh=True, docs_index_max_age_days=21)
+    assert _maybe_refresh_index(idx, f, 2026, cfg) == (idx, f)

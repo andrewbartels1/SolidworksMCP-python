@@ -854,6 +854,63 @@ def _find_index_file(year: int | None, explicit_index_file: str | None) -> Path 
     return None
 
 
+def _index_is_stale(index_file: Path | None, max_age_days: int) -> bool:
+    """True when an existing index file is older than ``max_age_days``."""
+    if index_file is None:
+        return False
+    try:
+        if not index_file.exists():
+            return False
+        import time
+
+        age_days = (time.time() - index_file.stat().st_mtime) / 86400.0
+        return age_days > max_age_days
+    except OSError:
+        return False
+
+
+def _maybe_refresh_index(
+    index: dict[str, Any] | None,
+    index_file: Path | None,
+    year: int | None,
+    config: Any,
+) -> tuple[dict[str, Any] | None, Path | None]:
+    """Rebuild the docs index if an existing one is stale and the config allows.
+
+    Only acts on an index file that exists but is older than
+    ``docs_index_max_age_days`` — a *missing* index is left to the caller's
+    ``auto_discover_if_missing`` opt-in. Returns the (possibly refreshed)
+    ``(index, index_file)``. A no-op without win32com / SolidWorks, or when
+    ``config.docs_index_auto_refresh`` is off; any failure leaves the original
+    index untouched.
+    """
+    if not getattr(config, "docs_index_auto_refresh", False):
+        return index, index_file
+    max_age = int(getattr(config, "docs_index_max_age_days", 21) or 21)
+    if not _index_is_stale(index_file, max_age):
+        return index, index_file
+    if not (HAS_WIN32COM and platform.system() == "Windows"):
+        return index, index_file
+    try:
+        logger.info(
+            "Docs index missing or older than {} days; rebuilding via "
+            "discover_solidworks_docs",
+            max_age,
+        )
+        discovery = SolidWorksDocsDiscovery()
+        fresh = discovery.discover_all()
+        filename = (
+            f"solidworks_docs_index_{year}.json"
+            if year
+            else "solidworks_docs_index.json"
+        )
+        fresh_file = discovery.save_index(filename=filename)
+        return fresh, fresh_file or index_file
+    except Exception as exc:  # noqa: BLE001 - keep serving the stale index
+        logger.warning("Docs index auto-refresh failed, using existing index: {}", exc)
+        return index, index_file
+
+
 def _search_index(
     index: dict[str, Any], query: str, max_results: int
 ) -> list[dict[str, Any]]:
@@ -1277,6 +1334,9 @@ async def register_docs_discovery_tools(
             index_file = _find_index_file(year, normalized.index_file)
             index = _load_index_file(index_file) if index_file else None
 
+            # Rebuild when stale (config-gated), or when missing and the caller
+            # opted in.
+            index, index_file = _maybe_refresh_index(index, index_file, year, config)
             if index is None and normalized.auto_discover_if_missing:
                 if HAS_WIN32COM and platform.system() == "Windows":
                     discovery = SolidWorksDocsDiscovery()
@@ -1335,6 +1395,9 @@ async def register_docs_discovery_tools(
         resolved_year = _resolve_solidworks_year(requested_year, config)
         index_file = _find_index_file(resolved_year, explicit_index_file)
         index = _load_index_file(index_file) if index_file else None
+        index, index_file = _maybe_refresh_index(
+            index, index_file, resolved_year, config
+        )
         return index, index_file, resolved_year
 
     @mcp.tool()  # type: ignore[untyped-decorator]
