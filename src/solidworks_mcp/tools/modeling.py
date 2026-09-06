@@ -318,6 +318,23 @@ class SetDimensionInput(CompatInput):
             raise ValueError("name is required")
 
 
+class SetUnitsInput(CompatInput):
+    """Input schema for setting the active document's unit system.
+
+    Attributes:
+        unit_system (str): Target linear unit - ``mm``, ``cm``, ``m``, ``in``
+            or ``ft`` (aliases such as ``inch`` / ``millimeters`` accepted).
+    """
+
+    unit_system: str = Field(
+        description="Linear unit system: mm, cm, m, in, or ft"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.unit_system.strip():
+            raise ValueError("unit_system is required")
+
+
 class CloseModelInput(BaseModel):
     """Input schema for closing a model.
 
@@ -429,6 +446,26 @@ class SuppressFeatureInput(CompatInput):
     suppress: bool = Field(
         default=True, description="True to suppress, False to unsuppress"
     )
+
+
+class RenameFeatureInput(CompatInput):
+    """Input schema for renaming a feature.
+
+    Attributes:
+        old_name (str): Current feature name.
+        new_name (str): New feature name.
+    """
+
+    old_name: str = Field(description="Current feature name, e.g. 'Fillet1'")
+    new_name: str = Field(
+        description="New feature name, e.g. 'MountingEdgeFillet'"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.old_name.strip():
+            raise ValueError("old_name is required")
+        if not self.new_name.strip():
+            raise ValueError("new_name is required")
 
 
 class UndoInput(CompatInput):
@@ -1231,6 +1268,49 @@ async def register_modeling_tools(
             }
 
     @mcp.tool()
+    async def set_units(input_data: SetUnitsInput) -> dict[str, Any]:
+        """Set the active document's linear unit system.
+
+        Accepts ``mm``, ``cm``, ``m``, ``in`` or ``ft`` (plus common aliases
+        such as ``inch`` or ``millimeters``). The setting is applied and then
+        read back from the document; if the readback disagrees the tool
+        reports an error rather than a false success.
+
+        Args:
+            input_data (SetUnitsInput): The target unit system.
+
+        Returns:
+            dict[str, Any]: Status and what was applied.
+
+        Example:
+            ```python
+            await set_units({"unit_system": "in"})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, SetUnitsInput)
+            result = await adapter.set_units(input_data.unit_system)
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                applied = data.get("unit_system", input_data.unit_system)
+                message = f"Set document units to {applied}"
+                if data.get("verified") is None:
+                    message += " (could not be read back to confirm)"
+                return {
+                    "status": "success",
+                    "message": message,
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to set units: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in set_units tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
     async def create_cut_extrude(input_data: CreateCutExtrudeInput) -> dict[str, Any]:
         """Cut material from the active model using the current sketch profile.
 
@@ -1686,6 +1766,60 @@ async def register_modeling_tools(
             }
         except Exception as e:
             logger.error(f"Error in suppress_feature tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def rename_feature(input_data: RenameFeatureInput) -> dict[str, Any]:
+        """Rename a feature on the feature tree.
+
+        SolidWorks silently refuses a rename onto a name another feature
+        already uses, so the new name is read back and a mismatch is reported
+        as an error rather than a quiet success. Renaming a feature to its
+        current name is a no-op success.
+
+        Args:
+            input_data (RenameFeatureInput): The feature and its new name.
+
+        Returns:
+            dict[str, Any]: Status and the old and new names.
+
+        Example:
+            ```python
+            await rename_feature({"old_name": "Fillet1", "new_name": "EdgeBreak"})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, RenameFeatureInput)
+            result = await adapter.rename_feature(
+                input_data.old_name, input_data.new_name
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                if data.get("renamed") is False:
+                    return {
+                        "status": "success",
+                        "message": (
+                            f"{input_data.old_name} unchanged: "
+                            + str(data.get("reason") or "no change")
+                        ),
+                        "data": data,
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "success",
+                    "message": (
+                        f"Renamed {data.get('old_name', input_data.old_name)} to "
+                        f"{data.get('new_name', input_data.new_name)}"
+                    ),
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to rename feature: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in rename_feature tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     @mcp.tool()

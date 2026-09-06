@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> Version history splits in two: the `3.x` entries at the bottom are the
+> original TypeScript/winax implementation. The project is now a Python +
+> pywin32 MCP server and restarted its own versioning at `1.0.0`; `1.x`
+> entries are the current line.
+
+## [1.1.0] - 2026-09-06
+
+Minor release — new tools, all additive and backward compatible.
+
+### Added
+
+- **`rename_feature` tool** (#59) — rename a feature on the tree via the
+  settable `IFeature.Name` property, with read-back verification and a
+  name-collision guard. Wired through every adapter layer with mock + tool
+  tests and `tests/test_live_sw_wave2.py`; verified live against SW 2026.
+- **`set_units` tool** (#60) — set the document linear unit system
+  (`mm`/`cm`/`m`/`in`/`ft`, plus aliases). Sets `swUnitSystem` and reads it
+  back from the document to confirm adoption; the swconst integers were
+  transcribed from a live `swconst.tlb` (the published API help omits them).
+  `create_part`'s previously-ignored `units` parameter now routes through
+  the same helper.
+- **`list_open_documents` / `activate_document` tools** (#61) —
+  `list_open_documents` is a read-only `ISldWorks.GetDocuments` enumeration
+  (`title`, `path`, `type`, `is_active`); `activate_document` resolves a
+  target by title / path / file name, calls `ActivateDoc3`, and verifies
+  against `ActiveDoc`.
+- **Granular API-lookup tools** (#64) — `lookup_api_method`,
+  `lookup_api_interface`, `find_related_api_members` in the docs-discovery
+  layer (`lookup_api_enum` split to a follow-up).
+- **SoC `script_line` capture** (#28) — every `ToolCallRecord` now stores the
+  rendered SolidWorks-as-Code line at write time; a startup `ALTER TABLE`
+  check backfills the column on existing local databases.
+- **Config toggles** — `SOLIDWORKS_MCP_SOC_LOGGING_ENABLED` (off by default)
+  and `SOLIDWORKS_MCP_DOCS_INDEX_AUTO_REFRESH` (on, 21-day staleness).
+
+### Fixed
+
+- Tools that read `adapter.currentModel` now resync from `ISldWorks.ActiveDoc`
+  first (shared `_sync_current_model_from_active`, factored out of the #91
+  fix), so `set_units` / `rename_feature` / `get_model_info` work for
+  documents opened in the SolidWorks UI rather than through a tool.
+
 ## [3.1.0] - 2026-03-11
 
 ### Fixed

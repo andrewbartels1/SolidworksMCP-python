@@ -1,6 +1,6 @@
-# Tool Catalog — All 125 Tools
+# Tool Catalog — All 129 Tools
 
-This reference documents all **125 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **129 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -9,13 +9,13 @@ Each section covers one functional category with parameter tables and copy-paste
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Modeling Tools](modeling.md) | 11 | Create and manipulate SolidWorks parts, assemblies, and drawings, including sketches, extrusions, revolves, and assemblies. |
+| [Modeling Tools](modeling.md) | 11 | Create and manipulate SolidWorks parts, assemblies, and drawings — sketches, extrusions, revolves, dimensions, feature renaming, and the document unit system. |
 | [Sketching Tools](sketching.md) | 19 | Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply geometric constraints and dimensions. |
 | [Drawing Tools](drawing.md) | 12 | Create and edit 2-D technical drawings: add projected, section, and detail views, place annotations, and auto-dimension layouts. |
 | [Drawing Analysis Tools](drawing-analysis.md) | 8 | Quality-gate your drawings by analyzing dimensions, annotations, view coverage, standards compliance, and completeness. |
 | [Analysis Tools](analysis.md) | 5 | Extract engineering properties from models, including mass, volume, center of mass, inertia, and material metadata. |
 | [Export Tools](export.md) | 7 | Convert SolidWorks models to industry-standard interchange and manufacturing formats such as STEP, IGES, STL, DWG, PDF, and images. |
-| [File Management Tools](file-management.md) | 14 | Open, save, and manage SolidWorks documents; load parts and assemblies, save variants, inspect model metadata, and classify model families. |
+| [File Management Tools](file-management.md) | 17 | Open, save, and manage SolidWorks documents; load parts and assemblies, switch the active document, enumerate what's open, inspect model metadata, and classify model families. |
 | [Automation Tools](automation.md) | 8 | Orchestrate multi-step workflows, run batch file processing, manage design tables, and tune performance settings. |
 | [VBA Generation Tools](vba-generation.md) | 10 | Generate and execute VBA macro code for operations that exceed direct COM call complexity or require procedural automation. |
 | [Template Management Tools](template-management.md) | 6 | Create, extract, apply, compare, and manage SolidWorks document templates in a reusable library workflow. |

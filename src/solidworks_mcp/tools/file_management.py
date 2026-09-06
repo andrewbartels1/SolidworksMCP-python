@@ -266,6 +266,26 @@ class ClassifyFeatureTreeInput(CompatInput):
     )
 
 
+class ActivateDocumentInput(CompatInput):
+    """Input schema for activating an already-open document.
+
+    Attributes:
+        title_or_path (str): Window title, full path, or file name of a
+            document that is already open in SolidWorks.
+    """
+
+    title_or_path: str = Field(
+        description=(
+            "Window title (e.g. 'bracket.SLDPRT'), full path, or bare file "
+            "name of a document that is already open"
+        )
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.title_or_path.strip():
+            raise ValueError("title_or_path is required")
+
+
 async def register_file_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -1613,5 +1633,91 @@ async def register_file_management_tools(
             logger.error(f"Error in pack_and_go_assembly tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 15  # Total number of registered tools in this module
+    @mcp.tool()
+    async def list_open_documents() -> dict[str, Any]:
+        """List every SolidWorks document that is currently open.
+
+        Read-only — does not change which document is active. Use it to
+        discover what is open (an assembly plus its parts, a drawing plus its
+        model) before switching with ``activate_document``.
+
+        Returns:
+            dict[str, Any]: ``status`` and ``documents`` — a list of
+            ``{title, path, type, is_active}`` entries, plus ``count``.
+
+        Example:
+            ```python
+            await list_open_documents()
+            ```
+        """
+        try:
+            result = await adapter.list_open_documents()
+            if result.is_success:
+                docs = result.data if isinstance(result.data, list) else []
+                active = next(
+                    (d.get("title") for d in docs if d.get("is_active")), None
+                )
+                return {
+                    "status": "success",
+                    "message": (
+                        f"{len(docs)} document(s) open"
+                        + (f"; active: {active}" if active else "")
+                    ),
+                    "documents": docs,
+                    "count": len(docs),
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to list open documents: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in list_open_documents tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def activate_document(
+        input_data: ActivateDocumentInput,
+    ) -> dict[str, Any]:
+        """Switch which open document is the active one.
+
+        Matches the argument against open documents by title, full path, or
+        file name (case-insensitive), calls ``ActivateDoc3``, and reads the
+        active document back to confirm the switch took.
+
+        Args:
+            input_data (ActivateDocumentInput): Which document to activate.
+
+        Returns:
+            dict[str, Any]: Status and the title switched to.
+
+        Example:
+            ```python
+            await activate_document({"title_or_path": "bracket.SLDPRT"})
+            ```
+        """
+        try:
+            input_data = _coerce_input(ActivateDocumentInput, input_data)
+            result = await adapter.activate_document(input_data.title_or_path)
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                activated = data.get("activated", input_data.title_or_path)
+                message = f"Activated {activated}"
+                if data.get("verified") is None:
+                    message += " (could not be read back to confirm)"
+                return {
+                    "status": "success",
+                    "message": message,
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to activate document: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in activate_document tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 17  # Total number of registered tools in this module
     return tool_count

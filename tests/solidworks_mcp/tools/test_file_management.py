@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 
 from solidworks_mcp.tools.file_management import (
+    ActivateDocumentInput,
     FileOperationInput,
     FormatConversionInput,
     SaveAsInput,
@@ -291,6 +292,103 @@ class TestFileManagementTools:
         )
         assert batch_result["status"] == "error"
         assert "does not support batch_file_operations" in batch_result["message"]
+
+    @pytest.mark.asyncio
+    async def test_list_open_documents_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """list_open_documents returns the open docs and names the active one."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "list_open_documents"
+        )
+        result = await tool_func()
+
+        assert result["status"] == "success"
+        assert result["count"] == 2
+        assert sum(1 for d in result["documents"] if d["is_active"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_list_open_documents_surfaces_adapter_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A failed adapter result surfaces the adapter's error message."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.list_open_documents = AsyncMock(
+            return_value=Mock(is_success=False, error="Not connected to SolidWorks")
+        )
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "list_open_documents"
+        )
+        result = await tool_func()
+
+        assert result["status"] == "error"
+        assert "Not connected to SolidWorks" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_activate_document_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """activate_document switches the active document by title."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        first = await mock_adapter.create_part()
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "activate_document"
+        )
+        result = await tool_func(
+            ActivateDocumentInput(title_or_path=first.data.name)
+        )
+
+        assert result["status"] == "success"
+        assert result["data"]["activated"] == first.data.name
+
+    @pytest.mark.asyncio
+    async def test_activate_document_unknown_is_an_error(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """Activating a document that is not open surfaces an error."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "activate_document"
+        )
+        result = await tool_func(
+            ActivateDocumentInput(title_or_path="ghost.SLDPRT")
+        )
+
+        assert result["status"] == "error"
+        assert "No open document matches" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_activate_document_error_when_adapter_lacks_capability(
+        self, mcp_server, mock_config
+    ):
+        """A bare object() adapter has no activate_document - report error."""
+        await register_file_management_tools(mcp_server, object(), mock_config)
+        tool_func = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "activate_document"
+        )
+        result = await tool_func(
+            ActivateDocumentInput(title_or_path="whatever.SLDPRT")
+        )
+        assert result["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_save_file_exception_path(

@@ -457,6 +457,247 @@ def _as_com(adapter: Any, obj: Any, interface: str) -> Any:
     return wrapped
 
 
+# --- Document unit system -------------------------------------------------
+# swUserPreferenceIntegerValue_e - values transcribed from swconst.tlb on a
+# live SW 2026 (3DEXPERIENCE R2026x) install; the published API help does not
+# print the integers and they are NOT the "obvious" small numbers.
+_SW_PREF_UNIT_SYSTEM = 263
+_SW_PREF_UNITS_LINEAR = 47
+_SW_PREF_UNITS_LINEAR_DECIMALS = 49
+# swUserPreferenceOption_e.swDetailingNoOptionSpecified
+_SW_PREF_OPTION_NONE = 0
+# swUnitSystem_e.swUnitSystem_Custom
+_SW_UNIT_SYSTEM_CUSTOM = 4
+
+# unit-system token -> (swUnitSystem_e, swLengthUnit_e)
+#   swUnitSystem_e: CGS=1 MKS=2 IPS=3 Custom=4 MMGS=5
+#   swLengthUnit_e: swMM=0 swCM=1 swMETER=2 swINCHES=3 swFEET=4
+_SW_UNIT_SYSTEMS: dict[str, tuple[int, int]] = {
+    "mm": (5, 0),
+    "cm": (1, 1),
+    "m": (2, 2),
+    "in": (3, 3),
+    "ft": (4, 4),
+}
+# Accepted aliases normalised to the canonical token above.
+_SW_UNIT_ALIASES: dict[str, str] = {
+    "mm": "mm",
+    "millimeter": "mm",
+    "millimeters": "mm",
+    "millimetre": "mm",
+    "millimetres": "mm",
+    "cm": "cm",
+    "centimeter": "cm",
+    "centimeters": "cm",
+    "m": "m",
+    "meter": "m",
+    "meters": "m",
+    "metre": "m",
+    "metres": "m",
+    "in": "in",
+    "inch": "in",
+    "inches": "in",
+    '"': "in",
+    "ft": "ft",
+    "foot": "ft",
+    "feet": "ft",
+    "'": "ft",
+}
+
+
+def _normalise_unit_system(unit_system: str) -> str | None:
+    """Map a user-supplied unit token onto a canonical key of ``_SW_UNIT_SYSTEMS``.
+
+    Args:
+        unit_system: e.g. ``"mm"``, ``"inch"``, ``"Millimeters"``.
+
+    Returns:
+        str | None: ``"mm" | "cm" | "m" | "in" | "ft"``, or ``None`` when
+        the token is not recognised.
+    """
+    return _SW_UNIT_ALIASES.get((unit_system or "").strip().lower())
+
+
+def _pref_int(adapter: Any, ext: Any, pref: int) -> int | None:
+    """Read one ``IModelDocExtension`` integer user preference.
+
+    Args:
+        adapter: A connected adapter (for ``_attempt``).
+        ext: The document's ``IModelDocExtension`` dispatch.
+        pref: A ``swUserPreferenceIntegerValue_e`` value.
+
+    Returns:
+        int | None: The preference value, or ``None`` when the COM call
+        fails or returns a non-numeric result.
+    """
+    value = adapter._attempt(
+        lambda: ext.GetUserPreferenceInteger(pref, _SW_PREF_OPTION_NONE),
+        default=None,
+    )
+    return int(value) if isinstance(value, (int, float)) else None
+
+
+def _apply_unit_system(adapter: Any, model: Any, unit_system: str) -> dict[str, Any]:
+    """Set a document's linear unit system and confirm it actually took.
+
+    ``IModelDocExtension::SetUserPreferenceInteger`` accepts the
+    ``swUnitSystem`` write and returns quietly even on builds where the
+    document's unit system does not move (observed on SW 2026 / 3DEXPERIENCE
+    against an assembly). The change is therefore verified by reading the
+    *unit-system preference itself* (``swUnitSystem`` = slot 263) back after
+    a rebuild - not the ``swUnitsLinear`` slot, which echoes whatever was
+    written regardless of whether the document honoured it.
+
+    For the ``mm`` / ``cm`` / ``m`` / ``in`` presets only ``swUnitSystem`` is
+    set and the preset drives the linear unit. ``ft`` has no preset, so it is
+    applied as ``swUnitSystem_Custom`` plus an explicit ``swUnitsLinear``.
+
+    Args:
+        adapter: A connected adapter.
+        model: The ``IModelDoc2`` to modify.
+        unit_system: Already-normalised token (key of ``_SW_UNIT_SYSTEMS``).
+
+    Returns:
+        dict[str, Any]: ``unit_system``; ``applied_unit_system`` /
+        ``applied_length_unit`` (the swUnitSystem_e / swLengthUnit_e targets);
+        ``observed_unit_system`` / ``observed_length_unit`` (what the document
+        reports afterwards); ``set_call_ok`` (bool the COM call returned);
+        and ``verified`` (``True`` only when the document's own unit-system
+        preference now equals the target; ``None`` when it could not be read).
+
+    Raises:
+        Exception: When the extension is unavailable, or the readback shows
+            the document did not adopt the requested unit system.
+    """
+    system_value, length_value = _SW_UNIT_SYSTEMS[unit_system]
+    is_custom = system_value == _SW_UNIT_SYSTEM_CUSTOM
+    ext = adapter._attempt(lambda: model.Extension, default=None)
+    if ext is None:
+        raise Exception("Document has no Extension; cannot set units")
+
+    before_system = _pref_int(adapter, ext, _SW_PREF_UNIT_SYSTEM)
+    before_linear = _pref_int(adapter, ext, _SW_PREF_UNITS_LINEAR)
+
+    set_system_ok = adapter._attempt(
+        lambda: ext.SetUserPreferenceInteger(
+            _SW_PREF_UNIT_SYSTEM, _SW_PREF_OPTION_NONE, system_value
+        ),
+        default=None,
+    )
+    set_linear_ok: Any = None
+    if is_custom:
+        set_linear_ok = adapter._attempt(
+            lambda: ext.SetUserPreferenceInteger(
+                _SW_PREF_UNITS_LINEAR, _SW_PREF_OPTION_NONE, length_value
+            ),
+            default=None,
+        )
+
+    # Nudge SolidWorks to apply and to flag the document dirty.
+    adapter._attempt(lambda: model.EditRebuild3(), default=None)
+    adapter._attempt(lambda: model.GraphicsRedraw2(), default=None)
+    adapter._attempt(lambda: model.SetSaveFlag(), default=None)
+
+    after_system = _pref_int(adapter, ext, _SW_PREF_UNIT_SYSTEM)
+    after_linear = _pref_int(adapter, ext, _SW_PREF_UNITS_LINEAR)
+
+    if after_system is None:
+        verified: bool | None = None
+    else:
+        verified = after_system == system_value
+        if is_custom and verified:
+            verified = after_linear == length_value
+
+    result = {
+        "unit_system": unit_system,
+        "applied_unit_system": system_value,
+        "applied_length_unit": length_value,
+        "observed_unit_system": after_system,
+        "observed_length_unit": after_linear,
+        "unit_system_before": before_system,
+        "length_unit_before": before_linear,
+        "set_call_ok": bool(set_system_ok) if set_system_ok is not None else None,
+        "set_linear_call_ok": (
+            bool(set_linear_ok) if set_linear_ok is not None else None
+        ),
+        "verified": verified,
+    }
+
+    if verified is False:
+        raise Exception(
+            f"Unit system '{unit_system}' (swUnitSystem={system_value}) was not "
+            f"adopted: SetUserPreferenceInteger returned {result['set_call_ok']!r}, "
+            f"and the document still reports swUnitSystem={after_system}, "
+            f"swUnitsLinear={after_linear} (was {before_system}/{before_linear})."
+        )
+
+    return result
+
+
+# --- Open-document enumeration ------------------------------------------
+_DOC_TYPE_NAMES: dict[int, str] = {1: "Part", 2: "Assembly", 3: "Drawing"}
+
+
+def _coerce_dispatch_sequence(raw: Any) -> list[Any]:
+    """Normalise ``ISldWorks::GetDocuments`` output into a list of dispatches.
+
+    Depending on the SolidWorks build and how many documents are open,
+    ``GetDocuments`` returns ``None``, a single ``IModelDoc2``, or a
+    tuple/list of them.
+
+    Args:
+        raw: Whatever ``GetDocuments()`` returned.
+
+    Returns:
+        list[Any]: Zero or more non-``None`` dispatches.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, (list, tuple)):
+        return [d for d in raw if d is not None]
+    return [raw]
+
+
+def _describe_open_document(
+    adapter: Any,
+    doc: Any,
+    active_title: str | None,
+    active_path: str | None,
+) -> dict[str, Any]:
+    """Summarise one open document: title, path, type and whether it is active.
+
+    Args:
+        adapter: A connected adapter (for ``_get_attr_or_call``).
+        doc: An ``IModelDoc2`` dispatch.
+        active_title: Title of ``ISldWorks::ActiveDoc``, if known.
+        active_path: Path of ``ISldWorks::ActiveDoc``, if known.
+
+    Returns:
+        dict[str, Any]: ``title``, ``path``, ``type`` and ``is_active``.
+    """
+    title = adapter._attempt(
+        lambda: adapter._get_attr_or_call(doc, "GetTitle"), default=None
+    )
+    path = adapter._attempt(
+        lambda: adapter._get_attr_or_call(doc, "GetPathName"), default=None
+    )
+    type_raw = adapter._attempt(
+        lambda: adapter._get_attr_or_call(doc, "GetType"), default=None
+    )
+    type_name = _DOC_TYPE_NAMES.get(
+        int(type_raw) if isinstance(type_raw, (int, float)) else -1, "Unknown"
+    )
+    is_active = False
+    if title and active_title:
+        is_active = str(title) == str(active_title)
+    elif path and active_path:
+        is_active = str(path).lower() == str(active_path).lower()
+    return {
+        "title": str(title) if title else None,
+        "path": str(path) if path else "",
+        "type": type_name,
+        "is_active": is_active,
+    }
 
 
 class SolidWorksIOMixin:
@@ -538,6 +779,40 @@ class SolidWorksIOMixin:
             return title_value
 
         return "Untitled"
+
+    def _sync_current_model_from_active(self) -> Any:
+        """Point ``adapter.currentModel`` at ``ISldWorks::ActiveDoc``.
+
+        The adapter only tracks ``currentModel`` for documents opened or
+        activated *through* a tool this session. When the user opens or
+        switches documents in the SolidWorks UI, ``currentModel`` goes stale
+        (or stays ``None``), so any tool that reads it first must resync -
+        exactly what ``get_model_info`` already does after issue #91.
+
+        ``ActiveDoc`` is a fresh, unflagged dispatch; it is flagged for its
+        document type here so downstream zero-arg accessors (``GetTitle`` and
+        friends) resolve as methods rather than property values that then
+        raise when called (COM pitfall #5).
+
+        Returns:
+            Any: The active document dispatch, or ``None`` when nothing is
+            open.
+        """
+        adapter = self._adapter(self)
+        active_model = (
+            getattr(adapter.swApp, "ActiveDoc", None) if adapter.swApp else None
+        )
+        if active_model is not None:
+            doc_type = adapter._get_attr_or_call(active_model, "GetType")
+            adapter._attempt(
+                lambda: _sw_type_info.flag_doc(
+                    active_model,
+                    int(doc_type) if isinstance(doc_type, (int, float)) else 1,
+                ),
+                default=0,
+            )
+            adapter.currentModel = active_model
+        return adapter.currentModel
 
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Open a SolidWorks model file and set it as active on the adapter.
@@ -684,7 +959,11 @@ class SolidWorksIOMixin:
 
         Args:
             name: Reserved for future naming policy.
-            units: Reserved for future units policy.
+            units: Optional linear unit system for the new part - ``mm``,
+                ``cm``, ``m``, ``in`` or ``ft`` (aliases such as ``inch``
+                accepted). Applied after creation; the outcome is recorded
+                under ``properties["units"]`` (or ``properties["units_error"]``
+                if it could not be applied). An unrecognised token is an error.
 
         Returns:
             AdapterResult[SolidWorksModel]: Metadata for the new part document.
@@ -695,9 +974,21 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
+        unit_token: str | None = None
+        if units is not None and str(units).strip():
+            unit_token = _normalise_unit_system(str(units))
+            if unit_token is None:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Unrecognised units {units!r}. "
+                        "Expected one of: mm, cm, m, in, ft."
+                    ),
+                )
+
         def _create() -> SolidWorksModel:
             """Create a new part."""
-            _ = name, units
+            _ = name
             model = None
             app = adapter.swApp
             if app is None:
@@ -719,13 +1010,23 @@ class SolidWorksIOMixin:
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 1), default=0)
             adapter.currentModel = model
             title = self._read_model_title(model)
+            properties: dict[str, Any] = {"created": datetime.now().isoformat()}
+            if unit_token is not None:
+                # A units failure must not lose the part that was just made;
+                # record it and carry on.
+                try:
+                    properties["units"] = _apply_unit_system(
+                        adapter, model, unit_token
+                    )
+                except Exception as exc:  # noqa: BLE001 - surfaced, not raised
+                    properties["units_error"] = str(exc)
             return SolidWorksModel(
                 path="",
                 name=title,
                 type="Part",
                 is_active=True,
                 configuration="Default",
-                properties={"created": datetime.now().isoformat()},
+                properties=properties,
             )
 
         return cast(
@@ -929,6 +1230,48 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("set_dimension", _set),
         )
 
+    async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
+        """Set the active document's linear unit system.
+
+        Accepts ``mm``, ``cm``, ``m``, ``in`` or ``ft`` (plus common aliases
+        such as ``inch`` / ``millimeters``). The choice is applied by setting
+        both ``swUnitSystem`` and the exact ``swUnitsLinear`` preference, then
+        reading the linear unit back - a mismatch is reported as an error.
+
+        Args:
+            unit_system: The target unit token.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: What was applied and whether the
+            readback confirmed it. ``ERROR`` when there is no active model or
+            the token is not recognised.
+        """
+        adapter = self._adapter(self)
+        # Resync from ActiveDoc in case the user switched documents in the UI.
+        self._sync_current_model_from_active()
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+
+        token = _normalise_unit_system(unit_system)
+        if token is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unrecognised unit system {unit_system!r}. "
+                    "Expected one of: mm, cm, m, in, ft."
+                ),
+            )
+
+        def _apply() -> dict[str, Any]:
+            return _apply_unit_system(adapter, adapter.currentModel, token)
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("set_units", _apply),
+        )
+
     async def save_file(self, file_path: str | None = None) -> AdapterResult[None]:
         """Save the active model to its current path or to a new file path.
 
@@ -1060,20 +1403,9 @@ class SolidWorksIOMixin:
             AdapterResult[dict[str, Any]]: Model information payload.
         """
         adapter = self._adapter(self)
-        active_model = (
-            getattr(adapter.swApp, "ActiveDoc", None) if adapter.swApp else None
-        )
-        if active_model is not None:
-            # ActiveDoc is a fresh, unflagged dispatch. Flag it now so every
-            # downstream tool that reads a zero-arg accessor off currentModel
-            # (GetTitle, Save, ...) gets a method, not a property value that
-            # then blows up when called (COM pitfall #5 / issue #91).
-            doc_type = adapter._get_attr_or_call(active_model, "GetType")
-            adapter._attempt(
-                lambda: _sw_type_info.flag_doc(active_model, int(doc_type or 1)),
-                default=0,
-            )
-            adapter.currentModel = active_model
+        # Resync from ActiveDoc: the user may have opened or switched
+        # documents in the SolidWorks UI since the last tool call (issue #91).
+        self._sync_current_model_from_active()
         if not adapter.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
@@ -1126,6 +1458,187 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("get_model_info", _get_info),
+        )
+
+    async def list_open_documents(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Enumerate every document currently open in SolidWorks.
+
+        Read-only: uses ``ISldWorks::GetDocuments`` and does not touch the
+        active-document selection. Each entry carries ``title``, ``path``,
+        ``type`` (``Part`` / ``Assembly`` / ``Drawing`` / ``Unknown``) and
+        ``is_active``.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: One entry per open document
+            (possibly empty). ``ERROR`` only when not connected.
+        """
+        adapter = self._adapter(self)
+        if not adapter.is_connected():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
+            )
+
+        def _list() -> list[dict[str, Any]]:
+            app = adapter.swApp
+            if app is None:
+                raise Exception("SolidWorks application is not connected")
+
+            docs = _coerce_dispatch_sequence(
+                adapter._attempt(lambda: app.GetDocuments(), default=None)
+            )
+            active = (
+                adapter._attempt(lambda: getattr(app, "ActiveDoc", None), default=None)
+            )
+            active_title = (
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(active, "GetTitle"), default=None
+                )
+                if active is not None
+                else None
+            )
+            active_path = (
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(active, "GetPathName"),
+                    default=None,
+                )
+                if active is not None
+                else None
+            )
+            return [
+                _describe_open_document(adapter, d, active_title, active_path)
+                for d in docs
+            ]
+
+        return cast(
+            AdapterResult[list[dict[str, Any]]],
+            adapter._handle_com_operation("list_open_documents", _list),
+        )
+
+    async def activate_document(
+        self, title_or_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make an already-open document the active one.
+
+        Matches ``title_or_path`` against the open documents by exact title,
+        by full path, or by file name (all case-insensitive), then calls
+        ``ISldWorks::ActivateDoc3`` and updates the adapter's tracked
+        ``currentModel``. The resulting ``ActiveDoc`` is read back and a
+        mismatch is reported as an error.
+
+        Args:
+            title_or_path: A window title (``"bracket.SLDPRT"``), a full path,
+                or a bare file name of a document that is already open.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``activated`` (the title switched
+            to) and ``verified`` (bool, or ``None`` when the readback could
+            not be performed). ``ERROR`` when not connected, the argument is
+            blank, or nothing open matches.
+        """
+        adapter = self._adapter(self)
+        if not adapter.is_connected():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
+            )
+        target = (title_or_path or "").strip()
+        if not target:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="title_or_path is required"
+            )
+
+        def _activate() -> dict[str, Any]:
+            app = adapter.swApp
+            if app is None:
+                raise Exception("SolidWorks application is not connected")
+
+            docs = _coerce_dispatch_sequence(
+                adapter._attempt(lambda: app.GetDocuments(), default=None)
+            )
+            needle = target.lower()
+            match: Any = None
+            match_title: str | None = None
+            open_titles: list[str] = []
+            for doc in docs:
+                title = adapter._attempt(
+                    lambda d=doc: adapter._get_attr_or_call(d, "GetTitle"),
+                    default=None,
+                )
+                path = adapter._attempt(
+                    lambda d=doc: adapter._get_attr_or_call(d, "GetPathName"),
+                    default=None,
+                )
+                if title:
+                    open_titles.append(str(title))
+                candidates = {
+                    str(title).lower() if title else "",
+                    str(path).lower() if path else "",
+                    Path(str(path)).name.lower() if path else "",
+                }
+                candidates.discard("")
+                if needle in candidates:
+                    match = doc
+                    match_title = str(title) if title else None
+                    break
+
+            if match is None:
+                raise Exception(
+                    f"No open document matches {target!r}. Open: "
+                    + (", ".join(open_titles) or "none")
+                )
+            if not match_title:
+                match_title = adapter._attempt(
+                    lambda: adapter._get_attr_or_call(match, "GetTitle"), default=None
+                )
+            if not match_title:
+                raise Exception(
+                    "Matched an open document but could not read its title to "
+                    "activate it"
+                )
+
+            activated = adapter._attempt(
+                lambda: app.ActivateDoc3(match_title, False, 0, _byref_int()),
+                default=None,
+            )
+            model = activated or adapter._attempt(
+                lambda: getattr(app, "ActiveDoc", None), default=None
+            )
+            if model is not None:
+                type_raw = adapter._attempt(
+                    lambda: adapter._get_attr_or_call(model, "GetType"), default=1
+                )
+                adapter._attempt(
+                    lambda: _sw_type_info.flag_doc(
+                        model, int(type_raw) if isinstance(type_raw, (int, float)) else 1
+                    ),
+                    default=0,
+                )
+                adapter.currentModel = model
+
+            active_after = adapter._attempt(
+                lambda: getattr(app, "ActiveDoc", None), default=None
+            )
+            now_title = (
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(active_after, "GetTitle"),
+                    default=None,
+                )
+                if active_after is not None
+                else None
+            )
+            if now_title is None:
+                verified: bool | None = None
+            else:
+                verified = str(now_title) == str(match_title)
+                if not verified:
+                    raise Exception(
+                        f"Requested {match_title!r} but ActiveDoc is "
+                        f"{now_title!r} after ActivateDoc3; activation did not take."
+                    )
+            return {"activated": str(match_title), "verified": verified}
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("activate_document", _activate),
         )
 
     async def list_configurations(self) -> AdapterResult[list[str]]:

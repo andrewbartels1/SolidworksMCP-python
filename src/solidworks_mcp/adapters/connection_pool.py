@@ -1017,6 +1017,47 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "set_dimension", lambda adapter: adapter.set_dimension(name, value)
         )
 
+    async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
+        """Set document units using pool.
+
+        Args:
+            unit_system (str): One of ``mm``, ``cm``, ``m``, ``in``, ``ft``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "set_units", lambda adapter: adapter.set_units(unit_system)
+        )
+
+    async def list_open_documents(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List open documents using pool.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: The result produced by the
+            operation.
+        """
+        return await self._execute_with_pool(
+            "list_open_documents", lambda adapter: adapter.list_open_documents()
+        )
+
+    async def activate_document(
+        self, title_or_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Activate an open document using pool.
+
+        Args:
+            title_or_path (str): Title, full path, or file name of an open
+                document.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "activate_document",
+            lambda adapter: adapter.activate_document(title_or_path),
+        )
+
     # Assembly operations
 
     async def insert_component(
@@ -1160,6 +1201,23 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         return await self._execute_with_pool(
             "suppress_feature",
             lambda adapter: adapter.suppress_feature(name, suppress),
+        )
+
+    async def rename_feature(
+        self, old_name: str, new_name: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rename a feature using pool.
+
+        Args:
+            old_name (str): Current feature name.
+            new_name (str): New feature name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "rename_feature",
+            lambda adapter: adapter.rename_feature(old_name, new_name),
         )
 
     async def undo(self, count: int = 1) -> AdapterResult[dict[str, Any]]:
