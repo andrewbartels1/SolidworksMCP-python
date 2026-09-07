@@ -15,13 +15,21 @@ adapter fixture / scratch-doc cleanup in each file, they live here:
   closes only the never-saved documents a test created and deletes only the
   files it wrote - safe against a SolidWorks session with real work open.
 
-Making the live calls lighter was investigated and did not pan out: toggling
-``swApp.Visible`` off cost more than it saved (each show/hide forces a full
-window relayout), and turning off the render passes (RealView, shadows,
-ambient occlusion, edge AA) plus ``VerifyOnRebuild`` showed no measurable
-change. The time is in ``create_part`` (default-template load, ~5 s) and the
-geometry-kernel rebuilds - both SolidWorks-internal. A fresh SolidWorks helps
-more than any preference: a long session (many connects, a crash/relaunch)
+**Headless (opt-in, off by default).** Set ``SOLIDWORKS_MCP_HEADLESS=1`` and
+every ``connect()`` leaves the SolidWorks window hidden instead of showing
+it. That is ~40% faster on this suite - but SolidWorks' sketch APIs
+(``CreateCornerRectangle``, ``InsertSketch``) intermittently fail with
+``RPC_E_DISCONNECTED`` when the window is hidden, so two of eight wave3 tests
+flaked on every headless run while the visible suite is 8/8. Not worth
+defaulting on. When it is set, ``pytest_sessionfinish`` restores the window,
+and ``dev-test-combined`` keeps ``tests/live`` in its own batch group so the
+hidden window never reaches an ``export_image`` smoke test elsewhere.
+
+Turning off the render passes (RealView, shadows, ambient occlusion, edge AA)
+plus ``VerifyOnRebuild`` was also tried and showed no measurable change - the
+remaining time is ``create_part`` (default-template load, ~5 s) and the
+geometry-kernel rebuilds, both SolidWorks-internal. A fresh SolidWorks
+process still helps most: a long session (many connects, a crash/relaunch)
 visibly slows every call.
 """
 
@@ -36,6 +44,32 @@ import pytest_asyncio
 
 _REAL_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
 _REAL_ENABLED = os.getenv(_REAL_FLAG, "").strip().lower() in {"1", "true", "yes", "on"}
+
+# Headless is NOT enabled here. It is honoured only if the caller exports
+# SOLIDWORKS_MCP_HEADLESS themselves - the adapter reads it directly. Default
+# on made two wave3 tests flake every run and once brought the whole process
+# down with `Windows fatal exception: 0x80010108` (RPC_E_DISCONNECTED) mid
+# create_part: SolidWorks' sketch/doc COM surface is not reliable with the
+# window hidden. The visible suite is 8/8.
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Un-hide the SolidWorks window the headless run left hidden (best effort)."""
+    if os.getenv("SOLIDWORKS_MCP_HEADLESS", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return
+    try:  # pragma: no cover - only meaningful with a live SolidWorks
+        import pythoncom  # noqa: F401
+        import win32com.client
+
+        win32com.client.Dispatch("SldWorks.Application").Visible = True
+    except Exception:  # noqa: BLE001 - restoring the window is not worth failing over
+        pass
+
 
 # Skip collection entirely off-Windows or without the opt-in flag - same effect
 # the per-file skipif pytestmark used to have, minus the "skipped" noise.

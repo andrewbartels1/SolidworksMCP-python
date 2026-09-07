@@ -125,6 +125,21 @@ _SW_RUN_MACRO_ERROR = {
 }
 
 
+def _headless_requested() -> bool:
+    """True when ``SOLIDWORKS_MCP_HEADLESS`` asks the SW window to stay hidden.
+
+    Off by default - a normal MCP session keeps the SolidWorks window visible.
+    The live test suite sets it so ``connect()`` does not re-show the window on
+    every per-test reconnect (each show/hide is a full window relayout).
+    """
+    return os.getenv("SOLIDWORKS_MCP_HEADLESS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _run_macro_error_name(code: Any) -> str:
     """Render a swRunMacroError_e code as ``"<n> (<Name>)"`` when known."""
     try:
@@ -368,7 +383,8 @@ class _ComSessionCoordinator:
         1. Initialise the COM apartment.
         2. Acquire the ``SldWorks.Application`` COM object (with retries).
         3. Wait for the server to become ready.
-        4. Make the application window visible.
+        4. Show the application window (hidden instead when
+           ``SOLIDWORKS_MCP_HEADLESS`` is set).
         5. Suppress interactive dialogs for automation.
 
         On any failure the adapter state is cleaned up (``swApp`` set to
@@ -384,7 +400,7 @@ class _ComSessionCoordinator:
                 lambda: sw_type_info.flag_methods(app, "ISldWorks"), default=0
             )
             await self.wait_for_server_ready(app)
-            app.Visible = True
+            app.Visible = not _headless_requested()
             self.set_automation_preferences(app, interactive=False)
         except Exception as exc:
             self._adapter.swApp = None
