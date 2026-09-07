@@ -252,7 +252,7 @@ function dev-test-combined {
     # The real-SolidWorks phase runs in small batches with a document drain +
     # settle pause between each - a single uninterrupted solidworks_only
     # session overwhelms SolidWorks and it crashes. Tune with
-    # SW_TEST_BATCH_SIZE (default 4) and SW_TEST_SETTLE_SECONDS (default 8).
+    # SW_TEST_BATCH_SIZE (default 10) and SW_TEST_SETTLE_SECONDS (default 8).
     Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (batched serial), merged into one true report..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 
@@ -286,9 +286,9 @@ function dev-test-combined {
     # process appending into .coverage.real (batch 1 fresh, rest --cov-append),
     # so Phase 3 still sees one merged real-coverage file.
     #
-    #   SW_TEST_BATCH_SIZE      tests per batch (default 4; 0 = one session)
+    #   SW_TEST_BATCH_SIZE      tests per batch (default 10; 0 = one session)
     #   SW_TEST_SETTLE_SECONDS  idle seconds between batches (default 8)
-    $batchSize = if ($env:SW_TEST_BATCH_SIZE) { [int]$env:SW_TEST_BATCH_SIZE } else { 4 }
+    $batchSize = if ($env:SW_TEST_BATCH_SIZE) { [int]$env:SW_TEST_BATCH_SIZE } else { 10 }
     $settle    = if ($env:SW_TEST_SETTLE_SECONDS) { [int]$env:SW_TEST_SETTLE_SECONDS } else { 8 }
 
     Write-Host "Phase 2/3: real SolidWorks suite (batched, serial - requires SolidWorks running)..." -ForegroundColor Cyan
