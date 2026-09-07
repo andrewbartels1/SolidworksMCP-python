@@ -306,7 +306,7 @@ as regular defs; properties use ``_prop_map_get_`` / ``_prop_map_put_``.
 
 ### 5. Regression tests
 
-See ``tests/test_live_sw_regression.py`` for the safety net:
+See ``tests/live/test_live_sw_regression.py`` for the safety net:
 
 - ComExecutor start/stop/exception semantics
 - flag_methods incrementality + per-interface correctness
@@ -319,7 +319,7 @@ Run these after any change to ``pywin32_adapter.py``, ``com_executor.py``,
 or ``sw_type_info.py``::
 
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1
-    .\.venv\Scripts\python.exe -m pytest tests/test_live_sw_regression.py -v
+    .\.venv\Scripts\python.exe -m pytest tests/live/test_live_sw_regression.py -v
 
 ### Reference sources
 

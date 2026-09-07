@@ -7,9 +7,9 @@ resync those tools depend on - the issue #91 follow-on where a tool that reads
 or it reports "No active model" for documents the user opened in the
 SolidWorks UI rather than through a tool.
 
-Gating matches ``tests/test_live_sw_regression.py``:
-  - ``@pytest.mark.solidworks_only`` / ``@pytest.mark.windows_only``
-  - skipped unless ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1``
+Gating, the ``scratch`` fixture and scratch-doc cleanup are shared from
+``tests/live/conftest.py`` (not collected unless
+``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows).
 
 Unlike the older real-integration tests, cleanup here closes only the
 scratch documents each test created (never ``CloseAllDocuments``), so the
@@ -18,113 +18,12 @@ suite is safe to run against a SolidWorks session that has real work open.
 Run locally on Windows with SolidWorks open::
 
     SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1 \
-        python -m pytest tests/test_live_sw_wave2.py -v
+        python -m pytest tests/live/test_live_sw_wave2.py -v
 """
 
 from __future__ import annotations
 
-import os
-import platform
-from collections.abc import AsyncIterator
-
 import pytest
-
-_REAL_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
-_REAL_ENABLED = os.getenv(_REAL_FLAG, "").strip().lower() in {"1", "true", "yes", "on"}
-
-pytestmark = [
-    pytest.mark.solidworks_only,
-    pytest.mark.windows_only,
-    pytest.mark.skipif(
-        not _REAL_ENABLED,
-        reason=f"set {_REAL_FLAG}=1 to run tests that require a live SolidWorks install",
-    ),
-    pytest.mark.skipif(
-        platform.system() != "Windows",
-        reason="SolidWorks only runs on Windows",
-    ),
-]
-
-
-class _ScratchSession:
-    """A connected adapter plus cleanup of only the scratch docs a test made.
-
-    Cleanup closes a document only when **both** guards agree it is scratch:
-
-    * its title is not in the snapshot taken when the session was created, and
-    * ``GetPathName`` is empty - i.e. it has never been saved.
-
-    A real file the user already had open always has a path, so it can never
-    be closed here even if the baseline snapshot comes back empty.
-    """
-
-    def __init__(self, adapter) -> None:  # noqa: ANN001
-        """Snapshot the currently open documents as the do-not-close baseline.
-
-        Args:
-            adapter: A connected ``PyWin32Adapter``.
-        """
-        self.adapter = adapter
-        self._baseline: set[str] = self._open_titles()
-
-    def _open_docs(self) -> list:
-        """Return the currently open ``IModelDoc2`` dispatches (never ``None``)."""
-        raw = self.adapter._attempt(
-            lambda: self.adapter.swApp.GetDocuments(), default=None
-        )
-        if isinstance(raw, (list, tuple)):
-            return [d for d in raw if d is not None]
-        return [raw] if raw else []
-
-    def _open_titles(self) -> set[str]:
-        """Return the window titles of every currently open document."""
-        titles: set[str] = set()
-        for d in self._open_docs():
-            t = self.adapter._attempt(
-                lambda d=d: self.adapter._get_attr_or_call(d, "GetTitle"), default=None
-            )
-            if t:
-                titles.add(str(t))
-        return titles
-
-    def cleanup(self) -> None:
-        """Close every scratch document this session opened, and nothing else.
-
-        A document is closed only when its title is new since construction
-        **and** it has no saved path, so a real file the user had open is
-        never touched even if the baseline snapshot came back empty.
-        """
-        for d in self._open_docs():
-            title = self.adapter._attempt(
-                lambda d=d: self.adapter._get_attr_or_call(d, "GetTitle"), default=None
-            )
-            path = self.adapter._attempt(
-                lambda d=d: self.adapter._get_attr_or_call(d, "GetPathName"),
-                default=None,
-            )
-            if not title or str(title) in self._baseline:
-                continue
-            if path:  # saved file — never ours to close
-                continue
-            self.adapter._attempt(
-                lambda t=str(title): self.adapter.swApp.CloseDoc(t)
-            )
-
-
-@pytest.fixture
-async def scratch() -> AsyncIterator[_ScratchSession]:
-    """Yield a connected adapter; on teardown close only its scratch docs."""
-    from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-
-    adapter = PyWin32Adapter({})
-    await adapter.connect()
-    session = _ScratchSession(adapter)
-    try:
-        yield session
-    finally:
-        session.cleanup()
-        await adapter.disconnect()
-
 
 # ---- set_units (#60) -------------------------------------------------------
 

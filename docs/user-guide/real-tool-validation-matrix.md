@@ -17,10 +17,10 @@ This split keeps tests deterministic and maintainable while still validating rea
 - Real part, assembly, and sketch lifecycle smoke flows.
 - Real COM connectivity on Windows with SolidWorks installed.
 - Targeted real-SolidWorks tests for individual tools:
-  `tests/test_live_sw_regression.py` (sketch geometry, patterns, mirror,
-  offset), `tests/test_live_sw_wave2.py` (`set_units`, `rename_feature`,
+  `tests/live/test_live_sw_regression.py` (sketch geometry, patterns, mirror,
+  offset), `tests/live/test_live_sw_wave2.py` (`set_units`, `rename_feature`,
   `list_open_documents`, `activate_document`) and
-  `tests/test_live_sw_wave3.py` (`create_reference_point`,
+  `tests/live/test_live_sw_wave3.py` (`create_reference_point`,
   `save_body_as_part`, `auto_center_marks`). All are gated behind
   `SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`; the wave files only ever close
   never-saved scratch documents (and delete any file they wrote), so they

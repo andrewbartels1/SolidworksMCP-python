@@ -18,15 +18,15 @@ These tests target specific bugs that were diagnosed and fixed on 2026-04-24:
    type library. Fixed by replacing with ``IsTessellationValid()`` and
    the ``IConfiguration.Name`` property.
 
-These tests are gated:
-  - ``@pytest.mark.solidworks_only`` — require SolidWorks installed
-  - ``@pytest.mark.windows_only`` — require Windows
-  - Skipped entirely unless ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1``
+Gating, the ``connected_adapter`` fixture and scratch-doc cleanup are
+shared from ``tests/live/conftest.py``: not collected unless
+``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows, and every test here
+is marked ``solidworks_only`` / ``windows_only``.
 
 Run only these tests locally on Windows with SW::
 
     SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1 \
-        python -m pytest tests/test_live_sw_regression.py -v
+        python -m pytest tests/live/test_live_sw_regression.py -v
 """
 
 from __future__ import annotations
@@ -34,7 +34,6 @@ from __future__ import annotations
 import asyncio
 import math
 import os
-import platform
 import threading
 
 import pytest
@@ -42,33 +41,6 @@ import pytest
 # base.py is pure-pydantic (no pywin32), so importing the parameter models at
 # module scope is safe on non-Windows CI even though the SW tests are skipped.
 from solidworks_mcp.adapters.base import LoftParameters, SweepParameters
-
-# Skip the entire module when the env flag isn't set. This matches the
-# pattern used by tests/test_real_solidworks_integration.py and keeps CI
-# fast on boxes without SW.
-_REAL_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
-_REAL_ENABLED = os.getenv(_REAL_FLAG, "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-
-pytestmark = [
-    pytest.mark.solidworks_only,
-    pytest.mark.windows_only,
-    pytest.mark.skipif(
-        not _REAL_ENABLED,
-        reason=(
-            f"set {_REAL_FLAG}=1 to run tests that require a live SolidWorks install"
-        ),
-    ),
-    pytest.mark.skipif(
-        platform.system() != "Windows",
-        reason="SolidWorks only runs on Windows",
-    ),
-]
-
 
 # Tests that need a real .SLDASM file to exercise OpenDoc6 read the path
 # from this env var. Set it to any local SolidWorks assembly; tests skip
@@ -86,7 +58,8 @@ def _test_assembly_path() -> str:
 
 
 # ---- ComExecutor unit tests (don't need SW) ----
-# These still run only when _REAL_ENABLED because they pull in pywin32.
+# These still run only under the live suite gate (see tests/live/conftest.py)
+# because they import pywin32.
 
 
 def test_com_executor_start_stop_idempotent() -> None:
@@ -175,19 +148,6 @@ def test_flag_methods_is_per_interface_incremental() -> None:
 
 
 # ---- End-to-end adapter regression tests ----
-
-
-@pytest.fixture
-async def connected_adapter():
-    """Yield a connected PyWin32Adapter and clean up afterwards."""
-    from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-
-    adapter = PyWin32Adapter({})
-    await adapter.connect()
-    try:
-        yield adapter
-    finally:
-        await adapter.disconnect()
 
 
 def _resolve_active_sketch(adapter):
@@ -2315,8 +2275,7 @@ async def test_assembly_insert_list_and_mate_change_real_geometry(connected_adap
         after = await adapter.get_mass_properties()
         assert after.is_success, after.error
         assert after.data.volume == pytest.approx(2 * part_volume, rel=1e-6), (
-            "the mate changed the assembly's volume, so it moved more than "
-            "position"
+            "the mate changed the assembly's volume, so it moved more than position"
         )
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
@@ -2386,8 +2345,7 @@ async def test_drawing_views_and_notes_produce_real_artifacts(connected_adapter)
         )
         assert note.is_success, note.error
         assert note.data["positioned"] is True, (
-            f"the note was created but SetPosition did not place it: "
-            f"{note.data}"
+            f"the note was created but SetPosition did not place it: {note.data}"
         )
 
         # Standard views, on a second sheet so the count is unambiguous.
@@ -2405,6 +2363,8 @@ async def test_drawing_views_and_notes_produce_real_artifacts(connected_adapter)
         assert len(three.data) == 3, three.data
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
 async def test_check_interference_answers_both_ways(connected_adapter):
     """Interference detection must discriminate, not just return a number.
 
@@ -2478,6 +2438,8 @@ async def test_check_interference_answers_both_ways(connected_adapter):
         assert separated.data["interferences"] == [], separated.data
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
 async def test_feature_editing_changes_the_model(connected_adapter):
     """Suppress, unsuppress, delete and undo, verified by volume and count.
 
@@ -2578,6 +2540,8 @@ async def test_feature_editing_changes_the_model(connected_adapter):
         )
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+
+
 async def test_reference_plane_can_be_sketched_on(connected_adapter):
     """A created plane must be usable by create_sketch, or it is worthless.
 
@@ -2725,7 +2689,9 @@ async def test_mirror_body_doubles_a_lofted_wing(connected_adapter):
         for offset, radius in ((0.0, 40.0), (300.0, 20.0)):
             plane = "Right Plane"
             if offset:
-                made = await adapter.create_reference_plane("Right Plane", offset=offset)
+                made = await adapter.create_reference_plane(
+                    "Right Plane", offset=offset
+                )
                 assert made.is_success, made.error
                 plane = made.data["name"]
             sketch = await adapter.create_sketch(plane)
@@ -2845,8 +2811,7 @@ async def test_circular_pattern_builds_a_propeller(connected_adapter):
 
         added = patterned.data["volume_after"] - patterned.data["volume_before"]
         assert added / seed == pytest.approx(3.0, rel=0.02), (
-            f"expected three extra blades, got {added / seed:.2f}: "
-            f"{patterned.data}"
+            f"expected three extra blades, got {added / seed:.2f}: {patterned.data}"
         )
     finally:
         adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
@@ -2865,9 +2830,7 @@ async def test_circular_pattern_refuses_bad_input(connected_adapter):
             await adapter.pattern_circular(["Boss-Extrude1"], "Axis1", 1)
         ).is_success
 
-        unknown = await adapter.pattern_circular(
-            ["Boss-Extrude1"], "NoSuchAxis", 4
-        )
+        unknown = await adapter.pattern_circular(["Boss-Extrude1"], "NoSuchAxis", 4)
         assert not unknown.is_success
         assert "NoSuchAxis" in (unknown.error or "")
     finally:
