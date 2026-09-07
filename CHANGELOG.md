@@ -28,6 +28,11 @@ verified live against SolidWorks 2026.
 - **`auto_center_marks` tool** (#63) — run SolidWorks' automatic centre-mark
   insertion (holes / fillets / slots) on a named drawing view, reporting the
   centre-mark count before and after.
+- **Tutorial: "Smart Dimensions, Reference Points, Save Bodies & Centre
+  Marks"** — a prompt-driven walkthrough of the three new tools plus
+  `add_sketch_dimension`, captured from a live SolidWorks 2026 MCP session
+  (real `export_image` screenshots), with the exact prompt text and the
+  tool-call sequence each prompt produces.
 
 Tool count 129 → 132. Also corrects a long-stale `drawing.py` tool count
 (reported 8, 12 tools were actually registered → now the true 13).

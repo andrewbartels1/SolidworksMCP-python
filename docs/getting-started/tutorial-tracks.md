@@ -54,6 +54,15 @@ The exported script mirrors the structure of `build_u_bracket_artifact.py` — a
 
 ## Available Tutorials
 
+### Prompt-Driven Walkthroughs
+
+**[Smart Dimensions, Reference Points, Save Bodies & Centre Marks](tutorials/wave3-reference-geometry-and-drawings.md)**
+— a live MCP session (real SolidWorks 2026, real screenshots) driving
+`add_sketch_dimension`, `create_reference_point`, `save_body_as_part`, and
+`auto_center_marks` entirely from plain-language prompts. Includes the exact
+prompt text, the tool calls each one triggers, and the gotchas (origin-plane
+picks, entity-ID rules, count read-back).
+
 ### Reference Artifacts
 
 **U-Bracket Build Script** — Builds the SolidWorks 2026 sample bracket from measured sketch coordinates; produces `.sldprt` and isometric PNG
