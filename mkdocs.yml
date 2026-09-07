@@ -25,6 +25,7 @@ nav:
       - SolidWorks as Code: getting-started/solidworks-as-code.md
       - U-Joint Assembly Build (From Scratch): getting-started/tutorials/u-joint-assembly-build.md
       - U-Joint Rebuild Prompts (Reference): getting-started/tutorial-parts/u_joint_rebuild_prompt.md
+      - "Smart Dimensions, Reference Points, Save Bodies & Centre Marks": getting-started/tutorials/wave3-reference-geometry-and-drawings.md
       - VS Code MCP Setup: getting-started/vscode-mcp-setup.md
       - Claude Code MCP Setup: getting-started/claude-code-setup.md
       - Local LLM (Ollama / Gemma): getting-started/local-llm.md
