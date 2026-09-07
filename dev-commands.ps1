@@ -182,13 +182,15 @@ function dev-test {
     # Keep generated integration artifacts from previous runs from accumulating.
     Invoke-IntegrationCleanup
 
-    # -n 4, not "auto": this machine has 24 logical CPUs but only ~10GB free
+    # -n 8, not "auto": this machine has 24 logical CPUs but only ~10GB free
     # RAM once VSCode + SolidWorks are running - "auto" spawns a worker per
-    # CPU, each loading the full package + deps, and OOMs the machine.
+    # CPU, each loading the full package + deps, and OOMs the machine. 8 is a
+    # deliberate middle ground: noticeably faster than 4, still well clear of
+    # the OOM ceiling.
     Invoke-Pytest @(
         "tests/",
         "-m", "not solidworks_only and not smoke",
-        "-n", "4",
+        "-n", "8",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
@@ -256,17 +258,18 @@ function dev-test-combined {
 
     Remove-Item -Path .coverage.mock, .coverage.real, .coverage.combined -Force -ErrorAction SilentlyContinue
 
-    # -n 4, not "auto": this machine has 24 logical CPUs but only ~10GB free
+    # -n 8, not "auto": this machine has 24 logical CPUs but only ~10GB free
     # RAM once VSCode + SolidWorks are running, and "auto" spawns a worker
     # per CPU - each loading the full package + deps. Already learned the
     # hard way once this session (see TODO_SESSION.md's 2026-08-14 entry) -
-    # "auto" OOM'd the machine again when this command first ran.
-    Write-Host "Phase 1/3: mock suite (parallel, -n 4)..." -ForegroundColor Cyan
+    # "auto" OOM'd the machine again when this command first ran. 8 is a
+    # deliberate middle ground: faster than 4, still well clear of the ceiling.
+    Write-Host "Phase 1/3: mock suite (parallel, -n 8)..." -ForegroundColor Cyan
     $env:COVERAGE_FILE = ".coverage.mock"
     Invoke-Pytest @(
         "tests/",
         "-m", "not solidworks_only",
-        "-n", "4",
+        "-n", "8",
         "--cov=src/solidworks_mcp",
         "--cov-report=",
         "--cov-fail-under=0",
