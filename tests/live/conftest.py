@@ -14,16 +14,18 @@ adapter fixture / scratch-doc cleanup in each file, they live here:
   ``scratch`` wraps the adapter in ``_ScratchSession``, which on teardown
   closes only the never-saved documents a test created and deletes only the
   files it wrote - safe against a SolidWorks session with real work open.
+* ``_pace_live_tests`` (autouse) idles ``SW_TEST_PACE_SECONDS`` after each
+  test (default 0; ``dev-test-combined`` sets ~4). A plain gap between
+  consecutive real COM tests keeps SolidWorks from being hammered - simpler
+  and, in practice, steadier than splitting the run into subprocess batches.
 
 **Headless (opt-in, off by default).** Set ``SOLIDWORKS_MCP_HEADLESS=1`` and
 every ``connect()`` leaves the SolidWorks window hidden instead of showing
-it. That is ~40% faster on this suite - but SolidWorks' sketch APIs
+it. That is ~40% faster - but SolidWorks' sketch APIs
 (``CreateCornerRectangle``, ``InsertSketch``) intermittently fail with
 ``RPC_E_DISCONNECTED`` when the window is hidden, so two of eight wave3 tests
 flaked on every headless run while the visible suite is 8/8. Not worth
-defaulting on. When it is set, ``pytest_sessionfinish`` restores the window,
-and ``dev-test-combined`` keeps ``tests/live`` in its own batch group so the
-hidden window never reaches an ``export_image`` smoke test elsewhere.
+defaulting on. ``pytest_sessionfinish`` restores the window if it was set.
 
 Turning off the render passes (RealView, shadows, ambient occlusion, edge AA)
 plus ``VerifyOnRebuild`` was also tried and showed no measurable change - the
@@ -37,7 +39,7 @@ from __future__ import annotations
 
 import os
 import platform
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 import pytest_asyncio
@@ -143,6 +145,25 @@ class _ScratchSession:
                     os.remove(f)
             except OSError:
                 pass
+
+
+@pytest.fixture(autouse=True)
+def _pace_live_tests() -> Iterator[None]:
+    """Idle ``SW_TEST_PACE_SECONDS`` after each live test (default 0).
+
+    ``dev-test-combined`` sets it to a few seconds: a plain gap between
+    consecutive real COM tests keeps SolidWorks from being hammered, without
+    the per-batch subprocess churn that batching added.
+    """
+    import time
+
+    yield
+    try:
+        pace = float(os.getenv("SW_TEST_PACE_SECONDS", "0"))
+    except ValueError:
+        pace = 0.0
+    if pace > 0:
+        time.sleep(pace)
 
 
 @pytest_asyncio.fixture
