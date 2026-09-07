@@ -68,6 +68,7 @@ EOF < /dev/null
 site/
 coverage.xml
 .coverage
+.coverage.*
 
 # Generated test artifacts
 tests/.generated/
