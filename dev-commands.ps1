@@ -286,6 +286,9 @@ function dev-test-combined {
 
     #   SW_TEST_BATCH_SIZE      tests per batch (default 10; 0 = one session)
     #   SW_TEST_SETTLE_SECONDS  idle seconds between batches (default 8)
+    #   SOLIDWORKS_MCP_HEADLESS=1  hide the SW window for the tests/live/ group
+    #                             (~40% faster, but its sketch COM goes flaky
+    #                             hidden - a couple of wave3 tests will flake)
     $batchSize = if ($env:SW_TEST_BATCH_SIZE) { [int]$env:SW_TEST_BATCH_SIZE } else { 10 }
     $settle    = if ($env:SW_TEST_SETTLE_SECONDS) { [int]$env:SW_TEST_SETTLE_SECONDS } else { 8 }
 
@@ -308,6 +311,38 @@ function dev-test-combined {
         $realNodes = @($collect | Where-Object { $_ -match '::test_' } | ForEach-Object { $_.Trim() })
     }
 
+    # Run one group of node ids in batches, draining + settling between each.
+    # tests/live/* run as their own group, separate from every other
+    # solidworks_only test: importing tests/live/conftest.py sets
+    # SOLIDWORKS_MCP_HEADLESS=1 (SolidWorks window hidden), and that must not
+    # bleed into an export_image / export_step smoke test in test_all_endpoints.
+    # Result goes to $script:groupRc (0 ok, non-zero pytest failure, 3 = SW
+    # went unreachable mid-group); pytest output streams straight to the host.
+    $script:groupRc = 0
+    $runBatchGroup = {
+        param($nodes, $label)
+        $script:groupRc = 0
+        if (-not $nodes -or $nodes.Count -eq 0) { return }
+        $n  = $nodes.Count
+        $nb = [math]::Ceiling($n / $batchSize)
+        Write-Host "  [$label] $n test(s), $batchSize per batch => $nb batch(es); ${settle}s settle between" -ForegroundColor DarkGray
+        for ($b = 0; $b -lt $nb; $b++) {
+            $s     = $b * $batchSize
+            $c     = [math]::Min($batchSize, $n - $s)
+            $slice = @($nodes[$s..($s + $c - 1)])
+            Write-Host ("  --- [{0}] batch {1}/{2} ({3} test(s)) ---" -f $label, ($b + 1), $nb, $c) -ForegroundColor Cyan
+            Invoke-Pytest (@("-q", "--no-header", "-p", "no:cacheprovider", "--timeout=300") + $covBase + $slice)
+            if ($LASTEXITCODE -ne 0) { $script:groupRc = $LASTEXITCODE }
+            Invoke-Venv @("tests/scripts/sw_close_all_and_settle.py", "--settle", "$settle")
+            if ($LASTEXITCODE -eq 2) {
+                Write-Host "  SolidWorks became unreachable after [$label] batch $($b + 1)/$nb - stopping the real suite." -ForegroundColor Red
+                Write-Host "  Restart SolidWorks; re-running dev-test-combined starts the real suite over." -ForegroundColor Yellow
+                $script:groupRc = 3
+                return
+            }
+        }
+    }
+
     if ($realNodes.Count -eq 0 -and $realExit -eq 0) {
         Write-Host "  no solidworks_only tests collected." -ForegroundColor Yellow
     }
@@ -317,26 +352,18 @@ function dev-test-combined {
         $realExit = $LASTEXITCODE
     }
     elseif ($realNodes.Count -gt 0) {
-        $total   = $realNodes.Count
-        $batches = [math]::Ceiling($total / $batchSize)
-        Write-Host "  $total real tests, $batchSize per batch => $batches batch(es); ${settle}s settle between" -ForegroundColor DarkGray
-        for ($b = 0; $b -lt $batches; $b++) {
-            $startIdx = $b * $batchSize
-            $count    = [math]::Min($batchSize, $total - $startIdx)
-            $slice    = @($realNodes[$startIdx..($startIdx + $count - 1)])
-            Write-Host ("  --- batch {0}/{1} ({2} test(s)) ---" -f ($b + 1), $batches, $count) -ForegroundColor Cyan
-            Invoke-Pytest (@("-q", "--no-header", "-p", "no:cacheprovider", "--timeout=300") + $covBase + $slice)
-            if ($LASTEXITCODE -ne 0) { $realExit = $LASTEXITCODE }
+        $liveNodes  = @($realNodes | Where-Object { ($_ -replace '\\', '/') -match '/live/' })
+        $otherNodes = @($realNodes | Where-Object { ($_ -replace '\\', '/') -notmatch '/live/' })
+        Write-Host "  $($realNodes.Count) real tests: $($liveNodes.Count) under tests/live/ (headless), $($otherNodes.Count) other" -ForegroundColor DarkGray
 
-            if ($b -lt $batches - 1) {
-                Invoke-Venv @("tests/scripts/sw_close_all_and_settle.py", "--settle", "$settle")
-                if ($LASTEXITCODE -eq 2) {
-                    Write-Host "  SolidWorks became unreachable after batch $($b + 1)/$batches - stopping the real suite." -ForegroundColor Red
-                    Write-Host "  Restart SolidWorks; re-running dev-test-combined starts the real suite over." -ForegroundColor Yellow
-                    if ($realExit -eq 0) { $realExit = 3 }
-                    break
-                }
-            }
+        & $runBatchGroup $liveNodes "live"
+        if ($script:groupRc -eq 3) { if ($realExit -eq 0) { $realExit = 3 } }
+        elseif ($script:groupRc -ne 0) { $realExit = $script:groupRc }
+
+        if ($realExit -ne 3) {
+            & $runBatchGroup $otherNodes "other"
+            if ($script:groupRc -eq 3) { if ($realExit -eq 0) { $realExit = 3 } }
+            elseif ($script:groupRc -ne 0) { $realExit = $script:groupRc }
         }
     }
     Remove-Item Env:\COVERAGE_FILE -ErrorAction SilentlyContinue
