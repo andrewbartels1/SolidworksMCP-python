@@ -3,9 +3,9 @@
 Covers ``create_reference_point`` (#58), ``auto_center_marks`` (#63) and
 ``save_body_as_part`` (#62).
 
-Gating matches ``tests/test_live_sw_regression.py``:
-  - ``@pytest.mark.solidworks_only`` / ``@pytest.mark.windows_only``
-  - skipped unless ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1``
+Gating, the ``scratch`` fixture and scratch-doc cleanup are shared from
+``tests/live/conftest.py`` (not collected unless
+``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows).
 
 Cleanup closes only never-saved scratch documents (and deletes any file a
 test wrote), so the suite is safe to run against a session with real work
@@ -15,106 +15,8 @@ open.
 from __future__ import annotations
 
 import os
-import platform
-from collections.abc import AsyncIterator
 
 import pytest
-
-_REAL_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
-_REAL_ENABLED = os.getenv(_REAL_FLAG, "").strip().lower() in {"1", "true", "yes", "on"}
-
-pytestmark = [
-    pytest.mark.solidworks_only,
-    pytest.mark.windows_only,
-    pytest.mark.skipif(
-        not _REAL_ENABLED,
-        reason=f"set {_REAL_FLAG}=1 to run tests that require a live SolidWorks install",
-    ),
-    pytest.mark.skipif(
-        platform.system() != "Windows",
-        reason="SolidWorks only runs on Windows",
-    ),
-]
-
-
-class _ScratchSession:
-    """A connected adapter plus cleanup of only the scratch docs a test made."""
-
-    def __init__(self, adapter) -> None:  # noqa: ANN001
-        """Snapshot the currently open documents as the do-not-close baseline.
-
-        Args:
-            adapter: A connected ``PyWin32Adapter``.
-        """
-        self.adapter = adapter
-        self._baseline: set[str] = self._open_titles()
-        self.written_files: list[str] = []
-
-    def _open_docs(self) -> list:
-        """Return the currently open ``IModelDoc2`` dispatches (never ``None``)."""
-        raw = self.adapter._attempt(
-            lambda: self.adapter.swApp.GetDocuments(), default=None
-        )
-        if isinstance(raw, (list, tuple)):
-            return [d for d in raw if d is not None]
-        return [raw] if raw else []
-
-    def _open_titles(self) -> set[str]:
-        """Return the window titles of every currently open document."""
-        titles: set[str] = set()
-        for d in self._open_docs():
-            t = self.adapter._attempt(
-                lambda d=d: self.adapter._get_attr_or_call(d, "GetTitle"), default=None
-            )
-            if t:
-                titles.add(str(t))
-        return titles
-
-    def cleanup(self) -> None:
-        """Close every scratch document opened here, and delete any files written.
-
-        A document is closed when it is new since the baseline snapshot and
-        either was never saved *or* was saved to one of this test's own
-        ``written_files`` paths. A real file the user already had open is
-        never touched.
-        """
-        owned = {os.path.normcase(os.path.abspath(f)) for f in self.written_files}
-        for d in self._open_docs():
-            title = self.adapter._attempt(
-                lambda d=d: self.adapter._get_attr_or_call(d, "GetTitle"), default=None
-            )
-            path = self.adapter._attempt(
-                lambda d=d: self.adapter._get_attr_or_call(d, "GetPathName"),
-                default=None,
-            )
-            if not title or str(title) in self._baseline:
-                continue
-            if path and os.path.normcase(os.path.abspath(str(path))) not in owned:
-                continue
-            self.adapter._attempt(
-                lambda t=str(title): self.adapter.swApp.CloseDoc(t)
-            )
-        for f in self.written_files:
-            try:
-                if os.path.exists(f):
-                    os.remove(f)
-            except OSError:
-                pass
-
-
-@pytest.fixture
-async def scratch() -> AsyncIterator[_ScratchSession]:
-    """Yield a connected adapter; on teardown close only its scratch docs/files."""
-    from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
-
-    adapter = PyWin32Adapter({})
-    await adapter.connect()
-    session = _ScratchSession(adapter)
-    try:
-        yield session
-    finally:
-        session.cleanup()
-        await adapter.disconnect()
 
 
 async def _box_part(adapter) -> None:  # noqa: ANN001
@@ -160,9 +62,7 @@ async def test_save_body_as_part_unknown_body_lists_the_real_ones(scratch, tmp_p
     adapter = scratch.adapter
     await _box_part(adapter)
 
-    result = await adapter.save_body_as_part(
-        "NoSuchBody", str(tmp_path / "x.sldprt")
-    )
+    result = await adapter.save_body_as_part("NoSuchBody", str(tmp_path / "x.sldprt"))
     assert not result.is_success
     assert "NoSuchBody" in (result.error or "")
 
@@ -228,9 +128,7 @@ async def test_create_reference_point_along_curve(scratch):
     mid_mm = _linear_edge_pick_mm(adapter, adapter.currentModel)
 
     before = (await adapter.list_features()).data or []
-    result = await adapter.create_reference_point(
-        "along_curve", *mid_mm, percent=50.0
-    )
+    result = await adapter.create_reference_point("along_curve", *mid_mm, percent=50.0)
     assert result.is_success, f"{result.error} (tried {mid_mm} mm)"
     assert result.data["features_after"] > result.data["features_before"]
     after = (await adapter.list_features()).data or []
@@ -301,17 +199,13 @@ async def _plate_with_hole_drawing(adapter, tmp_path) -> str:
     assert (await adapter.add_rectangle(0.0, 0.0, 60.0, 40.0)).is_success
     assert (await adapter.add_circle(30.0, 20.0, 4.0)).is_success
     assert (await adapter.exit_sketch()).is_success
-    assert (
-        await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
-    ).is_success
+    assert (await adapter.create_extrusion(ExtrusionParameters(depth=10.0))).is_success
 
     part_path = tmp_path / "plate.sldprt"
     assert (await adapter.save_file(str(part_path))).is_success
 
     assert (await adapter.create_drawing()).is_success
-    drawing = await adapter.create_technical_drawing(
-        {"model_file": str(part_path)}
-    )
+    drawing = await adapter.create_technical_drawing({"model_file": str(part_path)})
     assert drawing.is_success, drawing.error
 
     views = (await adapter.list_drawing_views()).data or []
