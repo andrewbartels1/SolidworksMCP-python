@@ -14,10 +14,13 @@ adapter fixture / scratch-doc cleanup in each file, they live here:
   ``scratch`` wraps the adapter in ``_ScratchSession``, which on teardown
   closes only the never-saved documents a test created and deletes only the
   files it wrote - safe against a SolidWorks session with real work open.
-* ``_pace_live_tests`` (autouse) idles ``SW_TEST_PACE_SECONDS`` after each
-  test (default 0; ``dev-test-combined`` sets ~4). A plain gap between
-  consecutive real COM tests keeps SolidWorks from being hammered - simpler
-  and, in practice, steadier than splitting the run into subprocess batches.
+* ``_pace_live_tests`` (autouse) drains every open document and idles
+  ``SW_TEST_PACE_SECONDS`` after each test (default 0 = off;
+  ``dev-test-combined`` sets 4). This is the recovery the per-batch
+  ``sw_close_all_and_settle`` drain provided - a long uninterrupted run
+  degrades (open assemblies accumulate, then ``create_part`` / ``open_model``
+  start throwing ``RPC_E_DISCONNECTED``); doing it in-process per test is the
+  same effect without a pytest subprocess per batch.
 
 **Headless (opt-in, off by default).** Set ``SOLIDWORKS_MCP_HEADLESS=1`` and
 every ``connect()`` leaves the SolidWorks window hidden instead of showing
@@ -149,21 +152,47 @@ class _ScratchSession:
 
 @pytest.fixture(autouse=True)
 def _pace_live_tests() -> Iterator[None]:
-    """Idle ``SW_TEST_PACE_SECONDS`` after each live test (default 0).
+    """After each live test: drain every open document, then idle.
 
-    ``dev-test-combined`` sets it to a few seconds: a plain gap between
-    consecutive real COM tests keeps SolidWorks from being hammered, without
-    the per-batch subprocess churn that batching added.
+    Only active when ``SW_TEST_PACE_SECONDS`` is set (``dev-test-combined``
+    sets 4); a bare ``pytest tests/live/`` stays fast. This is what the
+    per-batch ``sw_close_all_and_settle`` drain used to do - the batching
+    itself was subprocess churn, but closing leaked documents and giving
+    SolidWorks a breather between real COM tests is what actually kept a long
+    run from degrading (open assemblies pile up, then ``create_part`` /
+    ``open_model`` start throwing ``RPC_E_DISCONNECTED``). Doing it in-process
+    per test is the same effect without spawning a pytest per batch.
     """
     import time
 
     yield
+
     try:
         pace = float(os.getenv("SW_TEST_PACE_SECONDS", "0"))
     except ValueError:
         pace = 0.0
-    if pace > 0:
-        time.sleep(pace)
+    if pace <= 0:
+        return
+
+    # Best-effort drain on a throwaway connection (app-global, cheap).
+    try:  # pragma: no cover - only meaningful with a live SolidWorks
+        import asyncio
+
+        from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+
+        async def _drain() -> None:
+            adapter = PyWin32Adapter({})
+            await adapter.connect()
+            try:
+                adapter._attempt(lambda: adapter.swApp.CloseAllDocuments(True))
+            finally:
+                await adapter.disconnect()
+
+        asyncio.run(_drain())
+    except Exception:  # noqa: BLE001 - the drain is a courtesy, never a failure
+        pass
+
+    time.sleep(pace)
 
 
 @pytest_asyncio.fixture

@@ -121,9 +121,9 @@ function dev-help {
     Write-Host ""
     Write-Host "  dev-install         Install/sync dependencies via uv (creates/repairs .venv)"
     Write-Host "  dev-install-ui      Install/repair UI extras in .venv only"
-    Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only)"
+    Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only, smoke, slow)"
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
-    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (batched, serial, drain+settle between batches), merged into one true coverage report"
+    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (serial, drain+idle between each test), merged into one true coverage report"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
     Write-Host "  dev-check-tool-count  Verify 'N tools' claims across docs match the real AST-counted total"
     Write-Host "  dev-format          Format code only (ruff format)"
@@ -189,7 +189,7 @@ function dev-test {
     # the OOM ceiling.
     Invoke-Pytest @(
         "tests/",
-        "-m", "not solidworks_only and not smoke",
+        "-m", "not solidworks_only and not smoke and not slow",
         "-n", "8",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
@@ -251,8 +251,8 @@ function dev-test-combined {
     #
     # The real-SolidWorks phase is ONE serial pytest session (-n 1) with a
     # few seconds' idle between each test (SW_TEST_PACE_SECONDS, default 4).
-    # A plain inter-test gap paces SolidWorks without the subprocess churn
-    # that per-batch splitting added, and in practice held up better.
+    # It drains open documents + idles between each test - the recovery the
+    # per-batch drain gave, without the per-batch subprocess churn.
     Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (serial, paced), one appended report..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 

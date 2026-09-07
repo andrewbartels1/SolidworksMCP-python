@@ -56,8 +56,16 @@ def test_require_faiss_import_error() -> None:
             _require_faiss()
 
 
+@pytest.mark.slow
 def test_require_sentence_transformers_success() -> None:
-    """_require_sentence_transformers returns the SentenceTransformer class."""
+    """_require_sentence_transformers returns the SentenceTransformer class.
+
+    ``slow``: the only test in this module that imports the real
+    ``sentence_transformers`` (~9 s of torch/transformers). Every other test
+    fakes ``_get_embedding_model`` / ``_require_sentence_transformers``, so
+    this is the one that proves the real happy path. Runs under
+    ``dev-test-full`` / ``dev-test-combined`` / CI; ``dev-test`` skips it.
+    """
     pytest.importorskip("sentence_transformers")
     cls = _require_sentence_transformers()
     assert callable(cls)
