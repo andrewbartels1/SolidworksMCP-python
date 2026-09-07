@@ -71,7 +71,14 @@ class _ScratchSession:
         return titles
 
     def cleanup(self) -> None:
-        """Close every scratch document opened here, and delete any files written."""
+        """Close every scratch document opened here, and delete any files written.
+
+        A document is closed when it is new since the baseline snapshot and
+        either was never saved *or* was saved to one of this test's own
+        ``written_files`` paths. A real file the user already had open is
+        never touched.
+        """
+        owned = {os.path.normcase(os.path.abspath(f)) for f in self.written_files}
         for d in self._open_docs():
             title = self.adapter._attempt(
                 lambda d=d: self.adapter._get_attr_or_call(d, "GetTitle"), default=None
@@ -80,7 +87,9 @@ class _ScratchSession:
                 lambda d=d: self.adapter._get_attr_or_call(d, "GetPathName"),
                 default=None,
             )
-            if not title or str(title) in self._baseline or path:
+            if not title or str(title) in self._baseline:
+                continue
+            if path and os.path.normcase(os.path.abspath(str(path))) not in owned:
                 continue
             self.adapter._attempt(
                 lambda t=str(title): self.adapter.swApp.CloseDoc(t)
@@ -172,42 +181,85 @@ async def test_save_body_as_part_requires_a_part(scratch, tmp_path):
 # ---- create_reference_point (#58) ----------------------------------
 
 
+def _linear_edge_pick_mm(adapter, model) -> tuple[float, float, float]:
+    """Return the midpoint (mm) of a straight box edge that a coordinate pick resolves.
+
+    ``IEdge::GetStartVertex/GetEndVertex`` -> ``IVertex::GetPoint`` gives a
+    clean 3-array in metres (far more reliable through pywin32 than
+    ``GetCurveParams*``).
+
+    ``SelectByID2`` silently fails when the pick coordinate lies on the
+    ``x=0`` or ``z=0`` origin planes - it resolves the *reference plane*
+    instead of the edge (measured on SW 2026). So edges whose midpoint sits
+    on either plane are skipped; the first one clear of both is returned.
+    """
+    from solidworks_mcp.adapters import sw_type_info
+
+    part = sw_type_info.flagged(model, "IPartDoc")
+    bodies = part.GetBodies2(0, False)
+    body = sw_type_info.flagged(
+        bodies[0] if isinstance(bodies, (list, tuple)) else bodies, "IBody2"
+    )
+
+    edges = body.GetEdges()
+    for raw in edges if isinstance(edges, (list, tuple)) else [edges]:
+        edge = sw_type_info.flagged(raw, "IEdge")
+        sv = adapter._attempt(lambda e=edge: e.GetStartVertex(), default=None)
+        ev = adapter._attempt(lambda e=edge: e.GetEndVertex(), default=None)
+        if sv is None or ev is None:
+            continue
+        p1 = sw_type_info.flagged(sv, "IVertex").GetPoint()
+        p2 = sw_type_info.flagged(ev, "IVertex").GetPoint()
+        if tuple(round(c, 9) for c in p1) == tuple(round(c, 9) for c in p2):
+            continue
+        mid = tuple((p1[i] + p2[i]) / 2 for i in range(3))
+        if abs(mid[0]) < 1e-4 or abs(mid[2]) < 1e-4:  # on an origin plane
+            continue
+        return tuple(c * 1000.0 for c in mid)
+    raise AssertionError("no straight edge clear of the origin planes on the box")
+
+
 @pytest.mark.asyncio
 async def test_create_reference_point_along_curve(scratch):
-    """A point half-way along a real edge adds a feature to the tree."""
+    """A point half-way along a real box edge adds a feature to the tree."""
+    adapter = scratch.adapter
+    await _box_part(adapter)
+
+    mid_mm = _linear_edge_pick_mm(adapter, adapter.currentModel)
+
+    before = (await adapter.list_features()).data or []
+    result = await adapter.create_reference_point(
+        "along_curve", *mid_mm, percent=50.0
+    )
+    assert result.is_success, f"{result.error} (tried {mid_mm} mm)"
+    assert result.data["features_after"] > result.data["features_before"]
+    after = (await adapter.list_features()).data or []
+    assert len(after) > len(before)
+
+
+@pytest.mark.asyncio
+async def test_create_reference_point_face_center(scratch):
+    """A point at a box face centre adds a feature to the tree."""
     from solidworks_mcp.adapters import sw_type_info
 
     adapter = scratch.adapter
     await _box_part(adapter)
 
-    # Pick a real edge and a point on it, so the coordinate pick can resolve.
     part = sw_type_info.flagged(adapter.currentModel, "IPartDoc")
     bodies = part.GetBodies2(0, False)
     body = sw_type_info.flagged(
         bodies[0] if isinstance(bodies, (list, tuple)) else bodies, "IBody2"
     )
-    edges = body.GetEdges()
-    edge = sw_type_info.flagged(
-        edges[0] if isinstance(edges, (list, tuple)) else edges, "IEdge"
-    )
-    # IEdge.GetCurveParams3 -> (startPt[3], endPt[3], ...) in metres.
-    params = edge.GetCurveParams3()
-    sx, sy, sz = params[0][0], params[0][1], params[0][2]
-    ex, ey, ez = params[1][0], params[1][1], params[1][2]
-    mid_mm = (
-        (sx + ex) / 2 * 1000.0,
-        (sy + ey) / 2 * 1000.0,
-        (sz + ez) / 2 * 1000.0,
+    box = [float(v) for v in body.GetBodyBox()]  # metres
+    face_center_mm = (
+        (box[0] + box[3]) / 2 * 1000.0,
+        (box[1] + box[4]) / 2 * 1000.0,
+        box[5] * 1000.0,  # the +Z face
     )
 
-    before = (await adapter.list_features()).data or []
-    result = await adapter.create_reference_point(
-        "along_curve", mid_mm[0], mid_mm[1], mid_mm[2], percent=50.0
-    )
-    assert result.is_success, result.error
+    result = await adapter.create_reference_point("face_center", *face_center_mm)
+    assert result.is_success, f"{result.error} (tried {face_center_mm} mm)"
     assert result.data["features_after"] > result.data["features_before"]
-    after = (await adapter.list_features()).data or []
-    assert len(after) > len(before)
 
 
 @pytest.mark.asyncio
@@ -230,40 +282,51 @@ async def test_create_reference_point_validation(scratch):
 # ---- auto_center_marks (#63) --------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_auto_center_marks_runs_on_a_view(scratch, tmp_path):
-    """Auto-insert runs on a real view and reports a non-negative delta."""
+async def _plate_with_hole_drawing(adapter, tmp_path) -> str:
+    """Create a plate with a through hole, save it, and lay out a drawing.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        tmp_path: pytest ``tmp_path`` for the scratch ``.sldprt``.
+
+    Returns:
+        tuple[str, str]: The saved part path and the first drawing-view name.
+    """
     from solidworks_mcp.adapters.base import ExtrusionParameters
 
-    adapter = scratch.adapter
-
-    # A part with a through hole, saved so a drawing can reference it.
     assert (await adapter.create_part()).is_success
+    # Rectangle with an inner circle in one profile -> the extrude leaves a
+    # through hole, without needing create_cut_extrude (broken here).
     assert (await adapter.create_sketch("Front")).is_success
     assert (await adapter.add_rectangle(0.0, 0.0, 60.0, 40.0)).is_success
+    assert (await adapter.add_circle(30.0, 20.0, 4.0)).is_success
     assert (await adapter.exit_sketch()).is_success
     assert (
         await adapter.create_extrusion(ExtrusionParameters(depth=10.0))
     ).is_success
-    assert (await adapter.create_sketch("Front")).is_success
-    assert (await adapter.add_circle(30.0, 20.0, 4.0)).is_success
-    assert (await adapter.exit_sketch()).is_success
-    cut = await adapter.create_cut_extrude(
-        ExtrusionParameters(depth=10.0, end_condition="ThroughAll")
-    )
-    assert cut.is_success, cut.error
 
     part_path = tmp_path / "plate.sldprt"
-    scratch.written_files.append(str(part_path))
     assert (await adapter.save_file(str(part_path))).is_success
 
-    drawing = await adapter.create_technical_drawing({"model_path": str(part_path)})
+    assert (await adapter.create_drawing()).is_success
+    drawing = await adapter.create_technical_drawing(
+        {"model_file": str(part_path)}
+    )
     assert drawing.is_success, drawing.error
 
     views = (await adapter.list_drawing_views()).data or []
     assert views, "no drawing views were created"
+    return str(part_path), views[0]
 
-    result = await adapter.auto_center_marks(views[0], mark_holes=True)
+
+@pytest.mark.asyncio
+async def test_auto_center_marks_runs_on_a_view(scratch, tmp_path):
+    """Auto-insert runs on a real view and reports a non-negative delta."""
+    adapter = scratch.adapter
+    part_path, view = await _plate_with_hole_drawing(adapter, tmp_path)
+    scratch.written_files.append(part_path)
+
+    result = await adapter.auto_center_marks(view, mark_holes=True)
     assert result.is_success, result.error
     assert result.data["center_marks_after"] >= result.data["center_marks_before"]
     assert result.data["center_marks_added"] >= 0
@@ -272,22 +335,9 @@ async def test_auto_center_marks_runs_on_a_view(scratch, tmp_path):
 @pytest.mark.asyncio
 async def test_auto_center_marks_unknown_view_is_an_error(scratch, tmp_path):
     """An unknown view name errors and lists the views that exist."""
-    from solidworks_mcp.adapters.base import ExtrusionParameters
-
     adapter = scratch.adapter
-    assert (await adapter.create_part()).is_success
-    assert (await adapter.create_sketch("Front")).is_success
-    assert (await adapter.add_rectangle(0.0, 0.0, 30.0, 20.0)).is_success
-    assert (await adapter.exit_sketch()).is_success
-    assert (
-        await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
-    ).is_success
-    part_path = tmp_path / "b.sldprt"
-    scratch.written_files.append(str(part_path))
-    assert (await adapter.save_file(str(part_path))).is_success
-    assert (
-        await adapter.create_technical_drawing({"model_path": str(part_path)})
-    ).is_success
+    part_path, _view = await _plate_with_hole_drawing(adapter, tmp_path)
+    scratch.written_files.append(part_path)
 
     result = await adapter.auto_center_marks("Definitely Not A View")
     assert not result.is_success
