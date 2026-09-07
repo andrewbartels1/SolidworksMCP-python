@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > pywin32 MCP server and restarted its own versioning at `1.0.0`; `1.x`
 > entries are the current line.
 
-## [Unreleased]
+## [1.2.0] - 2026-09-06
+
+Minor release — new tools, all additive and backward compatible. All three
+verified live against SolidWorks 2026.
 
 ### Added
 
@@ -26,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   insertion (holes / fillets / slots) on a named drawing view, reporting the
   centre-mark count before and after.
 
-Tool count 129 → 132.
+Tool count 129 → 132. Also corrects a long-stale `drawing.py` tool count
+(reported 8, 12 tools were actually registered → now the true 13).
 
 ## [1.1.0] - 2026-09-06
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "solidworks-mcp-python"
-version = "1.1.0"
+version = "1.2.0"
 description = "SolidWorks MCP Server with FastMCP and PydanticAI - Python Implementation"
 readme = "README.md"
 requires-python = ">=3.13"
