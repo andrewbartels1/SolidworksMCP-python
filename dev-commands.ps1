@@ -235,28 +235,39 @@ function dev-test-full {
 function dev-test-combined {
     # dev-test-full runs everything serially in one ~30-50min pytest session
     # (-n 1 for the whole tree, since real COM needs single-threaded). This
-    # runs the mock suite in parallel and the real-SolidWorks suite serially
-    # as two SEPARATE pytest sessions, each writing to its own coverage data
-    # file, then combines them with `coverage combine` into one true report -
-    # the union of what mock tests AND real-SolidWorks tests each cover.
+    # runs the mock suite in parallel, then the real-SolidWorks suite in small
+    # serial batches, with EVERY pytest invocation --cov-append-ing into one
+    # shared data file (.coverage.combined). The result is the union of what
+    # mock tests AND real-SolidWorks tests each cover - no separate mock/real
+    # files, no `coverage combine` of named files (that step is what silently
+    # dropped the mock half before: "Combined 1 file").
     #
-    # Why this matters: a line only reachable via real COM (e.g. a defensive
-    # "SolidWorks returned nothing" raise inside add_mate) will always show
-    # as "missing" in a mock-only report, even once test_live_sw_regression.py
-    # genuinely exercises it. Chasing that gap with more mock tests either
-    # means skipping it (leaving a misleading "uncovered" line) or writing a
-    # redundant fake-COM test for something already proven live. Combined
-    # coverage answers "is this covered by ANY test" instead, so new tests
-    # only get written for lines neither suite actually reaches.
+    # Why the union matters: a line only reachable via real COM (e.g. a
+    # defensive "SolidWorks returned nothing" raise inside add_mate) always
+    # shows as "missing" in a mock-only report, even once
+    # test_live_sw_regression.py genuinely exercises it. Combined coverage
+    # answers "is this covered by ANY test", so new tests only get written for
+    # lines neither suite reaches.
     #
-    # The real-SolidWorks phase runs in small batches with a document drain +
-    # settle pause between each - a single uninterrupted solidworks_only
-    # session overwhelms SolidWorks and it crashes. Tune with
-    # SW_TEST_BATCH_SIZE (default 10) and SW_TEST_SETTLE_SECONDS (default 8).
-    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (batched serial), merged into one true report..." -ForegroundColor Cyan
+    # The real-SolidWorks phase batches with a document drain + settle pause
+    # between each - one uninterrupted solidworks_only session overwhelms
+    # SolidWorks and it crashes. Tune with SW_TEST_BATCH_SIZE (default 10) and
+    # SW_TEST_SETTLE_SECONDS (default 8).
+    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (batched serial), one appended report..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 
-    Remove-Item -Path .coverage.mock, .coverage.real, .coverage.combined -Force -ErrorAction SilentlyContinue
+    # Wipe prior coverage data - .coverage, .coverage.<anything>, and any
+    # leftover xdist fragments - but never .coveragerc / .coveragerc.full.
+    Get-ChildItem -Path . -Force -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -eq ".coverage" -or
+            ($_.Name -like ".coverage.*" -and $_.Name -notlike ".coveragerc*")
+        } | Remove-Item -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path htmlcov, coverage.xml -Recurse -Force -ErrorAction SilentlyContinue
+
+    # Every phase appends into this one file.
+    $env:COVERAGE_FILE = ".coverage.combined"
+    $covBase = @("--cov=src/solidworks_mcp", "--cov-append", "--cov-report=", "--cov-fail-under=0")
 
     # -n 8, not "auto": this machine has 24 logical CPUs but only ~10GB free
     # RAM once VSCode + SolidWorks are running, and "auto" spawns a worker
@@ -265,27 +276,14 @@ function dev-test-combined {
     # "auto" OOM'd the machine again when this command first ran. 8 is a
     # deliberate middle ground: faster than 4, still well clear of the ceiling.
     Write-Host "Phase 1/3: mock suite (parallel, -n 8)..." -ForegroundColor Cyan
-    $env:COVERAGE_FILE = ".coverage.mock"
-    Invoke-Pytest @(
-        "tests/",
-        "-m", "not solidworks_only",
-        "-n", "8",
-        "--cov=src/solidworks_mcp",
-        "--cov-report=",
-        "--cov-fail-under=0",
-        "-q"
-    )
+    Invoke-Pytest (@("tests/", "-m", "not solidworks_only", "-n", "8", "-q") + $covBase)
     $mockExit = $LASTEXITCODE
+    if (Test-Path .coverage.combined) {
+        Write-Host ("  mock coverage recorded ({0:N0} bytes)" -f (Get-Item .coverage.combined).Length) -ForegroundColor DarkGray
+    } else {
+        Write-Host "  WARNING: no .coverage.combined after Phase 1 - the mock half will be missing from the report." -ForegroundColor Yellow
+    }
 
-    # Phase 2 runs the real-SolidWorks suite in SMALL BATCHES, draining every
-    # open document and idling a few seconds between them
-    # (tests/scripts/sw_close_all_and_settle.py). One uninterrupted
-    # solidworks_only session has repeatedly pushed SolidWorks into a degraded
-    # RPC state or an outright crash - documents accumulate and the sustained
-    # rate of COM modelling calls exhausts it. Each batch is its own pytest
-    # process appending into .coverage.real (batch 1 fresh, rest --cov-append),
-    # so Phase 3 still sees one merged real-coverage file.
-    #
     #   SW_TEST_BATCH_SIZE      tests per batch (default 10; 0 = one session)
     #   SW_TEST_SETTLE_SECONDS  idle seconds between batches (default 8)
     $batchSize = if ($env:SW_TEST_BATCH_SIZE) { [int]$env:SW_TEST_BATCH_SIZE } else { 10 }
@@ -293,7 +291,6 @@ function dev-test-combined {
 
     Write-Host "Phase 2/3: real SolidWorks suite (batched, serial - requires SolidWorks running)..." -ForegroundColor Cyan
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
-    $env:COVERAGE_FILE = ".coverage.real"
     $realExit = 0
 
     Write-Host "  preflight: draining any open documents..." -ForegroundColor DarkGray
@@ -316,8 +313,7 @@ function dev-test-combined {
     }
     elseif ($batchSize -le 0 -and $realNodes.Count -gt 0) {
         Write-Host "  batching disabled (SW_TEST_BATCH_SIZE=0) - one serial session" -ForegroundColor DarkGray
-        Invoke-Pytest @("tests/", "-m", "solidworks_only", "-n", "1",
-            "--cov=src/solidworks_mcp", "--cov-report=", "--cov-fail-under=0", "-q")
+        Invoke-Pytest (@("tests/", "-m", "solidworks_only", "-n", "1", "-q") + $covBase)
         $realExit = $LASTEXITCODE
     }
     elseif ($realNodes.Count -gt 0) {
@@ -329,9 +325,7 @@ function dev-test-combined {
             $count    = [math]::Min($batchSize, $total - $startIdx)
             $slice    = @($realNodes[$startIdx..($startIdx + $count - 1)])
             Write-Host ("  --- batch {0}/{1} ({2} test(s)) ---" -f ($b + 1), $batches, $count) -ForegroundColor Cyan
-            $covArgs = @("--cov=src/solidworks_mcp", "--cov-report=", "--cov-fail-under=0")
-            if ($b -gt 0) { $covArgs += "--cov-append" }
-            Invoke-Pytest (@("-q", "--no-header", "-p", "no:cacheprovider", "--timeout=300") + $covArgs + $slice)
+            Invoke-Pytest (@("-q", "--no-header", "-p", "no:cacheprovider", "--timeout=300") + $covBase + $slice)
             if ($LASTEXITCODE -ne 0) { $realExit = $LASTEXITCODE }
 
             if ($b -lt $batches - 1) {
@@ -347,15 +341,21 @@ function dev-test-combined {
     }
     Remove-Item Env:\COVERAGE_FILE -ErrorAction SilentlyContinue
 
-    Write-Host "Phase 3/3: combining coverage data..." -ForegroundColor Cyan
-    $covDataFiles = @()
-    if (Test-Path .coverage.mock) { $covDataFiles += ".coverage.mock" }
-    if (Test-Path .coverage.real) { $covDataFiles += ".coverage.real" }
-    Invoke-Venv -Args (@("-m", "coverage", "combine", "--data-file=.coverage.combined", "--keep") + $covDataFiles)
-    Invoke-Venv -Args @("-m", "coverage", "html", "--data-file=.coverage.combined", "-d", "htmlcov")
-    Invoke-Venv -Args @("-m", "coverage", "xml", "--data-file=.coverage.combined", "-o", "coverage.xml")
-    Invoke-Venv -Args @("-m", "coverage", "report", "--data-file=.coverage.combined", "-m", "--fail-under=99")
-    $reportExit = $LASTEXITCODE
+    Write-Host "Phase 3/3: coverage report (.coverage.combined = mock + real, appended)..." -ForegroundColor Cyan
+    # Fold in any xdist fragments an interrupted batch left behind; harmless no-op otherwise.
+    $frags = @(Get-ChildItem -Path . -Force -File -Filter ".coverage.combined.*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+    if ($frags.Count -gt 0) {
+        Invoke-Venv (@("-m", "coverage", "combine", "--data-file=.coverage.combined", "--append") + $frags)
+    }
+    if (-not (Test-Path .coverage.combined)) {
+        Write-Host "  ERROR: .coverage.combined does not exist - no coverage was recorded by either phase." -ForegroundColor Red
+        $reportExit = 1
+    } else {
+        Invoke-Venv @("-m", "coverage", "html", "--data-file=.coverage.combined", "-d", "htmlcov")
+        Invoke-Venv @("-m", "coverage", "xml", "--data-file=.coverage.combined", "-o", "coverage.xml")
+        Invoke-Venv @("-m", "coverage", "report", "--data-file=.coverage.combined", "-m", "--fail-under=99")
+        $reportExit = $LASTEXITCODE
+    }
 
     if ($mockExit -eq 0 -and $realExit -eq 0 -and $reportExit -eq 0) {
         Write-Host "Combined suite passed! True combined coverage written to htmlcov/index.html" -ForegroundColor Green
