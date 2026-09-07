@@ -249,11 +249,11 @@ function dev-test-combined {
     # answers "is this covered by ANY test", so new tests only get written for
     # lines neither suite reaches.
     #
-    # The real-SolidWorks phase batches with a document drain + settle pause
-    # between each - one uninterrupted solidworks_only session overwhelms
-    # SolidWorks and it crashes. Tune with SW_TEST_BATCH_SIZE (default 10) and
-    # SW_TEST_SETTLE_SECONDS (default 8).
-    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (batched serial), one appended report..." -ForegroundColor Cyan
+    # The real-SolidWorks phase is ONE serial pytest session (-n 1) with a
+    # few seconds' idle between each test (SW_TEST_PACE_SECONDS, default 4).
+    # A plain inter-test gap paces SolidWorks without the subprocess churn
+    # that per-batch splitting added, and in practice held up better.
+    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (serial, paced), one appended report..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 
     # Wipe prior coverage data - .coverage, .coverage.<anything>, and any
@@ -284,16 +284,24 @@ function dev-test-combined {
         Write-Host "  WARNING: no .coverage.combined after Phase 1 - the mock half will be missing from the report." -ForegroundColor Yellow
     }
 
-    #   SW_TEST_BATCH_SIZE      tests per batch (default 10; 0 = one session)
-    #   SW_TEST_SETTLE_SECONDS  idle seconds between batches (default 8)
-    #   SOLIDWORKS_MCP_HEADLESS=1  hide the SW window for the tests/live/ group
-    #                             (~40% faster, but its sketch COM goes flaky
-    #                             hidden - a couple of wave3 tests will flake)
-    $batchSize = if ($env:SW_TEST_BATCH_SIZE) { [int]$env:SW_TEST_BATCH_SIZE } else { 10 }
-    $settle    = if ($env:SW_TEST_SETTLE_SECONDS) { [int]$env:SW_TEST_SETTLE_SECONDS } else { 8 }
+    #   SW_TEST_PACE_SECONDS  idle seconds after each real test (default 4)
+    #   SW_TEST_HEADLESS=1    hide the SW window for the real suite - ~40%
+    #                        faster, but its sketch COM goes flaky hidden
+    #                        (a couple of wave3 tests will flake); off by default
+    $pace = if ($env:SW_TEST_PACE_SECONDS) { $env:SW_TEST_PACE_SECONDS } else { "4" }
 
-    Write-Host "Phase 2/3: real SolidWorks suite (batched, serial - requires SolidWorks running)..." -ForegroundColor Cyan
+    # A SOLIDWORKS_MCP_HEADLESS left in the shell from an earlier experiment
+    # would silently flake the run - decide it explicitly from SW_TEST_HEADLESS.
+    if ($env:SW_TEST_HEADLESS -and $env:SW_TEST_HEADLESS -ne "0") {
+        $env:SOLIDWORKS_MCP_HEADLESS = "1"
+        Write-Host "  SW_TEST_HEADLESS set - running the real suite with the SolidWorks window hidden (expect a few flakes)." -ForegroundColor Yellow
+    } else {
+        Remove-Item Env:\SOLIDWORKS_MCP_HEADLESS -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Phase 2/3: real SolidWorks suite (serial, ${pace}s between tests - requires SolidWorks running)..." -ForegroundColor Cyan
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
+    $env:SW_TEST_PACE_SECONDS = "$pace"
     $realExit = 0
 
     Write-Host "  preflight: draining any open documents..." -ForegroundColor DarkGray
@@ -301,70 +309,9 @@ function dev-test-combined {
     if ($LASTEXITCODE -eq 2) {
         Write-Host "  SolidWorks is not reachable - skipping the real suite. Start SolidWorks and re-run." -ForegroundColor Red
         $realExit = 2
-        $realNodes = @()
     } else {
-        # -qq (not -q): pyproject addopts has --verbose, so -q only nets back to
-        # normal verbosity, which prints a compact "path: count" tree with no
-        # node ids. -qq forces one full node id per line. log_cli=false silences
-        # the live-log noise that would otherwise interleave.
-        $collect = & (Get-VenvPython) -m pytest "tests/" "-m" "solidworks_only" "--collect-only" "-qq" "-o" "log_cli=false" "-p" "no:cacheprovider" 2>$null
-        $realNodes = @($collect | Where-Object { $_ -match '::test_' } | ForEach-Object { $_.Trim() })
-    }
-
-    # Run one group of node ids in batches, draining + settling between each.
-    # tests/live/* run as their own group, separate from every other
-    # solidworks_only test: importing tests/live/conftest.py sets
-    # SOLIDWORKS_MCP_HEADLESS=1 (SolidWorks window hidden), and that must not
-    # bleed into an export_image / export_step smoke test in test_all_endpoints.
-    # Result goes to $script:groupRc (0 ok, non-zero pytest failure, 3 = SW
-    # went unreachable mid-group); pytest output streams straight to the host.
-    $script:groupRc = 0
-    $runBatchGroup = {
-        param($nodes, $label)
-        $script:groupRc = 0
-        if (-not $nodes -or $nodes.Count -eq 0) { return }
-        $n  = $nodes.Count
-        $nb = [math]::Ceiling($n / $batchSize)
-        Write-Host "  [$label] $n test(s), $batchSize per batch => $nb batch(es); ${settle}s settle between" -ForegroundColor DarkGray
-        for ($b = 0; $b -lt $nb; $b++) {
-            $s     = $b * $batchSize
-            $c     = [math]::Min($batchSize, $n - $s)
-            $slice = @($nodes[$s..($s + $c - 1)])
-            Write-Host ("  --- [{0}] batch {1}/{2} ({3} test(s)) ---" -f $label, ($b + 1), $nb, $c) -ForegroundColor Cyan
-            Invoke-Pytest (@("-q", "--no-header", "-p", "no:cacheprovider", "--timeout=300") + $covBase + $slice)
-            if ($LASTEXITCODE -ne 0) { $script:groupRc = $LASTEXITCODE }
-            Invoke-Venv @("tests/scripts/sw_close_all_and_settle.py", "--settle", "$settle")
-            if ($LASTEXITCODE -eq 2) {
-                Write-Host "  SolidWorks became unreachable after [$label] batch $($b + 1)/$nb - stopping the real suite." -ForegroundColor Red
-                Write-Host "  Restart SolidWorks; re-running dev-test-combined starts the real suite over." -ForegroundColor Yellow
-                $script:groupRc = 3
-                return
-            }
-        }
-    }
-
-    if ($realNodes.Count -eq 0 -and $realExit -eq 0) {
-        Write-Host "  no solidworks_only tests collected." -ForegroundColor Yellow
-    }
-    elseif ($batchSize -le 0 -and $realNodes.Count -gt 0) {
-        Write-Host "  batching disabled (SW_TEST_BATCH_SIZE=0) - one serial session" -ForegroundColor DarkGray
-        Invoke-Pytest (@("tests/", "-m", "solidworks_only", "-n", "1", "-q") + $covBase)
+        Invoke-Pytest (@("tests/", "-m", "solidworks_only", "-n", "1", "-q", "--timeout=300") + $covBase)
         $realExit = $LASTEXITCODE
-    }
-    elseif ($realNodes.Count -gt 0) {
-        $liveNodes  = @($realNodes | Where-Object { ($_ -replace '\\', '/') -match '/live/' })
-        $otherNodes = @($realNodes | Where-Object { ($_ -replace '\\', '/') -notmatch '/live/' })
-        Write-Host "  $($realNodes.Count) real tests: $($liveNodes.Count) under tests/live/ (headless), $($otherNodes.Count) other" -ForegroundColor DarkGray
-
-        & $runBatchGroup $liveNodes "live"
-        if ($script:groupRc -eq 3) { if ($realExit -eq 0) { $realExit = 3 } }
-        elseif ($script:groupRc -ne 0) { $realExit = $script:groupRc }
-
-        if ($realExit -ne 3) {
-            & $runBatchGroup $otherNodes "other"
-            if ($script:groupRc -eq 3) { if ($realExit -eq 0) { $realExit = 3 } }
-            elseif ($script:groupRc -ne 0) { $realExit = $script:groupRc }
-        }
     }
     Remove-Item Env:\COVERAGE_FILE -ErrorAction SilentlyContinue
 
@@ -389,7 +336,7 @@ function dev-test-combined {
     } else {
         Write-Host "Combined suite failed (mock exit=$mockExit, real exit=$realExit, coverage gate exit=$reportExit)." -ForegroundColor Red
         if ($realExit -eq 2) { Write-Host "  real exit=2: SolidWorks was not running - start it and re-run." -ForegroundColor Yellow }
-        if ($realExit -eq 3) { Write-Host "  real exit=3: SolidWorks crashed mid-run - restart it and re-run (or lower SW_TEST_BATCH_SIZE / raise SW_TEST_SETTLE_SECONDS)." -ForegroundColor Yellow }
+        if ($realExit -gt 0 -and $realExit -ne 2) { Write-Host "  real tests failed - if flaky COM errors, restart SolidWorks and/or raise SW_TEST_PACE_SECONDS." -ForegroundColor Yellow }
     }
 }
 
