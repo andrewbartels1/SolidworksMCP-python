@@ -123,7 +123,7 @@ function dev-help {
     Write-Host "  dev-install-ui      Install/repair UI extras in .venv only"
     Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only)"
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
-    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (serial) as 2 runs, merged into one true coverage report"
+    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (batched, serial, drain+settle between batches), merged into one true coverage report"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
     Write-Host "  dev-check-tool-count  Verify 'N tools' claims across docs match the real AST-counted total"
     Write-Host "  dev-format          Format code only (ruff format)"
@@ -246,7 +246,12 @@ function dev-test-combined {
     # redundant fake-COM test for something already proven live. Combined
     # coverage answers "is this covered by ANY test" instead, so new tests
     # only get written for lines neither suite actually reaches.
-    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (serial), merged into one true report..." -ForegroundColor Cyan
+    #
+    # The real-SolidWorks phase runs in small batches with a document drain +
+    # settle pause between each - a single uninterrupted solidworks_only
+    # session overwhelms SolidWorks and it crashes. Tune with
+    # SW_TEST_BATCH_SIZE (default 4) and SW_TEST_SETTLE_SECONDS (default 8).
+    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (batched serial), merged into one true report..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 
     Remove-Item -Path .coverage.mock, .coverage.real, .coverage.combined -Force -ErrorAction SilentlyContinue
@@ -269,23 +274,81 @@ function dev-test-combined {
     )
     $mockExit = $LASTEXITCODE
 
-    Write-Host "Phase 2/3: real SolidWorks suite (serial, -n 1 - requires SolidWorks running)..." -ForegroundColor Cyan
+    # Phase 2 runs the real-SolidWorks suite in SMALL BATCHES, draining every
+    # open document and idling a few seconds between them
+    # (tests/scripts/sw_close_all_and_settle.py). One uninterrupted
+    # solidworks_only session has repeatedly pushed SolidWorks into a degraded
+    # RPC state or an outright crash - documents accumulate and the sustained
+    # rate of COM modelling calls exhausts it. Each batch is its own pytest
+    # process appending into .coverage.real (batch 1 fresh, rest --cov-append),
+    # so Phase 3 still sees one merged real-coverage file.
+    #
+    #   SW_TEST_BATCH_SIZE      tests per batch (default 4; 0 = one session)
+    #   SW_TEST_SETTLE_SECONDS  idle seconds between batches (default 8)
+    $batchSize = if ($env:SW_TEST_BATCH_SIZE) { [int]$env:SW_TEST_BATCH_SIZE } else { 4 }
+    $settle    = if ($env:SW_TEST_SETTLE_SECONDS) { [int]$env:SW_TEST_SETTLE_SECONDS } else { 8 }
+
+    Write-Host "Phase 2/3: real SolidWorks suite (batched, serial - requires SolidWorks running)..." -ForegroundColor Cyan
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
     $env:COVERAGE_FILE = ".coverage.real"
-    Invoke-Pytest @(
-        "tests/",
-        "-m", "solidworks_only",
-        "-n", "1",
-        "--cov=src/solidworks_mcp",
-        "--cov-report=",
-        "--cov-fail-under=0",
-        "-q"
-    )
-    $realExit = $LASTEXITCODE
+    $realExit = 0
+
+    Write-Host "  preflight: draining any open documents..." -ForegroundColor DarkGray
+    Invoke-Venv @("tests/scripts/sw_close_all_and_settle.py", "--settle", "2")
+    if ($LASTEXITCODE -eq 2) {
+        Write-Host "  SolidWorks is not reachable - skipping the real suite. Start SolidWorks and re-run." -ForegroundColor Red
+        $realExit = 2
+        $realNodes = @()
+    } else {
+        # -qq (not -q): pyproject addopts has --verbose, so -q only nets back to
+        # normal verbosity, which prints a compact "path: count" tree with no
+        # node ids. -qq forces one full node id per line. log_cli=false silences
+        # the live-log noise that would otherwise interleave.
+        $collect = & (Get-VenvPython) -m pytest "tests/" "-m" "solidworks_only" "--collect-only" "-qq" "-o" "log_cli=false" "-p" "no:cacheprovider" 2>$null
+        $realNodes = @($collect | Where-Object { $_ -match '::test_' } | ForEach-Object { $_.Trim() })
+    }
+
+    if ($realNodes.Count -eq 0 -and $realExit -eq 0) {
+        Write-Host "  no solidworks_only tests collected." -ForegroundColor Yellow
+    }
+    elseif ($batchSize -le 0 -and $realNodes.Count -gt 0) {
+        Write-Host "  batching disabled (SW_TEST_BATCH_SIZE=0) - one serial session" -ForegroundColor DarkGray
+        Invoke-Pytest @("tests/", "-m", "solidworks_only", "-n", "1",
+            "--cov=src/solidworks_mcp", "--cov-report=", "--cov-fail-under=0", "-q")
+        $realExit = $LASTEXITCODE
+    }
+    elseif ($realNodes.Count -gt 0) {
+        $total   = $realNodes.Count
+        $batches = [math]::Ceiling($total / $batchSize)
+        Write-Host "  $total real tests, $batchSize per batch => $batches batch(es); ${settle}s settle between" -ForegroundColor DarkGray
+        for ($b = 0; $b -lt $batches; $b++) {
+            $startIdx = $b * $batchSize
+            $count    = [math]::Min($batchSize, $total - $startIdx)
+            $slice    = @($realNodes[$startIdx..($startIdx + $count - 1)])
+            Write-Host ("  --- batch {0}/{1} ({2} test(s)) ---" -f ($b + 1), $batches, $count) -ForegroundColor Cyan
+            $covArgs = @("--cov=src/solidworks_mcp", "--cov-report=", "--cov-fail-under=0")
+            if ($b -gt 0) { $covArgs += "--cov-append" }
+            Invoke-Pytest (@("-q", "--no-header", "-p", "no:cacheprovider", "--timeout=300") + $covArgs + $slice)
+            if ($LASTEXITCODE -ne 0) { $realExit = $LASTEXITCODE }
+
+            if ($b -lt $batches - 1) {
+                Invoke-Venv @("tests/scripts/sw_close_all_and_settle.py", "--settle", "$settle")
+                if ($LASTEXITCODE -eq 2) {
+                    Write-Host "  SolidWorks became unreachable after batch $($b + 1)/$batches - stopping the real suite." -ForegroundColor Red
+                    Write-Host "  Restart SolidWorks; re-running dev-test-combined starts the real suite over." -ForegroundColor Yellow
+                    if ($realExit -eq 0) { $realExit = 3 }
+                    break
+                }
+            }
+        }
+    }
     Remove-Item Env:\COVERAGE_FILE -ErrorAction SilentlyContinue
 
     Write-Host "Phase 3/3: combining coverage data..." -ForegroundColor Cyan
-    Invoke-Venv -Args @("-m", "coverage", "combine", "--data-file=.coverage.combined", "--keep", ".coverage.mock", ".coverage.real")
+    $covDataFiles = @()
+    if (Test-Path .coverage.mock) { $covDataFiles += ".coverage.mock" }
+    if (Test-Path .coverage.real) { $covDataFiles += ".coverage.real" }
+    Invoke-Venv -Args (@("-m", "coverage", "combine", "--data-file=.coverage.combined", "--keep") + $covDataFiles)
     Invoke-Venv -Args @("-m", "coverage", "html", "--data-file=.coverage.combined", "-d", "htmlcov")
     Invoke-Venv -Args @("-m", "coverage", "xml", "--data-file=.coverage.combined", "-o", "coverage.xml")
     Invoke-Venv -Args @("-m", "coverage", "report", "--data-file=.coverage.combined", "-m", "--fail-under=99")
@@ -295,6 +358,8 @@ function dev-test-combined {
         Write-Host "Combined suite passed! True combined coverage written to htmlcov/index.html" -ForegroundColor Green
     } else {
         Write-Host "Combined suite failed (mock exit=$mockExit, real exit=$realExit, coverage gate exit=$reportExit)." -ForegroundColor Red
+        if ($realExit -eq 2) { Write-Host "  real exit=2: SolidWorks was not running - start it and re-run." -ForegroundColor Yellow }
+        if ($realExit -eq 3) { Write-Host "  real exit=3: SolidWorks crashed mid-run - restart it and re-run (or lower SW_TEST_BATCH_SIZE / raise SW_TEST_SETTLE_SECONDS)." -ForegroundColor Yellow }
     }
 }
 
