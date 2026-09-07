@@ -1,15 +1,15 @@
 """Contract tests for the reference-geometry capabilities on the adapter surface.
 
-``create_reference_plane`` and ``create_axis`` each exist on the base adapter,
-the mock, the circuit breaker and the connection pool. A method missing from
-either wrapper silently degrades to the base "not implemented" default at
-runtime, and mock mode cannot catch it — the mock is not wrapped — so the
-wiring is asserted directly here.
+``create_reference_plane``, ``create_axis`` and ``create_reference_point``
+each exist on the base adapter, the mock, the circuit breaker and the
+connection pool. A method missing from either wrapper silently degrades to
+the base "not implemented" default at runtime, and mock mode cannot catch it
+— the mock is not wrapped — so the wiring is asserted directly here.
 
-Modeled on ``test_new_capabilities.py``, scoped to the two capabilities
-implemented on ``SolidWorksFeaturesMixin`` in
+Scoped to the capabilities implemented on ``SolidWorksFeaturesMixin`` in
 ``src/solidworks_mcp/adapters/solidworks/features.py``
-(``_create_reference_plane_impl`` / ``_create_axis_impl``).
+(``_create_reference_plane_impl`` / ``_create_axis_impl`` /
+``_create_reference_point_impl``).
 """
 
 import inspect
@@ -21,10 +21,11 @@ from solidworks_mcp.adapters.circuit_breaker import CircuitBreakerAdapter
 from solidworks_mcp.adapters.connection_pool import ConnectionPoolAdapter
 from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
-#: Capabilities added on this branch.
+#: Reference-geometry capabilities on ``SolidWorksFeaturesMixin``.
 CAPABILITIES = [
     "create_reference_plane",
     "create_axis",
+    "create_reference_point",
 ]
 
 WRAPPERS = [
@@ -177,6 +178,10 @@ async def test_base_defaults_report_missing_capability() -> None:
     assert not axis_result.is_success
     assert "create_axis" in (axis_result.error or "")
 
+    point_result = await adapter.create_reference_point("face_center", 0.0, 0.0, 0.0)
+    assert not point_result.is_success
+    assert "create_reference_point" in (point_result.error or "")
+
 
 # --- Mock refusals: must mirror the live adapter, never fabricate a result ---
 
@@ -250,6 +255,71 @@ async def test_mock_create_axis_success_shape() -> None:
     assert result.data["reference"] == "x"
     assert result.data["planes"] == ["Top Plane", "Front Plane"]
     assert result.data["features_after"] == result.data["features_before"] + 1
+
+
+@pytest.mark.asyncio
+async def test_mock_create_reference_point_along_curve_success_shape() -> None:
+    """Success invents a sequential point name and bumps the feature tree."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+
+    first = await adapter.create_reference_point("along_curve", 10, 0, 5, percent=50)
+    assert first.is_success
+    assert first.data["name"] == "Point1"
+    assert first.data["mode"] == "along_curve"
+    assert first.data["percent"] == 50
+    assert first.data["distance_mm"] is None
+    assert first.data["features_after"] == first.data["features_before"] + 1
+
+    second = await adapter.create_reference_point(
+        "along_curve", 0, 0, 0, distance=3.0
+    )
+    assert second.is_success
+    assert second.data["name"] == "Point2"
+    assert second.data["distance_mm"] == 3.0
+    assert second.data["features_before"] == first.data["features_after"]
+
+
+@pytest.mark.asyncio
+async def test_mock_create_reference_point_face_center_success_shape() -> None:
+    """face_center needs no distance/percent and reports neither."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+
+    result = await adapter.create_reference_point("face_center", 1, 2, 3)
+    assert result.is_success
+    assert result.data["mode"] == "face_center"
+    assert result.data["distance_mm"] is None
+    assert result.data["percent"] is None
+    assert result.data["at_mm"] == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "distance", "percent", "needle"),
+    [
+        ("spiral", None, None, "Unknown mode"),
+        ("along_curve", None, None, "exactly one"),
+        ("along_curve", 5.0, 50.0, "exactly one"),
+        ("along_curve", -1.0, None, "distance must be positive"),
+        ("along_curve", None, 150.0, "between 0 and 100"),
+    ],
+)
+async def test_mock_create_reference_point_refusals(
+    mode: str, distance: float | None, percent: float | None, needle: str
+) -> None:
+    """Bad mode / distance / percent combinations mirror the live refusals."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+
+    result = await adapter.create_reference_point(
+        mode, 0, 0, 0, distance=distance, percent=percent
+    )
+    assert not result.is_success
+    assert needle in (result.error or "")
 
 
 @pytest.mark.asyncio

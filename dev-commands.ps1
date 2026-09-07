@@ -121,9 +121,9 @@ function dev-help {
     Write-Host ""
     Write-Host "  dev-install         Install/sync dependencies via uv (creates/repairs .venv)"
     Write-Host "  dev-install-ui      Install/repair UI extras in .venv only"
-    Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only)"
+    Write-Host "  dev-test            Run test suite with coverage (excludes solidworks_only, smoke, slow)"
     Write-Host "  dev-test-full       Run full suite including real SolidWorks integration tests"
-    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (serial) as 2 runs, merged into one true coverage report"
+    Write-Host "  dev-test-combined   Mock (parallel) + real-SW (serial, drain+idle between each test), merged into one true coverage report"
     Write-Host "  dev-lint            Format + lint code (ruff format + ruff check)"
     Write-Host "  dev-check-tool-count  Verify 'N tools' claims across docs match the real AST-counted total"
     Write-Host "  dev-format          Format code only (ruff format)"
@@ -182,13 +182,15 @@ function dev-test {
     # Keep generated integration artifacts from previous runs from accumulating.
     Invoke-IntegrationCleanup
 
-    # -n 4, not "auto": this machine has 24 logical CPUs but only ~10GB free
+    # -n 8, not "auto": this machine has 24 logical CPUs but only ~10GB free
     # RAM once VSCode + SolidWorks are running - "auto" spawns a worker per
-    # CPU, each loading the full package + deps, and OOMs the machine.
+    # CPU, each loading the full package + deps, and OOMs the machine. 8 is a
+    # deliberate middle ground: noticeably faster than 4, still well clear of
+    # the OOM ceiling.
     Invoke-Pytest @(
         "tests/",
-        "-m", "not solidworks_only and not smoke",
-        "-n", "4",
+        "-m", "not solidworks_only and not smoke and not slow",
+        "-n", "8",
         "--cov=src/solidworks_mcp",
         "--cov-report=term-missing",
         "--cov-report=html:htmlcov",
@@ -233,68 +235,108 @@ function dev-test-full {
 function dev-test-combined {
     # dev-test-full runs everything serially in one ~30-50min pytest session
     # (-n 1 for the whole tree, since real COM needs single-threaded). This
-    # runs the mock suite in parallel and the real-SolidWorks suite serially
-    # as two SEPARATE pytest sessions, each writing to its own coverage data
-    # file, then combines them with `coverage combine` into one true report -
-    # the union of what mock tests AND real-SolidWorks tests each cover.
+    # runs the mock suite in parallel, then the real-SolidWorks suite in small
+    # serial batches, with EVERY pytest invocation --cov-append-ing into one
+    # shared data file (.coverage.combined). The result is the union of what
+    # mock tests AND real-SolidWorks tests each cover - no separate mock/real
+    # files, no `coverage combine` of named files (that step is what silently
+    # dropped the mock half before: "Combined 1 file").
     #
-    # Why this matters: a line only reachable via real COM (e.g. a defensive
-    # "SolidWorks returned nothing" raise inside add_mate) will always show
-    # as "missing" in a mock-only report, even once test_live_sw_regression.py
-    # genuinely exercises it. Chasing that gap with more mock tests either
-    # means skipping it (leaving a misleading "uncovered" line) or writing a
-    # redundant fake-COM test for something already proven live. Combined
-    # coverage answers "is this covered by ANY test" instead, so new tests
-    # only get written for lines neither suite actually reaches.
-    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (serial), merged into one true report..." -ForegroundColor Cyan
+    # Why the union matters: a line only reachable via real COM (e.g. a
+    # defensive "SolidWorks returned nothing" raise inside add_mate) always
+    # shows as "missing" in a mock-only report, even once
+    # test_live_sw_regression.py genuinely exercises it. Combined coverage
+    # answers "is this covered by ANY test", so new tests only get written for
+    # lines neither suite reaches.
+    #
+    # The real-SolidWorks phase is ONE serial pytest session (-n 1) with a
+    # few seconds' idle between each test (SW_TEST_PACE_SECONDS, default 4).
+    # It drains open documents + idles between each test - the recovery the
+    # per-batch drain gave, without the per-batch subprocess churn.
+    Write-Host "Running combined coverage: mock suite (parallel) + real SolidWorks suite (serial, paced), one appended report..." -ForegroundColor Cyan
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 
-    Remove-Item -Path .coverage.mock, .coverage.real, .coverage.combined -Force -ErrorAction SilentlyContinue
+    # Wipe prior coverage data - .coverage, .coverage.<anything>, and any
+    # leftover xdist fragments - but never .coveragerc / .coveragerc.full.
+    Get-ChildItem -Path . -Force -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -eq ".coverage" -or
+            ($_.Name -like ".coverage.*" -and $_.Name -notlike ".coveragerc*")
+        } | Remove-Item -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path htmlcov, coverage.xml -Recurse -Force -ErrorAction SilentlyContinue
 
-    # -n 4, not "auto": this machine has 24 logical CPUs but only ~10GB free
+    # Every phase appends into this one file.
+    $env:COVERAGE_FILE = ".coverage.combined"
+    $covBase = @("--cov=src/solidworks_mcp", "--cov-append", "--cov-report=", "--cov-fail-under=0")
+
+    # -n 8, not "auto": this machine has 24 logical CPUs but only ~10GB free
     # RAM once VSCode + SolidWorks are running, and "auto" spawns a worker
     # per CPU - each loading the full package + deps. Already learned the
     # hard way once this session (see TODO_SESSION.md's 2026-08-14 entry) -
-    # "auto" OOM'd the machine again when this command first ran.
-    Write-Host "Phase 1/3: mock suite (parallel, -n 4)..." -ForegroundColor Cyan
-    $env:COVERAGE_FILE = ".coverage.mock"
-    Invoke-Pytest @(
-        "tests/",
-        "-m", "not solidworks_only",
-        "-n", "4",
-        "--cov=src/solidworks_mcp",
-        "--cov-report=",
-        "--cov-fail-under=0",
-        "-q"
-    )
+    # "auto" OOM'd the machine again when this command first ran. 8 is a
+    # deliberate middle ground: faster than 4, still well clear of the ceiling.
+    Write-Host "Phase 1/3: mock suite (parallel, -n 8)..." -ForegroundColor Cyan
+    Invoke-Pytest (@("tests/", "-m", "not solidworks_only", "-n", "8", "-q") + $covBase)
     $mockExit = $LASTEXITCODE
+    if (Test-Path .coverage.combined) {
+        Write-Host ("  mock coverage recorded ({0:N0} bytes)" -f (Get-Item .coverage.combined).Length) -ForegroundColor DarkGray
+    } else {
+        Write-Host "  WARNING: no .coverage.combined after Phase 1 - the mock half will be missing from the report." -ForegroundColor Yellow
+    }
 
-    Write-Host "Phase 2/3: real SolidWorks suite (serial, -n 1 - requires SolidWorks running)..." -ForegroundColor Cyan
+    #   SW_TEST_PACE_SECONDS  idle seconds after each real test (default 4)
+    #   SW_TEST_HEADLESS=1    hide the SW window for the real suite - ~40%
+    #                        faster, but its sketch COM goes flaky hidden
+    #                        (a couple of wave3 tests will flake); off by default
+    $pace = if ($env:SW_TEST_PACE_SECONDS) { $env:SW_TEST_PACE_SECONDS } else { "4" }
+
+    # A SOLIDWORKS_MCP_HEADLESS left in the shell from an earlier experiment
+    # would silently flake the run - decide it explicitly from SW_TEST_HEADLESS.
+    if ($env:SW_TEST_HEADLESS -and $env:SW_TEST_HEADLESS -ne "0") {
+        $env:SOLIDWORKS_MCP_HEADLESS = "1"
+        Write-Host "  SW_TEST_HEADLESS set - running the real suite with the SolidWorks window hidden (expect a few flakes)." -ForegroundColor Yellow
+    } else {
+        Remove-Item Env:\SOLIDWORKS_MCP_HEADLESS -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Phase 2/3: real SolidWorks suite (serial, ${pace}s between tests - requires SolidWorks running)..." -ForegroundColor Cyan
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
-    $env:COVERAGE_FILE = ".coverage.real"
-    Invoke-Pytest @(
-        "tests/",
-        "-m", "solidworks_only",
-        "-n", "1",
-        "--cov=src/solidworks_mcp",
-        "--cov-report=",
-        "--cov-fail-under=0",
-        "-q"
-    )
-    $realExit = $LASTEXITCODE
+    $env:SW_TEST_PACE_SECONDS = "$pace"
+    $realExit = 0
+
+    Write-Host "  preflight: draining any open documents..." -ForegroundColor DarkGray
+    Invoke-Venv @("tests/scripts/sw_close_all_and_settle.py", "--settle", "2")
+    if ($LASTEXITCODE -eq 2) {
+        Write-Host "  SolidWorks is not reachable - skipping the real suite. Start SolidWorks and re-run." -ForegroundColor Red
+        $realExit = 2
+    } else {
+        Invoke-Pytest (@("tests/", "-m", "solidworks_only", "-n", "1", "-q", "--timeout=300") + $covBase)
+        $realExit = $LASTEXITCODE
+    }
     Remove-Item Env:\COVERAGE_FILE -ErrorAction SilentlyContinue
 
-    Write-Host "Phase 3/3: combining coverage data..." -ForegroundColor Cyan
-    Invoke-Venv -Args @("-m", "coverage", "combine", "--data-file=.coverage.combined", "--keep", ".coverage.mock", ".coverage.real")
-    Invoke-Venv -Args @("-m", "coverage", "html", "--data-file=.coverage.combined", "-d", "htmlcov")
-    Invoke-Venv -Args @("-m", "coverage", "xml", "--data-file=.coverage.combined", "-o", "coverage.xml")
-    Invoke-Venv -Args @("-m", "coverage", "report", "--data-file=.coverage.combined", "-m", "--fail-under=99")
-    $reportExit = $LASTEXITCODE
+    Write-Host "Phase 3/3: coverage report (.coverage.combined = mock + real, appended)..." -ForegroundColor Cyan
+    # Fold in any xdist fragments an interrupted batch left behind; harmless no-op otherwise.
+    $frags = @(Get-ChildItem -Path . -Force -File -Filter ".coverage.combined.*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+    if ($frags.Count -gt 0) {
+        Invoke-Venv (@("-m", "coverage", "combine", "--data-file=.coverage.combined", "--append") + $frags)
+    }
+    if (-not (Test-Path .coverage.combined)) {
+        Write-Host "  ERROR: .coverage.combined does not exist - no coverage was recorded by either phase." -ForegroundColor Red
+        $reportExit = 1
+    } else {
+        Invoke-Venv @("-m", "coverage", "html", "--data-file=.coverage.combined", "-d", "htmlcov")
+        Invoke-Venv @("-m", "coverage", "xml", "--data-file=.coverage.combined", "-o", "coverage.xml")
+        Invoke-Venv @("-m", "coverage", "report", "--data-file=.coverage.combined", "-m", "--fail-under=99")
+        $reportExit = $LASTEXITCODE
+    }
 
     if ($mockExit -eq 0 -and $realExit -eq 0 -and $reportExit -eq 0) {
         Write-Host "Combined suite passed! True combined coverage written to htmlcov/index.html" -ForegroundColor Green
     } else {
         Write-Host "Combined suite failed (mock exit=$mockExit, real exit=$realExit, coverage gate exit=$reportExit)." -ForegroundColor Red
+        if ($realExit -eq 2) { Write-Host "  real exit=2: SolidWorks was not running - start it and re-run." -ForegroundColor Yellow }
+        if ($realExit -gt 0 -and $realExit -ne 2) { Write-Host "  real tests failed - if flaky COM errors, restart SolidWorks and/or raise SW_TEST_PACE_SECONDS." -ForegroundColor Yellow }
     }
 }
 

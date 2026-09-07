@@ -25,6 +25,41 @@ from solidworks_mcp.server import SolidWorksMCPServer
 # Test configuration
 os.environ["USE_MOCK_SOLIDWORKS"] = "true"
 
+# Keep the embedding model (sentence-transformers / all-MiniLM-L6-v2) fully
+# local during tests. Without this every SentenceTransformer(...) construction
+# fires ~30 HuggingFace Hub HEAD requests to revalidate the already-cached
+# model files - slow, and it floods the live-log with httpx/huggingface_hub
+# noise on whichever test happens to trigger a docs-discovery RAG rebuild.
+# setdefault so a dev can still `HF_HUB_OFFLINE=0 ...` to refresh the cache.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Silence third-party INFO chatter that otherwise dominates the live log.
+
+    faiss's AVX-probe lines, huggingface_hub's cache-hit HEADs, httpx request
+    logging and sentence-transformers' load banner add nothing to a test
+    report - they just bury the actual PASSED/FAILED lines, especially in the
+    batched real-SolidWorks run.
+    """
+    import logging
+
+    for name in (
+        "httpx",
+        "httpcore",
+        "huggingface_hub",
+        "sentence_transformers",
+        "transformers",
+        "faiss",
+        "faiss.loader",
+        "filelock",
+        "urllib3",
+    ):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop]:

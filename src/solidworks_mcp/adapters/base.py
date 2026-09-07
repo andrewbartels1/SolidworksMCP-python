@@ -1002,6 +1002,35 @@ class SolidWorksAdapter(ABC):
             error="create_axis is not implemented by this adapter",
         )
 
+    async def create_reference_point(
+        self,
+        mode: str,
+        x: float,
+        y: float,
+        z: float,
+        distance: float | None = None,
+        percent: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a reference point on the active part.
+
+        Args:
+            mode (str): "along_curve" or "face_center".
+            x (float): X of a point on the target edge/face, in millimetres.
+            y (float): Y of a point on the target edge/face, in millimetres.
+            z (float): Z of a point on the target edge/face, in millimetres.
+            distance (float | None): For "along_curve", offset from the edge
+                start in millimetres.
+            percent (float | None): For "along_curve", position as 0-100 of
+                the edge length.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The mode and feature counts, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_reference_point is not implemented by this adapter",
+        )
+
     async def mirror_feature(
         self,
         features: list[str],
@@ -1195,6 +1224,48 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="list_drawing_views is not implemented by this adapter",
+        )
+
+    async def auto_center_marks(
+        self,
+        view_name: str,
+        mark_holes: bool = True,
+        mark_fillets: bool = False,
+        mark_slots: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-insert centre marks on circular features in a drawing view.
+
+        Args:
+            view_name (str): Name of a view on the active drawing.
+            mark_holes (bool): Mark holes / bores.
+            mark_fillets (bool): Mark fillets.
+            mark_slots (bool): Mark slots.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The view and before/after centre-mark
+            counts, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="auto_center_marks is not implemented by this adapter",
+        )
+
+    async def save_body_as_part(
+        self, body_name: str, file_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Extract one solid body from the active multibody part to a new file.
+
+        Args:
+            body_name (str): Name of a solid body in the active part.
+            file_path (str): Absolute path for the new ``.sldprt``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The body, the written path, and the
+            solid-body names found, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="save_body_as_part is not implemented by this adapter",
         )
 
     async def check_interference(

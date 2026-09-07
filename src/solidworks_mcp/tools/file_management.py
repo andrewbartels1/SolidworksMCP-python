@@ -286,6 +286,28 @@ class ActivateDocumentInput(CompatInput):
             raise ValueError("title_or_path is required")
 
 
+class SaveBodyAsPartInput(CompatInput):
+    """Input schema for extracting a solid body to its own part file.
+
+    Attributes:
+        body_name (str): Name of a solid body in the active multibody part.
+        file_path (str): Absolute path for the new ``.sldprt``.
+    """
+
+    body_name: str = Field(
+        description="Name of a solid body in the active part, e.g. 'Boss-Extrude1'"
+    )
+    file_path: str = Field(
+        description="Absolute path for the new .sldprt (parent directory must exist)"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.body_name.strip():
+            raise ValueError("body_name is required")
+        if not self.file_path.strip():
+            raise ValueError("file_path is required")
+
+
 async def register_file_management_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -1719,5 +1741,63 @@ async def register_file_management_tools(
             logger.error(f"Error in activate_document tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 17  # Total number of registered tools in this module
+    @mcp.tool()
+    async def save_body_as_part(
+        input_data: SaveBodyAsPartInput,
+    ) -> dict[str, Any]:
+        """Extract one solid body from the active multibody part to a new file.
+
+        Runs SolidWorks' Save Bodies on a single named body, writing a
+        standalone part to ``file_path``. The body is matched by name against
+        the active part's solid bodies; the response lists every solid body
+        found, so an unknown name reports the real options. Success is
+        confirmed by the file existing on disk afterwards.
+
+        Args:
+            input_data (SaveBodyAsPartInput): The body name and target path.
+
+        Returns:
+            dict[str, Any]: Status, the written path, and the solid-body list.
+
+        Example:
+            ```python
+            await save_body_as_part({
+                "body_name": "Boss-Extrude1",
+                "file_path": "C:/parts/bracket_body.sldprt"
+            })
+            ```
+        """
+        try:
+            if not hasattr(adapter, "save_body_as_part"):
+                return {
+                    "status": "error",
+                    "message": (
+                        "Active adapter does not support save_body_as_part; "
+                        "no file was written."
+                    ),
+                }
+            input_data = _coerce_input(SaveBodyAsPartInput, input_data)
+            result = await adapter.save_body_as_part(
+                input_data.body_name, input_data.file_path
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                return {
+                    "status": "success",
+                    "message": (
+                        f"Saved body {input_data.body_name} to "
+                        f"{data.get('file_path', input_data.file_path)}"
+                    ),
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to save body as part: {result.error}",
+            }
+        except Exception as e:
+            logger.error(f"Error in save_body_as_part tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    tool_count = 18  # Total number of registered tools in this module
     return tool_count

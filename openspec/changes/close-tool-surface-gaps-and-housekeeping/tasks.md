@@ -43,12 +43,18 @@
 
 ## 3. #58 — create_reference_point
 
-- [ ] 3.1 Verify the live vertex/curve/sketch-point signatures, implement
-      `create_reference_point` with read-back verification, and register
-      it in `modeling.py`
-- [ ] 3.2 Add the matching `mock_adapter.py` implementation
-- [ ] 3.3 Add tests for all three placement modes and an unresolvable
-      reference (`specs/tools/reference-point`); verify `dev-test` passes
+- [x] 3.1 Verify the live signatures, implement `create_reference_point` and
+      register it in `modeling.py`. Scope: `along_curve` (a point on the edge
+      under `(x,y,z)` mm, at a distance or percentage) and `face_center`;
+      selection is a coordinate `SelectByID2` pick (`ForceRebuild3` first,
+      `VT_DISPATCH` null callout). `InsertReferencePoint` always returns a
+      feature, so success is the feature count rising. `swRefPointType_e`
+      values transcribed from a live `swconst.tlb`
+- [x] 3.2 Add the matching `mock_adapter.py` implementation (mirrors the
+      mode / distance-percent XOR validation, bumps the feature counter)
+- [x] 3.3 Add tests for both modes and the bad-mode / bad-parameter
+      refusals (`test_reference_geometry_capability.py` + tool tests +
+      `tests/test_live_sw_wave3.py`); `dev-test` passes
 
 ## 4. #60 — set_units
 
@@ -78,24 +84,31 @@
 
 ## 6. #62 — save_body_as_part
 
-- [ ] 6.1 Verify the live body-extraction COM path, implement
-      `save_body_as_part` reusing the existing `save_as` write path, and
-      register it in `modeling.py`
-- [ ] 6.2 Add the matching `mock_adapter.py` implementation (multibody
-      fixture)
-- [ ] 6.3 Add tests for successful extraction, unresolvable body name, and
-      an unaffected source part (`specs/tools/multibody-part-export`);
-      verify `dev-test` passes
+- [x] 6.1 Implement `save_body_as_part` via `IFeatureManager::
+      CreateSaveBodyFeature` (the Save Bodies API); body matched by
+      `IBody2::Name` against `IPartDoc::GetBodies2(swSolidBody)`; the
+      body/path arrays are passed as `VT_ARRAY` VARIANTs. Registered in
+      `file_management.py`. Success is confirmed by the file existing on disk
+- [x] 6.2 Add the matching `mock_adapter.py` implementation (mirrors the
+      not-a-part / blank-argument / missing-parent-dir refusals and writes a
+      placeholder file so the side effect is observable)
+- [x] 6.3 Add tests for successful extraction, unresolvable body name, and
+      the not-a-part guard (`test_multibody_capability.py` + tool tests +
+      `tests/test_live_sw_wave3.py`); `dev-test` passes
 
 ## 7. #63 — auto_center_marks
 
-- [ ] 7.1 Verify the live center-mark COM path, implement
-      `auto_center_marks` returning the inserted count, and register it in
-      `drawing.py`
-- [ ] 7.2 Add the matching `mock_adapter.py` implementation
-- [ ] 7.3 Add tests for a view with holes, a view with none, and an
-      unresolvable view name (`specs/tools/drawing-center-marks`); verify
-      `dev-test` passes
+- [x] 7.1 Implement `auto_center_marks` via `IView::AutoInsertCenterMarks2`
+      (fallback `AutoInsertCenterMarks`), resolving the view by name from
+      `IDrawingDoc::GetViews`. The API returns no count, so
+      `IView::GetCenterMarkCount` is read before/after and the delta is
+      reported (adding nothing is still a success). Registered in `drawing.py`
+- [x] 7.2 Add the matching `mock_adapter.py` implementation (per-view
+      centre-mark counter; mirrors the not-a-drawing / no-feature-type /
+      unknown-view refusals)
+- [x] 7.3 Add tests for a first run that adds marks, a second run that adds
+      none, and the refusal paths (`test_drawing_capabilities.py` + tool
+      tests + `tests/test_live_sw_wave3.py`); `dev-test` passes
 
 ## 8. #64 — Granular API lookup tools
 

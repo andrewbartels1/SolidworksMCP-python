@@ -192,6 +192,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # pattern_circular the same way known_sources validates mirror
         # sources.
         self._axes: list[str] = []
+        # Reference points created via create_reference_point, in creation
+        # order, invented "PointN" names on the same pattern as _axes.
+        self._reference_points: list[str] = []
+        # Centre-mark count per drawing-view name, grown by auto_center_marks.
+        self._center_marks: dict[str, int] = {}
         self._feature_tree_count = 0
         # Volume tracked for mirror_feature, in mm^3. Seeded at the
         # live-measured 1819569.1 mm^3 wing volume from
@@ -2324,6 +2329,150 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"] / 2,
         )
 
+    async def auto_center_marks(
+        self,
+        view_name: str,
+        mark_holes: bool = True,
+        mark_fillets: bool = False,
+        mark_slots: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock auto-inserting centre marks on a drawing view.
+
+        The mock has no geometry, so it cannot know how many circular
+        features a view holds - it mirrors the live adapter's refusals (not
+        a drawing, no feature type selected, unknown view) and, on a valid
+        request, records a nominal centre-mark increase per view so
+        before/after deltas stay monotonic across calls.
+
+        Args:
+            view_name (str): Name of a view on the active drawing.
+            mark_holes (bool): Mark holes / bores.
+            mark_fillets (bool): Mark fillets.
+            mark_slots (bool): Mark slots.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The view, the feature types acted
+            on, and before/after centre-mark counts, or an error.
+        """
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+
+        model = self._current_model
+        if model is None or getattr(model, "type", None) != "Drawing":
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="auto_center_marks requires an active drawing document",
+            )
+        if not (mark_holes or mark_fillets or mark_slots):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "Select at least one feature type: mark_holes, "
+                    "mark_fillets or mark_slots."
+                ),
+            )
+        if view_name not in self._drawing_views:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"No view named {view_name!r} on the active drawing. "
+                    f"Views: {', '.join(self._drawing_views) or 'none'}"
+                ),
+            )
+
+        self._operation_count += 1
+        before = self._center_marks.get(view_name, 0)
+        # Nominal: two marks per selected feature type, added once.
+        added = 0 if before else 2 * sum(
+            (mark_holes, mark_fillets, mark_slots)
+        )
+        after = before + added
+        self._center_marks[view_name] = after
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "view": view_name,
+                "feature_types": [
+                    label
+                    for label, on in (
+                        ("holes", mark_holes),
+                        ("fillets", mark_fillets),
+                        ("slots", mark_slots),
+                    )
+                    if on
+                ],
+                "center_marks_before": before,
+                "center_marks_after": after,
+                "center_marks_added": added,
+            },
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
+    async def save_body_as_part(
+        self, body_name: str, file_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock extracting a solid body from the active part to a new file.
+
+        The mock has no bodies, so it cannot validate ``body_name`` against
+        real geometry - it mirrors the live adapter's other refusals (no
+        model, not a part, blank arguments, missing parent directory) and, on
+        a valid request, writes an empty placeholder file so callers and
+        tests can observe the side effect.
+
+        Args:
+            body_name (str): Name of a solid body in the active part.
+            file_path (str): Absolute path for the new ``.sldprt``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The body, the written path, and a
+            single-element body list, or an error.
+        """
+        import os as _os
+
+        await asyncio.sleep(self._delays["model_operation"])
+
+        model = self._current_model
+        if model is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        if getattr(model, "type", None) != "Part":
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="save_body_as_part requires an active part document",
+            )
+        if not str(body_name or "").strip():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="body_name is required"
+            )
+        target = str(file_path or "").strip()
+        if not target:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="file_path is required"
+            )
+        target = _os.path.abspath(target)
+        parent = _os.path.dirname(target)
+        if not _os.path.isdir(parent):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Parent directory does not exist: {parent}",
+            )
+
+        with open(target, "w", encoding="utf-8"):
+            pass
+        self._operation_count += 1
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "body": body_name,
+                "file_path": target,
+                "feature": f"Save Bodies{self._operation_count}",
+                "solid_bodies": [body_name],
+            },
+            execution_time=self._delays["model_operation"],
+        )
+
     async def check_interference(
         self, params: Any = None
     ) -> AdapterResult[dict[str, Any]]:
@@ -2747,6 +2896,80 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "planes": [plane_a, plane_b],
                 "features_before": before,
                 "features_after": after,
+            },
+            execution_time=self._delays["feature_operation"],
+        )
+
+    async def create_reference_point(
+        self,
+        mode: str,
+        x: float,
+        y: float,
+        z: float,
+        distance: float | None = None,
+        percent: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock creating a reference point on the active part.
+
+        The mock has no geometry, so it cannot resolve a coordinate to an
+        edge/face - it mirrors the live adapter's *validation* (unknown mode,
+        the distance/percent XOR, range checks) and, on a valid request,
+        bumps the feature counter the way ``InsertReferencePoint`` would.
+
+        Args:
+            mode (str): "along_curve" or "face_center".
+            x (float): X of a point on the target entity, in millimetres.
+            y (float): Y of a point on the target entity, in millimetres.
+            z (float): Z of a point on the target entity, in millimetres.
+            distance (float | None): For "along_curve", offset from the edge
+                start in millimetres.
+            percent (float | None): For "along_curve", 0-100 of edge length.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The mode and feature counts, or an
+            error matching the live adapter's refusals.
+        """
+        key = str(mode or "").strip().lower()
+        if key not in ("along_curve", "face_center"):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown mode {mode!r}. Use 'along_curve' or 'face_center'."
+                ),
+            )
+        if key == "along_curve":
+            if (distance is None) == (percent is None):
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error="along_curve needs exactly one of distance or percent",
+                )
+            if distance is not None and float(distance) <= 0.0:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error="distance must be positive",
+                )
+            if percent is not None and not 0.0 < float(percent) < 100.0:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error="percent must be between 0 and 100 (exclusive)",
+                )
+
+        await asyncio.sleep(self._delays["feature_operation"])
+        self._operation_count += 1
+        before = self._feature_tree_count
+        self._feature_tree_count += 1
+        self._reference_points.append(f"Point{len(self._reference_points) + 1}")
+
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": self._reference_points[-1],
+                "mode": key,
+                "at_mm": [x, y, z],
+                "distance_mm": distance if key == "along_curve" else None,
+                "percent": percent if key == "along_curve" else None,
+                "features_before": before,
+                "features_after": self._feature_tree_count,
             },
             execution_time=self._delays["feature_operation"],
         )

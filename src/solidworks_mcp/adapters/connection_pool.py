@@ -638,6 +638,23 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "create_axis", lambda adapter: adapter.create_axis(reference)
         )
 
+    async def create_reference_point(
+        self,
+        mode: str,
+        x: float,
+        y: float,
+        z: float,
+        distance: float | None = None,
+        percent: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a reference point using pool."""
+        return await self._execute_with_pool(
+            "create_reference_point",
+            lambda adapter: adapter.create_reference_point(
+                mode, x, y, z, distance, percent
+            ),
+        )
+
     async def mirror_feature(
         self,
         features: list[str],
@@ -1156,6 +1173,30 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """
         return await self._execute_with_pool(
             "list_drawing_views", lambda adapter: adapter.list_drawing_views()
+        )
+
+    async def auto_center_marks(
+        self,
+        view_name: str,
+        mark_holes: bool = True,
+        mark_fillets: bool = False,
+        mark_slots: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-insert drawing centre marks using pool."""
+        return await self._execute_with_pool(
+            "auto_center_marks",
+            lambda adapter: adapter.auto_center_marks(
+                view_name, mark_holes, mark_fillets, mark_slots
+            ),
+        )
+
+    async def save_body_as_part(
+        self, body_name: str, file_path: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Save a body to a new part using pool."""
+        return await self._execute_with_pool(
+            "save_body_as_part",
+            lambda adapter: adapter.save_body_as_part(body_name, file_path),
         )
 
     async def check_interference(
