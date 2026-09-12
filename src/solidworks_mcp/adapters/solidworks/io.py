@@ -647,6 +647,16 @@ _SW_CM_TYPE_SLOT = 4
 # swCenterMarkStyle_e.swCenterMark_Single
 _SW_CM_STYLE_SINGLE = 2
 
+# swAnnotationType_e.swCenterMarkSym — annotation type value for centre-mark
+# annotations auto-inserted by IView::AutoInsertCenterMarks2. There is no
+# member literally named "swAnnotationCenterMark" in swAnnotationType_e; that
+# name was a guess and 17 is actually swWeldBeadSymbol, which would have
+# reproduced the 0/0/0 bug on drawings with no weld beads (and silently
+# miscounted weld bead symbols as centre marks on drawings that have any).
+# Value confirmed against the published swconst enum (swAnnotationType_e):
+# https://help.solidworks.com/2026/english/api/swconst/SolidWorks.Interop.swconst~SolidWorks.Interop.swconst.swAnnotationType_e.html
+_SW_ANNOTATION_CENTER_MARK = 13
+
 
 def _variant_array(element_vt: int, values: Any) -> Any:
     """Wrap a Python sequence as a SAFEARRAY VARIANT for a SolidWorks call.
@@ -2739,10 +2749,17 @@ class SolidWorksIOMixin:
 
         Wraps ``IView::AutoInsertCenterMarks2`` (falling back to
         ``AutoInsertCenterMarks`` on older builds) using the document's
-        default size/gap/font. The call does not report how many marks it
-        added, so ``IView::GetCenterMarkCount`` is read before and after and
-        the delta is reported. Adding nothing is still a success - the view
-        may simply have no un-marked circular features.
+        default size/gap/font. ``IView::GetCenterMarkCount()`` returns 0
+        regardless of marks actually present on SW 3DEXPERIENCE R2026x, so
+        the count is derived instead from ``IView::GetAnnotations()``: the
+        view's annotations are enumerated and those flagged as
+        ``swCenterMarkSym`` (``swAnnotationType_e``) are counted.
+        ``center_marks_before == center_marks_after == 0`` is reported when
+        the annotation enumeration cannot be performed (COM unavailable or
+        older builds).
+
+        Adding nothing is still a success - the view may simply have no
+        un-marked circular features.
 
         Args:
             view_name: Name of a view on the active drawing.
@@ -2784,10 +2801,36 @@ class SolidWorksIOMixin:
                     f"Views: {', '.join(_view_names(adapter, drawing)) or 'none'}"
                 )
 
-            before_raw = adapter._attempt(
-                lambda: view.GetCenterMarkCount(), default=None
-            )
-            before = int(before_raw) if isinstance(before_raw, (int, float)) else 0
+            def _center_mark_count() -> int:
+                """Count annotations on the view flagged as swCenterMarkSym.
+
+                Enumerates ``IView::GetAnnotations()`` and inspects each
+                annotation's type via ``IAnnotation::GetType()``. Returns 0 when
+                the enumeration cannot be performed (COM unavailable, older
+                builds, or the annotation type is unknown). This is the count
+                source for both ``center_marks_before`` and ``center_marks_after``.
+                """
+                raw_annos = adapter._attempt(
+                    lambda: view.GetAnnotations(), default=None
+                )
+                if not isinstance(raw_annos, (list, tuple)):
+                    return 0
+                count = 0
+                for raw in raw_annos:
+                    anno = _as_com(adapter, raw, "IAnnotation")
+                    if anno is None:
+                        continue
+                    anno_type = adapter._attempt(
+                        lambda anno=anno: anno.GetType(), default=None
+                    )
+                    if (
+                        isinstance(anno_type, (int, float))
+                        and anno_type == _SW_ANNOTATION_CENTER_MARK
+                    ):
+                        count += 1
+                return count
+
+            before = _center_mark_count()
 
             ran = adapter._attempt(
                 lambda: view.AutoInsertCenterMarks2(
@@ -2824,12 +2867,8 @@ class SolidWorksIOMixin:
                 lambda: adapter.currentModel.EditRebuild3(), default=None
             )
 
-            after_raw = adapter._attempt(
-                lambda: view.GetCenterMarkCount(), default=None
-            )
-            after = (
-                int(after_raw) if isinstance(after_raw, (int, float)) else before
-            )
+            after = _center_mark_count()
+
             return {
                 "view": view_name,
                 "feature_types": [
