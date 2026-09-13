@@ -647,9 +647,15 @@ _SW_CM_TYPE_SLOT = 4
 # swCenterMarkStyle_e.swCenterMark_Single
 _SW_CM_STYLE_SINGLE = 2
 
-# swAnnotationType_e.swAnnotationCenterMark — annotation type value for
-# centre-mark annotations auto-inserted by IView::AutoInsertCenterMarks2.
-_SW_ANNOTATION_CENTER_MARK = 17
+# swAnnotationType_e.swCenterMarkSym — annotation type value for centre-mark
+# annotations auto-inserted by IView::AutoInsertCenterMarks2. There is no
+# member literally named "swAnnotationCenterMark" in swAnnotationType_e; that
+# name was a guess and 17 is actually swWeldBeadSymbol, which would have
+# reproduced the 0/0/0 bug on drawings with no weld beads (and silently
+# miscounted weld bead symbols as centre marks on drawings that have any).
+# Value confirmed against the published swconst enum (swAnnotationType_e):
+# https://help.solidworks.com/2026/english/api/swconst/SolidWorks.Interop.swconst~SolidWorks.Interop.swconst.swAnnotationType_e.html
+_SW_ANNOTATION_CENTER_MARK = 13
 
 
 def _variant_array(element_vt: int, values: Any) -> Any:
@@ -2747,9 +2753,11 @@ class SolidWorksIOMixin:
         regardless of marks actually present on SW 3DEXPERIENCE R2026x, so
         the count is derived instead from ``IView::GetAnnotations()``: the
         view's annotations are enumerated and those flagged as
-        ``swAnnotationCenterMark`` are counted. ``center_marks_before ==
-        center_marks_after == 0`` is reported when the annotation
-        enumeration cannot be performed (COM unavailable or older builds).
+        ``swCenterMarkSym`` (``swAnnotationType_e``) are counted.
+        ``center_marks_before == center_marks_after == 0`` is reported when
+        the annotation enumeration cannot be performed (COM unavailable or
+        older builds).
+
         Adding nothing is still a success - the view may simply have no
         un-marked circular features.
 
@@ -2794,7 +2802,7 @@ class SolidWorksIOMixin:
                 )
 
             def _center_mark_count() -> int:
-                """Count annotations on the view flagged as swAnnotationCenterMark.
+                """Count annotations on the view flagged as swCenterMarkSym.
 
                 Enumerates ``IView::GetAnnotations()`` and inspects each
                 annotation's type via ``IAnnotation::GetType()``. Returns 0 when
@@ -2813,7 +2821,7 @@ class SolidWorksIOMixin:
                     if anno is None:
                         continue
                     anno_type = adapter._attempt(
-                        lambda: anno.GetType(), default=None
+                        lambda anno=anno: anno.GetType(), default=None
                     )
                     if (
                         isinstance(anno_type, (int, float))
