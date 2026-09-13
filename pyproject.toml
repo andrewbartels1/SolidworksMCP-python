@@ -130,6 +130,15 @@ rag = [
 [project.scripts]
 solidworks-mcp = "solidworks_mcp.server:cli_main"
 
+[tool.uv]
+# Transitive deps pulled in via pydantic-ai's genai-prices dependency.
+# Not declared directly by this project - force resolution past known CVEs:
+# CVE-2026-84381 (httpcore2 < 2.10.0) and CVE-2026-84382 (httpx2 < 2.12.0).
+constraint-dependencies = [
+    "httpx2>=2.12.0",
+    "httpcore2>=2.12.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/solidworks_mcp"]
 
