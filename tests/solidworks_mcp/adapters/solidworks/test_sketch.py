@@ -138,6 +138,35 @@ def test_create_sketch_falls_back_to_select_by_id_and_generated_name() -> None:
     assert calls["n"] >= 1
 
 
+def test_create_sketch_uses_active_sketch_property_when_insert_returns_falsy() -> None:
+    """Regression: InsertSketch's return value can be an empty Sub result.
+
+    When that happens, ISketchManager.ActiveSketch (a real property) must be
+    consulted before falling back to the synthetic ``Sketch_N`` name — a
+    wrong synthetic name breaks every later ``_last_sketch_name``-based
+    lookup, including create_cut_extrude's implicit-sketch reselection.
+    """
+    adapter = _FakeSketchAdapter()
+    plane_feature = SimpleNamespace(Select2=lambda _append, _mark: True)
+    real_active_sketch = SimpleNamespace(Name="Sketch4")
+    model = SimpleNamespace(
+        FeatureByName=lambda _name: plane_feature,
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: False),
+        SketchManager=SimpleNamespace(
+            InsertSketch=lambda *args: None,
+            ActiveSketch=real_active_sketch,
+        ),
+        GetActiveSketch2=lambda: None,
+    )
+    adapter.currentModel = model
+
+    result = sketch._create_sketch_impl(adapter, "Top")
+
+    assert result.status == AdapterResultStatus.SUCCESS
+    assert result.data == "Sketch4"
+    assert adapter._last_sketch_name == "Sketch4"
+
+
 def test_create_sketch_reports_plane_selection_failure() -> None:
     adapter = _FakeSketchAdapter()
     adapter.currentModel = SimpleNamespace(

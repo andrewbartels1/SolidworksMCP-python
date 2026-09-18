@@ -217,5 +217,5 @@ def _cli() -> None:
     print(f"To rewind: open {match['file_path']!r} in SolidWorks")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     _cli()

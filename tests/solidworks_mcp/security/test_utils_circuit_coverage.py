@@ -351,11 +351,12 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
         half_open_max_calls=1,
     )
 
-    # open -> allow after timeout -> half-open
-    cb.state = CircuitState.OPEN
-    cb.last_failure_time = 0
-    assert cb._should_allow_request() is True
-    assert cb.state == CircuitState.HALF_OPEN
+    # open -> allow after timeout -> half-open (per-operation bucket)
+    bucket = cb._get_bucket("ok")
+    bucket.state = CircuitState.OPEN
+    bucket.last_failure_time = 0
+    assert cb._should_allow_request(bucket) is True
+    assert bucket.state == CircuitState.HALF_OPEN
 
     # success in half-open closes breaker
     async def _ok():
@@ -364,9 +365,9 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
 
     result = await cb._execute_with_circuit_breaker("ok", _ok)
     assert result.is_success
-    assert cb.state == CircuitState.CLOSED
+    assert cb._get_bucket("ok").state == CircuitState.CLOSED
 
-    # error result increments failures and opens
+    # error result increments failures and opens (independent bucket)
     async def _bad_result():
         """Test helper for bad result."""
         return AdapterResult(status=AdapterResultStatus.ERROR, error="bad")
@@ -374,20 +375,15 @@ async def test_circuit_breaker_adapter_core_paths(monkeypatch):
     cb.failure_threshold = 1
     res2 = await cb._execute_with_circuit_breaker("bad", _bad_result)
     assert res2.is_error
-    assert cb.state == CircuitState.OPEN
+    assert cb._get_bucket("bad").state == CircuitState.OPEN
 
-    # exception path
+    # exception path (independent bucket, unaffected by "bad" being open)
     async def _boom():
         """Test helper for boom."""
         raise RuntimeError("boom")
 
-    cb.state = CircuitState.CLOSED
     res3 = await cb._execute_with_circuit_breaker("boom", _boom)
     assert res3.is_error
-
-    # open-state blocking is covered by the _execute gate path above
-    cb.state = CircuitState.OPEN
-    cb.recovery_timeout = 999999
 
 
 @pytest.mark.asyncio

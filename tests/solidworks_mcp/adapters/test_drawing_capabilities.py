@@ -181,6 +181,17 @@ async def test_mock_technical_drawing_adds_three_views() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_technical_drawing_requires_a_model_path() -> None:
+    """No model_path/model_file in the payload is refused, not fabricated."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    result = await adapter.create_technical_drawing({})
+    assert not result.is_success
+    assert "A model path is required" in (result.error or "")
+
+
+@pytest.mark.asyncio
 async def test_mock_first_angle_projection_is_honoured() -> None:
     """A first-angle request must not silently produce third-angle."""
     adapter = MockSolidWorksAdapter({})

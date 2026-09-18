@@ -239,6 +239,47 @@ async def test_mock_rename_to_same_name_is_a_noop_success() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_rename_rejects_blank_new_name() -> None:
+    """An all-whitespace new_name is rejected before any lookup."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    await adapter.add_rectangle(0.0, 0.0, 10.0, 10.0)
+    await adapter.exit_sketch()
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    created = await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+
+    result = await adapter.rename_feature(created.data.name, "   ")
+    assert not result.is_success
+    assert "new_name must not be empty" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mock_rename_carries_suppressed_state_to_the_new_name() -> None:
+    """Renaming a suppressed feature must keep it tracked as suppressed
+    under its new name, not silently un-suppress it."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    await adapter.add_rectangle(0.0, 0.0, 10.0, 10.0)
+    await adapter.exit_sketch()
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    created = await adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+    name = created.data.name
+    await adapter.suppress_feature(name, True)
+    assert name in adapter._suppressed_features
+
+    result = await adapter.rename_feature(name, "RenamedSuppressed")
+    assert result.is_success
+    assert "RenamedSuppressed" in adapter._suppressed_features
+    assert name not in adapter._suppressed_features
+
+
+@pytest.mark.asyncio
 async def test_mock_undo_with_nothing_to_undo_reports_no_change() -> None:
     """An undo that changed nothing must say so.
 

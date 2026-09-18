@@ -51,10 +51,6 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
-def _feature_names(feature_tree: list[dict[str, Any]]) -> list[str]:
-    return [f.get("name", "") for f in feature_tree if f.get("name")]
-
-
 def _feature_map(feature_tree: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {f.get("name", ""): f for f in feature_tree if f.get("name")}
 
@@ -332,5 +328,5 @@ def _cli() -> None:
     sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     _cli()

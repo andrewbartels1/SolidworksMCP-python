@@ -129,3 +129,26 @@ async def test_mock_save_body_requires_body_name(tmp_path) -> None:
     result = await adapter.save_body_as_part("  ", str(tmp_path / "b.sldprt"))
     assert not result.is_success
     assert "body_name is required" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mock_save_body_requires_an_active_model(tmp_path) -> None:
+    """With no document open at all, it refuses before touching anything."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    result = await adapter.save_body_as_part("B1", str(tmp_path / "b.sldprt"))
+    assert not result.is_success
+    assert "No active model" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mock_save_body_requires_file_path(tmp_path) -> None:
+    """A blank file_path is rejected."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+
+    result = await adapter.save_body_as_part("Boss-Extrude1", "   ")
+    assert not result.is_success
+    assert "file_path is required" in (result.error or "")

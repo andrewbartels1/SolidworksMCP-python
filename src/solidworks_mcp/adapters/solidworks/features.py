@@ -1100,18 +1100,41 @@ def _create_loft_impl(
 def _create_cut_extrude_impl(
     adapter: Any, params: ExtrusionParameters
 ) -> AdapterResult[SolidWorksFeature]:
-    """Create a cut-extrude feature from the active sketch profile.
+    """Create a cut-extrude feature from an explicit or unambiguously-tracked sketch.
 
-    The function first attempts to locate and select the sketch profile that
-    should be cut.  It walks the feature tree looking for the most recent
-    ``ProfileFeature``; if that fails, it falls back to the ``_last_sketch_name``
-    tracker and then to an enumerated ``Sketch<N>`` name search.
+    Sketch resolution never guesses:
 
-    Three COM API variants are attempted in order of preference:
+    1. ``params.sketch_name``, if given, is matched (case-insensitively)
+       against the live feature tree via :func:`_profile_feature_names`. No
+       match -> immediate error listing the sketches that do exist. No COM
+       cut is attempted.
+    2. Otherwise, ``adapter._last_sketch_name`` (set by the most recent
+       ``create_sketch``/``exit_sketch`` call in this session) is used only
+       if it also matches a real name in the current tree — this catches the
+       case where ``create_sketch`` had to fall back to a synthetic
+       ``Sketch_N`` guess (SolidWorks didn't hand back a usable sketch object
+       synchronously) and that guess doesn't correspond to anything real.
+    3. Otherwise: immediate error asking the caller to pass ``sketch_name``
+       explicitly, listing available sketches. There is no third guess (no
+       "most recent ``ProfileFeature`` in the tree", no blind ``Sketch<N>``
+       enumeration) — a wrong silent guess would cut the wrong profile.
+
+    Once resolved, the sketch is explicitly selected via ``SelectByID2``
+    *before* any ``FeatureCut`` call — SolidWorks' own "implicit" active-sketch
+    state (whatever was last open before this call) is never relied upon,
+    since that is exactly the racy behavior that made this feature
+    intermittently cut nothing.
+
+    Two COM API variants are attempted in order of preference:
 
     1. ``FeatureCut4`` — most modern (SolidWorks 2015+).
-    2. ``FeatureCut3`` modern signature — SolidWorks 2010–2014.
-    3. ``FeatureCut3`` legacy argument order — older installs.
+    2. ``FeatureCut3`` — SolidWorks 2010–2014, and any install lacking
+       ``FeatureCut4``. Same 26-parameter order as ``FeatureCut4`` minus the
+       trailing ``OptimizeGeometry`` argument (confirmed against SolidWorks
+       API help and live macro examples — there is no separate "legacy"
+       argument order; an earlier version of this fallback invented one and
+       it always raised ``DISP_E_PARAMNOTOPTIONAL`` because it was missing
+       the ``NormalCut`` argument and had ``D2`` missing entirely).
 
     All depth values are in millimetres and converted to metres internally.
 
@@ -1126,16 +1149,24 @@ def _create_cut_extrude_impl(
               ``"ThroughAll"`` / ``"through_all"``.
             - ``feature_scope`` (bool): Limit cut to selected bodies.
             - ``auto_select`` (bool): Auto-select bodies in scope.
+            - ``sketch_name`` (str | None): Sketch to cut from. See sketch
+              resolution above.
 
     Returns:
         AdapterResult[SolidWorksFeature]: On success, ``data`` is a
         ``SolidWorksFeature`` whose ``type`` is ``"Cut-Extrude"``.  On
-        failure, ``status`` is ``ERROR`` and ``error`` lists every API
-        variant that was tried.
+        failure, ``status`` is ``ERROR`` and ``error`` explains exactly
+        which stage failed: sketch-not-found (with the list of sketches that
+        do exist), sketch-selection-failed (the resolved name plus why
+        ``SelectByID2`` was rejected), or every ``FeatureCut`` COM variant's
+        own error text — and, when every COM call returned falsy without
+        raising at all, an explicit note that the profile likely isn't a
+        valid closed loop intersecting solid geometry, rather than a bare
+        "failed" with no diagnostic content.
 
     Raises:
-        Exception: Propagated through ``_handle_com_operation`` when all
-            three COM variants fail.
+        Exception: Propagated through ``_handle_com_operation`` for every
+            failure stage described above.
 
     Example::
 
@@ -1168,8 +1199,88 @@ def _create_cut_extrude_impl(
             end_condition=str(getattr(params, "end_condition", "Blind")),
             feature_scope=bool(getattr(params, "feature_scope", False)),
             auto_select=bool(getattr(params, "auto_select", True)),
+            sketch_name=getattr(params, "sketch_name", None) or None,
         )
         feature_manager = adapter.currentModel.FeatureManager
+
+        # --- Sketch resolution: explicit > tracked-and-verified > clear
+        # error. Never a silent guess — see the docstring above. Resolving
+        # this up front (before any FeatureCut attempt) also lets every
+        # failure below name the sketch it was actually targeting.
+        tree_names = _profile_feature_names(adapter)
+
+        def _match_tree_name(name: str) -> str | None:
+            for real in tree_names:
+                if real.lower() == name.lower():
+                    return real
+            return None
+
+        available = ", ".join(tree_names) if tree_names else "(none found)"
+        if normalized.sketch_name:
+            target_sketch = _match_tree_name(normalized.sketch_name)
+            if target_sketch is None:
+                raise Exception(
+                    f"Sketch '{normalized.sketch_name}' not found in the "
+                    f"feature tree. Sketches available to cut from: {available}"
+                )
+        else:
+            last_tracked = getattr(adapter, "_last_sketch_name", None)
+            target_sketch = _match_tree_name(last_tracked) if last_tracked else None
+            if target_sketch is None:
+                hint = (
+                    f" (the last create_sketch call returned '{last_tracked}', "
+                    "which does not match any real sketch in the model — "
+                    "SolidWorks likely didn't hand back a usable sketch "
+                    "object synchronously)"
+                    if last_tracked
+                    else " (no create_sketch/exit_sketch call has run this session)"
+                )
+                raise Exception(
+                    "No sketch_name given, and no reliably-tracked sketch to "
+                    f"cut from{hint}. Pass sketch_name explicitly. Sketches "
+                    f"available to cut from: {available}"
+                )
+
+        # Explicit selection before any FeatureCut attempt. SolidWorks' own
+        # "implicit" active-sketch state (whatever was last open) is never
+        # relied upon — that is exactly the race that made this feature
+        # intermittently cut nothing while reporting no error at all.
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
+        # Callout must be an explicit VT_DISPATCH null, not plain None — a
+        # bare None marshals as VT_NULL and SolidWorks rejects the whole call
+        # with DISP_E_TYPEMISMATCH (runbook item 11). Using
+        # _attempt_with_error (not _attempt) here means that error surfaces
+        # in the failure message below instead of being swallowed into a
+        # generic "selection failed" guess.
+        select_result, select_error = adapter._attempt_with_error(
+            lambda: adapter.currentModel.Extension.SelectByID2(
+                target_sketch,
+                "SKETCH",
+                0.0,
+                0.0,
+                0.0,
+                False,
+                0,
+                _null_callout(),
+                0,
+            )
+        )
+        sketch_selected = bool(select_result)
+        if not sketch_selected:
+            reason = (
+                f" COM error: {select_error}"
+                if select_error is not None
+                else " SelectByID2 returned False with no COM error — the "
+                "sketch may already be consumed by another feature, be "
+                "suppressed, or not be a valid selectable profile."
+            )
+            raise Exception(
+                f"Failed to select sketch '{target_sketch}' via SelectByID2."
+                + reason
+            )
+        adapter._last_sketch_name = target_sketch
 
         end_condition = (normalized.end_condition or "Blind").strip().lower()
         t1 = adapter.constants["swEndCondBlind"]
@@ -1315,34 +1426,33 @@ def _create_cut_extrude_impl(
             fallback_errors.append(f"FeatureCut4: {cut4_error}")
 
         if not feature:
-            # Implicit sketch context (from exit_sketch) was not picked up.
-            # Try selecting the sketch explicitly before falling back to older API.
+            # The sketch is already explicitly selected (above) — no
+            # reselection loop here. If FeatureCut4 didn't take, retry the
+            # exact same selection against the older FeatureCut3 signature
+            # rather than guessing at a different sketch.
             adapter._attempt(
-                lambda: adapter.currentModel.ClearSelection2(True), default=None
+                lambda: adapter.currentModel.Extension.SelectByID2(
+                    target_sketch,
+                    "SKETCH",
+                    0.0,
+                    0.0,
+                    0.0,
+                    False,
+                    0,
+                    _null_callout(),
+                    0,
+                ),
+                default=False,
             )
-            for candidate in (
-                [adapter._last_sketch_name] if adapter._last_sketch_name else []
-            ) + [f"Sketch{n}" for n in range(adapter._sketch_count, 0, -1)]:
-                sel_ok = bool(
-                    adapter._attempt(
-                        lambda c=candidate: adapter.currentModel.Extension.SelectByID2(
-                            c, "SKETCH", 0.0, 0.0, 0.0, False, 0, None, 0
-                        ),
-                        default=False,
-                    )
-                )
-                if sel_ok:
-                    adapter._last_sketch_name = candidate
-                    break
 
         if not feature:
-            # 2. FeatureCut3 modern (SW 2010+, 26 params, corrected for SW 2022)
+            # 2. FeatureCut3 (SW 2010+, and any install lacking FeatureCut4)
             # Signature: Sd, Flip, Dir, T1, T2, D1, D2, Dchk1, Dchk2, Ddir1, Ddir2,
             #   Dang1, Dang2, OffsetReverse1, OffsetReverse2, TranslateSurface1,
             #   TranslateSurface2, NormalCut, UseFeatScope, UseAutoSelect,
             #   AssemblyFeatureScope, AutoSelectComponents, PropagateFeatureToParts,
             #   T0, StartOffset, FlipStartOffset
-            feature, cut3_modern_error = adapter._attempt_with_error(
+            feature, cut3_error = adapter._attempt_with_error(
                 lambda: feature_manager.FeatureCut3(
                     is_through,
                     normalized.reverse_direction,
@@ -1372,45 +1482,26 @@ def _create_cut_extrude_impl(
                     False,
                 )
             )
-            if cut3_modern_error is not None:
-                fallback_errors.append(f"FeatureCut3 modern: {cut3_modern_error}")
-
-        if not feature:
-            # 3. FeatureCut3 legacy (older installs, alternate arg order)
-            feature, cut3_legacy_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut3(
-                    True,
-                    False,
-                    normalized.reverse_direction,
-                    adapter.constants["swEndCondBlind"],
-                    adapter.constants["swEndCondBlind"],
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.draft_angle * 3.14159 / 180.0,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.feature_scope,
-                    normalized.auto_select,
-                    normalized.depth / 1000.0,
-                    0.0,
-                )
-            )
-            if cut3_legacy_error is not None:
-                fallback_errors.append(f"FeatureCut3 legacy: {cut3_legacy_error}")
+            if cut3_error is not None:
+                fallback_errors.append(f"FeatureCut3: {cut3_error}")
 
         if not feature:
             if fallback_errors:
                 raise Exception(
-                    "Failed to create cut extrude feature. "
+                    f"Failed to create cut extrude feature from sketch "
+                    f"'{target_sketch}' (SolidWorks major version {sw_major}). "
                     + " | ".join(fallback_errors)
                 )
-            raise Exception("Failed to create cut extrude feature")
+            raise Exception(
+                f"SolidWorks accepted the FeatureCut call(s) for sketch "
+                f"'{target_sketch}' (SolidWorks major version {sw_major}) "
+                "without raising an error, but returned no feature. This "
+                "means the COM call itself succeeded but the modeling "
+                "engine couldn't perform the cut — check that the sketch is "
+                "a fully closed profile, that it actually intersects solid "
+                "geometry within the given depth, and that it hasn't "
+                "already been consumed by another feature."
+            )
 
         return SolidWorksFeature(
             name=feature.Name,
@@ -1420,6 +1511,7 @@ def _create_cut_extrude_impl(
                 "depth": normalized.depth,
                 "draft_angle": normalized.draft_angle,
                 "reverse_direction": normalized.reverse_direction,
+                "sketch_name": target_sketch,
             },
             properties={"created": datetime.now().isoformat()},
         )
@@ -2257,6 +2349,22 @@ def _offset_plane_distance(offset_mm: float, base_flip: bool) -> tuple[float, in
     return distance_m, flip_bits
 
 
+class _NullCalloutSentinel:
+    """Stand-in for ``VARIANT(VT_DISPATCH, None)`` when pywin32 is absent.
+
+    Never passed to a real COM call (if pywin32 isn't importable, no live
+    SolidWorks call can happen either), but must still be distinguishable
+    from a bare ``None`` so callers can't accidentally regress to passing
+    plain ``None`` as ``SelectByID2``'s ``Callout`` argument.
+    """
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return "<null callout: pywin32 unavailable>"
+
+
+_NULL_CALLOUT_SENTINEL = _NullCalloutSentinel()
+
+
 def _null_callout() -> Any:
     """Return a VT_DISPATCH null for ``SelectByID2``'s ``Callout`` parameter.
 
@@ -2265,14 +2373,15 @@ def _null_callout() -> Any:
     ``(-2147352571, 'Type mismatch.', None, 8)``. See runbook item 11.
 
     Returns:
-        Any: A ``VARIANT(VT_DISPATCH, None)``, or ``None`` when pywin32 is
-        unavailable (mock/Linux runs, where no COM call will be made anyway).
+        Any: A ``VARIANT(VT_DISPATCH, None)``, or a non-``None`` sentinel
+        when pywin32 is unavailable (mock/Linux runs, where no real COM call
+        will be made anyway, but the value must still never be bare ``None``).
     """
     try:
         import pythoncom
         import win32com.client as _win32com
     except ImportError:  # pragma: no cover - Windows-only path
-        return None
+        return _NULL_CALLOUT_SENTINEL
     return _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
 
 

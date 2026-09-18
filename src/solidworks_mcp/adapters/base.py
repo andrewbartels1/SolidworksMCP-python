@@ -210,6 +210,10 @@ class ExtrusionParameters(BaseModel):
         feature_scope (bool): The feature scope value.
         merge_result (bool): The merge result value.
         reverse_direction (bool): The reverse direction value.
+        sketch_name (str | None): Explicit sketch to operate on. When set,
+            callers (e.g. create_cut_extrude) must select exactly this
+            sketch and fail with a clear error if it doesn't exist rather
+            than silently falling back to some other sketch.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
         up_to_surface (str | None): The up to surface value.
@@ -228,6 +232,7 @@ class ExtrusionParameters(BaseModel):
     merge_result: bool = True
     feature_scope: bool = False
     auto_select: bool = True
+    sketch_name: str | None = None
 
 
 class RevolveParameters(BaseModel):

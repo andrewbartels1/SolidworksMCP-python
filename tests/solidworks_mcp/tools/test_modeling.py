@@ -4,7 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from solidworks_mcp.adapters.base import ExtrusionParameters
+from solidworks_mcp.adapters.base import (
+    AdapterResult,
+    AdapterResultStatus,
+    ExtrusionParameters,
+)
 from solidworks_mcp.tools.modeling import (
     AddFilletInput,
     AddMateInput,
@@ -808,6 +812,34 @@ class TestAssemblyTools:
         assert result["mate"]["mate_type"] == "coincident"
 
     @pytest.mark.asyncio
+    async def test_add_mate_notes_when_constraint_already_satisfied(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A mate whose constraint is already satisfied moves nothing.
+
+        SolidWorks treats that as a real success, not an error - the tool
+        must say so plainly instead of leaving the caller to guess why
+        nothing visibly changed.
+        """
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.add_mate = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={"components": ["part-1", "part-2"], "geometry_moved": False},
+            )
+        )
+
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_mate"
+        )
+        result = await tool_func(
+            AddMateInput(component_a="part-1", component_b="part-2")
+        )
+
+        assert result["status"] == "success"
+        assert "already satisfied" in result["message"]
+
+    @pytest.mark.asyncio
     async def test_list_components_success_and_reflects_inserts(
         self, mcp_server, mock_adapter, mock_config
     ):
@@ -1262,6 +1294,18 @@ class TestReferenceGeometryTools:
         """CreateReferencePlaneInput.model_post_init rejects a blank reference."""
         with pytest.raises(ValueError, match="reference is required"):
             CreateReferencePlaneInput(reference="   ", offset=10.0)
+
+    def test_set_units_input_rejects_blank_unit_system(self):
+        """SetUnitsInput.model_post_init rejects a blank unit_system."""
+        with pytest.raises(ValueError, match="unit_system is required"):
+            SetUnitsInput(unit_system="   ")
+
+    def test_rename_feature_input_rejects_blank_names(self):
+        """RenameFeatureInput.model_post_init rejects blank old_name/new_name."""
+        with pytest.raises(ValueError, match="old_name is required"):
+            RenameFeatureInput(old_name="   ", new_name="Sketch2")
+        with pytest.raises(ValueError, match="new_name is required"):
+            RenameFeatureInput(old_name="Sketch1", new_name="   ")
 
     @pytest.mark.asyncio
     async def test_create_axis_success(self, mcp_server, mock_adapter, mock_config):
