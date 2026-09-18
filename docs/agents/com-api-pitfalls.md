@@ -529,6 +529,65 @@ Found 2026-08-14 while implementing drawing annotation against live SolidWorks 2
 
 ---
 
+## 19. `IModelDoc2.FeatureChamferType` is a silent no-op — feature-count change is not proof of success
+
+**Symptom:** The call returns cleanly (no exception, `VT_VOID`), a real feature named
+e.g. `"Chamfer1"` of type `"Chamfer"` appears in the tree, unsuppressed, no error code —
+but the model's geometry is byte-identical. No material was actually removed.
+
+**Root cause:** `IModelDoc2.FeatureChamferType(ChamferType, Width, Angle, Flip, OtherDist,
+VertexChamDist1, VertexChamDist2, VertexChamDist3)` (DISPID 65888) matches its documented
+signature exactly — parameter count, order, and COM types (`VT_I2`, `VT_R8`, `VT_BOOL`) all
+check out against the live type library. The edge selection beforehand is also confirmed
+correct (`SelectionManager.GetSelectedObjectCount2(-1) == 1` immediately before the call).
+The call still does not cut anything. This was confirmed live on SW major 34 (SW2026);
+whether it's broken on every "2025+" build or just this one is unknown.
+
+This is a sharper version of pitfall #6/#7's "int, not IFeature" problem: those return an
+int you can at least check for `0`/failure. `FeatureChamferType` returns nothing to check
+at all, so **"the call didn't raise and the feature count went up" is not evidence the
+operation did what it claims.** A reference implementation used exactly that heuristic
+(`count_after > count_before`) and reported "success" on every call, always with zero
+volume removed.
+
+**Fix:** Use `IFeatureManager.InsertFeatureChamfer` (pitfall #2) unconditionally — do not
+version-branch to `FeatureChamferType` at all. Verified on the same SW major 34 install to
+actually remove material:
+
+```python
+feature = model.FeatureManager.InsertFeatureChamfer(
+    1,           # Options
+    1,           # ChamferType = equal distance
+    width_m,
+    math.pi / 4,
+    0.0, 0.0, 0.0, 0.0,
+)
+if not feature:
+    raise Exception("InsertFeatureChamfer returned None")
+```
+
+**How this was actually confirmed** — feature-tree inspection was not enough; the
+diagnostic that caught it compared `IModelDoc2.Extension.CreateMassProperty().Volume`
+immediately before and after the call:
+
+```python
+mp_before = await adapter.get_mass_properties()
+# ... make the FeatureChamferType call ...
+mp_after = await adapter.get_mass_properties()
+assert mp_after.data.volume < mp_before.data.volume  # was NOT true for FeatureChamferType
+```
+
+**General lesson:** for any feature-creation call whose only observable signal is "did the
+feature count change" or "did it raise," verify with a geometry-level check (mass
+properties volume, or a screenshot) at least once against real SolidWorks before trusting
+it. A feature appearing in the tree is necessary but not sufficient evidence the operation
+actually did anything.
+
+Found 2026-09-18 while adding a live regression test for the `add_chamfer` MCP tool
+against the M4 heat-set-insert coupon (see `tests/live/test_live_sw_add_chamfer_tool.py`).
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests
