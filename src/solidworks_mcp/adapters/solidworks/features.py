@@ -1768,8 +1768,12 @@ def _add_chamfer_impl(
 
     Each edge in ``edge_names`` is selected by name using
     ``Extension.SelectByID2`` with entity type ``"EDGE"``.  After all edges
-    are in the selection set, ``FeatureChamfer`` is called in
-    equal-distance mode (type ``1``).
+    are in the selection set, ``IFeatureManager::InsertFeatureChamfer`` is
+    called in equal-distance mode (type ``1``). A version-gated
+    ``IModelDoc2::FeatureChamferType`` path was tried for SW 2025+ but
+    live-verified to silently create an empty, zero-volume feature -- see
+    the comment at its call site for how this was confirmed and why
+    ``InsertFeatureChamfer`` is used unconditionally instead.
 
     Args:
         adapter: A fully connected ``PyWin32Adapter`` with a non-``None``
@@ -1786,7 +1790,8 @@ def _add_chamfer_impl(
 
     Raises:
         Exception: Propagated through ``_handle_com_operation`` when an
-            edge cannot be selected or ``FeatureChamfer`` returns ``None``.
+            edge cannot be selected or ``InsertFeatureChamfer`` returns
+            ``None``.
 
     Example::
 
@@ -1809,18 +1814,6 @@ def _add_chamfer_impl(
         """
         import math
 
-        # Detect SW major version (same pattern as fillet).
-        chamfer_sw_major = 0
-        if getattr(adapter, "swApp", None):
-            rev = adapter._attempt(
-                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
-                default="0",
-            )
-            try:
-                chamfer_sw_major = int(str(rev).split(".")[0])
-            except (ValueError, IndexError):
-                chamfer_sw_major = 0
-
         # Clear any prior selection so the edge set is clean.
         adapter._attempt(
             lambda: adapter.currentModel.ClearSelection2(True), default=None
@@ -1837,7 +1830,7 @@ def _add_chamfer_impl(
                 selected = adapter._attempt(
                     lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append: (
                         adapter.currentModel.Extension.SelectByID2(
-                            sn, "EDGE", _x, _y, _z, _ap, 0, None, 0
+                            sn, "EDGE", _x, _y, _z, _ap, 0, _null_callout(), 0
                         )
                     ),
                     default=False,
@@ -1847,54 +1840,35 @@ def _add_chamfer_impl(
 
         fm = adapter.currentModel.FeatureManager
         _flag_feature_methods(fm, "IFeatureManager")
-        count_before = adapter._attempt(
-            lambda: int(fm.GetFeatureCount(True) or 0), default=0
-        )
 
+        # IModelDoc2.FeatureChamferType (the documented "SW 2025+" call) was
+        # tried here previously, gated on RevisionNumber >= 33. Live-verified
+        # (2026-09-18, SW major 34 / SW2026): it returns cleanly and a
+        # "Chamfer1" feature appears in the tree, but removes zero volume --
+        # a silent no-op, not a real chamfer. IFeatureManager.InsertFeatureChamfer
+        # was verified on the same install to actually remove material
+        # (confirmed via mass-properties volume delta), so it is used
+        # unconditionally rather than version-branching to a call that has
+        # never been proven to work on any SW version.
         feature_name = "Chamfer"
-        feature = None
-
-        if chamfer_sw_major >= 33:
-            # SW 2025+ (major >= 33): IModelDoc2.FeatureChamferType (8 params,
-            # VT_VOID). Detect success via feature count change.
-            adapter.currentModel.FeatureChamferType(
-                0,  # ChamferType: 0 = swChamferType_EqualDistance
+        feature, insert_err = adapter._attempt_with_error(
+            lambda: fm.InsertFeatureChamfer(
+                1,  # Options
+                1,  # ChamferType = equal distance
                 distance / 1000.0,  # Width in metres
-                math.pi / 4,  # 45Â° angle
-                False,  # Flip
-                0.0,  # OtherDist
-                0.0,  # VertexChamDist1
-                0.0,  # VertexChamDist2
-                0.0,  # VertexChamDist3
+                math.pi / 4,  # 45 degree angle
+                0.0,
+                0.0,
+                0.0,
+                0.0,
             )
-            count_after = adapter._attempt(
-                lambda: int(fm.GetFeatureCount(True) or 0), default=0
+        )
+        if feature and hasattr(feature, "Name"):
+            feature_name = feature.Name or "Chamfer"
+        elif not feature:
+            raise Exception(
+                f"Failed to create chamfer (InsertFeatureChamfer: {insert_err})"
             )
-            if count_after <= count_before:
-                raise Exception(
-                    "Failed to create chamfer (IModelDoc2.FeatureChamferType;"
-                    " feature count unchanged)"
-                )
-        else:
-            # Older SW: IFeatureManager.InsertFeatureChamfer returns IFeature.
-            feature, insert_err = adapter._attempt_with_error(
-                lambda: fm.InsertFeatureChamfer(
-                    1,  # Options
-                    1,  # ChamferType = equal distance
-                    distance / 1000.0,  # Width in metres
-                    math.pi / 4,  # 45Â° angle
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                )
-            )
-            if feature and hasattr(feature, "Name"):
-                feature_name = feature.Name or "Chamfer"
-            elif not feature:
-                raise Exception(
-                    f"Failed to create chamfer (InsertFeatureChamfer: {insert_err})"
-                )
 
         return SolidWorksFeature(
             name=feature_name,
