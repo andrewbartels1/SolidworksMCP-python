@@ -396,6 +396,25 @@ class AddFilletInput(CompatInput):
             raise ValueError("radius must be positive")
 
 
+class AddChamferInput(CompatInput):
+    """Input schema for adding an equal-distance chamfer feature.
+
+    Attributes:
+        distance (float): Chamfer distance in millimeters.
+        edge_names (list[str]): Edge names to chamfer.
+    """
+
+    distance: float = Field(description="Chamfer distance in millimeters")
+    edge_names: list[str] = Field(
+        default_factory=list,
+        description="Named edges to chamfer (e.g. 'Edge<1>'). Leave empty to chamfer all edges.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.distance <= 0:
+            raise ValueError("distance must be positive")
+
+
 class CreateAssemblyInput(CompatInput):
     """Input schema for creating a new assembly.
 
@@ -1486,6 +1505,54 @@ async def register_modeling_tools(
                 }
         except Exception as e:
             logger.error(f"Error in add_fillet tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
+        """Add an equal-distance chamfer to selected edges of the current model.
+
+        Chamfers the specified named edges with the given distance. Edge names use
+        the SolidWorks convention, e.g. 'Edge<1>', or you can leave edge_names empty
+        to chamfer all edges if the adapter supports it.
+
+        Args:
+            input_data (AddChamferInput): Distance and edge names.
+
+        Returns:
+            dict[str, Any]: Status and feature details.
+
+        Example:
+            ```python
+            # Chamfer two specific edges with a 1.5 mm distance
+            result = await add_chamfer({"distance": 1.5, "edge_names": ["Edge<1>", "Edge<2>"]})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, AddChamferInput)
+            result = await adapter.add_chamfer(
+                input_data.distance, input_data.edge_names
+            )
+            if result.is_success:
+                feature = result.data
+                return {
+                    "status": "success",
+                    "message": f"Created chamfer: {_result_value(feature, 'feature_name', 'name', default='Chamfer')}",
+                    "chamfer": {
+                        "name": _result_value(
+                            feature, "feature_name", "name", default="Chamfer"
+                        ),
+                        "distance": input_data.distance,
+                        "edges": input_data.edge_names,
+                    },
+                    "execution_time": result.execution_time,
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Failed to add chamfer: {result.error}",
+                }
+        except Exception as e:
+            logger.error(f"Error in add_chamfer tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     @mcp.tool()
