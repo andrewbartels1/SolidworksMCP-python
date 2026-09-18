@@ -388,7 +388,16 @@ class AddFilletInput(CompatInput):
     radius: float = Field(description="Fillet radius in millimeters")
     edge_names: list[str] = Field(
         default_factory=list,
-        description="Named edges to fillet (e.g. 'Edge<1>'). Leave empty to fillet all edges.",
+        description=(
+            "Edges (or faces) to fillet. Accepts a topology name (e.g. "
+            "'Edge<1>'), a coordinate hint in metres ('x,y,z') to select the "
+            "nearest edge, or 'face:x,y,z' to select a whole face — which "
+            "fillets every edge bounding it in one call. Prefer 'face:' over "
+            "a coordinate on an edge that sits exactly on a shared boundary "
+            "between two faces (e.g. a hole rim flush with a flat face): the "
+            "nearest-edge match there can silently resolve to a different, "
+            "unrelated edge. Leave empty to fillet all edges."
+        ),
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -407,7 +416,16 @@ class AddChamferInput(CompatInput):
     distance: float = Field(description="Chamfer distance in millimeters")
     edge_names: list[str] = Field(
         default_factory=list,
-        description="Named edges to chamfer (e.g. 'Edge<1>'). Leave empty to chamfer all edges.",
+        description=(
+            "Edges (or faces) to chamfer. Accepts a topology name (e.g. "
+            "'Edge<1>'), a coordinate hint in metres ('x,y,z') to select the "
+            "nearest edge, or 'face:x,y,z' to select a whole face — which "
+            "chamfers every edge bounding it in one call. Prefer 'face:' over "
+            "a coordinate on an edge that sits exactly on a shared boundary "
+            "between two faces (e.g. a hole rim flush with a flat face): the "
+            "nearest-edge match there can silently resolve to a different, "
+            "unrelated edge. Leave empty to chamfer all edges."
+        ),
     )
 
     def model_post_init(self, __context: Any) -> None:

@@ -1522,23 +1522,49 @@ def _create_cut_extrude_impl(
     )
 
 
-def _parse_edge_spec(  # pragma: no cover
+def _parse_edge_spec(
     edge_name: str,
-) -> tuple[str, float, float, float]:
-    """Parse an edge specification string into (SelectByID2 name, x, y, z).
+) -> tuple[str, float, float, float, str]:
+    """Parse an edge/face specification string into (name, x, y, z, entity_type).
 
-    Supports two formats:
-    - ``"Edge<1>"`` — name-based selection (x=y=z=0.0, SW looks up by topology name)
-    - ``"x,y,z"`` — coordinate-based selection (name="", coordinate hint in metres)
+    Supports three formats:
+    - ``"Edge<1>"`` — name-based EDGE selection (x=y=z=0.0, SW looks up by
+      topology name)
+    - ``"x,y,z"`` — coordinate-based EDGE selection (name="", coordinate hint
+      in metres)
+    - ``"face:x,y,z"`` (case-insensitive prefix) — coordinate-based FACE
+      selection. Selecting a whole face and handing it to
+      ``InsertFeatureChamfer``/``FeatureFillet3`` chamfers/fillets every
+      edge bounding that face in one call. This is more robust than
+      targeting a single edge by coordinate: a point exactly on a shared
+      boundary between two faces (e.g. a hole rim flush with the top
+      surface) can have its nearest-edge resolution silently shift to an
+      unrelated edge after another feature is added earlier in the tree,
+      picking a face interior point has no such ambiguity. Confirmed live
+      2026-09-18: an edge-coordinate hole-rim chamfer silently landed on
+      the block's 30mm outer edge instead (volume delta matched the
+      straight-edge formula, not the circular-rim one); selecting the face
+      instead reliably chamfers the real rim.
     """
+    prefix, _, rest = edge_name.partition(":")
+    if prefix.strip().lower() == "face":
+        parts = rest.split(",")
+        if len(parts) == 3:
+            try:
+                x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
+                return "", x, y, z, "FACE"
+            except ValueError:
+                pass
+        return rest, 0.0, 0.0, 0.0, "FACE"
+
     parts = edge_name.split(",")
     if len(parts) == 3:
         try:
             x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
-            return "", x, y, z
+            return "", x, y, z, "EDGE"
         except ValueError:
             pass
-    return edge_name, 0.0, 0.0, 0.0
+    return edge_name, 0.0, 0.0, 0.0, "EDGE"
 
 
 def _select_edge_by_coord(  # pragma: no cover
@@ -1548,25 +1574,31 @@ def _select_edge_by_coord(  # pragma: no cover
     z: float,
     append: bool,
     mark: int = 0,
+    entity_type: str = "EDGE",
 ) -> bool:
-    """Select the edge nearest to (x, y, z) in metres via ``SelectByID2``.
+    """Select the edge (or face) nearest to (x, y, z) in metres via ``SelectByID2``.
 
-    Calls ``ForceRebuild3`` on the first edge in the selection set so that
-    recent features are fully tessellated and their edges are selectable.
-    Tries the primary coordinate and several small radial/Y offsets to
-    improve hit probability on curved edges.
+    Calls ``ForceRebuild3`` on the first entity in the selection set so that
+    recent features are fully tessellated and selectable. Tries the primary
+    coordinate and several small radial/Y offsets to improve hit probability
+    on curved edges.
+
+    ``entity_type`` is normally ``"EDGE"``, but pass ``"FACE"`` to select a
+    whole face instead — ``InsertFeatureChamfer``/``FeatureFillet3`` then
+    chamfer/fillet every edge bounding that face. Face selection has no
+    equivalent to the edge case's boundary ambiguity (see ``_parse_edge_spec``).
 
     The ``Callout`` parameter of ``SelectByID2`` requires a VT_DISPATCH null
     VARIANT — passing plain Python ``None`` triggers DISP_E_TYPEMISMATCH.
 
-    Returns True if an edge was successfully selected; False otherwise.
+    Returns True if an entity was successfully selected; False otherwise.
     """
     import math
 
     model = adapter.currentModel
 
     # Rebuild to tessellate geometry from recent features before the first
-    # edge in the selection set (when append=False this is the first edge).
+    # entity in the selection set (when append=False this is the first one).
     if not append:
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
 
@@ -1589,21 +1621,11 @@ def _select_edge_by_coord(  # pragma: no cover
             (x, y * 1.001, z),
         ]
 
-    # VT_DISPATCH null pointer — required by SelectByID2's Callout parameter.
-    # Plain Python None marshals as VT_NULL which SW rejects with DISP_E_TYPEMISMATCH.
-    try:
-        import pythoncom
-        import win32com.client as _win32com
-
-        null_callout = _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
-    except Exception:
-        null_callout = None  # fallback: may fail on some SW versions
-
     for cx, cy, cz in candidates:
         try:
             selected = bool(
                 model.Extension.SelectByID2(
-                    "", "EDGE", cx, cy, cz, append, mark, null_callout, 0
+                    "", entity_type, cx, cy, cz, append, mark, _null_callout(), 0
                 )
             )
         except Exception:
@@ -1630,7 +1652,9 @@ def _add_fillet_impl(
         radius: Fillet radius in **millimetres**.  Converted to metres
             internally before the COM call.
         edge_names: List of SolidWorks edge entity names to fillet, e.g.
-            ``["Edge<1>", "Edge<2>"]``.
+            ``["Edge<1>", "Edge<2>"]``, coordinate hints in metres
+            (``"x,y,z"``), or ``"face:x,y,z"`` to select a whole face and
+            fillet every edge bounding it — see :func:`_parse_edge_spec`.
 
     Returns:
         AdapterResult[SolidWorksFeature]: On success, ``data`` is a
@@ -1678,16 +1702,18 @@ def _add_fillet_impl(
         )
 
         for idx, edge_name in enumerate(edge_names):
-            sel_name, ex, ey, ez = _parse_edge_spec(edge_name)
+            sel_name, ex, ey, ez, entity_type = _parse_edge_spec(edge_name)
             append = idx > 0  # first edge starts fresh, subsequent ones append
             if sel_name == "":
-                # Coordinate-based: traverse body edges and pick the closest one.
-                selected = _select_edge_by_coord(adapter, ex, ey, ez, append=append)
+                # Coordinate-based: traverse body edges/faces and pick the closest one.
+                selected = _select_edge_by_coord(
+                    adapter, ex, ey, ez, append=append, entity_type=entity_type
+                )
             else:
                 selected = adapter._attempt(
-                    lambda sn=sel_name, _x=ex, _y=ey, _z=ez, _ap=append: (
+                    lambda sn=sel_name, _x=ex, _y=ey, _z=ez, _ap=append, _et=entity_type: (
                         adapter.currentModel.Extension.SelectByID2(
-                            sn, "EDGE", _x, _y, _z, _ap, 0, None, 0
+                            sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
                         )
                     ),
                     default=False,
@@ -1781,7 +1807,9 @@ def _add_chamfer_impl(
         distance: Chamfer distance in **millimetres**.  Converted to metres
             internally.
         edge_names: List of SolidWorks edge entity names, e.g.
-            ``["Edge<2>", "Edge<5>"]``.
+            ``["Edge<2>", "Edge<5>"]``, coordinate hints in metres
+            (``"x,y,z"``), or ``"face:x,y,z"`` to select a whole face and
+            chamfer every edge bounding it — see :func:`_parse_edge_spec`.
 
     Returns:
         AdapterResult[SolidWorksFeature]: On success, ``data`` is a
@@ -1820,17 +1848,17 @@ def _add_chamfer_impl(
         )
 
         for idx, edge_name in enumerate(edge_names):
-            sel_name, cx, cy, cz = _parse_edge_spec(edge_name)
+            sel_name, cx, cy, cz, entity_type = _parse_edge_spec(edge_name)
             append = idx > 0
             if sel_name == "":
                 selected = _select_edge_by_coord(
-                    adapter, cx, cy, cz, append=append, mark=0
+                    adapter, cx, cy, cz, append=append, mark=0, entity_type=entity_type
                 )
             else:
                 selected = adapter._attempt(
-                    lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append: (
+                    lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append, _et=entity_type: (
                         adapter.currentModel.Extension.SelectByID2(
-                            sn, "EDGE", _x, _y, _z, _ap, 0, _null_callout(), 0
+                            sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
                         )
                     ),
                     default=False,

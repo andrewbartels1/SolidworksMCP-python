@@ -588,6 +588,69 @@ against the M4 heat-set-insert coupon (see `tests/live/test_live_sw_add_chamfer_
 
 ---
 
+## 20. `SelectByID2` coordinate-based EDGE selection can silently resolve to the *wrong* edge at a shared face boundary — select the FACE instead
+
+**Symptom:** `SelectByID2("", "EDGE", x, y, z, ...)` returns `True` (a "successful" selection),
+and the resulting chamfer/fillet reports success with a real volume change — but it's the
+*wrong* edge. Worse than pitfall #19: there is no error, no zero-volume tell, nothing to
+catch by checking "did the operation report success."
+
+**Root cause:** A point that sits exactly on the boundary shared by two entities — e.g. a
+hole's rim edge, which lies exactly in the plane of the flat face it opens into — is
+ambiguous input to SolidWorks' nearest-entity resolution. On one part, at one rebuild state,
+it may resolve to the hole's circular rim; after literally any other feature is added
+earlier in the tree (changing internal tessellation/entity ordering), the exact same
+coordinate can resolve to a different, unrelated edge instead (confirmed live: a block's
+30mm straight outer edge, ~12mm away in-plane from the intended hole).
+
+**How this was actually caught** — not by checking success/failure, and not by checking
+"was some volume removed" (a wrong-edge chamfer still removes real volume). It required
+computing the *expected* volume for the specific edge being targeted and comparing:
+
+```python
+# Expected volume removed chamfering a circular edge of radius r by width w:
+expected_hole_rim = math.pi * (((r + w) ** 3 - r**3) / 3.0 - r * r * w)   # ≈ 2.29 mm³ for r=2.75, w=0.5
+
+# Expected volume removed chamfering ONE straight edge of length L by width w:
+expected_straight_edge = 0.5 * w * w * L                                   # = 3.75 mm³ for L=30, w=0.5
+
+# Measured delta matched expected_straight_edge almost exactly (3.7500 mm³) —
+# proof the "hole rim" coordinate had actually chamfered the block's outer
+# edge instead, despite SelectByID2 returning True and a real Chamfer1
+# feature with plausible-looking volume appearing in the tree.
+```
+
+A generic feature-defintion inspection (`IFeature.GetDefinition()`) returned `None` for
+this feature type under late binding and wasn't useful here — the geometric volume
+comparison was the only thing that actually caught it.
+
+**Fix:** For any edge that sits on a shared/ambiguous boundary (a hole's rim flush with a
+face, two coplanar edges, etc.), select the **face** instead of hunting for the edge by
+coordinate. `InsertFeatureChamfer`/`FeatureFillet3` accept a face selection and apply to
+every edge bounding that face — for a hole, that's exactly its one rim edge; for a larger
+face, it's every edge on its boundary in one call. A point well inside a face's interior
+has no equivalent boundary ambiguity:
+
+```python
+model.Extension.SelectByID2("", "FACE", x, y, z, False, 0, null_callout, 0)
+feature = model.FeatureManager.InsertFeatureChamfer(1, 1, width_m, math.pi / 4, 0.0, 0.0, 0.0, 0.0)
+```
+
+This project's adapter (`_parse_edge_spec` in `features.py`) now supports a `"face:x,y,z"`
+prefix in `add_chamfer`/`add_fillet`'s `edge_names` for exactly this reason — prefer it
+over a coordinate that lands on a shared boundary.
+
+**General lesson:** "the operation reported success and did something plausible" is still
+not proof it did the *intended* thing when the target was selected by nearest-point
+coordinate. If the edge/face could plausibly be confused with a neighbor (shared boundary,
+similar size, similar location), verify against a geometry-derived expected value, not just
+a before/after delta.
+
+Found 2026-09-18, same investigation as pitfall #19, after fixing that bug and finding this
+second, independent one immediately behind it.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests
