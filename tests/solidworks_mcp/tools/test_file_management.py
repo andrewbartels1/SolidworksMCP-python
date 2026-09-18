@@ -985,6 +985,41 @@ class TestFileManagementTools:
         assert configs_exception["status"] == "error"
 
     @pytest.mark.asyncio
+    async def test_get_selected_entities_tool_success_and_missing_capability(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """get_selected_entities tool surfaces the adapter's selection
+        fixture on success, and refuses cleanly when the active adapter has
+        no get_selected_entities method at all."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+
+        tool = None
+        for t in await mcp_server.list_tools():
+            if t.name == "get_selected_entities":
+                tool = t.fn
+        assert tool is not None
+
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        result = await tool()
+        assert result["status"] == "success"
+        assert result["count"] == len(result["entities"])
+        assert result["count"] > 0
+
+        from fastmcp import FastMCP
+
+        bare_server = FastMCP("bare-test-server")
+        await register_file_management_tools(bare_server, object(), mock_config)
+        bare_tool = None
+        for t in await bare_server.list_tools():
+            if t.name == "get_selected_entities":
+                bare_tool = t.fn
+        assert bare_tool is not None
+        bare_result = await bare_tool()
+        assert bare_result["status"] == "error"
+        assert "does not support get_selected_entities" in bare_result["message"]
+
+    @pytest.mark.asyncio
     async def test_list_features_tool_flattened_assembly_result(
         self, mcp_server, mock_adapter, mock_config
     ):

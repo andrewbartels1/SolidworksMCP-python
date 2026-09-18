@@ -658,6 +658,44 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"] / 4,
         )
 
+    async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Mock UI selection — always reports one canned face and one canned edge.
+
+        There's no real UI to read a selection from in mock mode, so this
+        returns a stable, plausible-shaped fixture rather than an empty list,
+        so callers exercising this tool in tests get realistic field names.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: The result produced by the operation.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No active model",
+            )
+        await asyncio.sleep(self._delays["feature_operation"] / 4)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=[
+                {
+                    "index": 1,
+                    "type": "FACE",
+                    "bounding_box_mm": {"min": [0.0, 0.0, 0.0], "max": [30.0, 30.0, 0.0]},
+                    "center_mm": [15.0, 15.0, 0.0],
+                    "area_mm2": 900.0,
+                    "normal": [0.0, 0.0, 1.0],
+                },
+                {
+                    "index": 2,
+                    "type": "EDGE",
+                    "start_mm": [0.0, 0.0, -15.0],
+                    "end_mm": [30.0, 0.0, -15.0],
+                    "length_mm": 30.0,
+                },
+            ],
+            execution_time=self._delays["feature_operation"] / 4,
+        )
+
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """Mock configuration listing for the active model.
 

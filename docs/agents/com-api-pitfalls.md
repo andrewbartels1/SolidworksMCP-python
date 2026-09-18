@@ -651,6 +651,44 @@ second, independent one immediately behind it.
 
 ---
 
+## 21. `SaveBitmapWithVariableSize` captures whatever MDI window is frontmost, not the COM object it's called on
+
+**Symptom:** `export_image` reports success and writes a real image file, but the picture is
+of a *different* open SolidWorks document than the one the adapter targeted — e.g. the
+user's unrelated real project, captured instead of the script's own test part.
+
+**Root cause:** `IModelDoc2::SaveBitmapWithVariableSize` / `IModelView2::SaveBitmapWithVariableSize`
+render the currently-visible MDI child window inside the SW frame, not necessarily the
+document identified by the COM object the method is invoked on. `swApp.Frame.SetFocus()`
+only focuses the top-level SW application window — it does nothing to select *which* of
+several open document tabs/windows is the active one. If the user has clicked into a
+different document in the SW UI between when the adapter captured its `currentModel`
+reference and when `export_image` actually runs, the bitmap comes from whatever they were
+last looking at, silently, with no error.
+
+**Fix:** explicitly activate the target document's own window with `ISldWorks::ActivateDoc3`
+before capturing, using its title (not path):
+
+```python
+title = target_doc.GetTitle()
+swApp.ActivateDoc3(title, False, 0, byref_long_out_param)
+swApp.Frame.SetFocus()
+# ... then SaveBitmapWithVariableSize as before
+```
+
+`export_image` in `pywin32_adapter.py` now does this unconditionally before every capture.
+
+**General lesson:** a COM method called "on" a specific document object is not guaranteed to
+operate on that document if the underlying operation is actually frame/window-scoped rather
+than document-scoped. When in doubt, activate the document explicitly first rather than
+trusting that holding a reference to it is enough.
+
+Found 2026-09-18, flagged during the add_chamfer live demo (screenshot twice showed the
+user's real project instead of the test coupon) but not fixed at the time; fixed in a
+follow-up pass the same day.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests

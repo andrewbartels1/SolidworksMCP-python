@@ -699,6 +699,9 @@ class TestConnectionPoolAdapterExtras:
             async def add_chamfer(self, distance, edge_names):
                 return _ok("chamfer")
 
+            async def get_selected_entities(self):
+                return _ok("selection")
+
         async def _exercise_every_passthrough(wrapped) -> None:
             assert (await wrapped.create_reference_plane("Top")).is_success
             assert (await wrapped.create_axis("Top")).is_success
@@ -724,6 +727,7 @@ class TestConnectionPoolAdapterExtras:
             assert (await wrapped.undo()).is_success
             assert (await wrapped.add_mate("Comp1", "Comp2")).is_success
             assert (await wrapped.add_chamfer(1.0, ["Edge1"])).is_success
+            assert (await wrapped.get_selected_entities()).is_success
 
         await _exercise_every_passthrough(CircuitBreakerAdapter(adapter=_FullStubAdapter()))
 
@@ -2364,11 +2368,14 @@ class TestPyWin32AdapterBranches:
             SaveBitmapWithVariableSize=Mock(side_effect=_save_bitmap),
             ShowNamedView2=Mock(),
             ViewZoomToFit2=Mock(),
+            GetTitle=Mock(return_value="shot.SLDPRT"),
+            GetPathName=Mock(return_value=""),
         )
         adapter.currentModel = target_doc
         adapter.swApp = SimpleNamespace(
             ActiveDoc=target_doc,
             Frame=SimpleNamespace(SetFocus=Mock()),
+            ActivateDoc3=Mock(return_value=target_doc),
         )
 
         result = await adapter.export_image(
@@ -2387,6 +2394,8 @@ class TestPyWin32AdapterBranches:
         assert result.data["view"] == "front"
         target_doc.ShowNamedView2.assert_called_once_with("", 1)
         target_doc.ViewZoomToFit2.assert_called_once()
+        adapter.swApp.ActivateDoc3.assert_called_once()
+        assert adapter.swApp.ActivateDoc3.call_args[0][0] == "shot.SLDPRT"
 
     def test_prepare_stl_export_data_paths(self, monkeypatch) -> None:
         """_prepare_stl_export_data should handle missing app, missing data, and success."""

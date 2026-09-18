@@ -631,6 +631,14 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"distance": distance, "edge_names": edge_names},
         )
 
+    async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Report the current UI selection through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_selected_entities",
+            lambda: self.adapter.get_selected_entities(),
+            input_dict={},
+        )
+
     async def create_reference_plane(
         self,
         reference: str,

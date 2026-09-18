@@ -28,6 +28,7 @@ from .solidworks import (
     SolidWorksSelectionMixin,
     SolidWorksSketchMixin,
 )
+from .solidworks.io import _byref_int
 
 try:
     import pythoncom
@@ -2291,6 +2292,20 @@ class PyWin32Adapter(
             _os.makedirs(_os.path.dirname(resolved), exist_ok=True)
 
             target_doc = self._resolve_export_target_doc()
+
+            # Activate target_doc's own MDI window before capturing. Without
+            # this, SaveBitmapWithVariableSize renders whatever document
+            # window is currently frontmost in the SW frame -- which can be
+            # a completely different open document if the user has clicked
+            # around in SolidWorks since -- even though it's called on the
+            # correct target_doc COM object. See com-api-pitfalls.md #21.
+            _, target_title = self._document_identity(target_doc)
+            if target_title:
+                self._attempt(
+                    lambda: self.swApp.ActivateDoc3(  # type: ignore[union-attr]
+                        target_title, False, 0, _byref_int()
+                    )
+                )
 
             # Ensure SolidWorks window is focused so the viewport is rendered.
             # Required for both view changes and bitmap capture.

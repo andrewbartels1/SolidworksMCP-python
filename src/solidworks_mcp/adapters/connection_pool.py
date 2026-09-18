@@ -627,6 +627,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "add_chamfer", lambda adapter: adapter.add_chamfer(distance, edge_names)
         )
 
+    async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Report the current UI selection using pool."""
+        return await self._execute_with_pool(
+            "get_selected_entities", lambda adapter: adapter.get_selected_entities()
+        )
+
     async def create_reference_plane(
         self,
         reference: str,

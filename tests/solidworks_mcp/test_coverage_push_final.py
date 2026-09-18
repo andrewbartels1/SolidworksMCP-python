@@ -34,6 +34,25 @@ class TestMockAdapterCoveragePush:
         assert "No active model" in (result.error or "")
 
     @pytest.mark.asyncio
+    async def test_get_selected_entities_no_model(self, mock_adapter) -> None:
+        """get_selected_entities returns ERROR when no model is active."""
+        mock_adapter._current_model = None
+        result = await mock_adapter.get_selected_entities()
+        assert not result.is_success
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_get_selected_entities_success(self, mock_adapter) -> None:
+        """get_selected_entities reports canned face/edge fixtures when a model is active."""
+        await mock_adapter.connect()
+        await mock_adapter.create_part()
+        result = await mock_adapter.get_selected_entities()
+        assert result.is_success
+        assert len(result.data) == 2
+        assert result.data[0]["type"] == "FACE"
+        assert result.data[1]["type"] == "EDGE"
+
+    @pytest.mark.asyncio
     async def test_add_spline_malformed_point(self, mock_adapter) -> None:
         """add_spline returns ERROR when a point dict is missing x/y (line 901)."""
         await mock_adapter.connect()

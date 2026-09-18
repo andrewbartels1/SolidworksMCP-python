@@ -990,6 +990,22 @@ class SolidWorksAdapter(ABC):
             error="add_chamfer is not implemented by this adapter",
         )
 
+    async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
+        """Report the faces/edges/vertices currently selected in the live UI.
+
+        Lets an agent see exactly what the user has clicked on in SolidWorks
+        (e.g. "chamfer THIS face") instead of inferring it from a screenshot.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: One descriptor per selected
+            entity. See the PyWin32 adapter's implementation for the field
+            set (varies by entity type).
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_selected_entities is not implemented by this adapter",
+        )
+
     async def create_reference_plane(
         self,
         reference: str,

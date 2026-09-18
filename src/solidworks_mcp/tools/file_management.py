@@ -1020,6 +1020,48 @@ async def register_file_management_tools(
             }
 
     @mcp.tool()
+    async def get_selected_entities() -> dict[str, Any]:
+        """Report the faces/edges/vertices currently selected in the live SolidWorks UI.
+
+        Use this to find out exactly what the user has clicked on in SolidWorks
+        before applying a feature (e.g. "chamfer the face I selected") instead
+        of guessing from coordinates or a screenshot. Each entry includes
+        enough geometry (bounding box, center, area/length, normal where
+        applicable) to identify which face/edge is which, and the center
+        coordinates can be fed straight into add_chamfer/add_fillet's
+        "face:x,y,z" or coordinate edge_names syntax.
+
+        Returns:
+            dict[str, Any]: ``entities`` (list of selection descriptors) and
+            ``count`` on success.
+        """
+        try:
+            if hasattr(adapter, "get_selected_entities"):
+                result = await adapter.get_selected_entities()
+                if result.is_success:
+                    return {
+                        "status": "success",
+                        "entities": result.data or [],
+                        "count": len(result.data or []),
+                        "execution_time": result.execution_time,
+                    }
+                return {
+                    "status": "error",
+                    "message": result.error or "Failed to get selected entities",
+                }
+
+            return {
+                "status": "error",
+                "message": "Active adapter does not support get_selected_entities",
+            }
+        except Exception as e:
+            logger.error(f"Error in get_selected_entities tool: {e}")
+            return {
+                "status": "error",
+                "message": f"Unexpected error: {str(e)}",
+            }
+
+    @mcp.tool()
     async def classify_feature_tree(
         input_data: ClassifyFeatureTreeInput,
     ) -> dict[str, Any]:
@@ -1799,5 +1841,5 @@ async def register_file_management_tools(
             logger.error(f"Error in save_body_as_part tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 18  # Total number of registered tools in this module
+    tool_count = 19  # Total number of registered tools in this module
     return tool_count
