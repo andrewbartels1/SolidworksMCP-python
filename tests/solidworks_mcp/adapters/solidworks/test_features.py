@@ -487,3 +487,40 @@ def test_offset_plane_distance_positive_offset_with_flip() -> None:
     distance_m, flip_bits = features._offset_plane_distance(76.2, base_flip=True)
     assert distance_m == pytest.approx(0.0762)
     assert flip_bits == features._REF_PLANE_OPTION_FLIP
+
+
+# --- _parse_edge_spec ---------------------------------------------------
+
+
+def test_parse_edge_spec_topology_name_is_edge() -> None:
+    name, x, y, z, entity_type = features._parse_edge_spec("Edge<1>")
+    assert (name, x, y, z, entity_type) == ("Edge<1>", 0.0, 0.0, 0.0, "EDGE")
+
+
+def test_parse_edge_spec_coordinate_is_edge() -> None:
+    name, x, y, z, entity_type = features._parse_edge_spec("0.01,0.02,0.03")
+    assert name == ""
+    assert (x, y, z) == pytest.approx((0.01, 0.02, 0.03))
+    assert entity_type == "EDGE"
+
+
+def test_parse_edge_spec_face_prefix_selects_whole_face() -> None:
+    name, x, y, z, entity_type = features._parse_edge_spec("face:0.01,0.02,0.03")
+    assert name == ""
+    assert (x, y, z) == pytest.approx((0.01, 0.02, 0.03))
+    assert entity_type == "FACE"
+
+
+def test_parse_edge_spec_face_prefix_is_case_insensitive() -> None:
+    _, _, _, _, entity_type = features._parse_edge_spec("FACE:0.01,0.02,0.03")
+    assert entity_type == "FACE"
+
+
+def test_parse_edge_spec_face_prefix_with_unparseable_coordinates() -> None:
+    """A malformed face: coordinate falls back to name-based FACE selection
+    rather than silently mis-parsing as a coordinate.
+    """
+    name, x, y, z, entity_type = features._parse_edge_spec("face:not,a,coord")
+    assert name == "not,a,coord"
+    assert (x, y, z) == (0.0, 0.0, 0.0)
+    assert entity_type == "FACE"
