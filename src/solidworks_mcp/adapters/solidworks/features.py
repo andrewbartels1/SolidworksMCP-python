@@ -2349,6 +2349,22 @@ def _offset_plane_distance(offset_mm: float, base_flip: bool) -> tuple[float, in
     return distance_m, flip_bits
 
 
+class _NullCalloutSentinel:
+    """Stand-in for ``VARIANT(VT_DISPATCH, None)`` when pywin32 is absent.
+
+    Never passed to a real COM call (if pywin32 isn't importable, no live
+    SolidWorks call can happen either), but must still be distinguishable
+    from a bare ``None`` so callers can't accidentally regress to passing
+    plain ``None`` as ``SelectByID2``'s ``Callout`` argument.
+    """
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return "<null callout: pywin32 unavailable>"
+
+
+_NULL_CALLOUT_SENTINEL = _NullCalloutSentinel()
+
+
 def _null_callout() -> Any:
     """Return a VT_DISPATCH null for ``SelectByID2``'s ``Callout`` parameter.
 
@@ -2357,14 +2373,15 @@ def _null_callout() -> Any:
     ``(-2147352571, 'Type mismatch.', None, 8)``. See runbook item 11.
 
     Returns:
-        Any: A ``VARIANT(VT_DISPATCH, None)``, or ``None`` when pywin32 is
-        unavailable (mock/Linux runs, where no COM call will be made anyway).
+        Any: A ``VARIANT(VT_DISPATCH, None)``, or a non-``None`` sentinel
+        when pywin32 is unavailable (mock/Linux runs, where no real COM call
+        will be made anyway, but the value must still never be bare ``None``).
     """
     try:
         import pythoncom
         import win32com.client as _win32com
     except ImportError:  # pragma: no cover - Windows-only path
-        return None
+        return _NULL_CALLOUT_SENTINEL
     return _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
 
 
