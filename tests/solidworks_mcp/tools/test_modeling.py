@@ -10,6 +10,7 @@ from solidworks_mcp.adapters.base import (
     ExtrusionParameters,
 )
 from solidworks_mcp.tools.modeling import (
+    AddChamferInput,
     AddFilletInput,
     AddMateInput,
     CloseModelInput,
@@ -768,6 +769,38 @@ class TestModelingTools:
         )
         assert fillet_result["status"] == "error"
         assert "fillet radius too large" in fillet_result["message"]
+
+    @pytest.mark.asyncio
+    async def test_add_chamfer_success_and_failure_paths(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """add_chamfer returns the created feature name, and surfaces adapter errors."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+
+        tool = {
+            registered.name: registered.fn
+            for registered in await mcp_server.list_tools()
+        }
+
+        mock_adapter.add_chamfer = AsyncMock(
+            return_value=Mock(is_success=True, data=Mock(name="Chamfer1"), execution_time=0.01)
+        )
+        success_result = await tool["add_chamfer"](
+            AddChamferInput(distance=1.5, edge_names=["Edge<1>", "Edge<2>"])
+        )
+        assert success_result["status"] == "success"
+        assert success_result["chamfer"]["distance"] == 1.5
+        assert success_result["chamfer"]["edges"] == ["Edge<1>", "Edge<2>"]
+        mock_adapter.add_chamfer.assert_awaited_once_with(1.5, ["Edge<1>", "Edge<2>"])
+
+        mock_adapter.add_chamfer = AsyncMock(
+            return_value=Mock(is_success=False, error="chamfer distance exceeds edge length")
+        )
+        error_result = await tool["add_chamfer"](
+            AddChamferInput(distance=50.0, edge_names=["Edge<1>"])
+        )
+        assert error_result["status"] == "error"
+        assert "chamfer distance exceeds edge length" in error_result["message"]
 
 
 class TestAssemblyTools:

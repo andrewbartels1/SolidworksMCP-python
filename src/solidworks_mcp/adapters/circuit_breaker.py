@@ -621,6 +621,16 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"radius": radius, "edge_names": edge_names},
         )
 
+    async def add_chamfer(
+        self, distance: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Add chamfer through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_chamfer",
+            lambda: self.adapter.add_chamfer(distance, edge_names),
+            input_dict={"distance": distance, "edge_names": edge_names},
+        )
+
     async def create_reference_plane(
         self,
         reference: str,
