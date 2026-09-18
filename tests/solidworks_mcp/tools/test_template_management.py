@@ -9,8 +9,14 @@ from solidworks_mcp.tools.template_management import (
     TemplateBatchInput,
     TemplateComparisonInput,
     TemplateExtractionInput,
+    _file_fact_snapshot,
     register_template_management_tools,
 )
+
+
+def test_file_fact_snapshot_returns_none_for_empty_path():
+    """An empty path is not a filesystem lookup — just None, no stat() call."""
+    assert _file_fact_snapshot("") is None
 
 
 class TestTemplateManagementTools:

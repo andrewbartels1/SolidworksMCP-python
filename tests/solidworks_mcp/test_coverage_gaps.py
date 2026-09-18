@@ -26,18 +26,25 @@ from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
 @pytest.fixture
 def open_circuit_breaker():
-    """Return a CircuitBreakerAdapter already in OPEN state."""
+    """Return a CircuitBreakerAdapter with the "open_model" bucket already OPEN.
+
+    Each operation gets its own breaker bucket (see CircuitBreakerAdapter's
+    per-operation isolation), so forcing this fixture's target operation open
+    means pre-opening that operation's specific bucket, not the legacy
+    ``cb.state`` attribute (which only backs ``connect()``/``call()``).
+    """
     mock = MockSolidWorksAdapter({})
     cb = CircuitBreakerAdapter(
         adapter=mock,
         failure_threshold=1,
         recovery_timeout=9999.0,
     )
-    # Force state to OPEN without timing dependencies
-    cb.state = CircuitState.OPEN
+    # Force the "open_model" bucket to OPEN without timing dependencies
     import time
 
-    cb.last_failure_time = time.time()
+    bucket = cb._get_bucket("open_model")
+    bucket.state = CircuitState.OPEN
+    bucket.last_failure_time = time.time()
     return cb
 
 

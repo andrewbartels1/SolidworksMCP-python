@@ -243,3 +243,13 @@ async def test_mock_activate_document_blank_is_an_error() -> None:
 
     result = await adapter.activate_document("   ")
     assert not result.is_success
+
+
+@pytest.mark.asyncio
+async def test_mock_activate_document_requires_connection() -> None:
+    """Calling activate_document before connect() is an error, not a crash."""
+    adapter = MockSolidWorksAdapter({})
+
+    result = await adapter.activate_document("Part1")
+    assert not result.is_success
+    assert "Not connected to SolidWorks" in (result.error or "")

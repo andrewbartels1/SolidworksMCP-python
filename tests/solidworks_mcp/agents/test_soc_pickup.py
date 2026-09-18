@@ -110,6 +110,20 @@ def test_diff_preserves_order():
     assert [r["name"] for r in result] == ["B", "C"]
 
 
+def test_diff_handles_nameless_rows_without_crashing():
+    """A row with no name (e.g. a folder/marker row) has no stable identity.
+
+    _feature_key returns None for it rather than raising or matching on an
+    empty-string name; old_keys excludes None entirely, so a nameless row
+    can never be treated as "already seen" - it always surfaces as new.
+    """
+    nameless = {"type": "MateGroup"}
+    old = [nameless]
+    new = [nameless, _feat("A", "Sketch")]
+    result = diff_feature_trees(old, new)
+    assert result == [nameless, _feat("A", "Sketch")]
+
+
 def test_diff_ignores_removed_features():
     # A feature removed from new_tree is not in the diff (only additions)
     old = [_feat("A", "Sketch"), _feat("B", "Fillet")]

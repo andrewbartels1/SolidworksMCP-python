@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -47,6 +48,20 @@ class _FakeFeatureAdapter:
         return getattr(feature, "Name", "feature-id")
 
 
+def _fake_sketch_feature(name: str) -> SimpleNamespace:
+    """A single-node fake feature tree containing one ProfileFeature (sketch).
+
+    Used so ``_profile_feature_names`` (the ground-truth tree walk
+    create_cut_extrude now requires before it will target a sketch) finds a
+    real match for ``adapter._last_sketch_name`` in these unit tests.
+    """
+    return SimpleNamespace(
+        GetTypeName2=lambda: "ProfileFeature",
+        Name=name,
+        GetNextFeature=lambda: None,
+    )
+
+
 def test_create_cut_extrude_requires_model() -> None:
     adapter = _FakeFeatureAdapter()
     result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=5.0))
@@ -64,8 +79,8 @@ def test_create_cut_extrude_collects_all_fallback_errors() -> None:
     adapter.currentModel = SimpleNamespace(
         FeatureManager=feature_manager,
         ClearSelection2=lambda *_args: True,
-        FirstFeature=None,
-        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: False),
+        FirstFeature=_fake_sketch_feature("Sketch2"),
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
     )
     adapter._last_sketch_name = "Sketch2"
 
@@ -75,9 +90,160 @@ def test_create_cut_extrude_collects_all_fallback_errors() -> None:
     )
 
     assert result.status == AdapterResultStatus.ERROR
+    assert "Sketch2" in (result.error or "")
     assert "FeatureCut4: cut4 failed" in (result.error or "")
-    assert "FeatureCut3 modern: cut3 failed" in (result.error or "")
-    assert "FeatureCut3 legacy: cut3 failed" in (result.error or "")
+    assert "FeatureCut3: cut3 failed" in (result.error or "")
+
+
+def test_create_cut_extrude_fails_clearly_when_sketch_selection_rejected() -> None:
+    """SelectByID2 rejecting the resolved sketch must fail fast, by name.
+
+    No FeatureCut variant should even be attempted — cutting with whatever
+    happens to still be selected would risk operating on the wrong profile.
+    """
+    adapter = _FakeFeatureAdapter()
+
+    feature_manager = SimpleNamespace(
+        FeatureCut4=Mock(side_effect=AssertionError("should not be called")),
+        FeatureCut3=Mock(side_effect=AssertionError("should not be called")),
+    )
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=feature_manager,
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=_fake_sketch_feature("Sketch2"),
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: False),
+    )
+    adapter._last_sketch_name = "Sketch2"
+
+    result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=4.0))
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to select sketch 'Sketch2'" in (result.error or "")
+    feature_manager.FeatureCut4.assert_not_called()
+    feature_manager.FeatureCut3.assert_not_called()
+
+
+def test_create_cut_extrude_never_passes_bare_none_as_callout() -> None:
+    """SelectByID2's Callout arg must never be plain None.
+
+    Plain None marshals as VT_NULL, which real SolidWorks rejects with
+    DISP_E_TYPEMISMATCH (runbook item 11) — silently swallowed by _attempt
+    into an unhelpful "selection failed" guess unless the call site passes
+    the VT_DISPATCH null helper instead.
+    """
+    adapter = _FakeFeatureAdapter()
+
+    select_calls: list[tuple] = []
+
+    def _select_by_id2(*args, **kwargs):
+        select_calls.append(args)
+        return True
+
+    feature = SimpleNamespace(Name="Cut-Extrude1")
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(
+            FeatureCut4=lambda *args: feature, FeatureCut3=lambda *args: None
+        ),
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=_fake_sketch_feature("Sketch2"),
+        Extension=SimpleNamespace(SelectByID2=_select_by_id2),
+    )
+    adapter._last_sketch_name = "Sketch2"
+
+    result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=4.0))
+
+    assert result.is_success
+    assert select_calls, "expected at least one SelectByID2 call"
+    for call_args in select_calls:
+        callout = call_args[7]
+        assert callout is not None, (
+            "SelectByID2's Callout arg was bare None — SolidWorks rejects "
+            "this with DISP_E_TYPEMISMATCH"
+        )
+
+
+def test_create_cut_extrude_surfaces_real_selection_com_error() -> None:
+    """A COM error during sketch selection must appear in the failure message.
+
+    Previously this was swallowed by ``_attempt`` into a generic "may
+    already be consumed..." guess, hiding the actual cause.
+    """
+    adapter = _FakeFeatureAdapter()
+
+    def _select_by_id2(*_args, **_kwargs):
+        raise RuntimeError("(-2147352571, 'Type mismatch.', None, 8)")
+
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(
+            FeatureCut4=Mock(side_effect=AssertionError("should not be called")),
+            FeatureCut3=Mock(side_effect=AssertionError("should not be called")),
+        ),
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=_fake_sketch_feature("Sketch2"),
+        Extension=SimpleNamespace(SelectByID2=_select_by_id2),
+    )
+    adapter._last_sketch_name = "Sketch2"
+
+    result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=4.0))
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Type mismatch" in (result.error or "")
+
+
+def test_create_cut_extrude_explicit_sketch_name_not_found_fails_fast() -> None:
+    """An explicit sketch_name that doesn't exist must fail with the real list."""
+    adapter = _FakeFeatureAdapter()
+
+    feature_manager = SimpleNamespace(
+        FeatureCut4=Mock(side_effect=AssertionError("should not be called")),
+        FeatureCut3=Mock(side_effect=AssertionError("should not be called")),
+    )
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=feature_manager,
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=_fake_sketch_feature("Sketch2"),
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
+    )
+
+    result = features._create_cut_extrude_impl(
+        adapter, ExtrusionParameters(depth=4.0, sketch_name="Sketch99")
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Sketch 'Sketch99' not found" in (result.error or "")
+    assert "Sketch2" in (result.error or "")
+    feature_manager.FeatureCut4.assert_not_called()
+    feature_manager.FeatureCut3.assert_not_called()
+
+
+def test_create_cut_extrude_explicit_sketch_name_overrides_last_tracked() -> None:
+    """sketch_name wins even when it differs from _last_sketch_name."""
+    adapter = _FakeFeatureAdapter()
+
+    feature = SimpleNamespace(Name="Cut-Extrude2")
+    feature_manager = SimpleNamespace(
+        FeatureCut4=lambda *args: feature,
+        FeatureCut3=lambda *args: None,
+    )
+    selected: list[str] = []
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=feature_manager,
+        ClearSelection2=lambda *_args: True,
+        FirstFeature=_fake_sketch_feature("Sketch7"),
+        Extension=SimpleNamespace(
+            SelectByID2=lambda name, *_args, **_kwargs: selected.append(name)
+            or True
+        ),
+    )
+    adapter._last_sketch_name = "Sketch2"  # stale/unrelated tracked value
+
+    result = features._create_cut_extrude_impl(
+        adapter, ExtrusionParameters(depth=4.0, sketch_name="Sketch7")
+    )
+
+    assert result.is_success
+    assert result.data.parameters["sketch_name"] == "Sketch7"
+    assert selected == ["Sketch7"]
 
 
 def test_create_cut_extrude_uses_modern_fallback_when_cut4_returns_none() -> None:
@@ -92,14 +258,16 @@ def test_create_cut_extrude_uses_modern_fallback_when_cut4_returns_none() -> Non
     adapter.currentModel = SimpleNamespace(
         FeatureManager=feature_manager,
         ClearSelection2=lambda *_args: True,
-        FirstFeature=None,
+        FirstFeature=_fake_sketch_feature("Sketch2"),
         Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
     )
+    adapter._last_sketch_name = "Sketch2"
 
     result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=6.0))
     assert result.is_success
     assert result.data.type == "Cut-Extrude"
     assert result.data.name == "Cut-Extrude9"
+    assert result.data.parameters["sketch_name"] == "Sketch2"
 
 
 def test_add_fillet_and_chamfer_selection_and_feature_failures() -> None:
@@ -144,7 +312,7 @@ def test_create_cut_extrude_through_all_both_directions() -> None:
     adapter.currentModel = SimpleNamespace(
         FeatureManager=feature_manager,
         ClearSelection2=lambda *_args: True,
-        FirstFeature=None,
+        FirstFeature=_fake_sketch_feature("Sketch1"),
         Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
     )
     adapter._last_sketch_name = "Sketch1"
@@ -160,7 +328,7 @@ def test_create_cut_extrude_through_all_both_directions() -> None:
 
 
 def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
-    """Missing cut feature should raise a generic error when no fallback errors exist."""
+    """Missing cut feature should give a diagnostic error when no fallback errors exist."""
     # Force all cut methods to return None without errors to hit the final raise.
     adapter = _FakeFeatureAdapter()
 
@@ -171,7 +339,7 @@ def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
     adapter.currentModel = SimpleNamespace(
         FeatureManager=feature_manager,
         ClearSelection2=lambda *_args: True,
-        FirstFeature=None,
+        FirstFeature=_fake_sketch_feature("Sketch1"),
         Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: True),
     )
     adapter._last_sketch_name = "Sketch1"
@@ -181,7 +349,8 @@ def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
         ExtrusionParameters(depth=4.0),
     )
     assert result.status == AdapterResultStatus.ERROR
-    assert "Failed to create cut extrude feature" in (result.error or "")
+    assert "Sketch1" in (result.error or "")
+    assert "without raising an error, but returned no feature" in (result.error or "")
 
 
 # ---------------------------------------------------------------------------

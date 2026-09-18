@@ -301,6 +301,35 @@ class TestAnalysisTools:
         assert material["status"] == "error"
         assert "does not support get_material_properties" in material["message"]
 
+        # Exception branch for adapter get_material_properties.
+        mock_adapter.get_material_properties = AsyncMock(
+            side_effect=RuntimeError("material boom")
+        )
+        material_errored = await material_tool()
+        assert material_errored["status"] == "error"
+        assert "Unexpected error: material boom" in material_errored["message"]
+
+    @pytest.mark.asyncio
+    async def test_check_interference_refuses_when_adapter_lacks_support(
+        self, mcp_server, mock_config
+    ):
+        """When the active adapter has no check_interference at all, the tool
+        must refuse with its own message rather than calling a missing method.
+        """
+
+        class _AdapterWithoutInterferenceSupport:
+            """A stand-in with none of the analysis capabilities."""
+
+        bare_adapter = _AdapterWithoutInterferenceSupport()
+        await register_analysis_tools(mcp_server, bare_adapter, mock_config)
+
+        check_tool = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "check_interference"
+        )
+        result = await check_tool(input_data=InterferenceCheckInput())
+        assert result["status"] == "error"
+        assert "does not support check_interference" in result["message"]
+
     @pytest.mark.asyncio
     async def test_analyze_geometry_and_material_properties_adapter_paths(
         self, mcp_server, mock_adapter, mock_config

@@ -229,6 +229,32 @@ def test_build_component_tree_flat_top_level_components() -> None:
     assert tree["components"]["PartA"]["components"] == {}
 
 
+def test_build_component_tree_backfills_path_from_a_later_row() -> None:
+    """A component's first row can arrive with no component_path.
+
+    If a later row for the same component does carry one, the node's path
+    must be backfilled instead of staying None forever.
+    """
+    features = [
+        {
+            "name": "UnresolvedComponent",
+            "type": "UnresolvedComponent",
+            "component": "PartA",
+            "component_path": None,
+            "component_parent": None,
+        },
+        {
+            "name": "Boss1",
+            "type": "Boss",
+            "component": "PartA",
+            "component_path": "C:/PartA.sldprt",
+            "component_parent": None,
+        },
+    ]
+    tree = build_component_tree(features)
+    assert tree["components"]["PartA"]["path"] == "C:/PartA.sldprt"
+
+
 def test_build_component_tree_nests_subassembly_components() -> None:
     """A component whose component_parent points at another component nests under it."""
     features = [
