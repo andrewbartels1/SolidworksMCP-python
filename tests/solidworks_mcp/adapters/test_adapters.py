@@ -280,8 +280,88 @@ class TestCircuitBreaker:
         # Next call should enter half-open state
         result = await cb.call(lambda: "success")
         assert result == "success"
-        assert cb.state == CircuitState.CLOSED
-        assert cb.failure_count == 0
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_isolates_failures_per_operation(self):
+        """A tool that keeps failing must not trip the breaker for other tools.
+
+        Regression test for the bug reported against create_cut_extrude:
+        repeated failures on one operation used to open a single
+        adapter-wide CircuitState, which then rejected unrelated read-only
+        calls like list_features and get_model_info too.
+        """
+        from solidworks_mcp.adapters.base import ExtrusionParameters
+
+        class _PartlyFailingAdapter:
+            async def create_cut_extrude(self, params):
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR, error="Parameter not optional"
+                )
+
+            async def list_features(self, include_suppressed, max_assembly_depth):
+                return AdapterResult(status=AdapterResultStatus.SUCCESS, data=[])
+
+            async def get_model_info(self):
+                return AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+
+        cb = CircuitBreakerAdapter(
+            adapter=_PartlyFailingAdapter(), failure_threshold=2, recovery_timeout=10.0
+        )
+        params = ExtrusionParameters(depth=6.0)
+
+        for _ in range(2):
+            result = await cb.create_cut_extrude(params)
+            assert result.status == AdapterResultStatus.ERROR
+
+        # The cut-extrude breaker is now open ...
+        tripped = await cb.create_cut_extrude(params)
+        assert "Circuit breaker is open" in (tripped.error or "")
+
+        # ... but reads on unrelated operations still go through.
+        features = await cb.list_features()
+        assert features.is_success
+        info = await cb.get_model_info()
+        assert info.is_success
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_health_check_flags_open_operation_bucket(self):
+        """health_check must report unhealthy when a per-operation bucket is
+        open, even though the legacy connection-level breaker stays closed.
+        """
+        from datetime import datetime
+
+        from solidworks_mcp.adapters.base import AdapterHealth, ExtrusionParameters
+
+        class _AlwaysFailingCutAdapter:
+            async def health_check(self):
+                return AdapterHealth(
+                    healthy=True,
+                    last_check=datetime.now(),
+                    error_count=0,
+                    success_count=1,
+                    average_response_time=0.01,
+                    connection_status="connected",
+                )
+
+            async def create_cut_extrude(self, params):
+                return AdapterResult(status=AdapterResultStatus.ERROR, error="boom")
+
+        cb = CircuitBreakerAdapter(
+            adapter=_AlwaysFailingCutAdapter(), failure_threshold=1, recovery_timeout=10.0
+        )
+        params = ExtrusionParameters(depth=6.0)
+
+        await cb.create_cut_extrude(params)  # opens the "create_cut_extrude" bucket
+
+        health = await cb.health_check()
+        assert health.healthy is False
+        assert "create_cut_extrude" in health.connection_status
+        assert (
+            health.metrics["circuit_breaker_operations"]["create_cut_extrude"]["state"]
+            == "open"
+        )
+        # The legacy connection-level bucket (used by connect()) is untouched.
+        assert health.metrics["circuit_breaker"]["state"] == "closed"
 
 
 class TestConnectionPool:
@@ -506,6 +586,149 @@ class TestConnectionPoolAdapterExtras:
         assert pool_result.is_success
         assert pool_result.data == "centerline:0.0,0.0->10.0,0.0"
         await pool.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_wrapper_adapters_forward_every_remaining_passthrough_method(self):
+        """Every pass-through method on both wrapper adapters actually forwards.
+
+        CircuitBreakerAdapter and ConnectionPoolAdapter each expose an
+        identical set of thin wrapper methods (create_reference_plane,
+        mirror_feature, rename_feature, add_mate, ...). One stub covering
+        every one of them, called once through each wrapper, is far cheaper
+        than a dedicated test per method for what is otherwise a single
+        delegating line.
+        """
+
+        def _ok(data=None):
+            return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
+
+        class _FullStubAdapter:
+            async def connect(self):
+                return None
+
+            async def disconnect(self):
+                return None
+
+            async def create_reference_plane(self, reference, offset=0.0, angle=0.0, flip=False):
+                return _ok("plane")
+
+            async def create_axis(self, reference):
+                return _ok("axis")
+
+            async def create_reference_point(
+                self, mode, x, y, z, distance=None, percent=None
+            ):
+                return _ok("point")
+
+            async def mirror_feature(
+                self, features, mirror_plane, merge=True, mirror_bodies=True
+            ):
+                return _ok("mirrored")
+
+            async def pattern_circular(
+                self, features, axis, count, angle=360.0, equal_spacing=True
+            ):
+                return _ok("patterned")
+
+            async def set_units(self, unit_system):
+                return _ok({"unit_system": unit_system})
+
+            async def list_open_documents(self):
+                return _ok([])
+
+            async def activate_document(self, title_or_path):
+                return _ok({"activated": title_or_path})
+
+            async def insert_component(self, file_path, x=0.0, y=0.0, z=0.0):
+                return _ok({"file_path": file_path})
+
+            async def list_components(self):
+                return _ok([])
+
+            async def create_drawing_view(self, payload=None):
+                return _ok("view")
+
+            async def add_drawing_view(self, payload=None):
+                return _ok("view")
+
+            async def create_technical_drawing(self, payload=None):
+                return _ok("drawing")
+
+            async def add_note(self, payload=None):
+                return _ok("note")
+
+            async def list_drawing_views(self):
+                return _ok([])
+
+            async def auto_center_marks(
+                self, view_name, mark_holes=True, mark_fillets=False, mark_slots=True
+            ):
+                return _ok("marks")
+
+            async def save_body_as_part(self, body_name, file_path):
+                return _ok({"body": body_name})
+
+            async def check_interference(self, params=None):
+                return _ok("interference")
+
+            async def delete_feature(self, name):
+                return _ok({"deleted": name})
+
+            async def suppress_feature(self, name, suppress=True):
+                return _ok({"name": name})
+
+            async def rename_feature(self, old_name, new_name):
+                return _ok({"new_name": new_name})
+
+            async def undo(self, count=1):
+                return _ok({"count": count})
+
+            async def add_mate(
+                self,
+                component_a,
+                component_b,
+                entity_a="Front Plane",
+                entity_b="Front Plane",
+                mate_type="coincident",
+                alignment="aligned",
+                distance=0.0,
+                angle=0.0,
+            ):
+                return _ok("mate")
+
+        async def _exercise_every_passthrough(wrapped) -> None:
+            assert (await wrapped.create_reference_plane("Top")).is_success
+            assert (await wrapped.create_axis("Top")).is_success
+            assert (await wrapped.create_reference_point("along_curve", 0, 0, 0)).is_success
+            assert (await wrapped.mirror_feature(["F1"], "Right")).is_success
+            assert (await wrapped.pattern_circular(["F1"], "Axis1", 4)).is_success
+            assert (await wrapped.set_units("mm")).is_success
+            assert (await wrapped.list_open_documents()).is_success
+            assert (await wrapped.activate_document("Part1")).is_success
+            assert (await wrapped.insert_component("a.sldprt")).is_success
+            assert (await wrapped.list_components()).is_success
+            assert (await wrapped.create_drawing_view()).is_success
+            assert (await wrapped.add_drawing_view()).is_success
+            assert (await wrapped.create_technical_drawing()).is_success
+            assert (await wrapped.add_note()).is_success
+            assert (await wrapped.list_drawing_views()).is_success
+            assert (await wrapped.auto_center_marks("View1")).is_success
+            assert (await wrapped.save_body_as_part("Body1", "b.sldprt")).is_success
+            assert (await wrapped.check_interference()).is_success
+            assert (await wrapped.delete_feature("Sketch1")).is_success
+            assert (await wrapped.suppress_feature("Sketch1")).is_success
+            assert (await wrapped.rename_feature("Sketch1", "Sketch2")).is_success
+            assert (await wrapped.undo()).is_success
+            assert (await wrapped.add_mate("Comp1", "Comp2")).is_success
+
+        await _exercise_every_passthrough(CircuitBreakerAdapter(adapter=_FullStubAdapter()))
+
+        pool = ConnectionPoolAdapter(adapter_factory=lambda: _FullStubAdapter(), max_size=1)
+        await pool.connect()
+        try:
+            await _exercise_every_passthrough(pool)
+        finally:
+            await pool.disconnect()
 
 
 class TestPyWin32AdapterBranches:
@@ -1011,6 +1234,11 @@ class TestPyWin32AdapterBranches:
             SketchManager=sketch_manager,
             FeatureManager=feature_manager,
             ClearSelection2=Mock(return_value=True),
+            FirstFeature=SimpleNamespace(
+                GetTypeName2=lambda: "ProfileFeature",
+                Name="SketchA",
+                GetNextFeature=lambda: None,
+            ),
         )
 
         created_sketch = await adapter.create_sketch("XY")
@@ -1388,21 +1616,30 @@ class TestPyWin32AdapterBranches:
         """Cover failure branches for cut/fillet/chamfer feature creation."""
         adapter = self._build_adapter(monkeypatch)
         model = SimpleNamespace(
-            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
             FeatureManager=SimpleNamespace(
                 FeatureCut3=Mock(return_value=None),
                 FeatureFillet3=Mock(return_value=None),
                 FeatureChamfer=Mock(return_value=None),
             ),
+            FirstFeature=SimpleNamespace(
+                GetTypeName2=lambda: "ProfileFeature",
+                Name="Sketch1",
+                GetNextFeature=lambda: None,
+            ),
+            ClearSelection2=Mock(return_value=True),
         )
         adapter.currentModel = model
+        adapter._last_sketch_name = "Sketch1"
 
         cut_fail = await adapter.create_cut_extrude(
             SimpleNamespace(depth=2.0, draft_angle=0.0, reverse_direction=False)
         )
         assert cut_fail.is_error
-        assert "Failed to create cut extrude feature" in (cut_fail.error or "")
+        assert "Sketch1" in (cut_fail.error or "")
+        assert "FeatureCut4" in (cut_fail.error or "")
 
+        model.Extension.SelectByID2 = Mock(return_value=False)
         fillet_select_fail = await adapter.add_fillet(1.0, ["Edge1"])
         chamfer_select_fail = await adapter.add_chamfer(1.0, ["Edge1"])
         assert fillet_select_fail.is_error

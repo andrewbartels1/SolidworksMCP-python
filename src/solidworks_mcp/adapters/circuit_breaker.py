@@ -51,8 +51,37 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"  # Testing if service is back
 
 
+class _BreakerBucket:
+    """Per-operation circuit breaker state.
+
+    Attributes:
+        state (CircuitState): The current state of this bucket.
+        failure_count (int): Consecutive failures recorded in ``CLOSED``/``OPEN``.
+        last_failure_time (float): ``time.time()`` of the most recent failure.
+        half_open_calls (int): Calls let through since entering ``HALF_OPEN``.
+    """
+
+    __slots__ = ("state", "failure_count", "last_failure_time", "half_open_calls")
+
+    def __init__(self) -> None:
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.last_failure_time: float = 0.0
+        self.half_open_calls = 0
+
+
 class CircuitBreakerAdapter(SolidWorksAdapter):
     """Circuit breaker wrapper for SolidWorks adapters.
+
+    Each named operation (``create_cut_extrude``, ``list_features``, ...) gets
+    its own independent breaker bucket, keyed by the ``operation_name`` passed
+    to ``_execute_with_circuit_breaker``. A run of failures on one tool (e.g.
+    every ``create_cut_extrude`` attempt failing while a wrong argument count
+    is being worked out) trips only that tool's breaker — unrelated read-only
+    tools like ``list_features`` or ``get_model_info`` keep working. Before
+    this, a single shared ``CircuitState`` meant one failing tool blocked
+    every other tool on the adapter, including reads, until the shared
+    recovery timeout elapsed.
 
     Args:
         adapter (SolidWorksAdapter | None): Adapter instance used for the operation.
@@ -65,12 +94,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
     Attributes:
         adapter (Any): The adapter value.
-        failure_count (Any): The failure count value.
         failure_threshold (Any): The failure threshold value.
-        half_open_calls (Any): The half open calls value.
         half_open_max_calls (Any): The half open max calls value.
         recovery_timeout (Any): The recovery timeout value.
-        state (Any): The state value.
     """
 
     def __init__(
@@ -105,10 +131,30 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         self.recovery_timeout = recovery_timeout
         self.half_open_max_calls = half_open_max_calls
 
+        # Legacy/default bucket, used by connect() and the generic call() API.
         self.state = CircuitState.CLOSED
         self.failure_count = 0
         self.last_failure_time: float = 0.0
         self.half_open_calls = 0
+
+        # Per-operation buckets, keyed by operation_name, used by every named
+        # method that goes through _execute_with_circuit_breaker.
+        self._buckets: dict[str, _BreakerBucket] = {}
+
+    def _get_bucket(self, operation_name: str) -> _BreakerBucket:
+        """Get (creating if needed) the breaker bucket for one operation name.
+
+        Args:
+            operation_name (str): The operation name value.
+
+        Returns:
+            _BreakerBucket: That operation's independent breaker state.
+        """
+        bucket = self._buckets.get(operation_name)
+        if bucket is None:
+            bucket = _BreakerBucket()
+            self._buckets[operation_name] = bucket
+        return bucket
 
     async def _invoke_with_optional_args(
         self,
@@ -129,59 +175,75 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         except TypeError:
             return await method()
 
-    def _should_allow_request(self) -> bool:
+    def _should_allow_request(self, bucket: Any = None) -> bool:
         """Check if request should be allowed through circuit breaker.
+
+        Args:
+            bucket (Any): The breaker bucket to check. Defaults to ``self``
+                (the legacy/default bucket used by ``connect()``/``call()``).
 
         Returns:
             bool: True if should allow request, otherwise False.
         """
-        if self.state == CircuitState.CLOSED:
+        if bucket is None:
+            bucket = self
+        if bucket.state == CircuitState.CLOSED:
             return True
-        elif self.state == CircuitState.OPEN:
+        elif bucket.state == CircuitState.OPEN:
             # Check if enough time has passed to try again
-            if time.time() - self.last_failure_time >= self.recovery_timeout:
-                self.state = CircuitState.HALF_OPEN
-                self.half_open_calls = 0
+            if time.time() - bucket.last_failure_time >= self.recovery_timeout:
+                bucket.state = CircuitState.HALF_OPEN
+                bucket.half_open_calls = 0
                 return True
             return False
-        elif self.state == CircuitState.HALF_OPEN:
-            return self.half_open_calls < self.half_open_max_calls
+        elif bucket.state == CircuitState.HALF_OPEN:
+            return bucket.half_open_calls < self.half_open_max_calls
 
-    def _record_success(self) -> None:
+    def _record_success(self, bucket: Any = None) -> None:
         """Record successful operation.
 
+        Args:
+            bucket (Any): The breaker bucket to update. Defaults to ``self``.
+
         Returns:
             None: None.
         """
-        if self.state == CircuitState.HALF_OPEN:
+        if bucket is None:
+            bucket = self
+        if bucket.state == CircuitState.HALF_OPEN:
             # Reset circuit breaker on success in half-open state
-            self.state = CircuitState.CLOSED
-            self.failure_count = 0
-            self.half_open_calls = 0
-        elif self.state == CircuitState.CLOSED:
+            bucket.state = CircuitState.CLOSED
+            bucket.failure_count = 0
+            bucket.half_open_calls = 0
+        elif bucket.state == CircuitState.CLOSED:
             # Reset failure count on success
-            self.failure_count = 0
+            bucket.failure_count = 0
 
-    def _record_failure(self) -> None:
+    def _record_failure(self, bucket: Any = None) -> None:
         """Record failed operation.
 
+        Args:
+            bucket (Any): The breaker bucket to update. Defaults to ``self``.
+
         Returns:
             None: None.
         """
-        self.failure_count += 1
-        self.last_failure_time = time.time()
+        if bucket is None:
+            bucket = self
+        bucket.failure_count += 1
+        bucket.last_failure_time = time.time()
 
-        if self.state == CircuitState.HALF_OPEN:
+        if bucket.state == CircuitState.HALF_OPEN:
             # Go back to open state
-            self.state = CircuitState.OPEN
+            bucket.state = CircuitState.OPEN
         elif (
-            self.state == CircuitState.CLOSED
-            and self.failure_count >= self.failure_threshold
+            bucket.state == CircuitState.CLOSED
+            and bucket.failure_count >= self.failure_threshold
         ):
             # Open circuit breaker
-            self.state = CircuitState.OPEN
+            bucket.state = CircuitState.OPEN
             logger.warning(
-                f"Circuit breaker opened after {self.failure_count} failures"
+                f"Circuit breaker opened after {bucket.failure_count} failures"
             )
 
     async def _execute_with_circuit_breaker(
@@ -201,33 +263,34 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         Returns:
             AdapterResult[T]: The result produced by the operation.
         """
-        if not self._should_allow_request():
+        bucket = self._get_bucket(operation_name)
+        if not self._should_allow_request(bucket):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=f"Circuit breaker is {self.state.value} for {operation_name}",
-                metadata={"circuit_state": self.state.value},
+                error=f"Circuit breaker is {bucket.state.value} for {operation_name}",
+                metadata={"circuit_state": bucket.state.value},
             )
 
-        if self.state == CircuitState.HALF_OPEN:
-            self.half_open_calls += 1
+        if bucket.state == CircuitState.HALF_OPEN:
+            bucket.half_open_calls += 1
 
         t0 = time.time()
         try:
             result = await operation()
             latency_ms = (time.time() - t0) * 1000.0
             if result.is_success:
-                self._record_success()
+                self._record_success(bucket)
             else:
-                self._record_failure()
+                self._record_failure(bucket)
             self._soc_log(operation_name, input_dict, result, latency_ms)
             return result
         except Exception as e:
             latency_ms = (time.time() - t0) * 1000.0
-            self._record_failure()
+            self._record_failure(bucket)
             err_result: AdapterResult[T] = AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"Circuit breaker caught exception in {operation_name}: {e}",
-                metadata={"circuit_state": self.state.value},
+                metadata={"circuit_state": bucket.state.value},
             )
             self._soc_log(operation_name, input_dict, err_result, latency_ms)
             return err_result
@@ -306,6 +369,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
     async def health_check(self) -> AdapterHealth:
         """Get health check with circuit breaker status.
 
+        ``circuit_breaker`` reports the legacy/default bucket (used by
+        ``connect()``), which is what "connection health" means here.
+        ``circuit_breaker_operations`` reports every per-tool bucket, so a
+        tripped tool-specific breaker is visible even while the connection
+        itself is healthy.
+
         Returns:
             AdapterHealth: The result produced by the operation.
         """
@@ -318,11 +387,31 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "last_failure_time": self.last_failure_time,
             "half_open_calls": self.half_open_calls,
         }
+        base_health.metrics["circuit_breaker_operations"] = {
+            name: {
+                "state": bucket.state.value,
+                "failure_count": bucket.failure_count,
+                "last_failure_time": bucket.last_failure_time,
+                "half_open_calls": bucket.half_open_calls,
+            }
+            for name, bucket in self._buckets.items()
+        }
 
-        # Consider circuit as unhealthy if open
+        # Consider circuit as unhealthy if the connection breaker or any
+        # per-operation breaker is open.
+        open_operations = [
+            name
+            for name, bucket in self._buckets.items()
+            if bucket.state == CircuitState.OPEN
+        ]
         if self.state == CircuitState.OPEN:
             base_health.healthy = False
             base_health.connection_status = "circuit_breaker_open"
+        elif open_operations:
+            base_health.healthy = False
+            base_health.connection_status = (
+                f"circuit_breaker_open_for: {', '.join(sorted(open_operations))}"
+            )
 
         return base_health
 

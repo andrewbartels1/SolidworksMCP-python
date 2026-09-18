@@ -353,12 +353,24 @@ class CreateCutExtrudeInput(CompatInput):
         draft_angle (float): Draft angle in degrees.
         end_condition (str): End condition type.
         reverse_direction (bool): Reverse cut direction.
+        sketch_name (str | None): Sketch to cut from.
     """
 
     depth: float = Field(description="Cut depth in millimeters")
     draft_angle: float = Field(default=0.0, description="Draft angle in degrees")
     reverse_direction: bool = Field(default=False, description="Reverse cut direction")
     end_condition: str = Field(default="Blind", description="End condition type")
+    sketch_name: str | None = Field(
+        default=None,
+        description=(
+            "Sketch to cut from, e.g. 'Sketch3'. If omitted, the sketch most "
+            "recently created/exited in this session is used, but only if it "
+            "still exists in the model — there is no other fallback. Pass "
+            "this explicitly whenever more than one unconsumed sketch could "
+            "exist, or after any operation that might have changed the "
+            "active sketch."
+        ),
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if self.depth <= 0:
@@ -1351,24 +1363,37 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_cut_extrude(input_data: CreateCutExtrudeInput) -> dict[str, Any]:
-        """Cut material from the active model using the current sketch profile.
+        """Cut material from a sketch profile in the active model.
 
-        Creates a Cut-Extrude feature (Insert > Cut > Extrude) from the active sketch.
-        Use this after exit_sketch when you want to remove material — e.g. to create
-        windows, holes, slots, or any through/blind cut in an existing solid body.
+        Creates a Cut-Extrude feature (Insert > Cut > Extrude). Use this after
+        exit_sketch when you want to remove material — e.g. to create windows,
+        holes, slots, or any through/blind cut in an existing solid body.
+
+        Sketch selection is never a silent guess: pass ``sketch_name``
+        explicitly whenever you're not certain which sketch this should act
+        on (e.g. more than one sketch could be unconsumed, or other tool
+        calls ran in between). If omitted, only the sketch most recently
+        created/exited in this same session is used, and only when it still
+        exists in the model — there is no further fallback. Any ambiguity or
+        mismatch is reported back as an error naming the sketch(es) actually
+        found in the model, rather than cutting the wrong profile.
 
         Args:
-            input_data (CreateCutExtrudeInput): Depth, direction and draft parameters.
+            input_data (CreateCutExtrudeInput): Depth, direction, draft, and
+                optional sketch_name parameters.
 
         Returns:
-            dict[str, Any]: Status and feature details.
+            dict[str, Any]: Status and feature details. On error, ``message``
+                identifies exactly which stage failed (sketch not found,
+                sketch selection rejected by SolidWorks, or the specific
+                FeatureCut COM error) rather than a generic failure string.
 
         Example:
             ```python
-            # Cut a blind pocket 10 mm deep
-            result = await create_cut_extrude({"depth": 10.0})
+            # Cut a blind pocket 10 mm deep from a named sketch
+            result = await create_cut_extrude({"depth": 10.0, "sketch_name": "Sketch3"})
 
-            # Through-all cut (use a depth larger than the solid)
+            # Through-all cut using the most recently exited sketch
             result = await create_cut_extrude({"depth": 200.0})
             ```
         """
@@ -1385,10 +1410,17 @@ async def register_modeling_tools(
                 merge_result=False,
                 feature_scope=False,
                 auto_select=True,
+                sketch_name=input_data.sketch_name,
             )
             result = await adapter.create_cut_extrude(params)
             if result.is_success:
                 feature = result.data
+                feature_params = _result_value(feature, "parameters", default={})
+                sketch_used = (
+                    feature_params.get("sketch_name")
+                    if isinstance(feature_params, dict)
+                    else None
+                ) or input_data.sketch_name
                 return {
                     "status": "success",
                     "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
@@ -1397,6 +1429,7 @@ async def register_modeling_tools(
                             feature, "feature_name", "name", default="Cut-Extrude"
                         ),
                         "depth": input_data.depth,
+                        "sketch_name": sketch_used,
                     },
                     "execution_time": result.execution_time,
                 }

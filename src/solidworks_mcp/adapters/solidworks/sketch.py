@@ -351,15 +351,23 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
         except Exception:
             adapter.currentSketch = adapter.currentSketchManager.InsertSketch()
 
-        if not adapter.currentSketch:
-            # Prefer the method-flagged ``currentModel`` dispatch: a bare
-            # ``swApp.ActiveDoc`` is not flagged, so its ``GetActiveSketch2``
-            # resolves to a non-callable and silently yields ``None`` — which
-            # forces the synthetic ``Sketch_N`` fallback name and makes the
-            # sketch unselectable by later features.
-            adapter.currentSketch = adapter._attempt(
-                lambda: adapter.currentModel.GetActiveSketch2()
-            ) or adapter._attempt(lambda: adapter.swApp.ActiveDoc.GetActiveSketch2())
+        if not (adapter.currentSketch and hasattr(adapter.currentSketch, "Name")):
+            # ISketchManager.ActiveSketch is the documented property for
+            # "whatever sketch is open right now" — more reliable than
+            # trusting InsertSketch's return value, which some SW versions
+            # return as an empty Sub result. Try it before the GetActiveSketch2
+            # method fallbacks: a bare ``swApp.ActiveDoc`` is not flagged, so
+            # its ``GetActiveSketch2`` resolves to a non-callable and silently
+            # yields ``None`` — which forces the synthetic ``Sketch_N``
+            # fallback name and makes the sketch unselectable by later
+            # features (create_cut_extrude included).
+            adapter.currentSketch = (
+                adapter._attempt(lambda: adapter.currentSketchManager.ActiveSketch)
+                or adapter._attempt(lambda: adapter.currentModel.GetActiveSketch2())
+                or adapter._attempt(
+                    lambda: adapter.swApp.ActiveDoc.GetActiveSketch2()
+                )
+            )
 
         adapter._sketch_count += 1
 
