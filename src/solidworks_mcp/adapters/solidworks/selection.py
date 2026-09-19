@@ -11,9 +11,12 @@ from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
 
 # swSelectType_e values actually observed on this SW install for the entity
-# kinds this method cares about. Not the full enum -- just the ones that
-# matter for "what face/edge/vertex did the user click on".
-_SELECTED_ENTITY_TYPE_NAMES = {2: "FACE", 3: "EDGE", 4: "VERTEX"}
+# kinds this method cares about (EDGE=1, FACE=2 confirmed live 2026-09-18 by
+# selecting each kind and checking which methods resolve on the returned
+# object -- IEdge.GetStartVertex for EDGE, IFace2.GetBox for FACE. VERTEX=3
+# is the documented swSelectType_e value but has not been live-verified the
+# same way; treat it as a good guess, not a fact, if it ever misbehaves.
+_SELECTED_ENTITY_TYPE_NAMES = {1: "EDGE", 2: "FACE", 3: "VERTEX"}
 
 
 class SolidWorksSelectionMixin:

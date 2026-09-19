@@ -134,7 +134,7 @@ async def test_get_selected_entities_requires_active_model() -> None:
 async def test_get_selected_entities_describes_face_and_edge() -> None:
     """A selected FACE and EDGE should each be described with their own fields."""
     sel_mgr = _FakeSelectionManager(
-        [(2, _FakeFace()), (3, _FakeEdge())]  # swSelFACES=2, swSelEDGES=3
+        [(2, _FakeFace()), (1, _FakeEdge())]  # FACE=2, EDGE=1 (confirmed live)
     )
     model = SimpleNamespace(SelectionManager=sel_mgr)
     harness = _SelectionHarness(has_model=True)

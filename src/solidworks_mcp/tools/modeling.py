@@ -396,7 +396,13 @@ class AddFilletInput(CompatInput):
             "a coordinate on an edge that sits exactly on a shared boundary "
             "between two faces (e.g. a hole rim flush with a flat face): the "
             "nearest-edge match there can silently resolve to a different, "
-            "unrelated edge. Leave empty to fillet all edges."
+            "unrelated edge. Leave empty to use whatever is *currently "
+            "selected* in the live SolidWorks UI (e.g. entities read back "
+            "via get_selected_entities and left selected) without touching "
+            "the selection — this is the most reliable option when the user "
+            "has hand-picked specific edges, since it never round-trips "
+            "through coordinates. Falls back to filleting all edges only if "
+            "nothing at all is selected."
         ),
     )
 
@@ -424,7 +430,13 @@ class AddChamferInput(CompatInput):
             "a coordinate on an edge that sits exactly on a shared boundary "
             "between two faces (e.g. a hole rim flush with a flat face): the "
             "nearest-edge match there can silently resolve to a different, "
-            "unrelated edge. Leave empty to chamfer all edges."
+            "unrelated edge. Leave empty to use whatever is *currently "
+            "selected* in the live SolidWorks UI (e.g. entities read back "
+            "via get_selected_entities and left selected) without touching "
+            "the selection — this is the most reliable option when the user "
+            "has hand-picked specific edges, since it never round-trips "
+            "through coordinates. Falls back to chamfering all edges only if "
+            "nothing at all is selected."
         ),
     )
 

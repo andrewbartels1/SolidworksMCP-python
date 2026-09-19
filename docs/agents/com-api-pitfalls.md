@@ -689,6 +689,82 @@ follow-up pass the same day.
 
 ---
 
+## 22. `add_fillet`/`add_chamfer` unconditionally cleared the user's live UI selection, even with `edge_names=[]`
+
+**Symptom:** The user hand-selects several edges in the SolidWorks UI (e.g. the outer edges
+of a block plus a hole rim) and asks for a fillet on "the edges I have selected" — the
+resulting fillet only covers one of them (typically whichever edge SW's own no-selection
+fallback happened to land on), not the full set the user picked.
+
+**Root cause:** `_add_fillet_impl`/`_add_chamfer_impl` called
+`adapter.currentModel.ClearSelection2(True)` *unconditionally* at the top of the operation,
+before checking whether `edge_names` was even non-empty. `edge_names=[]` is documented as
+"use the current selection / fillet all edges", but the unconditional clear wiped out
+exactly the selection that meant "use the current selection" — by the time `FeatureFillet3`
+ran, nothing was selected at all, so SW fell back to its own all-edges (or first-found-edge)
+behavior instead of the user's actual picks.
+
+**Fix:** only clear and rebuild the selection when `edge_names` is non-empty — i.e. when the
+caller is explicitly naming edges/faces to select. An empty list now leaves whatever is
+already selected in the live UI completely untouched:
+
+```python
+if edge_names:
+    model.ClearSelection2(True)
+    for name in edge_names:
+        ...  # SelectByID2 / _select_edge_by_coord as before
+# else: fall through to FeatureFillet3/InsertFeatureChamfer on the existing selection
+```
+
+Combined with `get_selected_entities` (added the same day — see the selection mixin), this
+gives a coordinate-free path for "operate on exactly what the user selected": read the
+selection to show the agent what's there, then call `add_fillet(radius, edge_names=[])`
+without ever re-selecting anything, sidestepping the coordinate-ambiguity bugs in #20
+entirely for this case.
+
+**General lesson:** a "no-op" input value (empty list, `None`, etc.) can still trigger a
+side-effecting call earlier in the function. Audit unconditional setup/teardown calls
+(`ClearSelection2`, `EditRebuild3`, etc.) against every branch that follows, not just the
+branch you're currently changing.
+
+Found and fixed 2026-09-18.
+
+---
+
+## 23. `get_mass_properties`'s `ForceRebuild3` call silently clears the live UI selection
+
+**Symptom:** A workflow that reads the current selection, measures something (e.g. mass
+properties, for a before/after volume comparison), then acts on "the current selection"
+(e.g. `add_fillet(edge_names=[])`, see pitfall #22) ends up creating an empty/near-empty
+feature — the measurement step ran *between* reading the selection and using it, and wiped
+it out.
+
+**Root cause:** `get_mass_properties`'s `_get()` closure (`solidworks/io.py`) starts with
+`adapter.currentModel.ForceRebuild3(False)`. Forcing a model rebuild is a well-known
+selection-clearing operation in SolidWorks — the tessellation/topology being regenerated
+invalidates any transient entity selection, so `ForceRebuild3` silently deselects everything
+in the live UI as a side effect of "just measuring."
+
+**Fix:** don't call `get_mass_properties` (or anything else that rebuilds the model) between
+reading a selection you intend to reuse and acting on it. If you need a before/after volume
+comparison around a selection-consuming operation, take the "before" measurement *first*,
+before ever reading the selection with `get_selected_entities`, not immediately before the
+feature call.
+
+**General lesson:** a "read-only sounding" diagnostic call (measuring mass properties) can
+still mutate transient UI state (selection) as an incidental side effect of a step it needs
+internally (forcing a rebuild for accurate measurements). When chaining "read selection →
+act on selection," audit every call placed in between for rebuild/regenerate semantics, not
+just calls that obviously write geometry.
+
+Found 2026-09-18 while live-verifying the pitfall #22 fix: a `get_mass_properties` call placed
+between reading a 4-edge UI selection and calling `add_fillet(edge_names=[])` cleared the
+selection, and the resulting fillet reported "success" with a real feature name but removed
+0.0000 mm³ — the same silent-success shape as pitfall #19, but here caused by test-script
+ordering rather than a product bug in `add_fillet` itself.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests

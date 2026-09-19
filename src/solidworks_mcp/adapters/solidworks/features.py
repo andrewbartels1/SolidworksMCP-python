@@ -1696,30 +1696,39 @@ def _add_fillet_impl(
             except (ValueError, IndexError):
                 fillet_sw_major = 0
 
-        # Clear any prior selection so the edge set is clean.
-        adapter._attempt(
-            lambda: adapter.currentModel.ClearSelection2(True), default=None
-        )
+        # Only touch the selection when edges/faces were explicitly named.
+        # An empty edge_names means "use whatever is already selected" --
+        # e.g. entities the user hand-picked in the live UI via
+        # get_selected_entities. Clearing unconditionally here used to wipe
+        # that selection out from under the caller before FeatureFillet3
+        # ever ran, so a live multi-edge UI selection silently fell through
+        # to "no selection" (SW's own fillet-all-edges fallback) or an
+        # earlier partial/stale selection instead of what was actually
+        # picked. See com-api-pitfalls.md #22.
+        if edge_names:
+            adapter._attempt(
+                lambda: adapter.currentModel.ClearSelection2(True), default=None
+            )
 
-        for idx, edge_name in enumerate(edge_names):
-            sel_name, ex, ey, ez, entity_type = _parse_edge_spec(edge_name)
-            append = idx > 0  # first edge starts fresh, subsequent ones append
-            if sel_name == "":
-                # Coordinate-based: traverse body edges/faces and pick the closest one.
-                selected = _select_edge_by_coord(
-                    adapter, ex, ey, ez, append=append, entity_type=entity_type
-                )
-            else:
-                selected = adapter._attempt(
-                    lambda sn=sel_name, _x=ex, _y=ey, _z=ez, _ap=append, _et=entity_type: (
-                        adapter.currentModel.Extension.SelectByID2(
-                            sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
-                        )
-                    ),
-                    default=False,
-                )
-            if not selected:
-                raise Exception(f"Failed to select edge: {edge_name}")
+            for idx, edge_name in enumerate(edge_names):
+                sel_name, ex, ey, ez, entity_type = _parse_edge_spec(edge_name)
+                append = idx > 0  # first edge starts fresh, subsequent ones append
+                if sel_name == "":
+                    # Coordinate-based: traverse body edges/faces and pick the closest one.
+                    selected = _select_edge_by_coord(
+                        adapter, ex, ey, ez, append=append, entity_type=entity_type
+                    )
+                else:
+                    selected = adapter._attempt(
+                        lambda sn=sel_name, _x=ex, _y=ey, _z=ez, _ap=append, _et=entity_type: (
+                            adapter.currentModel.Extension.SelectByID2(
+                                sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
+                            )
+                        ),
+                        default=False,
+                    )
+                if not selected:
+                    raise Exception(f"Failed to select edge: {edge_name}")
 
         # SW 2025+ (major >= 33): IModelDoc2.FeatureFillet3 (9 params).
         # Returns a non-zero int on success — NOT an IFeature — so we look up
@@ -1842,29 +1851,32 @@ def _add_chamfer_impl(
         """
         import math
 
-        # Clear any prior selection so the edge set is clean.
-        adapter._attempt(
-            lambda: adapter.currentModel.ClearSelection2(True), default=None
-        )
+        # Only touch the selection when edges/faces were explicitly named.
+        # An empty edge_names means "use whatever is already selected" --
+        # see the matching comment in _add_fillet_impl / com-api-pitfalls.md #22.
+        if edge_names:
+            adapter._attempt(
+                lambda: adapter.currentModel.ClearSelection2(True), default=None
+            )
 
-        for idx, edge_name in enumerate(edge_names):
-            sel_name, cx, cy, cz, entity_type = _parse_edge_spec(edge_name)
-            append = idx > 0
-            if sel_name == "":
-                selected = _select_edge_by_coord(
-                    adapter, cx, cy, cz, append=append, mark=0, entity_type=entity_type
-                )
-            else:
-                selected = adapter._attempt(
-                    lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append, _et=entity_type: (
-                        adapter.currentModel.Extension.SelectByID2(
-                            sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
-                        )
-                    ),
-                    default=False,
-                )
-            if not selected:
-                raise Exception(f"Failed to select edge: {edge_name}")
+            for idx, edge_name in enumerate(edge_names):
+                sel_name, cx, cy, cz, entity_type = _parse_edge_spec(edge_name)
+                append = idx > 0
+                if sel_name == "":
+                    selected = _select_edge_by_coord(
+                        adapter, cx, cy, cz, append=append, mark=0, entity_type=entity_type
+                    )
+                else:
+                    selected = adapter._attempt(
+                        lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append, _et=entity_type: (
+                            adapter.currentModel.Extension.SelectByID2(
+                                sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
+                            )
+                        ),
+                        default=False,
+                    )
+                if not selected:
+                    raise Exception(f"Failed to select edge: {edge_name}")
 
         fm = adapter.currentModel.FeatureManager
         _flag_feature_methods(fm, "IFeatureManager")

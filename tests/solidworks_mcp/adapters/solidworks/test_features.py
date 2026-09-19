@@ -438,6 +438,46 @@ def test_add_fillet_sw2026_edge_selection_failure() -> None:
     assert "Failed to select edge" in (result.error or "")
 
 
+def test_add_fillet_empty_edge_names_does_not_touch_selection() -> None:
+    """edge_names=[] must skip ClearSelection2/SelectByID2 entirely and go
+    straight to FeatureFillet3 on whatever is already selected in the live
+    UI -- see com-api-pitfalls.md #22. Regression test for the bug where an
+    unconditional ClearSelection2 wiped out a hand-picked multi-edge
+    selection before the fillet call ever ran."""
+    adapter = _make_sw2026_adapter(fillet3_return=1)
+    clear_selection = Mock(return_value=True)
+    select_by_id2 = Mock(return_value=True)
+    adapter.currentModel.ClearSelection2 = clear_selection
+    adapter.currentModel.Extension.SelectByID2 = select_by_id2
+
+    result = features._add_fillet_impl(adapter, 1.0, [])
+
+    assert result.is_success
+    clear_selection.assert_not_called()
+    select_by_id2.assert_not_called()
+
+
+def test_add_chamfer_empty_edge_names_does_not_touch_selection() -> None:
+    """Same guarantee as above, for add_chamfer."""
+    adapter = _FakeFeatureAdapter()
+    clear_selection = Mock(return_value=True)
+    select_by_id2 = Mock(return_value=True)
+    feature = SimpleNamespace(Name="Chamfer1")
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=clear_selection,
+        Extension=SimpleNamespace(SelectByID2=select_by_id2),
+        FeatureManager=SimpleNamespace(
+            InsertFeatureChamfer=lambda *args: feature,
+        ),
+    )
+
+    result = features._add_chamfer_impl(adapter, 1.0, [])
+
+    assert result.is_success
+    clear_selection.assert_not_called()
+    select_by_id2.assert_not_called()
+
+
 def test_add_fillet_sw33_also_uses_new_path() -> None:
     """major=33 (SW 2025) hits the >= 33 branch; name defaults to 'Fillet'
     because IModelDoc2.FeatureFillet3 returns int, not IFeature."""
