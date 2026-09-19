@@ -4,7 +4,7 @@ Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as 
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 18**
+**Total tools in this category: 19**
 
 ---
 
@@ -393,6 +393,30 @@ Switch which open document is the active one. Matches the argument against open 
   "title_or_path": "bracket.SLDPRT"
 }
 ```
+
+---
+
+### `get_selected_entities`
+
+Report the faces/edges/vertices currently selected in the live SolidWorks UI. Use this to find out exactly what the user has clicked on before applying a feature (e.g. "chamfer the face I selected") instead of guessing from coordinates or a screenshot. Each entry includes enough geometry (bounding box, center, area/length, normal where applicable) to identify which face/edge is which, and the center coordinates can be fed straight into `add_chamfer`/`add_fillet`'s `"face:x,y,z"` or coordinate `edge_names` syntax.
+
+**Prerequisite:** Active document with at least one entity selected in the SolidWorks UI (returns an empty list otherwise)
+
+**Parameters:** none
+
+**Sample call:**
+
+```json
+{}
+```
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `str` | `"success"` or `"error"` |
+| `entities` | `list[dict]` | One descriptor per selected entity — `type` (`FACE`/`EDGE`/`VERTEX`) plus type-specific fields (`bounding_box_mm`/`center_mm`/`area_mm2`/`normal` for faces, `start_mm`/`end_mm`/`length_mm` for edges, `point_mm` for vertices) |
+| `count` | `int` | Number of selected entities |
 
 ---
 
