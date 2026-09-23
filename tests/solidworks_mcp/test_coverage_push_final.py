@@ -252,6 +252,19 @@ class TestModelingInputValidation:
         with pytest.raises(Exception, match="radius must be positive"):
             AddFilletInput(radius=0.0)
 
+    def test_chamfer_negative_distance_raises(self) -> None:
+        """AddChamferInput rejects distance <= 0, mirroring AddFilletInput."""
+        from solidworks_mcp.tools.modeling import AddChamferInput
+
+        with pytest.raises(Exception, match="distance"):
+            AddChamferInput(distance=-1.0)
+
+    def test_chamfer_zero_distance_raises(self) -> None:
+        from solidworks_mcp.tools.modeling import AddChamferInput
+
+        with pytest.raises(Exception, match="distance must be positive"):
+            AddChamferInput(distance=0.0)
+
 
 class TestModelingToolSuccessPaths:
     """Cover create_cut_extrude and add_fillet success paths (lines 1023-1096)."""

@@ -970,6 +970,26 @@ class SolidWorksAdapter(ABC):
             error="add_fillet is not implemented by this adapter",
         )
 
+    async def add_chamfer(
+        self, distance: float, edge_names: list[str]
+    ) -> AdapterResult[Any]:
+        """Add an equal-distance chamfer feature to selected edges.
+
+        Chamfers the selected edges of the current solid body by the given
+        distance.
+
+        Args:
+            distance (float): Chamfer distance in millimeters.
+            edge_names (list[str]): List of edge names to chamfer.
+
+        Returns:
+            AdapterResult: Feature result or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_chamfer is not implemented by this adapter",
+        )
+
     async def create_reference_plane(
         self,
         reference: str,

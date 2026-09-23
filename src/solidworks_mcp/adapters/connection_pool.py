@@ -619,6 +619,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "add_fillet", lambda adapter: adapter.add_fillet(radius, edge_names)
         )
 
+    async def add_chamfer(
+        self, distance: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Add chamfer using pool."""
+        return await self._execute_with_pool(
+            "add_chamfer", lambda adapter: adapter.add_chamfer(distance, edge_names)
+        )
+
     async def create_reference_plane(
         self,
         reference: str,

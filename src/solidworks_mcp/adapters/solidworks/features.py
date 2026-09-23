@@ -1522,23 +1522,49 @@ def _create_cut_extrude_impl(
     )
 
 
-def _parse_edge_spec(  # pragma: no cover
+def _parse_edge_spec(
     edge_name: str,
-) -> tuple[str, float, float, float]:
-    """Parse an edge specification string into (SelectByID2 name, x, y, z).
+) -> tuple[str, float, float, float, str]:
+    """Parse an edge/face specification string into (name, x, y, z, entity_type).
 
-    Supports two formats:
-    - ``"Edge<1>"`` — name-based selection (x=y=z=0.0, SW looks up by topology name)
-    - ``"x,y,z"`` — coordinate-based selection (name="", coordinate hint in metres)
+    Supports three formats:
+    - ``"Edge<1>"`` — name-based EDGE selection (x=y=z=0.0, SW looks up by
+      topology name)
+    - ``"x,y,z"`` — coordinate-based EDGE selection (name="", coordinate hint
+      in metres)
+    - ``"face:x,y,z"`` (case-insensitive prefix) — coordinate-based FACE
+      selection. Selecting a whole face and handing it to
+      ``InsertFeatureChamfer``/``FeatureFillet3`` chamfers/fillets every
+      edge bounding that face in one call. This is more robust than
+      targeting a single edge by coordinate: a point exactly on a shared
+      boundary between two faces (e.g. a hole rim flush with the top
+      surface) can have its nearest-edge resolution silently shift to an
+      unrelated edge after another feature is added earlier in the tree,
+      picking a face interior point has no such ambiguity. Confirmed live
+      2026-09-18: an edge-coordinate hole-rim chamfer silently landed on
+      the block's 30mm outer edge instead (volume delta matched the
+      straight-edge formula, not the circular-rim one); selecting the face
+      instead reliably chamfers the real rim.
     """
+    prefix, _, rest = edge_name.partition(":")
+    if prefix.strip().lower() == "face":
+        parts = rest.split(",")
+        if len(parts) == 3:
+            try:
+                x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
+                return "", x, y, z, "FACE"
+            except ValueError:
+                pass
+        return rest, 0.0, 0.0, 0.0, "FACE"
+
     parts = edge_name.split(",")
     if len(parts) == 3:
         try:
             x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
-            return "", x, y, z
+            return "", x, y, z, "EDGE"
         except ValueError:
             pass
-    return edge_name, 0.0, 0.0, 0.0
+    return edge_name, 0.0, 0.0, 0.0, "EDGE"
 
 
 def _select_edge_by_coord(  # pragma: no cover
@@ -1548,25 +1574,31 @@ def _select_edge_by_coord(  # pragma: no cover
     z: float,
     append: bool,
     mark: int = 0,
+    entity_type: str = "EDGE",
 ) -> bool:
-    """Select the edge nearest to (x, y, z) in metres via ``SelectByID2``.
+    """Select the edge (or face) nearest to (x, y, z) in metres via ``SelectByID2``.
 
-    Calls ``ForceRebuild3`` on the first edge in the selection set so that
-    recent features are fully tessellated and their edges are selectable.
-    Tries the primary coordinate and several small radial/Y offsets to
-    improve hit probability on curved edges.
+    Calls ``ForceRebuild3`` on the first entity in the selection set so that
+    recent features are fully tessellated and selectable. Tries the primary
+    coordinate and several small radial/Y offsets to improve hit probability
+    on curved edges.
+
+    ``entity_type`` is normally ``"EDGE"``, but pass ``"FACE"`` to select a
+    whole face instead — ``InsertFeatureChamfer``/``FeatureFillet3`` then
+    chamfer/fillet every edge bounding that face. Face selection has no
+    equivalent to the edge case's boundary ambiguity (see ``_parse_edge_spec``).
 
     The ``Callout`` parameter of ``SelectByID2`` requires a VT_DISPATCH null
     VARIANT — passing plain Python ``None`` triggers DISP_E_TYPEMISMATCH.
 
-    Returns True if an edge was successfully selected; False otherwise.
+    Returns True if an entity was successfully selected; False otherwise.
     """
     import math
 
     model = adapter.currentModel
 
     # Rebuild to tessellate geometry from recent features before the first
-    # edge in the selection set (when append=False this is the first edge).
+    # entity in the selection set (when append=False this is the first one).
     if not append:
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
 
@@ -1589,21 +1621,11 @@ def _select_edge_by_coord(  # pragma: no cover
             (x, y * 1.001, z),
         ]
 
-    # VT_DISPATCH null pointer — required by SelectByID2's Callout parameter.
-    # Plain Python None marshals as VT_NULL which SW rejects with DISP_E_TYPEMISMATCH.
-    try:
-        import pythoncom
-        import win32com.client as _win32com
-
-        null_callout = _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
-    except Exception:
-        null_callout = None  # fallback: may fail on some SW versions
-
     for cx, cy, cz in candidates:
         try:
             selected = bool(
                 model.Extension.SelectByID2(
-                    "", "EDGE", cx, cy, cz, append, mark, null_callout, 0
+                    "", entity_type, cx, cy, cz, append, mark, _null_callout(), 0
                 )
             )
         except Exception:
@@ -1630,7 +1652,9 @@ def _add_fillet_impl(
         radius: Fillet radius in **millimetres**.  Converted to metres
             internally before the COM call.
         edge_names: List of SolidWorks edge entity names to fillet, e.g.
-            ``["Edge<1>", "Edge<2>"]``.
+            ``["Edge<1>", "Edge<2>"]``, coordinate hints in metres
+            (``"x,y,z"``), or ``"face:x,y,z"`` to select a whole face and
+            fillet every edge bounding it — see :func:`_parse_edge_spec`.
 
     Returns:
         AdapterResult[SolidWorksFeature]: On success, ``data`` is a
@@ -1678,16 +1702,18 @@ def _add_fillet_impl(
         )
 
         for idx, edge_name in enumerate(edge_names):
-            sel_name, ex, ey, ez = _parse_edge_spec(edge_name)
+            sel_name, ex, ey, ez, entity_type = _parse_edge_spec(edge_name)
             append = idx > 0  # first edge starts fresh, subsequent ones append
             if sel_name == "":
-                # Coordinate-based: traverse body edges and pick the closest one.
-                selected = _select_edge_by_coord(adapter, ex, ey, ez, append=append)
+                # Coordinate-based: traverse body edges/faces and pick the closest one.
+                selected = _select_edge_by_coord(
+                    adapter, ex, ey, ez, append=append, entity_type=entity_type
+                )
             else:
                 selected = adapter._attempt(
-                    lambda sn=sel_name, _x=ex, _y=ey, _z=ez, _ap=append: (
+                    lambda sn=sel_name, _x=ex, _y=ey, _z=ez, _ap=append, _et=entity_type: (
                         adapter.currentModel.Extension.SelectByID2(
-                            sn, "EDGE", _x, _y, _z, _ap, 0, None, 0
+                            sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
                         )
                     ),
                     default=False,
@@ -1768,8 +1794,12 @@ def _add_chamfer_impl(
 
     Each edge in ``edge_names`` is selected by name using
     ``Extension.SelectByID2`` with entity type ``"EDGE"``.  After all edges
-    are in the selection set, ``FeatureChamfer`` is called in
-    equal-distance mode (type ``1``).
+    are in the selection set, ``IFeatureManager::InsertFeatureChamfer`` is
+    called in equal-distance mode (type ``1``). A version-gated
+    ``IModelDoc2::FeatureChamferType`` path was tried for SW 2025+ but
+    live-verified to silently create an empty, zero-volume feature -- see
+    the comment at its call site for how this was confirmed and why
+    ``InsertFeatureChamfer`` is used unconditionally instead.
 
     Args:
         adapter: A fully connected ``PyWin32Adapter`` with a non-``None``
@@ -1777,7 +1807,9 @@ def _add_chamfer_impl(
         distance: Chamfer distance in **millimetres**.  Converted to metres
             internally.
         edge_names: List of SolidWorks edge entity names, e.g.
-            ``["Edge<2>", "Edge<5>"]``.
+            ``["Edge<2>", "Edge<5>"]``, coordinate hints in metres
+            (``"x,y,z"``), or ``"face:x,y,z"`` to select a whole face and
+            chamfer every edge bounding it — see :func:`_parse_edge_spec`.
 
     Returns:
         AdapterResult[SolidWorksFeature]: On success, ``data`` is a
@@ -1786,7 +1818,8 @@ def _add_chamfer_impl(
 
     Raises:
         Exception: Propagated through ``_handle_com_operation`` when an
-            edge cannot be selected or ``FeatureChamfer`` returns ``None``.
+            edge cannot be selected or ``InsertFeatureChamfer`` returns
+            ``None``.
 
     Example::
 
@@ -1809,35 +1842,23 @@ def _add_chamfer_impl(
         """
         import math
 
-        # Detect SW major version (same pattern as fillet).
-        chamfer_sw_major = 0
-        if getattr(adapter, "swApp", None):
-            rev = adapter._attempt(
-                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
-                default="0",
-            )
-            try:
-                chamfer_sw_major = int(str(rev).split(".")[0])
-            except (ValueError, IndexError):
-                chamfer_sw_major = 0
-
         # Clear any prior selection so the edge set is clean.
         adapter._attempt(
             lambda: adapter.currentModel.ClearSelection2(True), default=None
         )
 
         for idx, edge_name in enumerate(edge_names):
-            sel_name, cx, cy, cz = _parse_edge_spec(edge_name)
+            sel_name, cx, cy, cz, entity_type = _parse_edge_spec(edge_name)
             append = idx > 0
             if sel_name == "":
                 selected = _select_edge_by_coord(
-                    adapter, cx, cy, cz, append=append, mark=0
+                    adapter, cx, cy, cz, append=append, mark=0, entity_type=entity_type
                 )
             else:
                 selected = adapter._attempt(
-                    lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append: (
+                    lambda sn=sel_name, _x=cx, _y=cy, _z=cz, _ap=append, _et=entity_type: (
                         adapter.currentModel.Extension.SelectByID2(
-                            sn, "EDGE", _x, _y, _z, _ap, 0, None, 0
+                            sn, _et, _x, _y, _z, _ap, 0, _null_callout(), 0
                         )
                     ),
                     default=False,
@@ -1847,54 +1868,35 @@ def _add_chamfer_impl(
 
         fm = adapter.currentModel.FeatureManager
         _flag_feature_methods(fm, "IFeatureManager")
-        count_before = adapter._attempt(
-            lambda: int(fm.GetFeatureCount(True) or 0), default=0
-        )
 
+        # IModelDoc2.FeatureChamferType (the documented "SW 2025+" call) was
+        # tried here previously, gated on RevisionNumber >= 33. Live-verified
+        # (2026-09-18, SW major 34 / SW2026): it returns cleanly and a
+        # "Chamfer1" feature appears in the tree, but removes zero volume --
+        # a silent no-op, not a real chamfer. IFeatureManager.InsertFeatureChamfer
+        # was verified on the same install to actually remove material
+        # (confirmed via mass-properties volume delta), so it is used
+        # unconditionally rather than version-branching to a call that has
+        # never been proven to work on any SW version.
         feature_name = "Chamfer"
-        feature = None
-
-        if chamfer_sw_major >= 33:
-            # SW 2025+ (major >= 33): IModelDoc2.FeatureChamferType (8 params,
-            # VT_VOID). Detect success via feature count change.
-            adapter.currentModel.FeatureChamferType(
-                0,  # ChamferType: 0 = swChamferType_EqualDistance
+        feature, insert_err = adapter._attempt_with_error(
+            lambda: fm.InsertFeatureChamfer(
+                1,  # Options
+                1,  # ChamferType = equal distance
                 distance / 1000.0,  # Width in metres
-                math.pi / 4,  # 45Â° angle
-                False,  # Flip
-                0.0,  # OtherDist
-                0.0,  # VertexChamDist1
-                0.0,  # VertexChamDist2
-                0.0,  # VertexChamDist3
+                math.pi / 4,  # 45 degree angle
+                0.0,
+                0.0,
+                0.0,
+                0.0,
             )
-            count_after = adapter._attempt(
-                lambda: int(fm.GetFeatureCount(True) or 0), default=0
+        )
+        if feature and hasattr(feature, "Name"):
+            feature_name = feature.Name or "Chamfer"
+        elif not feature:
+            raise Exception(
+                f"Failed to create chamfer (InsertFeatureChamfer: {insert_err})"
             )
-            if count_after <= count_before:
-                raise Exception(
-                    "Failed to create chamfer (IModelDoc2.FeatureChamferType;"
-                    " feature count unchanged)"
-                )
-        else:
-            # Older SW: IFeatureManager.InsertFeatureChamfer returns IFeature.
-            feature, insert_err = adapter._attempt_with_error(
-                lambda: fm.InsertFeatureChamfer(
-                    1,  # Options
-                    1,  # ChamferType = equal distance
-                    distance / 1000.0,  # Width in metres
-                    math.pi / 4,  # 45Â° angle
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                )
-            )
-            if feature and hasattr(feature, "Name"):
-                feature_name = feature.Name or "Chamfer"
-            elif not feature:
-                raise Exception(
-                    f"Failed to create chamfer (InsertFeatureChamfer: {insert_err})"
-                )
 
         return SolidWorksFeature(
             name=feature_name,

@@ -696,6 +696,9 @@ class TestConnectionPoolAdapterExtras:
             ):
                 return _ok("mate")
 
+            async def add_chamfer(self, distance, edge_names):
+                return _ok("chamfer")
+
         async def _exercise_every_passthrough(wrapped) -> None:
             assert (await wrapped.create_reference_plane("Top")).is_success
             assert (await wrapped.create_axis("Top")).is_success
@@ -720,6 +723,7 @@ class TestConnectionPoolAdapterExtras:
             assert (await wrapped.rename_feature("Sketch1", "Sketch2")).is_success
             assert (await wrapped.undo()).is_success
             assert (await wrapped.add_mate("Comp1", "Comp2")).is_success
+            assert (await wrapped.add_chamfer(1.0, ["Edge1"])).is_success
 
         await _exercise_every_passthrough(CircuitBreakerAdapter(adapter=_FullStubAdapter()))
 

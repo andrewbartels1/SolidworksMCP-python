@@ -83,7 +83,7 @@
 | `create_sweep` | Sweep profile along a path sketch | IFeatureManager::InsertProtrusionSwept4 |
 | `create_loft` | Loft solid between ≥2 profile sketches | IFeatureManager::InsertProtrusionBlend2 |
 | `add_fillet` | Constant-radius fillet on named edges | IModelDoc2::FeatureFillet3 / IFeatureManager::FeatureFillet3 |
-| `add_chamfer` | Equal-distance chamfer on named edges (adapter only, no MCP tool yet) | IFeatureManager::InsertFeatureChamfer |
+| `add_chamfer` | Equal-distance chamfer on named edges | IFeatureManager::InsertFeatureChamfer |
 | `get_dimension` | Reads a named dimension value | IModelDoc2::Parameter |
 | `set_dimension` | Sets a named dimension and rebuilds | IModelDoc2::Parameter / ForceRebuild3 |
 
@@ -220,7 +220,7 @@ Covers operations on the active document regardless of type (part/assembly/drawi
 | `SketchManager` (enter sketch) | Implemented | `create_sketch` |
 | `ClearSelection2` | Implemented | Internal — used before multi-edge operations |
 | `FeatureFillet3` | Implemented | `add_fillet` |
-| `FeatureChamfer` | Implemented | `add_chamfer` (adapter only, no MCP tool) |
+| `FeatureChamfer` | Implemented | `add_chamfer` |
 
 ---
 
@@ -357,7 +357,7 @@ Extends `IModelDoc2` for drawings: sheets, views, annotations, BOM tables, revis
 | `InsertProtrusionSwept4` | Implemented | `create_sweep` |
 | `InsertProtrusionBlend2` (loft) | Implemented | `create_loft` |
 | `FeatureFillet3` | Implemented | `add_fillet` |
-| `InsertFeatureChamfer` | Implemented (adapter) | `add_chamfer` — adapter has it, no MCP tool |
+| `InsertFeatureChamfer` | Implemented | `add_chamfer` |
 | `InsertShell` | **Missing** (High) | Shell out a solid |
 | `InsertRib` | **Missing** (Medium) | Rib feature |
 | Linear pattern (`FeatureLinearPattern3`) | **Missing** (High) | Array of features/bodies |
@@ -573,24 +573,6 @@ Extends `IModelDoc2` for drawings: sheets, views, annotations, BOM tables, revis
 ## 3. Missing High-Priority Tools
 
 These are the most impactful gaps — operations that a typical modeling workflow needs and that the current server cannot handle with real COM calls.
-
----
-
-### 3.1 `add_chamfer` MCP Tool
-
-**Why needed:** The adapter (`adapters/solidworks/features.py`) already implements `_add_chamfer_impl` using `IFeatureManager::InsertFeatureChamfer` but there is no corresponding MCP tool in `modeling.py`. Every add-fillet workflow also needs chamfer for sharp edge breaks.
-
-**What to add:**
-```python
-# modeling.py — mirror AddFilletInput
-class AddChamferInput(CompatInput):
-    distance: float = Field(description="Chamfer distance in millimeters")
-    edge_names: list[str] = Field(default_factory=list)
-    
-async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
-    result = await adapter.add_chamfer(input_data.distance, input_data.edge_names)
-    ...
-```
 
 ---
 
@@ -838,18 +820,17 @@ async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
 
 Based on impact and dependency order:
 
-1. **`add_chamfer` MCP tool** — 1 hour; adapter code already written
-2. **Real custom properties** (`get_custom_properties`, `set_custom_property`) — 1 day
-3. **Configuration switching** (`switch_configuration`, `get_active_configuration`) — 1 day  
-4. **`set_material` / `get_material`** — 1 day
-5. **Feature patterns** (linear, circular, mirror) — 2 days
-6. **Hole Wizard** — 1 day
-7. **`sketch_trim` / `sketch_convert_entities`** — 1 day
-8. **Reference plane / axis creation** — 1 day
-9. **Shell feature** — 0.5 days
-10. **Bounding box** — 0.5 days
-11. **Assembly: insert component + add mate** — 3 days
-12. **Equation Manager** — 2 days
-13. **Real drawing view creation** (COM-backed) — 3 days
-14. **Sheet metal (base flange, edge flange, flatten, DXF export)** — 3 days
-15. **Run macro** — 0.5 days
+1. **Real custom properties** (`get_custom_properties`, `set_custom_property`) — 1 day
+2. **Configuration switching** (`switch_configuration`, `get_active_configuration`) — 1 day  
+3. **`set_material` / `get_material`** — 1 day
+4. **Feature patterns** (linear, circular, mirror) — 2 days
+5. **Hole Wizard** — 1 day
+6. **`sketch_trim` / `sketch_convert_entities`** — 1 day
+7. **Reference plane / axis creation** — 1 day
+8. **Shell feature** — 0.5 days
+9. **Bounding box** — 0.5 days
+10. **Assembly: insert component + add mate** — 3 days
+11. **Equation Manager** — 2 days
+12. **Real drawing view creation** (COM-backed) — 3 days
+13. **Sheet metal (base flange, edge flange, flatten, DXF export)** — 3 days
+14. **Run macro** — 0.5 days

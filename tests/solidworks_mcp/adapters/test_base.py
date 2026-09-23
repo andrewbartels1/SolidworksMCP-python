@@ -132,3 +132,7 @@ async def test_base_default_sketch_helpers_return_error() -> None:
 
     result = await adapter.sketch_offset(["e1"], 1.0, False)
     assert result.status == AdapterResultStatus.ERROR
+
+    result = await adapter.add_chamfer(1.0, ["Edge1"])
+    assert result.status == AdapterResultStatus.ERROR
+    assert "add_chamfer" in (result.error or "")
