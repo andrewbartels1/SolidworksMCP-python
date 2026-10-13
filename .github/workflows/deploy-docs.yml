@@ -69,7 +69,12 @@ jobs:
             "mkdocs-autorefs==1.4.4" \
             "mkdocs-minify-plugin==0.8.0" \
             "mkdocs-awesome-pages-plugin==2.10.1" \
-            "mkdocs-mermaid2-plugin==1.2.3"
+            "mkdocs-mermaid2-plugin==1.2.3" \
+            "pymdown-extensions==11.0.1"
+          # pymdown-extensions is a transitive dep of mkdocs-material; left
+          # unpinned, 12.x's Highlight(md) signature change broke the build
+          # ("Highlight.__init__() missing 1 required positional argument: 'md'").
+          # Keep it in sync with uv.lock.
 
       - name: Setup Pages
         id: pages
