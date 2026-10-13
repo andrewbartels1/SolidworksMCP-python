@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Keeps uv.lock moving past newly published CVEs in transitive deps, which
+  # otherwise fail the daily Trivy scan until someone hand-pins them.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Major bumps (e.g. pydantic-ai 1.x -> 2.x) are migrations, not upkeep.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
