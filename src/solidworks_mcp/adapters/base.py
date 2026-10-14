@@ -1006,6 +1006,80 @@ class SolidWorksAdapter(ABC):
             error="get_selected_entities is not implemented by this adapter",
         )
 
+    async def select_feature(
+        self, feature_name: str, append: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Select a named feature, sketch, plane or component.
+
+        Args:
+            feature_name (str): The feature name, optionally ``@document``
+                qualified.
+            append (bool): Add to the current selection instead of replacing
+                it. Defaults to False.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: On success ``selected`` (True),
+            ``feature_name``, ``selected_name``, ``entity_type`` and
+            ``selection_count``. ERROR when nothing could be selected - never
+            SUCCESS with ``selected: False``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="select_feature is not implemented by this adapter",
+        )
+
+    async def select_face_edges(
+        self,
+        point: list[float] | None = None,
+        side: str | None = None,
+        plane: str | None = None,
+        edge_type: str = "all",
+        append: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Multi-select every edge bounding one face of the active part.
+
+        Exactly one of ``point``/``side``/``plane`` identifies the face.
+
+        Args:
+            point (list[float] | None): ``[x, y, z]`` in mm on the face.
+            side (str | None): ``+X``..``-Z`` or ``top/bottom/front/back/
+                right/left``; the furthest planar face facing that way.
+            plane (str | None): Reference plane name; the body face(s) lying
+                on it.
+            edge_type (str): ``all``, ``linear`` or ``circular``.
+            append (bool): Add to the current selection. Defaults to False.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``face`` (or ``faces``), ``edges``
+            (one descriptor per selected edge) and ``selection_count``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="select_face_edges is not implemented by this adapter",
+        )
+
+    async def rebuild_model(
+        self, top_level_only: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Force a rebuild and report per-feature rebuild errors.
+
+        Args:
+            top_level_only (bool): Rebuild only the top level of an assembly.
+                Defaults to False (full rebuild).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``rebuilt``, ``top_level_only``,
+            ``errors`` (one entry per failing feature with ``feature``,
+            ``type``, ``code``, ``code_name``, ``severity``, ``description``,
+            ``parents``, ``hint``), ``error_count`` and ``warning_count``.
+            ERROR (still carrying ``data``) when any error-severity entry
+            remains.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="rebuild_model is not implemented by this adapter",
+        )
+
     async def create_reference_plane(
         self,
         reference: str,

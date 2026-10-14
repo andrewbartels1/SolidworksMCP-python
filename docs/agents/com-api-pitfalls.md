@@ -765,6 +765,70 @@ ordering rather than a product bug in `add_fillet` itself.
 
 ---
 
+## 24. `IEntity.Select4` needs a real `SelectData` — `None` is a type mismatch
+
+**Symptom:** `edge.Select4(False, None)` raises `(-2147352571, 'Type mismatch.', None, 2)`
+and nothing is selected.
+
+**Root cause:** the second parameter is an `ISelectData` dispatch. Python `None`
+marshals as `VT_NULL`, which SolidWorks rejects — the same family as pitfall #1
+(`SelectByID2`'s `Callout`).
+
+**Fix:** create one from the selection manager and reuse it for every entity:
+
+```python
+sel_mgr = model.SelectionManager            # flag CreateSelectData / GetSelectedObjectCount2
+data = sel_mgr.CreateSelectData()
+model.ClearSelection2(True)                 # unless appending
+for edge in face.GetEdges():                # flag Select4 on each edge
+    edge.Select4(True, data)                # True = append to the set being built
+```
+
+Also note, from the same investigation: every `IBody2`/`IFace2`/`IEdge`/`ICurve`
+dispatch must be method-flagged (pitfall #5) — unflagged, `GetEdges`/`GetArea`/
+`IsPlane` return their *value* (`'tuple' object is not callable`) and `GetSurface`
+is `Member not found`. `IFace2.Normal` is a property and is `[0, 0, 0]` for
+non-planar faces; a full-circle edge (hole rim) has no start/end vertex, so describe it
+with `ICurve.CircleParams` (`[cx, cy, cz, ax, ay, az, radius]`, metres).
+
+Found 2026-10-13 building `select_face_edges` (#106).
+
+---
+
+## 25. Array/bool out-parameters (`GetWhatsWrong`, `GetErrorCode2`) need byref VARIANTs
+
+**Symptom:** `ext.GetWhatsWrong()` and `feature.GetErrorCode2()` raise
+`'Parameter not optional.'`; passing `pythoncom.Missing` raises
+`Objects of type 'PyOleMissing' can not be converted to a COM VARIANT`.
+
+**Fix:** pass byref VARIANTs and read `.value` afterwards (works under forced late
+binding — no early-bound wrapper needed, and `makepy` cannot auto-generate one for these
+objects anyway):
+
+```python
+from win32com.client import VARIANT
+import pythoncom
+
+feats, codes, warns = (VARIANT(pythoncom.VT_BYREF | pythoncom.VT_VARIANT, None) for _ in range(3))
+ext.GetWhatsWrong(feats, codes, warns)        # feats.value: tuple of IFeature, codes.value: swFeatureError_e
+is_warning = VARIANT(pythoncom.VT_BYREF | pythoncom.VT_BOOL, False)
+code = feature.GetErrorCode2(is_warning)      # is_warning.value: bool
+```
+
+`_byref_variant()` / `_byref_bool()` in `solidworks/io.py` build these (with a
+non-pywin32 fallback). `swFeatureError_e` values are generated from `swconst.tlb` by
+`scripts/gen_sw_feature_errors.py` — never hand-type them (see #60).
+
+**Gotchas observed:** an extrude whose sketch was emptied reports code `1`
+(`swFeatureErrorUnknown`), so the code alone is often unhelpful — `rebuild_model` falls
+back to the feature type and checks parent sketches for zero segments. And setting a
+fillet's radius dimension to an impossible value (30 / 200 mm on a 10 mm block) via
+`SetSystemValue3` + `EditRebuild3` produced **no** reported rebuild error at all.
+
+Found 2026-10-13 building `rebuild_model` diagnostics (#106).
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests

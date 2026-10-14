@@ -9,6 +9,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
+from .com_utils import selection_count, strip_op_prefix
+from .face_selection import FaceEdgeSelector, describe_edge, validate_face_query
 
 # swSelectType_e values actually observed on this SW install for the entity
 # kinds this method cares about (EDGE=1, FACE=2 confirmed live 2026-09-18 by
@@ -108,14 +110,105 @@ class SolidWorksSelectionMixin:
             ),
         )
 
-    async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
+    async def select_feature(
+        self, feature_name: str, append: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Select a named feature, sketch, plane or component.
+
+        Args:
+            feature_name: Feature name, optionally ``@document`` qualified.
+            append: Add to the current selection instead of replacing it.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The selector payload plus
+            ``selection_count``. ERROR - never SUCCESS with
+            ``selected: False`` - when no strategy could select the name.
+        """
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
-        return self._handle_com_operation(
-            "select_feature", self._feature_selector.select_feature, feature_name
-        )
+
+        def _select() -> dict[str, Any]:
+            payload = self._feature_selector.select_feature(feature_name, append)
+            if not payload or not payload.get("selected"):
+                raise LookupError(
+                    f"Feature not found or could not be selected: {feature_name}"
+                )
+            payload["selection_count"] = selection_count(self, self.currentModel)
+            return payload
+
+        return self._run_clean("select_feature", _select)
+
+    async def select_face_edges(
+        self,
+        point: list[float] | None = None,
+        side: str | None = None,
+        plane: str | None = None,
+        edge_type: str = "all",
+        append: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Multi-select every edge bounding one face of the active part.
+
+        See ``SolidWorksAdapter.select_face_edges`` for the contract; the face
+        resolution and selection live in ``face_selection.FaceEdgeSelector``.
+        """
+        problem = validate_face_query(point, side, plane, edge_type)
+        if problem:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=problem)
+        if not self.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        from .io import _doc_type
+
+        doc_type = _doc_type(self)
+        if doc_type is not None and doc_type != 1:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "select_face_edges requires an active part document "
+                    f"(active document type is {doc_type})."
+                ),
+            )
+
+        def _select_edges() -> dict[str, Any]:
+            selector = FaceEdgeSelector(self)
+            faces = selector.resolve(point, side, plane)
+            edges = selector.edges(faces, edge_type)
+            if not edges:
+                kind = "" if edge_type == "all" else f"{edge_type} "
+                raise LookupError(
+                    f"The selected face has no {kind}edges "
+                    f"(face centre {faces[0].describe()['center_mm']} mm)."
+                )
+            count = selector.select(edges, append)
+            described = [f.describe() for f in faces]
+            return {
+                "face": described[0],
+                "faces": described,
+                "edge_type": edge_type,
+                "edges": [info for _edge, info in edges],
+                "selected_edges": len(edges),
+                "selection_count": count,
+            }
+
+        return self._run_clean("select_face_edges", _select_edges)
+
+    def _run_clean(
+        self, operation_name: str, operation: Callable[[], Any]
+    ) -> AdapterResult[dict[str, Any]]:
+        """Run ``operation`` via ``_handle_com_operation`` with a clean error.
+
+        Strips the generic ``"Error in <op>: "`` prefix so expected failures
+        (not found, nothing to select) read as plain sentences for the LLM.
+        """
+        result = self._handle_com_operation(operation_name, operation)
+        if not result.is_success:
+            result.error = strip_op_prefix(result.error, operation_name)
+        return cast("AdapterResult[dict[str, Any]]", result)
+
+
 
     async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
         """Report the faces/edges/vertices currently highlighted in the live
@@ -204,38 +297,9 @@ class SolidWorksSelectionMixin:
                         entry["normal"] = [round(float(n), 6) for n in normal]
 
                 elif type_name == "EDGE":
-                    start_v = self._attempt(
-                        lambda o=obj: o.GetStartVertex(), default=None
-                    )
-                    end_v = self._attempt(lambda o=obj: o.GetEndVertex(), default=None)
-                    self._attempt(
-                        lambda v=start_v: _sw_type_info.flag_methods(v, "IVertex"),
-                        default=0,
-                    )
-                    self._attempt(
-                        lambda v=end_v: _sw_type_info.flag_methods(v, "IVertex"),
-                        default=0,
-                    )
-                    start = (
-                        self._attempt(lambda v=start_v: v.GetPoint(), default=None)
-                        if start_v is not None
-                        else None
-                    )
-                    end = (
-                        self._attempt(lambda v=end_v: v.GetPoint(), default=None)
-                        if end_v is not None
-                        else None
-                    )
-                    if start:
-                        entry["start_mm"] = [c * 1000 for c in start]
-                    if end:
-                        entry["end_mm"] = [c * 1000 for c in end]
-                    if start and end:
-                        entry["length_mm"] = (
-                            sum((a - b) ** 2 for a, b in zip(start, end, strict=True))
-                            ** 0.5
-                            * 1000
-                        )
+                    # Shared with select_face_edges: start/end/length plus
+                    # curve kind and, for circles, centre/axis/radius.
+                    entry.update(describe_edge(self, obj))
 
                 elif type_name == "VERTEX":
                     point = self._attempt(lambda o=obj: o.GetPoint(), default=None)

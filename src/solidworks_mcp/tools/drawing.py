@@ -1073,6 +1073,47 @@ async def register_drawing_tools(
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     @mcp.tool()
+    async def list_drawing_views() -> dict[str, Any]:
+        """List the views on the active drawing.
+
+        Read-only. Use it to find an existing view's name before targeting it
+        (e.g. with ``auto_center_marks``). Errors when the active document is
+        not a drawing.
+
+        Returns:
+            dict[str, Any]: ``status``, ``views`` (view names, sheet formats
+            excluded) and ``count``.
+
+        Example:
+            ```python
+            await list_drawing_views()
+            ```
+        """
+        try:
+            result = await adapter.list_drawing_views()
+            if result.is_success:
+                views = list(result.data or [])
+                return {
+                    "status": "success",
+                    "message": (
+                        f"{len(views)} view(s): {', '.join(views)}"
+                        if views
+                        else "The drawing has no views"
+                    ),
+                    "views": views,
+                    "count": len(views),
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": f"Failed to list drawing views: {result.error}",
+                "execution_time": result.execution_time,
+            }
+        except Exception as e:
+            logger.error(f"Error in list_drawing_views tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
     async def auto_center_marks(
         input_data: AutoCenterMarksInput,
     ) -> dict[str, Any]:
@@ -1134,5 +1175,5 @@ async def register_drawing_tools(
             logger.error(f"Error in auto_center_marks tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
-    tool_count = 13  # Number of tools registered
+    tool_count = 14  # Number of tools registered
     return tool_count

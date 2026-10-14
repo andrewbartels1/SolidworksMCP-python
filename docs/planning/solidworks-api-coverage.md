@@ -195,7 +195,9 @@ Covers operations on the active document regardless of type (part/assembly/drawi
 | Operation | Status | Tool / Notes |
 |---|---|---|
 | `Save3` / `SaveAs4` | Implemented | `save_file`, `save_as`, `save_part`, `save_assembly` |
-| `ForceRebuild3` | Implemented | Internal — called before SelectByID2 |
+| `ForceRebuild3` | Implemented | `rebuild_model`; also internal — called before SelectByID2 |
+| `IModelDocExtension::GetWhatsWrong` / `GetWhatsWrongCount` | Implemented | `rebuild_model` — per-feature rebuild errors with `swFeatureError_e` names and fix hints |
+| `IFeature::GetErrorCode2` / `GetParents` | Implemented | `rebuild_model` (fallback source, parent references) |
 | `Parameter` (read dimension) | Implemented | `get_dimension` |
 | `Parameter.SystemValue = x` (write dimension) | Implemented | `set_dimension` |
 | `FirstFeature` / `GetNextFeature` | Implemented | `list_features`, internal tree walks |
@@ -409,11 +411,13 @@ Extends `IModelDoc2` for drawings: sheets, views, annotations, BOM tables, revis
 |---|---|---|
 | `SelectByID2` (by entity name + type) | Implemented | Internal — used by fillet, chamfer, cut |
 | `SelectByID2` (by coordinate) | Implemented | Internal — coordinate-based edge selection |
-| `Select2` (via `IFeature`) | Implemented | Internal — sweep/loft profile selection |
+| `Select2` (via `IFeature`) | Implemented | `select_feature` (`FeatureByName` + `Select2`, with `append`); sweep/loft profile selection |
+| `IEntity::Select4` + `ISelectionMgr::CreateSelectData` | Implemented | `select_face_edges` — multi-select every edge of a face (by point / side / plane, `edge_type` filter) |
+| `IFace2::GetEdges` / `GetClosestPointOn`, `ICurve::IsCircle` / `CircleParams` | Implemented | `select_face_edges` face resolution and edge description |
 | `ClearSelection2` | Implemented | Internal |
 | `ForceRebuild3` (pre-selection rebuild) | Implemented | Internal |
-| `GetSelectedObjectCount2` | **Missing** (Medium) | Query selection state |
-| `GetSelectedObject6` | **Missing** (Medium) | Inspect what is selected |
+| `GetSelectedObjectCount2` | Implemented | `get_selected_entities`; `selection_count` in `select_feature` / `select_face_edges` |
+| `GetSelectedObject6` | Implemented | `get_selected_entities` |
 | `ISelectionMgr::GetSelectedObjectsComponent3` | **Missing** (Low) | Assembly component from selection |
 | Selection filters | **Missing** (Low) | Filter selection to faces/edges/vertices |
 

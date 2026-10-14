@@ -1,6 +1,6 @@
-# Tool Catalog — All 134 Tools
+# Tool Catalog — All 138 Tools
 
-This reference documents all **134 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **138 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -9,9 +9,9 @@ Each section covers one functional category with parameter tables and copy-paste
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Modeling Tools](modeling.md) | 27 | Create and manipulate SolidWorks parts, assemblies, and drawings — sketches, extrusions, revolves, dimensions, feature renaming, chamfers/fillets, and the document unit system. |
+| [Modeling Tools](modeling.md) | 30 | Create and manipulate SolidWorks parts, assemblies, and drawings — sketches, extrusions, revolves, dimensions, feature renaming, chamfers/fillets, and the document unit system. |
 | [Sketching Tools](sketching.md) | 19 | Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply geometric constraints and dimensions. |
-| [Drawing Tools](drawing.md) | 13 | Create and edit 2-D technical drawings: add projected, section, and detail views, place annotations, and auto-dimension layouts. |
+| [Drawing Tools](drawing.md) | 14 | Create and edit 2-D technical drawings: add projected, section, and detail views, place annotations, and auto-dimension layouts. |
 | [Drawing Analysis Tools](drawing-analysis.md) | 8 | Quality-gate your drawings by analyzing dimensions, annotations, view coverage, standards compliance, and completeness. |
 | [Analysis Tools](analysis.md) | 5 | Extract engineering properties from models, including mass, volume, center of mass, inertia, and material metadata. |
 | [Export Tools](export.md) | 7 | Convert SolidWorks models to industry-standard interchange and manufacturing formats such as STEP, IGES, STL, DWG, PDF, and images. |

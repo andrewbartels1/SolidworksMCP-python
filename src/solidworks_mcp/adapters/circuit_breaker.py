@@ -251,6 +251,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         operation_name: str,
         operation: Callable[[], Awaitable[AdapterResult[T]]],
         input_dict: dict[str, Any] | None = None,
+        error_results_are_failures: bool = True,
     ) -> AdapterResult[T]:
         """Build internal execute with circuit breaker.
 
@@ -259,6 +260,12 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             operation (Callable[[], Awaitable[AdapterResult[T]]]): Callable object executed by
                                                                    the helper.
             input_dict (dict | None): Input parameters for SoC logging. Defaults to None.
+            error_results_are_failures (bool): When False, an ERROR result
+                returned by the operation counts as a healthy round trip, not a
+                breaker failure - only exceptions trip the breaker. For
+                diagnostic/lookup operations whose ERROR is an expected answer
+                ("the model has rebuild errors", "no such feature"); otherwise
+                they would lock themselves out exactly when needed.
 
         Returns:
             AdapterResult[T]: The result produced by the operation.
@@ -278,7 +285,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         try:
             result = await operation()
             latency_ms = (time.time() - t0) * 1000.0
-            if result.is_success:
+            if result.is_success or not error_results_are_failures:
                 self._record_success(bucket)
             else:
                 self._record_failure(bucket)
@@ -637,6 +644,52 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "get_selected_entities",
             lambda: self.adapter.get_selected_entities(),
             input_dict={},
+        )
+
+    async def select_feature(
+        self, feature_name: str, append: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Select a named feature through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "select_feature",
+            lambda: self.adapter.select_feature(feature_name, append),
+            input_dict={"feature_name": feature_name, "append": append},
+            error_results_are_failures=False,
+        )
+
+    async def select_face_edges(
+        self,
+        point: list[float] | None = None,
+        side: str | None = None,
+        plane: str | None = None,
+        edge_type: str = "all",
+        append: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Multi-select a face's edges through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "select_face_edges",
+            lambda: self.adapter.select_face_edges(
+                point, side, plane, edge_type, append
+            ),
+            input_dict={
+                "point": point,
+                "side": side,
+                "plane": plane,
+                "edge_type": edge_type,
+                "append": append,
+            },
+            error_results_are_failures=False,
+        )
+
+    async def rebuild_model(
+        self, top_level_only: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Force a rebuild through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "rebuild_model",
+            lambda: self.adapter.rebuild_model(top_level_only),
+            input_dict={"top_level_only": top_level_only},
+            error_results_are_failures=False,
         )
 
     async def create_reference_plane(

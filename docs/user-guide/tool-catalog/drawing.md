@@ -4,7 +4,7 @@ Create and edit 2-D technical drawings: add projected/section/detail views, plac
 
 > **Prerequisite:** An active SolidWorks Drawing (.slddrw) document.
 
-**Total tools in this category: 13**
+**Total tools in this category: 14**
 
 ---
 
@@ -335,6 +335,33 @@ Auto-insert centre marks on circular features in a drawing view. Runs SolidWorks
 ```json
 {
   "view_name": "Drawing View1"
+}
+```
+
+---
+
+### `list_drawing_views`
+
+List the views on the active drawing (sheet formats excluded). Read-only — use it to find an existing view's name before targeting it, e.g. with `auto_center_marks`. Errors when the active document is not a drawing.
+
+**Prerequisite:** Active drawing
+
+**Parameters:** none
+
+**Sample call:**
+
+```json
+{}
+```
+
+**Sample response:**
+
+```json
+{
+  "status": "success",
+  "message": "3 view(s): Drawing View1, Drawing View2, Drawing View3",
+  "views": ["Drawing View1", "Drawing View2", "Drawing View3"],
+  "count": 3
 }
 ```
 

@@ -529,6 +529,85 @@ class RenameFeatureInput(CompatInput):
             raise ValueError("new_name is required")
 
 
+class SelectFeatureInput(CompatInput):
+    """Input schema for selecting a named feature.
+
+    Attributes:
+        feature_name (str): Feature, sketch, plane or component name.
+        append (bool): Add to the current selection instead of replacing it.
+    """
+
+    feature_name: str = Field(
+        description="Feature, sketch, plane or component name, e.g. "
+        "'Boss-Extrude1', 'Sketch1', 'Front Plane' (an '@Part1' suffix is ok)"
+    )
+    append: bool = Field(
+        default=False,
+        description="Add to the current selection instead of replacing it",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        self.feature_name = self.feature_name.strip()
+        if not self.feature_name:
+            raise ValueError("feature_name is required")
+
+
+class SelectFaceEdgesInput(CompatInput):
+    """Input schema for multi-selecting every edge of one face.
+
+    Attributes:
+        point (list[float] | None): A point on the face, [x, y, z] in mm.
+        side (str | None): Which way the face points.
+        plane (str | None): Reference plane the face lies on.
+        edge_type (str): Edge filter: all, linear or circular.
+        append (bool): Add to the current selection instead of replacing it.
+    """
+
+    point: list[float] | None = Field(
+        default=None, description="A point on the face, [x, y, z] in mm"
+    )
+    side: str | None = Field(
+        default=None,
+        description="Outward direction of the face: +X/-X/+Y/-Y/+Z/-Z or "
+        "right/left/top/bottom/front/back (top=+Y, front=+Z, right=+X, as in "
+        "SolidWorks' default views); picks the furthest flat face that way",
+    )
+    plane: str | None = Field(
+        default=None,
+        description="Reference plane name, e.g. 'Front Plane'; picks the body "
+        "face(s) lying on it",
+    )
+    edge_type: str = Field(
+        default="all", description="'all', 'linear' or 'circular' (e.g. hole rims)"
+    )
+    append: bool = Field(
+        default=False,
+        description="Add to the current selection instead of replacing it",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        from ..adapters.solidworks.face_selection import validate_face_query
+
+        self.edge_type = str(self.edge_type or "all").strip().lower()
+        problem = validate_face_query(self.point, self.side, self.plane, self.edge_type)
+        if problem:
+            raise ValueError(problem)
+
+
+class RebuildModelInput(CompatInput):
+    """Input schema for forcing a model rebuild.
+
+    Attributes:
+        top_level_only (bool): Rebuild only the top level of an assembly.
+    """
+
+    top_level_only: bool = Field(
+        default=False,
+        description="Rebuild only the top level of an assembly (default: full "
+        "rebuild including sub-assemblies)",
+    )
+
+
 class UndoInput(CompatInput):
     """Input schema for undoing model operations.
 
@@ -1989,6 +2068,169 @@ async def register_modeling_tools(
             }
         except Exception as e:
             logger.error(f"Error in rename_feature tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def select_feature(input_data: SelectFeatureInput) -> dict[str, Any]:
+        """Select a named feature, sketch, plane or component.
+
+        Replaces the current selection by default; pass ``append: true`` to
+        add to it (e.g. to select several features in turn). A name that
+        cannot be selected is an error, never a quiet success.
+
+        Args:
+            input_data (SelectFeatureInput): The feature name and append flag.
+
+        Returns:
+            dict[str, Any]: Status, the matched name and how many entities are
+            now selected.
+
+        Example:
+            ```python
+            await select_feature({"feature_name": "Boss-Extrude1"})
+            await select_feature({"feature_name": "Sketch1", "append": True})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, SelectFeatureInput)
+        except ValueError as e:
+            return {"status": "error", "message": f"Invalid input: {e}"}
+        try:
+            result = await adapter.select_feature(
+                input_data.feature_name, input_data.append
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                return {
+                    "status": "success",
+                    "message": (
+                        f"Selected {data.get('selected_name', input_data.feature_name)} "
+                        f"({data.get('selection_count', '?')} selected)"
+                    ),
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": str(result.error),
+                "execution_time": result.execution_time,
+            }
+        except Exception as e:
+            logger.error(f"Error in select_feature tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def select_face_edges(input_data: SelectFaceEdgesInput) -> dict[str, Any]:
+        """Select every edge of one face of the active part (multi-select).
+
+        Identify the face with exactly one of ``point`` (a point on it, mm),
+        ``side`` (``top``/``bottom``/``front``/``back``/``right``/``left`` or
+        ``+X``..``-Z``; top=+Y, front=+Z, right=+X as in SolidWorks' default
+        views - the furthest flat face facing that way) or ``plane`` (a
+        reference plane name - the body face lying on it). ``edge_type``
+        narrows to ``linear`` or ``circular`` edges (e.g. hole rims).
+
+        The edges become the live SolidWorks selection, so the next
+        ``add_chamfer`` / ``add_fillet`` call with an empty ``edge_names``
+        acts on exactly them. Anything that changes the selection in between
+        (including the user clicking in SolidWorks) changes what is used.
+
+        Args:
+            input_data (SelectFaceEdgesInput): Face identifier, edge filter and
+                append flag.
+
+        Returns:
+            dict[str, Any]: Status plus ``data.face`` (centre, normal, area),
+            ``data.edges`` (one entry per selected edge: curve type,
+            endpoints/length or centre/radius) and ``data.selection_count``.
+
+        Example:
+            ```python
+            # Chamfer the hole rims on the top face
+            await select_face_edges({"side": "top", "edge_type": "circular"})
+            await add_chamfer({"distance": 0.5, "edge_names": []})
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data, SelectFaceEdgesInput)
+        except ValueError as e:
+            return {"status": "error", "message": f"Invalid input: {e}"}
+        try:
+            result = await adapter.select_face_edges(
+                input_data.point,
+                input_data.side,
+                input_data.plane,
+                input_data.edge_type,
+                input_data.append,
+            )
+            if result.is_success:
+                data = result.data if isinstance(result.data, dict) else {}
+                kinds = sorted({e.get("curve", "other") for e in data.get("edges", [])})
+                return {
+                    "status": "success",
+                    "message": (
+                        f"Selected {data.get('selected_edges', 0)} edge(s) "
+                        f"({', '.join(kinds)}) on the face at "
+                        f"{data.get('face', {}).get('center_mm')} mm"
+                    ),
+                    "data": data,
+                    "execution_time": result.execution_time,
+                }
+            return {
+                "status": "error",
+                "message": str(result.error),
+                "execution_time": result.execution_time,
+            }
+        except Exception as e:
+            logger.error(f"Error in select_face_edges tool: {e}")
+            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+    @mcp.tool()
+    async def rebuild_model(
+        input_data: RebuildModelInput | None = None,
+    ) -> dict[str, Any]:
+        """Force a rebuild of the active model and report what is wrong.
+
+        Use after programmatic edits (``set_dimension``, feature edits) to
+        confirm the model rebuilds cleanly. When features fail, the response
+        is an error whose ``data.errors`` names each failing feature with its
+        SolidWorks error code, the features/sketches it depends on, and a
+        concrete ``hint`` for fixing it. Warnings alone still succeed.
+
+        Args:
+            input_data (RebuildModelInput | None): ``top_level_only`` for
+                assemblies; omit for a full rebuild.
+
+        Returns:
+            dict[str, Any]: Status, a one-line summary, and ``data`` with
+            ``errors``, ``error_count`` and ``warning_count``.
+
+        Example:
+            ```python
+            await rebuild_model()
+            ```
+        """
+        try:
+            input_data = _normalize_input(input_data or {}, RebuildModelInput)
+        except ValueError as e:
+            return {"status": "error", "message": f"Invalid input: {e}"}
+        try:
+            result = await adapter.rebuild_model(input_data.top_level_only)
+            data = result.data if isinstance(result.data, dict) else None
+            response: dict[str, Any] = {
+                "status": "success" if result.is_success else "error",
+                "message": (
+                    (data or {}).get("summary") or "Rebuilt"
+                    if result.is_success
+                    else str(result.error)
+                ),
+                "execution_time": result.execution_time,
+            }
+            if data is not None:
+                response["data"] = data
+            return response
+        except Exception as e:
+            logger.error(f"Error in rebuild_model tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
     @mcp.tool()

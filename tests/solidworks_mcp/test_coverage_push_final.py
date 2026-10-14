@@ -431,10 +431,10 @@ class TestMockAdapterDelayBranches:
         """select_feature success path: asyncio.sleep + increment + return (lines 386-388)."""
         await mock_adapter.connect()
         await mock_adapter.create_part()
-        result = await mock_adapter.select_feature("Boss-Extrude1")
+        result = await mock_adapter.select_feature("Front Plane")
         assert result.is_success
         assert result.data["selected"] is True
-        assert result.data["feature_name"] == "Boss-Extrude1"
+        assert result.data["feature_name"] == "Front Plane"
 
     @pytest.mark.asyncio
     async def test_add_sketch_constraint_no_active_sketch(self, mock_adapter) -> None:

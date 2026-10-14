@@ -1745,7 +1745,7 @@ class TestPyWin32AdapterBranches:
 
         rebuild_fail = await adapter.rebuild_model()
         assert rebuild_fail.is_error
-        assert "Failed to rebuild model" in (rebuild_fail.error or "")
+        assert "listed no failing feature" in (rebuild_fail.error or "")
 
     @pytest.mark.asyncio
     async def test_list_features_additional_fallback_branches(self, monkeypatch):
@@ -2476,10 +2476,10 @@ class TestPyWin32AdapterBranches:
         assert result.data["entity_type"] == "BODYFEATURE"
 
     @pytest.mark.asyncio
-    async def test_select_feature_returns_unselected_when_all_strategies_fail(
+    async def test_select_feature_errors_when_all_strategies_fail(
         self, monkeypatch
     ) -> None:
-        """select_feature should return selected=False when no strategy finds a match."""
+        """No strategy selects the name -> ERROR naming it (#106), never SUCCESS+False."""
         adapter = self._build_adapter(monkeypatch)
         adapter.currentModel = SimpleNamespace(
             GetTitle=Mock(return_value="MyPart.SLDPRT"),
@@ -2490,12 +2490,101 @@ class TestPyWin32AdapterBranches:
 
         result = await adapter.select_feature("MissingFeature")
 
+        assert result.is_error
+        assert result.error == (
+            "Feature not found or could not be selected: MissingFeature"
+        )
+
+    @pytest.mark.asyncio
+    async def test_select_feature_tries_feature_by_name_first(
+        self, monkeypatch
+    ) -> None:
+        """FeatureByName + Select2 short-circuits the slower strategies."""
+        adapter = self._build_adapter(monkeypatch)
+        feature = SimpleNamespace(Name="Boss-Extrude1", Select2=Mock(return_value=True))
+        select_by_id = Mock(return_value=True)
+        sel_mgr = SimpleNamespace(GetSelectedObjectCount2=Mock(return_value=1))
+        adapter.currentModel = SimpleNamespace(
+            GetTitle=Mock(return_value="Part1.SLDPRT"),
+            ClearSelection2=Mock(),
+            FeatureByName=Mock(return_value=feature),
+            Extension=SimpleNamespace(SelectByID2=select_by_id),
+            SelectionManager=sel_mgr,
+        )
+
+        # Qualified with the active document's own name -> FeatureByName path.
+        result = await adapter.select_feature("Boss-Extrude1@Part1")
+
         assert result.is_success
-        assert result.data == {
-            "selected": False,
-            "feature_name": "MissingFeature",
-            "selected_name": "MissingFeature",
-        }
+        assert result.data["entity_type"] == "feature-name"
+        assert result.data["selected_name"] == "Boss-Extrude1"
+        assert result.data["selection_count"] == 1
+        adapter.currentModel.FeatureByName.assert_called_once_with("Boss-Extrude1")
+        adapter.currentModel.ClearSelection2.assert_called_once_with(True)
+        feature.Select2.assert_called_once_with(False, 0)
+        select_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_select_feature_component_path_skips_feature_by_name(
+        self, monkeypatch
+    ) -> None:
+        """Review #1: 'Front Plane@Part1-1@Assem1' must not resolve to the
+        assembly's own Front Plane via FeatureByName."""
+        adapter = self._build_adapter(monkeypatch)
+        select_by_id = Mock(return_value=True)
+        adapter.currentModel = SimpleNamespace(
+            GetTitle=Mock(return_value="Assem1.SLDASM"),
+            FeatureByName=Mock(return_value=SimpleNamespace(Name="Front Plane")),
+            Extension=SimpleNamespace(SelectByID2=select_by_id),
+        )
+
+        result = await adapter.select_feature("Front Plane@Part1-1@Assem1")
+
+        assert result.is_success
+        adapter.currentModel.FeatureByName.assert_not_called()
+        assert select_by_id.call_args[0][0] == "Front Plane@Part1-1@Assem1"
+
+    @pytest.mark.asyncio
+    async def test_select_feature_append_keeps_existing_selection(
+        self, monkeypatch
+    ) -> None:
+        """append=True skips ClearSelection2 and forwards append to Select2."""
+        adapter = self._build_adapter(monkeypatch)
+        feature = SimpleNamespace(Name="Sketch1", Select2=Mock(return_value=True))
+        adapter.currentModel = SimpleNamespace(
+            ClearSelection2=Mock(),
+            FeatureByName=Mock(return_value=feature),
+            SelectionManager=SimpleNamespace(
+                GetSelectedObjectCount2=Mock(return_value=2)
+            ),
+        )
+
+        result = await adapter.select_feature("Sketch1", append=True)
+
+        assert result.is_success
+        assert result.data["selection_count"] == 2
+        adapter.currentModel.ClearSelection2.assert_not_called()
+        feature.Select2.assert_called_once_with(True, 0)
+
+    @pytest.mark.asyncio
+    async def test_select_feature_extension_strategy_passes_null_callout(
+        self, monkeypatch
+    ) -> None:
+        """SelectByID2 gets a non-None callout (pitfall #11) and the append flag."""
+        adapter = self._build_adapter(monkeypatch)
+        select_by_id = Mock(return_value=True)
+        adapter.currentModel = SimpleNamespace(
+            GetTitle=Mock(return_value="MyPart.SLDPRT"),
+            FeatureByName=Mock(return_value=None),
+            Extension=SimpleNamespace(SelectByID2=select_by_id),
+        )
+
+        result = await adapter.select_feature("Front Plane", append=True)
+
+        assert result.is_success
+        args = select_by_id.call_args[0]
+        assert args[5] is True  # Append
+        assert args[7] is not None  # Callout: VT_DISPATCH null, never None
 
     @pytest.mark.asyncio
     async def test_execute_macro_returns_error_without_macro_path(

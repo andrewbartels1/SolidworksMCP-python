@@ -1924,11 +1924,11 @@ def _add_chamfer_impl(
     )
 
 
-def _select_feature_by_name(adapter: Any, name: str) -> Any:
+def _select_feature_by_name(adapter: Any, name: str, append: bool = False) -> Any:
     """Select a feature or sketch by name and return it.
 
     Resolves the entity with ``IModelDoc2::FeatureByName`` and selects it with
-    ``IFeature::Select2(False, 0)`` - the same path used elsewhere in this
+    ``IFeature::Select2(append, 0)`` - the same path used elsewhere in this
     adapter. ``SelectByID2`` is avoided here because it needs an entity-type
     string that differs between sketches and solid features, and because its
     ``Callout`` argument raises ``Type mismatch`` unless passed an explicit
@@ -1937,19 +1937,24 @@ def _select_feature_by_name(adapter: Any, name: str) -> Any:
     Args:
         adapter: A connected adapter with a valid ``currentModel``.
         name: Feature or sketch name, e.g. ``"Boss-Extrude1"`` or ``"Sketch1"``.
+        append: Add to the current selection instead of clearing it first.
+            Defaults to False.
 
     Returns:
         Any: The selected ``IFeature``, or ``None`` when it does not exist or
         could not be selected.
     """
     bare = name.split("@", 1)[0]
-    adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+    if not append:
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
     feature = adapter._attempt(
         lambda: adapter.currentModel.FeatureByName(bare), default=None
     )
     if not feature:
         return None
-    selected = adapter._attempt(lambda: feature.Select2(False, 0), default=False)
+    selected = adapter._attempt(lambda: feature.Select2(append, 0), default=False)
     return feature if selected else None
 
 

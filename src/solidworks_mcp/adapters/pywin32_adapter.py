@@ -28,6 +28,7 @@ from .solidworks import (
     SolidWorksSelectionMixin,
     SolidWorksSketchMixin,
 )
+from .solidworks.features import _null_callout, _select_feature_by_name
 from .solidworks.io import _byref_int
 
 try:
@@ -1090,11 +1091,61 @@ class _FeatureSelectionService:
             candidates.append(f"{feature_name}@{doc_title}")
         return candidates
 
+    def try_select_by_feature_name(
+        self,
+        target_doc: Any,
+        feature_name: str,
+        append: bool = False,
+    ) -> dict[str, Any] | None:
+        """Select via ``FeatureByName`` + ``IFeature::Select2`` (first strategy).
+
+        Delegates to the shared ``features._select_feature_by_name`` helper -
+        the path suppress/rename already rely on, and the one confirmed live
+        on R2026x for solid features, sketches and reference planes. It does
+        not resolve assembly components, which fall through to
+        :meth:`try_select_by_component`.
+
+        Args:
+            target_doc: SolidWorks ``IModelDoc2`` COM object (the adapter's
+                ``currentModel``; the helper reads it from the adapter).
+            feature_name: Feature name; any ``@document`` qualifier is
+                stripped by the helper.
+            append: Add to the current selection. Defaults to False.
+
+        Returns:
+            dict[str, Any] | None: Success payload (same schema as
+            :meth:`try_select_by_extension`) with ``entity_type`` set to
+            ``"feature-name"``, or ``None`` when it could not be selected.
+        """
+        if "@" in feature_name:
+            # FeatureByName only sees this document's own tree. A name
+            # qualified with anything but this document (e.g. a component
+            # path "Front Plane@Part1-1@Assem1") must reach the qualified
+            # SelectByID2 strategies, or the assembly's own "Front Plane"
+            # would be selected instead.
+            bare = feature_name.split("@", 1)[0]
+            own_names = self.build_feature_candidate_names(bare, target_doc)
+            if feature_name not in own_names:
+                return None
+        feature = _select_feature_by_name(self._adapter, feature_name, append)
+        if feature is None:
+            return None
+        selected_name = self._adapter._attempt(
+            lambda: str(feature.Name or ""), default=""
+        )
+        return {
+            "selected": True,
+            "feature_name": feature_name,
+            "selected_name": selected_name or feature_name.split("@", 1)[0],
+            "entity_type": "feature-name",
+        }
+
     def try_select_by_extension(
         self,
         target_doc: Any,
         candidate_names: list[str],
         feature_name: str,
+        append: bool = False,
     ) -> dict[str, Any] | None:
         """Attempt feature selection via ``Extension.SelectByID2``.
 
@@ -1109,6 +1160,7 @@ class _FeatureSelectionService:
                 qualified variants from :meth:`build_feature_candidate_names`).
             feature_name: The original caller-supplied name, included in the
                 result payload for traceability.
+            append: Add to the current selection. Defaults to False.
 
         Returns:
             dict[str, Any] | None: On success, a result dict with keys
@@ -1119,8 +1171,18 @@ class _FeatureSelectionService:
         for candidate in candidate_names:
             for entity_type in entity_types:
                 try:
+                    # Callout must be a VT_DISPATCH null; Python None is a
+                    # Type mismatch (runbook #11, confirmed live 2026-10-13).
                     selected = target_doc.Extension.SelectByID2(
-                        candidate, entity_type, 0, 0, 0, False, 0, None, 0
+                        candidate,
+                        entity_type,
+                        0,
+                        0,
+                        0,
+                        append,
+                        0,
+                        _null_callout(),
+                        0,
                     )
                     if selected:
                         return {
@@ -1138,6 +1200,7 @@ class _FeatureSelectionService:
         target_doc: Any,
         candidate_names: list[str],
         feature_name: str,
+        append: bool = False,
     ) -> dict[str, Any] | None:
         """Attempt component selection for assembly-context features.
 
@@ -1156,6 +1219,7 @@ class _FeatureSelectionService:
                 before the first ``@`` is used as the component name.
             feature_name: Original caller-supplied name for the result
                 payload.
+            append: Add to the current selection. Defaults to False.
 
         Returns:
             dict[str, Any] | None: Success dict (same schema as
@@ -1175,9 +1239,9 @@ class _FeatureSelectionService:
             if component is None:
                 continue
             for method_name, args in [
-                ("Select4", (False, None, False)),
-                ("Select", (False,)),
-                ("Select2", (False, 0)),
+                ("Select4", (append, None, False)),
+                ("Select", (append,)),
+                ("Select2", (append, 0)),
             ]:
                 selector = getattr(component, method_name, None)
                 if not callable(selector):
@@ -1199,6 +1263,7 @@ class _FeatureSelectionService:
         target_doc: Any,
         feature_name: str,
         candidate_names: list[str],
+        append: bool = False,
     ) -> dict[str, Any] | None:
         """Walk the SolidWorks feature tree and select the first matching feature.
 
@@ -1217,6 +1282,7 @@ class _FeatureSelectionService:
                 payload.
             candidate_names: Candidate names used to build the normalised
                 match set.
+            append: Add to the current selection. Defaults to False.
 
         Returns:
             dict[str, Any] | None: Success dict (same schema as
@@ -1235,6 +1301,14 @@ class _FeatureSelectionService:
         while feature and guard < 10000:
             guard += 1
             feature_ref = feature
+            # Unflagged, GetNextFeature/Select2 resolve as properties and the
+            # walk dies with "Member not found" (confirmed live 2026-10-13).
+            self._adapter._attempt(
+                lambda f=feature_ref: sw_type_info.flag_members(  # type: ignore[misc]
+                    f, "GetNextFeature", "Select2"
+                ),
+                default=0,
+            )
             tree_name = self._adapter._attempt(
                 lambda current_feature=feature_ref: str(current_feature.Name or ""),  # type: ignore[misc]
                 default="",
@@ -1243,7 +1317,7 @@ class _FeatureSelectionService:
                 tree_name, normalized_candidates, normalized_bases
             ):
                 try:
-                    if feature.Select2(False, 0):
+                    if feature.Select2(append, 0):
                         return {
                             "selected": True,
                             "feature_name": feature_name,
@@ -1284,28 +1358,43 @@ class _FeatureSelectionService:
             return True
         return normalized_name.split("@", 1)[0] in normalized_bases
 
-    def select_feature(self, feature_name: str) -> dict[str, Any]:
-        """Run all feature-selection strategies and return best-effort payload.
+    def select_feature(self, feature_name: str, append: bool = False) -> dict[str, Any]:
+        """Run the feature-selection strategies in order; first success wins.
+
+        Order: ``FeatureByName`` (cheapest, proven live), ``SelectByID2``
+        over candidate names x entity types (planes, mates), component
+        selection (assemblies), then a feature-tree walk.
 
         Args:
             feature_name: Feature name requested by caller.
+            append: Add to the current selection. Defaults to False.
 
         Returns:
-            dict[str, Any]: Selection result payload.
+            dict[str, Any]: Selection payload; ``selected`` is False only when
+            every strategy failed (the adapter maps that to an ERROR).
         """
         target_doc = self._adapter.currentModel
-        candidate_names = self.build_feature_candidate_names(feature_name, target_doc)
 
-        result = self.try_select_by_extension(target_doc, candidate_names, feature_name)
+        result = self.try_select_by_feature_name(target_doc, feature_name, append)
         if result:
             return result
 
-        result = self.try_select_by_component(target_doc, candidate_names, feature_name)
+        candidate_names = self.build_feature_candidate_names(feature_name, target_doc)
+
+        result = self.try_select_by_extension(
+            target_doc, candidate_names, feature_name, append
+        )
+        if result:
+            return result
+
+        result = self.try_select_by_component(
+            target_doc, candidate_names, feature_name, append
+        )
         if result:
             return result
 
         result = self.try_select_by_feature_tree(
-            target_doc, feature_name, candidate_names
+            target_doc, feature_name, candidate_names, append
         )
         if result:
             return result

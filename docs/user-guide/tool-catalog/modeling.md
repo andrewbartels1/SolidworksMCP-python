@@ -282,6 +282,101 @@ Rename a feature on the feature tree. SolidWorks silently refuses a rename onto 
 
 ---
 
+### `select_feature`
+
+Select a named feature, sketch, reference plane or assembly component. Replaces the current selection by default; `append: true` adds to it. A name that cannot be selected is an **error** naming it — never a success with `selected: false`. The response reports the name actually matched and how many entities are now selected.
+
+**Prerequisite:** Active document containing the named entity
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `feature_name` | `str` | ✅ | `` | Feature, sketch, plane or component name, e.g. 'Boss-Extrude1', 'Sketch1', 'Front Plane' (an '@Part1' suffix is ok) |
+| `append` | `bool` | ❌ | `false` | Add to the current selection instead of replacing it |
+
+**Sample call:**
+
+```json
+{
+  "feature_name": "Boss-Extrude1"
+}
+```
+
+---
+
+### `select_face_edges`
+
+Multi-select every edge bounding one face of the active part. Identify the face with **exactly one** of `point` (a point on the face, mm), `side` (the furthest flat face facing `top`/`bottom`/`front`/`back`/`right`/`left` or `+X`…`-Z`; top=+Y, front=+Z, right=+X as in SolidWorks' default views) or `plane` (a reference plane name — the body face lying on it). `edge_type` narrows to `linear` or `circular` edges (e.g. hole rims).
+
+The edges become the live selection, so a following `add_chamfer` / `add_fillet` with an empty `edge_names` acts on exactly them. Anything that changes the selection in between — including a click in SolidWorks — changes what is used. The response reports the face chosen (`data.face`: centre, normal, area) and each edge (`data.edges`: curve type, endpoints/length or centre/radius), so you can switch to `point` if `side` picked a different face than intended.
+
+**Prerequisite:** Active part document
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `point` | `list[float]` | ❌ | `null` | A point on the face, `[x, y, z]` in mm |
+| `side` | `str` | ❌ | `null` | `+X`/`-X`/`+Y`/`-Y`/`+Z`/`-Z` or `right`/`left`/`top`/`bottom`/`front`/`back` |
+| `plane` | `str` | ❌ | `null` | Reference plane name, e.g. 'Front Plane' |
+| `edge_type` | `str` | ❌ | `all` | `all`, `linear` or `circular` |
+| `append` | `bool` | ❌ | `false` | Add to the current selection instead of replacing it |
+
+**Sample call** (then chamfer the selected hole rims with `add_chamfer({"distance": 0.5, "edge_names": []})`):
+
+```json
+{
+  "side": "top",
+  "edge_type": "circular"
+}
+```
+
+---
+
+### `rebuild_model`
+
+Force a rebuild of the active model and report exactly what is wrong. When features fail, the response is an **error** whose `data.errors` lists each failing feature with its `type`, SolidWorks error `code` and `code_name` (`swFeatureError_e`), `severity`, a `description`, the `parents` it depends on (sketches report their segment count, so an emptied sketch is called out), and a concrete `hint` for fixing it. Warnings alone still succeed and are listed. Use after `set_dimension` or other programmatic edits.
+
+**Prerequisite:** Active document
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `top_level_only` | `bool` | ❌ | `false` | Rebuild only the top level of an assembly |
+
+**Sample call:**
+
+```json
+{}
+```
+
+**Sample error response (abridged):**
+
+```json
+{
+  "status": "error",
+  "message": "Rebuild left 1 feature error(s): Boss-Extrude2. See data.errors for each cause and hint.",
+  "data": {
+    "error_count": 1,
+    "errors": [
+      {
+        "feature": "Boss-Extrude2",
+        "type": "Extrusion",
+        "code": 1,
+        "code_name": "swFeatureErrorUnknown",
+        "severity": "error",
+        "parents": [{"name": "Sketch2", "type": "ProfileFeature", "segment_count": 0}],
+        "hint": "Parent sketch 'Sketch2' has no geometry. Add a closed profile to it (or delete this feature)."
+      }
+    ]
+  }
+}
+```
+
+---
+
 ### `create_reference_point`
 
 Create a reference point on the active part. Two modes: `along_curve` places a point on the edge under `(x, y, z)` mm — either `distance` mm from the edge start or at `percent` (0–100) of its length; `face_center` places a point at the centroid of the face under `(x, y, z)` mm. The coordinate must lie on the target edge/face. `InsertReferencePoint` always returns a feature, so success is confirmed by the feature tree growing.

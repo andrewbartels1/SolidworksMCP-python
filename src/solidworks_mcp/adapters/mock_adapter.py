@@ -144,6 +144,20 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         _simulate_errors (Any): The simulate errors value.
     """
 
+    @property
+    def _current_model(self) -> SolidWorksModel | None:
+        """The active mock document."""
+        return self.__dict__.get("_active_model")
+
+    @_current_model.setter
+    def _current_model(self, model: SolidWorksModel | None) -> None:
+        # Switching documents drops the selection, as in real SolidWorks:
+        # edges selected on one part must never feed an empty-edge_names
+        # fillet/chamfer on another.
+        if model is not self.__dict__.get("_active_model"):
+            self.__dict__.get("_selection", []).clear()
+        self.__dict__["_active_model"] = model
+
     def __init__(self, config: object | None = None) -> None:
         """Initialize the mock solid works adapter.
 
@@ -156,7 +170,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         super().__init__(config)
         cfg: dict[str, Any] = dict(self.config_dict)
         self._connected = False
-        self._current_model: SolidWorksModel | None = None
+        self._current_model = None
         self._models: dict[str, SolidWorksModel] = {}
         self._features: dict[str, SolidWorksFeature] = {}
         # Names suppressed via suppress_feature. Kept beside _features rather
@@ -168,6 +182,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._assembly_components: dict[str, dict[str, Any]] = {}
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
+        # Names currently "selected" via select_feature / select_face_edges,
+        # so append and selection_count behave like the real selection set.
+        self._selection: list[str] = []
+        # Test hook: RawRebuildIssue objects rebuild_model should report, so
+        # the error/warning paths can be exercised without real geometry.
+        self.injected_rebuild_issues: list[Any] = []
         # Tracks IDs returned by add_line/add_arc/add_circle/add_centerline/
         # add_rectangle/add_spline so add_sketch_constraint can validate
         # entity1/entity2 the same way the real adapter validates against
@@ -264,6 +284,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._features.clear()
         self._sketches.clear()
         self._current_sketch = None
+        self._selection.clear()
 
     def is_connected(self) -> bool:
         """Check if mock connection is active.
@@ -632,11 +653,21 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         return results
 
-    async def select_feature(self, feature_name: str) -> AdapterResult[dict[str, Any]]:
-        """Mock feature selection/highlight — succeeds without COM side-effects.
+    #: Default tree items every new part has, selectable like the real ones.
+    _DEFAULT_SELECTABLE = ("Front Plane", "Top Plane", "Right Plane", "Origin")
+
+    async def select_feature(
+        self, feature_name: str, append: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock feature selection, mirroring the real adapter's contract.
+
+        Succeeds only for names the mock is tracking for the active model
+        (created features, sketches, default planes); anything else is an
+        ERROR naming the feature - never SUCCESS with ``selected: False``.
 
         Args:
-            feature_name (str): The feature name value.
+            feature_name (str): The feature name, optionally ``@doc`` qualified.
+            append (bool): Add to the current selection. Defaults to False.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -648,12 +679,30 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             )
         await asyncio.sleep(self._delays["feature_operation"] / 4)
         self._operation_count += 1
+
+        bare = feature_name.split("@", 1)[0].strip()
+        known = (
+            {f.name for f in self._features.values()}
+            | set(self._sketches)
+            | set(self._DEFAULT_SELECTABLE)
+        )
+        if bare not in known:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Feature not found or could not be selected: {feature_name}",
+            )
+        if not append:
+            self._selection.clear()
+        if bare not in self._selection:
+            self._selection.append(bare)
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={
                 "selected": True,
                 "feature_name": feature_name,
+                "selected_name": bare,
                 "entity_type": "mock",
+                "selection_count": len(self._selection),
             },
             execution_time=self._delays["feature_operation"] / 4,
         )
@@ -695,6 +744,205 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             ],
             execution_time=self._delays["feature_operation"] / 4,
         )
+
+    async def select_face_edges(
+        self,
+        point: list[float] | None = None,
+        side: str | None = None,
+        plane: str | None = None,
+        edge_type: str = "all",
+        append: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock face-edge multi-selection on a canned 10 mm block.
+
+        Mirrors the real adapter's contract: the same input validation, the
+        same payload shape, and the same failure cases. The block spans
+        0..10 mm on every axis; the +Z/-Z faces carry a 2 mm radius hole rim
+        once any circle has been sketched, so ``edge_type="circular"``
+        behaves like a real drilled part. ``Front Plane`` (z = 0) is the only
+        reference plane with a face on it.
+        """
+        from .solidworks.face_selection import side_vector, validate_face_query
+
+        problem = validate_face_query(point, side, plane, edge_type)
+        if problem:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=problem)
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        if getattr(self._current_model, "type", "Part") != "Part":
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="select_face_edges requires an active part document.",
+            )
+        await asyncio.sleep(self._delays["feature_operation"] / 4)
+
+        if point is not None:
+            normal = self._mock_face_at(point)
+            if normal is None:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=f"No face found at point {list(point)} mm.",
+                )
+        elif side is not None:
+            normal = side_vector(side)
+        elif plane == "Front Plane":
+            normal = (0.0, 0.0, -1.0)
+        else:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No body face lies on {plane!r}.",
+            )
+
+        center = [5.0 + 5.0 * c for c in normal]
+        has_hole = any(e.startswith("Circle") for e in self._sketch_entity_ids)
+        edges: list[dict[str, Any]] = [
+            {"curve": "linear", "length_mm": 10.0, "face_index": 0} for _ in range(4)
+        ]
+        if has_hole and normal[2] != 0:
+            edges.append(
+                {
+                    "curve": "circular",
+                    "center_mm": [5.0, 5.0, center[2]],
+                    "axis": [0.0, 0.0, 1.0],
+                    "radius_mm": 2.0,
+                    "face_index": 0,
+                }
+            )
+        edges = [e for e in edges if edge_type == "all" or e["curve"] == edge_type]
+        if not edges:
+            kind = "" if edge_type == "all" else f"{edge_type} "
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"The selected face has no {kind}edges (face centre {center} mm).",
+            )
+
+        if not append:
+            self._selection.clear()
+        self._selection.extend(f"Edge{i}" for i in range(len(edges)))
+        face = {
+            "index": 0,
+            "center_mm": center,
+            "normal": [float(c) for c in normal],
+            "area_mm2": 100.0,
+            "planar": True,
+        }
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "face": face,
+                "faces": [face],
+                "edge_type": edge_type,
+                "edges": edges,
+                "selected_edges": len(edges),
+                "selection_count": len(self._selection),
+            },
+            execution_time=self._delays["feature_operation"] / 4,
+        )
+
+    async def add_fillet(
+        self, radius: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Mock constant-radius fillet (see :meth:`_mock_edge_feature`)."""
+        return await self._mock_edge_feature("Fillet", radius, edge_names)
+
+    async def add_chamfer(
+        self, distance: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Mock equal-distance chamfer (see :meth:`_mock_edge_feature`)."""
+        return await self._mock_edge_feature("Chamfer", distance, edge_names)
+
+    async def _mock_edge_feature(
+        self, kind: str, size: float, edge_names: list[str]
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Create a mock fillet/chamfer on named edges or the live selection.
+
+        Mirrors the real contract: an empty ``edge_names`` acts on whatever is
+        currently selected (e.g. after ``select_face_edges``), and is an error
+        when nothing is.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        if size <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"{kind} size must be positive",
+            )
+        edges = list(edge_names) or list(self._selection)
+        if not edges:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No edges given and nothing is selected for the {kind.lower()}",
+            )
+        await asyncio.sleep(self._delays["feature_operation"] / 4)
+        count = sum(1 for f in self._features.values() if f.type == kind) + 1
+        feature = SolidWorksFeature(
+            name=f"{kind}{count}",
+            type=kind,
+            id=f"{kind.lower()}_{uuid.uuid4().hex[:8]}",
+            parameters={"size": size, "edges": edges},
+            properties={"created": datetime.now().isoformat(), "mock": True},
+        )
+        self._features[feature.id or feature.name] = feature
+        self._selection.clear()
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=feature,
+            execution_time=self._delays["feature_operation"] / 4,
+        )
+
+    async def rebuild_model(
+        self, top_level_only: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock rebuild with the real adapter's diagnostics contract.
+
+        Clean by default; issues placed in ``injected_rebuild_issues`` are
+        explained with the same ``rebuild_diagnostics`` logic the real
+        adapter uses, so ERROR-with-data / warnings-only behave identically.
+        """
+        from .solidworks.rebuild_diagnostics import explain, summarize
+
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        await asyncio.sleep(self._delays["model_operation"] / 4)
+        entries = [explain(i) for i in self.injected_rebuild_issues]
+        error_count, warning_count, summary = summarize(entries)
+        data = {
+            "rebuilt": True,
+            "top_level_only": top_level_only,
+            "errors": entries,
+            "error_count": error_count,
+            "warning_count": warning_count,
+            "summary": summary,
+        }
+        return AdapterResult(
+            status=(
+                AdapterResultStatus.ERROR
+                if error_count
+                else AdapterResultStatus.SUCCESS
+            ),
+            data=data,
+            error=summary if error_count else None,
+            execution_time=self._delays["model_operation"] / 4,
+        )
+
+    @staticmethod
+    def _mock_face_at(point: list[float]) -> tuple[float, float, float] | None:
+        """Return the outward normal of the mock block face containing ``point``."""
+        if not all(-1e-6 <= c <= 10.0 + 1e-6 for c in point):
+            return None
+        for axis in range(3):
+            for value, sign in ((0.0, -1.0), (10.0, 1.0)):
+                if abs(point[axis] - value) <= 1e-6:
+                    normal = [0.0, 0.0, 0.0]
+                    normal[axis] = sign
+                    return (normal[0], normal[1], normal[2])
+        return None
 
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """Mock configuration listing for the active model.

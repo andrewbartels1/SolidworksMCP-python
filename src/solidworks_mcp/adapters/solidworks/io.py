@@ -285,6 +285,43 @@ def _byref_int() -> Any:
     )
 
 
+def _byref_variant() -> Any:
+    """Return a byref VARIANT for an array/variant out-parameter.
+
+    ``IModelDocExtension::GetWhatsWrong`` fills three of these (features,
+    error codes, warning flags); confirmed live on R2026x that late binding
+    accepts ``VARIANT(VT_BYREF | VT_VARIANT, None)`` and exposes the result on
+    ``.value``. ``pythoncom.Missing`` is rejected ("can not be converted to a
+    COM VARIANT").
+
+    Returns:
+        Any: The byref VARIANT, or a ``_ByrefFallback(None)`` without pywin32.
+    """
+    variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
+    if not callable(variant_ctor):
+        return _ByrefFallback(None)
+    return variant_ctor(
+        int(getattr(pythoncom, "VT_BYREF", 0))
+        | int(getattr(pythoncom, "VT_VARIANT", 0)),
+        None,
+    )
+
+
+def _byref_bool() -> Any:
+    """Return a byref bool VARIANT (e.g. ``IFeature::GetErrorCode2(IsWarning)``).
+
+    Returns:
+        Any: The byref VARIANT, or a ``_ByrefFallback(False)`` without pywin32.
+    """
+    variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
+    if not callable(variant_ctor):
+        return _ByrefFallback(False)
+    return variant_ctor(
+        int(getattr(pythoncom, "VT_BYREF", 0)) | int(getattr(pythoncom, "VT_BOOL", 0)),
+        False,
+    )
+
+
 def _doc_type(adapter: Any) -> int | None:
     """Return the active document's type: 1 part, 2 assembly, 3 drawing.
 
@@ -1452,28 +1489,69 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("save_file", _save),
         )
 
-    async def rebuild_model(self) -> AdapterResult[None]:
-        """Force a model rebuild.
+    async def rebuild_model(
+        self, top_level_only: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Force a rebuild and report exactly which features fail and why.
+
+        Args:
+            top_level_only: Rebuild only the top level of an assembly.
+                Defaults to False (full rebuild).
 
         Returns:
-            AdapterResult[None]: Result of the rebuild operation.
+            AdapterResult[dict[str, Any]]: ``rebuilt``, ``top_level_only``,
+            ``errors`` (see ``rebuild_diagnostics.explain``), ``error_count``,
+            ``warning_count`` and a one-line ``summary``. ERROR - still
+            carrying that ``data`` - when any error-severity entry remains or
+            SolidWorks reports the rebuild itself failed.
         """
+        from .com_utils import strip_op_prefix
+        from .rebuild_diagnostics import explain, summarize
+        from .rebuild_inspector import collect_rebuild_issues
+
         adapter = self._adapter(self)
         if not adapter.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _rebuild() -> None:
-            """Rebuild the model."""
-            success = adapter.currentModel.ForceRebuild3(False)
-            if not success:
-                raise Exception("Failed to rebuild model")
+        def _rebuild() -> dict[str, Any]:
+            model = adapter.currentModel
+            # ForceRebuild3 returns False whenever a feature fails to rebuild
+            # (confirmed live 2026-10-13), so False is not "the rebuild call
+            # broke" - collect the per-feature issues either way and only fall
+            # back to a generic failure when SolidWorks names none.
+            rebuilt = bool(model.ForceRebuild3(top_level_only))
+            entries = [explain(i) for i in collect_rebuild_issues(adapter, model)]
+            error_count, warning_count, summary = summarize(entries)
+            if not rebuilt and not error_count:
+                # Keep any warnings in data; only the cause is unnamed.
+                summary = (
+                    "SolidWorks reported that the rebuild failed (ForceRebuild3 "
+                    "returned False) but listed no failing feature."
+                    + (f" Warnings: {summary}" if warning_count else "")
+                )
+            return {
+                "rebuilt": rebuilt,
+                "top_level_only": top_level_only,
+                "errors": entries,
+                "error_count": error_count,
+                "warning_count": warning_count,
+                "summary": summary,
+            }
 
-        return cast(
-            AdapterResult[None],
+        result = cast(
+            "AdapterResult[dict[str, Any]]",
             adapter._handle_com_operation("rebuild_model", _rebuild),
         )
+        if not result.is_success:
+            result.error = strip_op_prefix(result.error, "rebuild_model")
+        elif result.data and (
+            result.data["error_count"] or not result.data["rebuilt"]
+        ):
+            result.status = AdapterResultStatus.ERROR
+            result.error = result.data["summary"]
+        return result
 
     async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
         """Collect summary metadata about the active model.

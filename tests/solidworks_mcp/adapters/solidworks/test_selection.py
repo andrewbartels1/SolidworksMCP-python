@@ -18,11 +18,17 @@ class _SelectionHarness(SolidWorksSelectionMixin):
         self.swApp = swApp
         self._feature_selector = SimpleNamespace(
             list_features=lambda _include, _depth=2: [{"name": "Feat1"}],
-            select_feature=lambda _name: {"selected": True},
+            select_feature=lambda name, _append=False: {"selected": name != "Missing"},
         )
 
-    def _handle_com_operation(self, _name, operation, *args):
-        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=operation(*args))
+    def _handle_com_operation(self, name, operation, *args):
+        try:
+            data = operation(*args)
+        except Exception as e:  # mirror PyWin32Adapter._handle_com_operation
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"Error in {name}: {e}"
+            )
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
 
     def _attempt(self, operation, default=None):
         try:
@@ -59,7 +65,16 @@ async def test_list_and_select_feature_success() -> None:
     assert list_result.is_success
     assert list_result.data == [{"name": "Feat1"}]
     assert select_result.is_success
-    assert select_result.data == {"selected": True}
+    assert select_result.data == {"selected": True, "selection_count": None}
+
+
+@pytest.mark.asyncio
+async def test_select_feature_unselected_is_an_error() -> None:
+    """A payload with selected=False becomes an ERROR naming the feature (#106)."""
+    harness = _SelectionHarness(has_model=True)
+    result = await harness.select_feature("Missing")
+    assert result.status == AdapterResultStatus.ERROR
+    assert result.error == "Feature not found or could not be selected: Missing"
 
 
 class _FakeFace:

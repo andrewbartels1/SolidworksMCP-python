@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 134 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+The SolidWorks MCP Server provides 138 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
 
 ## Read this first
 
@@ -21,7 +21,7 @@ The SolidWorks MCP Server provides 134 specialized tools for CAD automation. Thi
 
     Core 3D modeling operations including part creation, features, assemblies, and configurations.
 
-    [**27 tools available** :octicons-arrow-right-24:](#modeling-tools)
+    [**30 tools available** :octicons-arrow-right-24:](#modeling-tools)
 
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
@@ -37,7 +37,7 @@ The SolidWorks MCP Server provides 134 specialized tools for CAD automation. Thi
 
     Technical drawing creation, view management, dimensions, and annotations.
 
-    [**13 tools available** :octicons-arrow-right-24:](#drawing-tools)
+    [**14 tools available** :octicons-arrow-right-24:](#drawing-tools)
 
 - :material-chart-line:{ .lg .middle } **Analysis Tools**
 
@@ -117,9 +117,9 @@ The SolidWorks MCP Server provides 134 specialized tools for CAD automation. Thi
 
 | Category | Tool Count | Complexity Level | Primary Use Case |
 |----------|------------|------------------|------------------|
-| **Modeling** | 27 | High | Part/assembly creation and modification |
+| **Modeling** | 30 | High | Part/assembly creation and modification |
 | **Sketching** | 19 | Medium | 2D geometry and constraint management |
-| **Drawing** | 13 | Medium | Technical documentation creation |
+| **Drawing** | 14 | Medium | Technical documentation creation |
 | **Drawing Analysis** | 8 | Medium | Quality assurance and compliance |
 | **Analysis** | 5 | High | Engineering validation and analysis |
 | **Export** | 7 | Low | File format conversion and sharing |
@@ -130,7 +130,7 @@ The SolidWorks MCP Server provides 134 specialized tools for CAD automation. Thi
 | **Macro Recording** | 7 | High | Workflow capture and optimization |
 | **Docs Discovery** | 2 | Medium | API and COM discovery workflows |
 
-**Total: 134 Tools**
+**Total: 138 Tools**
 
 ## Tool Design Principles
 

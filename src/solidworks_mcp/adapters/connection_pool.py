@@ -633,6 +633,39 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "get_selected_entities", lambda adapter: adapter.get_selected_entities()
         )
 
+    async def select_feature(
+        self, feature_name: str, append: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Select a named feature using pool."""
+        return await self._execute_with_pool(
+            "select_feature",
+            lambda adapter: adapter.select_feature(feature_name, append),
+        )
+
+    async def select_face_edges(
+        self,
+        point: list[float] | None = None,
+        side: str | None = None,
+        plane: str | None = None,
+        edge_type: str = "all",
+        append: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Multi-select a face's edges using pool."""
+        return await self._execute_with_pool(
+            "select_face_edges",
+            lambda adapter: adapter.select_face_edges(
+                point, side, plane, edge_type, append
+            ),
+        )
+
+    async def rebuild_model(
+        self, top_level_only: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Force a rebuild using pool."""
+        return await self._execute_with_pool(
+            "rebuild_model", lambda adapter: adapter.rebuild_model(top_level_only)
+        )
+
     async def create_reference_plane(
         self,
         reference: str,
