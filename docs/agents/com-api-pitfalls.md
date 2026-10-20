@@ -829,6 +829,39 @@ Found 2026-10-13 building `rebuild_model` diagnostics (#106).
 
 ---
 
+## 26. SolidWorks 2026 SP04 (3DEXPERIENCE) crashes in its idle-time CommandManager refresh
+
+- **Signature:** SolidWorks dies during or right after an ordinary call
+  (`CreateLine`, `CloseDoc`, ...); the client gets RPC `0x800706BE`. The
+  journal (`%APPDATA%\SolidWorks\SOLIDWORKS 2026\swxJRNL.BAK` after a
+  restart) ends with a stack trace in SolidWorks' own idle loop:
+  `CAmApp::OnIdle` -> `swCMBar::SetAnalysisPreparationTabVisibility` ->
+  `uiBlockMan_c::isPartialModify` -> `uiModelDoc_c::conditionalBlockCmd`.
+  Windows Error Reporting records nothing.
+- **Not our code:** `main` crashes identically, and a COM trace showed the
+  feature branch sending byte-identical calls. Not a leak (memory/GDI flat).
+- **When:** nearly every crash landed 2-5 minutes after SolidWorks launched,
+  while 3DEXPERIENCE finishes signing in and re-lays-out its role-based
+  CommandManager tabs, combined with back-to-back API calls.
+- **What works (2026-10-20):** the full live regression file ran clean on a
+  warmed-up session at 1 s per call, 2.5 s per document open/create/close and
+  8 s between tests. `_handle_com_operation` now pauses after every operation
+  (`SOLIDWORKS_MCP_COM_SETTLE_SECONDS`, default 0.25;
+  `SOLIDWORKS_MCP_DOC_SETTLE_SECONDS`, default 1.0). The live suite applies the
+  slower values and waits until SolidWorks is `SW_TEST_WARMUP_SECONDS` (480)
+  old before its first test.
+- **Did not help:** `ISldWorks.CommandInProgress` (crashed sooner),
+  `SketchManager.AddToDB`, leaving sketch-edit mode before `CloseDoc`,
+  unloading the 3DEXPERIENCE add-ins, resetting SolidWorks settings, hidden
+  background mode (`DocumentVisible(False)` stops sketch creation entirely),
+  and restarting SolidWorks every N documents (the 3DEXPERIENCE edition will
+  not relaunch from `sldworks.exe` directly).
+- **Harness rule:** after a crash, `connect()` would COM-launch a bare
+  `SLDWORKS.exe -Embedding` per test and crash it again. The live fixtures now
+  stop the run when SolidWorks is not running. Use `-x` for live runs.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests

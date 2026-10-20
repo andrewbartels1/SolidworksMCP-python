@@ -142,6 +142,60 @@ def _headless_requested() -> bool:
     }
 
 
+# Operations that open, create, close or switch documents. SolidWorks rebuilds
+# its UI (document window, CommandManager tabs, task panes) for each of these,
+# so they get the longer settle pause.
+_DOCUMENT_OPERATIONS = frozenset(
+    {
+        "activate_document",
+        "close_model",
+        "create_assembly",
+        "create_drawing",
+        "create_part",
+        "create_technical_drawing",
+        "open_model",
+        "pack_and_go_assembly",
+        "save_body_as_part",
+    }
+)
+# Defaults in seconds; override with the environment variables below.
+_DEFAULT_COM_SETTLE_SECONDS = 0.25
+_DEFAULT_DOC_SETTLE_SECONDS = 1.0
+
+
+def _settle_seconds(variable: str, default: float) -> float:
+    """Read a non-negative settle pause from the environment."""
+    try:
+        return max(0.0, float(os.getenv(variable, default)))
+    except ValueError:
+        return default
+
+
+def _settle_after(operation_name: str) -> None:
+    """Pause after a COM operation so SolidWorks can finish its UI work.
+
+    SolidWorks does part of each operation's work later, in its idle loop
+    (CommandManager/task-pane refresh). Firing the next call while that is in
+    progress re-enters it, and SolidWorks 2026 crashed there repeatedly under
+    back-to-back API calls (COM pitfall #26). A human never drives it that
+    fast. Tunable via ``SOLIDWORKS_MCP_COM_SETTLE_SECONDS`` (every operation)
+    and ``SOLIDWORKS_MCP_DOC_SETTLE_SECONDS`` (document open/create/close).
+
+    Args:
+        operation_name: The ``_handle_com_operation`` name just completed.
+    """
+    if operation_name in _DOCUMENT_OPERATIONS:
+        pause = _settle_seconds(
+            "SOLIDWORKS_MCP_DOC_SETTLE_SECONDS", _DEFAULT_DOC_SETTLE_SECONDS
+        )
+    else:
+        pause = _settle_seconds(
+            "SOLIDWORKS_MCP_COM_SETTLE_SECONDS", _DEFAULT_COM_SETTLE_SECONDS
+        )
+    if pause > 0:
+        time.sleep(pause)
+
+
 def _run_macro_error_name(code: Any) -> str:
     """Render a swRunMacroError_e code as ``"<n> (<Name>)"`` when known."""
     try:
@@ -1909,19 +1963,6 @@ class PyWin32Adapter(
         """
         await self._session_coordinator.wait_for_server_ready(app)
 
-    def _set_automation_preferences(  # pragma: no cover
-        self, app: Any, *, interactive: bool
-    ) -> None:
-        """Toggle SolidWorks warning/question prompts for automation safety.
-
-        Args:
-            app: SolidWorks application COM object.
-            interactive: ``True`` restores dialogs, ``False`` suppresses them.
-        """
-        self._session_coordinator.set_automation_preferences(
-            app, interactive=interactive
-        )
-
     async def connect(self) -> None:
         """Connect to SolidWorks COM and prepare automation-safe session state.
 
@@ -2080,6 +2121,9 @@ class PyWin32Adapter(
                 error=f"Error in {operation_name}: {e}",
                 execution_time=execution_time,
             )
+        finally:
+            # After the timing above, so execution_time stays the call itself.
+            _settle_after(operation_name)
 
     def _attempt(
         self, operation: Callable[[], T], default: T | None = None

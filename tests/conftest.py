@@ -25,6 +25,18 @@ from solidworks_mcp.server import SolidWorksMCPServer
 # Test configuration
 os.environ["USE_MOCK_SOLIDWORKS"] = "true"
 
+# The real adapter pauses after every COM operation so live SolidWorks can
+# finish its idle-time UI work (COM pitfall #26). Fake-COM unit tests have
+# nothing to wait for; live runs keep the defaults unless overridden.
+if os.getenv("SOLIDWORKS_MCP_RUN_REAL_INTEGRATION", "").strip().lower() not in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}:
+    os.environ.setdefault("SOLIDWORKS_MCP_COM_SETTLE_SECONDS", "0")
+    os.environ.setdefault("SOLIDWORKS_MCP_DOC_SETTLE_SECONDS", "0")
+
 # Keep the embedding model (sentence-transformers / all-MiniLM-L6-v2) fully
 # local during tests. Without this every SentenceTransformer(...) construction
 # fires ~30 HuggingFace Hub HEAD requests to revalidate the already-cached

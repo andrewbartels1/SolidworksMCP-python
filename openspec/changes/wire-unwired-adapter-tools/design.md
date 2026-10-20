@@ -286,3 +286,29 @@ and unit-tested before live re-certification (5/5 live):
 
 The live run also showed `GetTypeName2` reports a boss extrude as `ICE`; the
 hint/label tables now treat `ICE` as a generic extrude.
+
+## Live-run crash investigation (2026-10-19/20)
+
+Full live runs crashed SolidWorks (RPC `0x800706BE`) with one native stack
+(`CAmApp::OnIdle` -> `swCMBar::SetAnalysisPreparationTabVisibility` ->
+`conditionalBlockCmd`). Findings, in the order they were established:
+
+- **Not caused by this change.** A clean worktree of the branch base
+  (`c0eeaf0`) crashed the same way. A COM trace showed byte-identical call
+  sequences for `main` and this branch.
+- **Not a leak, not one API call.** Memory and GDI stayed flat. Crashes landed
+  in `CreateLine`, `CreateArc`, `CloseDoc`, patterns and splines alike.
+- **Timing.** Nearly every crash came 2-5 minutes after SolidWorks launched,
+  while 3DEXPERIENCE finishes signing in and updates its CommandManager tabs,
+  under back-to-back API calls.
+- **Fix that held.** The whole regression file passed on a warmed-up session
+  at 1 s per call, 2.5 s per document and 8 s between tests. The adapter now
+  pauses after each COM operation, and the live harness applies the slower
+  pacing and a warm-up wait. See COM pitfall #26 for the tried-and-rejected
+  list.
+- **Harness fix.** Live fixtures stop the run when SolidWorks is gone instead
+  of COM-launching hidden `-Embedding` instances.
+- **Follow-ups (separate issues):**
+  - `create_drawing` has no default-template fallback; `create_part` does.
+  - The MCP server's `connect()` COM-launches a hidden SolidWorks when none
+    is running.

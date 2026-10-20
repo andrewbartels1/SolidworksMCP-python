@@ -58,20 +58,128 @@ _REAL_ENABLED = os.getenv(_REAL_FLAG, "").strip().lower() in {"1", "true", "yes"
 # window hidden. The visible suite is 8/8.
 
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+# Live-run pacing defaults (each overridable from the environment). On
+# SolidWorks 2026 SP04 / 3DEXPERIENCE, back-to-back API calls on a freshly
+# started session crashed SolidWorks in its idle-time CommandManager refresh
+# (COM pitfall #26). These values ran the whole regression file clean.
+_LIVE_PACING_DEFAULTS = {
+    "SOLIDWORKS_MCP_COM_SETTLE_SECONDS": "1",
+    "SOLIDWORKS_MCP_DOC_SETTLE_SECONDS": "2.5",
+    "SW_TEST_PACE_SECONDS": "8",
+}
+# Minimum SolidWorks process age before the first live test. Nearly every
+# crash landed 2-5 minutes after launch, while 3DEXPERIENCE finishes signing in
+# and re-lays-out the CommandManager tabs. ``SW_TEST_WARMUP_SECONDS=0`` skips.
+_DEFAULT_WARMUP_SECONDS = 480
+
+
+def _solidworks_pid() -> int | None:
+    """PID of the running ``SLDWORKS.exe`` (no COM call, never launches)."""
+    import csv
+    import subprocess
+
+    out = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq SLDWORKS.exe", "/FO", "CSV", "/NH"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    for row in csv.reader(out.splitlines()):
+        if row and row[0].lower() == "sldworks.exe":
+            return int(row[1])
+    return None
+
+
+def _solidworks_running() -> bool:
+    return _solidworks_pid() is not None
+
+
+def _solidworks_age_seconds(pid: int) -> float | None:
+    """Seconds since process ``pid`` started (Win32 ``GetProcessTimes``)."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32")
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        created, ignored = wintypes.FILETIME(), wintypes.FILETIME()
+        if not kernel32.GetProcessTimes(
+            handle,
+            ctypes.byref(created),
+            ctypes.byref(ignored),
+            ctypes.byref(ignored),
+            ctypes.byref(ignored),
+        ):
+            return None
+        now = wintypes.FILETIME()
+        kernel32.GetSystemTimeAsFileTime(ctypes.byref(now))
+
+        def _ticks(ft: wintypes.FILETIME) -> int:
+            return (ft.dwHighDateTime << 32) | ft.dwLowDateTime
+
+        return (_ticks(now) - _ticks(created)) / 10_000_000
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _require_running_solidworks() -> None:
+    """Stop the whole live run if SolidWorks is gone - never relaunch it.
+
+    ``connect()`` falls back to ``Dispatch``, which COM-launches a bare
+    ``SLDWORKS.exe -Embedding``. After a crash that turned one failure into a
+    cascade: every remaining test relaunched SolidWorks and crashed it again,
+    leaving orphaned hidden instances (2026-10-19). End the run instead.
+    """
+    if not _solidworks_running():
+        pytest.exit(
+            "SolidWorks is not running (crashed?). Stopping the live run instead "
+            "of relaunching it; restart SolidWorks and re-run.",
+            returncode=3,
+        )
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Apply live pacing defaults and wait for SolidWorks to finish warming up."""
+    if not _REAL_ENABLED or platform.system() != "Windows":
+        return
+    for name, value in _LIVE_PACING_DEFAULTS.items():
+        os.environ.setdefault(name, value)
+    try:
+        warmup = float(os.getenv("SW_TEST_WARMUP_SECONDS", _DEFAULT_WARMUP_SECONDS))
+    except ValueError:
+        warmup = float(_DEFAULT_WARMUP_SECONDS)
+    pid = _solidworks_pid()
+    age = _solidworks_age_seconds(pid) if pid is not None and warmup > 0 else None
+    if age is not None and age < warmup:  # pragma: no cover - live only
+        import sys
+        import time
+
+        wait = warmup - age
+        print(
+            f"[live] SolidWorks started {age:.0f}s ago; waiting {wait:.0f}s for it "
+            "to finish warming up (SW_TEST_WARMUP_SECONDS)...",
+            file=sys.stderr,
+            flush=True,
+        )
+        time.sleep(wait)
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Un-hide the SolidWorks window the headless run left hidden (best effort)."""
-    if os.getenv("SOLIDWORKS_MCP_HEADLESS", "").strip().lower() not in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
+    if os.getenv("SOLIDWORKS_MCP_HEADLESS", "").strip().lower() not in _TRUTHY:
         return
+    if not _solidworks_running():
+        return  # never launch SolidWorks just to un-hide it
     try:  # pragma: no cover - only meaningful with a live SolidWorks
-        import pythoncom  # noqa: F401
+        import pythoncom
         import win32com.client
 
-        win32com.client.Dispatch("SldWorks.Application").Visible = True
+        pythoncom.CoInitialize()
+        win32com.client.GetActiveObject("SldWorks.Application").Visible = True
     except Exception:  # noqa: BLE001 - restoring the window is not worth failing over
         pass
 
@@ -181,6 +289,8 @@ def _pace_live_tests() -> Iterator[None]:
         from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
         async def _drain() -> None:
+            if not _solidworks_running():
+                return  # never relaunch a crashed SolidWorks just to drain it
             adapter = PyWin32Adapter({})
             await adapter.connect()
             try:
@@ -200,6 +310,7 @@ async def live_adapter() -> AsyncIterator[object]:
     """A connected ``PyWin32Adapter``; disconnected on teardown."""
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
+    _require_running_solidworks()
     adapter = PyWin32Adapter({})
     await adapter.connect()
     try:
