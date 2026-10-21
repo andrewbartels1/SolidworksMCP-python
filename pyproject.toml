@@ -226,18 +226,14 @@ omit = [
     "*/test_*",
     "*/__pycache__/*",
     "*/migrations/*",
-    "*/solidworks_mcp/ui/*",
 ]
 
+# Only genuinely non-executable lines are excluded. There is no
+# "pragma: no cover": unreachable code is deleted, not hidden (see
+# openspec/changes/full-coverage-and-error-boundary/dead-code.md).
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
+    "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",

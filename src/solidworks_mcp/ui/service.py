@@ -72,9 +72,9 @@ DEFAULT_CONTEXT_DIR = _utils_service._DEFAULT_CONTEXT_DIR
 DEFAULT_UPLOADED_MODEL_DIR = _utils_service._DEFAULT_UPLOADED_MODEL_DIR
 
 # Keep this symbol available for tests that monkeypatch PDF ingestion behavior.
-try:  # pragma: no cover
+try:
     from pypdf import PdfReader  # type: ignore
-except Exception:  # pragma: no cover
+except Exception:
     PdfReader = None
 
 

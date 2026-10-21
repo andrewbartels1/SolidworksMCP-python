@@ -343,7 +343,7 @@ def _create_extrusion_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _extrusion_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _extrusion_operation() -> SolidWorksFeature:
         """Inner COM closure that builds and returns the extrusion feature.
 
         Normalises ``params`` into a ``SimpleNamespace`` so every attribute
@@ -550,7 +550,7 @@ def _create_revolve_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _revolve_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _revolve_operation() -> SolidWorksFeature:
         """Inner COM closure that builds and returns the revolve feature.
 
         Converts the degree angle to radians and invokes ``FeatureRevolve2``.
@@ -575,7 +575,7 @@ def _create_revolve_impl(
 
         import math
 
-        if revolve_sw_major == 33:  # pragma: no cover
+        if revolve_sw_major == 33:
             # IFeatureManager.FeatureRevolve2 - exact 20-parameter signature
             # read from the live gen_py type library for SW 2025:
             #   SingleDir, IsSolid, IsThin, IsCut, ReverseDir,
@@ -700,7 +700,7 @@ def _select_named_feature(
     return bool(adapter._attempt(lambda: feature.Select2(append, mark), default=False))
 
 
-def _flag_feature_methods(obj: Any, interface: str) -> None:  # pragma: no cover
+def _flag_feature_methods(obj: Any, interface: str) -> None:
     """Best-effort method flagging for a COM object via ``sw_type_info``.
 
     Flagging tells pywin32 late binding to resolve names like ``GetTypeName2``
@@ -714,7 +714,7 @@ def _flag_feature_methods(obj: Any, interface: str) -> None:  # pragma: no cover
     sw_type_info.flag_methods(obj, interface)
 
 
-def _flag_feature_members(obj: Any, *names: str) -> None:  # pragma: no cover
+def _flag_feature_members(obj: Any, *names: str) -> None:
     """Flag only the named members on ``obj``.
 
     Cheaper than :func:`_flag_feature_methods` inside a loop: flagging a
@@ -734,7 +734,7 @@ def _flag_feature_members(obj: Any, *names: str) -> None:  # pragma: no cover
 _TREE_WALK_MEMBERS = ("GetTypeName2", "GetNextFeature", "Name")
 
 
-def _read_member(obj: Any, name: str) -> Any:  # pragma: no cover
+def _read_member(obj: Any, name: str) -> Any:
     """Read a COM member that pywin32 may expose as a property *or* a method.
 
     Late-bound pywin32 dispatches are inconsistent: an unflagged zero-arg
@@ -762,7 +762,7 @@ def _read_member(obj: Any, name: str) -> Any:  # pragma: no cover
         return member
 
 
-def _profile_feature_names(adapter: Any) -> list[str]:  # pragma: no cover
+def _profile_feature_names(adapter: Any) -> list[str]:
     """Return sketch (``ProfileFeature``) names in feature-tree order.
 
     Walks ``FirstFeature`` -> ``GetNextFeature`` reading ``GetTypeName2`` and
@@ -855,7 +855,7 @@ def _create_sweep_impl(
             error="Sweep requires a 'path' sketch name",
         )
 
-    def _sweep_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _sweep_operation() -> SolidWorksFeature:
         """Inner COM closure that selects profile + path and runs the sweep.
 
         Returns:
@@ -1009,7 +1009,7 @@ def _create_loft_impl(
             error="Loft requires at least 2 profile sketches",
         )
 
-    def _loft_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _loft_operation() -> SolidWorksFeature:
         """Inner COM closure that selects profiles/guides and runs the loft.
 
         Returns:
@@ -1037,7 +1037,7 @@ def _create_loft_impl(
                 raise Exception(f"Failed to select loft guide curve: {guide}")
 
         # swTangencyType_e: 0 = none, 1 = tangent to profile normal.
-        def _tangency(value: str | None) -> int:  # pragma: no cover
+        def _tangency(value: str | None) -> int:
             return 1 if str(value or "").strip().lower() == "normal" else 0
 
         start_match = _tangency(getattr(params, "start_tangent", None))
@@ -1171,7 +1171,7 @@ def _create_cut_extrude_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _cut_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _cut_operation() -> SolidWorksFeature:
         """Inner COM closure that locates the active sketch and performs the cut.
 
         Normalises ``params``, resolves the end-condition constant, selects the
@@ -1558,7 +1558,7 @@ def _parse_edge_spec(
     return edge_name, 0.0, 0.0, 0.0, "EDGE"
 
 
-def _select_edge_by_coord(  # pragma: no cover
+def _select_edge_by_coord(
     adapter: Any,
     x: float,
     y: float,
@@ -1666,7 +1666,7 @@ def _add_fillet_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _fillet_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _fillet_operation() -> SolidWorksFeature:
         """Inner COM closure that selects edges and invokes FeatureFillet3.
 
         Returns:
@@ -1837,7 +1837,7 @@ def _add_chamfer_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _chamfer_operation() -> SolidWorksFeature:  # pragma: no cover
+    def _chamfer_operation() -> SolidWorksFeature:
         """Inner COM closure that selects edges and invokes the chamfer API.
 
         Returns:
@@ -2372,7 +2372,7 @@ class _NullCalloutSentinel:
     plain ``None`` as ``SelectByID2``'s ``Callout`` argument.
     """
 
-    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+    def __repr__(self) -> str:
         return "<null callout: pywin32 unavailable>"
 
 
@@ -2394,7 +2394,7 @@ def _null_callout() -> Any:
     try:
         import pythoncom
         import win32com.client as _win32com
-    except ImportError:  # pragma: no cover - Windows-only path
+    except ImportError:
         return _NULL_CALLOUT_SENTINEL
     return _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
 

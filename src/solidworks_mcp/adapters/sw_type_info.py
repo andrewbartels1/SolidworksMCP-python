@@ -83,7 +83,7 @@ def _load_wrapper() -> None:
             _wrapper_module = mod
             break
 
-    if _wrapper_module is None:  # pragma: no cover
+    if _wrapper_module is None:
         # Gen_py wrapper not generated yet — try to generate now.
         for major in (35, 34, 33, 32, 31, 30):
             try:
@@ -209,7 +209,7 @@ def flag_methods(obj: Any, *interfaces: str) -> int:
     """
     _ensure_loaded()
 
-    if not _interface_methods or obj is None:  # pragma: no cover
+    if not _interface_methods or obj is None:
         return 0
 
     already = _flagged_interfaces(obj)
@@ -282,7 +282,7 @@ def flagged(obj: Any, *interfaces: str) -> Any:
     If ``obj`` is ``None`` (e.g. SW returned Nothing), passes through
     unchanged.
     """
-    if obj is not None:  # pragma: no cover
+    if obj is not None:
         flag_methods(obj, *interfaces)
     return obj
 

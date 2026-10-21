@@ -153,7 +153,7 @@ class SolidWorksMCPServer:
                     else None
                 ),
             )
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             logger.debug("Tool event logging skipped due to error: {}", exc)
 
     def _configure_runtime_services(self) -> None:
@@ -770,5 +770,5 @@ def run_server() -> None:
         sys.exit(1)
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     cli_main()

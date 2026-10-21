@@ -29,7 +29,7 @@ try:
     from pywintypes import com_error
 
     HAS_WIN32COM = True
-except ImportError:  # pragma: no cover
+except ImportError:
     HAS_WIN32COM = False
 
 

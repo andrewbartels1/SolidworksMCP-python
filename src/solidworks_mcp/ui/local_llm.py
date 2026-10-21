@@ -682,7 +682,7 @@ async def run_local_agent(
         from pydantic_ai import Agent
         from pydantic_ai.models.openai import OpenAIChatModel
         from pydantic_ai.providers.openai import OpenAIProvider
-    except ImportError:  # pragma: no cover
+    except ImportError:
         return LocalAgentResult(
             success=False,
             error="pydantic-ai is not installed in this environment.",

@@ -22,6 +22,6 @@ def setup_cors(mcp: Any, config: SolidWorksMCPConfig) -> None:
     try:
         mcp._security_cors_enabled = enable_cors
         mcp._security_cors_origins = list(origins)
-    except (AttributeError, TypeError):  # pragma: no cover
+    except (AttributeError, TypeError):
         # Some tests intentionally pass plain object() instances without __dict__.
         return

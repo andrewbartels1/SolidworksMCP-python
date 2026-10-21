@@ -38,7 +38,7 @@ DEFAULT_OVERLAP = 150
 # ---------------------------------------------------------------------------
 
 
-def _require_faiss() -> Any:  # pragma: no cover
+def _require_faiss() -> Any:
     """Return the required require faiss.
 
     Returns:
@@ -53,13 +53,13 @@ def _require_faiss() -> Any:  # pragma: no cover
         import faiss
 
         return faiss
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:
         raise ImportError(
             "faiss-cpu is required for vector RAG. Install with: pip install faiss-cpu"
         ) from exc
 
 
-def _require_sentence_transformers() -> Any:  # pragma: no cover
+def _require_sentence_transformers() -> Any:
     """Return the required require sentence transformers.
 
     Returns:
@@ -74,7 +74,7 @@ def _require_sentence_transformers() -> Any:  # pragma: no cover
         from sentence_transformers import SentenceTransformer
 
         return SentenceTransformer
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:
         import sys
 
         if sys.modules.get("sentence_transformers", "__missing__") is None:

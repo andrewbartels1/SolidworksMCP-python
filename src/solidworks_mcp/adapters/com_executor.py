@@ -47,7 +47,7 @@ try:
     import pythoncom
 
     PYWIN32_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     PYWIN32_AVAILABLE = False
 
 
@@ -236,7 +236,7 @@ class ComExecutor:
 
                 fn, fut = item
                 if not fut.set_running_or_notify_cancel():
-                    continue  # pragma: no cover
+                    continue
 
                 try:
                     result = fn()
@@ -246,7 +246,7 @@ class ComExecutor:
                     fut.set_result(result)
         finally:
             try:
-                pythoncom.CoUninitialize()  # pragma: no cover
-            except Exception:  # pragma: no cover
+                pythoncom.CoUninitialize()
+            except Exception:
                 pass
             logger.info(f"ComExecutor '{self._name}' stopped")

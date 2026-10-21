@@ -16,7 +16,7 @@ try:
     from pydantic_ai import Agent
 
     IMPORT_ERROR: ImportError | None = None
-except ImportError as exc:  # pragma: no cover
+except ImportError as exc:
     Agent = None  # type: ignore[assignment, misc]
     IMPORT_ERROR = exc
 
@@ -89,7 +89,7 @@ async def run_validated_prompt(
     Raises:
         RuntimeError: Pydantic_ai is not importable. Install dependencies and retry.
     """
-    if Agent is None:  # pragma: no cover
+    if Agent is None:
         raise RuntimeError(
             "pydantic_ai is not importable. Install dependencies and retry."
         ) from IMPORT_ERROR

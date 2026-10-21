@@ -678,16 +678,16 @@ def _add_spline_impl(
         try:
             import pythoncom as _pythoncom
             from win32com.client import VARIANT as _VARIANT
-        except ImportError:  # pragma: no cover
+        except ImportError:
             _pythoncom = None
             _VARIANT = None
 
         points_arg: Any
         if _pythoncom is not None and _VARIANT is not None:
             points_arg = _VARIANT(_pythoncom.VT_ARRAY | _pythoncom.VT_R8, spline_points)
-        elif sys.platform == "win32":  # pragma: no cover
+        elif sys.platform == "win32":
             raise Exception("pywin32 is required for add_spline on Windows")
-        else:  # pragma: no cover
+        else:
             points_arg = spline_points
 
         spline = adapter.currentSketchManager.CreateSpline2(points_arg, False)
@@ -991,7 +991,7 @@ def _add_sketch_constraint_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _constraint_operation() -> str:  # pragma: no cover
+    def _constraint_operation() -> str:
         if not adapter.currentModel:
             raise Exception("No active model")
 
@@ -1183,7 +1183,7 @@ def _add_sketch_dimension_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _dimension_operation() -> str:  # pragma: no cover
+    def _dimension_operation() -> str:
         """Inner COM closure that resolves entities, places and values the dimension.
 
         Resolves entity objects from the adapter registry, computes the
@@ -1256,7 +1256,7 @@ def _add_sketch_dimension_impl(
 
         text_x, text_y, text_z, direction = placement
 
-        def _try_create_angular_dimension() -> Any:  # pragma: no cover
+        def _try_create_angular_dimension() -> Any:
             """Attempt to create an angular dimension between two line segments.
 
             Finds the shared vertex between ``entity1_obj`` and
@@ -1376,9 +1376,7 @@ def _add_sketch_dimension_impl(
     )
 
 
-def _select_sketch_entities(  # pragma: no cover
-    adapter: Any, entity_ids: list[str], mark: int
-) -> None:
+def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> None:
     """Select sketch entities from the registry under a specific mark.
 
     Resolves each ID against ``adapter._sketch_entities`` and calls
@@ -1505,7 +1503,7 @@ def _sketch_linear_pattern_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _linear_pattern_operation() -> str:  # pragma: no cover
+    def _linear_pattern_operation() -> str:
         if not entities:
             raise Exception("sketch_linear_pattern requires at least one entity")
         if count < 2:
@@ -1627,7 +1625,7 @@ def _sketch_circular_pattern_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _circular_pattern_operation() -> str:  # pragma: no cover
+    def _circular_pattern_operation() -> str:
         if not entities:
             raise Exception("sketch_circular_pattern requires at least one entity")
         if count < 2:
@@ -1826,7 +1824,7 @@ def _sketch_mirror_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _mirror_operation() -> str:  # pragma: no cover
+    def _mirror_operation() -> str:
         if not entities:
             raise Exception("sketch_mirror requires at least one entity")
         if not mirror_line:
@@ -1935,7 +1933,7 @@ def _sketch_offset_impl(
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
 
-    def _offset_operation() -> str:  # pragma: no cover
+    def _offset_operation() -> str:
         if not entities:
             raise Exception("sketch_offset requires at least one entity")
         if offset_distance <= 0:
@@ -2039,7 +2037,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
             error="No active sketch to exit",
         )
 
-    def _exit_operation() -> str:  # pragma: no cover
+    def _exit_operation() -> str:
         # ``GetActiveSketch2`` is a real zero-arg method on IModelDoc2.
         # Without flagging, pywin32 late binding resolves it as a property
         # and SW returns ``Member not found`` — the same root cause as
@@ -2094,7 +2092,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
             AdapterResult[None],
             AdapterResult(status=AdapterResultStatus.SUCCESS, data=None),
         )
-    return cast(AdapterResult[None], result)  # pragma: no cover
+    return cast(AdapterResult[None], result)
 
 
 def _to_bool(value: Any) -> bool | None:
@@ -2270,7 +2268,7 @@ def _check_sketch_fully_defined_impl(
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    def _get_sketch_payload() -> dict[str, Any]:  # pragma: no cover
+    def _get_sketch_payload() -> dict[str, Any]:
         """Main inner closure that locates the sketch and probes its constraint status.
 
         Resolves the sketch feature by name (falling back to the last-known

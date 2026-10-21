@@ -402,7 +402,7 @@ async def _run_structured_agent(
         Either an instance of ``result_type`` or a ``RecoverableFailure`` describing
         why the agent call failed and how to recover.
     """
-    if Agent is None:  # pragma: no cover
+    if Agent is None:
         return RecoverableFailure(
             explanation="pydantic_ai is not installed in this environment.",
             remediation_steps=["Install project dependencies and retry."],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from collections.abc import Callable
 
 from .. import sw_type_info as _sw_type_info
@@ -24,7 +24,7 @@ _SELECTED_ENTITY_TYPE_NAMES = {1: "EDGE", 2: "FACE", 3: "VERTEX"}
 class SolidWorksSelectionMixin:
     """Expose feature-selection and feature-list methods through a mixin."""
 
-    if TYPE_CHECKING:  # pragma: no cover
+    if TYPE_CHECKING:
         # Mixin protocol: declare attributes that must exist on the parent class
         currentModel: Any
         swApp: Any

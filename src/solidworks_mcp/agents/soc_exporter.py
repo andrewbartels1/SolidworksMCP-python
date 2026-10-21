@@ -646,5 +646,5 @@ def _cli() -> None:
     print(f"Exported {session_id!r} → {written}")
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     _cli()

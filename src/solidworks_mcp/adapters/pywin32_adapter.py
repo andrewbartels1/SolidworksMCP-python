@@ -38,7 +38,7 @@ try:
     from win32com.client import dynamic as _dynamic_module
 
     PYWIN32_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     # Keep names defined for tests that patch module attributes on non-Windows CI.
     pythoncom = SimpleNamespace()
     pywintypes = SimpleNamespace(com_error=Exception)
@@ -383,7 +383,7 @@ class _ComSessionCoordinator:
                 lambda: self._adapter._get_attr_or_call(app, "RevisionNumber"),
                 default=None,
             )
-            if revision is not None:  # pragma: no cover
+            if revision is not None:
                 return
             await asyncio.sleep(0.5)
 
@@ -617,11 +617,11 @@ class _SketchGeometryService:
         dimension_obj = self._adapter._attempt(
             lambda: display_dim.GetDimension2(0), default=None
         )
-        if dimension_obj is None:  # pragma: no cover
+        if dimension_obj is None:
             dimension_obj = self._adapter._attempt(
                 lambda: display_dim.GetDimension(), default=None
             )
-        if dimension_obj is None:  # pragma: no cover
+        if dimension_obj is None:
             dimension_obj = display_dim
 
         if (
@@ -699,7 +699,7 @@ class _SketchGeometryService:
             bool: ``True`` when a setter call succeeded; ``False`` otherwise
             (including when ``point_obj`` is ``None``).
         """
-        if point_obj is None:  # pragma: no cover
+        if point_obj is None:
             return False
         if (
             self._adapter._attempt(lambda: point_obj.SetCoords(x, y, z), default=None)
@@ -741,7 +741,7 @@ class _SketchGeometryService:
                 (float(start[0]), float(start[1]), float(start[2])),
                 (float(end[0]), float(end[1]), float(end[2])),
             )
-        return None  # pragma: no cover
+        return None
 
     def segment_point_objects(self, entity: Any) -> tuple[Any | None, Any | None]:
         """Return the COM point objects at the start and end of a segment.
@@ -785,11 +785,11 @@ class _SketchGeometryService:
         tol = 1e-6
         for point1 in points1:
             xyz1 = self.point_xyz(point1)
-            if xyz1 is None:  # pragma: no cover
+            if xyz1 is None:
                 continue
             for point2 in points2:
                 xyz2 = self.point_xyz(point2)
-                if xyz2 is None:  # pragma: no cover
+                if xyz2 is None:
                     continue
                 if (
                     abs(xyz1[0] - xyz2[0]) <= tol
@@ -797,7 +797,7 @@ class _SketchGeometryService:
                     and abs(xyz1[2] - xyz2[2]) <= tol
                 ):
                     return (point1, point1, point2)
-        return None  # pragma: no cover
+        return None
 
     def smart_dimension_direction(self, dx: float, dy: float) -> int:
         """Map a 2-D direction vector to a SolidWorks dimension-direction constant.
@@ -854,7 +854,7 @@ class _SketchGeometryService:
                 text_x, text_y, text_z, direction = placement
         """
         endpoints = self.read_segment_endpoints(entity)
-        if endpoints is None:  # pragma: no cover
+        if endpoints is None:
             return None
 
         (x1, y1, z1), (x2, y2, z2) = endpoints
@@ -898,7 +898,7 @@ class _SketchGeometryService:
         """
         endpoints1 = self.read_segment_endpoints(entity1)
         endpoints2 = self.read_segment_endpoints(entity2)
-        if endpoints1 is None or endpoints2 is None:  # pragma: no cover
+        if endpoints1 is None or endpoints2 is None:
             return None
 
         pts1 = endpoints1
@@ -930,7 +930,7 @@ class _SketchGeometryService:
         v2y = ray2[1] - vertex[1]
         l1 = (v1x * v1x + v1y * v1y) ** 0.5
         l2 = (v2x * v2x + v2y * v2y) ** 0.5
-        if l1 <= 1e-9 or l2 <= 1e-9:  # pragma: no cover
+        if l1 <= 1e-9 or l2 <= 1e-9:
             return None
 
         b1x = v1x / l1
@@ -939,7 +939,7 @@ class _SketchGeometryService:
         b2y = v2y / l2
         bis_x = b1x + b2x
         bis_y = b1y + b2y
-        if abs(bis_x) <= 1e-9 and abs(bis_y) <= 1e-9:  # pragma: no cover
+        if abs(bis_x) <= 1e-9 and abs(bis_y) <= 1e-9:
             bis_x = -b1y
             bis_y = b1x
 
@@ -991,7 +991,7 @@ class _DocumentRoutingService:
             ``title`` is the raw display title.  Either element is ``None``
             when the corresponding attribute is absent or empty.
         """
-        if document is None:  # pragma: no cover
+        if document is None:
             return None, None
 
         raw_path = self._adapter._attempt(lambda: document.GetPathName(), default=None)
@@ -1032,9 +1032,9 @@ class _DocumentRoutingService:
             if self._adapter.swApp
             else None
         )
-        if self._adapter.currentModel is None:  # pragma: no cover
+        if self._adapter.currentModel is None:
             return active_doc
-        if active_doc is None:  # pragma: no cover
+        if active_doc is None:
             return self._adapter.currentModel
 
         current_path, current_title = self.document_identity(self._adapter.currentModel)
@@ -1865,12 +1865,12 @@ class PyWin32Adapter(
                             adapter = PyWin32Adapter(config)
                             ```
         """
-        if not PYWIN32_AVAILABLE:  # pragma: no cover
+        if not PYWIN32_AVAILABLE:
             raise SolidWorksMCPError(
                 "pywin32 is not available. Install with: pip install pywin32"
             )
 
-        if platform.system() != "Windows":  # pragma: no cover
+        if platform.system() != "Windows":
             raise SolidWorksMCPError("PyWin32Adapter requires Windows platform")
 
         super().__init__(config)
@@ -2454,7 +2454,7 @@ class PyWin32Adapter(
 
             # Remove any pre-existing file so SolidWorks never shows the
             # "already exists — replace?" confirmation dialog.
-            if _os.path.exists(resolved):  # pragma: no cover
+            if _os.path.exists(resolved):
                 _os.remove(resolved)
 
             # Try screenshot methods in order: ModelView → TargetDoc → SaveAs3
