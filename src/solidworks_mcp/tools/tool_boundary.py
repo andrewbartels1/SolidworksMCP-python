@@ -27,6 +27,8 @@ from ..adapters.base import AdapterResult
 from .error_classifier import (
     INTERNAL,
     INVALID_INPUT,
+    NOT_SUPPORTED,
+    NOT_SUPPORTED_HINT,
     Classification,
     ErrorClassifier,
 )
@@ -62,13 +64,31 @@ class ToolOperationError(Exception):
         self.data = data
 
 
+class UnsupportedOperationError(Exception):
+    """The active adapter has no capability for the requested operation."""
+
+
+def require_capability(adapter: Any, method: str, message: str) -> None:
+    """Raise :class:`UnsupportedOperationError` unless ``adapter`` has ``method``.
+
+    Args:
+        adapter: The active SolidWorks adapter.
+        method: The adapter method the tool needs.
+        message: What was not done, and what to do instead.
+    """
+    if not hasattr(adapter, method):
+        raise UnsupportedOperationError(message)
+
+
 def normalize_input[TModel: BaseModel](
     input_data: Any, model_type: type[TModel]
 ) -> TModel:
     """Validate ``input_data`` as ``model_type``.
 
     Args:
-        input_data: A ``model_type`` instance or a mapping of its fields.
+        input_data: A ``model_type`` instance, a mapping of its fields, another
+            pydantic model (converted through ``model_dump``), or ``None`` for
+            a tool whose fields all have defaults.
         model_type: The tool's pydantic input model.
 
     Returns:
@@ -79,6 +99,10 @@ def normalize_input[TModel: BaseModel](
     """
     if isinstance(input_data, model_type):
         return input_data
+    if input_data is None:
+        input_data = {}
+    elif not isinstance(input_data, dict) and hasattr(input_data, "model_dump"):
+        input_data = input_data.model_dump()
     try:
         return model_type.model_validate(input_data)
     except ValidationError as exc:  # also wraps ValueErrors from validators
@@ -172,6 +196,10 @@ def tool_boundary(
             return error_payload(
                 f"Invalid input: {describe_validation_error(exc)}",
                 Classification(INVALID_INPUT, _INVALID_INPUT_HINT),
+            )
+        except UnsupportedOperationError as exc:
+            return error_payload(
+                str(exc), Classification(NOT_SUPPORTED, NOT_SUPPORTED_HINT)
             )
         except ToolOperationError as exc:
             message = str(exc)

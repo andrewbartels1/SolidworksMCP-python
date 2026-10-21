@@ -7,12 +7,16 @@ technical drawings in SolidWorks.
 from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    UnsupportedOperationError,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 # Input schemas using Python 3.14 built-in types
 
@@ -419,35 +423,20 @@ async def register_drawing_tools(
                             - View positioning follows drawing sheet coordinate system
                             - Multiple views can reference the same model file
         """
-        try:
-            if hasattr(adapter, "create_drawing_view"):
-                result = await adapter.create_drawing_view(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Created {input_data.view_type} view of {input_data.model_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to create drawing view",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support create_drawing_view; no "
-                    f"{input_data.view_type} view of {input_data.model_path} was created."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in create_drawing_view tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "create_drawing_view",
+            "Active adapter does not support create_drawing_view; no "
+            f"{input_data.view_type} view of {input_data.model_path} was created.",
+        )
+        result = await adapter.create_drawing_view(input_data.model_dump())
+        require_success(result, "Failed to create drawing view")
+        return {
+            "status": "success",
+            "message": f"Created {input_data.view_type} view of {input_data.model_path}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
@@ -486,69 +475,54 @@ async def register_drawing_tools(
                             - Precision should match manufacturing tolerances
                             - Some dimension types require specific entity combinations
         """
-        try:
-            if hasattr(input_data, "model_dump"):
-                payload = input_data.model_dump()
-            else:
-                payload = dict(input_data)
+        if hasattr(input_data, "model_dump"):
+            payload = input_data.model_dump()
+        else:
+            payload = dict(input_data)
 
-            dimension_type = payload.get("dimension_type")
-            entity1 = payload.get("entity1")
-            entity2 = payload.get("entity2")
-            position_x = payload.get("position_x")
-            position_y = payload.get("position_y")
+        dimension_type = payload.get("dimension_type")
+        entity1 = payload.get("entity1")
+        entity2 = payload.get("entity2")
+        position_x = payload.get("position_x")
+        position_y = payload.get("position_y")
 
-            if (entity1 is None or entity2 is None) and payload.get("entities"):
-                entities = payload["entities"]
-                if entity1 is None and len(entities) >= 1:
-                    entity1 = entities[0]
-                if entity2 is None and len(entities) >= 2:
-                    entity2 = entities[1]
+        if (entity1 is None or entity2 is None) and payload.get("entities"):
+            entities = payload["entities"]
+            if entity1 is None and len(entities) >= 1:
+                entity1 = entities[0]
+            if entity2 is None and len(entities) >= 2:
+                entity2 = entities[1]
 
-            if (position_x is None or position_y is None) and payload.get("position"):
-                position = payload["position"]
-                if len(position) >= 2:
-                    if position_x is None:
-                        position_x = position[0]
-                    if position_y is None:
-                        position_y = position[1]
+        if (position_x is None or position_y is None) and payload.get("position"):
+            position = payload["position"]
+            if len(position) >= 2:
+                if position_x is None:
+                    position_x = position[0]
+                if position_y is None:
+                    position_y = position[1]
 
-            # Feed the alias-normalized values back into the payload so the
-            # adapter call sees entity1/entity2/position_x/position_y even
-            # when the caller only supplied entities/position.
-            payload["entity1"] = entity1
-            payload["entity2"] = entity2
-            payload["position_x"] = position_x
-            payload["position_y"] = position_y
+        # Feed the alias-normalized values back into the payload so the
+        # adapter call sees entity1/entity2/position_x/position_y even
+        # when the caller only supplied entities/position.
+        payload["entity1"] = entity1
+        payload["entity2"] = entity2
+        payload["position_x"] = position_x
+        payload["position_y"] = position_y
 
-            if hasattr(adapter, "add_dimension"):
-                result = await adapter.add_dimension(payload)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Dimension added successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to add dimension",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    f"Active adapter does not support add_dimension; no "
-                    f"{dimension_type} dimension was added."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in add_dimension tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "add_dimension",
+            f"Active adapter does not support add_dimension; no "
+            f"{dimension_type} dimension was added.",
+        )
+        result = await adapter.add_dimension(payload)
+        require_success(result, "Failed to add dimension")
+        return {
+            "status": "success",
+            "message": "Dimension added successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_note(input_data: AddNoteInput) -> dict[str, Any]:
@@ -587,32 +561,19 @@ async def register_drawing_tools(
                                     - Font size should comply with drawing standards
                                     - Position carefully to avoid dimension conflicts
         """
-        try:
-            if hasattr(adapter, "add_note"):
-                result = await adapter.add_note(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Added note: {input_data.text[:30]}...",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to add note",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support add_note; no note was added.",
-            }
-
-        except Exception as e:
-            logger.error(f"Error in add_note tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "add_note",
+            "Active adapter does not support add_note; no note was added.",
+        )
+        result = await adapter.add_note(input_data.model_dump())
+        require_success(result, "Failed to add note")
+        return {
+            "status": "success",
+            "message": f"Added note: {input_data.text[:30]}...",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_section_view(input_data: CreateSectionViewInput) -> dict[str, Any]:
@@ -651,23 +612,12 @@ async def register_drawing_tools(
                             - Label follows ANSI/ISO drafting standards (A-A, B-B, etc.)
                             - Essential for showing internal features and assemblies
         """
-        try:
-            return {
-                "status": "error",
-                "message": (
-                    "No adapter capability exists for cutting a section view "
-                    "along a section line; create_section_view cannot compute "
-                    "the cut geometry, so no view was created. Use SolidWorks "
-                    "directly (Insert > Drawing View > Section) instead."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in create_section_view tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        raise UnsupportedOperationError(
+            "No adapter capability exists for cutting a section view "
+            "along a section line; create_section_view cannot compute "
+            "the cut geometry, so no view was created. Use SolidWorks "
+            "directly (Insert > Drawing View > Section) instead."
+        )
 
     @mcp.tool()
     async def create_detail_view(input_data: CreateDetailViewInput) -> dict[str, Any]:
@@ -706,24 +656,13 @@ async def register_drawing_tools(
                             - Label follows standard drafting conventions (Detail A, etc.)
                             - Essential for communicating tight tolerance requirements
         """
-        try:
-            return {
-                "status": "error",
-                "message": (
-                    "No adapter capability exists for magnifying the "
-                    "geometry inside a detail circle; create_detail_view "
-                    "cannot compute the detail geometry, so no view was "
-                    "created. Use SolidWorks directly (Insert > Drawing "
-                    "View > Detail) instead."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in create_detail_view tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        raise UnsupportedOperationError(
+            "No adapter capability exists for magnifying the "
+            "geometry inside a detail circle; create_detail_view "
+            "cannot compute the detail geometry, so no view was "
+            "created. Use SolidWorks directly (Insert > Drawing "
+            "View > Detail) instead."
+        )
 
     @mcp.tool()
     async def update_sheet_format(input_data: UpdateSheetFormatInput) -> dict[str, Any]:
@@ -764,35 +703,20 @@ async def register_drawing_tools(
                             - Sheet size affects drawing layout and scaling decisions
                             - Essential for drawing control and document management systems
         """
-        try:
-            if hasattr(adapter, "update_sheet_format"):
-                result = await adapter.update_sheet_format(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Updated sheet format to {input_data.sheet_size}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to update sheet format",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support update_sheet_format; the "
-                    "sheet format and title block were not changed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in update_sheet_format tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "update_sheet_format",
+            "Active adapter does not support update_sheet_format; the "
+            "sheet format and title block were not changed.",
+        )
+        result = await adapter.update_sheet_format(input_data.model_dump())
+        require_success(result, "Failed to update sheet format")
+        return {
+            "status": "success",
+            "message": f"Updated sheet format to {input_data.sheet_size}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def auto_dimension_view(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -831,35 +755,20 @@ async def register_drawing_tools(
                             - May require manual adjustment for optimal readability
                             - Significantly reduces manual dimensioning time
         """
-        try:
-            if hasattr(adapter, "auto_dimension_view"):
-                result = await adapter.auto_dimension_view(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Auto-dimensioned drawing view",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to auto-dimension view",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support auto_dimension_view; no "
-                    "dimensions were added."
-                ),
-            }
-
-        except Exception as e:  # pragma: no cover - defensive guard for future logic
-            logger.error(f"Error in auto_dimension_view tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "auto_dimension_view",
+            "Active adapter does not support auto_dimension_view; no "
+            "dimensions were added.",
+        )
+        result = await adapter.auto_dimension_view(input_data)
+        require_success(result, "Failed to auto-dimension view")
+        return {
+            "status": "success",
+            "message": "Auto-dimensioned drawing view",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def check_drawing_standards(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -898,23 +807,12 @@ async def register_drawing_tools(
                             - Automated validation reduces human error in review process
                             - Essential for quality management and ISO certification
         """
-        try:
-            return {
-                "status": "error",
-                "message": (
-                    "No adapter capability exists for checking drafting "
-                    "standards compliance; check_drawing_standards cannot "
-                    "inspect the drawing, so no compliance score was "
-                    "computed. Use SolidWorks Design Checker for this."
-                ),
-            }
-
-        except Exception as e:  # pragma: no cover - defensive guard for future logic
-            logger.error(f"Error in check_drawing_standards tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        raise UnsupportedOperationError(
+            "No adapter capability exists for checking drafting "
+            "standards compliance; check_drawing_standards cannot "
+            "inspect the drawing, so no compliance score was "
+            "computed. Use SolidWorks Design Checker for this."
+        )
 
     @mcp.tool()
     async def create_technical_drawing(
@@ -931,31 +829,20 @@ async def register_drawing_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "create_technical_drawing"):
-                result = await adapter.create_technical_drawing(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Technical drawing created successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to create technical drawing",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support create_technical_drawing; "
-                    "no drawing was created."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in create_technical_drawing tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        require_capability(
+            adapter,
+            "create_technical_drawing",
+            "Active adapter does not support create_technical_drawing; "
+            "no drawing was created.",
+        )
+        result = await adapter.create_technical_drawing(input_data.model_dump())
+        require_success(result, "Failed to create technical drawing")
+        return {
+            "status": "success",
+            "message": "Technical drawing created successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_drawing_view(input_data: DrawingViewInput) -> dict[str, Any]:
@@ -970,31 +857,19 @@ async def register_drawing_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "add_drawing_view"):
-                result = await adapter.add_drawing_view(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Drawing view added successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to add drawing view",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support add_drawing_view; no "
-                    "view was added."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in add_drawing_view tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        require_capability(
+            adapter,
+            "add_drawing_view",
+            "Active adapter does not support add_drawing_view; no view was added.",
+        )
+        result = await adapter.add_drawing_view(input_data.model_dump())
+        require_success(result, "Failed to add drawing view")
+        return {
+            "status": "success",
+            "message": "Drawing view added successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_annotation(input_data: AnnotationInput) -> dict[str, Any]:
@@ -1009,31 +884,19 @@ async def register_drawing_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "add_annotation"):
-                result = await adapter.add_annotation(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Annotation added successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to add annotation",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support add_annotation; no "
-                    "annotation was added."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in add_annotation tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        require_capability(
+            adapter,
+            "add_annotation",
+            "Active adapter does not support add_annotation; no annotation was added.",
+        )
+        result = await adapter.add_annotation(input_data.model_dump())
+        require_success(result, "Failed to add annotation")
+        return {
+            "status": "success",
+            "message": "Annotation added successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def update_title_block(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1048,31 +911,20 @@ async def register_drawing_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "update_title_block"):
-                result = await adapter.update_title_block(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Title block updated successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to update title block",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support update_title_block; the "
-                    "title block was not changed."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in update_title_block tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        require_capability(
+            adapter,
+            "update_title_block",
+            "Active adapter does not support update_title_block; the "
+            "title block was not changed.",
+        )
+        result = await adapter.update_title_block(input_data)
+        require_success(result, "Failed to update title block")
+        return {
+            "status": "success",
+            "message": "Title block updated successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def list_drawing_views() -> dict[str, Any]:
@@ -1091,29 +943,20 @@ async def register_drawing_tools(
             await list_drawing_views()
             ```
         """
-        try:
-            result = await adapter.list_drawing_views()
-            if result.is_success:
-                views = list(result.data or [])
-                return {
-                    "status": "success",
-                    "message": (
-                        f"{len(views)} view(s): {', '.join(views)}"
-                        if views
-                        else "The drawing has no views"
-                    ),
-                    "views": views,
-                    "count": len(views),
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to list drawing views: {result.error}",
-                "execution_time": result.execution_time,
-            }
-        except Exception as e:
-            logger.error(f"Error in list_drawing_views tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        result = await adapter.list_drawing_views()
+        require_success(result, context="Failed to list drawing views")
+        views = list(result.data or [])
+        return {
+            "status": "success",
+            "message": (
+                f"{len(views)} view(s): {', '.join(views)}"
+                if views
+                else "The drawing has no views"
+            ),
+            "views": views,
+            "count": len(views),
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def auto_center_marks(
@@ -1140,41 +983,31 @@ async def register_drawing_tools(
             await auto_center_marks({"view_name": "Drawing View1"})
             ```
         """
-        try:
-            if not hasattr(adapter, "auto_center_marks"):
-                return {
-                    "status": "error",
-                    "message": (
-                        "Active adapter does not support auto_center_marks; "
-                        "no centre marks were inserted."
-                    ),
-                }
-            result = await adapter.auto_center_marks(
-                input_data.view_name,
-                input_data.mark_holes,
-                input_data.mark_fillets,
-                input_data.mark_slots,
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                added = data.get("center_marks_added")
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Inserted {added} centre mark(s) on {input_data.view_name}"
-                        if isinstance(added, int)
-                        else f"Ran centre-mark insertion on {input_data.view_name}"
-                    ),
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to insert centre marks: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in auto_center_marks tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        require_capability(
+            adapter,
+            "auto_center_marks",
+            "Active adapter does not support auto_center_marks; "
+            "no centre marks were inserted.",
+        )
+        result = await adapter.auto_center_marks(
+            input_data.view_name,
+            input_data.mark_holes,
+            input_data.mark_fillets,
+            input_data.mark_slots,
+        )
+        require_success(result, context="Failed to insert centre marks")
+        data = result.data if isinstance(result.data, dict) else {}
+        added = data.get("center_marks_added")
+        return {
+            "status": "success",
+            "message": (
+                f"Inserted {added} centre mark(s) on {input_data.view_name}"
+                if isinstance(added, int)
+                else f"Ran centre-mark insertion on {input_data.view_name}"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     tool_count = 14  # Number of tools registered
     return tool_count

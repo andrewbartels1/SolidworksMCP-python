@@ -1,3 +1,5 @@
+import re
+
 """Contract tests for interference detection on the adapter surface.
 
 ``check_interference`` exists on the base adapter, the mock, the circuit
@@ -6,7 +8,7 @@ degrades to the base "not implemented" default at runtime, and mock mode cannot
 catch it — the mock is not wrapped — so the wiring is asserted directly here.
 
 The name is the one ``tools/analysis.py`` already gates on with
-``hasattr(adapter, "check_interference")``, so renaming it leaves that tool
+``require_capability(adapter, "check_interference", ...)``, so renaming it leaves that tool
 unreachable with every adapter test still green.
 """
 
@@ -71,7 +73,7 @@ def test_capability_name_matches_the_tool_gate() -> None:
     import solidworks_mcp.tools.analysis as analysis_tools
 
     source = Path(analysis_tools.__file__).read_text(encoding="utf-8")
-    assert f'hasattr(adapter, "{CAPABILITY}")' in source, (
+    assert re.search(rf'require_capability\(\s*adapter,\s*"{CAPABILITY}"', source), (
         f"no tool in analysis.py gates on adapter.{CAPABILITY}; either the "
         "gate was renamed or this capability is unreachable"
     )

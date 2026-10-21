@@ -92,7 +92,7 @@ class TestSketchingExceptionPaths:
         fn = await _get_tool(mcp, "create_sketch")
         result = await fn(CreateSketchInput(plane="Front"))
         assert result["status"] == "error"
-        assert "Unexpected error" in result["message"]
+        assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_add_line_adapter_error_result(self):
@@ -257,7 +257,7 @@ class TestAutomationExceptionPaths:
         adapter = MockSolidWorksAdapter({})
 
         # Patch the inner dict-return path to raise
-        with patch("solidworks_mcp.tools.automation.logger"):
+        with patch("solidworks_mcp.tools.tool_boundary.logger"):
             await register_automation_tools(mcp, adapter, _make_config())
             fn = await _get_tool(mcp, "automation_stop_macro_recording")
 

@@ -279,7 +279,7 @@ class TestAnalysisTools:
         mock_adapter.check_interference = AsyncMock(side_effect=RuntimeError("boom"))
         errored = await check_tool(input_data=InterferenceCheckInput())
         assert errored["status"] == "error"
-        assert "Unexpected error: boom" in errored["message"]
+        assert errored["error_type"] == "internal"
 
         class _BadGeometryInput:
             """Test bad geometry input."""
@@ -307,7 +307,7 @@ class TestAnalysisTools:
         )
         material_errored = await material_tool()
         assert material_errored["status"] == "error"
-        assert "Unexpected error: material boom" in material_errored["message"]
+        assert material_errored["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_check_interference_refuses_when_adapter_lacks_support(

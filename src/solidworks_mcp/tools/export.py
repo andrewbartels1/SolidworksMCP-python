@@ -7,29 +7,19 @@ STL, PDF, DWG, and image formats.
 from typing import Any, TypeVar
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    UnsupportedOperationError,
+    normalize_input,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 TInput = TypeVar("TInput", bound=BaseModel)
-
-
-def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
-    """Build internal normalize input.
-
-    Args:
-        input_data (Any): The input data value.
-        model_type (type[TInput]): The model type value.
-
-    Returns:
-        TInput: The result produced by the operation.
-    """
-    if isinstance(input_data, model_type):
-        return input_data
-    return model_type.model_validate(input_data)
 
 
 # Input schemas using Python 3.14 built-in types
@@ -426,49 +416,36 @@ async def register_export_tools(
                             - Recommended for supplier collaboration and CNC machining
                             - Supports assemblies, parts, and surface models
         """
-        try:
-            if hasattr(input_data, "model_dump"):
-                payload = input_data.model_dump()
-                file_path = input_data.file_path
-            else:
-                payload = dict(input_data)
-                file_path = str(payload.get("file_path") or "")
+        if hasattr(input_data, "model_dump"):
+            payload = input_data.model_dump()
+            file_path = input_data.file_path
+        else:
+            payload = dict(input_data)
+            file_path = str(payload.get("file_path") or "")
 
-            if hasattr(adapter, "export_step"):
-                result = await adapter.export_step(payload)
-            else:
-                result = await adapter.export_file(file_path, "step")
+        if hasattr(adapter, "export_step"):
+            result = await adapter.export_step(payload)
+        else:
+            result = await adapter.export_file(file_path, "step")
 
-            if result.is_success:
-                if hasattr(adapter, "export_step"):
-                    return {
-                        "status": "success",
-                        "message": f"Exported to STEP format: {file_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "success",
-                    "message": f"Exported to STEP format: {file_path}",
-                    "export": {
-                        "file_path": file_path,
-                        "format": "STEP",
-                        "size_estimate": "Unknown",  # Would get actual file size
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to export STEP: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in export_step tool: {e}")
+        require_success(result, context="Failed to export STEP")
+        if hasattr(adapter, "export_step"):
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Exported to STEP format: {file_path}",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
+        return {
+            "status": "success",
+            "message": f"Exported to STEP format: {file_path}",
+            "export": {
+                "file_path": file_path,
+                "format": "STEP",
+                "size_estimate": "Unknown",  # Would get actual file size
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def export_iges(input_data: ExportFileInput) -> dict[str, Any]:
@@ -509,42 +486,29 @@ async def register_export_tools(
                             - Use STEP format for newer systems when possible
                             - Common in aerospace and automotive surface design
         """
-        try:
-            if hasattr(adapter, "export_iges"):
-                result = await adapter.export_iges(input_data.model_dump())
-            else:
-                result = await adapter.export_file(input_data.file_path, "iges")
+        if hasattr(adapter, "export_iges"):
+            result = await adapter.export_iges(input_data.model_dump())
+        else:
+            result = await adapter.export_file(input_data.file_path, "iges")
 
-            if result.is_success:
-                if hasattr(adapter, "export_iges"):
-                    return {
-                        "status": "success",
-                        "message": f"Exported to IGES format: {input_data.file_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "success",
-                    "message": f"Exported to IGES format: {input_data.file_path}",
-                    "export": {
-                        "file_path": input_data.file_path,
-                        "format": "IGES",
-                        "size_estimate": "Unknown",
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to export IGES: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in export_iges tool: {e}")
+        require_success(result, context="Failed to export IGES")
+        if hasattr(adapter, "export_iges"):
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Exported to IGES format: {input_data.file_path}",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
+        return {
+            "status": "success",
+            "message": f"Exported to IGES format: {input_data.file_path}",
+            "export": {
+                "file_path": input_data.file_path,
+                "format": "IGES",
+                "size_estimate": "Unknown",
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def export_stl(input_data: ExportFileInput) -> dict[str, Any]:
@@ -585,43 +549,30 @@ async def register_export_tools(
                             - Binary format is more compact than ASCII
                             - Essential for 3D printing and rapid prototyping workflows
         """
-        try:
-            if hasattr(adapter, "export_stl"):
-                result = await adapter.export_stl(input_data.model_dump())
-            else:
-                result = await adapter.export_file(input_data.file_path, "stl")
+        if hasattr(adapter, "export_stl"):
+            result = await adapter.export_stl(input_data.model_dump())
+        else:
+            result = await adapter.export_file(input_data.file_path, "stl")
 
-            if result.is_success:
-                if hasattr(adapter, "export_stl"):
-                    return {
-                        "status": "success",
-                        "message": f"Exported to STL format: {input_data.file_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "success",
-                    "message": f"Exported to STL format: {input_data.file_path}",
-                    "export": {
-                        "file_path": input_data.file_path,
-                        "format": "STL",
-                        "use_case": "3D printing and rapid prototyping",
-                        "size_estimate": "Unknown",
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to export STL: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in export_stl tool: {e}")
+        require_success(result, context="Failed to export STL")
+        if hasattr(adapter, "export_stl"):
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Exported to STL format: {input_data.file_path}",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
+        return {
+            "status": "success",
+            "message": f"Exported to STL format: {input_data.file_path}",
+            "export": {
+                "file_path": input_data.file_path,
+                "format": "STL",
+                "use_case": "3D printing and rapid prototyping",
+                "size_estimate": "Unknown",
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def export_pdf(input_data: ExportFileInput) -> dict[str, Any]:
@@ -667,43 +618,30 @@ async def register_export_tools(
                             - Can include multiple sheets from drawing files
                             - Supports password protection and access controls
         """
-        try:
-            if hasattr(adapter, "export_pdf"):
-                result = await adapter.export_pdf(input_data.model_dump())
-            else:
-                result = await adapter.export_file(input_data.file_path, "pdf")
+        if hasattr(adapter, "export_pdf"):
+            result = await adapter.export_pdf(input_data.model_dump())
+        else:
+            result = await adapter.export_file(input_data.file_path, "pdf")
 
-            if result.is_success:
-                if hasattr(adapter, "export_pdf"):
-                    return {
-                        "status": "success",
-                        "message": f"Exported to PDF format: {input_data.file_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "success",
-                    "message": f"Exported to PDF format: {input_data.file_path}",
-                    "export": {
-                        "file_path": input_data.file_path,
-                        "format": "PDF",
-                        "use_case": "Documentation and sharing",
-                        "size_estimate": "Unknown",
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to export PDF: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in export_pdf tool: {e}")
+        require_success(result, context="Failed to export PDF")
+        if hasattr(adapter, "export_pdf"):
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Exported to PDF format: {input_data.file_path}",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
+        return {
+            "status": "success",
+            "message": f"Exported to PDF format: {input_data.file_path}",
+            "export": {
+                "file_path": input_data.file_path,
+                "format": "PDF",
+                "use_case": "Documentation and sharing",
+                "size_estimate": "Unknown",
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def export_dwg(input_data: ExportFileInput) -> dict[str, Any]:
@@ -745,43 +683,30 @@ async def register_export_tools(
                             - Version compatibility important for legacy AutoCAD systems
                             - Preserves dimensions, annotations, and drawing structure
         """
-        try:
-            if hasattr(adapter, "export_dwg"):
-                result = await adapter.export_dwg(input_data.model_dump())
-            else:
-                result = await adapter.export_file(input_data.file_path, "dwg")
+        if hasattr(adapter, "export_dwg"):
+            result = await adapter.export_dwg(input_data.model_dump())
+        else:
+            result = await adapter.export_file(input_data.file_path, "dwg")
 
-            if result.is_success:
-                if hasattr(adapter, "export_dwg"):
-                    return {
-                        "status": "success",
-                        "message": f"Exported to DWG format: {input_data.file_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "success",
-                    "message": f"Exported to DWG format: {input_data.file_path}",
-                    "export": {
-                        "file_path": input_data.file_path,
-                        "format": "DWG",
-                        "use_case": "AutoCAD compatibility",
-                        "size_estimate": "Unknown",
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to export DWG: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in export_dwg tool: {e}")
+        require_success(result, context="Failed to export DWG")
+        if hasattr(adapter, "export_dwg"):
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Exported to DWG format: {input_data.file_path}",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
+        return {
+            "status": "success",
+            "message": f"Exported to DWG format: {input_data.file_path}",
+            "export": {
+                "file_path": input_data.file_path,
+                "format": "DWG",
+                "use_case": "AutoCAD compatibility",
+                "size_estimate": "Unknown",
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def export_image(input_data: ExportImageInput) -> dict[str, Any]:
@@ -818,58 +743,39 @@ async def register_export_tools(
                             - Isometric views are ideal for technical documentation
                             - Consider lighting and material settings for best results
         """
-        try:
-            input_data = _normalize_input(input_data, ExportImageInput)
-            if hasattr(adapter, "export_image"):
-                result = await adapter.export_image(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Exported image: {input_data.file_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to export image",
-                }
-
-            if hasattr(adapter, "export_file") and input_data.file_path:
-                result = await adapter.export_file(  # type: ignore[assignment]
-                    input_data.file_path, input_data.format_type
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Exported image: {input_data.file_path}",
-                        "export": {
-                            "file_path": input_data.file_path,
-                            "format": input_data.format_type.upper(),
-                            "dimensions": f"{input_data.width}x{input_data.height}",
-                            "view": input_data.view_orientation,
-                            "use_case": "Documentation and presentations",
-                        },
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to export image",
-                }
-
+        input_data = normalize_input(input_data, ExportImageInput)
+        if hasattr(adapter, "export_image"):
+            result = await adapter.export_image(input_data.model_dump())
+            require_success(result, "Failed to export image")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support export_image or "
-                    "export_file; no image was exported."
-                ),
+                "status": "success",
+                "message": f"Exported image: {input_data.file_path}",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in export_images tool: {e}")
+        if hasattr(adapter, "export_file") and input_data.file_path:
+            result = await adapter.export_file(  # type: ignore[assignment]
+                input_data.file_path, input_data.format_type
+            )
+            require_success(result, "Failed to export image")
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Exported image: {input_data.file_path}",
+                "export": {
+                    "file_path": input_data.file_path,
+                    "format": input_data.format_type.upper(),
+                    "dimensions": f"{input_data.width}x{input_data.height}",
+                    "view": input_data.view_orientation,
+                    "use_case": "Documentation and presentations",
+                },
+                "execution_time": result.execution_time,
             }
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support export_image or "
+            "export_file; no image was exported."
+        )
 
     @mcp.tool()
     async def batch_export(input_data: BatchExportInput) -> dict[str, Any]:
@@ -909,35 +815,19 @@ async def register_export_tools(
                             - Maintains directory structure in output location
                             - Essential for project deliverables and supplier packages
         """
-        try:
-            if hasattr(adapter, "batch_export"):
-                result = await adapter.batch_export(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Batch export completed to {input_data.format_type} format",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Batch export failed",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support batch_export; no files "
-                    "were exported."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in batch_export tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "batch_export",
+            "Active adapter does not support batch_export; no files were exported.",
+        )
+        result = await adapter.batch_export(input_data.model_dump())
+        require_success(result, "Batch export failed")
+        return {
+            "status": "success",
+            "message": f"Batch export completed to {input_data.format_type} format",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     tool_count = 7  # Number of tools registered
     return tool_count

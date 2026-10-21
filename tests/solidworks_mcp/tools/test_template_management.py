@@ -607,11 +607,11 @@ class TestTemplateManagementTools:
 
         save_exception = await save_tool(input_data={"template_name": "bad"})
         assert save_exception["status"] == "error"
-        assert "Failed to save to library" in save_exception["message"]
+        assert save_exception["error_type"] == "internal"
 
         list_exception = await list_tool(input_data={"category": "all"})
         assert list_exception["status"] == "error"
-        assert "Failed to list library" in list_exception["message"]
+        assert list_exception["error_type"] == "internal"
 
     @pytest.mark.unit
     def test_template_extraction_input_validation(self):

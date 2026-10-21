@@ -9,12 +9,17 @@ import pathlib
 from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    ToolOperationError,
+    UnsupportedOperationError,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 
 def _file_fact_snapshot(path_str: str) -> dict[str, Any] | None:
@@ -165,35 +170,20 @@ async def register_template_management_tools(
         Example:
                             >>> result = await extract_template(extraction_input)
         """
-        try:
-            if hasattr(adapter, "extract_template"):
-                result = await adapter.extract_template(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Template '{input_data.template_name}' extracted from {input_data.source_model}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to extract template",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support extract_template; no "
-                    f"template was extracted from {input_data.source_model}."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in extract_template tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to extract template: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "extract_template",
+            "Active adapter does not support extract_template; no "
+            f"template was extracted from {input_data.source_model}.",
+        )
+        result = await adapter.extract_template(input_data.model_dump())
+        require_success(result, "Failed to extract template")
+        return {
+            "status": "success",
+            "message": f"Template '{input_data.template_name}' extracted from {input_data.source_model}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def apply_template(input_data: TemplateApplicationInput) -> dict[str, Any]:
@@ -211,35 +201,20 @@ async def register_template_management_tools(
         Example:
                             >>> result = await apply_template(application_input)
         """
-        try:
-            if hasattr(adapter, "apply_template"):
-                result = await adapter.apply_template(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Template applied to {input_data.target_model}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to apply template",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support apply_template; "
-                    f"{input_data.target_model} was not changed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in apply_template tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to apply template: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "apply_template",
+            "Active adapter does not support apply_template; "
+            f"{input_data.target_model} was not changed.",
+        )
+        result = await adapter.apply_template(input_data.model_dump())
+        require_success(result, "Failed to apply template")
+        return {
+            "status": "success",
+            "message": f"Template applied to {input_data.target_model}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def batch_apply_template(input_data: TemplateBatchInput) -> dict[str, Any]:
@@ -257,35 +232,20 @@ async def register_template_management_tools(
         Example:
                             >>> result = await batch_apply_template(batch_input)
         """
-        try:
-            if hasattr(adapter, "batch_apply_template"):
-                result = await adapter.batch_apply_template(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Batch template application completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed batch template application",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support batch_apply_template; "
-                    f"no files in {input_data.source_folder} were changed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in batch_apply_template tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed batch template application: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "batch_apply_template",
+            "Active adapter does not support batch_apply_template; "
+            f"no files in {input_data.source_folder} were changed.",
+        )
+        result = await adapter.batch_apply_template(input_data.model_dump())
+        require_success(result, "Failed batch template application")
+        return {
+            "status": "success",
+            "message": "Batch template application completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def compare_templates(input_data: TemplateComparisonInput) -> dict[str, Any]:
@@ -309,72 +269,57 @@ async def register_template_management_tools(
             time, byte-identical check) — it does not report property,
             dimension, or formatting differences it cannot actually read.
         """
-        try:
-            if hasattr(adapter, "compare_templates"):
-                result = await adapter.compare_templates(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Template comparison completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to compare templates",
-                }
-
-            file_1 = _file_fact_snapshot(input_data.template1_path)
-            file_2 = _file_fact_snapshot(input_data.template2_path)
-
-            missing = [
-                path
-                for path, snapshot in (
-                    (input_data.template1_path, file_1),
-                    (input_data.template2_path, file_2),
-                )
-                if snapshot is None
-            ]
-            if missing:
-                return {
-                    "status": "error",
-                    "message": (
-                        "Cannot compare templates; file(s) not found on "
-                        f"disk: {', '.join(missing)}. No template-property "
-                        "diff was performed."
-                    ),
-                }
-
-            assert file_1 is not None
-            assert file_2 is not None
-            identical = file_1["sha256"] == file_2["sha256"]
-
+        if hasattr(adapter, "compare_templates"):
+            result = await adapter.compare_templates(input_data.model_dump())
+            require_success(result, "Failed to compare templates")
             return {
                 "status": "success",
-                "message": (
-                    "Template files are byte-identical"
-                    if identical
-                    else "Template files differ on disk"
-                ),
-                "comparison": {
-                    "file_1": file_1,
-                    "file_2": file_2,
-                    "identical": identical,
-                    "size_delta_bytes": file_2["size_bytes"] - file_1["size_bytes"],
-                },
-                "note": (
-                    "This is a filesystem-level comparison only; template "
-                    "properties, dimensions, and formatting were not "
-                    "analyzed."
-                ),
+                "message": "Template comparison completed",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in compare_templates tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to compare templates: {str(e)}",
-            }
+        file_1 = _file_fact_snapshot(input_data.template1_path)
+        file_2 = _file_fact_snapshot(input_data.template2_path)
+
+        missing = [
+            path
+            for path, snapshot in (
+                (input_data.template1_path, file_1),
+                (input_data.template2_path, file_2),
+            )
+            if snapshot is None
+        ]
+        if missing:
+            raise ToolOperationError(
+                "Cannot compare templates; file(s) not found on "
+                f"disk: {', '.join(missing)}. No template-property "
+                "diff was performed."
+            )
+
+        assert file_1 is not None
+        assert file_2 is not None
+        identical = file_1["sha256"] == file_2["sha256"]
+
+        return {
+            "status": "success",
+            "message": (
+                "Template files are byte-identical"
+                if identical
+                else "Template files differ on disk"
+            ),
+            "comparison": {
+                "file_1": file_1,
+                "file_2": file_2,
+                "identical": identical,
+                "size_delta_bytes": file_2["size_bytes"] - file_1["size_bytes"],
+            },
+            "note": (
+                "This is a filesystem-level comparison only; template "
+                "properties, dimensions, and formatting were not "
+                "analyzed."
+            ),
+        }
 
     @mcp.tool()
     async def save_to_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -393,39 +338,24 @@ async def register_template_management_tools(
                             >>> result = await save_to_template_library(library_input)
         """
 
-        try:
-            if hasattr(adapter, "save_to_template_library"):
-                result = await adapter.save_to_template_library(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Template saved to library",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to save to library",
-                }
-
-            template_name = input_data.get("template_name", "")
-
+        if hasattr(adapter, "save_to_template_library"):
+            result = await adapter.save_to_template_library(input_data)
+            require_success(result, "Failed to save to library")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support save_to_template_library; "
-                    f"'{template_name}' was not saved to any library. There is "
-                    "no local template registry — this tool needs a real "
-                    "adapter-backed library service."
-                ),
+                "status": "success",
+                "message": "Template saved to library",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in save_to_template_library tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to save to library: {str(e)}",
-            }
+        template_name = input_data.get("template_name", "")
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support save_to_template_library; "
+            f"'{template_name}' was not saved to any library. There is "
+            "no local template registry — this tool needs a real "
+            "adapter-backed library service."
+        )
 
     @mcp.tool()
     async def list_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -443,35 +373,20 @@ async def register_template_management_tools(
         Example:
                             >>> result = await list_template_library(list_input)
         """
-        try:
-            if hasattr(adapter, "list_template_library"):
-                result = await adapter.list_template_library(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Template library listed successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to list template library",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support list_template_library; "
-                    "there is no local template registry to list."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in list_template_library tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to list library: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "list_template_library",
+            "Active adapter does not support list_template_library; "
+            "there is no local template registry to list.",
+        )
+        result = await adapter.list_template_library(input_data)
+        require_success(result, "Failed to list template library")
+        return {
+            "status": "success",
+            "message": "Template library listed successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     tool_count = 6  # Template management tools
     return tool_count

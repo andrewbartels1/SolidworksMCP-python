@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
@@ -19,7 +18,14 @@ from ..utils.feature_tree_classifier import (
     classify_feature_tree_snapshot,
 )
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    InvalidInputError,
+    ToolOperationError,
+    UnsupportedOperationError,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 # swPackAndGoSaveStatus_e — returned (per-file) by IModelDocExtension::SavePackAndGo.
 # All zeros means every file was written successfully by SolidWorks Pack-and-Go.
@@ -388,7 +394,7 @@ async def register_file_management_tools(
         *,
         required_extension: str,
         overwrite: bool,
-    ) -> tuple[str | None, dict[str, Any] | None]:
+    ) -> str:
         """Normalize and validate a save target before adapter/COM calls.
 
         Enforces pre-save guardrails used by save convenience tools so invalid paths are
@@ -403,21 +409,23 @@ async def register_file_management_tools(
             overwrite (bool): Whether saving is allowed to replace an existing file.
 
         Returns:
-            tuple[str | None, dict[str, Any] | None]: A tuple where the first element is
-            the normalized save path string when validation succeeds, and the second element
-            is ``None``. When validation fails, the first element is ``None`` and the second
-            element is an error payload shaped like ``{"status": "error", "message": ...}``.
+            str: The normalized save path.
+
+        Raises:
+            InvalidInputError: When the path is empty, has the wrong extension, its
+                directory is missing or not writable, or it exists and overwrite is
+                False.
 
         Example:
             ```python
-            target, error = _prepare_save_target(
+            target = _prepare_save_target(
                 r"C:/Exports/bracket.step",
                 required_extension=".sldprt",
                 overwrite=False,
             )
 
-            # target == "C:/Exports/bracket.sldprt" when valid
-            # error is populated when directory is missing/not writable,
+            # target == "C:/Exports/bracket.sldprt" when valid; raises
+            # InvalidInputError when the directory is missing/not writable,
             # or when the target exists and overwrite is False.
             ```
 
@@ -427,10 +435,7 @@ async def register_file_management_tools(
         """
         file_path = raw_path.strip()
         if not file_path:
-            return None, {
-                "status": "error",
-                "message": "Invalid file_path: path is empty or whitespace.",
-            }
+            raise InvalidInputError("Invalid file_path: path is empty or whitespace.")
 
         cleaned = file_path.strip()
         extension_name = required_extension.lstrip(".")
@@ -440,10 +445,9 @@ async def register_file_management_tools(
             and cleaned[1:].lower() == extension_name
         ):
             # Reject extension-only input such as ".sldprt".
-            return None, {
-                "status": "error",
-                "message": "Invalid file_path: missing base filename before extension.",
-            }
+            raise InvalidInputError(
+                "Invalid file_path: missing base filename before extension."
+            )
 
         target = Path(file_path)
         if target.suffix.lower() != required_extension.lower():
@@ -452,36 +456,27 @@ async def register_file_management_tools(
 
         target_dir = target.parent
         if not target_dir.exists():
-            return None, {
-                "status": "error",
-                "message": f"Target directory does not exist: {target_dir}",
-            }
+            raise InvalidInputError(f"Target directory does not exist: {target_dir}")
 
         if not target_dir.is_dir():
-            return None, {
-                "status": "error",
-                "message": f"Target parent path is not a directory: {target_dir}",
-            }
+            raise InvalidInputError(
+                f"Target parent path is not a directory: {target_dir}"
+            )
 
         if not os.access(target_dir, os.W_OK):
-            return None, {
-                "status": "error",
-                "message": f"Target directory is not writable: {target_dir}",
-            }
+            raise InvalidInputError(f"Target directory is not writable: {target_dir}")
 
         if target.exists() and target.is_dir():
-            return None, {
-                "status": "error",
-                "message": f"Target path is a directory, expected file path: {target}",
-            }
+            raise InvalidInputError(
+                f"Target path is a directory, expected file path: {target}"
+            )
 
         if target.exists() and not overwrite:
-            return None, {
-                "status": "error",
-                "message": f"File already exists and overwrite=False: {target}. Set overwrite=True to replace it.",
-            }
+            raise InvalidInputError(
+                f"File already exists and overwrite=False: {target}. Set overwrite=True to replace it."
+            )
 
-        return str(target), None
+        return str(target)
 
     def _get_attr_or_call(  # pragma: no cover
         obj: Any, name: str, default: Any = None
@@ -546,24 +541,20 @@ async def register_file_management_tools(
 
     def _copy_active_assembly_with_references(  # pragma: no cover
         target_assembly_path: str,
-    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    ) -> dict[str, Any]:
         """Copy active assembly and resolved dependencies into target folder."""
         current_model = getattr(adapter, "currentModel", None)
         if current_model is None:
-            return None, {
-                "status": "error",
-                "message": "No active model available to copy references.",
-            }
+            raise ToolOperationError("No active model available to copy references.")
 
         source_assembly_raw = _get_attr_or_call(current_model, "GetPathName")
         source_assembly = (
             Path(str(source_assembly_raw)) if source_assembly_raw else None
         )
         if source_assembly is None or not source_assembly.exists():
-            return None, {
-                "status": "error",
-                "message": "Active assembly must be saved before include_references=True can copy dependencies.",
-            }
+            raise ToolOperationError(
+                "Active assembly must be saved before include_references=True can copy dependencies."
+            )
 
         target_assembly = Path(target_assembly_path)
         target_dir = target_assembly.parent
@@ -571,18 +562,16 @@ async def register_file_management_tools(
 
         dependency_callable = getattr(current_model, "GetDependencies2", None)
         if not callable(dependency_callable):
-            return None, {
-                "status": "error",
-                "message": "Adapter does not expose GetDependencies2; cannot copy assembly references in this mode.",
-            }
+            raise ToolOperationError(
+                "Adapter does not expose GetDependencies2; cannot copy assembly references in this mode."
+            )
 
         try:
             raw_dependencies = dependency_callable(True, True, False)
         except Exception as exc:
-            return None, {
-                "status": "error",
-                "message": f"Failed to enumerate assembly dependencies: {exc}",
-            }
+            raise ToolOperationError(
+                f"Failed to enumerate assembly dependencies: {exc}"
+            ) from exc
 
         dependency_paths = _extract_dependency_paths(raw_dependencies)
         unique_sources: list[Path] = [source_assembly]
@@ -614,7 +603,7 @@ async def register_file_management_tools(
             "copied_files": copied_files,
             "missing_source_files": missing_sources,
             "copy_method": "tool_dependency_copy",
-        }, None
+        }
 
     def _native_pack_and_go(  # pragma: no cover
         target_assembly_path: str,
@@ -721,33 +710,20 @@ async def register_file_management_tools(
                             - Updates document timestamp and metadata
                             - No effect if document is read-only
         """
-        try:
-            input_data = _coerce_input(SaveFileInput, input_data)
-            if hasattr(adapter, "save_file"):
-                result = await adapter.save_file(input_data.file_path)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "File saved successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to save file",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support save_file; the file was not saved.",
-            }
-
-        except Exception as e:
-            logger.error(f"Error in save_file tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        input_data = _coerce_input(SaveFileInput, input_data)
+        require_capability(
+            adapter,
+            "save_file",
+            "Active adapter does not support save_file; the file was not saved.",
+        )
+        result = await adapter.save_file(input_data.file_path)
+        require_success(result, "Failed to save file")
+        return {
+            "status": "success",
+            "message": "File saved successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def save_as(input_data: SaveAsInput) -> dict[str, Any]:
@@ -786,60 +762,41 @@ async def register_file_management_tools(
                             })
                             ```
         """
-        try:
-            input_data = _coerce_input(SaveAsInput, input_data)
-            if hasattr(adapter, "save_file") and input_data.format_type.lower() in {
-                "solidworks",
-                "sldprt",
-                "sldasm",
-                "slddrw",
-            }:
-                result = await adapter.save_file(input_data.file_path)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"File saved as: {input_data.file_path}",
-                        "file_path": input_data.file_path,
-                        "format": input_data.format_type,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to save file",
-                }
-
-            if hasattr(adapter, "export_file"):
-                result = await adapter.export_file(
-                    input_data.file_path,
-                    input_data.format_type,
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"File exported as: {input_data.file_path}",
-                        "file_path": input_data.file_path,
-                        "format": input_data.format_type,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to export file",
-                }
-
+        input_data = _coerce_input(SaveAsInput, input_data)
+        if hasattr(adapter, "save_file") and input_data.format_type.lower() in {
+            "solidworks",
+            "sldprt",
+            "sldasm",
+            "slddrw",
+        }:
+            result = await adapter.save_file(input_data.file_path)
+            require_success(result, "Failed to save file")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support save_file or export_file; "
-                    f"no file was saved as {input_data.file_path}."
-                ),
+                "status": "success",
+                "message": f"File saved as: {input_data.file_path}",
+                "file_path": input_data.file_path,
+                "format": input_data.format_type,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in save_as tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "export_file",
+            "Active adapter does not support save_file or export_file; "
+            f"no file was saved as {input_data.file_path}.",
+        )
+        result = await adapter.export_file(
+            input_data.file_path,
+            input_data.format_type,
+        )
+        require_success(result, "Failed to export file")
+        return {
+            "status": "success",
+            "message": f"File exported as: {input_data.file_path}",
+            "file_path": input_data.file_path,
+            "format": input_data.format_type,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def get_file_properties() -> dict[str, Any]:
@@ -882,60 +839,48 @@ async def register_file_management_tools(
                             - Some properties may be empty if not set
                             - Technical properties depend on document configuration
         """
-        try:
-            if not hasattr(adapter, "get_model_info"):
-                return {
-                    "status": "error",
-                    "message": "Active adapter does not support model metadata",
+        require_capability(
+            adapter, "get_model_info", "Active adapter does not support model metadata"
+        )
+
+        result = await adapter.get_model_info()
+        if not result.is_success or not isinstance(result.data, dict):
+            raise ToolOperationError(result.error or "No active SolidWorks document")
+
+        model_info = dict(result.data)
+        raw_path = str(model_info.get("path") or "")
+        file_path = Path(raw_path) if raw_path else None
+        properties: dict[str, Any] = {
+            "file_name": (
+                file_path.name
+                if file_path is not None
+                else str(model_info.get("title") or "")
+            ),
+            "file_path": raw_path,
+            "file_size_bytes": None,
+            "created_date": None,
+            "modified_date": None,
+            "document_type": model_info.get("type"),
+            "configuration": model_info.get("configuration"),
+            "is_dirty": model_info.get("is_dirty"),
+            "feature_count": model_info.get("feature_count"),
+        }
+
+        if file_path is not None and file_path.is_file():
+            stat = file_path.stat()
+            properties.update(
+                {
+                    "file_size_bytes": stat.st_size,
+                    "created_date": stat.st_ctime,
+                    "modified_date": stat.st_mtime,
                 }
+            )
 
-            result = await adapter.get_model_info()
-            if not result.is_success or not isinstance(result.data, dict):
-                return {
-                    "status": "error",
-                    "message": result.error or "No active SolidWorks document",
-                }
-
-            model_info = dict(result.data)
-            raw_path = str(model_info.get("path") or "")
-            file_path = Path(raw_path) if raw_path else None
-            properties: dict[str, Any] = {
-                "file_name": (
-                    file_path.name
-                    if file_path is not None
-                    else str(model_info.get("title") or "")
-                ),
-                "file_path": raw_path,
-                "file_size_bytes": None,
-                "created_date": None,
-                "modified_date": None,
-                "document_type": model_info.get("type"),
-                "configuration": model_info.get("configuration"),
-                "is_dirty": model_info.get("is_dirty"),
-                "feature_count": model_info.get("feature_count"),
-            }
-
-            if file_path is not None and file_path.is_file():
-                stat = file_path.stat()
-                properties.update(
-                    {
-                        "file_size_bytes": stat.st_size,
-                        "created_date": stat.st_ctime,
-                        "modified_date": stat.st_mtime,
-                    }
-                )
-
-            return {
-                "status": "success",
-                "properties": properties,
-                "execution_time": result.execution_time,
-            }
-        except Exception as e:
-            logger.error(f"Error in get_file_properties tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "properties": properties,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def get_model_info() -> dict[str, Any]:
@@ -947,30 +892,16 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "get_model_info"):
-                result = await adapter.get_model_info()
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "model_info": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to get model info",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support get_model_info",
-            }
-        except Exception as e:
-            logger.error(f"Error in get_model_info tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter, "get_model_info", "Active adapter does not support get_model_info"
+        )
+        result = await adapter.get_model_info()
+        require_success(result, "Failed to get model info")
+        return {
+            "status": "success",
+            "model_info": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def list_features(input_data: ListFeaturesInput) -> dict[str, Any]:
@@ -985,41 +916,27 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _coerce_input(ListFeaturesInput, input_data)
-            if hasattr(adapter, "list_features"):
-                result = await adapter.list_features(
-                    include_suppressed=input_data.include_suppressed,
-                    max_assembly_depth=input_data.max_assembly_depth,
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "features": result.data or [],
-                        "count": len(result.data or []),
-                        # Additive, derived view of the same flat "features"
-                        # list above - grouped by component/sub-component
-                        # for callers that want the assembly structure
-                        # rather than a flat tag-and-scan. Does not change
-                        # the meaning of "features"/"count".
-                        "assembly_tree": build_component_tree(result.data),
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to list features",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support list_features",
-            }
-        except Exception as e:
-            logger.error(f"Error in list_features tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        input_data = _coerce_input(ListFeaturesInput, input_data)
+        require_capability(
+            adapter, "list_features", "Active adapter does not support list_features"
+        )
+        result = await adapter.list_features(
+            include_suppressed=input_data.include_suppressed,
+            max_assembly_depth=input_data.max_assembly_depth,
+        )
+        require_success(result, "Failed to list features")
+        return {
+            "status": "success",
+            "features": result.data or [],
+            "count": len(result.data or []),
+            # Additive, derived view of the same flat "features"
+            # list above - grouped by component/sub-component
+            # for callers that want the assembly structure
+            # rather than a flat tag-and-scan. Does not change
+            # the meaning of "features"/"count".
+            "assembly_tree": build_component_tree(result.data),
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def get_selected_entities() -> dict[str, Any]:
@@ -1037,31 +954,19 @@ async def register_file_management_tools(
             dict[str, Any]: ``entities`` (list of selection descriptors) and
             ``count`` on success.
         """
-        try:
-            if hasattr(adapter, "get_selected_entities"):
-                result = await adapter.get_selected_entities()
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "entities": result.data or [],
-                        "count": len(result.data or []),
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to get selected entities",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support get_selected_entities",
-            }
-        except Exception as e:
-            logger.error(f"Error in get_selected_entities tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "get_selected_entities",
+            "Active adapter does not support get_selected_entities",
+        )
+        result = await adapter.get_selected_entities()
+        require_success(result, "Failed to get selected entities")
+        return {
+            "status": "success",
+            "entities": result.data or [],
+            "count": len(result.data or []),
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def classify_feature_tree(
@@ -1079,56 +984,45 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _coerce_input(ClassifyFeatureTreeInput, input_data)
-            model_info = input_data.model_info
-            features = input_data.features
-            execution_time = 0.0
+        input_data = _coerce_input(ClassifyFeatureTreeInput, input_data)
+        model_info = input_data.model_info
+        features = input_data.features
+        execution_time = 0.0
 
-            if model_info is None and hasattr(adapter, "get_model_info"):
-                model_result = await adapter.get_model_info()
-                if model_result.is_success:
-                    model_info = model_result.data
+        if model_info is None and hasattr(adapter, "get_model_info"):
+            model_result = await adapter.get_model_info()
+            if model_result.is_success:
+                model_info = model_result.data
+                execution_time = max(execution_time, model_result.execution_time or 0.0)
+
+        if features is None:
+            if hasattr(adapter, "list_features"):
+                feature_result = await adapter.list_features(
+                    include_suppressed=input_data.include_suppressed
+                )
+                if feature_result.is_success:
+                    features = feature_result.data or []
                     execution_time = max(
-                        execution_time, model_result.execution_time or 0.0
+                        execution_time, feature_result.execution_time or 0.0
                     )
-
-            if features is None:
-                if hasattr(adapter, "list_features"):
-                    feature_result = await adapter.list_features(
-                        include_suppressed=input_data.include_suppressed
-                    )
-                    if feature_result.is_success:
-                        features = feature_result.data or []
-                        execution_time = max(
-                            execution_time, feature_result.execution_time or 0.0
-                        )
-                    else:
-                        return {
-                            "status": "error",
-                            "message": feature_result.error
-                            or "Failed to list features for classification",
-                        }
                 else:
-                    return {
-                        "status": "error",
-                        "message": "Active adapter does not support list_features",
-                    }
+                    raise ToolOperationError(
+                        feature_result.error
+                        or "Failed to list features for classification"
+                    )
+            else:
+                raise UnsupportedOperationError(
+                    "Active adapter does not support list_features"
+                )
 
-            classification = classify_feature_tree_snapshot(model_info, features or [])  # type: ignore[arg-type]
-            return {
-                "status": "success",
-                "classification": classification,
-                "model_info": model_info or {},
-                "features": features or [],
-                "execution_time": execution_time,
-            }
-        except Exception as e:
-            logger.error(f"Error in classify_feature_tree tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        classification = classify_feature_tree_snapshot(model_info, features or [])  # type: ignore[arg-type]
+        return {
+            "status": "success",
+            "classification": classification,
+            "model_info": model_info or {},
+            "features": features or [],
+            "execution_time": execution_time,
+        }
 
     @mcp.tool()
     async def list_configurations() -> dict[str, Any]:
@@ -1140,31 +1034,19 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "list_configurations"):
-                result = await adapter.list_configurations()
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "configurations": result.data or [],
-                        "count": len(result.data or []),
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to list configurations",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support list_configurations",
-            }
-        except Exception as e:
-            logger.error(f"Error in list_configurations tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "list_configurations",
+            "Active adapter does not support list_configurations",
+        )
+        result = await adapter.list_configurations()
+        require_success(result, "Failed to list configurations")
+        return {
+            "status": "success",
+            "configurations": result.data or [],
+            "count": len(result.data or []),
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def manage_file_properties(input_data: FileOperationInput) -> dict[str, Any]:
@@ -1179,31 +1061,21 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _coerce_input(FileOperationInput, input_data)
-            if hasattr(adapter, "manage_file_properties"):
-                result = await adapter.manage_file_properties(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "File properties managed successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to manage file properties",
-                }
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support manage_file_properties; "
-                    f"no {input_data.operation} operation was performed."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in manage_file_properties tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = _coerce_input(FileOperationInput, input_data)
+        require_capability(
+            adapter,
+            "manage_file_properties",
+            "Active adapter does not support manage_file_properties; "
+            f"no {input_data.operation} operation was performed.",
+        )
+        result = await adapter.manage_file_properties(input_data.model_dump())
+        require_success(result, "Failed to manage file properties")
+        return {
+            "status": "success",
+            "message": "File properties managed successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def convert_file_format(input_data: FormatConversionInput) -> dict[str, Any]:
@@ -1218,31 +1090,21 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _coerce_input(FormatConversionInput, input_data)
-            if hasattr(adapter, "convert_file_format"):
-                result = await adapter.convert_file_format(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "File converted successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to convert file format",
-                }
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support convert_file_format; "
-                    f"{input_data.source_file} was not converted."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in convert_file_format tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = _coerce_input(FormatConversionInput, input_data)
+        require_capability(
+            adapter,
+            "convert_file_format",
+            "Active adapter does not support convert_file_format; "
+            f"{input_data.source_file} was not converted.",
+        )
+        result = await adapter.convert_file_format(input_data.model_dump())
+        require_success(result, "Failed to convert file format")
+        return {
+            "status": "success",
+            "message": "File converted successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def batch_file_operations(input_data: FileOperationInput) -> dict[str, Any]:
@@ -1257,31 +1119,21 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _coerce_input(FileOperationInput, input_data)
-            if hasattr(adapter, "batch_file_operations"):
-                result = await adapter.batch_file_operations(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Batch file operations completed successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to run batch file operations",
-                }
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support batch_file_operations; "
-                    f"no {input_data.operation} batch operation was performed."
-                ),
-            }
-        except Exception as e:
-            logger.error(f"Error in batch_file_operations tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = _coerce_input(FileOperationInput, input_data)
+        require_capability(
+            adapter,
+            "batch_file_operations",
+            "Active adapter does not support batch_file_operations; "
+            f"no {input_data.operation} batch operation was performed.",
+        )
+        result = await adapter.batch_file_operations(input_data.model_dump())
+        require_success(result, "Failed to run batch file operations")
+        return {
+            "status": "success",
+            "message": "Batch file operations completed successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def load_part(input_data: LoadPartInput) -> dict[str, Any]:
@@ -1310,43 +1162,29 @@ async def register_file_management_tools(
                             - File must be a valid .sldprt (part) file
                             - Path must be absolute and accessible
         """
-        try:
-            input_data = _coerce_input(LoadPartInput, input_data)
-            # Ensure file path ends with .sldprt
-            file_path = input_data.file_path
-            if not file_path.lower().endswith(".sldprt"):
-                return {
-                    "status": "error",
-                    "message": f"File must be a .sldprt part file: {file_path}",
-                }
+        input_data = _coerce_input(LoadPartInput, input_data)
+        # Ensure file path ends with .sldprt
+        file_path = input_data.file_path
+        if not file_path.lower().endswith(".sldprt"):
+            raise InvalidInputError(f"File must be a .sldprt part file: {file_path}")
 
-            result = await adapter.open_model(file_path)
-            if result.is_success:
-                model = result.data
-                title = _result_value(model, "title", "name", default=file_path)
-                path = _result_value(model, "path", "file_path", default=file_path)
-                configuration = _result_value(model, "configuration", default="Default")
-                return {
-                    "status": "success",
-                    "message": f"Loaded part: {title}",
-                    "model": {
-                        "name": title,
-                        "type": "Part",
-                        "path": path,
-                        "configuration": configuration,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to load part: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in load_part tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        result = await adapter.open_model(file_path)
+        require_success(result, context="Failed to load part")
+        model = result.data
+        title = _result_value(model, "title", "name", default=file_path)
+        path = _result_value(model, "path", "file_path", default=file_path)
+        configuration = _result_value(model, "configuration", default="Default")
+        return {
+            "status": "success",
+            "message": f"Loaded part: {title}",
+            "model": {
+                "name": title,
+                "type": "Part",
+                "path": path,
+                "configuration": configuration,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def load_assembly(input_data: LoadAssemblyInput) -> dict[str, Any]:
@@ -1375,43 +1213,31 @@ async def register_file_management_tools(
                             - File must be a valid .sldasm (assembly) file
                             - Path must be absolute and accessible
         """
-        try:
-            input_data = _coerce_input(LoadAssemblyInput, input_data)
-            # Ensure file path ends with .sldasm
-            file_path = input_data.file_path
-            if not file_path.lower().endswith(".sldasm"):
-                return {
-                    "status": "error",
-                    "message": f"File must be a .sldasm assembly file: {file_path}",
-                }
+        input_data = _coerce_input(LoadAssemblyInput, input_data)
+        # Ensure file path ends with .sldasm
+        file_path = input_data.file_path
+        if not file_path.lower().endswith(".sldasm"):
+            raise InvalidInputError(
+                f"File must be a .sldasm assembly file: {file_path}"
+            )
 
-            result = await adapter.open_model(file_path)
-            if result.is_success:
-                model = result.data
-                title = _result_value(model, "title", "name", default=file_path)
-                path = _result_value(model, "path", "file_path", default=file_path)
-                configuration = _result_value(model, "configuration", default="Default")
-                return {
-                    "status": "success",
-                    "message": f"Loaded assembly: {title}",
-                    "model": {
-                        "name": title,
-                        "type": "Assembly",
-                        "path": path,
-                        "configuration": configuration,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to load assembly: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in load_assembly tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        result = await adapter.open_model(file_path)
+        require_success(result, context="Failed to load assembly")
+        model = result.data
+        title = _result_value(model, "title", "name", default=file_path)
+        path = _result_value(model, "path", "file_path", default=file_path)
+        configuration = _result_value(model, "configuration", default="Default")
+        return {
+            "status": "success",
+            "message": f"Loaded assembly: {title}",
+            "model": {
+                "name": title,
+                "type": "Assembly",
+                "path": path,
+                "configuration": configuration,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def save_part(input_data: SavePartInput | None = None) -> dict[str, Any]:
@@ -1445,52 +1271,35 @@ async def register_file_management_tools(
                             - Active document must be a part file
                             - When saving to new location, ensure path ends with .sldprt
         """
-        try:
-            if input_data is None:
-                input_data = SavePartInput()
-            else:
-                input_data = _coerce_input(SavePartInput, input_data)
+        if input_data is None:
+            input_data = SavePartInput()
+        else:
+            input_data = _coerce_input(SavePartInput, input_data)
 
-            # If file_path provided, use save_as; otherwise use regular save
-            if input_data.file_path:
-                file_path, validation_error = _prepare_save_target(
-                    input_data.file_path,
-                    required_extension=".sldprt",
-                    overwrite=input_data.overwrite,
-                )
-                if validation_error is not None:
-                    return validation_error
+        # If file_path provided, use save_as; otherwise use regular save
+        if input_data.file_path:
+            file_path = _prepare_save_target(
+                input_data.file_path,
+                required_extension=".sldprt",
+                overwrite=input_data.overwrite,
+            )
 
-                result = await adapter.save_file(file_path)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Part saved as: {file_path}",
-                        "file_path": file_path,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": f"Failed to save part: {result.error}",
-                }
-            else:
-                # Save to current location
-                result = await adapter.save_file(None)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Part saved successfully",
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": f"Failed to save part: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in save_part tool: {e}")
+            result = await adapter.save_file(file_path)
+            require_success(result, context="Failed to save part")
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Part saved as: {file_path}",
+                "file_path": file_path,
+                "execution_time": result.execution_time,
+            }
+        else:
+            # Save to current location
+            result = await adapter.save_file(None)
+            require_success(result, context="Failed to save part")
+            return {
+                "status": "success",
+                "message": "Part saved successfully",
+                "execution_time": result.execution_time,
             }
 
     @mcp.tool()
@@ -1527,72 +1336,45 @@ async def register_file_management_tools(
                             - Active document must be an assembly file
                             - When saving to new location, ensure path ends with .sldasm
         """
-        try:
-            if input_data is None:
-                input_data = SaveAssemblyInput()
-            else:
-                input_data = _coerce_input(SaveAssemblyInput, input_data)
+        if input_data is None:
+            input_data = SaveAssemblyInput()
+        else:
+            input_data = _coerce_input(SaveAssemblyInput, input_data)
 
-            # If file_path provided, use save_as; otherwise use regular save
-            if input_data.file_path:
-                file_path, validation_error = _prepare_save_target(
-                    input_data.file_path,
-                    required_extension=".sldasm",
-                    overwrite=input_data.overwrite,
-                )
-                if validation_error is not None:
-                    return validation_error
-                assert (
-                    file_path is not None
-                )  # validation_error being None implies file_path is valid
+        # If file_path provided, use save_as; otherwise use regular save
+        if input_data.file_path:
+            file_path = _prepare_save_target(
+                input_data.file_path,
+                required_extension=".sldasm",
+                overwrite=input_data.overwrite,
+            )
 
-                if input_data.include_references:
-                    native_result, native_error = _native_pack_and_go(file_path)
-                    if native_result is not None:  # pragma: no cover
-                        return native_result
+            if input_data.include_references:
+                native_result, native_error = _native_pack_and_go(file_path)
+                if native_result is not None:  # pragma: no cover
+                    return native_result
 
-                    copied_result, copy_error = _copy_active_assembly_with_references(
-                        file_path
-                    )  # pragma: no cover
-                    if copy_error is not None:  # pragma: no cover
-                        return copy_error  # pragma: no cover
-                    assert copied_result is not None  # pragma: no cover
-                    if native_error is not None:  # pragma: no cover
-                        copied_result["native_pack_and_go_error"] = (
-                            native_error  # pragma: no cover
-                        )
-                    return copied_result  # pragma: no cover
+                copied_result = _copy_active_assembly_with_references(file_path)
+                if native_error is not None:
+                    copied_result["native_pack_and_go_error"] = native_error
+                return copied_result
 
-                result = await adapter.save_file(file_path)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Assembly saved as: {file_path}",
-                        "file_path": file_path,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": f"Failed to save assembly: {result.error}",
-                }
-            else:
-                # Save to current location
-                result = await adapter.save_file(None)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Assembly saved successfully",
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": f"Failed to save assembly: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in save_assembly tool: {e}")
+            result = await adapter.save_file(file_path)
+            require_success(result, context="Failed to save assembly")
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": f"Assembly saved as: {file_path}",
+                "file_path": file_path,
+                "execution_time": result.execution_time,
+            }
+        else:
+            # Save to current location
+            result = await adapter.save_file(None)
+            require_success(result, context="Failed to save assembly")
+            return {
+                "status": "success",
+                "message": "Assembly saved successfully",
+                "execution_time": result.execution_time,
             }
 
     @mcp.tool()
@@ -1631,73 +1413,60 @@ async def register_file_management_tools(
                             - target_dir is created if it does not exist
                             - Use overwrite=True to replace files in an existing target_dir
         """
-        try:
-            if input_data is None:
-                input_data = PackAndGoInput(source_path="", target_dir="")
-            else:
-                input_data = _coerce_input(PackAndGoInput, input_data)
+        if input_data is None:
+            input_data = PackAndGoInput(source_path="", target_dir="")
+        else:
+            input_data = _coerce_input(PackAndGoInput, input_data)
 
-            from pathlib import Path as _Path
+        from pathlib import Path as _Path
 
-            source = _Path(input_data.source_path)
-            out_dir = _Path(input_data.target_dir)
+        source = _Path(input_data.source_path)
+        out_dir = _Path(input_data.target_dir)
 
-            if not source.exists():
-                return {
-                    "status": "error",
-                    "message": f"Source assembly not found: {source}",
-                }
+        if not source.exists():
+            raise ToolOperationError(f"Source assembly not found: {source}")
 
-            if not source.suffix.lower() == ".sldasm":
-                return {
-                    "status": "error",
-                    "message": f"source_path must be a .sldasm file, got: {source.suffix}",
-                }
-
-            if not input_data.overwrite and out_dir.exists() and any(out_dir.iterdir()):
-                return {
-                    "status": "error",
-                    "message": (
-                        f"target_dir already contains files: {out_dir}. "
-                        "Set overwrite=True to replace them."
-                    ),
-                }
-
-            result = await adapter.pack_and_go_assembly(  # type: ignore[attr-defined]
-                source_path=str(source),
-                target_dir=str(out_dir),
+        if not source.suffix.lower() == ".sldasm":
+            raise InvalidInputError(
+                f"source_path must be a .sldasm file, got: {source.suffix}"
             )
 
-            if not result.is_success:
-                return {"status": "error", "message": result.error}
+        if not input_data.overwrite and out_dir.exists() and any(out_dir.iterdir()):
+            raise InvalidInputError(
+                f"target_dir already contains files: {out_dir}. "
+                "Set overwrite=True to replace them."
+            )
 
-            report: dict[str, Any] = {
-                "status": "success",
-                "method": "native_pack_and_go",
-                "execution_time": result.execution_time,
-                **result.data,
-            }
+        result = await adapter.pack_and_go_assembly(  # type: ignore[attr-defined]
+            source_path=str(source),
+            target_dir=str(out_dir),
+        )
 
-            if input_data.export_preview:
-                preview_path = out_dir / "assembly_preview.png"
-                img_result = await adapter.export_image(
-                    {
-                        "file_path": str(preview_path),
-                        "format_type": "png",
-                        "width": 1600,
-                        "height": 1000,
-                        "view_orientation": "isometric",
-                    }
-                )
-                report["preview_image"] = (
-                    str(preview_path) if img_result.is_success else None
-                )
+        require_success(result)
 
-            return report
+        report: dict[str, Any] = {
+            "status": "success",
+            "method": "native_pack_and_go",
+            "execution_time": result.execution_time,
+            **result.data,
+        }
 
-        except Exception as e:
-            logger.error(f"Error in pack_and_go_assembly tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        if input_data.export_preview:
+            preview_path = out_dir / "assembly_preview.png"
+            img_result = await adapter.export_image(
+                {
+                    "file_path": str(preview_path),
+                    "format_type": "png",
+                    "width": 1600,
+                    "height": 1000,
+                    "view_orientation": "isometric",
+                }
+            )
+            report["preview_image"] = (
+                str(preview_path) if img_result.is_success else None
+            )
+
+        return report
 
     @mcp.tool()
     async def list_open_documents() -> dict[str, Any]:
@@ -1716,30 +1485,20 @@ async def register_file_management_tools(
             await list_open_documents()
             ```
         """
-        try:
-            result = await adapter.list_open_documents()
-            if result.is_success:
-                docs = result.data if isinstance(result.data, list) else []
-                active = next(
-                    (d.get("title") for d in docs if d.get("is_active")), None
-                )
-                return {
-                    "status": "success",
-                    "message": (
-                        f"{len(docs)} document(s) open"
-                        + (f"; active: {active}" if active else "")
-                    ),
-                    "documents": docs,
-                    "count": len(docs),
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to list open documents: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in list_open_documents tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        result = await adapter.list_open_documents()
+        require_success(result, context="Failed to list open documents")
+        docs = result.data if isinstance(result.data, list) else []
+        active = next((d.get("title") for d in docs if d.get("is_active")), None)
+        return {
+            "status": "success",
+            "message": (
+                f"{len(docs)} document(s) open"
+                + (f"; active: {active}" if active else "")
+            ),
+            "documents": docs,
+            "count": len(docs),
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def activate_document(
@@ -1762,28 +1521,20 @@ async def register_file_management_tools(
             await activate_document({"title_or_path": "bracket.SLDPRT"})
             ```
         """
-        try:
-            input_data = _coerce_input(ActivateDocumentInput, input_data)
-            result = await adapter.activate_document(input_data.title_or_path)
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                activated = data.get("activated", input_data.title_or_path)
-                message = f"Activated {activated}"
-                if data.get("verified") is None:
-                    message += " (could not be read back to confirm)"
-                return {
-                    "status": "success",
-                    "message": message,
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to activate document: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in activate_document tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = _coerce_input(ActivateDocumentInput, input_data)
+        result = await adapter.activate_document(input_data.title_or_path)
+        require_success(result, context="Failed to activate document")
+        data = result.data if isinstance(result.data, dict) else {}
+        activated = data.get("activated", input_data.title_or_path)
+        message = f"Activated {activated}"
+        if data.get("verified") is None:
+            message += " (could not be read back to confirm)"
+        return {
+            "status": "success",
+            "message": message,
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def save_body_as_part(
@@ -1811,37 +1562,26 @@ async def register_file_management_tools(
             })
             ```
         """
-        try:
-            if not hasattr(adapter, "save_body_as_part"):
-                return {
-                    "status": "error",
-                    "message": (
-                        "Active adapter does not support save_body_as_part; "
-                        "no file was written."
-                    ),
-                }
-            input_data = _coerce_input(SaveBodyAsPartInput, input_data)
-            result = await adapter.save_body_as_part(
-                input_data.body_name, input_data.file_path
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Saved body {input_data.body_name} to "
-                        f"{data.get('file_path', input_data.file_path)}"
-                    ),
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to save body as part: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in save_body_as_part tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        require_capability(
+            adapter,
+            "save_body_as_part",
+            "Active adapter does not support save_body_as_part; no file was written.",
+        )
+        input_data = _coerce_input(SaveBodyAsPartInput, input_data)
+        result = await adapter.save_body_as_part(
+            input_data.body_name, input_data.file_path
+        )
+        require_success(result, context="Failed to save body as part")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": (
+                f"Saved body {input_data.body_name} to "
+                f"{data.get('file_path', input_data.file_path)}"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     tool_count = 19  # Total number of registered tools in this module
     return tool_count

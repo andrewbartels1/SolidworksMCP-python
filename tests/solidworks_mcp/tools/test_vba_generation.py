@@ -505,7 +505,7 @@ class TestVBAGenerationBranchCoverage:
 
         for result in (r1, r2, r3, r4):
             assert result["status"] == "error"
-            assert "failed to generate vba code" in result["message"].lower()
+            assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_vba_extrusion_exception_and_adapter_error_paths(
@@ -558,8 +558,11 @@ class TestVBAGenerationBranchCoverage:
             )
         )
 
-        for result in (extrusion, revolve, assembly, drawing, batch):
+        assert extrusion["error_type"] == "internal"
+        assert "boom extrusion" in extrusion["message"]
+        for result in (revolve, assembly, drawing, batch):
             assert result["status"] == "error"
+            assert result["error_type"] == "operation_failed"
             assert "failed to generate vba code" in result["message"].lower()
 
     @pytest.mark.asyncio
@@ -638,4 +641,4 @@ class TestVBAGenerationBranchCoverage:
 
         for result in (part_exc, mate_exc, dim_exc, file_exc, rec_exc):
             assert result["status"] == "error"
-            assert "failed to generate vba code" in result["message"].lower()
+            assert result["error_type"] == "internal"

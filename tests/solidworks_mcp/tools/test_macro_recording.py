@@ -474,7 +474,7 @@ class TestMacroRecordingTools:
         )
 
         assert result["status"] == "error"
-        assert "Failed to start recording" in result["message"]
+        assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_stop_macro_recording_fallback_path(self, mcp_server, mock_config):
@@ -517,7 +517,7 @@ class TestMacroRecordingTools:
 
         exception_result = await stop_tool(input_data={"session_id": "REC-2"})
         assert exception_result["status"] == "error"
-        assert "Failed to stop recording" in exception_result["message"]
+        assert exception_result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_macro_tools_fallback_without_adapter_methods(
@@ -594,7 +594,7 @@ class TestMacroRecordingTools:
         )
 
         assert result["status"] == "error"
-        assert "Failed to execute macro" in result["message"]
+        assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_execute_macro_adapter_error_path(
@@ -721,7 +721,7 @@ class TestMacroRecordingTools:
             input_data=MacroBatchInput(macro_list=["m1.swp"], stop_on_error=True)
         )
         assert exception_result["status"] == "error"
-        assert "Failed batch execution" in exception_result["message"]
+        assert exception_result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_optimize_and_library_fallback_paths(self, mcp_server, mock_config):

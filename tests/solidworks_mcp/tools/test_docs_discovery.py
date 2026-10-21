@@ -23,7 +23,6 @@ from solidworks_mcp.config import (
 )
 from solidworks_mcp.server import SolidWorksMCPServer
 from solidworks_mcp.tools.docs_discovery import (
-    DiscoverDocsInput,
     SolidWorksDocsDiscovery,
     _extract_year,
     _fallback_help_for_query,
@@ -657,33 +656,6 @@ def test_discover_all_success_path_with_stubbed_steps(
     assert result["vba_references"]["SldWorks"]["status"] == "available"
 
 
-def test_normalize_input_helper_branches() -> None:
-    """_normalize_input should accept None/model/dict/model_dump objects."""
-    from solidworks_mcp.tools.docs_discovery import _normalize_input
-
-    none_normalized = _normalize_input(None, DiscoverDocsInput)
-    assert isinstance(none_normalized, DiscoverDocsInput)
-
-    model_input = DiscoverDocsInput(output_dir="x", include_vba=False)
-    model_normalized = _normalize_input(model_input, DiscoverDocsInput)
-    assert model_normalized is model_input
-
-    dict_normalized = _normalize_input(
-        {"output_dir": "y", "include_vba": True}, DiscoverDocsInput
-    )
-    assert dict_normalized.output_dir == "y"
-
-    class _ModelDumpCarrier:
-        """Test suite for ModelDumpCarrier."""
-
-        def model_dump(self):
-            """Test helper for model dump."""
-            return {"output_dir": "z", "include_vba": True}
-
-    dump_normalized = _normalize_input(_ModelDumpCarrier(), DiscoverDocsInput)
-    assert dump_normalized.output_dir == "z"
-
-
 def test_extract_year_handles_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """_extract_year should return None when int conversion fails."""
     import solidworks_mcp.tools.docs_discovery as docs_mod
@@ -835,21 +807,6 @@ def test_load_index_file_missing_and_search_property_match(temp_dir: Path) -> No
     assert any(item["member_type"] == "property" for item in results)
 
 
-def test_normalize_input_non_dict_non_model_dump_path() -> None:
-    """_normalize_input should validate plain objects via final fallback branch."""
-    from solidworks_mcp.tools.docs_discovery import _normalize_input
-
-    class _PlainInput:
-        """Test suite for PlainInput."""
-
-        output_dir = "plain"
-        include_vba = True
-        year = None
-
-    with pytest.raises((TypeError, ValueError)):
-        _normalize_input(_PlainInput(), DiscoverDocsInput)
-
-
 @pytest.mark.asyncio
 async def test_discover_solidworks_docs_tool_non_windows_error(
     mcp_server,
@@ -958,7 +915,7 @@ async def test_search_api_help_exception_path(
 
     monkeypatch.setattr(
         docs_mod,
-        "_normalize_input",
+        "normalize_input",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             RuntimeError("normalize failed")
         ),
@@ -966,7 +923,7 @@ async def test_search_api_help_exception_path(
 
     result = await search_tool({"query": "OpenDoc6"})
     assert result["status"] == "error"
-    assert "API help search failed" in result["message"]
+    assert result["error_type"] == "internal"
 
 
 def test_enumerate_typeinfo_members_happy_path_and_error_item() -> None:
@@ -1296,7 +1253,7 @@ async def test_discover_tool_top_level_exception_path(
 
     result = await discover_tool({})
     assert result["status"] == "error"
-    assert "Discovery failed" in result["message"]
+    assert result["error_type"] == "internal"
 
 
 # ---------------------------------------------------------------------------

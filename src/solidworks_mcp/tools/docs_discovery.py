@@ -18,7 +18,11 @@ from loguru import logger
 from pydantic import Field
 
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    UnsupportedOperationError,
+    normalize_input,
+    with_tool_boundary,
+)
 
 try:
     import win32com.client
@@ -708,27 +712,6 @@ class FindRelatedApiInput(CompatInput):
 CompatInputT = TypeVar("CompatInputT", bound=CompatInput)
 
 
-def _normalize_input(input_data: Any, model_type: type[CompatInputT]) -> CompatInputT:
-    """Normalize dict/model payloads for direct tool invocation paths.
-
-    Args:
-        input_data (Any): The input data value.
-        model_type (type[CompatInputT]): The model type value.
-
-    Returns:
-        CompatInputT: The result produced by the operation.
-    """
-    if input_data is None:
-        return model_type()
-    if isinstance(input_data, model_type):
-        return input_data
-    if isinstance(input_data, dict):
-        return model_type.model_validate(input_data)
-    if hasattr(input_data, "model_dump"):
-        return model_type.model_validate(input_data.model_dump())
-    return model_type.model_validate(input_data)
-
-
 def _extract_year(value: str | None) -> int | None:
     """Extract a 4-digit year from any string.
 
@@ -1248,75 +1231,63 @@ async def register_docs_discovery_tools(
         start_time = time.time()
 
         if not HAS_WIN32COM:
-            return {
-                "status": "error",
-                "message": "win32com not available; cannot discover COM documentation",
-            }
+            raise UnsupportedOperationError(
+                "win32com not available; cannot discover COM documentation"
+            )
 
         if platform.system() != "Windows":
-            return {
-                "status": "error",
-                "message": "COM discovery only available on Windows",
-            }
+            raise UnsupportedOperationError("COM discovery only available on Windows")
 
-        try:
-            normalized = _normalize_input(input_data, DiscoverDocsInput)
-            output_dir = Path(normalized.output_dir) if normalized.output_dir else None
-            year = _resolve_solidworks_year(normalized.year, config)
+        normalized = normalize_input(input_data, DiscoverDocsInput)
+        output_dir = Path(normalized.output_dir) if normalized.output_dir else None
+        year = _resolve_solidworks_year(normalized.year, config)
 
-            discovery = SolidWorksDocsDiscovery(output_dir=output_dir)
+        discovery = SolidWorksDocsDiscovery(output_dir=output_dir)
 
-            logger.info("Starting SolidWorks documentation discovery...")
-            index = discovery.discover_all()
+        logger.info("Starting SolidWorks documentation discovery...")
+        index = discovery.discover_all()
 
-            filename = (
-                f"solidworks_docs_index_{year}.json"
-                if year
-                else "solidworks_docs_index.json"
-            )
-            output_file = discovery.save_index(filename=filename)
+        filename = (
+            f"solidworks_docs_index_{year}.json"
+            if year
+            else "solidworks_docs_index.json"
+        )
+        output_file = discovery.save_index(filename=filename)
 
-            # Rebuild the FAISS RAG namespace so Gemma can query the API surface.
-            rag_indexed = False
-            if output_file is not None:
-                try:
-                    from solidworks_mcp.agents.vector_rag import (
-                        build_solidworks_api_docs_index,
-                    )
+        # Rebuild the FAISS RAG namespace so Gemma can query the API surface.
+        rag_indexed = False
+        if output_file is not None:
+            try:
+                from solidworks_mcp.agents.vector_rag import (
+                    build_solidworks_api_docs_index,
+                )
 
-                    rag_idx = build_solidworks_api_docs_index(output_file)
-                    rag_idx.save()
-                    rag_indexed = True
-                    logger.info(
-                        "FAISS 'solidworks-api-docs' namespace rebuilt: %d chunks",
-                        rag_idx.chunk_count,
-                    )
-                except ImportError:
-                    logger.debug("faiss-cpu not installed; skipping RAG index rebuild")
-                except Exception as _rag_exc:
-                    logger.warning("RAG rebuild failed: {}", _rag_exc)
+                rag_idx = build_solidworks_api_docs_index(output_file)
+                rag_idx.save()
+                rag_indexed = True
+                logger.info(
+                    "FAISS 'solidworks-api-docs' namespace rebuilt: %d chunks",
+                    rag_idx.chunk_count,
+                )
+            except ImportError:
+                logger.debug("faiss-cpu not installed; skipping RAG index rebuild")
+            except Exception as _rag_exc:
+                logger.warning("RAG rebuild failed: {}", _rag_exc)
 
-            summary = discovery.create_search_summary()
+        summary = discovery.create_search_summary()
 
-            return {
-                "status": "success",
-                "message": f"Discovered {summary['total_com_objects']} COM objects, "
-                f"{summary['total_methods']} methods, "
-                f"{summary['total_properties']} properties",
-                "index": index,
-                "summary": summary,
-                "year": year,
-                "output_file": str(output_file) if output_file else None,
-                "rag_indexed": rag_indexed,
-                "execution_time": time.time() - start_time,
-            }
-
-        except Exception as e:
-            logger.error(f"Error during docs discovery: {e}")
-            return {
-                "status": "error",
-                "message": f"Discovery failed: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "message": f"Discovered {summary['total_com_objects']} COM objects, "
+            f"{summary['total_methods']} methods, "
+            f"{summary['total_properties']} properties",
+            "index": index,
+            "summary": summary,
+            "year": year,
+            "output_file": str(output_file) if output_file else None,
+            "rag_indexed": rag_indexed,
+            "execution_time": time.time() - start_time,
+        }
 
     @mcp.tool()  # type: ignore[untyped-decorator]
     async def search_solidworks_api_help(
@@ -1338,66 +1309,56 @@ async def register_docs_discovery_tools(
 
         start_time = time.time()
 
-        try:
-            normalized = _normalize_input(input_data, SearchApiHelpInput)
-            year = _resolve_solidworks_year(normalized.year, config)
+        normalized = normalize_input(input_data, SearchApiHelpInput)
+        year = _resolve_solidworks_year(normalized.year, config)
 
-            index_file = _find_index_file(year, normalized.index_file)
-            index = _load_index_file(index_file) if index_file else None
+        index_file = _find_index_file(year, normalized.index_file)
+        index = _load_index_file(index_file) if index_file else None
 
-            # Rebuild when stale (config-gated), or when missing and the caller
-            # opted in.
-            index, index_file = _maybe_refresh_index(index, index_file, year, config)
-            if index is None and normalized.auto_discover_if_missing:
-                if HAS_WIN32COM and platform.system() == "Windows":
-                    discovery = SolidWorksDocsDiscovery()
-                    index = discovery.discover_all()
-                    filename = (
-                        f"solidworks_docs_index_{year}.json"
-                        if year
-                        else "solidworks_docs_index.json"
-                    )
-                    index_file = discovery.save_index(filename=filename)
+        # Rebuild when stale (config-gated), or when missing and the caller
+        # opted in.
+        index, index_file = _maybe_refresh_index(index, index_file, year, config)
+        if index is None and normalized.auto_discover_if_missing:
+            if HAS_WIN32COM and platform.system() == "Windows":
+                discovery = SolidWorksDocsDiscovery()
+                index = discovery.discover_all()
+                filename = (
+                    f"solidworks_docs_index_{year}.json"
+                    if year
+                    else "solidworks_docs_index.json"
+                )
+                index_file = discovery.save_index(filename=filename)
 
-            matches = _search_index(
-                index or {}, normalized.query, normalized.max_results
+        matches = _search_index(index or {}, normalized.query, normalized.max_results)
+        fallback = _fallback_help_for_query(normalized.query)
+
+        guidance_lines = []
+        if matches:
+            guidance_lines.append(
+                f"Found {len(matches)} API matches for '{normalized.query}'."
             )
-            fallback = _fallback_help_for_query(normalized.query)
+            guidance_lines.append(
+                "Start with the highest-score members and verify with the real adapter path."
+            )
+        else:
+            guidance_lines.append(
+                "No indexed API hits found; using workflow fallback guidance."
+            )
+            guidance_lines.append(
+                "Consider running discover_solidworks_docs first for this machine/version."
+            )
 
-            guidance_lines = []
-            if matches:
-                guidance_lines.append(
-                    f"Found {len(matches)} API matches for '{normalized.query}'."
-                )
-                guidance_lines.append(
-                    "Start with the highest-score members and verify with the real adapter path."
-                )
-            else:
-                guidance_lines.append(
-                    "No indexed API hits found; using workflow fallback guidance."
-                )
-                guidance_lines.append(
-                    "Consider running discover_solidworks_docs first for this machine/version."
-                )
-
-            return {
-                "status": "success",
-                "message": "SolidWorks API help search completed",
-                "query": normalized.query,
-                "year": year,
-                "source_index_file": str(index_file) if index_file else None,
-                "matches": matches,
-                "fallback_help": fallback,
-                "guidance": " ".join(guidance_lines),
-                "execution_time": time.time() - start_time,
-            }
-
-        except Exception as e:
-            logger.error(f"Error during SolidWorks API help search: {e}")
-            return {
-                "status": "error",
-                "message": f"API help search failed: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "message": "SolidWorks API help search completed",
+            "query": normalized.query,
+            "year": year,
+            "source_index_file": str(index_file) if index_file else None,
+            "matches": matches,
+            "fallback_help": fallback,
+            "guidance": " ".join(guidance_lines),
+            "execution_time": time.time() - start_time,
+        }
 
     def _load_index_for_lookup(
         requested_year: int | None, explicit_index_file: str | None
@@ -1425,29 +1386,23 @@ async def register_docs_discovery_tools(
         import time
 
         start = time.time()
-        try:
-            normalized = _normalize_input(input_data, LookupApiMethodInput)
-            index, index_file, year = _load_index_for_lookup(
-                normalized.year, normalized.index_file
-            )
-            result = _lookup_method(
-                index or {}, normalized.interface, normalized.method
-            )
-            return {
-                "status": "success",
-                "message": (
-                    "Method found"
-                    if result.get("found")
-                    else "No indexed match for that interface/method"
-                ),
-                "year": year,
-                "source_index_file": str(index_file) if index_file else None,
-                "result": result,
-                "execution_time": time.time() - start,
-            }
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Error during lookup_api_method: {e}")
-            return {"status": "error", "message": f"lookup_api_method failed: {e}"}
+        normalized = normalize_input(input_data, LookupApiMethodInput)
+        index, index_file, year = _load_index_for_lookup(
+            normalized.year, normalized.index_file
+        )
+        result = _lookup_method(index or {}, normalized.interface, normalized.method)
+        return {
+            "status": "success",
+            "message": (
+                "Method found"
+                if result.get("found")
+                else "No indexed match for that interface/method"
+            ),
+            "year": year,
+            "source_index_file": str(index_file) if index_file else None,
+            "result": result,
+            "execution_time": time.time() - start,
+        }
 
     @mcp.tool()  # type: ignore[untyped-decorator]
     async def lookup_api_interface(
@@ -1457,30 +1412,23 @@ async def register_docs_discovery_tools(
         import time
 
         start = time.time()
-        try:
-            normalized = _normalize_input(input_data, LookupApiInterfaceInput)
-            index, index_file, year = _load_index_for_lookup(
-                normalized.year, normalized.index_file
-            )
-            result = _lookup_interface(index or {}, normalized.interface)
-            return {
-                "status": "success",
-                "message": (
-                    f"{result['method_count']} methods, {result['property_count']} properties"
-                    if result.get("found")
-                    else "Interface not found in the indexed documentation"
-                ),
-                "year": year,
-                "source_index_file": str(index_file) if index_file else None,
-                "result": result,
-                "execution_time": time.time() - start,
-            }
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Error during lookup_api_interface: {e}")
-            return {
-                "status": "error",
-                "message": f"lookup_api_interface failed: {e}",
-            }
+        normalized = normalize_input(input_data, LookupApiInterfaceInput)
+        index, index_file, year = _load_index_for_lookup(
+            normalized.year, normalized.index_file
+        )
+        result = _lookup_interface(index or {}, normalized.interface)
+        return {
+            "status": "success",
+            "message": (
+                f"{result['method_count']} methods, {result['property_count']} properties"
+                if result.get("found")
+                else "Interface not found in the indexed documentation"
+            ),
+            "year": year,
+            "source_index_file": str(index_file) if index_file else None,
+            "result": result,
+            "execution_time": time.time() - start,
+        }
 
     @mcp.tool()  # type: ignore[untyped-decorator]
     async def find_related_api_members(
@@ -1494,32 +1442,25 @@ async def register_docs_discovery_tools(
         import time
 
         start = time.time()
-        try:
-            normalized = _normalize_input(input_data, FindRelatedApiInput)
-            index, index_file, year = _load_index_for_lookup(
-                normalized.year, normalized.index_file
-            )
-            result = _find_related_api_members(
-                index or {}, normalized.name, normalized.max_results
-            )
-            return {
-                "status": "success",
-                "message": (
-                    f"{len(result['related'])} related member(s)"
-                    if result.get("found")
-                    else "No related members found"
-                ),
-                "year": year,
-                "source_index_file": str(index_file) if index_file else None,
-                "result": result,
-                "execution_time": time.time() - start,
-            }
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Error during find_related_api_members: {e}")
-            return {
-                "status": "error",
-                "message": f"find_related_api_members failed: {e}",
-            }
+        normalized = normalize_input(input_data, FindRelatedApiInput)
+        index, index_file, year = _load_index_for_lookup(
+            normalized.year, normalized.index_file
+        )
+        result = _find_related_api_members(
+            index or {}, normalized.name, normalized.max_results
+        )
+        return {
+            "status": "success",
+            "message": (
+                f"{len(result['related'])} related member(s)"
+                if result.get("found")
+                else "No related members found"
+            ),
+            "year": year,
+            "source_index_file": str(index_file) if index_file else None,
+            "result": result,
+            "execution_time": time.time() - start,
+        }
 
     # discover_solidworks_docs, search_solidworks_api_help, lookup_api_method,
     # lookup_api_interface, find_related_api_members

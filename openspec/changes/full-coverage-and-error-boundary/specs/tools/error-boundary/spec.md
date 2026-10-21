@@ -47,6 +47,9 @@ Failures with a recognisable cause SHALL be reported with a specific
   (stale type cache or wrong interface). Hint: refresh the type cache.
 - **`com_type_mismatch`:** an argument had the wrong COM type. Hint: report as a bug.
 - **`not_found`:** a named document, feature, sketch, view or entity does not exist.
+- **`not_supported`:** the active adapter has no capability for the operation
+  (for example, the mock adapter or a non-Windows host). Hint: use the real
+  SolidWorks adapter, another tool, or do the step in SolidWorks directly.
 - **`no_active_document`:** the operation needs an open or active document and
   there is none.
 - **`no_active_sketch`:** the operation needs an open sketch and none is in edit
@@ -59,6 +62,10 @@ Failures with a recognisable cause SHALL be reported with a specific
 #### Scenario: Circuit breaker is open
 - **WHEN** the adapter rejects the call because its circuit breaker is open
 - **THEN** the payload has `error_type: "circuit_open"` and a hint explaining that calls resume after the timeout
+
+#### Scenario: Operation not supported by the adapter
+- **WHEN** a tool needs an adapter capability the active adapter does not have
+- **THEN** the payload has `error_type: "not_supported"`, a message saying what was not done, and no adapter call is attempted
 
 #### Scenario: No active document
 - **WHEN** a tool that needs a document runs with no active model

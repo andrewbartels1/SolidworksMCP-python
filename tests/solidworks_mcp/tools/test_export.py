@@ -516,7 +516,7 @@ class TestExportToolsBranchCoverage:
 
         for result in results:
             assert result["status"] == "error"
-            assert "unexpected error" in result["message"].lower()
+            assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_export_step_exception_path(
@@ -534,7 +534,7 @@ class TestExportToolsBranchCoverage:
         )
 
         assert result["status"] == "error"
-        assert "unexpected error" in result["message"].lower()
+        assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_export_image_error_and_export_file_fallback_paths(

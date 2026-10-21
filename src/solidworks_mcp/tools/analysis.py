@@ -9,12 +9,15 @@ inspection, not for creating geometry.
 from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 # Input schemas using Python 3.14 built-in types
 
@@ -164,66 +167,47 @@ async def register_analysis_tools(
                             - Uses model units and coordinate system
                             - Includes both geometric and inertial properties
         """
-        try:
-            if hasattr(adapter, "calculate_mass_properties"):
-                result = await adapter.calculate_mass_properties(
-                    input_data.model_dump()
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Mass properties calculated successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": f"Failed to calculate mass properties: {result.error}",
-                }
-
-            result = await adapter.get_mass_properties()
-
-            if result.is_success:
-                props = result.data
-                assert props is not None
-                return {
-                    "status": "success",
-                    "message": "Mass properties calculated successfully",
-                    "mass_properties": {
-                        "volume": {"value": props.volume, "units": "mm³"},
-                        "surface_area": {"value": props.surface_area, "units": "mm²"},
-                        "mass": {"value": props.mass, "units": "kg"},
-                        "center_of_mass": {
-                            "x": props.center_of_mass[0],
-                            "y": props.center_of_mass[1],
-                            "z": props.center_of_mass[2],
-                            "units": "mm",
-                        },
-                        "moments_of_inertia": {
-                            "Ixx": props.moments_of_inertia["Ixx"],
-                            "Iyy": props.moments_of_inertia["Iyy"],
-                            "Izz": props.moments_of_inertia["Izz"],
-                            "Ixy": props.moments_of_inertia["Ixy"],
-                            "Ixz": props.moments_of_inertia["Ixz"],
-                            "Iyz": props.moments_of_inertia["Iyz"],
-                            "units": "kg·mm²",
-                        },
-                        "principal_axes": props.principal_axes,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to calculate mass properties: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in get_mass_properties tool: {e}")
+        if hasattr(adapter, "calculate_mass_properties"):
+            result = await adapter.calculate_mass_properties(input_data.model_dump())
+            require_success(result, context="Failed to calculate mass properties")
             return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
+                "status": "success",
+                "message": "Mass properties calculated successfully",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
+
+        result = await adapter.get_mass_properties()
+
+        require_success(result, context="Failed to calculate mass properties")
+        props = result.data
+        assert props is not None
+        return {
+            "status": "success",
+            "message": "Mass properties calculated successfully",
+            "mass_properties": {
+                "volume": {"value": props.volume, "units": "mm³"},
+                "surface_area": {"value": props.surface_area, "units": "mm²"},
+                "mass": {"value": props.mass, "units": "kg"},
+                "center_of_mass": {
+                    "x": props.center_of_mass[0],
+                    "y": props.center_of_mass[1],
+                    "z": props.center_of_mass[2],
+                    "units": "mm",
+                },
+                "moments_of_inertia": {
+                    "Ixx": props.moments_of_inertia["Ixx"],
+                    "Iyy": props.moments_of_inertia["Iyy"],
+                    "Izz": props.moments_of_inertia["Izz"],
+                    "Ixy": props.moments_of_inertia["Ixy"],
+                    "Ixz": props.moments_of_inertia["Ixz"],
+                    "Iyz": props.moments_of_inertia["Iyz"],
+                    "units": "kg·mm²",
+                },
+                "principal_axes": props.principal_axes,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def get_mass_properties(
@@ -283,37 +267,22 @@ async def register_analysis_tools(
                                     print(f"Volume: {interference['volume']} mm³")
                             ```
         """
-        try:
-            if hasattr(adapter, "check_interference"):
-                result = await adapter.check_interference(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Interference check completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Interference check failed",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support check_interference; no "
-                    "interference analysis was performed. Use SolidWorks "
-                    "directly (Tools > Interference Detection) to check this "
-                    "assembly."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in check_interference tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "check_interference",
+            "Active adapter does not support check_interference; no "
+            "interference analysis was performed. Use SolidWorks "
+            "directly (Tools > Interference Detection) to check this "
+            "assembly.",
+        )
+        result = await adapter.check_interference(input_data.model_dump())
+        require_success(result, "Interference check failed")
+        return {
+            "status": "success",
+            "message": "Interference check completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def analyze_geometry(input_data: GeometryAnalysisInput) -> dict[str, Any]:
@@ -328,35 +297,20 @@ async def register_analysis_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "analyze_geometry"):
-                result = await adapter.analyze_geometry(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Geometry analysis ({input_data.analysis_type}) completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to analyze geometry",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    f"Active adapter does not support analyze_geometry; no "
-                    f"{input_data.analysis_type} analysis was performed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in analyze_geometry tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "analyze_geometry",
+            f"Active adapter does not support analyze_geometry; no "
+            f"{input_data.analysis_type} analysis was performed.",
+        )
+        result = await adapter.analyze_geometry(input_data.model_dump())
+        require_success(result, "Failed to analyze geometry")
+        return {
+            "status": "success",
+            "message": f"Geometry analysis ({input_data.analysis_type}) completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def get_material_properties() -> dict[str, Any]:
@@ -368,31 +322,19 @@ async def register_analysis_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            if hasattr(adapter, "get_material_properties"):
-                result = await adapter.get_material_properties()
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Material properties retrieved successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to get material properties",
-                }
-
-            return {
-                "status": "error",
-                "message": "Active adapter does not support get_material_properties",
-            }
-        except Exception as e:
-            logger.error(f"Error in get_material_properties tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "get_material_properties",
+            "Active adapter does not support get_material_properties",
+        )
+        result = await adapter.get_material_properties()
+        require_success(result, "Failed to get material properties")
+        return {
+            "status": "success",
+            "message": "Material properties retrieved successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     # Future analysis tools:
     # - perform_fea_analysis (if FEA capabilities are available)

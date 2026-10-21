@@ -27,6 +27,10 @@ class _Input(BaseModel):
     name: str = "x"
 
 
+class _Defaults(BaseModel):
+    name: str = "default"
+
+
 class _PostInitInput(BaseModel):
     value: int
 
@@ -50,6 +54,26 @@ def test_normalize_input_passes_a_model_through() -> None:
 
 def test_normalize_input_validates_a_mapping() -> None:
     assert normalize_input({"radius": "2.5"}, _Input).radius == 2.5
+
+
+def test_normalize_input_treats_none_as_all_defaults() -> None:
+    assert normalize_input(None, _Defaults) == _Defaults()
+
+
+def test_normalize_input_converts_model_dump_carriers() -> None:
+    class _Carrier:
+        def model_dump(self) -> dict[str, Any]:
+            return {"radius": 4}
+
+    assert normalize_input(_Carrier(), _Input).radius == 4
+
+
+def test_normalize_input_rejects_plain_objects() -> None:
+    class _Plain:
+        radius = 1.0
+
+    with pytest.raises(InvalidInputError):
+        normalize_input(_Plain(), _Input)
 
 
 def test_normalize_input_names_the_missing_field() -> None:

@@ -18,11 +18,11 @@ For each module:
 - update tests that pin `"Unexpected error"` wording
 
 - [x] 2.1 `tools/modeling.py`
-- [ ] 2.2 `tools/sketching.py`
-- [ ] 2.3 `tools/drawing.py` and `tools/drawing_analysis.py`
-- [ ] 2.4 `tools/file_management.py`
-- [ ] 2.5 `tools/export.py`, `tools/analysis.py`, `tools/automation.py`
-- [ ] 2.6 `tools/docs_discovery.py`, `tools/vba_generation.py`, `tools/macro_recording.py`, `tools/template_management.py`
+- [x] 2.2 `tools/sketching.py`
+- [x] 2.3 `tools/drawing.py` and `tools/drawing_analysis.py`
+- [x] 2.4 `tools/file_management.py`
+- [x] 2.5 `tools/export.py`, `tools/analysis.py`, `tools/automation.py`
+- [x] 2.6 `tools/docs_discovery.py`, `tools/vba_generation.py`, `tools/macro_recording.py`, `tools/template_management.py`
 - [ ] 2.7 `ui/services/llm_service.py` catalog text and `docs/user-guide/tool-catalog/`: document `error_type` / `hint`
 
 ## 3. Coverage to 100% (honest config)

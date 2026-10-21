@@ -807,7 +807,7 @@ class TestDrawingToolsBranchCoverage:
 
         for result in (r1, r2, r3, r4):
             assert result["status"] == "error"
-            assert "Unexpected error" in result["message"]
+            assert result["error_type"] == "internal"
 
     # ── additional drawing tool branches (legacy tool set) ───────────────
 

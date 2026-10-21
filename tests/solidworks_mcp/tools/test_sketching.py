@@ -645,7 +645,7 @@ class TestSketchingToolsBranchCoverage:
         stub.check_sketch_fully_defined = AsyncMock(side_effect=RuntimeError("boom"))
         failure = await by_name["check_sketch_fully_defined"]()
         assert failure["status"] == "error"
-        assert "Unexpected error: boom" in failure["message"]
+        assert failure["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_tutorial_simple_hole_create_sketch_failure(

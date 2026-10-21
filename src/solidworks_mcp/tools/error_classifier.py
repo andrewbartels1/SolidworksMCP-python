@@ -30,6 +30,11 @@ _HRESULT_IN_TEXT = re.compile(r"\((-\d{9,10}),")
 OPERATION_FAILED = "operation_failed"
 INTERNAL = "internal"
 INVALID_INPUT = "invalid_input"
+NOT_SUPPORTED = "not_supported"
+NOT_SUPPORTED_HINT = (
+    "The active adapter cannot perform this operation. Use the real SolidWorks "
+    "adapter, another tool, or do this step in SolidWorks directly."
+)
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,16 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
         hresults=frozenset({DISP_E_TYPEMISMATCH}),
         patterns=(r"type mismatch",),
+    ),
+    ErrorRule(
+        error_type=NOT_SUPPORTED,
+        hint=NOT_SUPPORTED_HINT,
+        patterns=(
+            r"does not support",
+            r"no adapter capability",
+            r"only available on windows",
+            r"not available",
+        ),
     ),
     ErrorRule(
         error_type="no_active_sketch",

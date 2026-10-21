@@ -220,7 +220,9 @@ async def test_list_drawing_views_tool(mcp_server, mock_adapter, mock_config) ->
     assert err["status"] == "error" and "drawing document" in err["message"]
 
     mock_adapter.list_drawing_views = AsyncMock(side_effect=RuntimeError("boom"))
-    assert (await tool())["message"] == "Unexpected error: boom"
+    crashed = await tool()
+    assert crashed["error_type"] == "internal"
+    assert crashed["message"] == "list_drawing_views failed: RuntimeError: boom"
 
 
 # ---- local-LLM prompt catalog -------------------------------------------------

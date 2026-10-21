@@ -1,3 +1,5 @@
+import re
+
 """Contract tests for the drawing capabilities added to the adapter surface.
 
 ``create_drawing_view``, ``add_drawing_view``, ``create_technical_drawing``,
@@ -8,7 +10,7 @@ implemented" default at runtime, and mock mode cannot catch it — the mock is
 not wrapped — so the wiring is asserted directly here.
 
 The method names are deliberately the ones ``tools/drawing.py`` already gates
-on with ``hasattr(adapter, ...)``. Renaming any of them re-breaks the tools
+on with ``require_capability(adapter, ...)``. Renaming any of them re-breaks the tools
 without failing a single existing test, so the names are pinned below.
 """
 
@@ -67,7 +69,11 @@ def test_real_adapter_resolves_to_the_com_mixin(capability: str) -> None:
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
     owner = next(
-        (klass.__name__ for klass in PyWin32Adapter.__mro__ if capability in vars(klass)),
+        (
+            klass.__name__
+            for klass in PyWin32Adapter.__mro__
+            if capability in vars(klass)
+        ),
         None,
     )
     assert owner == "SolidWorksIOMixin", (
@@ -89,7 +95,7 @@ def test_wrappers_do_not_silently_fall_through_to_base(capability: str) -> None:
 
 
 #: Capabilities a tool on this branch already reaches. ``tools/drawing.py``
-#: guards each tool with ``hasattr(adapter, "<name>")``, so a rename here
+#: guards each tool with ``require_capability(adapter, "<name>", ...)``, so a rename here
 #: leaves the tool refusing forever with every adapter test still green.
 GATED_ON_THIS_BRANCH = [
     "add_drawing_view",
@@ -115,7 +121,7 @@ def test_capability_names_match_the_tool_gates(capability: str) -> None:
     import solidworks_mcp.tools.drawing as drawing_tools
 
     source = Path(drawing_tools.__file__).read_text(encoding="utf-8")
-    assert f'hasattr(adapter, "{capability}")' in source, (
+    assert re.search(rf'require_capability\(\s*adapter,\s*"{capability}"', source), (
         f"no tool in drawing.py gates on adapter.{capability}; either the tool "
         "gate was renamed or this capability is unreachable"
     )
@@ -169,9 +175,7 @@ async def test_mock_technical_drawing_adds_three_views() -> None:
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
 
-    result = await adapter.create_technical_drawing(
-        {"model_file": "C:/parts/a.sldprt"}
-    )
+    result = await adapter.create_technical_drawing({"model_file": "C:/parts/a.sldprt"})
     assert result.is_success
     assert len(result.data["views"]) == 3
     assert result.data["projection"] == "third_angle"

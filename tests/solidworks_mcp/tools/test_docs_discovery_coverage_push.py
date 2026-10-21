@@ -19,7 +19,6 @@ from solidworks_mcp.tools.docs_discovery import (
     _enumerate_typeinfo_members,
     _extract_year,
     _fallback_help_for_query,
-    _normalize_input,
     _resolve_solidworks_year,
     _search_index,
 )
@@ -633,30 +632,6 @@ def test_detect_installed_solidworks_year_finds_latest(
 
 # ============================================================================
 # Test: Input Normalization Edge Cases
-# ============================================================================
-
-
-def test_normalize_input_with_class_model_dump(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_normalize_input should handle Pydantic model_dump() protocol."""
-    from solidworks_mcp.tools.docs_discovery import DiscoverDocsInput
-
-    class _FakeModelWithDump:
-        """Fake object with model_dump method."""
-
-        def model_dump(self):
-            """Return dict."""
-            return {"output_dir": "/custom/path", "include_vba": True}
-
-    fake_obj = _FakeModelWithDump()
-    normalized = _normalize_input(fake_obj, DiscoverDocsInput)
-
-    assert isinstance(normalized, DiscoverDocsInput)
-    assert normalized.output_dir == "/custom/path"
-    assert normalized.include_vba is True
-
-
-# ============================================================================
-# Test: Search Index Scoring Edge Cases
 # ============================================================================
 
 

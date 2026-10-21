@@ -805,19 +805,19 @@ class TestDrawingAnalysisTools:
 
         view_exception = await view_tool(input_data={"drawing_path": "demo.slddrw"})
         assert view_exception["status"] == "error"
-        assert "Failed to analyze views" in view_exception["message"]
+        assert view_exception["error_type"] == "internal"
 
         report_exception = await report_tool(input_data={"drawing_path": "demo.slddrw"})
         assert report_exception["status"] == "error"
-        assert "Failed to generate report" in report_exception["message"]
+        assert report_exception["error_type"] == "internal"
 
         compare_exception = await compare_tool(input_data=[])
         assert compare_exception["status"] == "error"
-        assert "Failed to compare versions" in compare_exception["message"]
+        assert compare_exception["error_type"] == "internal"
 
         completeness_exception = await completeness_tool(input_data=[])
         assert completeness_exception["status"] == "error"
-        assert "Failed to validate completeness" in completeness_exception["message"]
+        assert completeness_exception["error_type"] == "internal"
 
     @pytest.mark.unit
     def test_drawing_analysis_input_validation(self):

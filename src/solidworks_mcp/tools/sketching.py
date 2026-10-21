@@ -7,29 +7,17 @@ lines, circles, rectangles, arcs, and constraints.
 from typing import Any, TypeVar
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    normalize_input,
+    require_success,
+    with_tool_boundary,
+)
 
 TInput = TypeVar("TInput", bound=BaseModel)
-
-
-def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
-    """Build internal normalize input.
-
-    Args:
-        input_data (Any): The input data value.
-        model_type (type[TInput]): The model type value.
-
-    Returns:
-        TInput: The result produced by the operation.
-    """
-    if isinstance(input_data, model_type):
-        return input_data
-    return model_type.model_validate(input_data)
 
 
 # Input schemas using Python 3.14 built-in types
@@ -381,37 +369,24 @@ async def register_sketching_tools(
                             - Sketch is automatically selected and ready for geometry addition
                             - Use exit_sketch() when finished to exit sketch edit mode
         """
-        try:
-            input_data = _normalize_input(input_data, CreateSketchInput)
-            result = await adapter.create_sketch(input_data.plane)
+        input_data = normalize_input(input_data, CreateSketchInput)
+        result = await adapter.create_sketch(input_data.plane)
 
-            if result.is_success:
-                sketch_name = input_data.sketch_name or (
-                    result.data.get("sketch_name")
-                    if isinstance(result.data, dict)
-                    else result.data
-                )
-                return {
-                    "status": "success",
-                    "message": f"Created sketch '{sketch_name}' on {input_data.plane} plane",
-                    "sketch": {
-                        "name": sketch_name,
-                        "plane": input_data.plane,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create sketch: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in create_sketch tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create sketch")
+        sketch_name = input_data.sketch_name or (
+            result.data.get("sketch_name")
+            if isinstance(result.data, dict)
+            else result.data
+        )
+        return {
+            "status": "success",
+            "message": f"Created sketch '{sketch_name}' on {input_data.plane} plane",
+            "sketch": {
+                "name": sketch_name,
+                "plane": input_data.plane,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_line(input_data: AddLineInput) -> dict[str, Any]:
@@ -446,56 +421,43 @@ async def register_sketching_tools(
                             - Lines can be constrained after creation
                             - Useful for creating construction lines with zero length
         """
-        try:
-            input_data = _normalize_input(input_data, AddLineInput)
-            if hasattr(adapter, "add_sketch_line"):
-                result = await adapter.add_sketch_line(
-                    input_data.x1,
-                    input_data.y1,
-                    input_data.x2,
-                    input_data.y2,
-                    input_data.construction,
-                )
-            else:
-                result = await adapter.add_line(
-                    input_data.x1,  # type: ignore[arg-type]
-                    input_data.y1,  # type: ignore[arg-type]
-                    input_data.x2,  # type: ignore[arg-type]
-                    input_data.y2,  # type: ignore[arg-type]
-                )
+        input_data = normalize_input(input_data, AddLineInput)
+        if hasattr(adapter, "add_sketch_line"):
+            result = await adapter.add_sketch_line(
+                input_data.x1,
+                input_data.y1,
+                input_data.x2,
+                input_data.y2,
+                input_data.construction,
+            )
+        else:
+            result = await adapter.add_line(
+                input_data.x1,  # type: ignore[arg-type]
+                input_data.y1,  # type: ignore[arg-type]
+                input_data.x2,  # type: ignore[arg-type]
+                input_data.y2,  # type: ignore[arg-type]
+            )
 
-            if result.is_success:
-                line_id = (
-                    result.data.get("entity_id")
-                    if isinstance(result.data, dict)
-                    else result.data
-                )
-                x1, y1 = input_data.x1 or 0.0, input_data.y1 or 0.0
-                x2, y2 = input_data.x2 or 0.0, input_data.y2 or 0.0
-                return {
-                    "status": "success",
-                    "message": f"Added line from ({x1}, {y1}) to ({x2}, {y2})",
-                    "line": {
-                        "id": line_id,
-                        "start": {"x": x1, "y": y1},
-                        "end": {"x": x2, "y": y2},
-                        "construction": input_data.construction,
-                        "length": ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add line: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_line tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add line")
+        line_id = (
+            result.data.get("entity_id")
+            if isinstance(result.data, dict)
+            else result.data
+        )
+        x1, y1 = input_data.x1 or 0.0, input_data.y1 or 0.0
+        x2, y2 = input_data.x2 or 0.0, input_data.y2 or 0.0
+        return {
+            "status": "success",
+            "message": f"Added line from ({x1}, {y1}) to ({x2}, {y2})",
+            "line": {
+                "id": line_id,
+                "start": {"x": x1, "y": y1},
+                "end": {"x": x2, "y": y2},
+                "construction": input_data.construction,
+                "length": ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_circle(input_data: AddCircleInput) -> dict[str, Any]:
@@ -507,49 +469,37 @@ async def register_sketching_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _normalize_input(input_data, AddCircleInput)
-            if hasattr(adapter, "add_sketch_circle"):
-                result = await adapter.add_sketch_circle(
-                    input_data.center_x,
-                    input_data.center_y,
-                    input_data.radius,
-                    input_data.construction,
-                )
-            else:
-                result = await adapter.add_circle(
-                    input_data.center_x, input_data.center_y, input_data.radius
-                )
+        input_data = normalize_input(input_data, AddCircleInput)
+        if hasattr(adapter, "add_sketch_circle"):
+            result = await adapter.add_sketch_circle(
+                input_data.center_x,
+                input_data.center_y,
+                input_data.radius,
+                input_data.construction,
+            )
+        else:
+            result = await adapter.add_circle(
+                input_data.center_x, input_data.center_y, input_data.radius
+            )
 
-            if result.is_success:
-                circle_id = (
-                    result.data.get("entity_id")
-                    if isinstance(result.data, dict)
-                    else result.data
-                )
-                return {
-                    "status": "success",
-                    "message": f"Added circle at ({input_data.center_x}, {input_data.center_y}) with radius {input_data.radius}mm",
-                    "circle": {
-                        "id": circle_id,
-                        "center": {"x": input_data.center_x, "y": input_data.center_y},
-                        "radius": input_data.radius,
-                        "construction": input_data.construction,
-                        "diameter": input_data.radius * 2,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to add circle: {result.error}",
-            }
-
-        except Exception as e:
-            logger.error(f"Error in add_circle tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add circle")
+        circle_id = (
+            result.data.get("entity_id")
+            if isinstance(result.data, dict)
+            else result.data
+        )
+        return {
+            "status": "success",
+            "message": f"Added circle at ({input_data.center_x}, {input_data.center_y}) with radius {input_data.radius}mm",
+            "circle": {
+                "id": circle_id,
+                "center": {"x": input_data.center_x, "y": input_data.center_y},
+                "radius": input_data.radius,
+                "construction": input_data.construction,
+                "diameter": input_data.radius * 2,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_rectangle(input_data: AddRectangleInput) -> dict[str, Any]:
@@ -585,61 +535,48 @@ async def register_sketching_tools(
                             - Corner coordinates can be in any order (automatically calculated)
                             - Useful as base profile for extrusions and cuts
         """
-        try:
-            input_data = _normalize_input(input_data, AddRectangleInput)
-            if hasattr(adapter, "add_sketch_rectangle"):
-                result = await adapter.add_sketch_rectangle(
-                    input_data.x1,
-                    input_data.y1,
-                    input_data.x2,
-                    input_data.y2,
-                    input_data.construction,
-                )
-            else:
-                result = await adapter.add_rectangle(
-                    input_data.x1,  # type: ignore[arg-type]
-                    input_data.y1,  # type: ignore[arg-type]
-                    input_data.x2,  # type: ignore[arg-type]
-                    input_data.y2,  # type: ignore[arg-type]
-                )
+        input_data = normalize_input(input_data, AddRectangleInput)
+        if hasattr(adapter, "add_sketch_rectangle"):
+            result = await adapter.add_sketch_rectangle(
+                input_data.x1,
+                input_data.y1,
+                input_data.x2,
+                input_data.y2,
+                input_data.construction,
+            )
+        else:
+            result = await adapter.add_rectangle(
+                input_data.x1,  # type: ignore[arg-type]
+                input_data.y1,  # type: ignore[arg-type]
+                input_data.x2,  # type: ignore[arg-type]
+                input_data.y2,  # type: ignore[arg-type]
+            )
 
-            if result.is_success:
-                rect_id = (
-                    result.data.get("entity_id")
-                    if isinstance(result.data, dict)
-                    else result.data
-                )
-                rx1, ry1 = input_data.x1 or 0.0, input_data.y1 or 0.0
-                rx2, ry2 = input_data.x2 or 0.0, input_data.y2 or 0.0
-                width = abs(rx2 - rx1)
-                height = abs(ry2 - ry1)
+        require_success(result, context="Failed to add rectangle")
+        rect_id = (
+            result.data.get("entity_id")
+            if isinstance(result.data, dict)
+            else result.data
+        )
+        rx1, ry1 = input_data.x1 or 0.0, input_data.y1 or 0.0
+        rx2, ry2 = input_data.x2 or 0.0, input_data.y2 or 0.0
+        width = abs(rx2 - rx1)
+        height = abs(ry2 - ry1)
 
-                return {
-                    "status": "success",
-                    "message": f"Added rectangle from ({rx1}, {ry1}) to ({rx2}, {ry2})",
-                    "rectangle": {
-                        "id": rect_id,
-                        "corner1": {"x": rx1, "y": ry1},
-                        "corner2": {"x": rx2, "y": ry2},
-                        "construction": input_data.construction,
-                        "width": width,
-                        "height": height,
-                        "area": width * height,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add rectangle: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_rectangle tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "message": f"Added rectangle from ({rx1}, {ry1}) to ({rx2}, {ry2})",
+            "rectangle": {
+                "id": rect_id,
+                "corner1": {"x": rx1, "y": ry1},
+                "corner2": {"x": rx2, "y": ry2},
+                "construction": input_data.construction,
+                "width": width,
+                "height": height,
+                "area": width * height,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def exit_sketch() -> dict[str, Any]:
@@ -670,27 +607,14 @@ async def register_sketching_tools(
                             - Automatically validates sketch geometry
                             - Previous sketch remains selectable for feature creation
         """
-        try:
-            result = await adapter.exit_sketch()
+        result = await adapter.exit_sketch()
 
-            if result.is_success:
-                return {
-                    "status": "success",
-                    "message": "Exited sketch editing mode",
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to exit sketch: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in exit_sketch tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to exit sketch")
+        return {
+            "status": "success",
+            "message": "Exited sketch editing mode",
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def check_sketch_fully_defined(
@@ -704,34 +628,22 @@ async def register_sketching_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            normalized = _normalize_input(
-                input_data or {},
-                CheckSketchDefinitionInput,
-            )
-            result = await adapter.check_sketch_fully_defined(normalized.sketch_name)
+        normalized = normalize_input(
+            input_data or {},
+            CheckSketchDefinitionInput,
+        )
+        result = await adapter.check_sketch_fully_defined(normalized.sketch_name)
 
-            if not result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to inspect sketch definition: {result.error}",
-                }
+        require_success(result, context="Failed to inspect sketch definition")
 
-            payload = result.data or {}
-            state = payload.get("definition_state", "unknown")
-            return {
-                "status": "success",
-                "message": f"Sketch definition state: {state}",
-                "sketch": payload,
-                "execution_time": result.execution_time,
-            }
-
-        except Exception as e:
-            logger.error(f"Error in check_sketch_fully_defined tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        payload = result.data or {}
+        state = payload.get("definition_state", "unknown")
+        return {
+            "status": "success",
+            "message": f"Sketch definition state: {state}",
+            "sketch": payload,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_arc(input_data: AddArcInput) -> dict[str, Any]:
@@ -768,45 +680,32 @@ async def register_sketching_tools(
                             - Arc direction follows counter-clockwise convention
                             - Commonly used for fillets and rounded profiles
         """
-        try:
-            input_data = _normalize_input(input_data, AddArcInput)
-            result = await adapter.add_arc(
-                input_data.center_x,
-                input_data.center_y,
-                input_data.start_x,
-                input_data.start_y,
-                input_data.end_x,
-                input_data.end_y,
-            )
+        input_data = normalize_input(input_data, AddArcInput)
+        result = await adapter.add_arc(
+            input_data.center_x,
+            input_data.center_y,
+            input_data.start_x,
+            input_data.start_y,
+            input_data.end_x,
+            input_data.end_y,
+        )
 
-            if result.is_success:
-                arc_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added arc centered at ({input_data.center_x}, {input_data.center_y})",
-                    "arc": {
-                        "id": arc_id,
-                        "center": {"x": input_data.center_x, "y": input_data.center_y},
-                        "start_point": {
-                            "x": input_data.start_x,
-                            "y": input_data.start_y,
-                        },
-                        "end_point": {"x": input_data.end_x, "y": input_data.end_y},
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add arc: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_arc tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add arc")
+        arc_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added arc centered at ({input_data.center_x}, {input_data.center_y})",
+            "arc": {
+                "id": arc_id,
+                "center": {"x": input_data.center_x, "y": input_data.center_y},
+                "start_point": {
+                    "x": input_data.start_x,
+                    "y": input_data.start_y,
+                },
+                "end_point": {"x": input_data.end_x, "y": input_data.end_y},
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_spline(input_data: AddSplineInput) -> dict[str, Any]:
@@ -847,33 +746,20 @@ async def register_sketching_tools(
                             - Spline weights and tangencies can be modified post-creation
                             - Essential for automotive and aerospace profile design
         """
-        try:
-            result = await adapter.add_spline(input_data.points)
+        result = await adapter.add_spline(input_data.points)
 
-            if result.is_success:
-                spline_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added spline with {len(input_data.points)} control points",
-                    "spline": {
-                        "id": spline_id,
-                        "control_points": input_data.points,
-                        "point_count": len(input_data.points),
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add spline: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_spline tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add spline")
+        spline_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added spline with {len(input_data.points)} control points",
+            "spline": {
+                "id": spline_id,
+                "control_points": input_data.points,
+                "point_count": len(input_data.points),
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_centerline(input_data: AddLineInput) -> dict[str, Any]:
@@ -909,41 +795,28 @@ async def register_sketching_tools(
                             - Essential for symmetrical design and mirroring operations
                             - Commonly used as revolution axes for turned parts
         """
-        try:
-            input_data = _normalize_input(input_data, AddLineInput)
+        input_data = normalize_input(input_data, AddLineInput)
 
-            result = await adapter.add_centerline(
-                input_data.x1,  # type: ignore[arg-type]
-                input_data.y1,  # type: ignore[arg-type]
-                input_data.x2,  # type: ignore[arg-type]
-                input_data.y2,  # type: ignore[arg-type]
-            )
+        result = await adapter.add_centerline(
+            input_data.x1,  # type: ignore[arg-type]
+            input_data.y1,  # type: ignore[arg-type]
+            input_data.x2,  # type: ignore[arg-type]
+            input_data.y2,  # type: ignore[arg-type]
+        )
 
-            if result.is_success:
-                centerline_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added centerline from ({input_data.x1}, {input_data.y1}) to ({input_data.x2}, {input_data.y2})",
-                    "centerline": {
-                        "id": centerline_id,
-                        "start_point": {"x": input_data.x1, "y": input_data.y1},
-                        "end_point": {"x": input_data.x2, "y": input_data.y2},
-                        "type": "construction",
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add centerline: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_centerline tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add centerline")
+        centerline_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added centerline from ({input_data.x1}, {input_data.y1}) to ({input_data.x2}, {input_data.y2})",
+            "centerline": {
+                "id": centerline_id,
+                "start_point": {"x": input_data.x1, "y": input_data.y1},
+                "end_point": {"x": input_data.x2, "y": input_data.y2},
+                "type": "construction",
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_polygon(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -980,39 +853,26 @@ async def register_sketching_tools(
                             - Common sides: 6 (hex), 8 (octagon), 12 (dodecagon)
                             - Ideal for fastener profiles and gear geometries
         """
-        try:
-            center_x = input_data.get("center_x", 0.0)
-            center_y = input_data.get("center_y", 0.0)
-            radius = input_data.get("radius", 10.0)
-            sides = input_data.get("sides", 6)
+        center_x = input_data.get("center_x", 0.0)
+        center_y = input_data.get("center_y", 0.0)
+        radius = input_data.get("radius", 10.0)
+        sides = input_data.get("sides", 6)
 
-            result = await adapter.add_polygon(center_x, center_y, radius, sides)
+        result = await adapter.add_polygon(center_x, center_y, radius, sides)
 
-            if result.is_success:
-                polygon_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added {sides}-sided polygon at ({center_x}, {center_y}) with radius {radius}mm",
-                    "polygon": {
-                        "id": polygon_id,
-                        "center": {"x": center_x, "y": center_y},
-                        "radius": radius,
-                        "sides": sides,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add polygon: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_polygon tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add polygon")
+        polygon_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added {sides}-sided polygon at ({center_x}, {center_y}) with radius {radius}mm",
+            "polygon": {
+                "id": polygon_id,
+                "center": {"x": center_x, "y": center_y},
+                "radius": radius,
+                "sides": sides,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_ellipse(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1049,41 +909,26 @@ async def register_sketching_tools(
                             - Useful for ergonomic designs and aerodynamic profiles
                             - Can be dimensionally constrained after creation
         """
-        try:
-            center_x = input_data.get("center_x", 0.0)
-            center_y = input_data.get("center_y", 0.0)
-            major_axis = input_data.get("major_axis", 20.0)
-            minor_axis = input_data.get("minor_axis", 10.0)
+        center_x = input_data.get("center_x", 0.0)
+        center_y = input_data.get("center_y", 0.0)
+        major_axis = input_data.get("major_axis", 20.0)
+        minor_axis = input_data.get("minor_axis", 10.0)
 
-            result = await adapter.add_ellipse(
-                center_x, center_y, major_axis, minor_axis
-            )
+        result = await adapter.add_ellipse(center_x, center_y, major_axis, minor_axis)
 
-            if result.is_success:
-                ellipse_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added ellipse at ({center_x}, {center_y}) with axes {major_axis}x{minor_axis}mm",
-                    "ellipse": {
-                        "id": ellipse_id,
-                        "center": {"x": center_x, "y": center_y},
-                        "major_axis": major_axis,
-                        "minor_axis": minor_axis,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add ellipse: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_ellipse tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add ellipse")
+        ellipse_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added ellipse at ({center_x}, {center_y}) with axes {major_axis}x{minor_axis}mm",
+            "ellipse": {
+                "id": ellipse_id,
+                "center": {"x": center_x, "y": center_y},
+                "major_axis": major_axis,
+                "minor_axis": minor_axis,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_sketch_constraint(input_data: AddRelationInput) -> dict[str, Any]:
@@ -1120,40 +965,27 @@ async def register_sketching_tools(
                             - Essential for parametric design and maintaining intent
                             - Over-constraining can cause sketch to fail
         """
-        try:
-            result = await adapter.add_sketch_constraint(
-                input_data.entity1,
-                input_data.entity2,
-                input_data.relation_type,
-                input_data.entity3,
-            )
+        result = await adapter.add_sketch_constraint(
+            input_data.entity1,
+            input_data.entity2,
+            input_data.relation_type,
+            input_data.entity3,
+        )
 
-            if result.is_success:
-                constraint_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added {input_data.relation_type} constraint between {input_data.entity1} and {input_data.entity2}",
-                    "constraint": {
-                        "id": constraint_id,
-                        "type": input_data.relation_type,
-                        "entity1": input_data.entity1,
-                        "entity2": input_data.entity2,
-                        "entity3": input_data.entity3,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add constraint: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_sketch_constraint tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add constraint")
+        constraint_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added {input_data.relation_type} constraint between {input_data.entity1} and {input_data.entity2}",
+            "constraint": {
+                "id": constraint_id,
+                "type": input_data.relation_type,
+                "entity1": input_data.entity1,
+                "entity2": input_data.entity2,
+                "entity3": input_data.entity3,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_sketch_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
@@ -1198,41 +1030,28 @@ async def register_sketching_tools(
                             - Radial and diameter dimensions use SolidWorks-specific APIs to avoid
                               falling back to the interactive Smart Dimension approval flow
         """
-        try:
-            input_data = _normalize_input(input_data, AddDimensionInput)
-            result = await adapter.add_sketch_dimension(
-                input_data.entity1,
-                input_data.entity2,
-                input_data.dimension_type,
-                input_data.value,
-            )
+        input_data = normalize_input(input_data, AddDimensionInput)
+        result = await adapter.add_sketch_dimension(
+            input_data.entity1,
+            input_data.entity2,
+            input_data.dimension_type,
+            input_data.value,
+        )
 
-            if result.is_success:
-                dimension_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Added {input_data.dimension_type} dimension of {input_data.value}mm to {input_data.entity1}",
-                    "dimension": {
-                        "id": dimension_id,
-                        "type": input_data.dimension_type,
-                        "value": input_data.value,
-                        "entity1": input_data.entity1,
-                        "entity2": input_data.entity2,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add dimension: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in add_sketch_dimension tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to add dimension")
+        dimension_id = result.data
+        return {
+            "status": "success",
+            "message": f"Added {input_data.dimension_type} dimension of {input_data.value}mm to {input_data.entity1}",
+            "dimension": {
+                "id": dimension_id,
+                "type": input_data.dimension_type,
+                "value": input_data.value,
+                "entity1": input_data.entity1,
+                "entity2": input_data.entity2,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def sketch_linear_pattern(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1270,44 +1089,31 @@ async def register_sketching_tools(
                             - Original entities remain as pattern seed geometry
                             - Commonly used for fastener and ventilation hole patterns
         """
-        try:
-            entities = input_data.get("entities", [])
-            direction_x = input_data.get("direction_x", 1.0)
-            direction_y = input_data.get("direction_y", 0.0)
-            spacing = input_data.get("spacing", 10.0)
-            count = input_data.get("count", 3)
+        entities = input_data.get("entities", [])
+        direction_x = input_data.get("direction_x", 1.0)
+        direction_y = input_data.get("direction_y", 0.0)
+        spacing = input_data.get("spacing", 10.0)
+        count = input_data.get("count", 3)
 
-            result = await adapter.sketch_linear_pattern(
-                entities, direction_x, direction_y, spacing, count
-            )
+        result = await adapter.sketch_linear_pattern(
+            entities, direction_x, direction_y, spacing, count
+        )
 
-            if result.is_success:
-                pattern_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created linear pattern with {count} instances, spacing {spacing}mm",
-                    "pattern": {
-                        "id": pattern_id,
-                        "type": "linear",
-                        "entities": entities,
-                        "count": count,
-                        "spacing": spacing,
-                        "direction": {"x": direction_x, "y": direction_y},
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create linear pattern: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in sketch_linear_pattern tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create linear pattern")
+        pattern_id = result.data
+        return {
+            "status": "success",
+            "message": f"Created linear pattern with {count} instances, spacing {spacing}mm",
+            "pattern": {
+                "id": pattern_id,
+                "type": "linear",
+                "entities": entities,
+                "count": count,
+                "spacing": spacing,
+                "direction": {"x": direction_x, "y": direction_y},
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def sketch_circular_pattern(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1350,43 +1156,30 @@ async def register_sketching_tools(
                             - Angle < 360° creates partial circular patterns
                             - Essential for mechanical fastener patterns and gear design
         """
-        try:
-            entities = input_data.get("entities", [])
-            angle = input_data.get("angle", 360.0)
-            count = input_data.get("count", 6)
+        entities = input_data.get("entities", [])
+        angle = input_data.get("angle", 360.0)
+        count = input_data.get("count", 6)
 
-            result = await adapter.sketch_circular_pattern(entities, angle, count)
+        result = await adapter.sketch_circular_pattern(entities, angle, count)
 
-            if result.is_success:
-                pattern_id = result.data
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Created circular pattern with {count} instances "
-                        "around the sketch origin"
-                    ),
-                    "pattern": {
-                        "id": pattern_id,
-                        "type": "circular",
-                        "entities": entities,
-                        "count": count,
-                        "center": {"x": 0.0, "y": 0.0},
-                        "angle": angle,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create circular pattern: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in sketch_circular_pattern tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create circular pattern")
+        pattern_id = result.data
+        return {
+            "status": "success",
+            "message": (
+                f"Created circular pattern with {count} instances "
+                "around the sketch origin"
+            ),
+            "pattern": {
+                "id": pattern_id,
+                "type": "circular",
+                "entities": entities,
+                "count": count,
+                "center": {"x": 0.0, "y": 0.0},
+                "angle": angle,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def sketch_mirror(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1422,36 +1215,23 @@ async def register_sketching_tools(
                             - Creates dependent copies that update with original geometry
                             - Essential for symmetric mechanical parts and assemblies
         """
-        try:
-            entities = input_data.get("entities", [])
-            mirror_line = input_data.get("mirror_line", "")
+        entities = input_data.get("entities", [])
+        mirror_line = input_data.get("mirror_line", "")
 
-            result = await adapter.sketch_mirror(entities, mirror_line)
+        result = await adapter.sketch_mirror(entities, mirror_line)
 
-            if result.is_success:
-                mirror_id = result.data
-                return {
-                    "status": "success",
-                    "message": f"Mirrored {len(entities)} entities about {mirror_line}",
-                    "mirror": {
-                        "id": mirror_id,
-                        "entities": entities,
-                        "mirror_line": mirror_line,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to mirror entities: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in sketch_mirror tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to mirror entities")
+        mirror_id = result.data
+        return {
+            "status": "success",
+            "message": f"Mirrored {len(entities)} entities about {mirror_line}",
+            "mirror": {
+                "id": mirror_id,
+                "entities": entities,
+                "mirror_line": mirror_line,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def sketch_offset(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1488,41 +1268,28 @@ async def register_sketching_tools(
                             - Direction affects whether result is larger or smaller
                             - Essential for sheet metal design and machining operations
         """
-        try:
-            entities = input_data.get("entities", [])
-            offset_distance = input_data.get("offset_distance", 5.0)
-            reverse_direction = input_data.get("reverse_direction", False)
+        entities = input_data.get("entities", [])
+        offset_distance = input_data.get("offset_distance", 5.0)
+        reverse_direction = input_data.get("reverse_direction", False)
 
-            result = await adapter.sketch_offset(
-                entities, offset_distance, reverse_direction
-            )
+        result = await adapter.sketch_offset(
+            entities, offset_distance, reverse_direction
+        )
 
-            if result.is_success:
-                offset_id = result.data
-                direction = "outward" if not reverse_direction else "inward"
-                return {
-                    "status": "success",
-                    "message": f"Created offset of {len(entities)} entities by {offset_distance}mm ({direction})",
-                    "offset": {
-                        "id": offset_id,
-                        "entities": entities,
-                        "distance": offset_distance,
-                        "direction": direction,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create offset: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in sketch_offset tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create offset")
+        offset_id = result.data
+        direction = "outward" if not reverse_direction else "inward"
+        return {
+            "status": "success",
+            "message": f"Created offset of {len(entities)} entities by {offset_distance}mm ({direction})",
+            "offset": {
+                "id": offset_id,
+                "entities": entities,
+                "distance": offset_distance,
+                "direction": direction,
+            },
+            "execution_time": result.execution_time,
+        }
 
     # Additional sketch tools can be added here in the future:
     # - add_arc (3-point arc, center-point arc)
@@ -1569,53 +1336,33 @@ async def register_sketching_tools(
                             - Result is ready for negative extrusion to create hole
                             - Perfect starting point for learning SolidWorks automation
         """
-        try:
-            steps_completed = []
+        steps_completed = []
 
-            # Step 1: Create sketch
-            sketch_result = await adapter.create_sketch("Top")
-            if not sketch_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create sketch: {sketch_result.error}",
-                }
-            steps_completed.append(f"Created sketch: {sketch_result.data}")
+        # Step 1: Create sketch
+        sketch_result = await adapter.create_sketch("Top")
+        require_success(sketch_result, context="Failed to create sketch")
+        steps_completed.append(f"Created sketch: {sketch_result.data}")
 
-            # Step 2: Add circle
-            circle_result = await adapter.add_circle(0, 0, 2.5)
-            if not circle_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add circle: {circle_result.error}",
-                }
-            steps_completed.append(f"Added 5mm diameter circle: {circle_result.data}")
+        # Step 2: Add circle
+        circle_result = await adapter.add_circle(0, 0, 2.5)
+        require_success(circle_result, context="Failed to add circle")
+        steps_completed.append(f"Added 5mm diameter circle: {circle_result.data}")
 
-            # Step 3: Exit sketch
-            exit_result = await adapter.exit_sketch()
-            if not exit_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to exit sketch: {exit_result.error}",
-                }
-            steps_completed.append("Exited sketch")
+        # Step 3: Exit sketch
+        exit_result = await adapter.exit_sketch()
+        require_success(exit_result, context="Failed to exit sketch")
+        steps_completed.append("Exited sketch")
 
-            return {
-                "status": "success",
-                "message": "Tutorial completed: Simple hole sketch created",
-                "steps_completed": steps_completed,
-                "next_step": "Use create_extrusion with negative depth to create the hole",
-                "suggested_extrusion": {
-                    "depth": -10,  # Negative for cut
-                    "reverse_direction": False,
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error in sketch_tutorial_simple_hole: {e}")
-            return {
-                "status": "error",
-                "message": f"Tutorial error: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "message": "Tutorial completed: Simple hole sketch created",
+            "steps_completed": steps_completed,
+            "next_step": "Use create_extrusion with negative depth to create the hole",
+            "suggested_extrusion": {
+                "depth": -10,  # Negative for cut
+                "reverse_direction": False,
+            },
+        }
 
     @mcp.tool()
     async def tutorial_simple_hole(
@@ -1633,68 +1380,42 @@ async def register_sketching_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            steps: list[dict[str, Any]] = []
+        steps: list[dict[str, Any]] = []
 
-            sketch_result = await adapter.create_sketch(input_data.plane)
-            if not sketch_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create sketch: {sketch_result.error}",
-                }
-            steps.append({"step": "Create sketch", "status": "success"})
+        sketch_result = await adapter.create_sketch(input_data.plane)
+        require_success(sketch_result, context="Failed to create sketch")
+        steps.append({"step": "Create sketch", "status": "success"})
 
-            circle_result = await adapter.add_sketch_circle(
-                input_data.center_x,
-                input_data.center_y,
-                input_data.diameter / 2,
-                False,
-            )
-            if not circle_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add circle: {circle_result.error}",
-                }
-            steps.append({"step": "Add circle", "status": "success"})
+        circle_result = await adapter.add_sketch_circle(
+            input_data.center_x,
+            input_data.center_y,
+            input_data.diameter / 2,
+            False,
+        )
+        require_success(circle_result, context="Failed to add circle")
+        steps.append({"step": "Add circle", "status": "success"})
 
-            exit_result = await adapter.exit_sketch()
-            if not exit_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to exit sketch: {exit_result.error}",
-                }
-            steps.append({"step": "Exit sketch", "status": "success"})
+        exit_result = await adapter.exit_sketch()
+        require_success(exit_result, context="Failed to exit sketch")
+        steps.append({"step": "Exit sketch", "status": "success"})
 
-            cut_depth = (
-                input_data.depth
-                if input_data.depth is not None
-                else input_data.diameter
-            )
-            cut_result = await adapter.create_cut("HoleSketch", cut_depth)
-            if not cut_result.is_success:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create cut extrude: {cut_result.error}",
-                }
-            steps.append({"step": "Create cut extrude", "status": "success"})
+        cut_depth = (
+            input_data.depth if input_data.depth is not None else input_data.diameter
+        )
+        cut_result = await adapter.create_cut("HoleSketch", cut_depth)
+        require_success(cut_result, context="Failed to create cut extrude")
+        steps.append({"step": "Create cut extrude", "status": "success"})
 
-            return {
-                "status": "success",
-                "message": "Completed simple hole tutorial",
-                "tutorial": {
-                    "plane": input_data.plane,
-                    "diameter": input_data.diameter,
-                    "depth": input_data.depth,
-                    "steps": steps,
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Error in tutorial_simple_hole tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "message": "Completed simple hole tutorial",
+            "tutorial": {
+                "plane": input_data.plane,
+                "diameter": input_data.diameter,
+                "depth": input_data.depth,
+                "steps": steps,
+            },
+        }
 
     tool_count = 6  # Legacy count expected by tests
     return tool_count

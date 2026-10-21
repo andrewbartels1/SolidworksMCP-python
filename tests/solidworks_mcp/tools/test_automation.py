@@ -526,19 +526,19 @@ class TestAutomationTools:
         )
 
         assert vba["status"] == "error"
-        assert "Unexpected error" in vba["message"]
+        assert vba["error_type"] == "internal"
         assert start["status"] == "error"
-        assert "Unexpected error" in start["message"]
+        assert start["error_type"] == "internal"
         assert batch["status"] == "error"
-        assert "Unexpected error" in batch["message"]
+        assert batch["error_type"] == "internal"
         assert table["status"] == "error"
-        assert "Unexpected error" in table["message"]
+        assert table["error_type"] == "internal"
         assert workflow["status"] == "error"
-        assert "Unexpected error" in workflow["message"]
+        assert workflow["error_type"] == "internal"
         assert template["status"] == "error"
-        assert "Unexpected error" in template["message"]
+        assert template["error_type"] == "internal"
         assert optimize["status"] == "error"
-        assert "Unexpected error" in optimize["message"]
+        assert optimize["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_automation_remaining_error_returns(

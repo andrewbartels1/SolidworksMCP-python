@@ -7,12 +7,16 @@ and workflow optimization.
 from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    UnsupportedOperationError,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 # Input schemas for macro operations
 
@@ -196,35 +200,20 @@ async def register_macro_recording_tools(
         Example:
                             >>> result = await start_macro_recording(recording_input)
         """
-        try:
-            if hasattr(adapter, "start_macro_recording"):
-                result = await adapter.start_macro_recording(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Macro recording started: {input_data.macro_name}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to start recording",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support start_macro_recording; "
-                    f"no recording of {input_data.macro_name} was started."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in start_macro_recording tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to start recording: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "start_macro_recording",
+            "Active adapter does not support start_macro_recording; "
+            f"no recording of {input_data.macro_name} was started.",
+        )
+        result = await adapter.start_macro_recording(input_data.model_dump())
+        require_success(result, "Failed to start recording")
+        return {
+            "status": "success",
+            "message": f"Macro recording started: {input_data.macro_name}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def stop_macro_recording(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -242,36 +231,21 @@ async def register_macro_recording_tools(
         Example:
                             >>> result = await stop_macro_recording(stop_input)
         """
-        try:
-            if hasattr(adapter, "stop_macro_recording"):
-                result = await adapter.stop_macro_recording(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Macro recording completed and saved",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to stop recording",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "No adapter capability exists for stopping a macro "
-                    "recording; this tool never started a real recording "
-                    "session, so there is no macro code to save."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in stop_macro_recording tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to stop recording: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "stop_macro_recording",
+            "No adapter capability exists for stopping a macro "
+            "recording; this tool never started a real recording "
+            "session, so there is no macro code to save.",
+        )
+        result = await adapter.stop_macro_recording(input_data)
+        require_success(result, "Failed to stop recording")
+        return {
+            "status": "success",
+            "message": "Macro recording completed and saved",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def execute_macro(input_data: MacroPlaybackInput) -> dict[str, Any]:
@@ -290,36 +264,21 @@ async def register_macro_recording_tools(
                             >>> result = await execute_macro(playback_input)
         """
 
-        try:
-            if hasattr(adapter, "execute_macro"):
-                result = await adapter.execute_macro(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Macro executed {input_data.repeat_count} times successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to execute macro",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support execute_macro; "
-                    f"{input_data.macro_path} was not run, and no features "
-                    "were created."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in execute_macro tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to execute macro: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "execute_macro",
+            "Active adapter does not support execute_macro; "
+            f"{input_data.macro_path} was not run, and no features "
+            "were created.",
+        )
+        result = await adapter.execute_macro(input_data.model_dump())
+        require_success(result, "Failed to execute macro")
+        return {
+            "status": "success",
+            "message": f"Macro executed {input_data.repeat_count} times successfully",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def analyze_macro(input_data: MacroAnalysisInput) -> dict[str, Any]:
@@ -337,35 +296,20 @@ async def register_macro_recording_tools(
         Example:
                             >>> result = await analyze_macro(analysis_input)
         """
-        try:
-            if hasattr(adapter, "analyze_macro"):
-                result = await adapter.analyze_macro(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Macro analysis completed for {input_data.macro_path}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to analyze macro",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support analyze_macro; "
-                    f"{input_data.macro_path} was not analyzed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in analyze_macro tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to analyze macro: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "analyze_macro",
+            "Active adapter does not support analyze_macro; "
+            f"{input_data.macro_path} was not analyzed.",
+        )
+        result = await adapter.analyze_macro(input_data.model_dump())
+        require_success(result, "Failed to analyze macro")
+        return {
+            "status": "success",
+            "message": f"Macro analysis completed for {input_data.macro_path}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def batch_execute_macros(input_data: MacroBatchInput) -> dict[str, Any]:
@@ -383,43 +327,28 @@ async def register_macro_recording_tools(
         Example:
                             >>> result = await batch_execute_macros(batch_input)
         """
-        try:
-            payload = (
-                input_data.model_dump()
-                if hasattr(input_data, "model_dump")
-                else dict(input_data)
-            )
+        payload = (
+            input_data.model_dump()
+            if hasattr(input_data, "model_dump")
+            else dict(input_data)
+        )
 
-            if hasattr(adapter, "batch_execute_macros"):
-                result = await adapter.batch_execute_macros(payload)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Batch macro execution completed successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed batch execution",
-                }
-
-            macro_list = payload.get("macro_list", [])
-
+        if hasattr(adapter, "batch_execute_macros"):
+            result = await adapter.batch_execute_macros(payload)
+            require_success(result, "Failed batch execution")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support batch_execute_macros; "
-                    f"none of the {len(macro_list)} macro(s) were run."
-                ),
+                "status": "success",
+                "message": "Batch macro execution completed successfully",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in batch_execute_macros tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed batch execution: {str(e)}",
-            }
+        macro_list = payload.get("macro_list", [])
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support batch_execute_macros; "
+            f"none of the {len(macro_list)} macro(s) were run."
+        )
 
     @mcp.tool()
     async def optimize_macro(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -436,43 +365,28 @@ async def register_macro_recording_tools(
         Example:
                             >>> result = await optimize_macro(optimization_input)
         """
-        try:
-            payload = (
-                input_data.model_dump()
-                if hasattr(input_data, "model_dump")
-                else dict(input_data)
-            )
+        payload = (
+            input_data.model_dump()
+            if hasattr(input_data, "model_dump")
+            else dict(input_data)
+        )
 
-            if hasattr(adapter, "optimize_macro"):
-                result = await adapter.optimize_macro(payload)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Macro optimization completed successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to optimize macro",
-                }
-
-            macro_path = payload.get("macro_path") or payload.get("macro_file", "")
-
+        if hasattr(adapter, "optimize_macro"):
+            result = await adapter.optimize_macro(payload)
+            require_success(result, "Failed to optimize macro")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support optimize_macro; "
-                    f"{macro_path} was not analyzed or changed."
-                ),
+                "status": "success",
+                "message": "Macro optimization completed successfully",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in optimize_macro tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to optimize macro: {str(e)}",
-            }
+        macro_path = payload.get("macro_path") or payload.get("macro_file", "")
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support optimize_macro; "
+            f"{macro_path} was not analyzed or changed."
+        )
 
     @mcp.tool()
     async def create_macro_library(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -490,43 +404,28 @@ async def register_macro_recording_tools(
         Example:
                             >>> result = await create_macro_library(library_input)
         """
-        try:
-            payload = (
-                input_data.model_dump()
-                if hasattr(input_data, "model_dump")
-                else dict(input_data)
-            )
+        payload = (
+            input_data.model_dump()
+            if hasattr(input_data, "model_dump")
+            else dict(input_data)
+        )
 
-            if hasattr(adapter, "create_macro_library"):
-                result = await adapter.create_macro_library(payload)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Macro library created successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to create library",
-                }
-
-            library_path = payload.get("library_path", "")
-
+        if hasattr(adapter, "create_macro_library"):
+            result = await adapter.create_macro_library(payload)
+            require_success(result, "Failed to create library")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support create_macro_library; "
-                    f"no library was created at {library_path or '(unspecified path)'}."
-                ),
+                "status": "success",
+                "message": "Macro library created successfully",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in create_macro_library tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to create library: {str(e)}",
-            }
+        library_path = payload.get("library_path", "")
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support create_macro_library; "
+            f"no library was created at {library_path or '(unspecified path)'}."
+        )
 
     tool_count = 8  # Macro recording and management tools
     return tool_count

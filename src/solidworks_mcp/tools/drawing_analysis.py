@@ -9,12 +9,18 @@ import pathlib
 from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
+from .tool_boundary import (
+    InvalidInputError,
+    ToolOperationError,
+    UnsupportedOperationError,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 
 def _file_fact_snapshot(path_str: str) -> dict[str, Any] | None:
@@ -172,38 +178,21 @@ async def register_drawing_analysis_tools(
         Example:
                             >>> result = await analyze_drawing_comprehensive(analysis_input)
         """
-        try:
-            if hasattr(adapter, "analyze_drawing_comprehensive"):
-                result = await adapter.analyze_drawing_comprehensive(
-                    input_data.model_dump()
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Comprehensive drawing analysis completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to analyze drawing",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support "
-                    "analyze_drawing_comprehensive; no analysis of "
-                    f"{input_data.drawing_path} was performed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in analyze_drawing_comprehensive tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to analyze drawing: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "analyze_drawing_comprehensive",
+            "Active adapter does not support "
+            "analyze_drawing_comprehensive; no analysis of "
+            f"{input_data.drawing_path} was performed.",
+        )
+        result = await adapter.analyze_drawing_comprehensive(input_data.model_dump())
+        require_success(result, "Failed to analyze drawing")
+        return {
+            "status": "success",
+            "message": "Comprehensive drawing analysis completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def analyze_drawing_dimensions(
@@ -224,37 +213,20 @@ async def register_drawing_analysis_tools(
                             >>> result = await analyze_drawing_dimensions(dimension_input)
         """
 
-        try:
-            if hasattr(adapter, "analyze_drawing_dimensions"):
-                result = await adapter.analyze_drawing_dimensions(
-                    input_data.model_dump()
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Dimension analysis completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to analyze dimensions",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support analyze_drawing_dimensions; "
-                    f"no analysis of {input_data.drawing_path} was performed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in analyze_drawing_dimensions tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to analyze dimensions: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "analyze_drawing_dimensions",
+            "Active adapter does not support analyze_drawing_dimensions; "
+            f"no analysis of {input_data.drawing_path} was performed.",
+        )
+        result = await adapter.analyze_drawing_dimensions(input_data.model_dump())
+        require_success(result, "Failed to analyze dimensions")
+        return {
+            "status": "success",
+            "message": "Dimension analysis completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def analyze_drawing_annotations(
@@ -276,37 +248,20 @@ async def register_drawing_analysis_tools(
 
         This tool examines notes, symbols, and text formatting for quality and compliance.
         """
-        try:
-            if hasattr(adapter, "analyze_drawing_annotations"):
-                result = await adapter.analyze_drawing_annotations(
-                    input_data.model_dump()
-                )
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Annotation analysis completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to analyze annotations",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support analyze_drawing_annotations; "
-                    f"no analysis of {input_data.drawing_path} was performed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in analyze_drawing_annotations tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to analyze annotations: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "analyze_drawing_annotations",
+            "Active adapter does not support analyze_drawing_annotations; "
+            f"no analysis of {input_data.drawing_path} was performed.",
+        )
+        result = await adapter.analyze_drawing_annotations(input_data.model_dump())
+        require_success(result, "Failed to analyze annotations")
+        return {
+            "status": "success",
+            "message": "Annotation analysis completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def check_drawing_compliance(
@@ -328,35 +283,20 @@ async def register_drawing_analysis_tools(
 
         This tool verifies compliance with ISO, ANSI, DIN, or other drafting standards.
         """
-        try:
-            if hasattr(adapter, "check_drawing_compliance"):
-                result = await adapter.check_drawing_compliance(input_data.model_dump())
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": f"Standards compliance check completed for {input_data.standard}",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Compliance check failed",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support check_drawing_compliance; "
-                    f"no {input_data.standard} compliance check was performed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in check_drawing_compliance tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to check compliance: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "check_drawing_compliance",
+            "Active adapter does not support check_drawing_compliance; "
+            f"no {input_data.standard} compliance check was performed.",
+        )
+        result = await adapter.check_drawing_compliance(input_data.model_dump())
+        require_success(result, "Compliance check failed")
+        return {
+            "status": "success",
+            "message": f"Standards compliance check completed for {input_data.standard}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def analyze_drawing_views(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -376,37 +316,22 @@ async def register_drawing_analysis_tools(
 
         This tool examines view selection, placement, and clarity.
         """
-        try:
-            if hasattr(adapter, "analyze_drawing_views"):
-                result = await adapter.analyze_drawing_views(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Drawing view analysis completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to analyze drawing views",
-                }
-
-            drawing_path = input_data.get("drawing_path", "")
-
+        if hasattr(adapter, "analyze_drawing_views"):
+            result = await adapter.analyze_drawing_views(input_data)
+            require_success(result, "Failed to analyze drawing views")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support analyze_drawing_views; "
-                    f"no analysis of {drawing_path} was performed."
-                ),
+                "status": "success",
+                "message": "Drawing view analysis completed",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in analyze_drawing_views tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to analyze views: {str(e)}",
-            }
+        drawing_path = input_data.get("drawing_path", "")
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support analyze_drawing_views; "
+            f"no analysis of {drawing_path} was performed."
+        )
 
     @mcp.tool()
     async def generate_drawing_report(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -426,37 +351,22 @@ async def register_drawing_analysis_tools(
 
         This tool creates a detailed report combining all analysis results.
         """
-        try:
-            if hasattr(adapter, "generate_drawing_report"):
-                result = await adapter.generate_drawing_report(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Drawing quality report generated successfully",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to generate drawing report",
-                }
-
-            drawing_path = input_data.get("drawing_path", "")
-
+        if hasattr(adapter, "generate_drawing_report"):
+            result = await adapter.generate_drawing_report(input_data)
+            require_success(result, "Failed to generate drawing report")
             return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support generate_drawing_report; "
-                    f"no report for {drawing_path} was generated."
-                ),
+                "status": "success",
+                "message": "Drawing quality report generated successfully",
+                "data": result.data,
+                "execution_time": result.execution_time,
             }
 
-        except Exception as e:
-            logger.error(f"Error in generate_drawing_report tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to generate report: {str(e)}",
-            }
+        drawing_path = input_data.get("drawing_path", "")
+
+        raise UnsupportedOperationError(
+            "Active adapter does not support generate_drawing_report; "
+            f"no report for {drawing_path} was generated."
+        )
 
     @mcp.tool()
     async def compare_drawing_versions(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -480,68 +390,54 @@ async def register_drawing_analysis_tools(
         filesystem: whether each file exists, its size, modified time, and
         whether the two files are byte-for-byte identical.
         """
-        try:
-            drawing_v1 = input_data.get("drawing_version_1", "")
-            drawing_v2 = input_data.get("drawing_version_2", "")
+        drawing_v1 = input_data.get("drawing_version_1", "")
+        drawing_v2 = input_data.get("drawing_version_2", "")
 
-            if not drawing_v1 or not drawing_v2:
-                return {
-                    "status": "error",
-                    "message": (
-                        "compare_drawing_versions requires both "
-                        "drawing_version_1 and drawing_version_2 paths."
-                    ),
-                }
+        if not drawing_v1 or not drawing_v2:
+            raise InvalidInputError(
+                "compare_drawing_versions requires both "
+                "drawing_version_1 and drawing_version_2 paths."
+            )
 
-            file_1 = _file_fact_snapshot(drawing_v1)
-            file_2 = _file_fact_snapshot(drawing_v2)
+        file_1 = _file_fact_snapshot(drawing_v1)
+        file_2 = _file_fact_snapshot(drawing_v2)
 
-            missing = [
-                path
-                for path, snapshot in ((drawing_v1, file_1), (drawing_v2, file_2))
-                if snapshot is None
-            ]
-            if missing:
-                return {
-                    "status": "error",
-                    "message": (
-                        "Cannot compare drawing versions; file(s) not found "
-                        f"on disk: {', '.join(missing)}. No SolidWorks-level "
-                        "diff was performed."
-                    ),
-                }
+        missing = [
+            path
+            for path, snapshot in ((drawing_v1, file_1), (drawing_v2, file_2))
+            if snapshot is None
+        ]
+        if missing:
+            raise ToolOperationError(
+                "Cannot compare drawing versions; file(s) not found "
+                f"on disk: {', '.join(missing)}. No SolidWorks-level "
+                "diff was performed."
+            )
 
-            assert file_1 is not None
-            assert file_2 is not None
-            identical = file_1["sha256"] == file_2["sha256"]
+        assert file_1 is not None
+        assert file_2 is not None
+        identical = file_1["sha256"] == file_2["sha256"]
 
-            return {
-                "status": "success",
-                "message": (
-                    "Drawing files are byte-identical"
-                    if identical
-                    else "Drawing files differ on disk"
-                ),
-                "comparison": {
-                    "file_1": file_1,
-                    "file_2": file_2,
-                    "identical": identical,
-                    "size_delta_bytes": file_2["size_bytes"] - file_1["size_bytes"],
-                },
-                "note": (
-                    "This is a filesystem-level comparison only; no "
-                    "SolidWorks session was opened, so geometric, "
-                    "dimension, and annotation differences were not "
-                    "analyzed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in compare_drawing_versions tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to compare versions: {str(e)}",
-            }
+        return {
+            "status": "success",
+            "message": (
+                "Drawing files are byte-identical"
+                if identical
+                else "Drawing files differ on disk"
+            ),
+            "comparison": {
+                "file_1": file_1,
+                "file_2": file_2,
+                "identical": identical,
+                "size_delta_bytes": file_2["size_bytes"] - file_1["size_bytes"],
+            },
+            "note": (
+                "This is a filesystem-level comparison only; no "
+                "SolidWorks session was opened, so geometric, "
+                "dimension, and annotation differences were not "
+                "analyzed."
+            ),
+        }
 
     @mcp.tool()
     async def validate_drawing_completeness(
@@ -563,38 +459,23 @@ async def register_drawing_analysis_tools(
 
         This tool checks for completeness from a manufacturing perspective.
         """
-        try:
-            drawing_path = input_data.get("drawing_path", "")
+        drawing_path = input_data.get("drawing_path", "")
 
-            if hasattr(adapter, "validate_drawing_completeness"):
-                result = await adapter.validate_drawing_completeness(input_data)
-                if result.is_success:
-                    return {
-                        "status": "success",
-                        "message": "Drawing completeness validation completed",
-                        "data": result.data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "error",
-                    "message": result.error or "Failed to validate completeness",
-                }
-
-            return {
-                "status": "error",
-                "message": (
-                    "Active adapter does not support "
-                    "validate_drawing_completeness; no validation of "
-                    f"{drawing_path} was performed."
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error in validate_drawing_completeness tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Failed to validate completeness: {str(e)}",
-            }
+        require_capability(
+            adapter,
+            "validate_drawing_completeness",
+            "Active adapter does not support "
+            "validate_drawing_completeness; no validation of "
+            f"{drawing_path} was performed.",
+        )
+        result = await adapter.validate_drawing_completeness(input_data)
+        require_success(result, "Failed to validate completeness")
+        return {
+            "status": "success",
+            "message": "Drawing completeness validation completed",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
 
     tool_count = 8  # Legacy count expected by tests
     return tool_count

@@ -472,7 +472,7 @@ class TestFileManagementTools:
         result = await save_tool(input_data={"force_save": True})
 
         assert result["status"] == "error"
-        assert "Unexpected error" in result["message"]
+        assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_save_file_success_with_adapter_path(
@@ -656,7 +656,7 @@ class TestFileManagementTools:
         assert properties_tool is not None
         result = await properties_tool()
         assert result["status"] == "error"
-        assert "Unexpected error" in result["message"]
+        assert result["error_type"] == "internal"
         assert "boom" in result["message"]
 
     @pytest.mark.asyncio
@@ -772,7 +772,7 @@ class TestFileManagementTools:
             )
         )
         assert result["status"] == "error"
-        assert "Unexpected error" in result["message"]
+        assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_batch_file_operations_adapter_error_path(
@@ -834,7 +834,7 @@ class TestFileManagementTools:
             input_data=FileOperationInput(file_path="x.sldprt", operation="rename")
         )
         assert manage_result["status"] == "error"
-        assert "Unexpected error" in manage_result["message"]
+        assert manage_result["error_type"] == "internal"
 
         convert_result = await convert_tool(
             input_data=FormatConversionInput(
@@ -844,13 +844,13 @@ class TestFileManagementTools:
             )
         )
         assert convert_result["status"] == "error"
-        assert "Unexpected error" in convert_result["message"]
+        assert convert_result["error_type"] == "internal"
 
         batch_result = await batch_tool(
             input_data=FileOperationInput(file_path="./parts", operation="batch")
         )
         assert batch_result["status"] == "error"
-        assert "Unexpected error" in batch_result["message"]
+        assert batch_result["error_type"] == "internal"
 
     @pytest.mark.unit
     def test_file_operation_input_validation(self):
@@ -932,7 +932,7 @@ class TestFileManagementTools:
         mock_adapter.get_model_info = AsyncMock(side_effect=RuntimeError("boom"))
         info_exception = await get_model_info_tool()
         assert info_exception["status"] == "error"
-        assert "Unexpected error" in info_exception["message"]
+        assert info_exception["error_type"] == "internal"
 
         mock_adapter.list_features = AsyncMock(
             return_value=Mock(
@@ -2124,4 +2124,4 @@ class TestFileManagementTools:
             }
         )
         assert result["status"] == "error"
-        assert "Unexpected error" in result["message"]
+        assert result["error_type"] == "internal"
