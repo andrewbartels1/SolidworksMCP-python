@@ -929,3 +929,12 @@ def test_fillet_with_unparseable_version_and_unreadable_feature_name() -> None:
 
     assert result.is_success, result.error
     assert result.data.name == "Fillet"
+
+
+@pytest.mark.parametrize("percent", [0.0, 100.0, 150.0])
+def test_reference_point_percent_must_be_inside_the_curve(percent: float) -> None:
+    result = features._create_reference_point_impl(
+        _point_adapter(), "along_curve", 0, 0, 0, None, percent
+    )
+
+    assert result.error == "percent must be between 0 and 100 (exclusive)"

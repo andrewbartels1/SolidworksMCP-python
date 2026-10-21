@@ -652,3 +652,21 @@ async def test_pack_and_go_assembly_reports_why_it_failed(
     assert no_lib.error.startswith(
         "Pack and Go failed: comtypes SolidWorks type library not available"
     )
+
+
+@pytest.mark.asyncio
+async def test_activate_document_needs_a_connection() -> None:
+    result = await _DocsHarness(None, None).activate_document("bracket.SLDPRT")
+
+    assert result.error == "Not connected to SolidWorks"
+
+
+@pytest.mark.asyncio
+async def test_save_body_as_part_needs_an_existing_parent_folder(tmp_path) -> None:
+    missing = tmp_path / "missing"
+
+    result = await _DocsHarness(_part_with([]), object()).save_body_as_part(
+        "B", str(missing / "b.sldprt")
+    )
+
+    assert result.error == f"Parent directory does not exist: {missing}"

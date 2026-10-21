@@ -303,3 +303,16 @@ def test_mismatched_whats_wrong_arrays_fall_back_to_the_tree_walk() -> None:
     issues = ri.collect_rebuild_issues(_Adapter(model), model)
 
     assert [(i.feature, i.code) for i in issues] == [("Boss-Extrude1", 1)]
+
+
+@pytest.mark.asyncio
+async def test_rebuild_call_failure_reads_as_a_plain_sentence() -> None:
+    """A raising ForceRebuild3 is an ERROR without the generic op prefix."""
+
+    def broken(_top):
+        raise RuntimeError("The object invoked has disconnected from its clients.")
+
+    model = SimpleNamespace(ForceRebuild3=broken)
+    result = await _IO(_Adapter(model)).rebuild_model()
+    assert result.is_error
+    assert result.error == "The object invoked has disconnected from its clients."
