@@ -240,17 +240,6 @@ async def log_ui_requests(request: Request, call_next):
         json.dumps(payload, ensure_ascii=True, default=str),
     )
 
-    async def receive() -> dict[str, Any]:
-        """Handle receive.
-
-        Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-        """
-
-        return {"type": "http.request", "body": raw_body, "more_body": False}
-
-    request = Request(request.scope, receive)
-
     try:
         response = await call_next(request)
     except Exception as exc:

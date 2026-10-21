@@ -6,6 +6,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, cast
 
+from .. import sw_type_info
 from ..base import (
     AdapterResult,
     AdapterResultStatus,
@@ -710,12 +711,7 @@ def _flag_feature_methods(obj: Any, interface: str) -> None:  # pragma: no cover
         obj: The COM object (or test double) to flag.
         interface: SolidWorks interface name (e.g. ``"IFeature"``).
     """
-    try:
-        from solidworks_mcp.adapters import sw_type_info
-
-        sw_type_info.flag_methods(obj, interface)
-    except Exception:
-        pass
+    sw_type_info.flag_methods(obj, interface)
 
 
 def _flag_feature_members(obj: Any, *names: str) -> None:  # pragma: no cover
@@ -731,12 +727,7 @@ def _flag_feature_members(obj: Any, *names: str) -> None:  # pragma: no cover
         obj: The COM object (or test double) to flag.
         *names: Member names about to be read.
     """
-    try:
-        from solidworks_mcp.adapters import sw_type_info
-
-        sw_type_info.flag_members(obj, *names)
-    except Exception:
-        pass
+    sw_type_info.flag_members(obj, *names)
 
 
 #: Members read while walking the feature tree in ``_profile_feature_names``.
@@ -1984,8 +1975,6 @@ def _feature_count(adapter: Any) -> int | None:
         int | None: The feature count, or ``None`` when it cannot be read -
         which is deliberately distinct from ``0``.
     """
-    from .. import sw_type_info
-
     manager = adapter._attempt(
         lambda: adapter.currentModel.FeatureManager, default=None
     )
@@ -2532,8 +2521,6 @@ def _create_reference_plane_impl(
         value, flip_bits = _offset_plane_distance(offset, flip)
         constraint = _REF_PLANE_DISTANCE | flip_bits
 
-        from .. import sw_type_info
-
         feature_manager = sw_type_info.flagged(
             adapter.currentModel.FeatureManager, "IFeatureManager"
         )
@@ -2736,8 +2723,6 @@ def _create_reference_point_impl(
             along_value = float(percent) / 100.0
 
     def _point_operation() -> dict[str, Any]:
-        from .. import sw_type_info
-
         model = adapter.currentModel
         before = _feature_count(adapter)
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
@@ -2904,8 +2889,6 @@ def _mirror_feature_impl(
         ):
             raise Exception(f"Failed to select mirror plane: {mirror_plane}")
 
-        from .. import sw_type_info
-
         feature_manager = sw_type_info.flagged(
             adapter.currentModel.FeatureManager, "IFeatureManager"
         )
@@ -3043,8 +3026,6 @@ def _pattern_circular_impl(
                 )
             if not selected:
                 raise Exception(f"Failed to select feature to pattern: {name}")
-
-        from .. import sw_type_info
 
         feature_manager = sw_type_info.flagged(
             adapter.currentModel.FeatureManager, "IFeatureManager"

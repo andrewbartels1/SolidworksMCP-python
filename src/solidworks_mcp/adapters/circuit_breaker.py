@@ -317,10 +317,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
             output_data: dict[str, Any] = {}
             if result.data is not None:
-                try:
-                    output_data = {"data": result.data}
-                except Exception:  # pragma: no cover
-                    output_data = {"data": str(result.data)}
+                output_data = {"data": result.data}
 
             insert_tool_call_record(
                 session_id=self.soc_session_id,

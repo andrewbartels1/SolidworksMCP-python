@@ -384,10 +384,7 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
 def _ensure_columns(engine: Any) -> None:
     """Add any missing post-release columns to already-existing tables."""
     inspector = sa_inspect(engine)
-    existing_tables = set(inspector.get_table_names())
     for table, columns in _ADDED_COLUMNS.items():
-        if table not in existing_tables:
-            continue  # create_all() just made it with every column
         present = {col["name"] for col in inspector.get_columns(table)}
         missing = {
             name: sql_type

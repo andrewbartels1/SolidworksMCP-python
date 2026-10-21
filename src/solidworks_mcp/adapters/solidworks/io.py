@@ -1637,8 +1637,6 @@ class SolidWorksIOMixin:
 
         def _list() -> list[dict[str, Any]]:
             app = adapter.swApp
-            if app is None:
-                raise Exception("SolidWorks application is not connected")
 
             docs = _coerce_dispatch_sequence(
                 adapter._attempt(lambda: app.GetDocuments(), default=None)
@@ -1705,8 +1703,6 @@ class SolidWorksIOMixin:
 
         def _activate() -> dict[str, Any]:
             app = adapter.swApp
-            if app is None:
-                raise Exception("SolidWorks application is not connected")
 
             docs = _coerce_dispatch_sequence(
                 adapter._attempt(lambda: app.GetDocuments(), default=None)

@@ -261,9 +261,6 @@ def attempt_auto_repair(
         if missing_key == "sketch_plane" and "active_sketch_plane" in context:
             repaired[missing_key] = context["active_sketch_plane"]
             repaired_any = True
-        elif missing_key == "sketch_name" and "last_sketch_name" in context:
-            repaired[missing_key] = context["last_sketch_name"]
-            repaired_any = True
         # For geometry parameters, we cannot auto-repair without user input
 
     if repaired_any:

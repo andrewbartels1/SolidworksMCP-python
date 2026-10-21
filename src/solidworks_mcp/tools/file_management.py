@@ -480,8 +480,6 @@ async def register_file_management_tools(
 
     def _get_attr_or_call(obj: Any, name: str, default: Any = None) -> Any:
         """Read COM values that may be exposed as either properties or methods."""
-        if obj is None:
-            return default
         candidate = getattr(obj, name, None)
         if candidate is None:
             return default

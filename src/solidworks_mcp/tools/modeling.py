@@ -18,7 +18,6 @@ from ..adapters.base import (
 )
 from .input_compat import CompatInput
 from .tool_boundary import (
-    InvalidInputError,
     normalize_input,
     require_success,
     with_tool_boundary,
@@ -1256,8 +1255,6 @@ async def register_modeling_tools(
                             ```
         """
         input_data = normalize_input(input_data, GetDimensionInput)
-        if not input_data.name:
-            raise InvalidInputError("name: Dimension name is required")
         result = await adapter.get_dimension(input_data.name)
 
         require_success(result, context="Failed to get dimension")
@@ -1289,8 +1286,6 @@ async def register_modeling_tools(
             dict[str, Any]: A dictionary containing the resulting values.
         """
         input_data = normalize_input(input_data, SetDimensionInput)
-        if not input_data.name:
-            raise InvalidInputError("name: Dimension name is required")
         result = await adapter.set_dimension(input_data.name, input_data.value)
 
         require_success(result, context="Failed to set dimension")

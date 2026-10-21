@@ -1,6 +1,6 @@
 """Tests for SolidWorks modeling tools."""
 
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -715,31 +715,24 @@ class TestModelingTools:
     async def test_dimension_empty_name_validation(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """get_dimension and set_dimension return error when name is empty string."""
+        """An empty dimension name is rejected before the adapter is called."""
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
         tool = {
             registered.name: registered.fn
             for registered in await mcp_server.list_tools()
         }
+        mock_adapter.get_dimension = AsyncMock()
+        mock_adapter.set_dimension = AsyncMock()
 
-        import solidworks_mcp.tools.modeling as _modeling_mod
+        get_result = await tool["get_dimension"]({"name": ""})
+        set_result = await tool["set_dimension"]({"name": "", "value": 5.0})
 
-        # model_post_init raises for empty name, so we patch _normalize_input to return
-        # a mock with name="" to exercise the handler's own guard (lines 920-921, 966-967).
-        fake_get = MagicMock(spec=["name", "dimension_name"])
-        fake_get.name = ""
-        with patch.object(_modeling_mod, "normalize_input", return_value=fake_get):
-            get_result = await tool["get_dimension"]({})
-        assert get_result["status"] == "error"
-        assert "Dimension name is required" in get_result["message"]
-
-        fake_set = MagicMock(spec=["name", "dimension_name", "value", "units"])
-        fake_set.name = ""
-        fake_set.value = 5.0
-        with patch.object(_modeling_mod, "normalize_input", return_value=fake_set):
-            set_result = await tool["set_dimension"]({})
-        assert set_result["status"] == "error"
-        assert "Dimension name is required" in set_result["message"]
+        for result in (get_result, set_result):
+            assert result["status"] == "error"
+            assert result["error_type"] == "invalid_input"
+            assert "name is required" in result["message"]
+        mock_adapter.get_dimension.assert_not_called()
+        mock_adapter.set_dimension.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_cut_extrude_and_add_fillet_failure_paths(

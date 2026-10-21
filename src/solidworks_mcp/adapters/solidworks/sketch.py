@@ -1041,15 +1041,10 @@ def _add_sketch_constraint_impl(
         # Flag IModelDoc2 + ISketch + ISketchRelationManager so late-binding
         # resolves GetActiveSketch2, RelationManager, and AddRelation as
         # methods/properties correctly.
-        try:
-            from .. import sw_type_info as _sw_type_info
-        except ImportError:
-            _sw_type_info = None  # type: ignore[assignment]
-        if _sw_type_info is not None:
-            adapter._attempt(
-                lambda: _sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2"),
-                default=0,
-            )
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2"),
+            default=0,
+        )
 
         active_sketch = adapter._attempt(
             lambda: adapter.currentModel.GetActiveSketch2(), default=None
@@ -1059,20 +1054,18 @@ def _add_sketch_constraint_impl(
                 "No active sketch on the model — create_sketch first or "
                 "open the existing sketch for edit."
             )
-        if _sw_type_info is not None:
-            adapter._attempt(
-                lambda: _sw_type_info.flag_methods(active_sketch, "ISketch"),
-                default=0,
-            )
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(active_sketch, "ISketch"),
+            default=0,
+        )
 
         relmgr = adapter._attempt(lambda: active_sketch.RelationManager, default=None)
         if relmgr is None:
             raise Exception("Active sketch has no RelationManager")
-        if _sw_type_info is not None:
-            adapter._attempt(
-                lambda: _sw_type_info.flag_methods(relmgr, "ISketchRelationManager"),
-                default=0,
-            )
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(relmgr, "ISketchRelationManager"),
+            default=0,
+        )
 
         # pywin32 won't auto-marshal a Python list of CDispatch entities to a
         # SAFEARRAY — the VT_ARRAY|VT_DISPATCH variant is the shape SolidWorks
@@ -1414,17 +1407,11 @@ def _select_sketch_entities(  # pragma: no cover
         Exception: If an entity ID is not in the registry or a Select4
             call returns ``False``.
     """
-    try:
-        from .. import sw_type_info as _sw_type_info
-    except ImportError:
-        _sw_type_info = None  # type: ignore[assignment]
-
     sel_mgr = adapter.currentModel.SelectionManager
-    if _sw_type_info is not None:
-        adapter._attempt(
-            lambda: _sw_type_info.flag_methods(sel_mgr, "ISelectionMgr"),
-            default=0,
-        )
+    adapter._attempt(
+        lambda: _sw_type_info.flag_methods(sel_mgr, "ISelectionMgr"),
+        default=0,
+    )
     select_data = sel_mgr.CreateSelectData()
     select_data.Mark = mark
     for ent_id in entity_ids:
@@ -1445,24 +1432,20 @@ def _select_sketch_entities(  # pragma: no cover
         # original Select4 path.
         if isinstance(entity, (list, tuple)):
             for segment in entity:
-                if _sw_type_info is not None:
-                    adapter._attempt(
-                        lambda s=segment: _sw_type_info.flag_methods(
-                            s, "ISketchSegment"
-                        ),
-                        default=0,
-                    )
+                adapter._attempt(
+                    lambda s=segment: _sw_type_info.flag_methods(s, "ISketchSegment"),
+                    default=0,
+                )
                 ok = segment.Select4(True, select_data)
                 if not ok:
                     raise Exception(
                         f"Failed to select segment of sketch entity '{ent_id}'"
                     )
         else:
-            if _sw_type_info is not None:
-                adapter._attempt(
-                    lambda e=entity: _sw_type_info.flag_methods(e, "ISketchSegment"),
-                    default=0,
-                )
+            adapter._attempt(
+                lambda e=entity: _sw_type_info.flag_methods(e, "ISketchSegment"),
+                default=0,
+            )
             ok = entity.Select4(True, select_data)
             if not ok:
                 raise Exception(f"Failed to select sketch entity '{ent_id}'")
@@ -1685,11 +1668,6 @@ def _sketch_circular_pattern_impl(
             # back to placing the axis at angle π from the seed if
             # GetCenterPoint isn't available; that still works when the
             # user positions the seed on the +X side of the origin.
-            try:
-                from .. import sw_type_info as _sw_type_info
-            except ImportError:
-                _sw_type_info = None  # type: ignore[assignment]
-
             first_entity = adapter._sketch_entities.get(entities[0])
 
             seed_xy: tuple[float, float] | None = None
@@ -1718,11 +1696,7 @@ def _sketch_circular_pattern_impl(
                         f"Use a circle, arc, or ellipse seed."
                     )
 
-            if (
-                seed_xy is None
-                and first_entity is not None
-                and _sw_type_info is not None
-            ):
+            if seed_xy is None and first_entity is not None:
                 # GetCenterPoint lives on multiple sketch-entity interfaces
                 # (ISketchArc for arcs/circles, ISketchEllipse for ellipses),
                 # all with the same zero-arg signature. Flag every interface
@@ -2066,20 +2040,14 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         )
 
     def _exit_operation() -> str:  # pragma: no cover
-        try:
-            from .. import sw_type_info as _sw_type_info
-        except ImportError:
-            _sw_type_info = None  # type: ignore[assignment]
-
         # ``GetActiveSketch2`` is a real zero-arg method on IModelDoc2.
         # Without flagging, pywin32 late binding resolves it as a property
         # and SW returns ``Member not found`` — the same root cause as
         # the cross-thread bugs in runbook #5.
-        if _sw_type_info is not None:
-            adapter._attempt(
-                lambda: _sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2"),
-                default=0,
-            )
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(adapter.currentModel, "IModelDoc2"),
+            default=0,
+        )
 
         sw_active = adapter._attempt(lambda: adapter.currentModel.GetActiveSketch2())
         adapter_active = adapter.currentSketchManager
@@ -2096,11 +2064,10 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         # apartment-safe); fall back to a fresh ``currentModel.SketchManager``
         # for the SW-only state case.
         sketch_manager = adapter_active or adapter.currentModel.SketchManager
-        if _sw_type_info is not None:
-            adapter._attempt(
-                lambda: _sw_type_info.flag_methods(sketch_manager, "ISketchManager"),
-                default=0,
-            )
+        adapter._attempt(
+            lambda: _sw_type_info.flag_methods(sketch_manager, "ISketchManager"),
+            default=0,
+        )
         sketch_manager.InsertSketch(True)
         adapter.currentSketch = None
         adapter.currentSketchManager = None
@@ -2348,11 +2315,6 @@ def _check_sketch_fully_defined_impl(
 
         if sketch_obj is None and sketch_feature is None:
             raise Exception("No active sketch found")
-
-        if resolved_name is None and sketch_feature is not None:
-            resolved_name = adapter._attempt(
-                lambda: str(sketch_feature.Name), default=None
-            )
 
         probes: list[tuple[str, Any]] = []
 

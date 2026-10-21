@@ -72,9 +72,6 @@ def _load_wrapper() -> None:
     """
     global _wrapper_module, _interface_methods
 
-    if not PYWIN32_AVAILABLE:  # pragma: no cover
-        return
-
     # Try version numbers from newest to oldest. SW 3DEXPERIENCE R2026x = 34,
     # SW 2025 = 33, SW 2024 = 32, SW 2023 = 31, SW 2022 = 30.
     for major in (35, 34, 33, 32, 31, 30):

@@ -606,9 +606,6 @@ def _render_checkpoint_script(
 # Direct-execution helpers
 # ---------------------------------------------------------------------------
 
-_MOCKED_TOOLS: frozenset[str] = frozenset()
-
-
 def _pf(planned: dict[str, Any], *keys: str, default: float = 0.0) -> float:
     """Return the first float-convertible value found under any of *keys*."""
     for key in keys:
@@ -896,7 +893,7 @@ async def _run_checkpoint_tools(
 
     Generates the checkpoint script as an audit artifact but executes tools
     in-process so that test adapters (monkeypatched create_adapter) work.
-    Tools in _MOCKED_TOOLS and unrecognized tool names are recorded as mocked
+    Unrecognized tool names are recorded as mocked
     and do not block checkpoint success.
     """
     tools = _planned_tools(planned)
@@ -939,17 +936,6 @@ async def _run_checkpoint_tools(
 
     try:
         for tool in tools:
-            if tool in _MOCKED_TOOLS:
-                mocked_tools.append(tool)
-                tool_runs.append(
-                    {
-                        "tool": tool,
-                        "status": "mocked",
-                        "message": f"{tool} — mocked (no adapter binding in this build)",
-                    }
-                )
-                continue
-
             try:
                 run = await _execute_tool(adapter, planned, tool)
             except Exception as exc:
