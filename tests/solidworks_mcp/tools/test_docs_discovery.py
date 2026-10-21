@@ -1453,3 +1453,106 @@ def test_docs_discovery_imports_without_pywin32(import_without) -> None:
     )
 
     assert attrs == {"HAS_WIN32COM": False}
+
+
+def test_index_is_stale_treats_an_unreadable_file_as_fresh() -> None:
+    from solidworks_mcp.tools.docs_discovery import _index_is_stale
+
+    def denied():
+        raise PermissionError("access denied")
+
+    unreadable = SimpleNamespace(exists=lambda: True, stat=denied)
+
+    assert _index_is_stale(unreadable, 21) is False
+
+
+@pytest.fixture
+def stale_index(tmp_path):
+    index_file = tmp_path / "solidworks_docs_index_2026.json"
+    index_file.write_text("{}")
+    old = time.time() - 30 * 86400
+    os.utime(index_file, (old, old))
+    return {"com_objects": {}}, index_file
+
+
+def _refresh_env(monkeypatch, *, saved_to=None, error=None):
+    """Pretend to be on Windows with pywin32; record what discovery was asked."""
+    from solidworks_mcp.tools import docs_discovery as dd
+
+    calls: list[str] = []
+
+    class _Discovery:
+        def discover_all(self):
+            if error is not None:
+                raise error
+            return {"com_objects": {"ISldWorks": {}}}
+
+        def save_index(self, filename):
+            calls.append(filename)
+            return saved_to
+
+    monkeypatch.setattr(dd, "HAS_WIN32COM", True)
+    monkeypatch.setattr(dd.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(dd, "SolidWorksDocsDiscovery", _Discovery)
+    return calls
+
+
+_REFRESH_ON = SimpleNamespace(docs_index_auto_refresh=True, docs_index_max_age_days=21)
+
+
+def test_maybe_refresh_index_rebuilds_a_stale_index(stale_index, monkeypatch, tmp_path):
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
+
+    index, index_file = stale_index
+    fresh_file = tmp_path / "fresh.json"
+    calls = _refresh_env(monkeypatch, saved_to=fresh_file)
+
+    refreshed, refreshed_file = _maybe_refresh_index(
+        index, index_file, 2026, _REFRESH_ON
+    )
+
+    assert refreshed == {"com_objects": {"ISldWorks": {}}}
+    assert refreshed_file == fresh_file
+    assert calls == ["solidworks_docs_index_2026.json"]
+
+
+def test_maybe_refresh_index_keeps_the_old_path_when_save_reports_none(
+    stale_index, monkeypatch
+):
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
+
+    index, index_file = stale_index
+    calls = _refresh_env(monkeypatch, saved_to=None)
+
+    _refreshed, refreshed_file = _maybe_refresh_index(
+        index, index_file, None, _REFRESH_ON
+    )
+
+    assert refreshed_file == index_file
+    assert calls == ["solidworks_docs_index.json"]
+
+
+def test_maybe_refresh_index_serves_the_stale_index_when_discovery_fails(
+    stale_index, monkeypatch
+):
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
+
+    index, index_file = stale_index
+    _refresh_env(monkeypatch, error=RuntimeError("SolidWorks not running"))
+
+    assert _maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
+        index,
+        index_file,
+    )
+
+
+def test_maybe_refresh_index_needs_windows_and_pywin32(stale_index, monkeypatch):
+    from solidworks_mcp.tools import docs_discovery as dd
+
+    index, index_file = stale_index
+    monkeypatch.setattr(dd, "HAS_WIN32COM", False)
+
+    assert dd._maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
+        index,
+        index_file,
+    )

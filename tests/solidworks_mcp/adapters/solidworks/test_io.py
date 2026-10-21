@@ -363,3 +363,292 @@ async def test_save_body_as_part_failures_and_overwrite(tmp_path, monkeypatch) -
     assert "has no FeatureManager" in (no_manager.error or "")
     assert "did not write a file" in (not_written.error or "")
     assert not target.exists()  # the stale file was removed before saving
+
+
+# ---- pack and go: comtypes type library, COM bridge, adapter flow ------------
+
+
+def test_get_sw_comtypes_lib_tries_newest_version_first(monkeypatch) -> None:
+    tried: list[int] = []
+    lib = object()
+
+    def get_module(spec):
+        tried.append(spec[1])
+        if spec[1] > 33:
+            raise OSError("type library not registered")
+        return lib
+
+    monkeypatch.setattr(_io_module, "_sw_comtypes_lib", None)
+    monkeypatch.setattr(_io_module, "_COMTYPES_AVAILABLE", True)
+    monkeypatch.setattr(_io_module, "comtypes", SimpleNamespace(GUID=str))
+    monkeypatch.setattr(
+        _io_module, "_comtypes_client", SimpleNamespace(GetModule=get_module)
+    )
+
+    assert _get_sw_comtypes_lib() is lib
+    assert tried == [35, 34, 33]
+    assert _io_module._sw_comtypes_lib is lib
+
+
+def test_get_sw_comtypes_lib_returns_none_when_no_version_is_registered(
+    monkeypatch,
+) -> None:
+    def get_module(_spec):
+        raise OSError("type library not registered")
+
+    monkeypatch.setattr(_io_module, "_sw_comtypes_lib", None)
+    monkeypatch.setattr(_io_module, "_COMTYPES_AVAILABLE", True)
+    monkeypatch.setattr(_io_module, "comtypes", SimpleNamespace(GUID=str))
+    monkeypatch.setattr(
+        _io_module, "_comtypes_client", SimpleNamespace(GetModule=get_module)
+    )
+
+    assert _get_sw_comtypes_lib() is None
+
+
+class _Unknown:
+    """pywin32 PyIUnknown stand-in; only its repr carries the raw pointer."""
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def __repr__(self) -> str:
+        return self._text
+
+
+def _bridge_env(monkeypatch, unk_repr: str) -> tuple[SimpleNamespace, list]:
+    calls: list = []
+
+    class _CtUnknown:
+        def __init__(self, address: int) -> None:
+            self.address = address
+
+        def AddRef(self) -> None:
+            calls.append(("AddRef", self.address))
+
+        def QueryInterface(self, iface):
+            calls.append(("QueryInterface", iface))
+            return f"{iface}@{self.address:#x}"
+
+    def query_interface(iid):
+        calls.append(("ole", iid))
+        return _Unknown(unk_repr)
+
+    monkeypatch.setattr(
+        _io_module, "pythoncom", SimpleNamespace(IID_IUnknown="IID_IUnknown")
+    )
+    monkeypatch.setattr(_io_module, "comtypes", SimpleNamespace(IUnknown=object))
+    monkeypatch.setattr(
+        _io_module,
+        "ctypes",
+        SimpleNamespace(
+            POINTER=lambda kind: kind,
+            cast=lambda address, _kind: _CtUnknown(address),
+        ),
+    )
+    obj = SimpleNamespace(_oleobj_=SimpleNamespace(QueryInterface=query_interface))
+    return obj, calls
+
+
+def test_bridge_com_to_comtypes_reuses_the_raw_pointer(monkeypatch) -> None:
+    obj, calls = _bridge_env(monkeypatch, "<PyIUnknown at 0x01 with obj at 0x2A>")
+
+    bridged = _io_module._bridge_com_to_comtypes(obj, "IModelDocExtension")
+
+    assert bridged == "IModelDocExtension@0x2a"
+    assert calls == [
+        ("ole", "IID_IUnknown"),
+        ("AddRef", 0x2A),
+        ("QueryInterface", "IModelDocExtension"),
+    ]
+
+
+def test_bridge_com_to_comtypes_rejects_an_unparseable_pointer(monkeypatch) -> None:
+    obj, _calls = _bridge_env(monkeypatch, "<PyIUnknown with no address>")
+
+    with pytest.raises(RuntimeError, match="Could not extract COM pointer"):
+        _io_module._bridge_com_to_comtypes(obj, "IModelDocExtension")
+
+
+class _PackAndGo:
+    """IPackAndGo stand-in that records its configuration."""
+
+    def __init__(self, names) -> None:
+        self.names = names
+        self.FlattenToSingleFolder = False
+        self.save_to = None
+
+    def SetSaveToName(self, flag, folder) -> None:
+        self.save_to = (flag, folder)
+
+    def GetDocumentNames(self):
+        return (self.names,)
+
+
+class _PackApp:
+    """swApp stand-in: OpenDoc6 answers from a scripted list of (model, err)."""
+
+    def __init__(self, opens) -> None:
+        self.opens = list(opens)
+        self.closed_all = False
+
+    def OpenDoc6(self, _path, _type, _opts, _cfg, err, _warn):
+        model, code = self.opens.pop(0)
+        err.value = code
+        return model
+
+    def CloseAllDocuments(self, _include_unsaved) -> None:
+        self.closed_all = True
+
+
+class _PackHarness(_IOHarness):
+    def __init__(self, app) -> None:
+        super().__init__(None)
+        self.swApp = app
+
+    def _adapter(self, _owner):
+        return self
+
+
+def _pack_env(monkeypatch, out_dir, *, names, statuses):
+    """Fake the comtypes layer; SavePackAndGo writes the packed files."""
+    pg = _PackAndGo(names)
+
+    class _Ext:
+        def GetPackAndGo(self):
+            return pg
+
+        def SavePackAndGo(self, _pg):
+            for name in ("asm.SLDASM", "part.sldprt", "notes.txt"):
+                (out_dir / name).write_text("x")
+            return statuses
+
+    monkeypatch.setattr(
+        _io_module, "win32com", SimpleNamespace(client=SimpleNamespace())
+    )
+    monkeypatch.setattr(
+        _io_module,
+        "_get_sw_comtypes_lib",
+        lambda: SimpleNamespace(IModelDocExtension="IModelDocExtension"),
+    )
+    monkeypatch.setattr(
+        _io_module, "_bridge_com_to_comtypes", lambda _obj, _iface: _Ext()
+    )
+    monkeypatch.setattr(_io_module._sw_type_info, "flag_doc", lambda _m, _t: None)
+    return pg
+
+
+@pytest.mark.asyncio
+async def test_pack_and_go_assembly_packs_into_a_fresh_folder(
+    tmp_path, monkeypatch
+) -> None:
+    out_dir = tmp_path / "pkg"
+    pg = _pack_env(
+        monkeypatch, out_dir, names=["a.sldasm", "b.sldprt"], statuses=(0, 0)
+    )
+    model = SimpleNamespace(Extension=object())
+    harness = _PackHarness(_PackApp([(model, 0)]))
+
+    result = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    assert result.is_success
+    assert harness.currentModel is model
+    assert pg.FlattenToSingleFolder is True
+    assert pg.save_to == (True, str(out_dir) + "\\")
+    assert result.data["source_files"] == ["a.sldasm", "b.sldprt"]
+    assert result.data["copied_files"] == sorted(
+        [str(out_dir / "asm.SLDASM"), str(out_dir / "part.sldprt")]
+    )
+    assert result.data["save_statuses"] == [0, 0]
+    assert result.data["all_files_saved"] is True
+
+
+@pytest.mark.asyncio
+async def test_pack_and_go_assembly_retries_after_closing_documents(
+    tmp_path, monkeypatch
+) -> None:
+    """err 65536 (file already open elsewhere) closes everything and retries once."""
+    out_dir = tmp_path / "pkg"
+    _pack_env(monkeypatch, out_dir, names=None, statuses=(0, 2))
+    app = _PackApp([(None, 65536), (SimpleNamespace(Extension=object()), 0)])
+    harness = _PackHarness(app)
+
+    result = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    assert app.closed_all is True
+    assert result.data["source_files"] == []
+    assert result.data["all_files_saved"] is False
+
+
+@pytest.mark.asyncio
+async def test_pack_and_go_assembly_moves_an_existing_folder_aside(
+    tmp_path, monkeypatch
+) -> None:
+    out_dir = tmp_path / "pkg"
+    out_dir.mkdir()
+    (out_dir / "stale.sldprt").write_text("old")
+    _pack_env(monkeypatch, out_dir, names=[], statuses=None)
+    harness = _PackHarness(_PackApp([(SimpleNamespace(Extension=object()), 0)]))
+
+    result = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    assert result.is_success
+    assert result.data["save_statuses"] == []
+    assert str(out_dir / "stale.sldprt") not in result.data["copied_files"]
+    assert [p.name for p in tmp_path.iterdir()] == ["pkg"]
+
+
+@pytest.mark.asyncio
+async def test_pack_and_go_assembly_keeps_going_when_the_old_folder_is_locked(
+    tmp_path, monkeypatch
+) -> None:
+    """SolidWorks file locks: a failed rename or delete must not stop the pack."""
+    out_dir = tmp_path / "pkg"
+    out_dir.mkdir()
+    _pack_env(monkeypatch, out_dir, names=[], statuses=(0,))
+    harness = _PackHarness(_PackApp([(SimpleNamespace(Extension=object()), 0)] * 2))
+
+    def locked(*_args, **_kwargs):
+        raise OSError("[WinError 32] file in use")
+
+    monkeypatch.setattr(_io_module.shutil, "rmtree", locked)
+    first = await harness.pack_and_go_assembly(str(tmp_path / "a.sldasm"), str(out_dir))
+    backups = [p for p in tmp_path.iterdir() if p.name.startswith("pkg_bak_")]
+
+    monkeypatch.setattr(_io_module.os, "rename", locked)
+    second = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    assert first.is_success and second.is_success
+    assert len(backups) == 1
+
+
+@pytest.mark.asyncio
+async def test_pack_and_go_assembly_reports_why_it_failed(
+    tmp_path, monkeypatch
+) -> None:
+    out_dir = tmp_path / "pkg"
+    _pack_env(monkeypatch, out_dir, names=[], statuses=())
+    harness = _PackHarness(_PackApp([(None, 1024)]))
+
+    opened = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    monkeypatch.setattr(_io_module, "_get_sw_comtypes_lib", lambda: None)
+    no_lib = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    assert opened.status == AdapterResultStatus.ERROR
+    assert opened.error == "Pack and Go failed: OpenDoc6 failed err=1024 warn=0"
+    assert no_lib.error.startswith(
+        "Pack and Go failed: comtypes SolidWorks type library not available"
+    )

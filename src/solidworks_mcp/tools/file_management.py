@@ -478,9 +478,7 @@ async def register_file_management_tools(
 
         return str(target)
 
-    def _get_attr_or_call(  # pragma: no cover
-        obj: Any, name: str, default: Any = None
-    ) -> Any:
+    def _get_attr_or_call(obj: Any, name: str, default: Any = None) -> Any:
         """Read COM values that may be exposed as either properties or methods."""
         if obj is None:
             return default
@@ -495,7 +493,7 @@ async def register_file_management_tools(
             return default if value is None else value
         return candidate
 
-    def _extract_dependency_paths(  # pragma: no cover
+    def _extract_dependency_paths(
         raw_dependencies: Any,
     ) -> list[Path]:
         """Extract model file paths from SolidWorks GetDependencies2 payloads."""
@@ -511,9 +509,7 @@ async def register_file_management_tools(
                 dependency_paths.append(Path(item))
         return dependency_paths
 
-    def _copy_with_collision_handling(  # pragma: no cover
-        source_path: Path, target_dir: Path
-    ) -> Path:
+    def _copy_with_collision_handling(source_path: Path, target_dir: Path) -> Path:
         """Copy a source file into target_dir, suffixing when name collisions occur."""
         destination = target_dir / source_path.name
         try:
@@ -539,7 +535,7 @@ async def register_file_management_tools(
                 return candidate
             index += 1
 
-    def _copy_active_assembly_with_references(  # pragma: no cover
+    def _copy_active_assembly_with_references(
         target_assembly_path: str,
     ) -> dict[str, Any]:
         """Copy active assembly and resolved dependencies into target folder."""
@@ -605,7 +601,7 @@ async def register_file_management_tools(
             "copy_method": "tool_dependency_copy",
         }
 
-    def _native_pack_and_go(  # pragma: no cover
+    def _native_pack_and_go(
         target_assembly_path: str,
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Try documented Pack-and-Go COM flow before fallback copy logic."""
@@ -623,7 +619,7 @@ async def register_file_management_tools(
         try:
             from win32com.client import Dispatch
 
-            model_ext_typed = Dispatch(  # pragma: no cover
+            model_ext_typed = Dispatch(
                 model_ext,
                 "IModelDocExtension",
                 "{99F4D4AF-F268-4EE1-8C55-041F7BECF879}",
@@ -631,22 +627,18 @@ async def register_file_management_tools(
 
             # SolidWorks API docs sequence:
             # GetPackAndGo -> SetSaveToName -> FlattenToSingleFolder -> SavePackAndGo
-            pack_and_go = model_ext_typed.GetPackAndGo()  # pragma: no cover
-            if pack_and_go is None:  # pragma: no cover
+            pack_and_go = model_ext_typed.GetPackAndGo()
+            if pack_and_go is None:
                 return None, "GetPackAndGo returned None."
 
-            set_path_ok = bool(
-                pack_and_go.SetSaveToName(True, str(target_dir))
-            )  # pragma: no cover
-            pack_and_go.FlattenToSingleFolder = True  # pragma: no cover
-            pack_and_go.IncludeDrawings = False  # pragma: no cover
-            pack_and_go.IncludeSimulationResults = False  # pragma: no cover
-            pack_and_go.IncludeToolboxComponents = True  # pragma: no cover
+            set_path_ok = bool(pack_and_go.SetSaveToName(True, str(target_dir)))
+            pack_and_go.FlattenToSingleFolder = True
+            pack_and_go.IncludeDrawings = False
+            pack_and_go.IncludeSimulationResults = False
+            pack_and_go.IncludeToolboxComponents = True
 
-            save_result = model_ext_typed.SavePackAndGo(pack_and_go)  # pragma: no cover
-            all_ok, status_warnings = _decode_pack_and_go_statuses(
-                save_result
-            )  # pragma: no cover
+            save_result = model_ext_typed.SavePackAndGo(pack_and_go)
+            all_ok, status_warnings = _decode_pack_and_go_statuses(save_result)
 
             copied_files = sorted(str(p) for p in target_dir.rglob("*") if p.is_file())
             if not copied_files:
@@ -1351,7 +1343,7 @@ async def register_file_management_tools(
 
             if input_data.include_references:
                 native_result, native_error = _native_pack_and_go(file_path)
-                if native_result is not None:  # pragma: no cover
+                if native_result is not None:
                     return native_result
 
                 copied_result = _copy_active_assembly_with_references(file_path)

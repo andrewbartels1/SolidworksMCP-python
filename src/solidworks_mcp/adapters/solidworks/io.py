@@ -19,7 +19,7 @@ try:
     import pythoncom
     import win32com.client
     import win32com.client.dynamic as _dynamic
-except ImportError:  # pragma: no cover
+except ImportError:
     pythoncom = SimpleNamespace()
     win32com = SimpleNamespace(client=SimpleNamespace())
     _dynamic = SimpleNamespace(Dispatch=lambda *_a, **_kw: None)
@@ -29,7 +29,7 @@ try:
     import comtypes.client as _comtypes_client  # type: ignore[import-untyped]
 
     _COMTYPES_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     _COMTYPES_AVAILABLE = False
 
 # SolidWorks type library GUID (stable across SW versions)
@@ -49,7 +49,7 @@ def _get_sw_comtypes_lib() -> Any:
         return _sw_comtypes_lib
     if not _COMTYPES_AVAILABLE:
         return None
-    for major in (35, 34, 33, 32, 31, 30):  # pragma: no cover
+    for major in (35, 34, 33, 32, 31, 30):
         try:
             _sw_comtypes_lib = _comtypes_client.GetModule(
                 (comtypes.GUID(_SW_TLB_GUID), major, 0)
@@ -57,10 +57,10 @@ def _get_sw_comtypes_lib() -> Any:
             return _sw_comtypes_lib
         except Exception:
             continue
-    return None  # pragma: no cover
+    return None
 
 
-def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:  # pragma: no cover
+def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:
     """Bridge a pywin32 CDispatch/COM object to a comtypes interface pointer.
 
     Extracts the raw IUnknown pointer from pywin32's repr string, then
@@ -1279,7 +1279,7 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _get() -> float:  # pragma: no cover
+        def _get() -> float:
             """Get the dimension value."""
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
@@ -1929,7 +1929,7 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("get_mass_properties", _get),
         )
 
-    async def pack_and_go_assembly(  # pragma: no cover
+    async def pack_and_go_assembly(
         self,
         source_path: str,
         target_dir: str,
@@ -1957,7 +1957,7 @@ class SolidWorksIOMixin:
         source = Path(source_path)
         out_dir = Path(target_dir)
 
-        def _do_pack_and_go() -> dict[str, Any]:  # pragma: no cover
+        def _do_pack_and_go() -> dict[str, Any]:
             # Load comtypes TLB (cached after first call)
             sw_lib = _get_sw_comtypes_lib()
             if sw_lib is None:
@@ -1984,16 +1984,11 @@ class SolidWorksIOMixin:
             out_dir.mkdir(parents=True, exist_ok=True)
 
             # Open the source assembly
-            vt = pythoncom.VT_BYREF | pythoncom.VT_I4
-            from win32com.client import VARIANT  # noqa: PLC0415
-
-            err = VARIANT(vt, 0)
-            warn = VARIANT(vt, 0)
+            err, warn = _byref_int(), _byref_int()
             model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
             if model is None and err.value == 65536:
                 adapter.swApp.CloseAllDocuments(False)
-                err = VARIANT(vt, 0)
-                warn = VARIANT(vt, 0)
+                err, warn = _byref_int(), _byref_int()
                 model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
             if model is None:
                 raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
