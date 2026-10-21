@@ -17,7 +17,7 @@ For each module:
 - read every removed `except` body first, and keep any logic that does more than log-and-return
 - update tests that pin `"Unexpected error"` wording
 
-- [ ] 2.1 `tools/modeling.py`
+- [x] 2.1 `tools/modeling.py`
 - [ ] 2.2 `tools/sketching.py`
 - [ ] 2.3 `tools/drawing.py` and `tools/drawing_analysis.py`
 - [ ] 2.4 `tools/file_management.py`

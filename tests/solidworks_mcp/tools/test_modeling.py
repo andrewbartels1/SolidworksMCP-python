@@ -728,7 +728,7 @@ class TestModelingTools:
         # a mock with name="" to exercise the handler's own guard (lines 920-921, 966-967).
         fake_get = MagicMock(spec=["name", "dimension_name"])
         fake_get.name = ""
-        with patch.object(_modeling_mod, "_normalize_input", return_value=fake_get):
+        with patch.object(_modeling_mod, "normalize_input", return_value=fake_get):
             get_result = await tool["get_dimension"]({})
         assert get_result["status"] == "error"
         assert "Dimension name is required" in get_result["message"]
@@ -736,7 +736,7 @@ class TestModelingTools:
         fake_set = MagicMock(spec=["name", "dimension_name", "value", "units"])
         fake_set.name = ""
         fake_set.value = 5.0
-        with patch.object(_modeling_mod, "_normalize_input", return_value=fake_set):
+        with patch.object(_modeling_mod, "normalize_input", return_value=fake_set):
             set_result = await tool["set_dimension"]({})
         assert set_result["status"] == "error"
         assert "Dimension name is required" in set_result["message"]

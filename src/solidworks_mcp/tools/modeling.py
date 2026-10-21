@@ -4,10 +4,9 @@ Provides tools for creating and manipulating SolidWorks models, including parts,
 assemblies, drawings, and features like extrusions, revolves, etc.
 """
 
-from typing import Any, TypeVar
+from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
 from pydantic import BaseModel, Field
 
 from ..adapters.base import (
@@ -18,10 +17,12 @@ from ..adapters.base import (
     SweepParameters,
 )
 from .input_compat import CompatInput
-from .tool_boundary import with_tool_boundary
-
-TInput = TypeVar("TInput", bound=BaseModel)
-
+from .tool_boundary import (
+    InvalidInputError,
+    normalize_input,
+    require_success,
+    with_tool_boundary,
+)
 
 # Input schemas using Python 3.14 built-in types
 
@@ -49,21 +50,6 @@ def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
             if value is not None:
                 return value
     return default
-
-
-def _normalize_input(input_data: Any, model_type: type[TInput]) -> TInput:
-    """Build internal normalize input.
-
-    Args:
-        input_data (Any): The input data value.
-        model_type (type[TInput]): The model type value.
-
-    Returns:
-        TInput: The result produced by the operation.
-    """
-    if isinstance(input_data, model_type):
-        return input_data
-    return model_type.model_validate(input_data)
 
 
 class OpenModelInput(BaseModel):
@@ -904,44 +890,27 @@ async def register_modeling_tools(
                             File path must be absolute and accessible to SolidWorks.
                             Model becomes the active document for subsequent operations.
         """
-        try:
-            input_data = _normalize_input(input_data, OpenModelInput)
-            result = await adapter.open_model(input_data.file_path)
+        input_data = normalize_input(input_data, OpenModelInput)
+        result = await adapter.open_model(input_data.file_path)
 
-            if result.is_success:
-                model = result.data
-                title = _result_value(
-                    model, "title", "name", default=input_data.file_path
-                )
-                model_type = _result_value(model, "type", default="Part")
-                path = _result_value(
-                    model, "path", "file_path", default=input_data.file_path
-                )
-                configuration = _result_value(model, "configuration", default="Default")
-                return {
-                    "status": "success",
-                    "message": f"Opened {model_type}: {title}",
-                    "model": {
-                        "title": title,
-                        "name": title,
-                        "type": model_type,
-                        "path": path,
-                        "configuration": configuration,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to open model: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in open_model tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to open model")
+        model = result.data
+        title = _result_value(model, "title", "name", default=input_data.file_path)
+        model_type = _result_value(model, "type", default="Part")
+        path = _result_value(model, "path", "file_path", default=input_data.file_path)
+        configuration = _result_value(model, "configuration", default="Default")
+        return {
+            "status": "success",
+            "message": f"Opened {model_type}: {title}",
+            "model": {
+                "title": title,
+                "name": title,
+                "type": model_type,
+                "path": path,
+                "configuration": configuration,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_part(input_data: CreatePartInput) -> dict[str, Any]:
@@ -973,37 +942,24 @@ async def register_modeling_tools(
                             - Use save operations to persist to disk
                             - Subsequent modeling operations will apply to this part
         """
-        try:
-            input_data = _normalize_input(input_data, CreatePartInput)
-            result = await adapter.create_part(input_data.name, input_data.units)
+        input_data = normalize_input(input_data, CreatePartInput)
+        result = await adapter.create_part(input_data.name, input_data.units)
 
-            if result.is_success:
-                model = result.data
-                part_name = _result_value(model, "name", default=input_data.name)
-                units = _result_value(model, "units", default=input_data.units or "mm")
-                return {
-                    "status": "success",
-                    "message": f"Created new part: {part_name}",
-                    "part": {
-                        "name": part_name,
-                        "units": units,
-                        "material": input_data.material,
-                        "template": input_data.template,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create part: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in create_part tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create part")
+        model = result.data
+        part_name = _result_value(model, "name", default=input_data.name)
+        units = _result_value(model, "units", default=input_data.units or "mm")
+        return {
+            "status": "success",
+            "message": f"Created new part: {part_name}",
+            "part": {
+                "name": part_name,
+                "units": units,
+                "material": input_data.material,
+                "template": input_data.template,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_assembly(input_data: CreateAssemblyInput) -> dict[str, Any]:
@@ -1039,35 +995,22 @@ async def register_modeling_tools(
                         This tool creates a new assembly document using the default assembly template.
                         The new assembly will become the active document.
         """
-        try:
-            input_data = _normalize_input(input_data, CreateAssemblyInput)
-            result = await adapter.create_assembly(input_data.name)
+        input_data = normalize_input(input_data, CreateAssemblyInput)
+        result = await adapter.create_assembly(input_data.name)
 
-            if result.is_success:
-                model = result.data
-                assembly_name = _result_value(model, "name", default=input_data.name)
-                return {
-                    "status": "success",
-                    "message": f"Created new assembly: {assembly_name}",
-                    "assembly": {
-                        "name": assembly_name,
-                        "components": input_data.components,
-                        "template": input_data.template,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create assembly: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in create_assembly tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create assembly")
+        model = result.data
+        assembly_name = _result_value(model, "name", default=input_data.name)
+        return {
+            "status": "success",
+            "message": f"Created new assembly: {assembly_name}",
+            "assembly": {
+                "name": assembly_name,
+                "components": input_data.components,
+                "template": input_data.template,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_drawing(input_data: CreateDrawingInput) -> dict[str, Any]:
@@ -1082,39 +1025,26 @@ async def register_modeling_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _normalize_input(input_data, CreateDrawingInput)
-            result = await adapter.create_drawing(input_data.name)
+        input_data = normalize_input(input_data, CreateDrawingInput)
+        result = await adapter.create_drawing(input_data.name)
 
-            if result.is_success:
-                model = result.data
-                drawing_name = _result_value(model, "name", default=input_data.name)
-                sheet_format = _result_value(
-                    model, "sheet_format", default=input_data.sheet_format
-                )
-                return {
-                    "status": "success",
-                    "message": f"Created new drawing: {drawing_name}",
-                    "drawing": {
-                        "name": drawing_name,
-                        "model_path": input_data.model_path,
-                        "sheet_format": sheet_format,
-                        "template": input_data.template,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create drawing: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in create_drawing tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create drawing")
+        model = result.data
+        drawing_name = _result_value(model, "name", default=input_data.name)
+        sheet_format = _result_value(
+            model, "sheet_format", default=input_data.sheet_format
+        )
+        return {
+            "status": "success",
+            "message": f"Created new drawing: {drawing_name}",
+            "drawing": {
+                "name": drawing_name,
+                "model_path": input_data.model_path,
+                "sheet_format": sheet_format,
+                "template": input_data.template,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def close_model(input_data: CloseModelInput) -> dict[str, Any]:
@@ -1147,29 +1077,16 @@ async def register_modeling_tools(
                             - Always save important work before closing
                             - Model must be open to close it
         """
-        try:
-            input_data = _normalize_input(input_data, CloseModelInput)
-            result = await adapter.close_model(input_data.save)
+        input_data = normalize_input(input_data, CloseModelInput)
+        result = await adapter.close_model(input_data.save)
 
-            if result.is_success:
-                return {
-                    "status": "success",
-                    "message": "Model closed successfully",
-                    "saved": input_data.save,
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to close model: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in close_model tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to close model")
+        return {
+            "status": "success",
+            "message": "Model closed successfully",
+            "saved": input_data.save,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_extrusion(input_data: CreateExtrusionInput) -> dict[str, Any]:
@@ -1208,51 +1125,38 @@ async def register_modeling_tools(
                             })
                             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateExtrusionInput)
-            # Convert input to ExtrusionParameters
-            params = ExtrusionParameters(
-                depth=input_data.depth,
-                draft_angle=input_data.draft_angle,
-                reverse_direction=input_data.reverse_direction,
-                both_directions=input_data.both_directions,
-                thin_feature=input_data.thin_feature,
-                thin_thickness=input_data.thin_thickness,
-                end_condition=input_data.end_condition,
-                merge_result=input_data.merge_result,
-                feature_scope=False,
-                auto_select=True,
-            )
+        input_data = normalize_input(input_data, CreateExtrusionInput)
+        # Convert input to ExtrusionParameters
+        params = ExtrusionParameters(
+            depth=input_data.depth,
+            draft_angle=input_data.draft_angle,
+            reverse_direction=input_data.reverse_direction,
+            both_directions=input_data.both_directions,
+            thin_feature=input_data.thin_feature,
+            thin_thickness=input_data.thin_thickness,
+            end_condition=input_data.end_condition,
+            merge_result=input_data.merge_result,
+            feature_scope=False,
+            auto_select=True,
+        )
 
-            result = await adapter.create_extrusion(params)
+        result = await adapter.create_extrusion(params)
 
-            if result.is_success:
-                feature = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created extrusion: {_result_value(feature, 'feature_name', 'name', default='Extrusion')}",
-                    "extrusion": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Extrusion"
-                        ),
-                        "sketch": input_data.sketch_name,
-                        "depth": input_data.depth,
-                        "direction": input_data.direction,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create extrusion: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in create_extrusion tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create extrusion")
+        feature = result.data
+        return {
+            "status": "success",
+            "message": f"Created extrusion: {_result_value(feature, 'feature_name', 'name', default='Extrusion')}",
+            "extrusion": {
+                "name": _result_value(
+                    feature, "feature_name", "name", default="Extrusion"
+                ),
+                "sketch": input_data.sketch_name,
+                "depth": input_data.depth,
+                "direction": input_data.direction,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_revolve(input_data: CreateRevolveInput) -> dict[str, Any]:
@@ -1290,48 +1194,35 @@ async def register_modeling_tools(
                             })
                             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateRevolveInput)
-            # Convert input to RevolveParameters
-            params = RevolveParameters(
-                angle=input_data.angle,
-                reverse_direction=input_data.reverse_direction,
-                both_directions=input_data.both_directions,
-                thin_feature=input_data.thin_feature,
-                thin_thickness=input_data.thin_thickness,
-                merge_result=input_data.merge_result,
-            )
+        input_data = normalize_input(input_data, CreateRevolveInput)
+        # Convert input to RevolveParameters
+        params = RevolveParameters(
+            angle=input_data.angle,
+            reverse_direction=input_data.reverse_direction,
+            both_directions=input_data.both_directions,
+            thin_feature=input_data.thin_feature,
+            thin_thickness=input_data.thin_thickness,
+            merge_result=input_data.merge_result,
+        )
 
-            result = await adapter.create_revolve(params)
+        result = await adapter.create_revolve(params)
 
-            if result.is_success:
-                feature = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created revolve: {_result_value(feature, 'feature_name', 'name', default='Revolve')}",
-                    "revolve": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Revolve"
-                        ),
-                        "sketch": input_data.sketch_name,
-                        "axis_entity": input_data.axis_entity,
-                        "angle": input_data.angle,
-                        "direction": input_data.direction,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create revolve: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in create_revolve tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to create revolve")
+        feature = result.data
+        return {
+            "status": "success",
+            "message": f"Created revolve: {_result_value(feature, 'feature_name', 'name', default='Revolve')}",
+            "revolve": {
+                "name": _result_value(
+                    feature, "feature_name", "name", default="Revolve"
+                ),
+                "sketch": input_data.sketch_name,
+                "axis_entity": input_data.axis_entity,
+                "angle": input_data.angle,
+                "direction": input_data.direction,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def get_dimension(input_data: GetDimensionInput) -> dict[str, Any]:
@@ -1364,38 +1255,25 @@ async def register_modeling_tools(
                             })
                             ```
         """
-        try:
-            input_data = _normalize_input(input_data, GetDimensionInput)
-            if not input_data.name:
-                return {"status": "error", "message": "Dimension name is required"}
-            result = await adapter.get_dimension(input_data.name)
+        input_data = normalize_input(input_data, GetDimensionInput)
+        if not input_data.name:
+            raise InvalidInputError("name: Dimension name is required")
+        result = await adapter.get_dimension(input_data.name)
 
-            if result.is_success:
-                value = result.data
-                dimension_value = _result_value(value, "value", default=value)
-                dimension_units = _result_value(value, "units", default="mm")
-                return {
-                    "status": "success",
-                    "message": f"Dimension {input_data.name} = {dimension_value} {dimension_units}",
-                    "dimension": {
-                        "name": input_data.name,
-                        "value": dimension_value,
-                        "units": dimension_units,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to get dimension: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in get_dimension tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to get dimension")
+        value = result.data
+        dimension_value = _result_value(value, "value", default=value)
+        dimension_units = _result_value(value, "units", default="mm")
+        return {
+            "status": "success",
+            "message": f"Dimension {input_data.name} = {dimension_value} {dimension_units}",
+            "dimension": {
+                "name": input_data.name,
+                "value": dimension_value,
+                "units": dimension_units,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def set_dimension(input_data: SetDimensionInput) -> dict[str, Any]:
@@ -1410,39 +1288,26 @@ async def register_modeling_tools(
         Returns:
             dict[str, Any]: A dictionary containing the resulting values.
         """
-        try:
-            input_data = _normalize_input(input_data, SetDimensionInput)
-            if not input_data.name:
-                return {"status": "error", "message": "Dimension name is required"}
-            result = await adapter.set_dimension(input_data.name, input_data.value)
+        input_data = normalize_input(input_data, SetDimensionInput)
+        if not input_data.name:
+            raise InvalidInputError("name: Dimension name is required")
+        result = await adapter.set_dimension(input_data.name, input_data.value)
 
-            if result.is_success:
-                payload = result.data
-                return {
-                    "status": "success",
-                    "message": f"Set dimension {input_data.name} = {input_data.value} mm",
-                    "dimension_update": {
-                        "name": input_data.name,
-                        "old_value": _result_value(payload, "old_value"),
-                        "new_value": _result_value(
-                            payload, "new_value", default=input_data.value
-                        ),
-                        "units": input_data.units or "mm",
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to set dimension: {result.error}",
-                }
-
-        except Exception as e:
-            logger.error(f"Error in set_dimension tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Unexpected error: {str(e)}",
-            }
+        require_success(result, context="Failed to set dimension")
+        payload = result.data
+        return {
+            "status": "success",
+            "message": f"Set dimension {input_data.name} = {input_data.value} mm",
+            "dimension_update": {
+                "name": input_data.name,
+                "old_value": _result_value(payload, "old_value"),
+                "new_value": _result_value(
+                    payload, "new_value", default=input_data.value
+                ),
+                "units": input_data.units or "mm",
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def set_units(input_data: SetUnitsInput) -> dict[str, Any]:
@@ -1464,28 +1329,20 @@ async def register_modeling_tools(
             await set_units({"unit_system": "in"})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, SetUnitsInput)
-            result = await adapter.set_units(input_data.unit_system)
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                applied = data.get("unit_system", input_data.unit_system)
-                message = f"Set document units to {applied}"
-                if data.get("verified") is None:
-                    message += " (could not be read back to confirm)"
-                return {
-                    "status": "success",
-                    "message": message,
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to set units: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in set_units tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, SetUnitsInput)
+        result = await adapter.set_units(input_data.unit_system)
+        require_success(result, context="Failed to set units")
+        data = result.data if isinstance(result.data, dict) else {}
+        applied = data.get("unit_system", input_data.unit_system)
+        message = f"Set document units to {applied}"
+        if data.get("verified") is None:
+            message += " (could not be read back to confirm)"
+        return {
+            "status": "success",
+            "message": message,
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_cut_extrude(input_data: CreateCutExtrudeInput) -> dict[str, Any]:
@@ -1523,50 +1380,41 @@ async def register_modeling_tools(
             result = await create_cut_extrude({"depth": 200.0})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateCutExtrudeInput)
-            params = ExtrusionParameters(
-                depth=input_data.depth,
-                draft_angle=input_data.draft_angle,
-                reverse_direction=input_data.reverse_direction,
-                both_directions=False,
-                thin_feature=False,
-                thin_thickness=None,
-                end_condition=input_data.end_condition,
-                merge_result=False,
-                feature_scope=False,
-                auto_select=True,
-                sketch_name=input_data.sketch_name,
-            )
-            result = await adapter.create_cut_extrude(params)
-            if result.is_success:
-                feature = result.data
-                feature_params = _result_value(feature, "parameters", default={})
-                sketch_used = (
-                    feature_params.get("sketch_name")
-                    if isinstance(feature_params, dict)
-                    else None
-                ) or input_data.sketch_name
-                return {
-                    "status": "success",
-                    "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
-                    "cut_extrude": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Cut-Extrude"
-                        ),
-                        "depth": input_data.depth,
-                        "sketch_name": sketch_used,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create cut-extrude: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in create_cut_extrude tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, CreateCutExtrudeInput)
+        params = ExtrusionParameters(
+            depth=input_data.depth,
+            draft_angle=input_data.draft_angle,
+            reverse_direction=input_data.reverse_direction,
+            both_directions=False,
+            thin_feature=False,
+            thin_thickness=None,
+            end_condition=input_data.end_condition,
+            merge_result=False,
+            feature_scope=False,
+            auto_select=True,
+            sketch_name=input_data.sketch_name,
+        )
+        result = await adapter.create_cut_extrude(params)
+        require_success(result, context="Failed to create cut-extrude")
+        feature = result.data
+        feature_params = _result_value(feature, "parameters", default={})
+        sketch_used = (
+            feature_params.get("sketch_name")
+            if isinstance(feature_params, dict)
+            else None
+        ) or input_data.sketch_name
+        return {
+            "status": "success",
+            "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
+            "cut_extrude": {
+                "name": _result_value(
+                    feature, "feature_name", "name", default="Cut-Extrude"
+                ),
+                "depth": input_data.depth,
+                "sketch_name": sketch_used,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_fillet(input_data: AddFilletInput) -> dict[str, Any]:
@@ -1588,31 +1436,22 @@ async def register_modeling_tools(
             result = await add_fillet({"radius": 2.0, "edge_names": ["Edge<1>", "Edge<2>"]})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, AddFilletInput)
-            result = await adapter.add_fillet(input_data.radius, input_data.edge_names)
-            if result.is_success:
-                feature = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created fillet: {_result_value(feature, 'feature_name', 'name', default='Fillet')}",
-                    "fillet": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Fillet"
-                        ),
-                        "radius": input_data.radius,
-                        "edges": input_data.edge_names,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add fillet: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in add_fillet tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, AddFilletInput)
+        result = await adapter.add_fillet(input_data.radius, input_data.edge_names)
+        require_success(result, context="Failed to add fillet")
+        feature = result.data
+        return {
+            "status": "success",
+            "message": f"Created fillet: {_result_value(feature, 'feature_name', 'name', default='Fillet')}",
+            "fillet": {
+                "name": _result_value(
+                    feature, "feature_name", "name", default="Fillet"
+                ),
+                "radius": input_data.radius,
+                "edges": input_data.edge_names,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
@@ -1634,33 +1473,22 @@ async def register_modeling_tools(
             result = await add_chamfer({"distance": 1.5, "edge_names": ["Edge<1>", "Edge<2>"]})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, AddChamferInput)
-            result = await adapter.add_chamfer(
-                input_data.distance, input_data.edge_names
-            )
-            if result.is_success:
-                feature = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created chamfer: {_result_value(feature, 'feature_name', 'name', default='Chamfer')}",
-                    "chamfer": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Chamfer"
-                        ),
-                        "distance": input_data.distance,
-                        "edges": input_data.edge_names,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to add chamfer: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in add_chamfer tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, AddChamferInput)
+        result = await adapter.add_chamfer(input_data.distance, input_data.edge_names)
+        require_success(result, context="Failed to add chamfer")
+        feature = result.data
+        return {
+            "status": "success",
+            "message": f"Created chamfer: {_result_value(feature, 'feature_name', 'name', default='Chamfer')}",
+            "chamfer": {
+                "name": _result_value(
+                    feature, "feature_name", "name", default="Chamfer"
+                ),
+                "distance": input_data.distance,
+                "edges": input_data.edge_names,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_sweep(input_data: CreateSweepInput) -> dict[str, Any]:
@@ -1692,38 +1520,27 @@ async def register_modeling_tools(
             })
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateSweepInput)
-            params = SweepParameters(
-                path=input_data.path,
-                twist_along_path=input_data.twist_along_path,
-                twist_angle=input_data.twist_angle,
-                merge_result=input_data.merge_result,
-            )
-            result = await adapter.create_sweep(params)
-            if result.is_success:
-                feature = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created sweep: {_result_value(feature, 'feature_name', 'name', default='Sweep')}",
-                    "sweep": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Sweep"
-                        ),
-                        "path": input_data.path,
-                        "twist_along_path": input_data.twist_along_path,
-                        "twist_angle": input_data.twist_angle,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create sweep: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in create_sweep tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, CreateSweepInput)
+        params = SweepParameters(
+            path=input_data.path,
+            twist_along_path=input_data.twist_along_path,
+            twist_angle=input_data.twist_angle,
+            merge_result=input_data.merge_result,
+        )
+        result = await adapter.create_sweep(params)
+        require_success(result, context="Failed to create sweep")
+        feature = result.data
+        return {
+            "status": "success",
+            "message": f"Created sweep: {_result_value(feature, 'feature_name', 'name', default='Sweep')}",
+            "sweep": {
+                "name": _result_value(feature, "feature_name", "name", default="Sweep"),
+                "path": input_data.path,
+                "twist_along_path": input_data.twist_along_path,
+                "twist_angle": input_data.twist_angle,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_loft(input_data: CreateLoftInput) -> dict[str, Any]:
@@ -1752,38 +1569,27 @@ async def register_modeling_tools(
             })
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateLoftInput)
-            params = LoftParameters(
-                profiles=input_data.profiles,
-                guide_curves=input_data.guide_curves,
-                start_tangent=input_data.start_tangent,
-                end_tangent=input_data.end_tangent,
-                merge_result=input_data.merge_result,
-            )
-            result = await adapter.create_loft(params)
-            if result.is_success:
-                feature = result.data
-                return {
-                    "status": "success",
-                    "message": f"Created loft: {_result_value(feature, 'feature_name', 'name', default='Loft')}",
-                    "loft": {
-                        "name": _result_value(
-                            feature, "feature_name", "name", default="Loft"
-                        ),
-                        "profiles": input_data.profiles,
-                        "guide_curves": input_data.guide_curves,
-                    },
-                    "execution_time": result.execution_time,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Failed to create loft: {result.error}",
-                }
-        except Exception as e:
-            logger.error(f"Error in create_loft tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, CreateLoftInput)
+        params = LoftParameters(
+            profiles=input_data.profiles,
+            guide_curves=input_data.guide_curves,
+            start_tangent=input_data.start_tangent,
+            end_tangent=input_data.end_tangent,
+            merge_result=input_data.merge_result,
+        )
+        result = await adapter.create_loft(params)
+        require_success(result, context="Failed to create loft")
+        feature = result.data
+        return {
+            "status": "success",
+            "message": f"Created loft: {_result_value(feature, 'feature_name', 'name', default='Loft')}",
+            "loft": {
+                "name": _result_value(feature, "feature_name", "name", default="Loft"),
+                "profiles": input_data.profiles,
+                "guide_curves": input_data.guide_curves,
+            },
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def insert_component(input_data: InsertComponentInput) -> dict[str, Any]:
@@ -1809,26 +1615,18 @@ async def register_modeling_tools(
             await insert_component({"file_path": "C:/parts/plate.sldprt", "x": 100.0})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, InsertComponentInput)
-            result = await adapter.insert_component(
-                input_data.file_path, input_data.x, input_data.y, input_data.z
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                return {
-                    "status": "success",
-                    "message": f"Inserted {data.get('component', 'component')}",
-                    "component": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to insert component: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in insert_component tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, InsertComponentInput)
+        result = await adapter.insert_component(
+            input_data.file_path, input_data.x, input_data.y, input_data.z
+        )
+        require_success(result, context="Failed to insert component")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Inserted {data.get('component', 'component')}",
+            "component": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def add_mate(input_data: AddMateInput) -> dict[str, Any]:
@@ -1858,44 +1656,34 @@ async def register_modeling_tools(
             })
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, AddMateInput)
-            result = await adapter.add_mate(
-                input_data.component_a,
-                input_data.component_b,
-                input_data.entity_a,
-                input_data.entity_b,
-                input_data.mate_type,
-                input_data.alignment,
-                input_data.distance,
-                input_data.angle,
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                message = (
-                    f"Added {input_data.mate_type} mate between "
-                    f"{input_data.component_a} and {input_data.component_b}"
-                )
-                # SolidWorks accepts a mate whose constraint is already
-                # satisfied and moves nothing. That is a real success, but
-                # saying so plainly beats leaving the caller to infer it.
-                if data.get("geometry_moved") is False:
-                    message += (
-                        " (no component moved - the constraint was already satisfied)"
-                    )
-                return {
-                    "status": "success",
-                    "message": message,
-                    "mate": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to add mate: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in add_mate tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, AddMateInput)
+        result = await adapter.add_mate(
+            input_data.component_a,
+            input_data.component_b,
+            input_data.entity_a,
+            input_data.entity_b,
+            input_data.mate_type,
+            input_data.alignment,
+            input_data.distance,
+            input_data.angle,
+        )
+        require_success(result, context="Failed to add mate")
+        data = result.data if isinstance(result.data, dict) else {}
+        message = (
+            f"Added {input_data.mate_type} mate between "
+            f"{input_data.component_a} and {input_data.component_b}"
+        )
+        # SolidWorks accepts a mate whose constraint is already
+        # satisfied and moves nothing. That is a real success, but
+        # saying so plainly beats leaving the caller to infer it.
+        if data.get("geometry_moved") is False:
+            message += " (no component moved - the constraint was already satisfied)"
+        return {
+            "status": "success",
+            "message": message,
+            "mate": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def list_components() -> dict[str, Any]:
@@ -1904,23 +1692,15 @@ async def register_modeling_tools(
         Returns:
             dict[str, Any]: Status and the component instance names.
         """
-        try:
-            result = await adapter.list_components()
-            if result.is_success:
-                components = result.data if isinstance(result.data, list) else []
-                return {
-                    "status": "success",
-                    "message": f"{len(components)} component(s) in the assembly",
-                    "components": components,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to list components: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in list_components tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        result = await adapter.list_components()
+        require_success(result, context="Failed to list components")
+        components = result.data if isinstance(result.data, list) else []
+        return {
+            "status": "success",
+            "message": f"{len(components)} component(s) in the assembly",
+            "components": components,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def delete_feature(input_data: DeleteFeatureInput) -> dict[str, Any]:
@@ -1941,32 +1721,24 @@ async def register_modeling_tools(
             await delete_feature({"name": "Boss-Extrude1"})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, DeleteFeatureInput)
-            result = await adapter.delete_feature(input_data.name)
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                removed = data.get("removed_features") or [input_data.name]
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Deleted {input_data.name}"
-                        + (
-                            f" and {len(removed) - 1} dependent feature(s)"
-                            if len(removed) > 1
-                            else ""
-                        )
-                    ),
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to delete feature: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in delete_feature tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, DeleteFeatureInput)
+        result = await adapter.delete_feature(input_data.name)
+        require_success(result, context="Failed to delete feature")
+        data = result.data if isinstance(result.data, dict) else {}
+        removed = data.get("removed_features") or [input_data.name]
+        return {
+            "status": "success",
+            "message": (
+                f"Deleted {input_data.name}"
+                + (
+                    f" and {len(removed) - 1} dependent feature(s)"
+                    if len(removed) > 1
+                    else ""
+                )
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def suppress_feature(input_data: SuppressFeatureInput) -> dict[str, Any]:
@@ -1988,30 +1760,20 @@ async def register_modeling_tools(
             await suppress_feature({"name": "Fillet1", "suppress": False})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, SuppressFeatureInput)
-            result = await adapter.suppress_feature(
-                input_data.name, input_data.suppress
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                verb = "Suppressed" if input_data.suppress else "Unsuppressed"
-                message = f"{verb} {input_data.name}"
-                if data.get("suppressed") is None:
-                    message += " (state could not be read back)"
-                return {
-                    "status": "success",
-                    "message": message,
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to suppress feature: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in suppress_feature tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, SuppressFeatureInput)
+        result = await adapter.suppress_feature(input_data.name, input_data.suppress)
+        require_success(result, context="Failed to suppress feature")
+        data = result.data if isinstance(result.data, dict) else {}
+        verb = "Suppressed" if input_data.suppress else "Unsuppressed"
+        message = f"{verb} {input_data.name}"
+        if data.get("suppressed") is None:
+            message += " (state could not be read back)"
+        return {
+            "status": "success",
+            "message": message,
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def rename_feature(input_data: RenameFeatureInput) -> dict[str, Any]:
@@ -2033,39 +1795,29 @@ async def register_modeling_tools(
             await rename_feature({"old_name": "Fillet1", "new_name": "EdgeBreak"})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, RenameFeatureInput)
-            result = await adapter.rename_feature(
-                input_data.old_name, input_data.new_name
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                if data.get("renamed") is False:
-                    return {
-                        "status": "success",
-                        "message": (
-                            f"{input_data.old_name} unchanged: "
-                            + str(data.get("reason") or "no change")
-                        ),
-                        "data": data,
-                        "execution_time": result.execution_time,
-                    }
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Renamed {data.get('old_name', input_data.old_name)} to "
-                        f"{data.get('new_name', input_data.new_name)}"
-                    ),
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
+        input_data = normalize_input(input_data, RenameFeatureInput)
+        result = await adapter.rename_feature(input_data.old_name, input_data.new_name)
+        require_success(result, context="Failed to rename feature")
+        data = result.data if isinstance(result.data, dict) else {}
+        if data.get("renamed") is False:
             return {
-                "status": "error",
-                "message": f"Failed to rename feature: {result.error}",
+                "status": "success",
+                "message": (
+                    f"{input_data.old_name} unchanged: "
+                    + str(data.get("reason") or "no change")
+                ),
+                "data": data,
+                "execution_time": result.execution_time,
             }
-        except Exception as e:
-            logger.error(f"Error in rename_feature tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        return {
+            "status": "success",
+            "message": (
+                f"Renamed {data.get('old_name', input_data.old_name)} to "
+                f"{data.get('new_name', input_data.new_name)}"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def select_feature(input_data: SelectFeatureInput) -> dict[str, Any]:
@@ -2088,33 +1840,21 @@ async def register_modeling_tools(
             await select_feature({"feature_name": "Sketch1", "append": True})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, SelectFeatureInput)
-        except ValueError as e:
-            return {"status": "error", "message": f"Invalid input: {e}"}
-        try:
-            result = await adapter.select_feature(
-                input_data.feature_name, input_data.append
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Selected {data.get('selected_name', input_data.feature_name)} "
-                        f"({data.get('selection_count', '?')} selected)"
-                    ),
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": str(result.error),
-                "execution_time": result.execution_time,
-            }
-        except Exception as e:
-            logger.error(f"Error in select_feature tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, SelectFeatureInput)
+        result = await adapter.select_feature(
+            input_data.feature_name, input_data.append
+        )
+        require_success(result)
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": (
+                f"Selected {data.get('selected_name', input_data.feature_name)} "
+                f"({data.get('selection_count', '?')} selected)"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def select_face_edges(input_data: SelectFaceEdgesInput) -> dict[str, Any]:
@@ -2148,39 +1888,27 @@ async def register_modeling_tools(
             await add_chamfer({"distance": 0.5, "edge_names": []})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, SelectFaceEdgesInput)
-        except ValueError as e:
-            return {"status": "error", "message": f"Invalid input: {e}"}
-        try:
-            result = await adapter.select_face_edges(
-                input_data.point,
-                input_data.side,
-                input_data.plane,
-                input_data.edge_type,
-                input_data.append,
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                kinds = sorted({e.get("curve", "other") for e in data.get("edges", [])})
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Selected {data.get('selected_edges', 0)} edge(s) "
-                        f"({', '.join(kinds)}) on the face at "
-                        f"{data.get('face', {}).get('center_mm')} mm"
-                    ),
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": str(result.error),
-                "execution_time": result.execution_time,
-            }
-        except Exception as e:
-            logger.error(f"Error in select_face_edges tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, SelectFaceEdgesInput)
+        result = await adapter.select_face_edges(
+            input_data.point,
+            input_data.side,
+            input_data.plane,
+            input_data.edge_type,
+            input_data.append,
+        )
+        require_success(result)
+        data = result.data if isinstance(result.data, dict) else {}
+        kinds = sorted({e.get("curve", "other") for e in data.get("edges", [])})
+        return {
+            "status": "success",
+            "message": (
+                f"Selected {data.get('selected_edges', 0)} edge(s) "
+                f"({', '.join(kinds)}) on the face at "
+                f"{data.get('face', {}).get('center_mm')} mm"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def rebuild_model(
@@ -2207,28 +1935,19 @@ async def register_modeling_tools(
             await rebuild_model()
             ```
         """
-        try:
-            input_data = _normalize_input(input_data or {}, RebuildModelInput)
-        except ValueError as e:
-            return {"status": "error", "message": f"Invalid input: {e}"}
-        try:
-            result = await adapter.rebuild_model(input_data.top_level_only)
-            data = result.data if isinstance(result.data, dict) else None
-            response: dict[str, Any] = {
-                "status": "success" if result.is_success else "error",
-                "message": (
-                    (data or {}).get("summary") or "Rebuilt"
-                    if result.is_success
-                    else str(result.error)
-                ),
-                "execution_time": result.execution_time,
-            }
-            if data is not None:
-                response["data"] = data
-            return response
-        except Exception as e:
-            logger.error(f"Error in rebuild_model tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data or {}, RebuildModelInput)
+        result = require_success(
+            await adapter.rebuild_model(input_data.top_level_only), with_data=True
+        )
+        data = result.data if isinstance(result.data, dict) else None
+        response: dict[str, Any] = {
+            "status": "success",
+            "message": (data or {}).get("summary") or "Rebuilt",
+            "execution_time": result.execution_time,
+        }
+        if data is not None:
+            response["data"] = data
+        return response
 
     @mcp.tool()
     async def undo(input_data: UndoInput | None = None) -> dict[str, Any]:
@@ -2249,32 +1968,24 @@ async def register_modeling_tools(
             await undo({"count": 1})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data or UndoInput(), UndoInput)
-            result = await adapter.undo(input_data.count)
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                changed = data.get("tree_changed")
-                if changed is False:
-                    message = (
-                        f"Undo of {input_data.count} step(s) left the feature "
-                        "tree unchanged - there was nothing to undo"
-                    )
-                else:
-                    message = f"Undid {input_data.count} step(s)"
-                return {
-                    "status": "success",
-                    "message": message,
-                    "data": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to undo: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in undo tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data or UndoInput(), UndoInput)
+        result = await adapter.undo(input_data.count)
+        require_success(result, context="Failed to undo")
+        data = result.data if isinstance(result.data, dict) else {}
+        changed = data.get("tree_changed")
+        if changed is False:
+            message = (
+                f"Undo of {input_data.count} step(s) left the feature "
+                "tree unchanged - there was nothing to undo"
+            )
+        else:
+            message = f"Undid {input_data.count} step(s)"
+        return {
+            "status": "success",
+            "message": message,
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_reference_plane(
@@ -2308,29 +2019,21 @@ async def register_modeling_tools(
             await create_sketch({"plane": plane["plane"]["name"]})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateReferencePlaneInput)
-            result = await adapter.create_reference_plane(
-                input_data.reference,
-                input_data.offset,
-                input_data.angle,
-                input_data.flip,
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                return {
-                    "status": "success",
-                    "message": f"Created reference plane: {data.get('name', 'Plane')}",
-                    "plane": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to create reference plane: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in create_reference_plane tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, CreateReferencePlaneInput)
+        result = await adapter.create_reference_plane(
+            input_data.reference,
+            input_data.offset,
+            input_data.angle,
+            input_data.flip,
+        )
+        require_success(result, context="Failed to create reference plane")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Created reference plane: {data.get('name', 'Plane')}",
+            "plane": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_axis(input_data: CreateAxisInput) -> dict[str, Any]:
@@ -2351,25 +2054,17 @@ async def register_modeling_tools(
             result = await create_axis({"reference": "z"})
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateAxisInput)
-            result = await adapter.create_axis(input_data.reference)
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                axis_name = data.get("reference", input_data.reference)
-                return {
-                    "status": "success",
-                    "message": f"Created {axis_name} axis",
-                    "axis": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to create axis: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in create_axis tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, CreateAxisInput)
+        result = await adapter.create_axis(input_data.reference)
+        require_success(result, context="Failed to create axis")
+        data = result.data if isinstance(result.data, dict) else {}
+        axis_name = data.get("reference", input_data.reference)
+        return {
+            "status": "success",
+            "message": f"Created {axis_name} axis",
+            "axis": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_reference_point(
@@ -2403,40 +2098,32 @@ async def register_modeling_tools(
             })
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, CreateReferencePointInput)
-            result = await adapter.create_reference_point(
-                input_data.mode,
-                input_data.x,
-                input_data.y,
-                input_data.z,
-                input_data.distance,
-                input_data.percent,
+        input_data = normalize_input(input_data, CreateReferencePointInput)
+        result = await adapter.create_reference_point(
+            input_data.mode,
+            input_data.x,
+            input_data.y,
+            input_data.z,
+            input_data.distance,
+            input_data.percent,
+        )
+        require_success(result, context="Failed to create reference point")
+        data = result.data if isinstance(result.data, dict) else {}
+        where = (
+            f"{data.get('percent')}% along a curve"
+            if data.get("percent") is not None
+            else (
+                f"{data.get('distance_mm')} mm along a curve"
+                if data.get("distance_mm") is not None
+                else "a face centre"
             )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                where = (
-                    f"{data.get('percent')}% along a curve"
-                    if data.get("percent") is not None
-                    else (
-                        f"{data.get('distance_mm')} mm along a curve"
-                        if data.get("distance_mm") is not None
-                        else "a face centre"
-                    )
-                )
-                return {
-                    "status": "success",
-                    "message": f"Created a reference point at {where}",
-                    "point": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to create reference point: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in create_reference_point tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        )
+        return {
+            "status": "success",
+            "message": f"Created a reference point at {where}",
+            "point": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def mirror_feature(input_data: MirrorFeatureInput) -> dict[str, Any]:
@@ -2463,30 +2150,22 @@ async def register_modeling_tools(
             )
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, MirrorFeatureInput)
-            result = await adapter.mirror_feature(
-                input_data.features,
-                input_data.mirror_plane,
-                input_data.merge,
-                input_data.mirror_bodies,
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                return {
-                    "status": "success",
-                    "message": f"Mirrored {', '.join(input_data.features)} "
-                    f"about {input_data.mirror_plane}",
-                    "mirror": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to mirror feature: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in mirror_feature tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, MirrorFeatureInput)
+        result = await adapter.mirror_feature(
+            input_data.features,
+            input_data.mirror_plane,
+            input_data.merge,
+            input_data.mirror_bodies,
+        )
+        require_success(result, context="Failed to mirror feature")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Mirrored {', '.join(input_data.features)} "
+            f"about {input_data.mirror_plane}",
+            "mirror": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def pattern_circular(input_data: PatternCircularInput) -> dict[str, Any]:
@@ -2513,31 +2192,23 @@ async def register_modeling_tools(
             )
             ```
         """
-        try:
-            input_data = _normalize_input(input_data, PatternCircularInput)
-            result = await adapter.pattern_circular(
-                input_data.features,
-                input_data.axis,
-                input_data.count,
-                input_data.angle,
-                input_data.equal_spacing,
-            )
-            if result.is_success:
-                data = result.data if isinstance(result.data, dict) else {}
-                return {
-                    "status": "success",
-                    "message": f"Patterned {', '.join(input_data.features)} "
-                    f"around {input_data.axis} ({input_data.count} instances)",
-                    "pattern": data,
-                    "execution_time": result.execution_time,
-                }
-            return {
-                "status": "error",
-                "message": f"Failed to pattern feature: {result.error}",
-            }
-        except Exception as e:
-            logger.error(f"Error in pattern_circular tool: {e}")
-            return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        input_data = normalize_input(input_data, PatternCircularInput)
+        result = await adapter.pattern_circular(
+            input_data.features,
+            input_data.axis,
+            input_data.count,
+            input_data.angle,
+            input_data.equal_spacing,
+        )
+        require_success(result, context="Failed to pattern feature")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Patterned {', '.join(input_data.features)} "
+            f"around {input_data.axis} ({input_data.count} instances)",
+            "pattern": data,
+            "execution_time": result.execution_time,
+        }
 
     # Counted from the registry rather than hand-maintained. The literal that
     # used to live here had drifted: it read 15 while 16 tools were actually

@@ -9,11 +9,18 @@ consistent payload that names what went wrong and what to try next.
 Every MCP tool SHALL report any failure as a payload with `status: "error"`, a
 human-readable `message`, an `error_type` from a fixed set, and a `hint` with the
 next corrective step. The tool SHALL never raise an exception to the MCP client.
-`execution_time` SHALL be present whenever the adapter reported one.
+`execution_time` SHALL always be present (the adapter's timing, or null when
+there is none) so the payload shape is stable, and
+`data` SHALL be present when the tool has diagnostic data that explains the
+failure (for example, the failing features of a rebuild).
 
 #### Scenario: Adapter reports a failure
 - **WHEN** a tool's adapter call returns an error result with a message and an execution time
 - **THEN** the tool returns `status: "error"`, that message, an `error_type`, a `hint` and the execution time
+
+#### Scenario: Failure with diagnostic data
+- **WHEN** a tool's adapter call fails and returns data describing the failure
+- **THEN** the error payload carries that data under `data` alongside the classification
 
 #### Scenario: Unexpected exception inside a tool
 - **WHEN** a tool's code raises an exception that no specific category covers

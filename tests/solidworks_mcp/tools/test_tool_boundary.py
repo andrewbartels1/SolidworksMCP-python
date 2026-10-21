@@ -72,12 +72,10 @@ def test_describe_validation_error_falls_back_to_input_for_empty_loc() -> None:
 # ---- require_success --------------------------------------------------------
 
 
-def test_require_success_returns_success_and_warning_results() -> None:
+def test_require_success_returns_a_successful_result() -> None:
     ok = AdapterResult(status=AdapterResultStatus.SUCCESS, data=1)
-    warn = AdapterResult(status=AdapterResultStatus.WARNING, error="careful")
 
     assert require_success(ok) is ok
-    assert require_success(warn) is warn
 
 
 @pytest.mark.parametrize(
@@ -85,6 +83,7 @@ def test_require_success_returns_success_and_warning_results() -> None:
     [
         (AdapterResultStatus.ERROR, "No active model", "No active model"),
         (AdapterResultStatus.TIMEOUT, None, "Export failed"),
+        (AdapterResultStatus.WARNING, "careful", "careful"),
     ],
 )
 def test_require_success_raises_for_errors_and_timeouts(
@@ -127,7 +126,7 @@ async def test_invalid_input_never_reaches_the_adapter() -> None:
     assert payload["status"] == "error"
     assert payload["error_type"] == "invalid_input"
     assert "radius" in payload["message"]
-    assert "execution_time" not in payload
+    assert payload["execution_time"] is None
     adapter.do_work.assert_not_called()
 
 
@@ -167,6 +166,13 @@ async def test_adapter_failure_is_classified_with_timing() -> None:
         "execution_time": 0.25,
     }
     assert "sketch" in payload["hint"]
+
+
+def test_require_success_prefixes_context() -> None:
+    failed = AdapterResult(status=AdapterResultStatus.ERROR, error="boom")
+
+    with pytest.raises(ToolOperationError, match="^Failed to create part: boom$"):
+        require_success(failed, context="Failed to create part")
 
 
 @pytest.mark.asyncio
@@ -274,3 +280,26 @@ def test_registrar_of_is_idempotent() -> None:
     registrar = ToolRegistrar(FastMCP("x"))
 
     assert ToolRegistrar.of(registrar) is registrar
+
+
+@pytest.mark.asyncio
+async def test_failure_data_is_returned_when_requested() -> None:
+    failed = AdapterResult(
+        status=AdapterResultStatus.ERROR,
+        error="Rebuild failed: Fillet1",
+        data={"error_count": 1},
+        execution_time=0.1,
+    )
+
+    @tool_boundary
+    async def with_data() -> dict[str, Any]:
+        require_success(failed, with_data=True)
+        return {"status": "success"}
+
+    @tool_boundary
+    async def without_data() -> dict[str, Any]:
+        require_success(failed)
+        return {"status": "success"}
+
+    assert (await with_data())["data"] == {"error_count": 1}
+    assert "data" not in await without_data()

@@ -8,8 +8,8 @@ Tools contain business logic only. They:
 * return their success payload.
 
 :func:`tool_boundary` turns anything raised into the uniform error payload -
-``status``, ``message``, ``error_type``, ``hint`` and, when known,
-``execution_time`` - using :class:`ErrorClassifier` to name the failure.
+``status``, ``message``, ``error_type``, ``hint`` and ``execution_time`` (null
+when unknown) - using :class:`ErrorClassifier` to name the failure.
 :class:`ToolRegistrar` applies the boundary to every tool at registration, so no
 tool can forget it.
 """
@@ -23,7 +23,7 @@ from typing import Any, cast
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from ..adapters.base import AdapterResult, AdapterResultStatus
+from ..adapters.base import AdapterResult
 from .error_classifier import (
     INTERNAL,
     INVALID_INPUT,
@@ -47,11 +47,19 @@ class ToolOperationError(Exception):
 
     Attributes:
         execution_time: The adapter's timing for the failed call, if any.
+        data: Diagnostic data that explains the failure (e.g. rebuild errors),
+            returned to the caller under ``data``.
     """
 
-    def __init__(self, message: str, execution_time: float | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        execution_time: float | None = None,
+        data: Any = None,
+    ) -> None:
         super().__init__(message)
         self.execution_time = execution_time
+        self.data = data
 
 
 def normalize_input[TModel: BaseModel](
@@ -87,18 +95,36 @@ def describe_validation_error(exc: ValidationError) -> str:
 
 
 def require_success[TResult](
-    result: AdapterResult[TResult], failure_message: str = "Operation failed"
+    result: AdapterResult[TResult],
+    failure_message: str = "Operation failed",
+    *,
+    context: str | None = None,
+    with_data: bool = False,
 ) -> AdapterResult[TResult]:
-    """Return ``result`` unless it is an error or timeout.
+    """Return ``result`` when it succeeded; raise otherwise.
 
-    Warnings pass through - the tool decides what a warning means.
+    Mirrors the ``if result.is_success: ... else: error`` the tools used before
+    the boundary, so anything that is not a success - including a warning - is
+    reported as a failure. Tools that treat a warning as success check
+    ``result.status`` themselves before calling this.
+
+    Args:
+        result: The adapter result to check.
+        failure_message: Message used when the adapter gave none.
+        context: Prefix naming what failed, e.g. ``"Failed to create part"``,
+            giving ``"<context>: <adapter error>"``.
+        with_data: Return the adapter's ``data`` with the error, for tools whose
+            failure data is the diagnosis (e.g. ``rebuild_model``).
 
     Raises:
         ToolOperationError: Carrying the adapter's message and timing.
     """
-    if result.status in (AdapterResultStatus.ERROR, AdapterResultStatus.TIMEOUT):
+    if not result.is_success:
+        message = str(result.error or failure_message)
         raise ToolOperationError(
-            str(result.error or failure_message), result.execution_time
+            f"{context}: {message}" if context else message,
+            result.execution_time,
+            result.data if with_data else None,
         )
     return result
 
@@ -107,6 +133,7 @@ def error_payload(
     message: str,
     classification: Classification,
     execution_time: float | None = None,
+    data: Any = None,
 ) -> dict[str, Any]:
     """Build the spec's error payload."""
     payload: dict[str, Any] = {
@@ -115,8 +142,9 @@ def error_payload(
         "error_type": classification.error_type,
         "hint": classification.hint,
     }
-    if execution_time is not None:
-        payload["execution_time"] = execution_time
+    payload["execution_time"] = execution_time
+    if data is not None:
+        payload["data"] = data
     return payload
 
 
@@ -148,7 +176,7 @@ def tool_boundary(
         except ToolOperationError as exc:
             message = str(exc)
             return error_payload(
-                message, classifier.classify(message), exc.execution_time
+                message, classifier.classify(message), exc.execution_time, exc.data
             )
         except Exception as exc:
             logger.exception("Tool {} raised", tool_name)
