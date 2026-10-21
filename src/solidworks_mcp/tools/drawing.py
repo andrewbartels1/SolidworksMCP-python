@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 # Input schemas using Python 3.14 built-in types
 
@@ -378,6 +379,7 @@ async def register_drawing_tools(
                         print(f"Registered {tool_count} drawing tools")
                         ```
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     @mcp.tool()
@@ -1159,8 +1161,7 @@ async def register_drawing_tools(
                 return {
                     "status": "success",
                     "message": (
-                        f"Inserted {added} centre mark(s) on "
-                        f"{input_data.view_name}"
+                        f"Inserted {added} centre mark(s) on {input_data.view_name}"
                         if isinstance(added, int)
                         else f"Ran centre-mark insertion on {input_data.view_name}"
                     ),

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 TInput = TypeVar("TInput", bound=BaseModel)
 
@@ -345,6 +346,7 @@ async def register_sketching_tools(
                         print(f"Registered {tool_count} sketching tools")
                         ```
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     @mcp.tool()

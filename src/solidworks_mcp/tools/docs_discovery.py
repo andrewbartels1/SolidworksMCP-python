@@ -18,6 +18,7 @@ from loguru import logger
 from pydantic import Field
 
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 try:
     import win32com.client
@@ -993,7 +994,9 @@ def _search_index(
     return results[:max_results]
 
 
-def _resolve_interface(index: dict[str, Any], name: str) -> tuple[str, dict[str, Any]] | None:
+def _resolve_interface(
+    index: dict[str, Any], name: str
+) -> tuple[str, dict[str, Any]] | None:
     """Case-insensitively resolve an interface name to its (canonical_name, data)."""
     com_objects = index.get("com_objects", {})
     if name in com_objects:
@@ -1027,7 +1030,9 @@ def _lookup_interface(index: dict[str, Any], interface: str) -> dict[str, Any]:
     }
 
 
-def _lookup_method(index: dict[str, Any], interface: str, method: str) -> dict[str, Any]:
+def _lookup_method(
+    index: dict[str, Any], interface: str, method: str
+) -> dict[str, Any]:
     """Confirm a method/property is indexed on an interface.
 
     The index has no signatures, so ``parameters`` / ``return_type`` are always
@@ -1099,7 +1104,12 @@ def _find_related_api_members(
             _add(obj_name, m, "method", "same interface")
         for p in obj_data.get("properties", []):
             _add(obj_name, p, "property", "same interface")
-        return {"found": True, "query": name, "resolved_as": "interface", "related": related[:max_results]}
+        return {
+            "found": True,
+            "query": name,
+            "resolved_as": "interface",
+            "related": related[:max_results],
+        }
 
     lowered = name.lower()
     matched_member = False
@@ -1197,6 +1207,7 @@ async def register_docs_discovery_tools(
     Returns:
         int: The computed numeric result.
     """
+    mcp = with_tool_boundary(mcp)
 
     @mcp.tool()  # type: ignore[untyped-decorator]
     async def discover_solidworks_docs(

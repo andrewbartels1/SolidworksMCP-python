@@ -12,6 +12,7 @@ from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 # Input schemas for macro operations
 
@@ -176,6 +177,7 @@ async def register_macro_recording_tools(
     Example:
                         >>> tool_count = await register_macro_recording_tools(mcp, adapter, config)
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     @mcp.tool()

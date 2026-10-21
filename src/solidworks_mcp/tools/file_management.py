@@ -19,6 +19,7 @@ from ..utils.feature_tree_classifier import (
     classify_feature_tree_snapshot,
 )
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 # swPackAndGoSaveStatus_e — returned (per-file) by IModelDocExtension::SavePackAndGo.
 # All zeros means every file was written successfully by SolidWorks Pack-and-Go.
@@ -337,6 +338,7 @@ async def register_file_management_tools(
                         File management tools require an active SolidWorks document.
                         Save operations preserve the current document state and metadata.
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     def _coerce_input(model_cls: Any, payload: Any) -> Any:

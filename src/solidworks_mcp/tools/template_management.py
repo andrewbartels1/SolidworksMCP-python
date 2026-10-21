@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 
 def _file_fact_snapshot(path_str: str) -> dict[str, Any] | None:
@@ -148,6 +149,7 @@ async def register_template_management_tools(
     Example:
                         >>> tool_count = await register_template_management_tools(mcp, adapter, config)
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     @mcp.tool()

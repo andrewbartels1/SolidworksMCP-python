@@ -15,6 +15,7 @@ from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 # Input schemas using Python 3.14 built-in types
 
@@ -280,6 +281,7 @@ async def register_automation_tools(
     Returns:
         int: The computed numeric result.
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     @mcp.tool()

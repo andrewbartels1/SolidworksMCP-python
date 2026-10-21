@@ -18,6 +18,7 @@ from ..adapters.base import (
     SweepParameters,
 )
 from .input_compat import CompatInput
+from .tool_boundary import with_tool_boundary
 
 TInput = TypeVar("TInput", bound=BaseModel)
 
@@ -326,9 +327,7 @@ class SetUnitsInput(CompatInput):
             or ``ft`` (aliases such as ``inch`` / ``millimeters`` accepted).
     """
 
-    unit_system: str = Field(
-        description="Linear unit system: mm, cm, m, in, or ft"
-    )
+    unit_system: str = Field(description="Linear unit system: mm, cm, m, in, or ft")
 
     def model_post_init(self, __context: Any) -> None:
         if not self.unit_system.strip():
@@ -518,9 +517,7 @@ class RenameFeatureInput(CompatInput):
     """
 
     old_name: str = Field(description="Current feature name, e.g. 'Fillet1'")
-    new_name: str = Field(
-        description="New feature name, e.g. 'MountingEdgeFillet'"
-    )
+    new_name: str = Field(description="New feature name, e.g. 'MountingEdgeFillet'")
 
     def model_post_init(self, __context: Any) -> None:
         if not self.old_name.strip():
@@ -874,6 +871,7 @@ async def register_modeling_tools(
                         print(f"Registered {tool_count} modeling tools")
                         ```
     """
+    mcp = with_tool_boundary(mcp)
     tool_count = 0
 
     @mcp.tool()
@@ -1883,8 +1881,7 @@ async def register_modeling_tools(
                 # saying so plainly beats leaving the caller to infer it.
                 if data.get("geometry_moved") is False:
                     message += (
-                        " (no component moved - the constraint was already "
-                        "satisfied)"
+                        " (no component moved - the constraint was already satisfied)"
                     )
                 return {
                     "status": "success",
@@ -2278,6 +2275,7 @@ async def register_modeling_tools(
         except Exception as e:
             logger.error(f"Error in undo tool: {e}")
             return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
     @mcp.tool()
     async def create_reference_plane(
         input_data: CreateReferencePlaneInput,
