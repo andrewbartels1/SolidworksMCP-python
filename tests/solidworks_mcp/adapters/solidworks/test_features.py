@@ -231,8 +231,7 @@ def test_create_cut_extrude_explicit_sketch_name_overrides_last_tracked() -> Non
         ClearSelection2=lambda *_args: True,
         FirstFeature=_fake_sketch_feature("Sketch7"),
         Extension=SimpleNamespace(
-            SelectByID2=lambda name, *_args, **_kwargs: selected.append(name)
-            or True
+            SelectByID2=lambda name, *_args, **_kwargs: selected.append(name) or True
         ),
     )
     adapter._last_sketch_name = "Sketch2"  # stale/unrelated tracked value
@@ -564,3 +563,369 @@ def test_parse_edge_spec_face_prefix_with_unparseable_coordinates() -> None:
     assert name == "not,a,coord"
     assert (x, y, z) == (0.0, 0.0, 0.0)
     assert entity_type == "FACE"
+
+
+# ---- rename_feature ---------------------------------------------------------
+
+
+class _Feature:
+    def __init__(self, name: str, *, refuse_rename: bool = False) -> None:
+        self._name, self._refuse = name, refuse_rename
+
+    @property
+    def Name(self) -> str:  # noqa: N802
+        return self._name
+
+    @Name.setter
+    def Name(self, value: str) -> None:  # noqa: N802
+        if self._refuse:
+            raise RuntimeError("name is read-only")
+        self._name = value
+
+
+def _rename_adapter(features_by_name: dict) -> _FakeFeatureAdapter:
+    adapter = _FakeFeatureAdapter()
+    adapter.currentModel = SimpleNamespace(
+        FeatureByName=lambda name: features_by_name.get(name),
+        EditRebuild3=lambda: True,
+    )
+    adapter._get_attr_or_call = lambda obj, name: getattr(obj, name)
+    return adapter
+
+
+def test_rename_requires_a_model_and_a_name() -> None:
+    no_model = _FakeFeatureAdapter()
+    empty_name = _rename_adapter({})
+
+    assert features._rename_feature_impl(no_model, "A", "B").error == "No active model"
+    assert (
+        features._rename_feature_impl(empty_name, "A", " @Part1").error
+        == "new_name must not be empty"
+    )
+
+
+def test_rename_reports_a_refused_and_a_silently_dropped_rename() -> None:
+    refused = _rename_adapter({"Boss1": _Feature("Boss1", refuse_rename=True)})
+    dropped = _rename_adapter({"Boss1": _Feature("Boss1")})  # new name never resolves
+
+    refused_result = features._rename_feature_impl(refused, "Boss1", "Base")
+    dropped_result = features._rename_feature_impl(dropped, "Boss1", "Base")
+
+    assert "Failed to rename Boss1 to Base" in (refused_result.error or "")
+    assert "did not take" in (dropped_result.error or "")
+
+
+# ---- create_reference_point -------------------------------------------------
+
+
+def _point_adapter(
+    *, selected=True, manager=True, counts=(5, 6)
+) -> _FakeFeatureAdapter:
+    adapter = _FakeFeatureAdapter()
+    remaining = list(counts)
+    feature_manager = SimpleNamespace(
+        GetFeatureCount=lambda _top: remaining.pop(0) if remaining else None,
+        InsertReferencePoint=lambda *_a: object(),
+    )
+    adapter.currentModel = SimpleNamespace(
+        ForceRebuild3=lambda _t: True,
+        ClearSelection2=lambda _a: True,
+        EditRebuild3=lambda: True,
+        FeatureManager=feature_manager if manager else None,
+        Extension=SimpleNamespace(SelectByID2=lambda *_a: selected),
+    )
+    return adapter
+
+
+def test_reference_point_input_rules() -> None:
+    assert (
+        features._create_reference_point_impl(
+            _FakeFeatureAdapter(), "face_center", 0, 0, 0, None, None
+        ).error
+        == "No active model"
+    )
+    assert (
+        features._create_reference_point_impl(
+            _point_adapter(), "along_curve", 0, 0, 0, 0.0, None
+        ).error
+        == "distance must be positive"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "fragment"),
+    [
+        ({"selected": False}, "No edge found at (1, 2, 3) mm"),
+        ({"manager": False}, "Part has no FeatureManager"),
+        ({"counts": (None, None)}, "could not be read"),
+        ({"counts": (5, 5)}, "added no feature"),
+    ],
+)
+def test_reference_point_failures_are_explained(kwargs: dict, fragment: str) -> None:
+    result = features._create_reference_point_impl(
+        _point_adapter(**kwargs), "along_curve", 1, 2, 3, 10.0, None
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert fragment in (result.error or "")
+
+
+def test_reference_point_along_curve_by_distance_succeeds() -> None:
+    result = features._create_reference_point_impl(
+        _point_adapter(), "along_curve", 1, 2, 3, 10.0, None
+    )
+
+    assert result.is_success, result.error
+    assert result.data["distance_mm"] == 10.0
+
+
+# ---- null callout -----------------------------------------------------------
+
+
+def test_null_callout_sentinel_without_pywin32(monkeypatch) -> None:
+    import sys
+
+    monkeypatch.setitem(sys.modules, "pythoncom", None)
+
+    callout = features._null_callout()
+
+    assert callout is features._NULL_CALLOUT_SENTINEL
+    assert callout is not None
+    assert repr(callout) == "<null callout: pywin32 unavailable>"
+
+
+# ---- feature-tree walk helpers ----------------------------------------------
+
+
+def test_read_member_returns_the_raw_member_when_calling_it_fails() -> None:
+    class _ComObject:
+        def __call__(self) -> None:  # default dispatch: "Member not found"
+            raise RuntimeError("Member not found")
+
+    sketch_obj = _ComObject()
+    holder = SimpleNamespace(GetSpecificFeature2=sketch_obj)
+
+    assert features._read_member(holder, "GetSpecificFeature2") is sketch_obj
+
+
+class _ExplodingFeature:
+    """A dispatch whose member access raises, like a stale COM object."""
+
+    def __init__(self, fail_on: str, name: str = "Sketch9") -> None:
+        self._fail_on, self.Name = fail_on, name
+
+    def __getattr__(self, attr: str):
+        if attr == self._fail_on:
+            raise RuntimeError(f"com_error reading {attr}")
+        if attr == "GetTypeName2":
+            return lambda: "ProfileFeature"
+        if attr == "GetNextFeature":
+            return lambda: None
+        raise AttributeError(attr)
+
+
+@pytest.mark.parametrize(
+    ("first", "expected"),
+    [
+        (_ExplodingFeature("GetTypeName2"), []),  # type unreadable: skipped
+        (_ExplodingFeature("GetNextFeature"), ["Sketch9"]),  # walk stops
+    ],
+)
+def test_profile_feature_names_survives_unreadable_members(
+    first: object, expected: list[str]
+) -> None:
+    adapter = _FakeFeatureAdapter()
+    adapter.currentModel = SimpleNamespace(FirstFeature=lambda: first)
+
+    assert features._profile_feature_names(adapter) == expected
+
+
+def test_profile_feature_names_without_a_model_is_empty() -> None:
+    assert features._profile_feature_names(SimpleNamespace()) == []
+
+
+def test_parse_edge_spec_treats_non_numeric_triplets_as_names() -> None:
+    assert features._parse_edge_spec("a,b,c") == ("a,b,c", 0.0, 0.0, 0.0, "EDGE")
+
+
+@pytest.mark.parametrize(
+    ("point", "responses", "expected"),
+    [
+        ((0.01, 0.0, 0.02), [RuntimeError("busy"), True], True),  # off-axis, retry
+        ((0.0, 0.01, 0.0), [False, False, False], False),  # nothing there
+    ],
+)
+def test_select_edge_by_coord_retries_and_gives_up(point, responses, expected) -> None:
+    replies = iter(responses)
+
+    def _select(*_args):
+        reply = next(replies)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    adapter = _FakeFeatureAdapter()
+    adapter.currentModel = SimpleNamespace(
+        ForceRebuild3=lambda _t: True, Extension=SimpleNamespace(SelectByID2=_select)
+    )
+
+    assert features._select_edge_by_coord(adapter, *point, append=False) is expected
+
+
+# ---- version-specific and selection-failure feature paths ---------------------
+
+
+def _versioned_adapter(revision: str) -> _FilletAdapterSW2026:
+    adapter = _FilletAdapterSW2026()
+    adapter.swApp = SimpleNamespace(RevisionNumber=revision)
+    adapter.constants = {
+        **adapter.constants,
+        "swEndCondThroughAllBoth": 9,
+    }
+    return adapter
+
+
+@pytest.mark.parametrize("revision", ["33.4.0", "34.4.0"])
+def test_revolve_angles_use_exact_radians(revision: str) -> None:
+    import math
+
+    from solidworks_mcp.adapters.base import RevolveParameters
+
+    calls: list[tuple] = []
+    adapter = _versioned_adapter(revision)
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(
+            FeatureRevolve2=lambda *args: (
+                calls.append(args) or SimpleNamespace(Name="Revolve1")
+            )
+        )
+    )
+
+    result = features._create_revolve_impl(
+        adapter, RevolveParameters(angle=90.0, both_directions=True)
+    )
+
+    assert result.is_success, result.error
+    (args,) = calls
+    assert args[8] == pytest.approx(math.pi / 2)  # Dir1Angle
+    assert args[9] == pytest.approx(math.pi / 2)  # Dir2Angle
+
+
+def test_revolve_on_sw2025_accepts_a_none_return() -> None:
+    """SW 2025's FeatureRevolve2 returns nothing even when it succeeds."""
+    from solidworks_mcp.adapters.base import RevolveParameters
+
+    adapter = _versioned_adapter("33.0")
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(FeatureRevolve2=lambda *_a: None)
+    )
+
+    result = features._create_revolve_impl(adapter, RevolveParameters(angle=360.0))
+
+    assert result.is_success
+    assert result.data.name == "Revolve-Auto"
+
+
+def _tree(*names: str):
+    """A FirstFeature chain of sketches with the given names."""
+    nodes = [
+        SimpleNamespace(GetTypeName2=lambda: "ProfileFeature", Name=n) for n in names
+    ]
+    for node, nxt in zip(nodes, [*nodes[1:], None], strict=True):
+        node.GetNextFeature = lambda nxt=nxt: nxt
+    return lambda: nodes[0]
+
+
+def _selectable(*names: str):
+    def _by_name(name: str):
+        if name in names:
+            return SimpleNamespace(Select2=lambda _append, _mark: True)
+        return None
+
+    return _by_name
+
+
+def test_sweep_reports_an_unselectable_path() -> None:
+    from solidworks_mcp.adapters.base import SweepParameters
+
+    adapter = _FakeFeatureAdapter()
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(),
+        ClearSelection2=lambda _a: True,
+        FirstFeature=_tree("Profile1"),
+        FeatureByName=_selectable("Profile1"),
+    )
+
+    result = features._create_sweep_impl(adapter, SweepParameters(path="Path1"))
+
+    assert "Failed to select sweep path: Path1" in (result.error or "")
+
+
+def test_loft_reports_an_unselectable_guide_curve() -> None:
+    from solidworks_mcp.adapters.base import LoftParameters
+
+    adapter = _FakeFeatureAdapter()
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(),
+        ClearSelection2=lambda _a: True,
+        FeatureByName=_selectable("P1", "P2"),
+    )
+
+    result = features._create_loft_impl(
+        adapter, LoftParameters(profiles=["P1", "P2"], guide_curves=["G1"])
+    )
+
+    assert "Failed to select loft guide curve: G1" in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    ("revision", "end_condition", "expected_t1"),
+    [
+        ("not-a-version", "ThroughAllBoth", 9),
+        ("33.1.0", "Blind", 1),
+    ],
+)
+def test_cut_extrude_version_and_end_condition_paths(
+    revision: str, end_condition: str, expected_t1: int
+) -> None:
+    calls: list[tuple] = []
+    adapter = _versioned_adapter(revision)
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(
+            FeatureCut4=lambda *args: (
+                calls.append(args) or SimpleNamespace(Name="Cut-Extrude1")
+            ),
+            FeatureCut3=lambda *_a: None,
+        ),
+        ClearSelection2=lambda *_a: True,
+        FirstFeature=_fake_sketch_feature("Sketch1"),
+        Extension=SimpleNamespace(SelectByID2=lambda *_a, **_k: True),
+    )
+    adapter._last_sketch_name = "Sketch1"
+
+    result = features._create_cut_extrude_impl(
+        adapter, ExtrusionParameters(depth=5.0, end_condition=end_condition)
+    )
+
+    assert result.is_success, result.error
+    assert calls[0][3] == expected_t1  # T1
+    if revision.startswith("33"):
+        assert len(calls[0]) == 27  # SW 2025 signature
+
+
+def test_fillet_with_unparseable_version_and_unreadable_feature_name() -> None:
+    class _Fillet:
+        @property
+        def Name(self):  # noqa: N802
+            raise RuntimeError("stale dispatch")
+
+    adapter = _versioned_adapter("garbage")
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(FeatureFillet3=lambda *_a: _Fillet()),
+        Extension=SimpleNamespace(SelectByID2=lambda *_a: True),
+    )
+
+    result = features._add_fillet_impl(adapter, 2.0, ["Edge<1>"])
+
+    assert result.is_success, result.error
+    assert result.data.name == "Fillet"

@@ -1347,33 +1347,33 @@ def _add_sketch_dimension_impl(
                     default=None,
                 )
 
-            if not display_dim:
-                raise Exception("SolidWorks failed to create sketch dimension")
+        if not display_dim:
+            raise Exception("SolidWorks failed to create sketch dimension")
 
-            if dim_type == "angular":
-                value_si = value * _math_dim.pi / 180.0
-            else:
-                value_si = value / 1000.0
+        if dim_type == "angular":
+            value_si = value * _math_dim.pi / 180.0
+        else:
+            value_si = value / 1000.0
 
-            dim_obj = (
-                adapter._attempt(lambda: display_dim.GetDimension2(0), default=None)
-                or adapter._attempt(lambda: display_dim.GetDimension(), default=None)
-                or display_dim
+        dim_obj = (
+            adapter._attempt(lambda: display_dim.GetDimension2(0), default=None)
+            or adapter._attempt(lambda: display_dim.GetDimension(), default=None)
+            or display_dim
+        )
+        if (
+            adapter._attempt(
+                lambda: dim_obj.SetSystemValue3(value_si, 1, None), default=None
             )
+            is None
+        ):
             if (
                 adapter._attempt(
-                    lambda: dim_obj.SetSystemValue3(value_si, 1, None), default=None
+                    lambda: dim_obj.SetSystemValue2(value_si, 1), default=None
                 )
                 is None
             ):
-                if (
-                    adapter._attempt(
-                        lambda: dim_obj.SetSystemValue2(value_si, 1), default=None
-                    )
-                    is None
-                ):
-                    if hasattr(dim_obj, "SystemValue"):
-                        dim_obj.SystemValue = value_si
+                if hasattr(dim_obj, "SystemValue"):
+                    dim_obj.SystemValue = value_si
 
         return adapter._register_sketch_entity("Dimension", display_dim)  # type: ignore[no-any-return]
 

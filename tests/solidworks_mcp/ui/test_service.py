@@ -497,7 +497,6 @@ async def test_compat_runner_normalises_duck_typed_failures(monkeypatch) -> None
     from types import SimpleNamespace
 
     from solidworks_mcp.ui import service
-    from solidworks_mcp.ui.services import llm_service
 
     duck = SimpleNamespace(
         explanation="model refused",
@@ -513,7 +512,8 @@ async def test_compat_runner_normalises_duck_typed_failures(monkeypatch) -> None
 
     result = await service._compat_run_structured_agent()
 
-    assert isinstance(result, llm_service.RecoverableFailure)
+    # The class service.py itself bound (other tests reload llm_service).
+    assert isinstance(result, service._llm_service.RecoverableFailure)
     assert result.remediation_steps == ["simplify the goal"]
     assert result.should_retry is True
 

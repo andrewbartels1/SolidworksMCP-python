@@ -812,7 +812,10 @@ def test_add_sketch_dimension_radial_diameter_and_selection_errors() -> None:
 
     assert radial.is_success
     assert diameter.is_success
-    assert angular.is_success
+    # No shared vertex -> no angular dimension can be placed: an error, not a
+    # silent success registering nothing (was a bug before the fix).
+    assert angular.status == AdapterResultStatus.ERROR
+    assert "failed to create sketch dimension" in (angular.error or "")
     assert bad_secondary.status == AdapterResultStatus.ERROR
     assert "Failed to select secondary entity" in (bad_secondary.error or "")
 
@@ -1051,6 +1054,7 @@ def test_to_number(raw: object, expected: float | None) -> None:
         ("GetOverDefinedCount", 2, False),
         ("IsOverDefined", True, False),
         ("IsOverDefined", 0, False),  # 0 -> falls through to _to_bool(0)
+        ("IsOverDefined", "yes", False),  # non-numeric over-defined flag
         ("IsFullyDefined", "true", True),
         ("Status", "Fully constrained", True),
         ("Status", "under-constrained", False),
@@ -1067,3 +1071,222 @@ def test_probe_to_flag(source: str, raw: object, expected: bool | None) -> None:
 )
 def test_state_from_bool(flag: bool | None, state: str) -> None:
     assert sketch._state_from_bool(flag) == state
+
+
+# ---- adapter-level validation of sketch patterns / mirror / offset ----------
+
+
+def _sketching_adapter(**entities: object) -> _FakeSketchAdapter:
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = SimpleNamespace()
+    adapter._sketch_entities = dict(entities)
+    return adapter
+
+
+@pytest.mark.parametrize(
+    ("entities", "angle", "count", "fragment"),
+    [
+        ([], 360.0, 4, "requires at least one entity"),
+        (["Line_1"], 360.0, 1, "requires count >= 2"),
+        (["Line_1"], 0.0, 4, "requires angle > 0"),
+        (["Ghost_1"], 360.0, 4, "Unknown sketch entity 'Ghost_1'"),
+    ],
+)
+def test_circular_pattern_validates_its_arguments(
+    entities: list[str], angle: float, count: int, fragment: str
+) -> None:
+    adapter = _sketching_adapter(Line_1=object())
+
+    result = sketch._sketch_circular_pattern_impl(adapter, entities, angle, count)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert fragment in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    ("entities", "mirror_line", "fragment"),
+    [
+        ([], "Centerline_1", "requires at least one entity"),
+        (["Line_1"], "", "mirror_line"),
+        (["Line_1"], "Centerline_9", "Centerline_9"),
+        (["Line_1"], "Line_2", "Line_2"),
+        (["Nope_1"], "Centerline_1", "Nope_1"),
+    ],
+)
+def test_mirror_validates_entities_and_mirror_line(
+    entities: list[str], mirror_line: str, fragment: str
+) -> None:
+    adapter = _sketching_adapter(
+        Line_1=object(), Line_2=object(), Centerline_1=object()
+    )
+
+    result = sketch._sketch_mirror_impl(adapter, entities, mirror_line)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert fragment in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    ("entities", "distance", "fragment"),
+    [
+        ([], 2.0, "requires at least one entity"),
+        (["Line_1"], 0.0, "offset_distance > 0"),
+    ],
+)
+def test_offset_validates_entities_and_distance(
+    entities: list[str], distance: float, fragment: str
+) -> None:
+    adapter = _sketching_adapter(Line_1=object())
+
+    result = sketch._sketch_offset_impl(adapter, entities, distance, False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert fragment in (result.error or "")
+
+
+def test_add_sketch_dimension_angular_applies_the_value_in_radians() -> None:
+    """The requested angle is applied (degrees -> radians), like other types."""
+    import math
+
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    vertex = SimpleNamespace(Select2=lambda _append, _mark: True)
+    entity = SimpleNamespace(Select2=lambda _append, _mark: True)
+    adapter._sketch_entities = {"L1": entity, "L2": entity}
+    adapter._angular_dimension_placement = lambda _e1, _e2: (0.02, 0.02, 0.0, 0)
+    adapter._shared_segment_vertex = lambda _e1, _e2: (object(), vertex, vertex)
+    applied: list[float] = []
+    dimension = SimpleNamespace(
+        SetSystemValue3=lambda value, _cfg, _names: applied.append(value) or True
+    )
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_args: True,
+        Extension=SimpleNamespace(
+            AddDimension=lambda *_a: SimpleNamespace(
+                GetDimension2=lambda *_b: dimension
+            )
+        ),
+    )
+
+    result = sketch._add_sketch_dimension_impl(adapter, "L1", "L2", "angular", 30.0)
+
+    assert result.is_success
+    assert applied == [pytest.approx(math.radians(30.0))]
+
+
+# ---- remaining sketch failure paths ---------------------------------------------
+
+
+def test_constraint_unknown_second_entity_and_missing_relation_manager() -> None:
+    adapter, add_relation, sketch_obj = _make_constraint_adapter()
+
+    unknown = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_9", "perpendicular"
+    )
+    sketch_obj.RelationManager = None
+    no_manager = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "perpendicular"
+    )
+
+    assert "Unknown sketch entity 'Line_9'" in (unknown.error or "")
+    assert "Active sketch has no RelationManager" in (no_manager.error or "")
+    add_relation.assert_not_called()
+
+
+def _dimension_adapter(select_ok: bool) -> _FakeSketchAdapter:
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    entity = SimpleNamespace(Select2=lambda _append, _mark: select_ok)
+    adapter._sketch_entities = {"L1": entity, "L2": entity}
+    adapter._single_line_dimension_placement = lambda _e: (0.01, 0.0, 0.0, 1)
+    adapter._angular_dimension_placement = lambda _e1, _e2: (0.01, 0.01, 0.0, 0)
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: True,
+        Extension=SimpleNamespace(AddDimension=lambda *_a: None),
+    )
+    return adapter
+
+
+def test_dimension_unknown_second_entity_and_unselectable_primary() -> None:
+    adapter = _dimension_adapter(select_ok=False)
+
+    unknown = sketch._add_sketch_dimension_impl(adapter, "L1", "L9", "linear", 5.0)
+    unselectable = sketch._add_sketch_dimension_impl(adapter, "L1", None, "linear", 5.0)
+
+    assert "Unknown sketch entity 'L9'" in (unknown.error or "")
+    assert "Failed to select primary entity 'L1'" in (unselectable.error or "")
+
+
+@pytest.mark.parametrize(
+    ("segment_ok", "vertex_ok"), [(False, True), (True, False), (True, True)]
+)
+def test_angular_dimension_reports_failure_when_every_attempt_fails(
+    segment_ok: bool, vertex_ok: bool
+) -> None:
+    """Segment refusal, vertex refusal, or AddDimension returning nothing."""
+    adapter = _dimension_adapter(select_ok=segment_ok)
+    vertex = SimpleNamespace(Select2=lambda _append, _mark: vertex_ok)
+    adapter._shared_segment_vertex = lambda _e1, _e2: (object(), vertex, vertex)
+
+    result = sketch._add_sketch_dimension_impl(adapter, "L1", "L2", "angular", 30.0)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "failed to create sketch dimension" in (result.error or "")
+
+
+class _SelMgr:
+    def __init__(self) -> None:
+        self.select_data = SimpleNamespace(Mark=None)
+
+    def CreateSelectData(self):  # noqa: N802
+        return self.select_data
+
+
+@pytest.mark.parametrize(
+    ("entity", "fragment"),
+    [
+        (None, "Unknown sketch entity 'E_1'"),
+        ((SimpleNamespace(Select4=lambda *_a: False),), "Failed to select segment"),
+        (SimpleNamespace(Select4=lambda *_a: False), "Failed to select sketch entity"),
+    ],
+)
+def test_select_sketch_entities_failures(entity: object, fragment: str) -> None:
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = SimpleNamespace(SelectionManager=_SelMgr())
+    adapter._sketch_entities = {} if entity is None else {"E_1": entity}
+
+    with pytest.raises(Exception, match=fragment):
+        sketch._select_sketch_entities(adapter, ["E_1"], mark=1)
+
+
+def test_exit_sketch_reports_insert_sketch_failure() -> None:
+    adapter = _FakeSketchAdapter()
+
+    def _boom(_rebuild: bool) -> None:
+        raise RuntimeError("cannot leave sketch")
+
+    adapter.currentSketchManager = SimpleNamespace(InsertSketch=_boom)
+    adapter.currentModel = SimpleNamespace(GetActiveSketch2=lambda: object())
+
+    result = sketch._exit_sketch_impl(adapter)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "cannot leave sketch" in (result.error or "")
+
+
+def test_check_fully_defined_by_name_and_with_no_sketch_anywhere() -> None:
+    adapter = _FakeSketchAdapter()
+    fully = SimpleNamespace(GetSketchStatus=lambda: True, IsFullyDefined=True)
+    feature = SimpleNamespace(GetSpecificFeature2=lambda: fully, Name="Sketch1")
+    adapter.currentModel = SimpleNamespace(
+        FeatureByName=lambda name: feature if name == "Sketch1" else None,
+        GetActiveSketch2=lambda: None,
+    )
+
+    named = sketch._check_sketch_fully_defined_impl(adapter, "Sketch1")
+    missing = sketch._check_sketch_fully_defined_impl(adapter, None)
+
+    assert named.is_success
+    assert named.data["sketch_name"] == "Sketch1"
+    assert missing.status == AdapterResultStatus.ERROR
+    assert "No active sketch found" in (missing.error or "")

@@ -623,8 +623,8 @@ def _create_revolve_impl(
                 False,
                 adapter.constants["swEndCondBlind"],
                 adapter.constants["swEndCondBlind"],
-                params.angle * 3.14159 / 180.0,
-                (params.angle * 3.14159 / 180.0) if params.both_directions else 0.0,
+                math.radians(params.angle),
+                math.radians(params.angle) if params.both_directions else 0.0,
                 False,
                 False,
                 0.0,
@@ -1776,16 +1776,22 @@ def _add_fillet_impl(
         # Resolve the feature name — FeatureFillet3 on SW 2025+ returns an int,
         # not an IFeature, so we can only report a default name here.
         feature_name = "Fillet"
-        if feature is not None and hasattr(feature, "Name"):
+        if feature is not None:
+            # Not hasattr(): it only swallows AttributeError, so a stale COM
+            # dispatch raising on Name would fail a fillet that was created.
             try:
                 feature_name = feature.Name or "Fillet"
-            except Exception:
+            except Exception:  # noqa: BLE001 - int return / stale dispatch
                 pass
 
         return SolidWorksFeature(
             name=feature_name,
             type="Fillet",
-            id=adapter._get_feature_id(feature) if feature else "",
+            id=(
+                adapter._attempt(lambda: adapter._get_feature_id(feature), default="")
+                if feature
+                else ""
+            ),
             parameters={"radius": radius, "edges": edge_names},
             properties={"created": datetime.now().isoformat()},
         )
