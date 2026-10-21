@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from solidworks_mcp.ui import server
@@ -609,3 +610,18 @@ def test_configure_ui_file_logging_first_call_creates_sink() -> None:
     finally:
         # Clean up - the sink was already created by module import so just restore
         server._UI_FILE_SINK_ID = original_sink_id
+
+
+@pytest.mark.asyncio
+async def test_startup_ingest_skips_an_empty_knowledge_folder(monkeypatch) -> None:
+    """No markdown files in design_knowledge -> nothing is indexed."""
+    from solidworks_mcp.ui import server as ui_server
+
+    monkeypatch.setattr(ui_server.FilePath, "glob", lambda self, _pattern: iter(()))
+
+    def _no_index(*_a, **_kw):
+        raise AssertionError("the RAG index must not be built")
+
+    monkeypatch.setattr("solidworks_mcp.agents.vector_rag.VectorRAGIndex", _no_index)
+
+    assert await ui_server._startup_ingest_design_knowledge() is None

@@ -190,3 +190,21 @@ async def test_get_selected_entities_refreshes_current_model_from_active_doc() -
     assert result.is_success
     assert result.data == []
     assert harness.currentModel is active_doc
+
+
+@pytest.mark.asyncio
+async def test_get_selected_entities_describes_vertices_and_skips_unreadable() -> None:
+    """A selected VERTEX reports its point in mm; an unreadable entry is skipped."""
+    sel_mgr = _FakeSelectionManager(
+        [(2, None), (3, _FakeVertex((0.01, 0.02, 0.03))), (3, _FakeVertex(None))]
+    )
+    harness = _SelectionHarness(has_model=True)
+    harness.currentModel = SimpleNamespace(SelectionManager=sel_mgr)
+    harness.swApp = SimpleNamespace(ActiveDoc=None)
+
+    result = await harness.get_selected_entities()
+
+    assert result.is_success
+    first, second = result.data
+    assert first == {"index": 2, "type": "VERTEX", "point_mm": [10.0, 20.0, 30.0]}
+    assert second == {"index": 3, "type": "VERTEX"}  # no point -> no point_mm

@@ -363,3 +363,44 @@ class PerformanceMonitor:
 def perf_monitor() -> PerformanceMonitor:
     """Provide PerformanceMonitor."""
     return PerformanceMonitor()
+
+
+@pytest.fixture
+def import_without():
+    """Import a module in a child interpreter with some dependencies blocked.
+
+    Used to test the "dependency not installed" fallbacks (pywin32, comtypes,
+    pydantic-ai, ...). A child process keeps the blocked import out of this
+    test session; coverage measures it via ``patch = subprocess``.
+
+    Call it with the module to import, the modules to block, and the module
+    attributes to read; it returns those attributes (``repr`` of any value that
+    is not JSON-serialisable) as a dict.
+    """
+    import json
+    import subprocess
+    import sys
+
+    def _run(module: str, blocked: list[str], attributes: list[str]) -> dict:
+        code = (
+            "import json, sys\n"
+            f"for name in {blocked!r}:\n"
+            "    sys.modules[name] = None\n"
+            f"import {module} as target\n"
+            "out = {}\n"
+            f"for attr in {attributes!r}:\n"
+            "    value = getattr(target, attr)\n"
+            "    try:\n"
+            "        json.dumps(value)\n"
+            "        out[attr] = value\n"
+            "    except TypeError:\n"
+            "        out[attr] = repr(value)\n"
+            "print(json.dumps(out))\n"
+        )
+        done = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+        )
+        assert done.returncode == 0, done.stderr
+        return json.loads(done.stdout.strip().splitlines()[-1])
+
+    return _run

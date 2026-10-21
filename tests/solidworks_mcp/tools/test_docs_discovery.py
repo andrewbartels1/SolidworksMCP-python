@@ -1442,3 +1442,14 @@ def test_maybe_refresh_index_leaves_fresh_index_untouched(tmp_path):
     f.write_text("{}")  # just written -> fresh
     cfg = SimpleNamespace(docs_index_auto_refresh=True, docs_index_max_age_days=21)
     assert _maybe_refresh_index(idx, f, 2026, cfg) == (idx, f)
+
+
+def test_docs_discovery_imports_without_pywin32(import_without) -> None:
+    attrs = import_without(
+        "solidworks_mcp.tools.docs_discovery",
+        # Only win32com.client: fastmcp -> mcp needs pywintypes on Windows.
+        ["win32com.client"],
+        ["HAS_WIN32COM"],
+    )
+
+    assert attrs == {"HAS_WIN32COM": False}

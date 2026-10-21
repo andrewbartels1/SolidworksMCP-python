@@ -128,3 +128,22 @@ async def test_assembly_unresolved_component(mock_adapter: MockSolidWorksAdapter
     row = next(r for r in result.data if r["name"] == "Missing")
     assert row["type"] == "UnresolvedComponent"
     assert row["component"] == "Missing"
+
+
+@pytest.mark.asyncio
+async def test_assembly_with_tracked_features_still_flattens_components(
+    mock_adapter: MockSolidWorksAdapter,
+) -> None:
+    """Once the assembly has its own features, components are appended to them."""
+    from solidworks_mcp.adapters.base import ExtrusionParameters
+
+    await mock_adapter.open_model(r"C:\mock\Assem1.sldasm")
+    created = await mock_adapter.create_extrusion(ExtrusionParameters(depth=5.0))
+    assert created.is_success
+
+    result = await mock_adapter.list_features()
+
+    assert result.is_success
+    own = [row for row in result.data if row["component"] is None]
+    assert [row["name"] for row in own] == [created.data.name]
+    assert {row["component"] for row in result.data} >= {"PartA", "PartB"}

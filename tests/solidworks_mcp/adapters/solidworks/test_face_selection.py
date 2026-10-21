@@ -376,3 +376,77 @@ async def test_requires_part_and_active_model() -> None:
     assert drawing.is_error and "part document" in (drawing.error or "")
     none = await _Harness(None).select_face_edges(side="top")
     assert none.is_error and none.error == "No active model"
+
+
+class _BrokenFace(_Face):
+    """A face whose closest-point query fails, as some COM faces do."""
+
+    def GetClosestPointOn(self, x: float, y: float, z: float) -> list[float]:  # noqa: N802
+        raise RuntimeError("closest point unavailable")
+
+
+@pytest.mark.asyncio
+async def test_point_mode_skips_faces_that_cannot_report_a_closest_point() -> None:
+    faces, _groups = _block()
+    faces.insert(0, _BrokenFace((0, 0, 1), (0, 0, 10, 60, 40, 10), 1, []))
+
+    result = await _Harness(_model(faces)).select_face_edges(point=[30, 20, 10])
+
+    assert result.is_success, result.error
+    assert result.data["face"]["center_mm"] == [30.0, 20.0, 10.0]
+
+
+def _model_with_feature(faces: list[_Face], feature: Any) -> SimpleNamespace:
+    model = _model(faces)
+    model.FeatureByName = lambda _name: feature
+    return model
+
+
+@pytest.mark.parametrize(
+    ("feature", "fragment"),
+    [
+        (
+            SimpleNamespace(GetSpecificFeature2=lambda: None),
+            "'Odd' is not a reference plane",
+        ),
+        (
+            SimpleNamespace(
+                GetSpecificFeature2=lambda: SimpleNamespace(
+                    Transform=SimpleNamespace(ArrayData=[1, 0, 0])
+                )
+            ),
+            "Could not read the geometry of plane 'Odd'",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_plane_mode_rejects_non_planes_and_unreadable_geometry(
+    feature: Any, fragment: str
+) -> None:
+    faces, _groups = _block()
+
+    result = await _Harness(_model_with_feature(faces, feature)).select_face_edges(
+        plane="Odd"
+    )
+
+    assert result.is_error
+    assert fragment in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_part_without_faces_is_an_error() -> None:
+    result = await _Harness(_model([])).select_face_edges(side="top")
+
+    assert result.is_error
+    assert "no solid body faces" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_side_without_a_planar_face_is_an_error() -> None:
+    faces, _groups = _block()
+    cylinder_only = [f for f in faces if f.Normal == [0, 0, 0]]
+
+    result = await _Harness(_model(cylinder_only)).select_face_edges(side="top")
+
+    assert result.is_error
+    assert "No planar face faces 'top'" in (result.error or "")

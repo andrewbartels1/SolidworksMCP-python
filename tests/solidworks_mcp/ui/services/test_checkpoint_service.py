@@ -805,3 +805,20 @@ def test_pv_handles_wrong_element_types() -> None:
         {"key": ["a", "b", "c", "d"]}, "key", size=4, default=[1.0, 2.0, 3.0, 4.0]
     )
     assert result == [1.0, 2.0, 3.0, 4.0]
+
+
+@pytest.mark.asyncio
+async def test_check_interference_requires_an_object_payload() -> None:
+    from unittest.mock import AsyncMock
+
+    from solidworks_mcp.ui.services.checkpoint_service import _execute_tool
+
+    adapter = AsyncMock()
+
+    with pytest.raises(ValueError, match="check_interference must be an object"):
+        await _execute_tool(
+            adapter,
+            {"check_interference": ["not", "an", "object"]},
+            "check_interference",
+        )
+    adapter.check_interference.assert_not_called()

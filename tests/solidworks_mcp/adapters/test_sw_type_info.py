@@ -204,3 +204,39 @@ def test_load_wrapper_warns_when_genpy_missing(monkeypatch) -> None:
 
     assert sw_type_info._wrapper_module is None
     assert any("gen_py wrapper not available" in msg for msg in warnings)
+
+
+def test_flag_methods_ignores_none() -> None:
+    """SolidWorks returned Nothing: nothing to flag."""
+    from solidworks_mcp.adapters import sw_type_info
+
+    assert sw_type_info.flag_methods(None, "ISldWorks") == 0
+
+
+def test_load_wrapper_generates_the_wrapper_when_not_cached(monkeypatch) -> None:
+    """No cached gen_py module -> EnsureModule generates one, then it is used."""
+    from types import SimpleNamespace
+
+    from solidworks_mcp.adapters import sw_type_info
+
+    generated = SimpleNamespace(__name__="fake_sw_wrapper")
+    state = {"ensured": False}
+
+    def _get_module(_iid, _lcid, major, _minor):
+        return generated if state["ensured"] and major == 34 else None
+
+    def _ensure_module(_iid, _lcid, major, _minor):
+        state["ensured"] = major == 34
+
+    monkeypatch.setattr(
+        sw_type_info,
+        "gencache",
+        SimpleNamespace(GetModuleForTypelib=_get_module, EnsureModule=_ensure_module),
+    )
+    monkeypatch.setattr(sw_type_info, "PYWIN32_AVAILABLE", True)
+    monkeypatch.setattr(sw_type_info, "_wrapper_module", None)
+    monkeypatch.setattr(sw_type_info, "_interface_methods", {})
+
+    sw_type_info._load_wrapper()
+
+    assert sw_type_info._wrapper_module is generated

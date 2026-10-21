@@ -81,3 +81,22 @@ def test_get_sw_comtypes_lib_returns_none_when_comtypes_unavailable() -> None:
     ):
         result = _get_sw_comtypes_lib()
     assert result is None
+
+
+def test_io_imports_without_pywin32_or_comtypes(import_without) -> None:
+    """Mock mode on Linux/macOS: names stay defined, COM bridges report absent."""
+    attrs = import_without(
+        "solidworks_mcp.adapters.solidworks.io",
+        [
+            "pythoncom",
+            "win32com",
+            "win32com.client",
+            "win32com.client.dynamic",
+            "comtypes",
+            "comtypes.client",
+        ],
+        ["_COMTYPES_AVAILABLE", "pythoncom"],
+    )
+
+    assert attrs["_COMTYPES_AVAILABLE"] is False
+    assert attrs["pythoncom"] == "namespace()"

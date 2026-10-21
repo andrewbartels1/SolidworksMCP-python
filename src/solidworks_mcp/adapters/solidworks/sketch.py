@@ -364,9 +364,7 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             adapter.currentSketch = (
                 adapter._attempt(lambda: adapter.currentSketchManager.ActiveSketch)
                 or adapter._attempt(lambda: adapter.currentModel.GetActiveSketch2())
-                or adapter._attempt(
-                    lambda: adapter.swApp.ActiveDoc.GetActiveSketch2()
-                )
+                or adapter._attempt(lambda: adapter.swApp.ActiveDoc.GetActiveSketch2())
             )
 
         adapter._sketch_count += 1
@@ -2132,6 +2130,126 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
     return cast(AdapterResult[None], result)  # pragma: no cover
 
 
+def _to_bool(value: Any) -> bool | None:
+    """Normalise an arbitrary raw value to a Python bool.
+
+    Handles booleans, 0/1 integers and floats, truthy/falsy strings, and
+    single-element sequences.
+
+    Args:
+        value: Raw value from a SolidWorks COM attribute or method return.
+
+    Returns:
+        bool | None: ``True``, ``False``, or ``None`` when the value is
+        ambiguous or unrecognised.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and int(value) in (0, 1):
+        return bool(int(value))
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "fully_defined", "fully defined"}:
+            return True
+        if normalized in {
+            "false",
+            "no",
+            "under_defined",
+            "under defined",
+            "over_defined",
+            "over defined",
+        }:
+            return False
+    if isinstance(value, (list, tuple)) and value:
+        return _to_bool(value[0])
+    return None
+
+
+def _to_number(value: Any) -> float | None:
+    """Normalise an arbitrary raw value to a float.
+
+    Args:
+        value: Raw value from a COM attribute or method return.
+
+    Returns:
+        float | None: Numeric value, or ``None`` when conversion fails.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    if isinstance(value, (list, tuple)) and value:
+        return _to_number(value[0])
+    return None
+
+
+def _probe_to_flag(source: str, raw: Any) -> bool | None:
+    """Interpret a raw probe result according to the property-name semantics.
+
+    The SolidWorks API uses both positive and negative naming conventions
+    (``IsFullyConstrained`` vs ``IsUnderDefined``) so the source name is
+    used as a hint when interpreting the raw value.
+
+    Args:
+        source: The name of the API attribute that produced ``raw``, e.g.
+            ``"IsFullyConstrained"`` or ``"IsUnderDefined"``.
+        raw: The raw return value from the COM attribute.
+
+    Returns:
+        bool | None: ``True`` if the sketch is fully defined, ``False`` if
+        not, or ``None`` when interpretation is impossible.
+    """
+    source_lower = source.lower()
+    text_value = str(raw).strip().lower() if raw is not None else ""
+    numeric_value = _to_number(raw)
+
+    if "underdefined" in source_lower or "under_defined" in source_lower:
+        if numeric_value is not None:
+            return numeric_value == 0
+        bool_value = _to_bool(raw)
+        if bool_value is not None:
+            return not bool_value
+
+    if "overdefined" in source_lower or "over_defined" in source_lower:
+        if numeric_value is not None and numeric_value > 0:
+            return False
+        bool_value = _to_bool(raw)
+        if bool_value is True:
+            return False
+
+    if "fullydefined" in source_lower or "fully_defined" in source_lower:
+        bool_value = _to_bool(raw)
+        if bool_value is not None:
+            return bool_value
+
+    if "fully" in text_value and "under" not in text_value and "over" not in text_value:
+        return True
+    if "under" in text_value or "over" in text_value:
+        return False
+
+    return _to_bool(raw)
+
+
+def _state_from_bool(flag: bool | None) -> str:
+    """Convert a nullable bool flag to a descriptive state string.
+
+    Args:
+        flag: The fully-defined flag value.
+
+    Returns:
+        str: ``"fully_defined"``, ``"not_fully_defined"``, or
+        ``"unknown"``.
+    """
+    if flag is True:
+        return "fully_defined"
+    if flag is False:
+        return "not_fully_defined"
+    return "unknown"
+
+
 def _check_sketch_fully_defined_impl(
     adapter: Any,
     sketch_name: str | None = None,
@@ -2184,126 +2302,6 @@ def _check_sketch_fully_defined_impl(
     """
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-
-    def _to_bool(value: Any) -> bool | None:  # pragma: no cover
-        """Normalise an arbitrary raw value to a Python bool.
-
-        Handles booleans, 0/1 integers and floats, truthy/falsy strings, and
-        single-element sequences.
-
-        Args:
-            value: Raw value from a SolidWorks COM attribute or method return.
-
-        Returns:
-            bool | None: ``True``, ``False``, or ``None`` when the value is
-            ambiguous or unrecognised.
-        """
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, (int, float)) and int(value) in (0, 1):
-            return bool(int(value))
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in {"true", "yes", "fully_defined", "fully defined"}:
-                return True
-            if normalized in {
-                "false",
-                "no",
-                "under_defined",
-                "under defined",
-                "over_defined",
-                "over defined",
-            }:
-                return False
-        if isinstance(value, (list, tuple)) and value:
-            return _to_bool(value[0])
-        return None
-
-    def _to_number(value: Any) -> float | None:  # pragma: no cover
-        """Normalise an arbitrary raw value to a float.
-
-        Args:
-            value: Raw value from a COM attribute or method return.
-
-        Returns:
-            float | None: Numeric value, or ``None`` when conversion fails.
-        """
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, str):
-            try:
-                return float(value.strip())
-            except ValueError:
-                return None
-        if isinstance(value, (list, tuple)) and value:
-            return _to_number(value[0])
-        return None
-
-    def _probe_to_flag(source: str, raw: Any) -> bool | None:  # pragma: no cover
-        """Interpret a raw probe result according to the property-name semantics.
-
-        The SolidWorks API uses both positive and negative naming conventions
-        (``IsFullyConstrained`` vs ``IsUnderDefined``) so the source name is
-        used as a hint when interpreting the raw value.
-
-        Args:
-            source: The name of the API attribute that produced ``raw``, e.g.
-                ``"IsFullyConstrained"`` or ``"IsUnderDefined"``.
-            raw: The raw return value from the COM attribute.
-
-        Returns:
-            bool | None: ``True`` if the sketch is fully defined, ``False`` if
-            not, or ``None`` when interpretation is impossible.
-        """
-        source_lower = source.lower()
-        text_value = str(raw).strip().lower() if raw is not None else ""
-        numeric_value = _to_number(raw)
-
-        if "underdefined" in source_lower or "under_defined" in source_lower:
-            if numeric_value is not None:
-                return numeric_value == 0
-            bool_value = _to_bool(raw)
-            if bool_value is not None:
-                return not bool_value
-
-        if "overdefined" in source_lower or "over_defined" in source_lower:
-            if numeric_value is not None and numeric_value > 0:
-                return False
-            bool_value = _to_bool(raw)
-            if bool_value is True:
-                return False
-
-        if "fullydefined" in source_lower or "fully_defined" in source_lower:
-            bool_value = _to_bool(raw)
-            if bool_value is not None:
-                return bool_value
-
-        if (
-            "fully" in text_value
-            and "under" not in text_value
-            and "over" not in text_value
-        ):
-            return True
-        if "under" in text_value or "over" in text_value:
-            return False
-
-        return _to_bool(raw)
-
-    def _state_from_bool(flag: bool | None) -> str:  # pragma: no cover
-        """Convert a nullable bool flag to a descriptive state string.
-
-        Args:
-            flag: The fully-defined flag value.
-
-        Returns:
-            str: ``"fully_defined"``, ``"not_fully_defined"``, or
-            ``"unknown"``.
-        """
-        if flag is True:
-            return "fully_defined"
-        if flag is False:
-            return "not_fully_defined"
-        return "unknown"
 
     def _get_sketch_payload() -> dict[str, Any]:  # pragma: no cover
         """Main inner closure that locates the sketch and probes its constraint status.

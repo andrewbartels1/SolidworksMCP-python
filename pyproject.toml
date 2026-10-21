@@ -217,6 +217,10 @@ timeout = 300
 
 [tool.coverage.run]
 source = ["src/solidworks_mcp"]
+# Measure child Python processes too: the "dependency not installed" import
+# fallbacks are tested by importing a module in a subprocess with the
+# dependency blocked (see the import_without fixture in tests/conftest.py).
+patch = ["subprocess"]
 omit = [
     "*/tests/*",
     "*/test_*",

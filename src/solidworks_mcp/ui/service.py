@@ -376,6 +376,38 @@ def ingest_reference_source(
         )
 
 
+async def _compat_run_structured_agent(*args: Any, **kwargs: Any) -> Any:
+    """Run the structured agent and normalise any failure to the LLM service's type.
+
+    Callers may receive this module's ``RecoverableFailure`` or any object with
+    the same four fields; the LLM service only understands its own class.
+    """
+    result = await _run_structured_agent(*args, **kwargs)
+    if isinstance(result, RecoverableFailure):
+        return _llm_service.RecoverableFailure(
+            explanation=str(getattr(result, "explanation", "")),
+            remediation_steps=list(getattr(result, "remediation_steps", []) or []),
+            retry_focus=str(getattr(result, "retry_focus", "")) or "",
+            should_retry=bool(getattr(result, "should_retry", False)),
+        )
+    if all(
+        hasattr(result, name)
+        for name in (
+            "explanation",
+            "remediation_steps",
+            "retry_focus",
+            "should_retry",
+        )
+    ):
+        return _llm_service.RecoverableFailure(
+            explanation=str(getattr(result, "explanation", "")),
+            remediation_steps=list(getattr(result, "remediation_steps", []) or []),
+            retry_focus=str(getattr(result, "retry_focus", "")),
+            should_retry=bool(getattr(result, "should_retry", False)),
+        )
+    return result
+
+
 async def request_clarifications(
     session_id: str,
     user_goal: str,
@@ -384,32 +416,6 @@ async def request_clarifications(
     model_name: str | None = None,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    async def _compat_run_structured_agent(*args: Any, **kwargs: Any):
-        result = await _run_structured_agent(*args, **kwargs)
-        if isinstance(result, RecoverableFailure):
-            return _llm_service.RecoverableFailure(
-                explanation=str(getattr(result, "explanation", "")),
-                remediation_steps=list(getattr(result, "remediation_steps", []) or []),
-                retry_focus=str(getattr(result, "retry_focus", "")) or "",
-                should_retry=bool(getattr(result, "should_retry", False)),
-            )
-        if all(
-            hasattr(result, name)
-            for name in (
-                "explanation",
-                "remediation_steps",
-                "retry_focus",
-                "should_retry",
-            )
-        ):
-            return _llm_service.RecoverableFailure(
-                explanation=str(getattr(result, "explanation", "")),
-                remediation_steps=list(getattr(result, "remediation_steps", []) or []),
-                retry_focus=str(getattr(result, "retry_focus", "")),
-                should_retry=bool(getattr(result, "should_retry", False)),
-            )
-        return result
-
     with _temporary_module_bindings(
         _llm_service, _run_structured_agent=_compat_run_structured_agent
     ):
@@ -429,32 +435,6 @@ async def inspect_family(
     model_name: str | None = None,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    async def _compat_run_structured_agent(*args: Any, **kwargs: Any):
-        result = await _run_structured_agent(*args, **kwargs)
-        if isinstance(result, RecoverableFailure):
-            return _llm_service.RecoverableFailure(
-                explanation=str(getattr(result, "explanation", "")),
-                remediation_steps=list(getattr(result, "remediation_steps", []) or []),
-                retry_focus=str(getattr(result, "retry_focus", "")) or "",
-                should_retry=bool(getattr(result, "should_retry", False)),
-            )
-        if all(
-            hasattr(result, name)
-            for name in (
-                "explanation",
-                "remediation_steps",
-                "retry_focus",
-                "should_retry",
-            )
-        ):
-            return _llm_service.RecoverableFailure(
-                explanation=str(getattr(result, "explanation", "")),
-                remediation_steps=list(getattr(result, "remediation_steps", []) or []),
-                retry_focus=str(getattr(result, "retry_focus", "")),
-                should_retry=bool(getattr(result, "should_retry", False)),
-            )
-        return result
-
     with _temporary_module_bindings(
         _llm_service, _run_structured_agent=_compat_run_structured_agent
     ):

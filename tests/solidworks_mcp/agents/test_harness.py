@@ -542,3 +542,13 @@ class TestRunValidatedPromptException:
         finally:
             harness_module.Agent = original_agent
             harness_module.IMPORT_ERROR = original_err
+
+
+def test_harness_imports_without_pydantic_ai(import_without) -> None:
+    """The harness still imports; Agent is None and the import error is kept."""
+    attrs = import_without(
+        "solidworks_mcp.agents.harness", ["pydantic_ai"], ["Agent", "IMPORT_ERROR"]
+    )
+
+    assert attrs["Agent"] is None
+    assert "pydantic_ai" in attrs["IMPORT_ERROR"]

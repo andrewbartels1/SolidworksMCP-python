@@ -842,3 +842,25 @@ async def test_run_local_agent_rag_other_namespace(
         rag_namespace="engineering-reference",
     )
     assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_run_local_agent_reports_missing_pydantic_ai(monkeypatch) -> None:
+    """Without pydantic-ai installed the agent fails cleanly instead of raising."""
+    import sys
+
+    from pydantic import BaseModel
+
+    from solidworks_mcp.ui.local_llm import run_local_agent
+
+    class _Out(BaseModel):
+        text: str
+
+    monkeypatch.setitem(sys.modules, "pydantic_ai", None)
+
+    result = await run_local_agent(
+        system_prompt="s", user_prompt="u", result_type=_Out, rag_query=None
+    )
+
+    assert result.success is False
+    assert result.error == "pydantic-ai is not installed in this environment."

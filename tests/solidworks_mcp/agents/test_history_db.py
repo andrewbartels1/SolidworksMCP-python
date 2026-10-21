@@ -821,3 +821,28 @@ class TestScriptLineColumn:
             _ensure_columns(engine)  # must not raise
         finally:
             engine.dispose()
+
+
+def test_insert_tool_call_record_survives_a_render_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A script-line render error must not block the log write (line stays None)."""
+    from solidworks_mcp.agents import soc_exporter
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("render failed")
+
+    monkeypatch.setattr(soc_exporter, "render_single", _boom)
+    db = _db(tmp_path)
+
+    insert_tool_call_record(
+        session_id="s1", tool_name="add_line", input_json="{}", db_path=db
+    )
+
+    from sqlmodel import Session, select
+
+    from solidworks_mcp.agents.history_db import ToolCallRecord, _build_engine
+
+    with Session(_build_engine(db)) as session:
+        (record,) = session.exec(select(ToolCallRecord)).all()
+    assert record.tool_name == "add_line"
+    assert record.script_line is None

@@ -5,6 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.adapters.solidworks import sketch
 
@@ -956,3 +958,112 @@ def test_check_sketch_fully_defined_handles_textual_probe_values() -> None:
     result = sketch._check_sketch_fully_defined_impl(adapter, None)
     assert result.is_success
     assert result.data["definition_state"] == "fully_defined"
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_spline_without_pythoncom(monkeypatch, platform: str) -> None:
+    """No pywin32: Windows fails clearly; mock mode elsewhere passes a plain list."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "pythoncom", None)
+    monkeypatch.setattr(sys, "platform", platform)
+    received: list = []
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = SimpleNamespace(
+        CreateSpline2=lambda points, _ends: received.append(points) or object()
+    )
+
+    result = sketch._add_spline_impl(
+        adapter, [{"x": 0.0, "y": 0.0}, {"x": 1000.0, "y": 0.0}]
+    )
+
+    if platform == "win32":
+        assert result.status == AdapterResultStatus.ERROR
+        assert "pywin32 is required for add_spline" in (result.error or "")
+        assert received == []
+    else:
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert received == [[0.0, 0.0, 0.0, 1.0, 0.0, 0.0]]
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_constraint_without_pythoncom(monkeypatch, platform: str) -> None:
+    import sys
+
+    monkeypatch.setitem(sys.modules, "pythoncom", None)
+    monkeypatch.setattr(sys, "platform", platform)
+    adapter, add_relation, _sk = _make_constraint_adapter(
+        add_relation_returns=SimpleNamespace(Name="Perp1")
+    )
+
+    result = sketch._add_sketch_constraint_impl(
+        adapter, "Line_1", "Line_2", "perpendicular"
+    )
+
+    if platform == "win32":
+        assert result.status == AdapterResultStatus.ERROR
+        assert "pywin32 is required for add_sketch_constraint" in (result.error or "")
+        add_relation.assert_not_called()
+    else:
+        assert result.status == AdapterResultStatus.SUCCESS
+        ents_arg, _rt = add_relation.call_args.args
+        assert isinstance(ents_arg, list)
+
+
+# ---- sketch-definition probe helpers ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (True, True),
+        (0, False),
+        (1.0, True),
+        (2, None),
+        (" Fully Defined ", True),
+        ("under_defined", False),
+        ("over defined", False),
+        ("maybe", None),
+        ([True], True),
+        ((), None),
+        (None, None),
+    ],
+)
+def test_to_bool(raw: object, expected: bool | None) -> None:
+    assert sketch._to_bool(raw) is expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(3, 3.0), (" 2.5 ", 2.5), ("abc", None), ([4], 4.0), ([], None), (None, None)],
+)
+def test_to_number(raw: object, expected: float | None) -> None:
+    assert sketch._to_number(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "raw", "expected"),
+    [
+        ("IsUnderDefined", 0, True),  # numeric: zero under-defined entities
+        ("IsUnderDefined", 3, False),
+        ("IsUnderDefined", "yes", False),  # bool: under-defined -> not fully
+        ("IsUnderDefined", object(), None),  # neither number nor bool
+        ("GetOverDefinedCount", 2, False),
+        ("IsOverDefined", True, False),
+        ("IsOverDefined", 0, False),  # 0 -> falls through to _to_bool(0)
+        ("IsFullyDefined", "true", True),
+        ("Status", "Fully constrained", True),
+        ("Status", "under-constrained", False),
+        ("Status", 1, True),
+    ],
+)
+def test_probe_to_flag(source: str, raw: object, expected: bool | None) -> None:
+    assert sketch._probe_to_flag(source, raw) is expected
+
+
+@pytest.mark.parametrize(
+    ("flag", "state"),
+    [(True, "fully_defined"), (False, "not_fully_defined"), (None, "unknown")],
+)
+def test_state_from_bool(flag: bool | None, state: str) -> None:
+    assert sketch._state_from_bool(flag) == state

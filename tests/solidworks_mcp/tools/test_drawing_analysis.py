@@ -862,3 +862,33 @@ class TestDrawingAnalysisTools:
         assert full_input.compliance_level == "Strict"
         assert full_input.generate_report is True
         assert full_input.check_title_block is False
+
+
+@pytest.mark.asyncio
+async def test_validate_drawing_completeness_success(mcp_server, mock_config) -> None:
+    """An adapter that can validate returns its data and timing unchanged."""
+    from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+
+    adapter = Mock()
+    adapter.validate_drawing_completeness = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"complete": True, "missing": []},
+            execution_time=0.2,
+        )
+    )
+    await register_drawing_analysis_tools(mcp_server, adapter, mock_config)
+    tool = next(
+        t.fn
+        for t in await mcp_server.list_tools()
+        if t.name == "validate_drawing_completeness"
+    )
+
+    result = await tool({"drawing_path": "a.slddrw"})
+
+    assert result == {
+        "status": "success",
+        "message": "Drawing completeness validation completed",
+        "data": {"complete": True, "missing": []},
+        "execution_time": 0.2,
+    }

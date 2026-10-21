@@ -513,3 +513,32 @@ def test_query_solidworks_api_docs_import_error(tmp_path: Path) -> None:
     with patch.object(VectorRAGIndex, "load", side_effect=ImportError("no faiss")):
         result = query_solidworks_api_docs("test", rag_dir=tmp_path)
     assert result == ""
+
+
+def test_fallback_embedder_when_sentence_transformers_is_absent(monkeypatch) -> None:
+    """Not installed (no sys.modules entry) -> deterministic numpy fallback."""
+    import builtins
+    import sys
+
+    import numpy as np
+
+    real_import = builtins.__import__
+
+    def _no_sentence_transformers(name, *args, **kwargs):
+        if name == "sentence_transformers":
+            raise ImportError("No module named 'sentence_transformers'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.delitem(sys.modules, "sentence_transformers", raising=False)
+    monkeypatch.setattr(builtins, "__import__", _no_sentence_transformers)
+
+    model = _require_sentence_transformers()("any-model")
+    normalised = model.encode(["bracket", "bracket", "flange"])
+    raw = model.encode(["bracket"], normalize_embeddings=False)
+
+    assert normalised.shape == (3, 384)
+    assert normalised.dtype == np.float32
+    assert np.allclose(np.linalg.norm(normalised, axis=1), 1.0, atol=1e-5)
+    assert np.array_equal(normalised[0], normalised[1])  # same text, same vector
+    assert not np.array_equal(normalised[0], normalised[2])
+    assert not np.isclose(np.linalg.norm(raw[0]), 1.0)  # left unnormalised

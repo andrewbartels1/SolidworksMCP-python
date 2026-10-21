@@ -201,3 +201,16 @@ async def test_mock_selection_does_not_leak_across_documents(part) -> None:
     await part.create_part()
     result = await part.add_fillet(1.0, [])
     assert result.is_error and "nothing is selected" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_mock_edge_features_without_model_are_errors() -> None:
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    for result in (
+        await adapter.add_fillet(1.0, ["Edge<1>"]),
+        await adapter.add_chamfer(1.0, []),
+    ):
+        assert result.is_error
+        assert result.error == "No active model"

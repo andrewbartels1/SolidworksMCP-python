@@ -95,3 +95,43 @@ def test_start_unblocks_when_coinitialize_fails(monkeypatch) -> None:
     with pytest.raises(RuntimeError, match="not running"):
         executor.submit(lambda: "nope")
     executor.stop()
+
+
+def test_com_executor_imports_without_pywin32(import_without) -> None:
+    attrs = import_without(
+        "solidworks_mcp.adapters.com_executor", ["pythoncom"], ["PYWIN32_AVAILABLE"]
+    )
+
+    assert attrs == {"PYWIN32_AVAILABLE": False}
+
+
+def test_worker_skips_cancelled_work_and_survives_uninit_failure(monkeypatch) -> None:
+    """A cancelled item is skipped; a CoUninitialize error never escapes."""
+    from concurrent.futures import Future
+
+    from solidworks_mcp.adapters import com_executor
+
+    calls: list[str] = []
+
+    def _uninit_fails() -> None:
+        calls.append("uninit")
+        raise RuntimeError("apartment already gone")
+
+    fake = SimpleNamespace(
+        CoInitialize=lambda: calls.append("init"), CoUninitialize=_uninit_fails
+    )
+    monkeypatch.setattr(com_executor, "pythoncom", fake, raising=False)
+    monkeypatch.setattr(com_executor, "PYWIN32_AVAILABLE", True)
+
+    ex = com_executor.ComExecutor(name="test-cancel")
+    ex.start()
+    cancelled: Future = Future()
+    cancelled.cancel()
+    ran: list[str] = []
+    ex._queue.put((lambda: ran.append("cancelled"), cancelled))
+
+    assert ex.run(lambda: "after") == "after"
+    ex.stop()
+
+    assert ran == []
+    assert calls == ["init", "uninit"]

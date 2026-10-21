@@ -4,14 +4,13 @@ Provides tools for managing SolidWorks templates including extraction, applicati
 comparison, and library management.
 """
 
-import hashlib
-import pathlib
 from typing import Any
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
+from .file_facts import file_fact_snapshot
 from .input_compat import CompatInput
 from .tool_boundary import (
     ToolOperationError,
@@ -20,30 +19,6 @@ from .tool_boundary import (
     require_success,
     with_tool_boundary,
 )
-
-
-def _file_fact_snapshot(path_str: str) -> dict[str, Any] | None:
-    """Read basic, honest filesystem facts about a file: size, mtime, hash.
-
-    Returns None if the path is empty or does not point at an existing file.
-    """
-    if not path_str:
-        return None
-    path = pathlib.Path(path_str)
-    if not path.is_file():
-        return None
-    stat = path.stat()
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return {
-        "path": str(path),
-        "size_bytes": stat.st_size,
-        "modified_time": stat.st_mtime,
-        "sha256": digest.hexdigest(),
-    }
-
 
 # Input schemas for template management
 
@@ -279,8 +254,8 @@ async def register_template_management_tools(
                 "execution_time": result.execution_time,
             }
 
-        file_1 = _file_fact_snapshot(input_data.template1_path)
-        file_2 = _file_fact_snapshot(input_data.template2_path)
+        file_1 = file_fact_snapshot(input_data.template1_path)
+        file_2 = file_fact_snapshot(input_data.template2_path)
 
         missing = [
             path

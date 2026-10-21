@@ -489,3 +489,49 @@ def test_build_agent_model_passthrough(monkeypatch) -> None:
     # Non-local, non-github model name should pass through unchanged
     result = svc._build_agent_model("openai:gpt-4.1")
     assert result == "openai:gpt-4.1"
+
+
+@pytest.mark.asyncio
+async def test_compat_runner_normalises_duck_typed_failures(monkeypatch) -> None:
+    """Any object with the four failure fields becomes the LLM service's type."""
+    from types import SimpleNamespace
+
+    from solidworks_mcp.ui import service
+    from solidworks_mcp.ui.services import llm_service
+
+    duck = SimpleNamespace(
+        explanation="model refused",
+        remediation_steps=["simplify the goal"],
+        retry_focus="goal",
+        should_retry=True,
+    )
+
+    async def _fake_agent(*_a, **_kw):
+        return duck
+
+    monkeypatch.setattr(service, "_run_structured_agent", _fake_agent)
+
+    result = await service._compat_run_structured_agent()
+
+    assert isinstance(result, llm_service.RecoverableFailure)
+    assert result.remediation_steps == ["simplify the goal"]
+    assert result.should_retry is True
+
+
+@pytest.mark.asyncio
+async def test_compat_runner_passes_normal_results_through(monkeypatch) -> None:
+    from solidworks_mcp.ui import service
+
+    async def _fake_agent(*_a, **_kw):
+        return {"answer": 42}
+
+    monkeypatch.setattr(service, "_run_structured_agent", _fake_agent)
+
+    assert await service._compat_run_structured_agent() == {"answer": 42}
+
+
+def test_service_read_reference_url_rejects_non_http_schemes() -> None:
+    from solidworks_mcp.ui import service
+
+    with pytest.raises(ValueError, match="Disallowed URL scheme: 'file'"):
+        service._read_reference_url("file:///C:/secrets.txt")

@@ -256,3 +256,50 @@ async def test_rebuild_false_with_only_warnings_keeps_them() -> None:
     assert "Fillet1" in (result.error or "")
     assert result.data["warning_count"] == 1
     assert result.data["errors"][0]["feature"] == "Fillet1"
+
+
+class _UnreadableSketch(_Feature):
+    """A sketch parent whose segment list raises when read."""
+
+    def GetSpecificFeature2(self):  # noqa: ANN201, N802
+        def _boom() -> None:
+            raise RuntimeError("segments unavailable")
+
+        return SimpleNamespace(GetSketchSegments=_boom)
+
+
+@pytest.mark.parametrize(
+    "sketch",
+    [
+        _Feature("Sketch1", "ProfileFeature", segments=None),  # no sketch object
+        _UnreadableSketch("Sketch1", "ProfileFeature"),
+    ],
+)
+def test_unreadable_parent_sketch_reports_no_segment_count(sketch: _Feature) -> None:
+    boss = _Feature("Boss-Extrude1", "Extrusion", code=1, parents=[sketch])
+    adapter = _Adapter(_model(boss, [(boss, 1, False)]))
+
+    (issue,) = ri.collect_rebuild_issues(adapter, adapter.currentModel)
+
+    assert issue.parents[0].name == "Sketch1"
+    assert issue.parents[0].segment_count is None
+
+
+class _MismatchedExt(_Ext):
+    """GetWhatsWrong returning fewer codes than features."""
+
+    def GetWhatsWrong(self, feats: Any, codes: Any, warns: Any) -> bool:  # noqa: N802
+        feats.value = tuple(i[0] for i in self._issues or [])
+        codes.value = ()
+        warns.value = ()
+        return True
+
+
+def test_mismatched_whats_wrong_arrays_fall_back_to_the_tree_walk() -> None:
+    boss = _Feature("Boss-Extrude1", "Extrusion", code=1)
+    model = _model(boss, [(boss, 1, False)])
+    model.Extension = _MismatchedExt([(boss, 1, False)])
+
+    issues = ri.collect_rebuild_issues(_Adapter(model), model)
+
+    assert [(i.feature, i.code) for i in issues] == [("Boss-Extrude1", 1)]

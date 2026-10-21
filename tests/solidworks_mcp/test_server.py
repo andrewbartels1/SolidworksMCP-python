@@ -912,6 +912,20 @@ class TestServerToolEventLogging:
         server._log_tool_event(tool_name="t", phase="start", payload={"k": "v"})
         assert called["count"] == 1
 
+    def test_log_tool_event_never_fails_the_tool_call(self, monkeypatch):
+        """A database error while logging is swallowed - logging is best effort."""
+        server = SolidWorksMCPServer(SolidWorksMCPConfig())
+        server._db_logging_enabled = True
+        server._db_run_id = "run"
+        server._db_path = "relative/history.sqlite3"
+
+        def _broken_insert(*_a, **_kw):
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr("solidworks_mcp.server.insert_tool_event", _broken_insert)
+
+        server._log_tool_event(tool_name="t", phase="end", payload=None)
+
 
 @pytest.mark.asyncio
 async def test_start_marks_connected_on_success(mock_config):

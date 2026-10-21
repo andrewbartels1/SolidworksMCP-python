@@ -993,3 +993,12 @@ def test_persist_ui_action_no_metadata_updates(tmp_path: Path) -> None:
     )
     # Returns empty merged_metadata (no updates)
     assert result == {}
+
+
+def test_read_reference_url_rejects_non_http_schemes() -> None:
+    import pytest
+
+    from solidworks_mcp.ui.services._utils import read_reference_url
+
+    with pytest.raises(ValueError, match="Disallowed URL scheme: 'ftp'"):
+        read_reference_url("ftp://example.com/notes.txt")
