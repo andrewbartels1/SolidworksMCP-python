@@ -16,6 +16,10 @@ read of the result, then wait for approval.
   `[evidence] <label>: <payload>` lines (the tool's real response, or a
   measured value such as a volume). Write one if it is missing; a demo
   shows the real tool path an MCP client hits, plus one failure case.
+- Print evidence with `tests.live.evidence.evidence(label, payload)`, never a
+  bare `print`: during a demo it holds SolidWorks on each proven state
+  (`SW_DEMO_HOLD_SECONDS`, set by `live_demo.ps1`), otherwise steps flash by
+  and the test closes its part before the user sees it.
 - List the demos in order, numbered, one line each. Show this list once.
 
 ## 2. Each demo (one at a time)
