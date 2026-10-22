@@ -95,6 +95,12 @@ _MATE_ALIGNMENTS: dict[str, int] = {
 }
 
 
+#: ``swDwgTemplates_e`` / ``swDwgPaperSizes_e`` values (read from swconst.tlb).
+_SW_DWG_TEMPLATE_NONE = 13
+_SW_DWG_PAPER_A_SIZE = 0
+_SW_DWG_PAPERS_USER_DEFINED = 12
+
+
 #: SolidWorks named views. The leading asterisk is part of the name and
 #: ``CreateDrawViewFromModelView3`` rejects the name without it.
 _NAMED_VIEWS: dict[str, str] = {
@@ -1237,14 +1243,29 @@ class SolidWorksIOMixin:
             # SW 2025: 8=Part.prtdot, 9=Assembly.asmdot, 10=Drawing.drwdot,
             # 0-3 all empty.
             drw_template = self._resolve_template_path([10, 1, 0, 2, 3], ".drwdot")
-            if not drw_template:
-                raise Exception("No drawing template configured in SolidWorks")
-
-            model = app.NewDocument(drw_template, 12, 0.2794, 0.2159)
+            model = None
+            if drw_template:
+                model = app.NewDocument(
+                    drw_template, _SW_DWG_PAPERS_USER_DEFINED, 0.2794, 0.2159
+                )
             if not model:
+                # No usable template (a settings reset blanks the slot, or it
+                # names a deleted file). Like create_part's NewPart fallback,
+                # let SolidWorks make a blank A-size drawing with no sheet
+                # format; views can still be placed on it.
+                model = adapter._attempt(
+                    lambda: app.NewDrawing2(
+                        _SW_DWG_TEMPLATE_NONE, "", _SW_DWG_PAPER_A_SIZE, 0.2794, 0.2159
+                    )
+                )
+            if not model:
+                if drw_template:
+                    tried = f"template {drw_template!r}"
+                else:
+                    tried = "no drawing template is configured"
                 raise Exception(
-                    f"Failed to create new drawing from template "
-                    f"'{drw_template}'"
+                    f"Failed to create a drawing: {tried}, and a blank drawing "
+                    "without a template (NewDrawing2) also failed"
                 )
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 3), default=0)

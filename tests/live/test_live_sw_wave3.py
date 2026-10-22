@@ -236,3 +236,28 @@ async def test_auto_center_marks_unknown_view_is_an_error(scratch, tmp_path):
     result = await adapter.auto_center_marks("Definitely Not A View")
     assert not result.is_success
     assert "No view named" in (result.error or "")
+
+
+# ---- create_drawing without a template ------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_drawing_without_a_template_live(scratch, tmp_path, monkeypatch):
+    """No usable drawing template (as after a settings reset): create_drawing
+    falls back to a blank A-size drawing, and views can still be placed."""
+    adapter = scratch.adapter
+    await _box_part(adapter)
+    part_path = tmp_path / "box.sldprt"
+    assert (await adapter.save_file(str(part_path))).is_success
+
+    monkeypatch.setattr(adapter, "_resolve_template_path", lambda *a, **kw: None)
+    created = await adapter.create_drawing()
+    print(f"\n[evidence] create_drawing without template: {created}")
+    assert created.is_success, created.error
+    assert int(adapter.currentModel.GetType()) == 3  # swDocDRAWING
+
+    drawing = await adapter.create_technical_drawing({"model_file": str(part_path)})
+    views = (await adapter.list_drawing_views()).data or []
+    print(f"[evidence] views on the blank drawing: {views}")
+    assert drawing.is_success, drawing.error
+    assert views, "no drawing views were placed on the template-less drawing"

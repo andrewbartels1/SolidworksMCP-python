@@ -998,20 +998,69 @@ class TestCheckInterferenceManagerUnavailable:
         assert "InterferenceDetectionManager is unavailable" in (result.error or "")
 
 
-class TestCreateDrawingNoTemplateConfigured:
-    """Cover ``create_drawing``'s "no drawing template configured" raise."""
+class TestCreateDrawingTemplateFallback:
+    """Without a usable template, create_drawing makes a blank drawing."""
 
-    @pytest.mark.asyncio
-    async def test_errors_when_no_template_resolves(self, monkeypatch) -> None:
+    def _adapter(self, monkeypatch, template, *, new_document, new_drawing):
         adapter = _build_adapter(monkeypatch)
         monkeypatch.setattr(adapter, "is_connected", lambda: True)
         adapter.swApp = MagicMock()
-        adapter._resolve_template_path = lambda *a, **kw: None
+        adapter.swApp.NewDocument.return_value = new_document
+        adapter.swApp.NewDrawing2.return_value = new_drawing
+        adapter._resolve_template_path = lambda *a, **kw: template
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_uses_the_configured_template(self, monkeypatch) -> None:
+        drawing = MagicMock()
+        adapter = self._adapter(
+            monkeypatch, "C:/t/Drawing.drwdot", new_document=drawing, new_drawing=None
+        )
+
+        result = await adapter.create_drawing()
+
+        assert result.is_success
+        adapter.swApp.NewDocument.assert_called_once_with(
+            "C:/t/Drawing.drwdot", 12, 0.2794, 0.2159
+        )
+        adapter.swApp.NewDrawing2.assert_not_called()
+
+    @pytest.mark.parametrize("template", [None, "C:/deleted/Drawing.drwdot"])
+    @pytest.mark.asyncio
+    async def test_falls_back_to_a_blank_a_size_drawing(
+        self, monkeypatch, template
+    ) -> None:
+        adapter = self._adapter(
+            monkeypatch, template, new_document=None, new_drawing=MagicMock()
+        )
+
+        result = await adapter.create_drawing()
+
+        assert result.is_success
+        assert result.data.type == "Drawing"
+        # swDwgTemplateNone, no template file, swDwgPaperAsize, 11 x 8.5 in
+        adapter.swApp.NewDrawing2.assert_called_once_with(13, "", 0, 0.2794, 0.2159)
+
+    @pytest.mark.parametrize(
+        ("template", "expected"),
+        [
+            (None, "no drawing template is configured"),
+            ("C:/deleted/Drawing.drwdot", "template 'C:/deleted/Drawing.drwdot'"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_reports_both_attempts_when_everything_fails(
+        self, monkeypatch, template, expected
+    ) -> None:
+        adapter = self._adapter(
+            monkeypatch, template, new_document=None, new_drawing=None
+        )
 
         result = await adapter.create_drawing()
 
         assert result.is_error
-        assert "No drawing template configured" in (result.error or "")
+        assert expected in result.error
+        assert "without a template (NewDrawing2) also failed" in result.error
 
 
 class TestByrefFallback:
@@ -1105,7 +1154,9 @@ class TestAddMateErrorBranches:
     async def test_errors_on_unknown_alignment(self, monkeypatch) -> None:
         adapter = self._assembly_adapter(monkeypatch)
 
-        result = await adapter.add_mate("part-1", "part-2", alignment="not_an_alignment")
+        result = await adapter.add_mate(
+            "part-1", "part-2", alignment="not_an_alignment"
+        )
 
         assert result.is_error
         assert "Unknown alignment" in (result.error or "")
@@ -1121,9 +1172,7 @@ class TestAddMateErrorBranches:
         assert "Could not read the assembly's components" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_errors_when_every_component_fails_to_wrap(
-        self, monkeypatch
-    ) -> None:
+    async def test_errors_when_every_component_fails_to_wrap(self, monkeypatch) -> None:
         """Exercises both the per-component 'continue' and the resulting
         'not found' raise: nothing wraps, so nothing can ever match."""
         adapter = self._assembly_adapter(monkeypatch)
@@ -1156,9 +1205,7 @@ class TestAddMateErrorBranches:
         assert "other-part-1" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_errors_when_entity_not_found_on_component(
-        self, monkeypatch
-    ) -> None:
+    async def test_errors_when_entity_not_found_on_component(self, monkeypatch) -> None:
         adapter = self._assembly_adapter(monkeypatch)
         self._identity_dynamic(monkeypatch)
         adapter.currentModel.GetComponents.return_value = [
@@ -1346,9 +1393,7 @@ class TestInterferenceDetailsHelper:
         adapter = _build_adapter(monkeypatch)
         monkeypatch.setattr(
             "solidworks_mcp.adapters.solidworks.io._dynamic",
-            SimpleNamespace(
-                Dispatch=lambda obj: None if isinstance(obj, str) else obj
-            ),
+            SimpleNamespace(Dispatch=lambda obj: None if isinstance(obj, str) else obj),
         )
         item = SimpleNamespace(
             Volume=1e-6, GetComponentCount=lambda: 1, Components=["raw-string"]
