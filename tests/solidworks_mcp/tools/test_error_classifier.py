@@ -129,3 +129,15 @@ def test_extract_hresult(
     message: str, exc: BaseException | None, expected: int | None
 ) -> None:
     assert extract_hresult(message, exc) == expected
+
+
+def test_wrong_thread_is_its_own_category() -> None:
+    from solidworks_mcp.tools.error_classifier import ErrorClassifier
+
+    found = ErrorClassifier().classify(
+        "get_model_info was called from thread 'w', but SolidWorks COM objects "
+        "belong to the thread that called connect()."
+    )
+
+    assert found.error_type == "com_wrong_thread"
+    assert "restart the MCP server" in found.hint

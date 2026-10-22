@@ -709,6 +709,7 @@ def generate_index_page(catalog: list[dict[str, Any]]) -> str:
         "| `not_found` | A named feature, document, view or file does not exist |",
         "| `solidworks_unavailable` | SolidWorks was closed or crashed (RPC disconnect) |",
         "| `circuit_open` | Calls are paused after repeated failures; retry after the breaker timeout |",
+        "| `com_wrong_thread` | A SolidWorks call ran off the thread that connected (a server bug; restart the server) |",
         "| `com_member_not_found` | SolidWorks could not resolve an API member (usually a stale `gen_py` cache) |",
         "| `com_type_mismatch` | SolidWorks rejected an argument's COM type (a server bug; report it) |",
         "| `operation_failed` | SolidWorks refused or failed the operation; read `message` |",

@@ -280,7 +280,9 @@ Consequences:
 - Never move adapter calls onto another thread: no ``asyncio.to_thread``,
   ``run_in_executor``, thread pools or synchronous FastMCP tools around
   COM work. ``swApp`` / ``currentModel`` used from another thread raise the
-  cross-thread ``AttributeError`` described in runbook item #5.
+  cross-thread ``AttributeError`` described in runbook item #5, so
+  ``_handle_com_operation`` refuses any call from a thread other than the one
+  ``initialize_com_apartment`` recorded (``error_type: com_wrong_thread``).
 - Do NOT call ``pythoncom.CoInitialize()`` anywhere else in the adapter;
   ``_ComSessionCoordinator`` owns the apartment.
 - ``com_executor.ComExecutor`` (a dedicated STA worker thread) is still
@@ -346,10 +348,8 @@ See ``tests/live/test_live_sw_regression.py`` for the safety net:
 - flag_methods incrementality + per-interface correctness
 - Late-bound ``swApp`` acquisition
 - ``get_model_info`` fields populate correctly
-- ``get_model_info`` from a worker thread: skipped unless
-  ``SOLIDWORKS_MCP_TEST_ASSEMBLY`` is set, and written for the old
-  ComExecutor design. Under invariant 1 a cross-thread call is not
-  supported, so this test needs rewriting before it is relied on.
+- a call from a worker thread is refused cleanly and the connect thread
+  keeps working (``test_com_calls_stay_on_the_connect_thread``)
 
 Run these after any change to ``pywin32_adapter.py``, ``com_executor.py``,
 ``sw_type_info.py`` or the settle pause::

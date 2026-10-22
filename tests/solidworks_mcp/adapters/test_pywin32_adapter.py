@@ -381,9 +381,12 @@ class TestPyWin32AdapterMockCOM:
                 from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
                 # Mock pythoncom and win32com
-                with patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom"), patch(
-                    "solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep",
-                    new=AsyncMock(),
+                with (
+                    patch("solidworks_mcp.adapters.pywin32_adapter.pythoncom"),
+                    patch(
+                        "solidworks_mcp.adapters.pywin32_adapter.asyncio.sleep",
+                        new=AsyncMock(),
+                    ),
                 ):
                     with patch(
                         "solidworks_mcp.adapters.pywin32_adapter.win32com.client"
@@ -707,7 +710,11 @@ def test_real_adapter_resolves_to_the_com_mixin(capability: str) -> None:
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
     owner = next(
-        (klass.__name__ for klass in PyWin32Adapter.__mro__ if capability in vars(klass)),
+        (
+            klass.__name__
+            for klass in PyWin32Adapter.__mro__
+            if capability in vars(klass)
+        ),
         None,
     )
     assert owner == "SolidWorksIOMixin", (
@@ -717,11 +724,18 @@ def test_real_adapter_resolves_to_the_com_mixin(capability: str) -> None:
     )
 
 
-CAPABILITIESFeatureEditingCapability = ["delete_feature", "suppress_feature", "rename_feature", "undo"]
+CAPABILITIESFeatureEditingCapability = [
+    "delete_feature",
+    "suppress_feature",
+    "rename_feature",
+    "undo",
+]
 
 
 @pytest.mark.parametrize("capability", CAPABILITIESFeatureEditingCapability)
-def test_real_adapter_resolves_to_the_com_mixin_feature_editing(capability: str) -> None:
+def test_real_adapter_resolves_to_the_com_mixin_feature_editing(
+    capability: str,
+) -> None:
     """PyWin32Adapter must reach the COM implementation, not the base stub."""
     pytest.importorskip("win32com", reason="pywin32 is Windows-only")
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
@@ -791,11 +805,7 @@ def test_real_adapter_resolves_to_the_io_mixin() -> None:
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
     owner = next(
-        (
-            k.__name__
-            for k in PyWin32Adapter.__mro__
-            if "save_body_as_part" in vars(k)
-        ),
+        (k.__name__ for k in PyWin32Adapter.__mro__ if "save_body_as_part" in vars(k)),
         None,
     )
     assert owner == "SolidWorksIOMixin", (
@@ -860,7 +870,9 @@ CAPABILITIESReferenceGeometryCapability = [
 
 
 @pytest.mark.parametrize("capability", CAPABILITIESReferenceGeometryCapability)
-def test_real_adapter_resolves_to_the_features_mixin_reference_geometry(capability: str) -> None:
+def test_real_adapter_resolves_to_the_features_mixin_reference_geometry(
+    capability: str,
+) -> None:
     """PyWin32Adapter must reach the COM implementation, not the base stub.
 
     The mixin methods are only reachable if they are defined *inside*
@@ -874,7 +886,11 @@ def test_real_adapter_resolves_to_the_features_mixin_reference_geometry(capabili
     from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 
     owner = next(
-        (klass.__name__ for klass in PyWin32Adapter.__mro__ if capability in vars(klass)),
+        (
+            klass.__name__
+            for klass in PyWin32Adapter.__mro__
+            if capability in vars(klass)
+        ),
         None,
     )
     assert owner == "SolidWorksFeaturesMixin", (
@@ -937,3 +953,118 @@ def test_real_adapter_resolves_to_the_com_mixin_drawing(capability: str) -> None
         "The implementation is unreachable and every call silently returns the "
         "base adapter's 'not implemented' error."
     )
+
+
+class TestOperationFailureLogging:
+    """Expected "not found" answers log one line; real faults keep the traceback."""
+
+    @pytest.fixture
+    def logged(self, monkeypatch):
+        from loguru import logger
+
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            lambda: "Windows",
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            SimpleNamespace(com_error=RuntimeError),
+            raising=False,
+        )
+        records: list = []
+        sink = logger.add(lambda m: records.append(m.record), level="WARNING")
+        yield PyWin32Adapter({}), records
+        logger.remove(sink)
+
+    def test_lookup_error_is_a_one_line_warning(self, logged) -> None:
+        adapter, records = logged
+
+        def missing():
+            raise LookupError("Feature not found: NoSuchFeature")
+
+        result = adapter._handle_com_operation("select_feature", missing)
+
+        assert (
+            result.error == "Error in select_feature: Feature not found: NoSuchFeature"
+        )
+        [record] = records
+        assert record["level"].name == "WARNING"
+        assert record["exception"] is None
+
+    def test_other_failures_log_the_traceback(self, logged) -> None:
+        adapter, records = logged
+
+        def broken():
+            raise ValueError("bad")
+
+        adapter._handle_com_operation("add_line", broken)
+
+        [record] = records
+        assert record["level"].name == "ERROR"
+        assert record["exception"] is not None
+
+
+class TestComThreadAffinity:
+    """COM objects are STA-bound: calls from another thread are refused."""
+
+    @pytest.fixture
+    def adapter(self, monkeypatch) -> PyWin32Adapter:
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            lambda: "Windows",
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            SimpleNamespace(com_error=RuntimeError),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.pythoncom",
+            SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: None),
+            raising=False,
+        )
+        return PyWin32Adapter({})
+
+    def test_apartment_records_and_releases_its_thread(self, adapter) -> None:
+        import threading
+
+        adapter._session_coordinator.initialize_com_apartment()
+        assert adapter._com_thread_id == threading.get_ident()
+
+        adapter._session_coordinator.uninitialize_com_apartment()
+        assert adapter._com_thread_id is None
+
+    def test_owner_thread_runs_and_other_threads_are_refused(self, adapter) -> None:
+        import threading
+
+        adapter._session_coordinator.initialize_com_apartment()
+        calls: list[str] = []
+        from_worker: dict = {}
+
+        def worker() -> None:
+            from_worker["result"] = adapter._handle_com_operation(
+                "get_model_info", lambda: calls.append("worker")
+            )
+
+        thread = threading.Thread(target=worker, name="tool-worker")
+        thread.start()
+        thread.join()
+        own = adapter._handle_com_operation("get_model_info", lambda: "ok")
+
+        refused = from_worker["result"]
+        assert refused.is_error
+        assert "'tool-worker'" in refused.error
+        assert "belong to the thread that called connect()" in refused.error
+        assert calls == []  # the operation never ran
+        assert own.is_success and own.data == "ok"
+
+    def test_no_owner_means_no_guard(self, adapter) -> None:
+        result = adapter._handle_com_operation("noop", lambda: 1)
+
+        assert result.is_success

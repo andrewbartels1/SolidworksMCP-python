@@ -8,6 +8,7 @@ import asyncio
 import os
 import platform
 import re
+import threading
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -294,6 +295,8 @@ class _ComSessionCoordinator:
             return
         pythoncom.CoInitialize()
         self._adapter._com_initialized = True
+        # SolidWorks COM objects are STA-bound: only this thread may use them.
+        self._adapter._com_thread_id = threading.get_ident()
 
     def uninitialize_com_apartment(self) -> None:
         """Release the COM apartment via ``pythoncom.CoUninitialize``.
@@ -309,6 +312,7 @@ class _ComSessionCoordinator:
             return
         pythoncom.CoUninitialize()
         self._adapter._com_initialized = False
+        self._adapter._com_thread_id = None
 
     async def acquire_solidworks_application(self) -> Any:
         """Acquire a live SolidWorks COM application object with retries.
@@ -1890,6 +1894,8 @@ class PyWin32Adapter(
         self._sketch_entity_centers: dict[str, tuple[float, float]] = {}
         self._sketch_entity_counter = 0
         self._com_initialized = False
+        # Thread that initialised the COM apartment (see _handle_com_operation).
+        self._com_thread_id: int | None = None
 
         # COM constants (equivalent to SolidWorks API constants)
         self.constants = {
@@ -2088,6 +2094,20 @@ class PyWin32Adapter(
                                 print("Sketch created successfully")
                             ```
         """
+        owner = self._com_thread_id
+        if owner is not None and threading.get_ident() != owner:
+            # Using an STA-bound IDispatch from another thread fails with a
+            # cryptic late-binding AttributeError (runbook #5); refuse clearly
+            # before touching COM.
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"{operation_name} was called from thread "
+                    f"{threading.current_thread().name!r}, but SolidWorks COM "
+                    "objects belong to the thread that called connect()."
+                ),
+                execution_time=0.0,
+            )
         start_time = time.time()
 
         try:
@@ -2115,7 +2135,12 @@ class PyWin32Adapter(
         except Exception as e:
             execution_time = time.time() - start_time
             self.update_metrics(execution_time, False)
-            logger.exception("Operation {} failed", operation_name)
+            if isinstance(e, LookupError):
+                # An expected answer ("no feature named X"), not a fault:
+                # one line, no traceback.
+                logger.warning("Operation {} found nothing: {}", operation_name, e)
+            else:
+                logger.exception("Operation {} failed", operation_name)
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"Error in {operation_name}: {e}",

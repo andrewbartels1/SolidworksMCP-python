@@ -79,6 +79,14 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type="com_wrong_thread",
+        hint=(
+            "A SolidWorks call ran off the thread that connected - a server "
+            "bug. Report the tool name; restart the MCP server to recover."
+        ),
+        patterns=(r"belong to the thread that called connect",),
+    ),
+    ErrorRule(
         error_type="circuit_open",
         hint=(
             "Calls to this operation are paused after repeated failures. Fix "
