@@ -4,6 +4,7 @@ Provides tools for recording, managing, and executing SolidWorks macros for auto
 and workflow optimization.
 """
 
+from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
@@ -13,12 +14,16 @@ from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
 from .tool_boundary import (
     UnsupportedOperationError,
+    normalize_input,
     require_capability,
     require_success,
     with_tool_boundary,
 )
 
 # Input schemas for macro operations
+
+# ISldWorks::RunMacro2 runs only binary macros.
+_RUNNABLE_MACRO_SUFFIXES = frozenset({".swp", ".swb"})
 
 
 class MacroRecordingInput(CompatInput):
@@ -92,10 +97,14 @@ class MacroPlaybackInput(CompatInput):
     """
 
     macro_path: str | None = Field(
-        default=None, description="Path to macro file (.swp or .vb)"
+        default=None,
+        description=(
+            "Path to a binary SolidWorks macro (.swp, or legacy .swb). "
+            "VBA source (.vb, .bas, text) cannot be run directly."
+        ),
     )
     macro_file: str | None = Field(
-        default=None, description="Alternative macro file path"
+        default=None, description="Alternative to macro_path (.swp or .swb)"
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict, description="Macro parameters"
@@ -111,6 +120,27 @@ class MacroPlaybackInput(CompatInput):
     pause_between_runs: float = Field(
         default=0.0, description="Pause between executions in seconds"
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Reject macro files ``ISldWorks::RunMacro2`` cannot run.
+
+        ``RunMacro2`` only runs binary ``.swp`` (or legacy ``.swb``) macros;
+        anything else fails deep inside COM with an opaque error.
+
+        Args:
+            __context (Any): The context value.
+
+        Raises:
+            ValueError: A macro path is not a ``.swp`` or ``.swb`` file.
+        """
+        for path in (self.macro_path, self.macro_file):
+            if path and Path(path).suffix.lower() not in _RUNNABLE_MACRO_SUFFIXES:
+                raise ValueError(
+                    f"execute_macro runs only binary SolidWorks macros "
+                    f"(.swp or .swb), got {path!r}. VBA source (.vb, .bas or "
+                    "text) must be saved as a .swp in the SolidWorks VBA "
+                    "editor first."
+                )
 
 
 class MacroAnalysisInput(CompatInput):
@@ -249,10 +279,12 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def execute_macro(input_data: MacroPlaybackInput) -> dict[str, Any]:
-        """Handle execute macro.
+        """Run a binary SolidWorks macro (.swp, or legacy .swb).
 
-        This tool runs a previously recorded or written macro with optional parameters and
-        repeat functionality.
+        Calls ``ISldWorks::RunMacro2`` on ``macro_path`` (or ``macro_file``).
+        Only binary macros run: VBA source (.vb, .bas, plain text) is
+        rejected as ``invalid_input`` before anything reaches SolidWorks.
+        The macro must not be interactive (no MsgBox or user forms).
 
         Args:
             input_data (MacroPlaybackInput): The input data value.
@@ -264,6 +296,7 @@ async def register_macro_recording_tools(
                             >>> result = await execute_macro(playback_input)
         """
 
+        input_data = normalize_input(input_data, MacroPlaybackInput)
         require_capability(
             adapter,
             "execute_macro",

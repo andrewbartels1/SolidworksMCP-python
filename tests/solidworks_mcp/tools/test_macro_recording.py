@@ -961,3 +961,33 @@ class TestMacroRecordingExceptionPaths:
         fn = await _get_tool(mcp, "create_macro_library")
         result = await fn({"library_path": "/tmp/lib", "library_name": "TestLib"})
         assert result["status"] == "error"
+
+
+@pytest.mark.parametrize("field", ["macro_path", "macro_file"])
+@pytest.mark.parametrize(
+    "path", ["C:/macros/build.vb", "build.bas", "macro.txt", "Sub main()"]
+)
+def test_playback_input_rejects_vba_source(field, path) -> None:
+    with pytest.raises(ValueError, match=r"\.swp or \.swb"):
+        MacroPlaybackInput(**{field: path})
+
+
+@pytest.mark.parametrize("path", ["C:/macros/build.SWP", "legacy.swb"])
+def test_playback_input_accepts_binary_macros(path) -> None:
+    assert MacroPlaybackInput(macro_path=path).macro_path == path
+
+
+@pytest.mark.asyncio
+async def test_execute_macro_rejects_vb_before_reaching_the_adapter(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    await register_macro_recording_tools(mcp_server, mock_adapter, mock_config)
+    mock_adapter.execute_macro = AsyncMock()
+    tools = {t.name: t.fn for t in await mcp_server.list_tools()}
+
+    result = await tools["execute_macro"]({"macro_path": "C:/macros/build.vb"})
+
+    assert result["status"] == "error"
+    assert result["error_type"] == "invalid_input"
+    assert ".swp" in result["message"]
+    mock_adapter.execute_macro.assert_not_called()
