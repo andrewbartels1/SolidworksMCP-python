@@ -232,6 +232,7 @@ def test_load_wrapper_generates_the_wrapper_when_not_cached(monkeypatch) -> None
         sw_type_info,
         "gencache",
         SimpleNamespace(GetModuleForTypelib=_get_module, EnsureModule=_ensure_module),
+        raising=False,
     )
     monkeypatch.setattr(sw_type_info, "PYWIN32_AVAILABLE", True)
     monkeypatch.setattr(sw_type_info, "_wrapper_module", None)

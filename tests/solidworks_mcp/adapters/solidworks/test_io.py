@@ -403,9 +403,14 @@ def test_get_sw_comtypes_lib_tries_newest_version_first(monkeypatch) -> None:
 
     monkeypatch.setattr(_io_module, "_sw_comtypes_lib", None)
     monkeypatch.setattr(_io_module, "_COMTYPES_AVAILABLE", True)
-    monkeypatch.setattr(_io_module, "comtypes", SimpleNamespace(GUID=str))
     monkeypatch.setattr(
-        _io_module, "_comtypes_client", SimpleNamespace(GetModule=get_module)
+        _io_module, "comtypes", SimpleNamespace(GUID=str), raising=False
+    )
+    monkeypatch.setattr(
+        _io_module,
+        "_comtypes_client",
+        SimpleNamespace(GetModule=get_module),
+        raising=False,
     )
 
     assert _get_sw_comtypes_lib() is lib
@@ -421,9 +426,14 @@ def test_get_sw_comtypes_lib_returns_none_when_no_version_is_registered(
 
     monkeypatch.setattr(_io_module, "_sw_comtypes_lib", None)
     monkeypatch.setattr(_io_module, "_COMTYPES_AVAILABLE", True)
-    monkeypatch.setattr(_io_module, "comtypes", SimpleNamespace(GUID=str))
     monkeypatch.setattr(
-        _io_module, "_comtypes_client", SimpleNamespace(GetModule=get_module)
+        _io_module, "comtypes", SimpleNamespace(GUID=str), raising=False
+    )
+    monkeypatch.setattr(
+        _io_module,
+        "_comtypes_client",
+        SimpleNamespace(GetModule=get_module),
+        raising=False,
     )
 
     assert _get_sw_comtypes_lib() is None
@@ -460,7 +470,9 @@ def _bridge_env(monkeypatch, unk_repr: str) -> tuple[SimpleNamespace, list]:
     monkeypatch.setattr(
         _io_module, "pythoncom", SimpleNamespace(IID_IUnknown="IID_IUnknown")
     )
-    monkeypatch.setattr(_io_module, "comtypes", SimpleNamespace(IUnknown=object))
+    monkeypatch.setattr(
+        _io_module, "comtypes", SimpleNamespace(IUnknown=object), raising=False
+    )
     monkeypatch.setattr(
         _io_module,
         "ctypes",
