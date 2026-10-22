@@ -56,7 +56,7 @@ Stop macro recording and save the recorded macro.
 
 ### `execute_macro`
 
-Execute a saved SolidWorks macro.
+Run a binary SolidWorks macro (`.swp`, or legacy `.swb`). VBA source (`.vb`, `.bas`, text) is rejected as `invalid_input`; save it as a `.swp` in the SolidWorks VBA editor first. The macro must not be interactive (no MsgBox or user forms).
 
 **Prerequisite:** SolidWorks running
 
@@ -64,8 +64,8 @@ Execute a saved SolidWorks macro.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `macro_path` | `str?` | — | `None` | Path to macro file (.swp or .vb) |
-| `macro_file` | `str?` | — | `None` | Alternative macro file path |
+| `macro_path` | `str?` | — | `None` | Path to a binary macro (.swp or .swb) |
+| `macro_file` | `str?` | — | `None` | Alternative to macro_path (.swp or .swb) |
 | `parameters` | `Dict[str, Any]` | ✅ | `` | Macro parameters |
 | `target_file` | `str?` | — | `None` | Target file |
 | `execution_mode` | `str?` | — | `None` | Execution mode |
