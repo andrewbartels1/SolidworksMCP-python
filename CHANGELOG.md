@@ -10,6 +10,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > pywin32 MCP server and restarted its own versioning at `1.0.0`; `1.x`
 > entries are the current line.
 
+## [1.4.0] - 2026-10-22
+
+Minor release. New tools and a uniform error contract; every change is
+additive for MCP clients. Every new tool and fix was signed off live against
+SolidWorks 2026.
+
+### Added
+
+- **`select_feature`** (#106): select a feature, sketch or plane by name
+  (bare or `Name@Part`, optional append).
+- **`select_face_edges`** (#119): find a face by side, point or reference
+  plane and select its edges, optionally only circular or linear ones.
+  Chains into `add_chamfer(edge_names=[])`.
+- **`rebuild_model`** (#106): `ForceRebuild3` plus the feature errors
+  SolidWorks reports, each with severity, error code, parent features and a
+  hint.
+- **`list_drawing_views`** (#106): the active drawing's view names.
+- **Error contract** (#123): every tool runs inside one error boundary, and
+  every error payload carries `error_type` and an actionable `hint` alongside
+  `status`, `message` and `execution_time`. The categories are listed in the
+  tool catalog.
+- **Live demo runner** (#127): `tests/scripts/live_demo.ps1` runs one live
+  test and prints its `[evidence]` lines.
+
+### Fixed
+
+- `exit_sketch` closes a sketch left open in SolidWorks even when the server
+  lost track of it (#120).
+- COM calls from the wrong thread are refused with a clear
+  `com_wrong_thread` error instead of a cryptic `AttributeError` (#121).
+- `create_drawing` falls back to a blank A-size drawing when no template is
+  configured (#122).
+- A short settle pause after every COM operation; back-to-back calls crashed
+  SolidWorks 2026 in its idle-time refresh.
+
+### Changed
+
+- `save_assembly(include_references=True)` copies the assembly and its
+  dependencies directly. Its tool-layer Pack-and-Go never worked on
+  SolidWorks 2026 and was removed, along with the `native_pack_and_go_error`
+  response field (#125).
+- Depends on `pydantic-ai-slim[openai,anthropic,mcp]` instead of the full
+  `pydantic-ai`; the server only uses those providers (#126).
+- Docs build with `strict: true`; `mkdocs` is pinned below 2 (#46).
+- Honest 100% coverage with no `# pragma: no cover`, and a test tree that
+  mirrors `src/` (#124).
+
+### Security
+
+- `certifi` 2026.10.19 (drops compromised emSign roots), `pillow` 13.0.0,
+  `virtualenv` 21.14.13; `aiohttp` is no longer a dependency (#126).
+
+Tool count 134 → 138.
+
+## [1.3.0] - 2026-10-13
+
+Minor release.
+
+### Added
+
+- **`add_chamfer` tool** (#110): equal-distance chamfers on named or
+  currently selected edges, wired through every adapter layer.
+- **`get_selected_entities` tool** (#112): read which faces, edges and
+  vertices are highlighted in the live SolidWorks UI, with their geometry.
+
+### Fixed
+
+- `create_cut_extrude` works again: the real `FeatureCut3` signature, and an
+  explicit or tree-verified sketch instead of a guessed one (#109).
+- The circuit breaker is per operation, so one failing tool no longer blocks
+  the others (#109).
+- `auto_center_marks` counts centre marks with the correct
+  `swAnnotationType_e` value on R2026x (#107).
+- `export_image` captures its own document's window, not whichever one is in
+  front (#112).
+
+### Security
+
+- Pinned transitive `httpx2`/`httpcore2` and bumped `uv.lock` past the
+  October 2026 Trivy CVEs; Dependabot added (#108, #111).
+
+Tool count 132 → 134.
+
 ## [1.2.0] - 2026-09-06
 
 Minor release — new tools, all additive and backward compatible. All three
