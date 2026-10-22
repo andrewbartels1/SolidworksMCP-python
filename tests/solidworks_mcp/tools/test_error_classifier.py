@@ -62,6 +62,19 @@ def classifier() -> ErrorClassifier:
         ("Feature not found: Boss-Extrude9", "not_found"),
         ("Model file not found: C:/x.sldprt", "not_found"),
         ("Configuration 'X' does not exist", "not_found"),
+        (
+            "The selected face has no circular edges (face centre [30, 10, 20] mm).",
+            "not_found",
+        ),
+        ("The selected face has no edges", "not_found"),
+        ("No face found at point [1000, 1000, 1000] mm.", "not_found"),
+        ("The active part has no solid body faces.", "not_found"),
+        (
+            "This operation requires a drawing document (active document type is 1).",
+            "wrong_document_type",
+        ),
+        ("select_face_edges requires an active part document", "wrong_document_type"),
+        ("save_body_as_part requires an active part document", "wrong_document_type"),
     ],
 )
 def test_known_messages_are_categorised(

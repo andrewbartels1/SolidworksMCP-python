@@ -150,7 +150,7 @@ async def test_invalid_input_never_reaches_the_adapter() -> None:
     assert payload["status"] == "error"
     assert payload["error_type"] == "invalid_input"
     assert "radius" in payload["message"]
-    assert payload["execution_time"] is None
+    assert isinstance(payload["execution_time"], float)
     adapter.do_work.assert_not_called()
 
 
@@ -190,6 +190,25 @@ async def test_adapter_failure_is_classified_with_timing() -> None:
         "execution_time": 0.25,
     }
     assert "sketch" in payload["hint"]
+
+
+@pytest.mark.asyncio
+async def test_untimed_adapter_guard_failure_gets_the_tool_wall_time() -> None:
+    @tool_boundary
+    async def tool() -> dict[str, Any]:
+        require_success(
+            AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="This operation requires a drawing document",
+            )
+        )
+        return {"status": "success"}
+
+    payload = await tool()
+
+    assert payload["error_type"] == "wrong_document_type"
+    assert isinstance(payload["execution_time"], float)
+    assert payload["execution_time"] >= 0.0
 
 
 def test_require_success_prefixes_context() -> None:

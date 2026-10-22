@@ -123,6 +123,15 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type="wrong_document_type",
+        hint=(
+            "The active document is the wrong kind for this tool. Create or "
+            "activate the right one (create_part, create_assembly, "
+            "create_drawing or activate_document), then retry."
+        ),
+        patterns=(r"requires an? (active )?(part|assembly|drawing) document",),
+    ),
+    ErrorRule(
         error_type="no_active_sketch",
         hint="Create or open a sketch first (create_sketch), then retry.",
         patterns=(r"no active sketch",),
@@ -141,7 +150,14 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
             "Check the name or path - list what exists first (list_features, "
             "list_open_documents, list_drawing_views) and use an exact name."
         ),
-        patterns=(r"\bnot found\b", r"does not exist", r"\bno such\b"),
+        patterns=(
+            r"\bnot found\b",
+            r"does not exist",
+            r"\bno such\b",
+            r"\bno face found\b",
+            r"\bhas no (\w+ )?(edges|faces)\b",
+            r"\bhas no solid body\b",
+        ),
     ),
 )
 

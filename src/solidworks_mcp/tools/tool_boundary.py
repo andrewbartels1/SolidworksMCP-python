@@ -8,8 +8,8 @@ Tools contain business logic only. They:
 * return their success payload.
 
 :func:`tool_boundary` turns anything raised into the uniform error payload -
-``status``, ``message``, ``error_type``, ``hint`` and ``execution_time`` (null
-when unknown) - using :class:`ErrorClassifier` to name the failure.
+``status``, ``message``, ``error_type``, ``hint`` and ``execution_time`` (the
+adapter's timing, else the tool's own wall time) - using :class:`ErrorClassifier` to name the failure.
 :class:`ToolRegistrar` applies the boundary to every tool at registration, so no
 tool can forget it.
 """
@@ -17,6 +17,7 @@ tool can forget it.
 from __future__ import annotations
 
 import functools
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
@@ -185,32 +186,46 @@ def tool_boundary(
 
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        started = time.perf_counter()
+
+        def elapsed() -> float:
+            return time.perf_counter() - started
+
         try:
             return await fn(*args, **kwargs)
         except InvalidInputError as exc:
             return error_payload(
                 f"Invalid input: {exc}",
                 Classification(INVALID_INPUT, _INVALID_INPUT_HINT),
+                elapsed(),
             )
         except ValidationError as exc:
             return error_payload(
                 f"Invalid input: {describe_validation_error(exc)}",
                 Classification(INVALID_INPUT, _INVALID_INPUT_HINT),
+                elapsed(),
             )
         except UnsupportedOperationError as exc:
             return error_payload(
-                str(exc), Classification(NOT_SUPPORTED, NOT_SUPPORTED_HINT)
+                str(exc),
+                Classification(NOT_SUPPORTED, NOT_SUPPORTED_HINT),
+                elapsed(),
             )
         except ToolOperationError as exc:
             message = str(exc)
+            # Adapter guards (wrong document type, no active model) reject a
+            # call before timing it; fall back to the tool's own wall time.
+            timing = exc.execution_time if exc.execution_time is not None else elapsed()
             return error_payload(
-                message, classifier.classify(message), exc.execution_time, exc.data
+                message, classifier.classify(message), timing, exc.data
             )
         except Exception as exc:
             logger.exception("Tool {} raised", tool_name)
             message = f"{tool_name} failed: {type(exc).__name__}: {exc}"
             return error_payload(
-                message, classifier.classify(str(exc), exc, fallback=INTERNAL)
+                message,
+                classifier.classify(str(exc), exc, fallback=INTERNAL),
+                elapsed(),
             )
 
     wrapper.__tool_boundary__ = True  # type: ignore[attr-defined]

@@ -9,8 +9,8 @@ consistent payload that names what went wrong and what to try next.
 Every MCP tool SHALL report any failure as a payload with `status: "error"`, a
 human-readable `message`, an `error_type` from a fixed set, and a `hint` with the
 next corrective step. The tool SHALL never raise an exception to the MCP client.
-`execution_time` SHALL always be present (the adapter's timing, or null when
-there is none) so the payload shape is stable, and
+`execution_time` SHALL always be a number (the adapter's timing, or the tool's
+own wall time when the adapter gave none) so the payload shape is stable, and
 `data` SHALL be present when the tool has diagnostic data that explains the
 failure (for example, the failing features of a rebuild).
 
