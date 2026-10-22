@@ -31,7 +31,7 @@ dependencies = [
     "fastmcp>=3.2.2",
     "mcp>=1.28.1",
     "pydantic>=2.5.0",
-    "pydantic-ai>=1.56.0",
+    "pydantic-ai-slim[openai,anthropic,mcp]>=1.107.4,<2",
     "sqlmodel>=0.0.22",
     "chardet<6",
     "pywin32>=306; platform_system=='Windows'",
@@ -140,7 +140,10 @@ solidworks-mcp = "solidworks_mcp.server:cli_main"
 #   separate migration
 # - CVE-2026-102266..102273 (pyjwt < 2.14.0)
 # - CVE-2026-97687, CVE-2026-97689 (urllib3 < 2.8.0)
-# - CVE-2026-102925, -102930, -102937 (virtualenv < 21.7.13)
+# - CVE-2026-102925, -102930, -102937, -113722, -113725 (virtualenv < 21.14.9).
+#   Needs packaging>=26.3, which is why the project depends on
+#   pydantic-ai-slim with only the extras it uses: full pydantic-ai pulls in
+#   xai-sdk, which pins packaging<26.
 constraint-dependencies = [
     "httpx2>=2.12.0",
     "httpcore2>=2.12.0",
@@ -150,7 +153,7 @@ constraint-dependencies = [
     "pydantic-ai-slim>=1.107.4,<2",
     "pyjwt>=2.14.0",
     "urllib3>=2.8.0",
-    "virtualenv>=21.7.13",
+    "virtualenv>=21.14.9",
 ]
 
 [tool.hatch.build.targets.wheel]
