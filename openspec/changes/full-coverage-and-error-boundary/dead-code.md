@@ -3,9 +3,11 @@
 Code that no real input, fixture or fake can reach. **Nothing here is deleted
 until the user reviews this list** (task 3.5).
 
-**Status (2026-10-21):** reviewed and approved. Items 1-12 are removed. Item 13
-waits for a live `save_assembly(include_references=True)` check during the
-feature review.
+**Status (2026-10-22):** reviewed and approved. Items 1-12 are removed. Item 13
+is removed too: live on SW 2026, `save_assembly(include_references=True)`'s
+native Pack-and-Go always failed (`Parameter not optional`) and fell back to the
+dependency copy, which produced a copy that opens with its part after the source
+is deleted (`test_save_assembly_with_references_live`).
 
 | # | Location | Guard | Why it cannot be reached | Evidence | Proposed action |
 |---|---|---|---|---|---|

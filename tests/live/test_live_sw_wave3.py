@@ -275,3 +275,80 @@ async def test_create_drawing_without_a_template_live(scratch, tmp_path, monkeyp
     evidence("views on the blank drawing", views)
     assert drawing.is_success, drawing.error
     assert views, "no drawing views were placed on the template-less drawing"
+
+
+# ---- save_assembly(include_references=True): dead-code ledger item 13 ------
+
+
+@pytest.mark.asyncio
+async def test_save_assembly_with_references_live(scratch, tmp_path):
+    """Record which path save_assembly(include_references=True) takes on this
+    SolidWorks: the tool's native Pack-and-Go, or the dependency-copy fallback.
+
+    Either way the copy must hold the assembly and its part.
+    """
+    from fastmcp import FastMCP
+
+    from solidworks_mcp.tools.file_management import register_file_management_tools
+
+    adapter = scratch.adapter
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    part_path = source_dir / "block.sldprt"
+    asm_path = source_dir / "holder.sldasm"
+    scratch.written_files += [str(part_path), str(asm_path)]
+
+    await _box_part(adapter)
+    assert (await adapter.save_file(str(part_path))).is_success
+    assert (await adapter.create_assembly()).is_success
+    assert (await adapter.insert_component(str(part_path), 0.0, 0.0, 0.0)).is_success
+    assert (await adapter.save_file(str(asm_path))).is_success
+    evidence("saved assembly", [part_path.name, asm_path.name])
+
+    mcp = FastMCP("item-13-live")
+    await register_file_management_tools(mcp, adapter, {})
+    save_assembly = {t.name: t.fn for t in await mcp.list_tools()}["save_assembly"]
+
+    target = tmp_path / "copy" / "holder_copy.sldasm"
+    target.parent.mkdir()  # save_assembly requires an existing folder
+    result = await save_assembly({"file_path": str(target), "include_references": True})
+    evidence(
+        "save_assembly(include_references=True)",
+        {
+            "status": result.get("status"),
+            "copy_method": result.get("copy_method"),
+            "native_pack_and_go_error": result.get("native_pack_and_go_error"),
+            "copied": sorted(p.name for p in target.parent.glob("*")),
+        },
+    )
+    assert result["status"] == "success", result
+    names = {p.name.lower() for p in target.parent.glob("*")}
+    assert "block.sldprt" in names, names
+    assert any(n.endswith(".sldasm") for n in names), names
+
+    # Show the copy is self-contained: close and delete the source, then open
+    # the copy in SolidWorks and check where its part was loaded from.
+    copied = [str(p) for p in target.parent.glob("*")]
+    scratch.cleanup()  # closes the source docs and deletes the source files
+    scratch.written_files += copied
+    assert not part_path.exists() and not asm_path.exists()
+
+    opened = await adapter.open_model(str(target))
+    assert opened.is_success, opened.error
+    model = adapter.currentModel
+    adapter._attempt(lambda: model.ViewZoomtofit2())
+    raw = adapter._attempt(lambda: model.GetComponents(False), default=None) or []
+    components = raw if isinstance(raw, (list, tuple)) else [raw]
+    loaded_from = [
+        str(adapter._get_attr_or_call(c, "GetPathName")) for c in components if c
+    ]
+    evidence(
+        "copy opened with the source deleted",
+        {"assembly": target.name, "components_loaded_from": loaded_from},
+    )
+    assert loaded_from, "the copied assembly opened with no components"
+    for path in loaded_from:
+        assert os.path.normcase(os.path.dirname(path)) == os.path.normcase(
+            str(target.parent)
+        ), f"component loaded from {path}, not from the copy folder"
+        assert os.path.exists(path), path

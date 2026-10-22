@@ -27,34 +27,6 @@ from .tool_boundary import (
     with_tool_boundary,
 )
 
-# swPackAndGoSaveStatus_e — returned (per-file) by IModelDocExtension::SavePackAndGo.
-# All zeros means every file was written successfully by SolidWorks Pack-and-Go.
-_SW_PACK_AND_GO_STATUS: dict[int, str] = {
-    0: "Ok",
-    2: "FileAlreadyExist — target file already exists and was not overwritten",
-    3: "MissingSource — source reference file could not be found",
-}
-
-
-def _decode_pack_and_go_statuses(save_result: Any) -> tuple[bool, list[str]]:
-    """Decode the SavePackAndGo per-file status array.
-
-    Returns (all_ok, human_readable_warnings).
-    """
-    if save_result is None:
-        return True, []
-    try:
-        codes = [int(c) for c in save_result]
-    except TypeError:
-        codes = [int(save_result)]
-    warnings: list[str] = []
-    for i, code in enumerate(codes):
-        if code != 0:
-            label = _SW_PACK_AND_GO_STATUS.get(code, f"Unknown status code {code}")
-            warnings.append(f"File index {i}: {label} (swPackAndGoSaveStatus_e={code})")
-    return len(warnings) == 0, warnings
-
-
 # Input schemas using Python 3.14 built-in types
 
 
@@ -598,75 +570,6 @@ async def register_file_management_tools(
             "missing_source_files": missing_sources,
             "copy_method": "tool_dependency_copy",
         }
-
-    def _native_pack_and_go(
-        target_assembly_path: str,
-    ) -> tuple[dict[str, Any] | None, str | None]:
-        """Try documented Pack-and-Go COM flow before fallback copy logic."""
-        current_model = getattr(adapter, "currentModel", None)
-        if current_model is None:
-            return None, "No active model available for Pack and Go."
-
-        target_assembly = Path(target_assembly_path)
-        target_dir = target_assembly.parent
-
-        model_ext = getattr(current_model, "Extension", None)
-        if model_ext is None:
-            return None, "Active model extension is not available for Pack and Go."
-
-        try:
-            from win32com.client import Dispatch
-
-            model_ext_typed = Dispatch(
-                model_ext,
-                "IModelDocExtension",
-                "{99F4D4AF-F268-4EE1-8C55-041F7BECF879}",
-            )
-
-            # SolidWorks API docs sequence:
-            # GetPackAndGo -> SetSaveToName -> FlattenToSingleFolder -> SavePackAndGo
-            pack_and_go = model_ext_typed.GetPackAndGo()
-            if pack_and_go is None:
-                return None, "GetPackAndGo returned None."
-
-            set_path_ok = bool(pack_and_go.SetSaveToName(True, str(target_dir)))
-            pack_and_go.FlattenToSingleFolder = True
-            pack_and_go.IncludeDrawings = False
-            pack_and_go.IncludeSimulationResults = False
-            pack_and_go.IncludeToolboxComponents = True
-
-            save_result = model_ext_typed.SavePackAndGo(pack_and_go)
-            all_ok, status_warnings = _decode_pack_and_go_statuses(save_result)
-
-            copied_files = sorted(str(p) for p in target_dir.rglob("*") if p.is_file())
-            if not copied_files:
-                return None, (
-                    "SavePackAndGo did not produce output files "
-                    f"(SetSaveToName={set_path_ok}, SavePackAndGo={save_result})."
-                )
-
-            # If Pack-and-Go emitted assembly using original name, align to requested name.
-            if not target_assembly.exists():
-                produced_assemblies = sorted(target_dir.glob("*.sldasm"))
-                if len(produced_assemblies) == 1:
-                    produced_assemblies[0].replace(target_assembly)
-                    copied_files = sorted(
-                        str(p) for p in target_dir.rglob("*") if p.is_file()
-                    )
-
-            return {
-                "status": "success",
-                "message": f"Assembly and references copied via native Pack and Go to: {target_dir}",
-                "file_path": str(target_assembly),
-                "copied_file_count": len(copied_files),
-                "copied_files": copied_files,
-                "all_files_saved": all_ok,
-                "save_status_warnings": status_warnings,
-                "missing_source_files": [],
-                "copy_method": "solidworks_pack_and_go_api",
-            }, None
-        except Exception as exc:
-            return None, str(exc)
 
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
@@ -1340,14 +1243,7 @@ async def register_file_management_tools(
             )
 
             if input_data.include_references:
-                native_result, native_error = _native_pack_and_go(file_path)
-                if native_result is not None:
-                    return native_result
-
-                copied_result = _copy_active_assembly_with_references(file_path)
-                if native_error is not None:
-                    copied_result["native_pack_and_go_error"] = native_error
-                return copied_result
+                return _copy_active_assembly_with_references(file_path)
 
             result = await adapter.save_file(file_path)
             require_success(result, context="Failed to save assembly")

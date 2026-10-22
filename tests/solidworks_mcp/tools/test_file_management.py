@@ -1,8 +1,7 @@
 """Tests for SolidWorks file management tools."""
 
-import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -344,13 +343,9 @@ class TestFileManagementTools:
         await mock_adapter.create_part()
 
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "activate_document"
+            t.fn for t in await mcp_server.list_tools() if t.name == "activate_document"
         )
-        result = await tool_func(
-            ActivateDocumentInput(title_or_path=first.data.name)
-        )
+        result = await tool_func(ActivateDocumentInput(title_or_path=first.data.name))
 
         assert result["status"] == "success"
         assert result["data"]["activated"] == first.data.name
@@ -364,13 +359,9 @@ class TestFileManagementTools:
         await mock_adapter.create_part()
 
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "activate_document"
+            t.fn for t in await mcp_server.list_tools() if t.name == "activate_document"
         )
-        result = await tool_func(
-            ActivateDocumentInput(title_or_path="ghost.SLDPRT")
-        )
+        result = await tool_func(ActivateDocumentInput(title_or_path="ghost.SLDPRT"))
 
         assert result["status"] == "error"
         assert "No open document matches" in result["message"]
@@ -382,13 +373,9 @@ class TestFileManagementTools:
         """A bare object() adapter has no activate_document - report error."""
         await register_file_management_tools(mcp_server, object(), mock_config)
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "activate_document"
+            t.fn for t in await mcp_server.list_tools() if t.name == "activate_document"
         )
-        result = await tool_func(
-            ActivateDocumentInput(title_or_path="whatever.SLDPRT")
-        )
+        result = await tool_func(ActivateDocumentInput(title_or_path="whatever.SLDPRT"))
         assert result["status"] == "error"
 
     @pytest.mark.asyncio
@@ -401,9 +388,7 @@ class TestFileManagementTools:
         target = tmp_path / "body.sldprt"
 
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "save_body_as_part"
+            t.fn for t in await mcp_server.list_tools() if t.name == "save_body_as_part"
         )
         result = await tool_func(
             SaveBodyAsPartInput(body_name="Boss-Extrude1", file_path=str(target))
@@ -425,9 +410,7 @@ class TestFileManagementTools:
         )
 
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "save_body_as_part"
+            t.fn for t in await mcp_server.list_tools() if t.name == "save_body_as_part"
         )
         result = await tool_func(
             SaveBodyAsPartInput(body_name="X", file_path="C:/parts/x.sldprt")
@@ -443,9 +426,7 @@ class TestFileManagementTools:
         """A bare object() adapter has no save_body_as_part - report error."""
         await register_file_management_tools(mcp_server, object(), mock_config)
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "save_body_as_part"
+            t.fn for t in await mcp_server.list_tools() if t.name == "save_body_as_part"
         )
         result = await tool_func(
             SaveBodyAsPartInput(body_name="B1", file_path="C:/x.sldprt")
@@ -1701,21 +1682,13 @@ class TestFileManagementTools:
         mock_adapter.currentModel = current_model
 
         target_asm_path = target_dir / "box_copy.sldasm"
-        # Force native Pack-and-Go to fail so the fallback copy path is exercised.
-        # Inject a stub win32com so the deferred `from win32com.client import Dispatch`
-        # inside _native_pack_and_go succeeds but Dispatch itself raises RuntimeError.
-        _fake_w32 = MagicMock()
-        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(
-            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
-        ):
-            result = await save_assembly_tool(
-                input_data={
-                    "file_path": str(target_asm_path),
-                    "include_references": True,
-                    "overwrite": False,
-                }
-            )
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_asm_path),
+                "include_references": True,
+                "overwrite": False,
+            }
+        )
 
         assert result["status"] == "success"
         assert result["copy_method"] == "tool_dependency_copy"
@@ -1750,17 +1723,12 @@ class TestFileManagementTools:
 
         target_dir = tmp_path / "tgt_exc"
         target_dir.mkdir(parents=True, exist_ok=True)
-        _fake_w32 = MagicMock()
-        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(
-            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
-        ):
-            result = await save_assembly_tool(
-                input_data={
-                    "file_path": str(target_dir / "crash_copy.sldasm"),
-                    "include_references": True,
-                }
-            )
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_dir / "crash_copy.sldasm"),
+                "include_references": True,
+            }
+        )
 
         assert result["status"] == "error"
         assert "COM explosion" in result["message"]
@@ -1785,17 +1753,12 @@ class TestFileManagementTools:
 
         target_dir = tmp_path / "tgt_unsaved"
         target_dir.mkdir(parents=True, exist_ok=True)
-        _fake_w32 = MagicMock()
-        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(
-            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
-        ):
-            result = await save_assembly_tool(
-                input_data={
-                    "file_path": str(target_dir / "copy.sldasm"),
-                    "include_references": True,
-                }
-            )
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_dir / "copy.sldasm"),
+                "include_references": True,
+            }
+        )
 
         assert result["status"] == "error"
         assert "must be saved before" in result["message"]
@@ -1826,19 +1789,12 @@ class TestFileManagementTools:
 
         target_dir = tmp_path / "tgt_nodeps"
         target_dir.mkdir(parents=True, exist_ok=True)
-        # Force native Pack-and-Go off so the fallback copy runs and hits the
-        # missing-GetDependencies2 branch.
-        _fake_w32 = MagicMock()
-        _fake_w32.client.Dispatch.side_effect = RuntimeError("no COM")
-        with patch.dict(
-            sys.modules, {"win32com": _fake_w32, "win32com.client": _fake_w32.client}
-        ):
-            result = await save_assembly_tool(
-                input_data={
-                    "file_path": str(target_dir / "copy.sldasm"),
-                    "include_references": True,
-                }
-            )
+        result = await save_assembly_tool(
+            input_data={
+                "file_path": str(target_dir / "copy.sldasm"),
+                "include_references": True,
+            }
+        )
 
         assert result["status"] == "error"
         assert "GetDependencies2" in result["message"]
@@ -2176,15 +2132,6 @@ async def test_activate_document_says_when_it_could_not_confirm(
     )
 
 
-def _fake_win32com(dispatch):
-    """sys.modules entries whose win32com.client.Dispatch is ``dispatch``."""
-    client = MagicMock()
-    client.Dispatch = dispatch
-    package = MagicMock()
-    package.client = client
-    return {"win32com": package, "win32com.client": client}
-
-
 def _assembly_on_disk(tmp_path):
     source_dir = tmp_path / "src"
     source_dir.mkdir()
@@ -2194,71 +2141,26 @@ def _assembly_on_disk(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_save_assembly_with_references_uses_native_pack_and_go(
+async def test_save_assembly_with_references_copies_an_assembly_without_dependencies(
     mcp_server, mock_adapter, mock_config, tmp_path
 ) -> None:
-    """Native Pack-and-Go output is renamed to the requested assembly name."""
-    save_assembly = await _tool(mcp_server, mock_adapter, mock_config, "save_assembly")
-    _source_dir, source_asm = _assembly_on_disk(tmp_path)
-    target_dir = tmp_path / "out"
-    target_dir.mkdir()
-
-    def save_pack_and_go(_pg):
-        (target_dir / "box.sldasm").write_text("asm", encoding="utf-8")
-        (target_dir / "bracket.sldprt").write_text("part", encoding="utf-8")
-        return (0, 3)
-
-    pack_and_go = Mock()
-    extension = Mock()
-    extension.GetPackAndGo.return_value = pack_and_go
-    extension.SavePackAndGo.side_effect = save_pack_and_go
-    mock_adapter.currentModel = Mock(GetPathName=Mock(return_value=str(source_asm)))
-
-    with patch.dict(sys.modules, _fake_win32com(Mock(return_value=extension))):
-        result = await save_assembly(
-            {
-                "file_path": str(target_dir / "box_copy.sldasm"),
-                "include_references": True,
-            }
-        )
-
-    assert result["copy_method"] == "solidworks_pack_and_go_api"
-    assert result["file_path"] == str(target_dir / "box_copy.sldasm")
-    assert result["copied_files"] == sorted(
-        [str(target_dir / "box_copy.sldasm"), str(target_dir / "bracket.sldprt")]
-    )
-    assert result["all_files_saved"] is False
-    assert "MissingSource" in result["save_status_warnings"][0]
-    pack_and_go.SetSaveToName.assert_called_once_with(True, str(target_dir))
-    assert pack_and_go.FlattenToSingleFolder is True
-    assert pack_and_go.IncludeDrawings is False
-
-
-@pytest.mark.asyncio
-async def test_save_assembly_falls_back_when_pack_and_go_is_unavailable(
-    mcp_server, mock_adapter, mock_config, tmp_path
-) -> None:
-    """GetPackAndGo returning None falls back to copying, and says why."""
+    """An assembly with no dependencies copies just the assembly file."""
     save_assembly = await _tool(mcp_server, mock_adapter, mock_config, "save_assembly")
     _source_dir, source_asm = _assembly_on_disk(tmp_path)
     (tmp_path / "out").mkdir()
-    extension = Mock()
-    extension.GetPackAndGo.return_value = None
     mock_adapter.currentModel = Mock(
         GetPathName=Mock(return_value=str(source_asm)),
         GetDependencies2=Mock(return_value=None),
     )
 
-    with patch.dict(sys.modules, _fake_win32com(Mock(return_value=extension))):
-        result = await save_assembly(
-            {
-                "file_path": str(tmp_path / "out" / "box_copy.sldasm"),
-                "include_references": True,
-            }
-        )
+    result = await save_assembly(
+        {
+            "file_path": str(tmp_path / "out" / "box_copy.sldasm"),
+            "include_references": True,
+        }
+    )
 
     assert result["copy_method"] == "tool_dependency_copy"
-    assert result["native_pack_and_go_error"] == "GetPackAndGo returned None."
     assert result["copied_files"] == [str(tmp_path / "out" / "box_copy.sldasm")]
 
 
@@ -2296,13 +2198,12 @@ async def test_reference_copy_reads_path_property_and_skips_non_model_entries(
         ),
     )
 
-    with patch.dict(sys.modules, _fake_win32com(Mock(side_effect=OSError("no COM")))):
-        result = await save_assembly(
-            {
-                "file_path": str(target_dir / "box_copy.sldasm"),
-                "include_references": True,
-            }
-        )
+    result = await save_assembly(
+        {
+            "file_path": str(target_dir / "box_copy.sldasm"),
+            "include_references": True,
+        }
+    )
 
     assert result["copied_files"] == sorted(
         [
@@ -2311,7 +2212,6 @@ async def test_reference_copy_reads_path_property_and_skips_non_model_entries(
             str(in_place),
         ]
     )
-    assert result["native_pack_and_go_error"] == "no COM"
 
 
 @pytest.mark.asyncio
@@ -2332,15 +2232,12 @@ async def test_reference_copy_needs_a_readable_saved_path(
         SimpleNamespace(Extension=object()),
     ):
         mock_adapter.currentModel = model
-        with patch.dict(
-            sys.modules, _fake_win32com(Mock(side_effect=OSError("no COM")))
-        ):
-            result = await save_assembly(
-                {
-                    "file_path": str(tmp_path / "out" / "box_copy.sldasm"),
-                    "include_references": True,
-                }
-            )
+        result = await save_assembly(
+            {
+                "file_path": str(tmp_path / "out" / "box_copy.sldasm"),
+                "include_references": True,
+            }
+        )
         messages.append(result["message"])
 
     assert all("must be saved" in m for m in messages)
@@ -2373,88 +2270,11 @@ async def test_reference_copy_treats_an_unresolvable_target_as_a_new_file(
         GetDependencies2=Mock(return_value=[str(bracket)]),
     )
 
-    with patch.dict(sys.modules, _fake_win32com(Mock(side_effect=OSError("no COM")))):
-        result = await save_assembly(
-            {
-                "file_path": str(target_dir / "box_copy.sldasm"),
-                "include_references": True,
-            }
-        )
+    result = await save_assembly(
+        {
+            "file_path": str(target_dir / "box_copy.sldasm"),
+            "include_references": True,
+        }
+    )
 
     assert str(target_dir / "bracket_1.sldprt") in result["copied_files"]
-
-
-@pytest.mark.asyncio
-async def test_save_assembly_falls_back_when_pack_and_go_writes_nothing(
-    mcp_server, mock_adapter, mock_config, tmp_path
-) -> None:
-    """An empty Pack-and-Go result falls back to copying, with the SW replies."""
-    save_assembly = await _tool(mcp_server, mock_adapter, mock_config, "save_assembly")
-    _source_dir, source_asm = _assembly_on_disk(tmp_path)
-    (tmp_path / "out").mkdir()
-    pack_and_go = Mock()
-    pack_and_go.SetSaveToName.return_value = False
-    extension = Mock()
-    extension.GetPackAndGo.return_value = pack_and_go
-    extension.SavePackAndGo.return_value = None
-    mock_adapter.currentModel = Mock(
-        GetPathName=Mock(return_value=str(source_asm)),
-        GetDependencies2=Mock(return_value=()),
-    )
-
-    with patch.dict(sys.modules, _fake_win32com(Mock(return_value=extension))):
-        result = await save_assembly(
-            {
-                "file_path": str(tmp_path / "out" / "box_copy.sldasm"),
-                "include_references": True,
-            }
-        )
-
-    assert result["copy_method"] == "tool_dependency_copy"
-    assert result["native_pack_and_go_error"] == (
-        "SavePackAndGo did not produce output files "
-        "(SetSaveToName=False, SavePackAndGo=None)."
-    )
-
-
-class TestDecodePackAndGoStatuses:
-    """Cover _decode_pack_and_go_statuses (lines 34-47)."""
-
-    def test_none_returns_all_ok(self) -> None:
-        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
-
-        ok, warnings = _decode_pack_and_go_statuses(None)
-        assert ok is True
-        assert warnings == []
-
-    def test_all_zero_status_is_ok(self) -> None:
-        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
-
-        ok, warnings = _decode_pack_and_go_statuses([0, 0, 0])
-        assert ok is True
-        assert warnings == []
-
-    def test_nonzero_status_produces_warning(self) -> None:
-        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
-
-        ok, warnings = _decode_pack_and_go_statuses([0, 2, 3])
-        assert ok is False
-        assert len(warnings) == 2
-        assert "FileAlreadyExist" in warnings[0]
-        assert "MissingSource" in warnings[1]
-
-    def test_unknown_status_code_labelled(self) -> None:
-        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
-
-        ok, warnings = _decode_pack_and_go_statuses([99])
-        assert not ok
-        assert "Unknown status code 99" in warnings[0]
-
-    def test_scalar_save_result_coerced(self) -> None:
-        """TypeError on iteration → scalar branch (line 39)."""
-        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
-
-        # int is not iterable → TypeError → codes = [int(save_result)]
-        ok, warnings = _decode_pack_and_go_statuses(2)
-        assert not ok
-        assert len(warnings) == 1
