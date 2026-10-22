@@ -8,7 +8,7 @@ Covers the chain of bugs found and fixed while debugging a reported
    confirmed-correct 26-parameter signature shared with ``FeatureCut4``.
 2. The adapter-wide ``CircuitBreakerAdapter`` state — one failing tool used
    to trip the breaker for every other tool, including reads. Covered by
-   the mock suite (test_adapters.py); not re-tested here since it needs no
+   the mock suite (tests/solidworks_mcp/adapters/test_mock_adapter.py); not re-tested here since it needs no
    real SolidWorks.
 3. ``create_sketch`` trusting ``InsertSketch``'s return value for the
    sketch name, which SolidWorks sometimes doesn't populate synchronously —

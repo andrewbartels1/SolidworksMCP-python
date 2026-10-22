@@ -846,3 +846,124 @@ def test_insert_tool_call_record_survives_a_render_failure(
         (record,) = session.exec(select(ToolCallRecord)).all()
     assert record.tool_name == "add_line"
     assert record.script_line is None
+
+
+def test_update_plan_checkpoint_existing(tmp_path):
+    """update_plan_checkpoint should update an existing checkpoint. Covers lines 865-882."""
+    from solidworks_mcp.agents.history_db import (
+        init_db,
+        insert_plan_checkpoint,
+        list_plan_checkpoints,
+        update_plan_checkpoint,
+    )
+
+    db_path = tmp_path / "test.db"
+    init_db(db_path=db_path)
+    insert_plan_checkpoint(
+        session_id="s1",
+        title="Test Checkpoint",
+        planned_action_json='{"part_name": "test"}',
+        checkpoint_index=0,
+        db_path=db_path,
+    )
+
+    rows = list_plan_checkpoints("s1", db_path=db_path)
+    assert len(rows) == 1
+    cp_id = rows[0]["id"]
+
+    update_plan_checkpoint(
+        cp_id, executed=True, result_json='{"ok": true}', db_path=db_path
+    )
+
+    rows_after = list_plan_checkpoints("s1", db_path=db_path)
+    assert rows_after[0]["executed"] is True
+
+
+def test_update_plan_checkpoint_missing(tmp_path):
+    """update_plan_checkpoint should return None for a missing checkpoint id."""
+    from solidworks_mcp.agents.history_db import init_db, update_plan_checkpoint
+
+    db_path = tmp_path / "test.db"
+    init_db(db_path=db_path)
+    result = update_plan_checkpoint(99999, executed=True, db_path=db_path)
+    assert result is None
+
+
+def test_update_plan_checkpoint_planned_action(tmp_path):
+    """update_plan_checkpoint_planned_action should update planned_action_json. Covers 865-882."""
+    from solidworks_mcp.agents.history_db import (
+        init_db,
+        insert_plan_checkpoint,
+        list_plan_checkpoints,
+        update_plan_checkpoint_planned_action,
+    )
+
+    db_path = tmp_path / "test.db"
+    init_db(db_path=db_path)
+    insert_plan_checkpoint(
+        session_id="s1",
+        title="Test",
+        planned_action_json='{"part_name": "old"}',
+        checkpoint_index=0,
+        db_path=db_path,
+    )
+    rows = list_plan_checkpoints("s1", db_path=db_path)
+    cp_id = rows[0]["id"]
+
+    update_plan_checkpoint_planned_action(
+        cp_id, planned_action_json='{"part_name": "new"}', db_path=db_path
+    )
+    rows_after = list_plan_checkpoints("s1", db_path=db_path)
+    assert rows_after[0]["planned_action_json"] == '{"part_name": "new"}'
+
+
+def test_update_plan_checkpoint_planned_action_missing(tmp_path):
+    """update_plan_checkpoint_planned_action should return None when row missing. Covers line 872."""
+    from solidworks_mcp.agents.history_db import (
+        init_db,
+        update_plan_checkpoint_planned_action,
+    )
+
+    db_path = tmp_path / "test.db"
+    init_db(db_path=db_path)
+    # Non-existent ID → row is None → early return
+    result = update_plan_checkpoint_planned_action(
+        99999, planned_action_json="{}", db_path=db_path
+    )
+    assert result is None
+
+
+def test_create_soc_checkpoint_inserts_and_returns_id(tmp_path):
+    """create_soc_checkpoint should persist a checkpoint and return its id. Covers 1290-1305."""
+    from solidworks_mcp.agents.history_db import (
+        create_soc_checkpoint,
+        get_soc_checkpoint,
+        init_db,
+    )
+
+    db_path = tmp_path / "test.db"
+    init_db(db_path=db_path)
+
+    cp_id = create_soc_checkpoint(
+        session_id="s1",
+        label="base-extrude",
+        file_path="/tmp/cp.sldprt",
+        db_path=db_path,
+    )
+    assert isinstance(cp_id, int)
+    assert cp_id > 0
+
+    row = get_soc_checkpoint("s1", "base-extrude", db_path=db_path)
+    assert row is not None
+    assert row["file_path"] == "/tmp/cp.sldprt"
+
+
+def test_get_soc_checkpoint_returns_none_for_missing(tmp_path):
+    """get_soc_checkpoint should return None when label doesn't exist. Covers lines 1359-1370."""
+    from solidworks_mcp.agents.history_db import get_soc_checkpoint, init_db
+
+    db_path = tmp_path / "test.db"
+    init_db(db_path=db_path)
+
+    result = get_soc_checkpoint("s1", "nonexistent-label", db_path=db_path)
+    assert result is None

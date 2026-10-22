@@ -155,7 +155,7 @@ The manifest format:
 
 ## Integration with Test Harness
 
-The `TestLevelCRealCOM` class in `tests/test_all_endpoints_harness.py` includes `test_c06_export_image` which exports a JPEG after every modelling lifecycle test. Connect this to screenshot comparison by adding to your CI script:
+The `TestLevelCRealCOM` class in `tests/integration/test_all_endpoints_harness.py` includes `test_c06_export_image` which exports a JPEG after every modelling lifecycle test. Connect this to screenshot comparison by adding to your CI script:
 
 ```powershell
 # After Level C tests produce smoke_c06_image.jpg

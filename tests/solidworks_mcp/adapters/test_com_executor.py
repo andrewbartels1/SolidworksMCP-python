@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -135,3 +136,77 @@ def test_worker_skips_cancelled_work_and_survives_uninit_failure(monkeypatch) ->
 
     assert ran == []
     assert calls == ["init", "uninit"]
+
+
+def test_com_executor_start_returns_early_when_thread_alive(monkeypatch):
+    """start() should return early when the worker thread is already running. Covers line 104."""
+    import threading
+
+    from solidworks_mcp.adapters import com_executor
+
+    executor = com_executor.ComExecutor("test")
+
+    # Create a mock thread that reports as alive
+    mock_thread = MagicMock(spec=threading.Thread)
+    mock_thread.is_alive = MagicMock(return_value=True)
+    executor._thread = mock_thread
+
+    # Should return early without starting a new thread
+    executor.start()  # No exception, no new thread started
+    mock_thread.start.assert_not_called()
+
+
+def test_com_executor_start_raises_when_pywin32_unavailable(monkeypatch):
+    """start() should raise RuntimeError when PYWIN32_AVAILABLE is False. Covers line 107."""
+    from solidworks_mcp.adapters import com_executor
+
+    monkeypatch.setattr(com_executor, "PYWIN32_AVAILABLE", False)
+
+    executor = com_executor.ComExecutor("test")
+    with pytest.raises(RuntimeError, match="pywin32"):
+        executor.start()
+
+
+def test_com_executor_start_raises_on_ready_timeout(monkeypatch):
+    """start() should raise RuntimeError when worker doesn't signal ready. Covers line 117."""
+    import threading
+
+    from solidworks_mcp.adapters import com_executor
+
+    monkeypatch.setattr(com_executor, "PYWIN32_AVAILABLE", True)
+
+    executor = com_executor.ComExecutor("test")
+
+    # Prevent real thread from starting; mock the ready event to never fire
+    mock_event = MagicMock()
+    mock_event.wait = MagicMock(return_value=False)
+    mock_event.clear = MagicMock()
+    mock_event.set = MagicMock()
+    executor._ready = mock_event
+
+    mock_thread = MagicMock(spec=threading.Thread)
+    mock_thread.is_alive = MagicMock(return_value=False)
+    mock_thread.start = MagicMock()
+
+    with patch.object(threading, "Thread", return_value=mock_thread):
+        with pytest.raises(RuntimeError, match="did not initialize"):
+            executor.start(timeout=0.001)
+
+
+def test_com_executor_stop_warns_when_thread_doesnt_exit(monkeypatch):
+    """stop() should warn when thread doesn't exit within timeout. Covers line 138."""
+    import threading
+
+    from solidworks_mcp.adapters import com_executor
+
+    executor = com_executor.ComExecutor("test")
+
+    # Simulate a thread that is alive but won't stop
+    mock_thread = MagicMock(spec=threading.Thread)
+    mock_thread.is_alive = MagicMock(return_value=True)
+    mock_thread.join = MagicMock()  # join returns but thread still alive
+    executor._thread = mock_thread
+
+    executor.stop(timeout=0.001)
+    # Thread should be set to None even though it didn't stop cleanly
+    assert executor._thread is None

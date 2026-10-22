@@ -1,6 +1,6 @@
 """Tests for MockSolidWorksAdapter's assembly-aware ``list_features``.
 
-Companion to ``test_list_features_assembly.py`` (which covers the real
+Companion to ``solidworks/test_selection_assembly_features.py`` (which covers the real
 pywin32 adapter with COM fakes) — exercises the same behavior against the
 mock adapter's configurable ``_assembly_components`` fixture, per GitHub
 issue #21 / OpenSpec change ``assembly-aware-list-features``.

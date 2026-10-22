@@ -8,7 +8,7 @@ honored independently per document, sub-assembly recursion is bounded by
 ``max_assembly_depth``, and an unresolvable component doesn't fail the call.
 
 Uses the same ``SimpleNamespace``-based COM fake pattern as the existing
-``test_list_features_*`` tests in ``test_adapters.py`` — no SolidWorks
+``test_list_features_*`` tests in ``test_selection.py`` — no SolidWorks
 required.
 """
 
@@ -85,7 +85,7 @@ def _assembly_doc(
 
 def _build_adapter(monkeypatch) -> PyWin32Adapter:
     """Build a PyWin32Adapter with COM/platform checks bypassed, per the
-    existing convention in test_adapters.py's ``_build_adapter`` helpers.
+    existing convention in the ``_build_adapter`` helpers of the mixin tests.
     """
     monkeypatch.setattr(
         "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True

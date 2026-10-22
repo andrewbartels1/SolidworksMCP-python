@@ -7,6 +7,7 @@ import json
 import sys
 import types
 import urllib.request
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -864,3 +865,56 @@ async def test_run_local_agent_reports_missing_pydantic_ai(monkeypatch) -> None:
 
     assert result.success is False
     assert result.error == "pydantic-ai is not installed in this environment."
+
+
+def test_detect_gpu_vram_wmic_path(monkeypatch):
+    """_detect_gpu_vram_gb should use wmic on Windows when nvidia-smi fails. Covers lines 348-349."""
+    import subprocess
+
+    from solidworks_mcp.ui import local_llm
+
+    # Simulate Windows and nvidia-smi failure, then wmic success
+    monkeypatch.setattr(local_llm.platform, "system", lambda: "Windows")
+
+    def _mock_check_output(cmd, *args, **kwargs):
+        cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+        if "nvidia-smi" in cmd_str:
+            raise subprocess.CalledProcessError(1, "nvidia-smi")
+        if "wmic" in cmd_str and "VideoController" in cmd_str:
+            return "AdapterRAM\r\n4294967296\r\n"  # 4 GB in bytes
+        raise RuntimeError(f"unexpected cmd: {cmd_str}")
+
+    monkeypatch.setattr(local_llm.subprocess, "check_output", _mock_check_output)
+
+    result = local_llm._detect_gpu_vram_gb()
+    assert result == pytest.approx(4.0, abs=0.1)
+
+
+def test_detect_system_ram_gb_psutil_path(monkeypatch):
+    """_detect_system_ram_gb should return RAM via psutil when available. Covers lines 363."""
+    from solidworks_mcp.ui import local_llm
+
+    # Inject a fake psutil module
+    fake_psutil = MagicMock()
+    fake_psutil.virtual_memory.return_value = SimpleNamespace(total=8 * 1024**3)
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+
+    result = local_llm._detect_system_ram_gb()
+    assert result == pytest.approx(8.0, abs=0.1)
+
+
+def test_detect_system_ram_gb_wmic_path(monkeypatch):
+    """_detect_system_ram_gb should fall back to wmic on Windows. Covers lines 379-380."""
+    from solidworks_mcp.ui import local_llm
+
+    # Remove psutil so the ImportError path runs
+    monkeypatch.setitem(sys.modules, "psutil", None)
+    monkeypatch.setattr(local_llm.platform, "system", lambda: "Windows")
+
+    def _mock_check_output(cmd, *args, **kwargs):
+        return "TotalPhysicalMemory\r\n8589934592\r\n"  # 8 GB
+
+    monkeypatch.setattr(local_llm.subprocess, "check_output", _mock_check_output)
+
+    result = local_llm._detect_system_ram_gb()
+    assert result == pytest.approx(8.0, abs=0.1)

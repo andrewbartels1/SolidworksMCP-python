@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import math
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 from solidworks_mcp.adapters.solidworks import sketch
+from solidworks_mcp.adapters.solidworks.sketch import SolidWorksSketchMixin
 
 
 class _FakeSwApp:
@@ -1290,3 +1293,898 @@ def test_check_fully_defined_by_name_and_with_no_sketch_anywhere() -> None:
     assert named.data["sketch_name"] == "Sketch1"
     assert missing.status == AdapterResultStatus.ERROR
     assert "No active sketch found" in (missing.error or "")
+
+
+def _build_adapter(monkeypatch) -> PyWin32Adapter:
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+    )
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter.platform.system",
+        lambda: "Windows",
+    )
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+        SimpleNamespace(com_error=RuntimeError),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter._ComSessionCoordinator",
+        lambda _adapter: SimpleNamespace(),
+        raising=False,
+    )
+    return PyWin32Adapter({})
+
+
+class TestSolidWorksSketchMixinGeometryHelpers:
+    """Cover the _point_xyz, _set_point_xyz, ... helper delegation methods."""
+
+    # --- _adapter staticmethod (line 17 in sketch.py) ---
+
+    def test_sketch_adapter_staticmethod_returns_obj(self) -> None:
+        sentinel = object()
+        assert SolidWorksSketchMixin._adapter(sentinel) is sentinel
+
+    # --- _point_xyz (lines 20-21) ---
+
+    def test_point_xyz_delegates_to_sketch_geometry(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        mock_geom = Mock()
+        mock_geom.point_xyz = Mock(return_value=(1.0, 2.0, 3.0))
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._point_xyz("pt_obj")
+        mock_geom.point_xyz.assert_called_once_with("pt_obj")
+        assert result == (1.0, 2.0, 3.0)
+
+    # --- _set_point_xyz (lines 27-28) ---
+
+    def test_set_point_xyz_delegates_to_sketch_geometry(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        mock_geom = Mock()
+        mock_geom.set_point_xyz = Mock(return_value=True)
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._set_point_xyz("pt_obj", 1.0, 2.0, 3.0)
+        mock_geom.set_point_xyz.assert_called_once_with("pt_obj", 1.0, 2.0, 3.0)
+        assert result is True
+
+    # --- _read_segment_endpoints (lines 33-34) ---
+
+    def test_read_segment_endpoints_delegates(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        endpoints = ((0.0, 0.0, 0.0), (1.0, 1.0, 0.0))
+        mock_geom = Mock()
+        mock_geom.read_segment_endpoints = Mock(return_value=endpoints)
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._read_segment_endpoints("seg_obj")
+        mock_geom.read_segment_endpoints.assert_called_once_with("seg_obj")
+        assert result == endpoints
+
+    # --- _segment_point_objects (lines 40-41) ---
+
+    def test_segment_point_objects_delegates(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        pt_a, pt_b = object(), object()
+        mock_geom = Mock()
+        mock_geom.segment_point_objects = Mock(return_value=(pt_a, pt_b))
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._segment_point_objects("seg_obj")
+        mock_geom.segment_point_objects.assert_called_once_with("seg_obj")
+        assert result == (pt_a, pt_b)
+
+    # --- _shared_segment_vertex (lines 49-50) ---
+
+    def test_shared_segment_vertex_delegates(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        vertex_triple = (object(), object(), object())
+        mock_geom = Mock()
+        mock_geom.shared_segment_vertex = Mock(return_value=vertex_triple)
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._shared_segment_vertex("e1", "e2")
+        mock_geom.shared_segment_vertex.assert_called_once_with("e1", "e2")
+        assert result == vertex_triple
+
+    # --- _smart_dimension_direction (lines 56-57) ---
+
+    def test_smart_dimension_direction_delegates(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        mock_geom = Mock()
+        mock_geom.smart_dimension_direction = Mock(return_value=1)
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._smart_dimension_direction(1.0, 0.0)
+        mock_geom.smart_dimension_direction.assert_called_once_with(1.0, 0.0)
+        assert result == 1
+
+    # --- _single_line_dimension_placement (lines 62-63) ---
+
+    def test_single_line_dimension_placement_delegates(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        placement = (5.0, 5.0, 0.0, 0)
+        mock_geom = Mock()
+        mock_geom.single_line_dimension_placement = Mock(return_value=placement)
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._single_line_dimension_placement("line_obj")
+        mock_geom.single_line_dimension_placement.assert_called_once_with("line_obj")
+        assert result == placement
+
+    # --- _angular_dimension_placement (lines 71-72) ---
+
+    def test_angular_dimension_placement_delegates(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        placement = (3.0, 4.0, 0.0, 1)
+        mock_geom = Mock()
+        mock_geom.angular_dimension_placement = Mock(return_value=placement)
+        adapter._sketch_geometry = mock_geom
+
+        result = adapter._angular_dimension_placement("l1", "l2")
+        mock_geom.angular_dimension_placement.assert_called_once_with("l1", "l2")
+        assert result == placement
+
+    # --- check_sketch_fully_defined (last statement in sketch.py) ---
+
+    @pytest.mark.asyncio
+    async def test_check_sketch_fully_defined_delegates(self, monkeypatch) -> None:
+        """Verify check_sketch_fully_defined passes through to sketch ops."""
+
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter._last_sketch_name = "Sketch1"
+
+        expected = {"fully_defined": True, "sketch_name": "Sketch1"}
+
+        with patch(
+            "solidworks_mcp.adapters.solidworks.sketch._check_sketch_fully_defined_impl",
+        ) as mock_fn:
+            from solidworks_mcp.adapters.base import (
+                AdapterResult,
+                AdapterResultStatus,
+            )
+
+            mock_fn.return_value = AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data=expected
+            )
+            result = await adapter.check_sketch_fully_defined("Sketch1")
+
+        assert result.is_success
+        assert result.data == expected
+
+
+class TestRealCircularPatternImpl:
+    """Direct tests for ``_sketch_circular_pattern_impl`` against a fake
+    SketchManager. Verifies the COM-call argument shape so partial sweeps
+    and full circles use the right ``PatternSpacing`` formula.
+    """
+
+    @staticmethod
+    def _build_adapter() -> tuple[SimpleNamespace, Mock, Mock]:
+        """Build the minimum object graph the real impl reads from.
+
+        The impl needs:
+          * ``adapter._sketch_entities`` — registered seed entities
+          * ``adapter.currentSketchManager.CreateCircularSketchStepAndRepeat``
+          * ``adapter.currentModel.ClearSelection2`` and
+            ``adapter.currentModel.SelectionManager.CreateSelectData``
+          * ``adapter._handle_com_operation(name, fn)`` — invoked
+            synchronously
+          * ``adapter._attempt(fn, default=...)`` — synchronous
+        """
+        seed_entity = Mock()
+        seed_entity.Select4 = Mock(return_value=True)
+        # GetCenterPoint must resolve to a length-2 tuple of metres for the
+        # impl's seed-centre lookup to succeed; without this the impl would
+        # raise the "can't derive the seed centre" error and tests that
+        # don't care about the seed position would break. (30, 0) mm puts
+        # the seed on +X — a sensible default for circular-pattern tests.
+        seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
+        sketch_entities = {"Circle_1": seed_entity}
+
+        create_pattern = Mock(return_value=True)
+        sketch_manager = Mock()
+        sketch_manager.CreateCircularSketchStepAndRepeat = create_pattern
+
+        select_data = Mock()
+        selection_mgr = Mock()
+        selection_mgr.CreateSelectData = Mock(return_value=select_data)
+        current_model = SimpleNamespace(
+            ClearSelection2=Mock(return_value=True),
+            SelectionManager=selection_mgr,
+        )
+
+        def _handle(_name, fn):
+            try:
+                return AdapterResult(status=AdapterResultStatus.SUCCESS, data=fn())
+            except Exception as exc:
+                return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+
+        def _attempt(fn, default=None):
+            try:
+                return fn()
+            except Exception:
+                return default
+
+        adapter = SimpleNamespace(
+            _sketch_entities=sketch_entities,
+            _sketch_entity_centers={},
+            currentSketchManager=sketch_manager,
+            currentModel=current_model,
+            _handle_com_operation=_handle,
+            _attempt=_attempt,
+        )
+        return adapter, create_pattern, seed_entity
+
+    def test_full_circle_uses_angle_over_count(self):
+        """A 360° pattern with count=6 should hand the COM call a
+        ``PatternSpacing`` of ``2π / 6`` so adjacent instances tile."""
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data.startswith("CircularPattern_6x360.0deg_")
+        create_pattern.assert_called_once()
+        args = create_pattern.call_args.args
+        # Signature: ArcRadius, ArcAngle, PatternNum, PatternSpacing,
+        # PatternRotate, DeleteInstances, RadiusDim, AngleDim,
+        # CreateNumOfInstancesDim
+        assert args[2] == 6  # PatternNum
+        assert args[3] == pytest.approx(math.radians(360.0) / 6)
+        assert args[4] is True  # PatternRotate
+
+    def test_partial_sweep_uses_angle_over_count_minus_one(self):
+        """For ``angle=180, count=3`` the partial-sweep formula puts the
+        last instance at 180°, so spacing must be ``π / (3 - 1)`` rad."""
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 180.0, 3
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        args = create_pattern.call_args.args
+        assert args[2] == 3
+        assert args[3] == pytest.approx(math.radians(180.0) / 2)
+
+    def test_clear_selection_runs_on_com_failure(self):
+        """``CreateCircularSketchStepAndRepeat`` returning False must
+        still leave selection state cleaned up (try/finally)."""
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        create_pattern.return_value = False
+        clear_selection = adapter.currentModel.ClearSelection2
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.ERROR
+        # ClearSelection2 runs before selecting and again in the finally
+        # block after the COM failure.
+        assert clear_selection.call_count == 2
+
+    def test_polygon_seed_with_cached_center_drives_arc_radius(self):
+        """When ``_add_polygon_impl`` cached the polygon center at register
+        time, circular_pattern must use that cached center to derive the
+        seed-to-axis distance instead of rejecting the seed."""
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        adapter._sketch_entities["Polygon_1"] = (Mock(), Mock(), Mock())
+        # Polygon at (30, 40) mm → seed-to-origin distance is 50 mm.
+        adapter._sketch_entity_centers["Polygon_1"] = (30.0, 40.0)
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Polygon_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        create_pattern.assert_called_once()
+        args = create_pattern.call_args.args
+        # ArcRadius is in metres: hypot(30, 40) / 1000 = 0.05.
+        assert args[0] == pytest.approx(0.05)
+        assert args[2] == 6
+
+    def test_rectangle_seed_with_cached_center_drives_arc_radius(self):
+        """Rectangles register as a SAFEARRAY tuple of line segments — same
+        shape as polygons. ``_add_rectangle_impl`` now caches the geometric
+        centre at register time, so a rectangle seed must flow through
+        circular_pattern the same as a polygon seed, deriving ArcRadius
+        from the cached centre.
+        """
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        adapter._sketch_entities["Rectangle_1"] = (Mock(), Mock(), Mock(), Mock())
+        # Rectangle centred at (60, 80) mm → seed-to-origin distance is 100 mm.
+        adapter._sketch_entity_centers["Rectangle_1"] = (60.0, 80.0)
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Rectangle_1"], 360.0, 4
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        create_pattern.assert_called_once()
+        args = create_pattern.call_args.args
+        # ArcRadius is in metres: hypot(60, 80) / 1000 = 0.100.
+        assert args[0] == pytest.approx(0.100)
+        assert args[2] == 4
+
+    def test_single_dispatch_seed_without_get_center_point_raises(self):
+        """Lines, splines, and centerlines register as a single dispatch but
+        none of them expose ``GetCenterPoint`` on the flagged interfaces
+        (``ISketchArc``/``ISketchEllipse``). The previous impl let this fall
+        through to a 1 mm placeholder radius, silently producing a tightly
+        clustered pattern instead of the intended one. Surface a clear
+        error pointing the caller at the supported seed types instead."""
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        # Stand-in for a line/spline/centerline: single dispatch whose
+        # GetCenterPoint returns a non-iterable value (the real impl swallows
+        # the AttributeError via ``_attempt`` and ``point`` stays as a Mock
+        # that fails the ``len(point) >= 2`` check). Use return_value=None to
+        # be explicit.
+        bare_seed = Mock()
+        bare_seed.Select4 = Mock(return_value=True)
+        bare_seed.GetCenterPoint = Mock(return_value=None)
+        adapter._sketch_entities["Line_1"] = bare_seed
+
+        result = sketch_ops._sketch_circular_pattern_impl(adapter, ["Line_1"], 360.0, 6)
+
+        assert result.status == AdapterResultStatus.ERROR
+        assert "Line_1" in (result.error or "")
+        assert "GetCenterPoint" in (result.error or "")
+        # COM call must NOT have fired — silent 1 mm placeholder pattern
+        # was the bug.
+        create_pattern.assert_not_called()
+
+    def test_tuple_seed_without_cached_center_raises_clear_error(self):
+        """Group-registering primitives (polygons, rectangles) cache their
+        centre at register time so circular_pattern can derive the
+        seed-to-axis radius from the tuple seed. Any *other* tuple seed
+        without a cached centre — e.g. a future ``add_slot`` — would
+        otherwise fall through to a misleading 1 mm placeholder radius.
+        Surface a clear, actionable error that names only the
+        always-works primitives instead.
+        """
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, _ = self._build_adapter()
+        # Stand in for a hypothetical tuple-registering primitive whose
+        # ``add_*`` writer never stashed a centre.
+        adapter._sketch_entities["Slot_1"] = (Mock(), Mock(), Mock(), Mock())
+
+        result = sketch_ops._sketch_circular_pattern_impl(adapter, ["Slot_1"], 360.0, 6)
+
+        assert result.status == AdapterResultStatus.ERROR
+        # Error must name the offending entity and the accepted seed types.
+        # Polygons and rectangles always reach the cached branch, so the
+        # message lists only the always-works primitives.
+        assert "Slot_1" in (result.error or "")
+        assert "circle, arc, or ellipse" in (result.error or "")
+        create_pattern.assert_not_called()
+
+    def test_arc_angle_normalized_to_positive_when_seed_on_plus_x_axis(self):
+        """A seed at (+X, 0) must hand SW a positive ``ArcAngle`` (+π), not
+        the ``-π`` that Python's ``math.atan2(-0.0, -seed_x)`` produces.
+
+        Regression: ``CreateCircularSketchStepAndRepeat`` silently returns
+        ``False`` on negative angle values — both the live
+        ``test_sketch_circular_pattern_creates_real_pattern`` regression
+        and the live demo failed without this normalisation.
+        """
+        from solidworks_mcp.adapters.solidworks import sketch as sketch_ops
+
+        adapter, create_pattern, seed_entity = self._build_adapter()
+        # Seed at (+30 mm, 0): GetCenterPoint returns metres on the SW side,
+        # so the impl multiplies by 1000 to get mm.  Length-2 tuple suffices
+        # for the ``len(point) >= 2`` check.
+        seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
+
+        result = sketch_ops._sketch_circular_pattern_impl(
+            adapter, ["Circle_1"], 360.0, 6
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        # Signature: ArcRadius, ArcAngle, PatternNum, ...
+        args = create_pattern.call_args.args
+        assert args[0] == pytest.approx(0.030)  # radius in metres
+        # The angle must be ~+π (positive), not -π.  Without normalisation
+        # ``math.atan2(-0.0, -0.030)`` returns ``-π`` and SW silently rejects
+        # the call.
+        assert args[1] == pytest.approx(math.pi)
+
+
+class TestPyWin32AdapterBranches:
+    """Additional PyWin32Adapter branch coverage with pure mocks."""
+
+    @staticmethod
+    def _build_adapter(monkeypatch) -> PyWin32Adapter:
+        """Test helper for build adapter."""
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            lambda: "Windows",
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            SimpleNamespace(com_error=RuntimeError),
+            raising=False,
+        )
+        adapter = PyWin32Adapter({})
+        # Synchronous mock ComExecutor: avoids "ComExecutor is not running"
+        # guard in _handle_com_operation for tests that set swApp/currentModel
+        # directly without going through connect().
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        mock_com = MagicMock()
+        mock_com._thread = mock_thread
+        mock_com.run = lambda fn, timeout=None: fn()
+        adapter._com = mock_com
+        return adapter
+
+    @staticmethod
+    def _sketch_tree(*names):
+        """Build a FirstFeature→GetNextFeature chain of ProfileFeature mocks.
+
+        Each node mimics the COM ``IFeature`` attributes the feature-tree
+        walk in ``features.py`` reads: ``GetTypeName2`` and ``Name`` as
+        properties and ``GetNextFeature`` as the link to the next node.
+        """
+        nxt = None
+        for name in reversed(names):
+            nxt = SimpleNamespace(
+                GetTypeName2="ProfileFeature", Name=name, GetNextFeature=nxt
+            )
+        return nxt
+
+    @staticmethod
+    def _feature_by_name(selected, *, fail=()):
+        """Return a FeatureByName mock that records ``Select2(append, mark)``.
+
+        ``features.py`` selects sketches/curves via
+        ``currentModel.FeatureByName(name).Select2(append, mark)``.  This
+        helper returns a callable that appends ``(name, append, mark)`` to
+        ``selected`` and reports success, except for names in ``fail`` (which
+        return ``None`` from ``FeatureByName`` to simulate a missing feature).
+        """
+
+        def factory(name):
+            if name in fail:
+                return None
+            feature = SimpleNamespace()
+            feature.Select2 = lambda append, mark, _n=name: bool(
+                selected.append((_n, append, mark)) or True
+            )
+            return feature
+
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_sketch_placeholder_and_exit_paths(self, monkeypatch):
+        """Test sketch operation helpers and exit-sketch branches.
+
+        The linear pattern call is wired with a fake SketchManager so the
+        real impl (``CreateLinearSketchStepAndRepeat`` via the executor)
+        succeeds. Circular pattern, mirror, and offset are still
+        placeholders at this point in the stack — they don't touch COM
+        and so only need ``currentSketchManager`` to be truthy.
+        """
+        adapter = self._build_adapter(monkeypatch)
+
+        no_sketch = await adapter.exit_sketch()
+        assert no_sketch.status.name == "WARNING"
+
+        adapter.currentSketchManager = SimpleNamespace(InsertSketch=Mock())
+
+        # Unknown relation types now error out — the placeholder that always
+        # returned success was replaced by a real SketchAddConstraints call.
+        assert (await adapter.add_sketch_constraint("L1", None, "unknown")).is_error
+        # add_sketch_dimension's no-model fast path returns a synthesised ID
+        # when ``adapter.currentModel`` is ``None``.
+        assert (
+            await adapter.add_sketch_dimension("L1", None, "linear", 10.0)
+        ).is_success
+
+        # Linear, circular, and mirror are real COM-touching impls now
+        # (placeholders only before #16/#17/#18). Wire the minimum:
+        #   currentSketchManager.CreateLinearSketchStepAndRepeat(...)
+        #   currentSketchManager.CreateCircularSketchStepAndRepeat(...)
+        #   currentModel.SketchMirror() (mirror)
+        #   currentModel.ClearSelection2 and SelectionManager.CreateSelectData
+        #   adapter._sketch_entities[entity_id].Select4(...)
+        #   The mirror_line entity must use a ``Centerline_*`` ID since
+        #   the real impl rejects anything else.
+        seed_entity = Mock()
+        seed_entity.Select4 = Mock(return_value=True)
+        # Circular pattern now requires a resolvable seed centre — either via
+        # GetCenterPoint (single dispatch) or via _sketch_entity_centers
+        # (group entities). Wire GetCenterPoint so this test's seed stands in
+        # for a circle/arc/ellipse rather than a line.
+        seed_entity.GetCenterPoint = Mock(return_value=(0.030, 0.0))
+        centerline = Mock()
+        centerline.Select4 = Mock(return_value=True)
+        adapter._sketch_entities = {
+            "L1": seed_entity,
+            "Centerline_42": centerline,
+        }
+
+        adapter.currentSketchManager = SimpleNamespace(
+            InsertSketch=Mock(),
+            CreateLinearSketchStepAndRepeat=Mock(return_value=True),
+            CreateCircularSketchStepAndRepeat=Mock(return_value=True),
+            SketchOffset2=Mock(return_value=True),
+        )
+
+        select_data = Mock()
+        selection_mgr = Mock()
+        selection_mgr.CreateSelectData = Mock(return_value=select_data)
+        adapter.currentModel = SimpleNamespace(
+            ClearSelection2=Mock(return_value=True),
+            SelectionManager=selection_mgr,
+            SketchMirror=Mock(return_value=None),
+        )
+
+        assert (
+            await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)
+        ).is_success
+        assert (await adapter.sketch_circular_pattern(["L1"], 180.0, 4)).is_success
+        assert (await adapter.sketch_mirror(["L1"], "Centerline_42")).is_success
+        assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_success
+
+        exited = await adapter.exit_sketch()
+        assert exited.is_success
+        assert adapter.currentSketchManager is None
+
+    @pytest.mark.asyncio
+    async def test_sketch_geometry_feature_and_mass_property_paths(self, monkeypatch):
+        """Test sketch/entity creation, feature creation, and mass properties with full mocks."""
+        adapter = self._build_adapter(monkeypatch)
+
+        feature_id = SimpleNamespace(ToString=lambda: "feat-1")
+        feature_obj = SimpleNamespace(Name="Feat1", GetID=lambda: feature_id)
+
+        sketch_manager = SimpleNamespace(
+            InsertSketch=Mock(return_value=SimpleNamespace(Name="SketchA")),
+            CreateLine=Mock(return_value=object()),
+            CreateCircleByRadius=Mock(return_value=object()),
+            CreateCornerRectangle=Mock(return_value=object()),
+            CreateArc=Mock(return_value=object()),
+            CreateSpline2=Mock(return_value=object()),
+            CreateCenterLine=Mock(return_value=object()),
+            CreatePolygon=Mock(return_value=object()),
+            CreateEllipse=Mock(return_value=object()),
+        )
+        feature_manager = SimpleNamespace(
+            FeatureExtrusion3=Mock(return_value=feature_obj),
+            FeatureExtrusion2=Mock(return_value=feature_obj),
+            FeatureExtruThin2=Mock(return_value=feature_obj),
+            FeatureRevolve2=Mock(return_value=feature_obj),
+            FeatureCut3=Mock(return_value=feature_obj),
+            FeatureFillet3=Mock(return_value=feature_obj),
+            FeatureChamfer=Mock(return_value=feature_obj),
+            InsertFeatureChamfer=Mock(return_value=feature_obj),
+        )
+        mass_props = SimpleNamespace(
+            Volume=2.0e-9,
+            SurfaceArea=5.0e-6,
+            Mass=0.25,
+            CenterOfMass=[0.01, 0.02, 0.03],
+            GetMomentOfInertia=lambda _about: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        )
+        extension = SimpleNamespace(
+            SelectByID2=Mock(return_value=True),
+            CreateMassProperty=Mock(return_value=mass_props),
+        )
+        adapter.currentModel = SimpleNamespace(
+            Extension=extension,
+            SketchManager=sketch_manager,
+            FeatureManager=feature_manager,
+            ClearSelection2=Mock(return_value=True),
+            FirstFeature=SimpleNamespace(
+                GetTypeName2=lambda: "ProfileFeature",
+                Name="SketchA",
+                GetNextFeature=lambda: None,
+            ),
+        )
+
+        created_sketch = await adapter.create_sketch("XY")
+        assert created_sketch.is_success
+        assert created_sketch.data == "SketchA"
+
+        assert (await adapter.add_line(0, 0, 10, 0)).is_success
+        assert (await adapter.add_circle(0, 0, 5)).is_success
+        assert (await adapter.add_rectangle(0, 0, 5, 3)).is_success
+        assert (await adapter.add_arc(0, 0, 1, 0, 0, 1)).is_success
+        assert (
+            await adapter.add_spline(
+                [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 0.0}]
+            )
+        ).is_success
+        assert (await adapter.add_centerline(0, 0, 0, 10)).is_success
+        assert (await adapter.add_polygon(0, 0, 5, 6)).is_success
+        assert (await adapter.add_ellipse(0, 0, 10, 6)).is_success
+
+        extrude_standard = await adapter.create_extrusion(
+            SimpleNamespace(
+                depth=10.0,
+                draft_angle=2.0,
+                reverse_direction=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+        extrude_thin = await adapter.create_extrusion(
+            SimpleNamespace(
+                depth=8.0,
+                draft_angle=0.0,
+                reverse_direction=True,
+                thin_feature=True,
+                thin_thickness=1.0,
+                merge_result=True,
+            )
+        )
+        revolve = await adapter.create_revolve(
+            SimpleNamespace(
+                angle=180.0,
+                reverse_direction=False,
+                both_directions=True,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+        cut = await adapter.create_cut_extrude(
+            SimpleNamespace(depth=4.0, draft_angle=1.0, reverse_direction=False)
+        )
+        fillet = await adapter.add_fillet(2.0, ["Edge1", "Edge2"])
+        chamfer = await adapter.add_chamfer(1.5, ["Edge1"])
+        mass = await adapter.get_mass_properties()
+
+        assert extrude_standard.is_success
+        assert extrude_thin.is_success
+        assert revolve.is_success
+        assert cut.is_success
+        assert fillet.is_success
+        assert chamfer.is_success
+        assert mass.is_success
+        assert mass.data.volume == pytest.approx(2.0)
+        assert mass.data.surface_area == pytest.approx(5.0)
+        assert mass.data.center_of_mass == [10.0, 20.0, 30.0]
+
+        plane_select_calls = [
+            call.args
+            for call in extension.SelectByID2.call_args_list
+            if len(call.args) >= 9
+            and call.args[0] == "Top Plane"
+            and call.args[1] == "PLANE"
+        ]
+        assert plane_select_calls, "Expected plane selection call for sketch creation"
+        assert any(call_args[7] in ("", None, 0) for call_args in plane_select_calls)
+        assert feature_manager.FeatureExtrusion3.called
+        assert feature_manager.FeatureExtruThin2.called
+        assert feature_manager.FeatureRevolve2.called
+        assert feature_manager.FeatureCut3.called
+
+    @pytest.mark.asyncio
+    async def test_sketch_methods_guard_and_failure_paths(self, monkeypatch):
+        """Cover no-active-sketch guards and per-entity creation failures."""
+        adapter = self._build_adapter(monkeypatch)
+
+        # Guard returns when sketch manager is missing.
+        for call in (
+            adapter.add_line(0, 0, 1, 1),
+            adapter.add_circle(0, 0, 1),
+            adapter.add_rectangle(0, 0, 1, 1),
+            adapter.add_arc(0, 0, 1, 0, 0, 1),
+            adapter.add_spline(
+                [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 0.0}]
+            ),
+            adapter.add_centerline(0, 0, 1, 1),
+            adapter.add_polygon(0, 0, 1, 5),
+            adapter.add_ellipse(0, 0, 2, 1),
+            adapter.add_sketch_constraint("L1", None, "parallel"),
+        ):
+            result = await call
+            assert result.is_error
+
+        adapter.currentSketchManager = SimpleNamespace(
+            CreateLine=Mock(return_value=None),
+            CreateCircleByRadius=Mock(return_value=None),
+            CreateCornerRectangle=Mock(return_value=None),
+            CreateArc=Mock(return_value=None),
+            CreateSpline2=Mock(return_value=None),
+            CreateCenterLine=Mock(return_value=None),
+            CreatePolygon=Mock(return_value=None),
+            CreateEllipse=Mock(return_value=None),
+        )
+
+        assert "Failed to create line" in (
+            (await adapter.add_line(0, 0, 1, 1)).error or ""
+        )
+        assert "Failed to create circle" in (
+            (await adapter.add_circle(0, 0, 1)).error or ""
+        )
+        assert "Failed to create rectangle" in (
+            (await adapter.add_rectangle(0, 0, 1, 1)).error or ""
+        )
+        assert "Failed to create arc" in (
+            (await adapter.add_arc(0, 0, 1, 0, 0, 1)).error or ""
+        )
+        assert "Failed to create spline" in (
+            (
+                await adapter.add_spline(
+                    [{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 0.0}]
+                )
+            ).error
+            or ""
+        )
+        assert "Failed to create centerline" in (
+            (await adapter.add_centerline(0, 0, 1, 1)).error or ""
+        )
+        assert "Failed to create polygon" in (
+            (await adapter.add_polygon(0, 0, 1, 5)).error or ""
+        )
+        assert "Failed to create ellipse" in (
+            (await adapter.add_ellipse(0, 0, 2, 1)).error or ""
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_sketch_plane_selection_fallback_paths(self, monkeypatch):
+        """Cover create_sketch feature-lookup/SelectByID2 fallback and InsertSketch variants."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _FakeComError(Exception):
+            """Test suite for FakeComError."""
+
+            pass
+
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            SimpleNamespace(com_error=_FakeComError),
+            raising=False,
+        )
+
+        class _PlaneFeature:
+            """Test suite for PlaneFeature."""
+
+            def Select2(self, *_args):
+                """Test helper for Select2."""
+                return True
+
+        feature_calls = {"count": 0}
+
+        def _feature_by_name(_name):
+            """Test helper for feature by name."""
+            feature_calls["count"] += 1
+            if feature_calls["count"] == 1:
+                raise RuntimeError("feature lookup failed")
+            return _PlaneFeature()
+
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=_feature_by_name,
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            SketchManager=SimpleNamespace(
+                InsertSketch=Mock(side_effect=[_FakeComError("variant"), None])
+            ),
+            GetActiveSketch2=Mock(side_effect=RuntimeError("no active sketch object")),
+        )
+
+        sketch_result = await adapter.create_sketch("Top")
+        assert sketch_result.is_success
+        assert str(sketch_result.data).startswith("Sketch_")
+
+        # Force total selection failure to cover explicit error branch.
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=Mock(side_effect=RuntimeError("lookup failed")),
+            Extension=SimpleNamespace(
+                SelectByID2=Mock(side_effect=RuntimeError("select failed"))
+            ),
+            SketchManager=SimpleNamespace(InsertSketch=Mock(return_value=None)),
+        )
+        failed = await adapter.create_sketch("Top")
+        assert failed.is_error
+        assert "Failed to select plane" in (failed.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sketch_empty_plane_and_total_select_failure(
+        self, monkeypatch
+    ) -> None:
+        """create_sketch should skip empty candidates and surface explicit plane selection failure."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=Mock(return_value=None),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            SketchManager=SimpleNamespace(InsertSketch=Mock(return_value=None)),
+            GetActiveSketch2=Mock(return_value="Sketch1"),
+        )
+
+        failed = await adapter.create_sketch("")
+        assert failed.is_error
+        assert "Failed to select plane" in (failed.error or "")
+
+    @pytest.mark.asyncio
+    async def test_sketch_and_mass_property_guard_and_fallback_errors(
+        self, monkeypatch
+    ) -> None:
+        """Cover sketch guard returns and mass-properties fallback error branches."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = None
+        assert (await adapter.create_sketch("Top")).is_error
+        assert (await adapter.get_mass_properties()).is_error
+
+        adapter.currentSketchManager = None
+        assert (await adapter.add_sketch_dimension("L1", None, "linear", 10.0)).is_error
+        assert (await adapter.sketch_linear_pattern(["L1"], 1.0, 0.0, 5.0, 3)).is_error
+        assert (await adapter.sketch_circular_pattern(["L1"], 180.0, 4)).is_error
+        assert (await adapter.sketch_mirror(["L1"], "CL1")).is_error
+        assert (await adapter.sketch_offset(["L1"], 1.0, True)).is_error
+
+        adapter.currentModel = SimpleNamespace(
+            ForceRebuild3=Mock(return_value=True),
+            Extension=SimpleNamespace(CreateMassProperty=Mock(return_value=None)),
+            GetMassProperties=[0.0, 0.0, 0.0, 1.0, 2.0, 3.0],
+        )
+        mass_result = await adapter.get_mass_properties()
+        assert mass_result.is_success
+        assert mass_result.data is not None
+        assert mass_result.data.moments_of_inertia == {
+            "Ixx": 0.0,
+            "Iyy": 0.0,
+            "Izz": 0.0,
+            "Ixy": 0.0,
+            "Ixz": 0.0,
+            "Iyz": 0.0,
+        }
+
+        # IMassProperty path with short MOI tuple should zero-fill inertia values.
+        adapter.currentModel = SimpleNamespace(
+            ForceRebuild3=Mock(return_value=True),
+            Extension=SimpleNamespace(
+                CreateMassProperty=Mock(
+                    return_value=SimpleNamespace(
+                        Volume=1.0,
+                        SurfaceArea=2.0,
+                        Mass=3.0,
+                        CenterOfMass=[0.0, 0.0, 0.0],
+                        GetMomentOfInertia=Mock(return_value=[1.0]),
+                    )
+                )
+            ),
+        )
+        short_moi = await adapter.get_mass_properties()
+        assert short_moi.is_success
+        assert short_moi.data is not None
+        assert short_moi.data.moments_of_inertia == {
+            "Ixx": 0.0,
+            "Iyy": 0.0,
+            "Izz": 0.0,
+            "Ixy": 0.0,
+            "Ixz": 0.0,
+            "Iyz": 0.0,
+        }
+
+        adapter.currentModel = SimpleNamespace(
+            ForceRebuild3=Mock(return_value=True),
+            Extension=SimpleNamespace(CreateMassProperty=Mock(return_value=None)),
+            GetMassProperties=[0.0, 0.0, 0.0],
+        )
+        mass_error = await adapter.get_mass_properties()
+        assert mass_error.is_error
+        assert "Failed to get mass properties" in (mass_error.error or "")

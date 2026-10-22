@@ -51,7 +51,7 @@ make test-clean
 
 The real SolidWorks smoke tests are in:
 
-- tests/test_real_solidworks_integration.py
+- tests/integration/test_real_solidworks_integration.py
 
 They validate:
 

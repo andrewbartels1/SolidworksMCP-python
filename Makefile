@@ -63,7 +63,7 @@ test-context-budget: ## Run smoke response-size guard test (CI-friendly)
 		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \
 		exit 1; \
 	fi
-	PY_KEY_VALUE_DISABLE_BEARTYPE=true $(CONDA_CMD) run -n solidworks_mcp python -m pytest tests/test_all_endpoints_harness.py \
+	PY_KEY_VALUE_DISABLE_BEARTYPE=true $(CONDA_CMD) run -n solidworks_mcp python -m pytest tests/integration/test_all_endpoints_harness.py \
 		-k "test_smoke_responses_within_context_budget" \
 		--no-cov \
 		-q

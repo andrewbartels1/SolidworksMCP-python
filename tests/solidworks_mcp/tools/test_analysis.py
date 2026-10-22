@@ -1,10 +1,19 @@
 """Tests for SolidWorks analysis tools."""
 
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import FastMCP
 
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
 from solidworks_mcp.tools.analysis import (
     GeometryAnalysisInput,
     InterferenceCheckInput,
@@ -388,3 +397,95 @@ class TestAnalysisTools:
         material_error = await material_tool()
         assert material_error["status"] == "error"
         assert "no material assigned" in material_error["message"]
+
+
+def _make_mcp():
+    """Create a plain FastMCP instance."""
+    mcp = FastMCP("test")
+    return mcp
+
+
+def _make_config():
+    """Test make config."""
+
+    return SolidWorksMCPConfig(
+        deployment_mode=DeploymentMode.LOCAL,
+        security_level=SecurityLevel.MINIMAL,
+        adapter_type=AdapterType.MOCK,
+        mock_solidworks=True,
+    )
+
+
+async def _get_tool(mcp, name: str):
+    """Test get tool."""
+
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
+
+
+class TestAnalysisCoverage:
+    """Test analysis coverage."""
+
+    @pytest.mark.asyncio
+    async def test_get_mass_properties_with_dict_input(self):
+        """Line 221 — dict input is validated into MassPropertiesInput."""
+        from solidworks_mcp.tools.analysis import register_analysis_tools
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await register_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "get_mass_properties")
+        result = await fn({"include_hidden": False})
+        # dict input path taken; should succeed or return an analysis result
+        assert isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_get_mass_properties_with_none_input(self):
+        """Line 217 — None input creates default MassPropertiesInput."""
+        from solidworks_mcp.tools.analysis import register_analysis_tools
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await register_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "get_mass_properties")
+        result = await fn(None)
+        assert isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_get_material_properties_returns_success(self):
+        """get_material_properties refuses when the adapter has no matching
+        capability, rather than returning static material data."""
+        from solidworks_mcp.tools.analysis import register_analysis_tools
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        await register_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "get_material_properties")
+        result = await fn()
+        assert result["status"] == "error"
+        assert "does not support get_material_properties" in result["message"]
+
+
+CAPABILITY = "check_interference"
+
+
+def test_capability_name_matches_the_tool_gate() -> None:
+    """``analysis.py`` reaches the adapter only by this exact name."""
+    from pathlib import Path
+
+    import solidworks_mcp.tools.analysis as analysis_tools
+
+    source = Path(analysis_tools.__file__).read_text(encoding="utf-8")
+    assert re.search(rf'require_capability\(\s*adapter,\s*"{CAPABILITY}"', source), (
+        f"no tool in analysis.py gates on adapter.{CAPABILITY}; either the "
+        "gate was renamed or this capability is unreachable"
+    )

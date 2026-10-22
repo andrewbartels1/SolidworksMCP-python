@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -12,7 +13,21 @@ from solidworks_mcp.adapters.base import (
     AdapterResultStatus,
     ExtrusionParameters,
 )
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
 from solidworks_mcp.adapters.solidworks import features
+from solidworks_mcp.adapters.solidworks.features import (
+    _create_axis_impl,
+    _create_reference_plane_impl,
+    _delete_feature_impl,
+    _feature_count,
+    _is_suppressed,
+    _mirror_feature_impl,
+    _pattern_circular_impl,
+    _select_reference_entity,
+    _suppress_feature_impl,
+    _undo_impl,
+)
 
 
 class _FakeFeatureAdapter:
@@ -938,3 +953,1140 @@ def test_reference_point_percent_must_be_inside_the_curve(percent: float) -> Non
     )
 
     assert result.error == "percent must be between 0 and 100 (exclusive)"
+
+
+def _build_adapter(monkeypatch) -> PyWin32Adapter:
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+    )
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter.platform.system",
+        lambda: "Windows",
+    )
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+        SimpleNamespace(com_error=RuntimeError),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.pywin32_adapter._ComSessionCoordinator",
+        lambda _adapter: SimpleNamespace(),
+        raising=False,
+    )
+    return PyWin32Adapter({})
+
+
+class TestSolidWorksFeaturesMixinSweepLoft:
+    """Cover the create_sweep and create_loft delegation paths."""
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_returns_error(self, monkeypatch) -> None:
+        """create_sweep is a stub that always returns ERROR."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        params = SimpleNamespace(profile_sketch="Sketch1", path_sketch="Path1")
+        result = await adapter.create_sweep(params)
+        assert result.is_error
+        assert result.error is not None
+
+    @pytest.mark.asyncio
+    async def test_create_loft_returns_error(self, monkeypatch) -> None:
+        """create_loft is a stub that always returns ERROR."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        params = SimpleNamespace(profiles=["Sketch1", "Sketch2"])
+        result = await adapter.create_loft(params)
+        assert result.is_error
+        assert result.error is not None
+
+
+class TestMirrorAndPatternVolumeBracketing:
+    """Cover the async wrapper methods' before/after volume-check branches."""
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_errors_when_volume_unreadable(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.get_mass_properties = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="no solid bodies"
+            )
+        )
+        with patch(
+            "solidworks_mcp.adapters.solidworks.features._mirror_feature_impl",
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data={"name": "Mirror1"}
+            ),
+        ):
+            result = await adapter.mirror_feature(["Body1"], "Right Plane")
+        assert result.is_error
+        assert "volume could not be read" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_errors_when_volume_did_not_grow(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        same_volume = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data=SimpleNamespace(volume=100.0)
+        )
+        adapter.get_mass_properties = AsyncMock(return_value=same_volume)
+        with patch(
+            "solidworks_mcp.adapters.solidworks.features._mirror_feature_impl",
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data={"name": "Mirror1"}
+            ),
+        ):
+            result = await adapter.mirror_feature(["Body1"], "Right Plane")
+        assert result.is_error
+        assert "no new geometry" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_errors_when_volume_unreadable(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.get_mass_properties = AsyncMock(
+            return_value=AdapterResult(status=AdapterResultStatus.ERROR, error="n/a")
+        )
+        with patch(
+            "solidworks_mcp.adapters.solidworks.features._pattern_circular_impl",
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data={"name": "CirPattern1"}
+            ),
+        ):
+            result = await adapter.pattern_circular(["Boss-Extrude1"], "Axis1", 4)
+        assert result.is_error
+        assert "volume could not be read" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_errors_when_volume_did_not_grow(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        same_volume = AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data=SimpleNamespace(volume=48431.5)
+        )
+        adapter.get_mass_properties = AsyncMock(return_value=same_volume)
+        with patch(
+            "solidworks_mcp.adapters.solidworks.features._pattern_circular_impl",
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data={"name": "CirPattern1"}
+            ),
+        ):
+            result = await adapter.pattern_circular(["Boss-Extrude1"], "Axis1", 4)
+        assert result.is_error
+        assert "produced no geometry" in (result.error or "")
+
+
+class TestSelectReferenceEntityFallback:
+    """Cover ``_select_reference_entity``'s SelectByID2 PLANE/FACE fallback."""
+
+    def test_falls_back_to_face_selectbyid2(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        # The named-feature path fails, so the fallback loop runs.
+        adapter.currentModel.FeatureByName.return_value = None
+        # PLANE attempt fails, FACE attempt succeeds.
+        adapter.currentModel.Extension.SelectByID2.side_effect = [False, True]
+
+        result = _select_reference_entity(adapter, "SomeFace", 0, append=False)
+
+        assert result is True
+        assert adapter.currentModel.Extension.SelectByID2.call_count == 2
+
+    def test_returns_false_when_every_attempt_fails(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = None
+        adapter.currentModel.Extension.SelectByID2.return_value = False
+
+        result = _select_reference_entity(adapter, "Nothing", 0, append=False)
+
+        assert result is False
+
+
+class TestCreateReferencePlaneImplErrors:
+    """Cover ``_create_reference_plane_impl``'s two raise branches."""
+
+    def test_errors_when_reference_not_selectable(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = None
+        adapter.currentModel.Extension.SelectByID2.return_value = False
+
+        result = _create_reference_plane_impl(
+            adapter, "Nonexistent Plane", 10.0, 0.0, False
+        )
+
+        assert result.is_error
+        assert "Failed to select reference plane/face" in (result.error or "")
+
+    def test_errors_when_plane_name_unreadable(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        # Named-feature selection succeeds.
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        # Feature count must rise (before < after) to pass that guard.
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.side_effect = [5, 6]
+        adapter.currentModel.FeatureManager = feature_manager
+        # InsertRefPlane succeeds but the resulting plane's Name is empty.
+        feature_manager.InsertRefPlane.return_value = SimpleNamespace(Name="")
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "name could not be read" in (result.error or "")
+
+
+class TestCreateAxisImplErrors:
+    """Cover ``_create_axis_impl``'s "feature count unreadable" branch."""
+
+    def test_errors_when_feature_count_unreadable(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        # GetFeatureCount returns a non-numeric value both times, so
+        # _feature_count(adapter) resolves to None on both reads.
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.return_value = None
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.is_error
+        assert "feature count could not be read" in (result.error or "")
+
+
+class TestMirrorAndPatternImplReturnedNothing:
+    """Cover the "COM returned nothing after a valid selection" raises."""
+
+    def test_mirror_feature_impl_errors_when_insert_returns_nothing(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        # mirror_bodies=False routes source AND plane selection through the
+        # named-feature path (FeatureByName + Select2), avoiding the need to
+        # also wire up the SelectByID2 body-selection branch.
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.InsertMirrorFeature.return_value = None
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _mirror_feature_impl(adapter, ["Loft1"], "Right Plane", True, False)
+
+        assert result.is_error
+        assert "InsertMirrorFeature returned nothing" in (result.error or "")
+
+    def test_pattern_circular_impl_errors_when_call_returns_nothing(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        # Axis and feature selection both go through SelectByID2 directly.
+        adapter.currentModel.Extension.SelectByID2.return_value = True
+        feature_manager = MagicMock()
+        feature_manager.FeatureCircularPattern5.return_value = None
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _pattern_circular_impl(
+            adapter, ["Boss-Extrude1"], "Axis1", 4, 360.0, True
+        )
+
+        assert result.is_error
+        assert "FeatureCircularPattern5 returned nothing" in (result.error or "")
+
+
+class TestSuppressFeatureImplStateMismatch:
+    """Cover the "state did not change" guard in ``_suppress_feature_impl``."""
+
+    def test_errors_when_readback_state_does_not_match_request(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        # First FeatureByName call (initial select) and second (post-rebuild
+        # refresh) both resolve to a feature reporting IsSuppressed=False -
+        # a suppress request (suppress=True) that the COM call accepted but
+        # that did not actually take effect.
+        adapter.currentModel.FeatureByName.side_effect = [
+            SimpleNamespace(IsSuppressed=False, Select2=lambda append, mark: True),
+            SimpleNamespace(IsSuppressed=False),
+        ]
+
+        result = _suppress_feature_impl(adapter, "Fillet1", True)
+
+        assert result.is_error
+        assert "did not change" in (result.error or "")
+
+
+class TestFeatureCountAndSuppressedHelpers:
+    """Direct unit tests for the small module-level helpers in features.py."""
+
+    def test_feature_count_returns_none_when_manager_unreadable(self) -> None:
+        class _Adapter:
+            currentModel = SimpleNamespace(FeatureManager=None)
+
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+        assert _feature_count(_Adapter()) is None
+
+    def test_feature_count_returns_none_when_count_not_numeric(self) -> None:
+        class _Adapter:
+            currentModel = SimpleNamespace(
+                FeatureManager=SimpleNamespace(
+                    GetFeatureCount=lambda include_hidden: "not-a-number"
+                )
+            )
+
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+        assert _feature_count(_Adapter()) is None
+
+    def test_is_suppressed_reads_list_state(self) -> None:
+        class _Adapter:
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+            def _get_attr_or_call(self, obj, attr_name):
+                attr = getattr(obj, attr_name, None)
+                return attr() if callable(attr) else attr
+
+        feature = SimpleNamespace(IsSuppressed=[True])
+        assert _is_suppressed(_Adapter(), feature) is True
+
+    def test_is_suppressed_reads_int_state(self) -> None:
+        class _Adapter:
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+            def _get_attr_or_call(self, obj, attr_name):
+                attr = getattr(obj, attr_name, None)
+                return attr() if callable(attr) else attr
+
+        feature = SimpleNamespace(IsSuppressed=1)
+        assert _is_suppressed(_Adapter(), feature) is True
+
+    def test_is_suppressed_returns_none_for_unrecognized_type(self) -> None:
+        class _Adapter:
+            def _attempt(self, op, default=None):
+                try:
+                    return op()
+                except Exception:
+                    return default
+
+            def _get_attr_or_call(self, obj, attr_name):
+                attr = getattr(obj, attr_name, None)
+                return attr() if callable(attr) else attr
+
+        feature = SimpleNamespace(IsSuppressed="unexpected")
+        assert _is_suppressed(_Adapter(), feature) is None
+
+
+class TestDeleteFeatureImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _delete_feature_impl(adapter, "Boss-Extrude1")
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_edit_delete_did_not_remove_feature(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.FeatureByName.return_value = feature
+
+        result = _delete_feature_impl(adapter, "Boss-Extrude1")
+
+        assert result.is_error
+        assert "EditDelete did not remove feature" in (result.error or "")
+
+
+class TestSuppressFeatureImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _suppress_feature_impl(adapter, "Fillet1", True)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_feature_not_found(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = None
+
+        result = _suppress_feature_impl(adapter, "Ghost1", True)
+
+        assert result.is_error
+        assert "Feature not found: Ghost1" in (result.error or "")
+
+    def test_errors_when_edit_suppress_raises(self, monkeypatch) -> None:
+        """Late binding can resolve EditSuppress2 as a property that performs
+        the edit and *then* raises "'bool' object is not callable" - the
+        operation succeeds while the caller sees a failure. Reproduced here
+        via a plain raise, which _attempt_with_error reports the same way."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True, IsSuppressed=False
+        )
+        adapter.currentModel.EditSuppress2.side_effect = TypeError(
+            "'bool' object is not callable"
+        )
+
+        result = _suppress_feature_impl(adapter, "Fillet1", True)
+
+        assert result.is_error
+        assert "Failed to suppress Fillet1" in (result.error or "")
+
+
+class TestUndoImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _undo_impl(adapter, 1)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_both_undo_overloads_fail(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.EditUndo2.side_effect = RuntimeError("not supported")
+        adapter.currentModel.EditUndo.side_effect = RuntimeError("legacy gone too")
+
+        result = _undo_impl(adapter, 1)
+
+        assert result.is_error
+        assert "Undo failed" in (result.error or "")
+
+
+class TestCreateReferencePlaneImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_reference_blank(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+
+        result = _create_reference_plane_impl(adapter, "", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "requires a reference plane/face name" in (result.error or "")
+
+    def test_flip_true_combines_the_option_flag_on_success(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.side_effect = [5, 6]
+        feature_manager.InsertRefPlane.return_value = SimpleNamespace(Name="Plane1")
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, True)
+
+        assert result.is_success
+        no_flip_constraint = feature_manager.InsertRefPlane.call_args.args[0]
+        assert no_flip_constraint & 256  # _REF_PLANE_OPTION_FLIP bit is set
+
+    def test_errors_when_no_plane_added_to_tree(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.return_value = 5  # unchanged before/after
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "No reference plane was added" in (result.error or "")
+
+    def test_errors_when_insert_ref_plane_returns_nothing(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.side_effect = [5, 6]
+        feature_manager.InsertRefPlane.return_value = None
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_reference_plane_impl(adapter, "Front Plane", 10.0, 0.0, False)
+
+        assert result.is_error
+        assert "InsertRefPlane returned nothing" in (result.error or "")
+
+
+class TestCreateAxisImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _create_axis_impl(adapter, "z")
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_plane_selection_fails(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = None
+        adapter.currentModel.Extension.SelectByID2.return_value = False
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.is_error
+        assert "Failed to select" in (result.error or "")
+
+    def test_errors_when_no_axis_created_but_counts_readable(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = SimpleNamespace(
+            Select2=lambda append, mark: True
+        )
+        feature_manager = MagicMock()
+        feature_manager.GetFeatureCount.return_value = 5  # unchanged
+        adapter.currentModel.FeatureManager = feature_manager
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.is_error
+        assert "No reference axis was created" in (result.error or "")
+
+
+class TestMirrorFeatureImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _mirror_feature_impl(adapter, ["Loft1"], "Right Plane", True, True)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_errors_when_plane_selection_fails_but_source_succeeds(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+
+        def feature_by_name(name):
+            if name == "Loft1":
+                return SimpleNamespace(Select2=lambda append, mark: True)
+            return None
+
+        adapter.currentModel.FeatureByName.side_effect = feature_by_name
+        adapter.currentModel.Extension.SelectByID2.return_value = False
+
+        result = _mirror_feature_impl(
+            adapter, ["Loft1"], "Right Plane", True, False
+        )
+
+        assert result.is_error
+        assert "Failed to select mirror plane: Right Plane" in (result.error or "")
+
+
+class TestPatternCircularImplMoreErrors:
+    def test_errors_when_no_active_model(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = _pattern_circular_impl(
+            adapter, ["Boss-Extrude1"], "Axis1", 4, 360.0, True
+        )
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    def test_falls_back_to_named_feature_selection_and_then_fails(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+
+        def select_by_id2(name, kind, x, y, z, append, mark, callout, opt):
+            return kind == "AXIS"
+
+        adapter.currentModel.Extension.SelectByID2.side_effect = select_by_id2
+        adapter.currentModel.FeatureByName.return_value = None
+
+        result = _pattern_circular_impl(
+            adapter, ["Boss-Extrude1"], "Axis1", 4, 360.0, True
+        )
+
+        assert result.is_error
+        assert "Failed to select feature to pattern" in (result.error or "")
+
+
+class TestMirrorAndPatternWrapperNoActiveModel:
+    """The async wrapper methods' own early 'no active model' guard."""
+
+    @pytest.mark.asyncio
+    async def test_mirror_feature_errors_when_no_active_model(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.mirror_feature(["Body1"], "Right Plane")
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_pattern_circular_errors_when_no_active_model(
+        self, monkeypatch
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = None
+        result = await adapter.pattern_circular(["Boss-Extrude1"], "Axis1", 4)
+        assert result.is_error
+        assert "No active model" in (result.error or "")
+
+
+class TestPyWin32AdapterBranches:
+    """Additional PyWin32Adapter branch coverage with pure mocks."""
+
+    @staticmethod
+    def _build_adapter(monkeypatch) -> PyWin32Adapter:
+        """Test helper for build adapter."""
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.platform.system",
+            lambda: "Windows",
+        )
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.pywin32_adapter.pywintypes",
+            SimpleNamespace(com_error=RuntimeError),
+            raising=False,
+        )
+        adapter = PyWin32Adapter({})
+        # Synchronous mock ComExecutor: avoids "ComExecutor is not running"
+        # guard in _handle_com_operation for tests that set swApp/currentModel
+        # directly without going through connect().
+        mock_thread = MagicMock()
+        mock_thread.is_alive.return_value = True
+        mock_com = MagicMock()
+        mock_com._thread = mock_thread
+        mock_com.run = lambda fn, timeout=None: fn()
+        adapter._com = mock_com
+        return adapter
+
+    @staticmethod
+    def _sketch_tree(*names):
+        """Build a FirstFeature→GetNextFeature chain of ProfileFeature mocks.
+
+        Each node mimics the COM ``IFeature`` attributes the feature-tree
+        walk in ``features.py`` reads: ``GetTypeName2`` and ``Name`` as
+        properties and ``GetNextFeature`` as the link to the next node.
+        """
+        nxt = None
+        for name in reversed(names):
+            nxt = SimpleNamespace(
+                GetTypeName2="ProfileFeature", Name=name, GetNextFeature=nxt
+            )
+        return nxt
+
+    @staticmethod
+    def _feature_by_name(selected, *, fail=()):
+        """Return a FeatureByName mock that records ``Select2(append, mark)``.
+
+        ``features.py`` selects sketches/curves via
+        ``currentModel.FeatureByName(name).Select2(append, mark)``.  This
+        helper returns a callable that appends ``(name, append, mark)`` to
+        ``selected`` and reports success, except for names in ``fail`` (which
+        return ``None`` from ``FeatureByName`` to simulate a missing feature).
+        """
+
+        def factory(name):
+            if name in fail:
+                return None
+            feature = SimpleNamespace()
+            feature.Select2 = lambda append, mark, _n=name: bool(
+                selected.append((_n, append, mark)) or True
+            )
+            return feature
+
+        return factory
+
+    @pytest.mark.asyncio
+    async def test_feature_id_and_mass_properties_tuple_fallback(self, monkeypatch):
+        """Feature IDs and mass properties should support common COM compatibility variants."""
+        adapter = self._build_adapter(monkeypatch)
+
+        feature_obj = SimpleNamespace(Name="FeatInt", GetID=lambda: 123)
+        feature_manager = SimpleNamespace(
+            FeatureExtrusion3=Mock(return_value=feature_obj),
+            FeatureExtrusion2=Mock(return_value=feature_obj),
+            FeatureExtruThin2=Mock(return_value=feature_obj),
+            FeatureRevolve2=Mock(return_value=feature_obj),
+            FeatureCut3=Mock(return_value=feature_obj),
+            FeatureFillet3=Mock(return_value=feature_obj),
+            FeatureChamfer=Mock(return_value=feature_obj),
+            InsertFeatureChamfer=Mock(return_value=feature_obj),
+        )
+        sketch_manager = SimpleNamespace(
+            InsertSketch=Mock(return_value=SimpleNamespace(Name="SketchA")),
+            CreateCenterLine=Mock(return_value=object()),
+            CreateLine=Mock(return_value=object()),
+        )
+        extension = SimpleNamespace(
+            SelectByID2=Mock(return_value=True),
+            CreateMassProperty=Mock(side_effect=RuntimeError("member not found")),
+        )
+        adapter.currentModel = SimpleNamespace(
+            Extension=extension,
+            SketchManager=sketch_manager,
+            FeatureManager=feature_manager,
+            ClearSelection2=Mock(return_value=True),
+            GetMassProperties=(
+                0.001,
+                0.002,
+                0.003,
+                4.0e-9,
+                7.0e-6,
+                0.5,
+                11.0,
+                22.0,
+                33.0,
+                44.0,
+                55.0,
+                66.0,
+            ),
+        )
+
+        extrude = await adapter.create_extrusion(
+            SimpleNamespace(
+                depth=10.0,
+                draft_angle=0.0,
+                reverse_direction=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+        mass = await adapter.get_mass_properties()
+
+        assert extrude.is_success
+        assert extrude.data.id == "123"
+        assert mass.is_success
+        assert mass.data.volume == pytest.approx(4.0)
+        assert mass.data.surface_area == pytest.approx(7.0)
+        assert mass.data.mass == pytest.approx(0.5)
+        assert mass.data.center_of_mass == [1.0, 2.0, 3.0]
+        assert mass.data.moments_of_inertia["Ixx"] == pytest.approx(11.0)
+        assert mass.data.moments_of_inertia["Iyy"] == pytest.approx(22.0)
+        assert mass.data.moments_of_inertia["Izz"] == pytest.approx(33.0)
+
+    @pytest.mark.asyncio
+    async def test_feature_creation_failure_paths(self, monkeypatch):
+        """Cover failure branches for cut/fillet/chamfer feature creation."""
+        adapter = self._build_adapter(monkeypatch)
+        model = SimpleNamespace(
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
+            FeatureManager=SimpleNamespace(
+                FeatureCut3=Mock(return_value=None),
+                FeatureFillet3=Mock(return_value=None),
+                FeatureChamfer=Mock(return_value=None),
+            ),
+            FirstFeature=SimpleNamespace(
+                GetTypeName2=lambda: "ProfileFeature",
+                Name="Sketch1",
+                GetNextFeature=lambda: None,
+            ),
+            ClearSelection2=Mock(return_value=True),
+        )
+        adapter.currentModel = model
+        adapter._last_sketch_name = "Sketch1"
+
+        cut_fail = await adapter.create_cut_extrude(
+            SimpleNamespace(depth=2.0, draft_angle=0.0, reverse_direction=False)
+        )
+        assert cut_fail.is_error
+        assert "Sketch1" in (cut_fail.error or "")
+        assert "FeatureCut4" in (cut_fail.error or "")
+
+        model.Extension.SelectByID2 = Mock(return_value=False)
+        fillet_select_fail = await adapter.add_fillet(1.0, ["Edge1"])
+        chamfer_select_fail = await adapter.add_chamfer(1.0, ["Edge1"])
+        assert fillet_select_fail.is_error
+        assert "Failed to select edge" in (fillet_select_fail.error or "")
+        assert chamfer_select_fail.is_error
+        assert "Failed to select edge" in (chamfer_select_fail.error or "")
+
+        model.Extension.SelectByID2 = Mock(return_value=True)
+        fillet_create_fail = await adapter.add_fillet(1.0, ["Edge1"])
+        chamfer_create_fail = await adapter.add_chamfer(1.0, ["Edge1"])
+        assert fillet_create_fail.is_error
+        assert "Failed to create fillet" in (fillet_create_fail.error or "")
+        assert chamfer_create_fail.is_error
+        assert "Failed to create chamfer" in (chamfer_create_fail.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_extrusion_and_revolve_feature_none_errors(
+        self, monkeypatch
+    ) -> None:
+        """create_extrusion/create_revolve should error when feature manager returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureManager=SimpleNamespace(
+                FeatureExtrusion3=Mock(return_value=None),
+                FeatureExtrusion2=Mock(return_value=None),
+                FeatureRevolve2=Mock(return_value=None),
+            )
+        )
+
+        extrusion_result = await adapter.create_extrusion(
+            SimpleNamespace(
+                depth=5.0,
+                draft_angle=0.0,
+                reverse_direction=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+        revolve_result = await adapter.create_revolve(
+            SimpleNamespace(
+                angle=90.0,
+                reverse_direction=False,
+                both_directions=False,
+                thin_feature=False,
+                thin_thickness=None,
+                merge_result=True,
+            )
+        )
+
+        assert extrusion_result.is_error
+        assert "Failed to create extrusion feature" in (extrusion_result.error or "")
+        assert revolve_result.is_error
+        assert "Failed to create revolve feature" in (revolve_result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_no_model_and_missing_path(self, monkeypatch) -> None:
+        """create_sweep guards: no active model, then missing path name."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = None
+        no_model = await adapter.create_sweep(SimpleNamespace(path="Sketch2"))
+        assert no_model.is_error
+        assert "No active model" in (no_model.error or "")
+
+        adapter.currentModel = SimpleNamespace()
+        no_path = await adapter.create_sweep(
+            SimpleNamespace(path="", twist_along_path=False, twist_angle=0.0)
+        )
+        assert no_path.is_error
+        assert "path" in (no_path.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_success_selects_profile_and_path(
+        self, monkeypatch
+    ) -> None:
+        """create_sweep selects the non-path sketch (mark 1) + path (mark 4)
+        and forwards the constant-twist option to InsertProtrusionSwept4."""
+        adapter = self._build_adapter(monkeypatch)
+
+        selected: list[tuple] = []
+        swept = Mock(return_value=SimpleNamespace(Name="Sweep1", GetID=lambda: 7))
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
+            FeatureByName=self._feature_by_name(selected),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=swept),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(
+                path="Sketch2",
+                twist_along_path=True,
+                twist_angle=90.0,
+                merge_result=True,
+            )
+        )
+
+        assert result.is_success, result.error
+        assert result.data.type == "Sweep"
+        assert result.data.parameters["profile"] == "Sketch1"
+        assert result.data.parameters["path"] == "Sketch2"
+
+        # Profile selected under mark 1 (append False), path under mark 4
+        # (append True). Recorded tuples are (name, append, mark).
+        assert ("Sketch1", False, 1) in selected
+        assert ("Sketch2", True, 4) in selected
+
+        # TwistCtrlOption (arg index 2) == 8 (constant twist along path) and
+        # TwistAngle (arg index 15) == 90 degrees in radians.
+        swept_args = swept.call_args.args
+        assert swept_args[2] == 8
+        assert swept_args[15] == pytest.approx(math.radians(90.0))
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_no_profile_distinct_from_path(
+        self, monkeypatch
+    ) -> None:
+        """When the only sketch is the path itself, create_sweep errors."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch2"),
+            FeatureByName=self._feature_by_name([]),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=Mock()),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
+        )
+        assert result.is_error
+        assert "profile sketch distinct from the path" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_feature_none_errors(self, monkeypatch) -> None:
+        """create_sweep errors when InsertProtrusionSwept4 returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
+            FeatureByName=self._feature_by_name([]),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(
+                InsertProtrusionSwept4=Mock(return_value=None)
+            ),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
+        )
+        assert result.is_error
+        assert "Failed to create sweep feature" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_sweep_profile_selection_failure(self, monkeypatch) -> None:
+        """create_sweep errors with the profile name when Select2 can't find it."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
+            # FeatureByName returns None for the inferred profile sketch.
+            FeatureByName=self._feature_by_name([], fail=("Sketch1",)),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=Mock()),
+        )
+
+        result = await adapter.create_sweep(
+            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
+        )
+        assert result.is_error
+        assert "Sketch1" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_loft_no_model_and_too_few_profiles(self, monkeypatch) -> None:
+        """create_loft guards: no active model, then fewer than two profiles."""
+        adapter = self._build_adapter(monkeypatch)
+
+        adapter.currentModel = None
+        no_model = await adapter.create_loft(SimpleNamespace(profiles=["A", "B"]))
+        assert no_model.is_error
+        assert "No active model" in (no_model.error or "")
+
+        adapter.currentModel = SimpleNamespace()
+        too_few = await adapter.create_loft(SimpleNamespace(profiles=["OnlyOne"]))
+        assert too_few.is_error
+        assert "at least 2 profile" in (too_few.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_loft_success_selects_profiles_in_order(
+        self, monkeypatch
+    ) -> None:
+        """create_loft selects every profile under mark 1 (first replaces,
+        rest append) and guide curves under mark 2."""
+        adapter = self._build_adapter(monkeypatch)
+
+        selected: list[tuple] = []
+        blend = Mock(return_value=SimpleNamespace(Name="Loft1", GetID=lambda: 9))
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=self._feature_by_name(selected),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionBlend2=blend),
+        )
+
+        result = await adapter.create_loft(
+            SimpleNamespace(
+                profiles=["Sketch1", "Sketch2"],
+                guide_curves=["Sketch3"],
+                start_tangent="normal",
+                end_tangent=None,
+                merge_result=True,
+            )
+        )
+
+        assert result.is_success, result.error
+        assert result.data.type == "Loft"
+        assert result.data.parameters["profiles"] == ["Sketch1", "Sketch2"]
+
+        # Recorded tuples are (name, append, mark).
+        assert ("Sketch1", False, 1) in selected  # first profile, replace
+        assert ("Sketch2", True, 1) in selected  # second profile, append
+        assert ("Sketch3", True, 2) in selected  # guide curve, mark 2
+
+        # StartMatchingType (arg 4) == 1 (tangent to normal) from
+        # start_tangent="normal"; EndMatchingType (arg 5) == 0 from None.
+        blend_args = blend.call_args.args
+        assert blend_args[4] == 1
+        assert blend_args[5] == 0
+
+    @pytest.mark.asyncio
+    async def test_create_loft_feature_none_errors(self, monkeypatch) -> None:
+        """create_loft errors when InsertProtrusionBlend2 returns None."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=self._feature_by_name([]),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(
+                InsertProtrusionBlend2=Mock(return_value=None)
+            ),
+        )
+
+        result = await adapter.create_loft(
+            SimpleNamespace(
+                profiles=["Sketch1", "Sketch2"],
+                guide_curves=None,
+                start_tangent=None,
+                end_tangent=None,
+                merge_result=True,
+            )
+        )
+        assert result.is_error
+        assert "Failed to create loft feature" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_loft_profile_selection_failure(self, monkeypatch) -> None:
+        """create_loft errors with the profile name when Select2 can't find it."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.currentModel = SimpleNamespace(
+            FeatureByName=self._feature_by_name([], fail=("SketchA",)),
+            ClearSelection2=Mock(return_value=True),
+            FeatureManager=SimpleNamespace(InsertProtrusionBlend2=Mock()),
+        )
+
+        result = await adapter.create_loft(
+            SimpleNamespace(
+                profiles=["SketchA", "SketchB"],
+                guide_curves=None,
+                start_tangent=None,
+                end_tangent=None,
+                merge_result=True,
+            )
+        )
+        assert result.is_error
+        assert "SketchA" in (result.error or "")
+
+
+def test_zero_arg_edit_members_are_not_called_with_parentheses() -> None:
+    """``EditSuppress2`` and friends must go through ``_get_attr_or_call``.
+
+    Late binding resolves these zero-argument members as properties on some
+    dispatches. Calling them with ``()`` performs the edit and *then* raises
+    ``'bool' object is not callable``, so the operation succeeds while the
+    caller is told it failed — measured on SW 2025 before this was fixed.
+    """
+    from pathlib import Path
+
+    import solidworks_mcp.adapters.solidworks.features as features_module
+
+    source = Path(features_module.__file__).read_text(encoding="utf-8")
+    for member in ("EditSuppress2", "EditUnsuppress2", "EditDelete", "IsSuppressed"):
+        assert f".{member}()" not in source, (
+            f"{member} is called with parentheses; late binding may resolve it "
+            "as a property, which raises after the edit has already happened. "
+            "Use adapter._get_attr_or_call(obj, name)."
+        )
+
+
+def test_mirror_selection_marks_match_the_solidworks_api() -> None:
+    """These are the SolidWorks-documented selection marks for InsertMirrorFeature.
+
+    Per the API reference: features are mark 1, faces are mark 128, bodies
+    are mark 256, and the mirror plane is mark 2. Wrong marks make the call
+    report a feature while mirroring nothing - a bug no other test here
+    would catch, since the live COM code is off-limits for modification and
+    the mock does not execute this path at all.
+    """
+    from solidworks_mcp.adapters.solidworks.features import (
+        _MIRROR_MARK_BODIES,
+        _MIRROR_MARK_FEATURES,
+        _MIRROR_MARK_PLANE,
+    )
+
+    assert _MIRROR_MARK_FEATURES == 1
+    assert _MIRROR_MARK_BODIES == 256
+    assert _MIRROR_MARK_PLANE == 2
+
+
+def test_pattern_selection_marks_match_the_solidworks_api() -> None:
+    """These are the SolidWorks-documented selection marks for FeatureCircularPattern5.
+
+    Per the API reference: the direction axis is mark 1 and the features to
+    pattern are mark 4. These differ from the mirror marks (features 1,
+    plane 2) - reusing those makes the call report a feature while
+    patterning nothing, a bug no other test here would catch, since the
+    live COM code is off-limits for modification and the mock does not
+    execute this path at all.
+    """
+    from solidworks_mcp.adapters.solidworks.features import (
+        _PATTERN_MARK_AXIS,
+        _PATTERN_MARK_FEATURES,
+    )
+
+    assert _PATTERN_MARK_AXIS == 1
+    assert _PATTERN_MARK_FEATURES == 4
+
+
+@pytest.mark.asyncio
+async def test_mock_create_axis_plane_pairs_match_the_com_layer() -> None:
+    """The mock's plane pairs must match the COM layer's ``_AXIS_PLANE_PAIRS``.
+
+    The two are the same object (imported directly, not copied), so this
+    also guards against a future refactor accidentally duplicating and
+    diverging the mapping.
+    """
+    from solidworks_mcp.adapters.solidworks.features import _AXIS_PLANE_PAIRS
+
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    for direction, (plane_a, plane_b) in _AXIS_PLANE_PAIRS.items():
+        result = await adapter.create_axis(direction)
+        assert result.is_success
+        assert result.data["planes"] == [plane_a, plane_b]

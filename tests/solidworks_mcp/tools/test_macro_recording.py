@@ -3,7 +3,16 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import FastMCP
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
 from solidworks_mcp.tools.macro_recording import (
     MacroAnalysisInput,
     MacroBatchInput,
@@ -852,3 +861,103 @@ class TestMacroRecordingTools:
         assert full_input.execution_mode == "Parallel"
         assert full_input.continue_on_error is False
         assert full_input.parallel_limit == 3
+
+
+def _make_mcp():
+    """Create a plain FastMCP instance."""
+    mcp = FastMCP("test")
+    return mcp
+
+
+def _make_config():
+    """Test make config."""
+
+    return SolidWorksMCPConfig(
+        deployment_mode=DeploymentMode.LOCAL,
+        security_level=SecurityLevel.MINIMAL,
+        adapter_type=AdapterType.MOCK,
+        mock_solidworks=True,
+    )
+
+
+async def _get_tool(mcp, name: str):
+    """Test get tool."""
+
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
+
+
+class TestMacroRecordingExceptionPaths:
+    """Test macro recording exception paths."""
+
+    @pytest.mark.asyncio
+    async def test_stop_macro_recording_adapter_error(self):
+        """Line 243 — adapter returns error on stop_macro_recording."""
+        from solidworks_mcp.tools.macro_recording import (
+            register_macro_recording_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.stop_macro_recording = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="stop err"
+            )
+        )
+        await register_macro_recording_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "stop_macro_recording")
+        result = await fn({"session_id": "abc", "save_path": "/tmp/m.swp"})
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_execute_macro_exception(self):
+        """Line 358 — exception in execute_macro."""
+        from solidworks_mcp.tools.macro_recording import (
+            MacroPlaybackInput,
+            register_macro_recording_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.execute_macro = AsyncMock(side_effect=RuntimeError("exec boom"))
+        await register_macro_recording_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "execute_macro")
+        result = await fn(MacroPlaybackInput(macro_path="/tmp/m.swp"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_optimize_macro_exception(self):
+        """Lines 757-759 — exception in optimize_macro."""
+        from solidworks_mcp.tools.macro_recording import (
+            MacroAnalysisInput,
+            register_macro_recording_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.optimize_macro = AsyncMock(side_effect=RuntimeError("opt boom"))
+        await register_macro_recording_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "optimize_macro")
+        result = await fn(MacroAnalysisInput(macro_path="/tmp/m.swp"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_create_macro_library_exception(self):
+        """Lines 914-916 — exception in create_macro_library."""
+        from solidworks_mcp.tools.macro_recording import (
+            register_macro_recording_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.create_macro_library = AsyncMock(side_effect=RuntimeError("lib boom"))
+        await register_macro_recording_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "create_macro_library")
+        result = await fn({"library_path": "/tmp/lib", "library_name": "TestLib"})
+        assert result["status"] == "error"

@@ -50,7 +50,7 @@ body:
       placeholder: |
         Files to change:
         - src/solidworks_mcp/adapters/pywin32_adapter.py — add `async def create_sweep(...)`
-        - tests/test_adapters.py — add branch-coverage tests
+        - tests/solidworks_mcp/adapters/test_pywin32_adapter.py — add branch-coverage tests (tests mirror src/)
 
         COM/VBA API references:
         - IFeatureManager::InsertProtrusionSweep2

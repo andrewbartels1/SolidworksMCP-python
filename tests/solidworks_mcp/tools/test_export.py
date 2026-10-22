@@ -1,5 +1,6 @@
 """Tests for SolidWorks export tools."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -8,6 +9,7 @@ from fastmcp import FastMCP
 from solidworks_mcp.tools.export import (
     BatchExportInput,
     ExportDWGInput,
+    ExportFileInput,
     ExportIGESInput,
     ExportImageInput,
     ExportPDFInput,
@@ -609,3 +611,171 @@ class TestExportToolsBranchCoverage:
         )
         assert refused["status"] == "error"
         assert "does not support export_image" in refused["message"]
+
+
+def _ok(data):
+    """Test helper for ok."""
+    return SimpleNamespace(
+        is_success=True,
+        data=data,
+        error=None,
+        execution_time=0.01,
+    )
+
+
+async def _tool(mcp_server, name: str):
+    """Test helper for tool."""
+    for registered in await mcp_server.list_tools():
+        if registered.name == name:
+            return registered.fn
+    raise AssertionError(f"Tool not found: {name}")
+
+
+class _ExportFallbackAdapter:
+    """Test suite for ExportFallbackAdapter."""
+
+    async def export_file(self, file_path: str, format_type: str):
+        """Test helper for export file."""
+        if not file_path:
+            return SimpleNamespace(
+                is_success=False, error="missing path", execution_time=0.01
+            )
+        return SimpleNamespace(
+            is_success=True,
+            error=None,
+            data={"file": file_path, "fmt": format_type},
+            execution_time=0.01,
+        )
+
+
+class _ExportNativeAdapter:
+    """Test suite for ExportNativeAdapter."""
+
+    async def export_step(self, *_args, **_kwargs):
+        """Test helper for export step."""
+        return _ok({"fmt": "step"})
+
+    async def export_iges(self, *_args, **_kwargs):
+        """Test helper for export iges."""
+        return _ok({"fmt": "iges"})
+
+    async def export_stl(self, *_args, **_kwargs):
+        """Test helper for export stl."""
+        return _ok({"fmt": "stl"})
+
+    async def export_pdf(self, *_args, **_kwargs):
+        """Test helper for export pdf."""
+        return _ok({"fmt": "pdf"})
+
+    async def export_dwg(self, *_args, **_kwargs):
+        """Test helper for export dwg."""
+        return _ok({"fmt": "dwg"})
+
+    async def export_image(self, *_args, **_kwargs):
+        """Test helper for export image."""
+        return _ok({"fmt": "image"})
+
+    async def batch_export(self, *_args, **_kwargs):
+        """Test helper for batch export."""
+        return _ok({"count": 2})
+
+
+@pytest.mark.asyncio
+async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
+    """Test export tools fallback and aliases."""
+    await register_export_tools(mcp_server, _ExportFallbackAdapter(), mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "export_step"))(
+            input_data={"file_path": "a.step", "format_type": "step"}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_iges"))(
+            input_data=ExportFileInput(file_path="a.igs", format_type="iges")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_stl"))(
+            input_data=ExportFileInput(file_path="a.stl", format_type="stl")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_pdf"))(
+            input_data=ExportFileInput(file_path="a.pdf", format_type="pdf")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_dwg"))(
+            input_data=ExportFileInput(file_path="a.dwg", format_type="dwg")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_image"))(
+            input_data=ExportImageInput(
+                output_path="a.png", image_format="png", resolution="800x600"
+            )
+        )
+    )["status"] == "success"
+    # _ExportFallbackAdapter has no batch_export capability (unlike
+    # export_file, which the single-file export tools fall back to), so
+    # batch_export must refuse rather than inventing a batch result.
+    assert (
+        await (await _tool(mcp_server, "batch_export"))(
+            input_data=BatchExportInput(
+                source_directory="src",
+                output_directory="out",
+                export_format="step",
+                file_pattern="*.sldprt",
+            )
+        )
+    )["status"] == "error"
+
+    error_result = await (await _tool(mcp_server, "export_step"))(
+        input_data={"file_path": None, "format_type": "step"}
+    )
+    assert error_result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_export_tools_native_adapter_methods(mcp_server, mock_config):
+    """Test export tools native adapter methods."""
+    await register_export_tools(mcp_server, _ExportNativeAdapter(), mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "export_step"))(
+            input_data=ExportFileInput(file_path="a.step", format_type="step")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_iges"))(
+            input_data=ExportFileInput(file_path="a.igs", format_type="iges")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_stl"))(
+            input_data=ExportFileInput(file_path="a.stl", format_type="stl")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_pdf"))(
+            input_data=ExportFileInput(file_path="a.pdf", format_type="pdf")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_dwg"))(
+            input_data=ExportFileInput(file_path="a.dwg", format_type="dwg")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "export_image"))(
+            input_data=ExportImageInput(file_path="a.png", format_type="png")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "batch_export"))(
+            input_data=BatchExportInput(
+                source_directory="src", output_directory="out", format_type="step"
+            )
+        )
+    )["status"] == "success"

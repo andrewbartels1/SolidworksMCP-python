@@ -2415,3 +2415,46 @@ async def test_save_assembly_falls_back_when_pack_and_go_writes_nothing(
         "SavePackAndGo did not produce output files "
         "(SetSaveToName=False, SavePackAndGo=None)."
     )
+
+
+class TestDecodePackAndGoStatuses:
+    """Cover _decode_pack_and_go_statuses (lines 34-47)."""
+
+    def test_none_returns_all_ok(self) -> None:
+        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
+
+        ok, warnings = _decode_pack_and_go_statuses(None)
+        assert ok is True
+        assert warnings == []
+
+    def test_all_zero_status_is_ok(self) -> None:
+        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
+
+        ok, warnings = _decode_pack_and_go_statuses([0, 0, 0])
+        assert ok is True
+        assert warnings == []
+
+    def test_nonzero_status_produces_warning(self) -> None:
+        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
+
+        ok, warnings = _decode_pack_and_go_statuses([0, 2, 3])
+        assert ok is False
+        assert len(warnings) == 2
+        assert "FileAlreadyExist" in warnings[0]
+        assert "MissingSource" in warnings[1]
+
+    def test_unknown_status_code_labelled(self) -> None:
+        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
+
+        ok, warnings = _decode_pack_and_go_statuses([99])
+        assert not ok
+        assert "Unknown status code 99" in warnings[0]
+
+    def test_scalar_save_result_coerced(self) -> None:
+        """TypeError on iteration → scalar branch (line 39)."""
+        from solidworks_mcp.tools.file_management import _decode_pack_and_go_statuses
+
+        # int is not iterable → TypeError → codes = [int(save_result)]
+        ok, warnings = _decode_pack_and_go_statuses(2)
+        assert not ok
+        assert len(warnings) == 1

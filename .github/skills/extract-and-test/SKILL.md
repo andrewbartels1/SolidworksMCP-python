@@ -116,7 +116,10 @@ def _operation() -> dict:
 
 ## Step 4 — Write Tests
 
-Add tests to `TestPyWin32AdapterBranches` in `tests/test_adapters.py`.
+Add tests to the file that mirrors the module you changed: `src/solidworks_mcp/<path>/<module>.py`
+is tested in `tests/solidworks_mcp/<path>/test_<module>.py` (for example
+`adapters/solidworks/features.py` -> `tests/solidworks_mcp/adapters/solidworks/test_features.py`).
+Adapter mixin files each have a `TestPyWin32AdapterBranches` class with the `_build_adapter` helper.
 
 **Critical rules:**
 - Use `self._build_adapter(monkeypatch)` — never construct `PyWin32Adapter` directly.
@@ -153,13 +156,13 @@ def test_<helper_name>_<scenario>(self, monkeypatch) -> None:
 Run only the new tests first (no coverage threshold):
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -o addopts="" tests/test_adapters.py::TestPyWin32AdapterBranches -k "<new_test_fragment>" -q
+.\.venv\Scripts\python.exe -m pytest -o addopts="" tests/solidworks_mcp/<path>/test_<module>.py -k "<new_test_fragment>" -q
 ```
 
-Run the full class to catch regressions:
+Run the whole file to catch regressions:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_adapters.py::TestPyWin32AdapterBranches -q --no-cov
+.\.venv\Scripts\python.exe -m pytest tests/solidworks_mcp/<path>/test_<module>.py -q --no-cov
 ```
 
 All tests must pass before the task is complete.
@@ -171,6 +174,6 @@ All tests must pass before the task is complete.
 The project uses `src.solidworks_mcp.exceptions` as the import path in the adapter module. If a test imports `from solidworks_mcp.exceptions import SolidWorksMCPError` inline, Python loads a separate module object and `pytest.raises` won't catch the exception even though the message is identical. Always use the module-level import:
 
 ```python
-# at the top of test_adapters.py — already present:
+# at the top of the test file:
 from src.solidworks_mcp.exceptions import SolidWorksMCPError
 ```

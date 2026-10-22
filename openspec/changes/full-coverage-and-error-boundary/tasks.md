@@ -27,32 +27,33 @@ For each module:
 
 ## 3. Coverage to 100% (honest config)
 
-- [ ] 3.1 Import-fallback tests (subprocess with the dependency blocked):
+- [x] 3.1 Import-fallback tests (subprocess with the dependency blocked):
   - `pywin32_adapter`, `solidworks/io.py`, `sketch.py`
   - `com_executor`, `docs_discovery`, `agents/harness`
   - `ui/local_llm`, `agents/vector_rag` (`_FallbackSentenceTransformer`)
-- [ ] 3.2 Pack-and-go:
+- [x] 3.2 Pack-and-go (unit tests done; the live check moved to dead-code item 13, run in the feature review):
   - unit tests for `_get_attr_or_call`, `_extract_dependency_paths`, `_copy_with_collision_handling`
   - a new live test that packs a generated assembly
-- [ ] 3.3 Fake-COM unit tests for the remaining branches:
+- [x] 3.3 Fake-COM unit tests for the remaining branches:
   - `features.py`, `sketch.py`, `io.py`
   - `pywin32_adapter` geometry helpers
   - `face_selection`, `selection`, `rebuild_inspector`, `com_utils`, `sw_type_info`, `com_executor._worker`
-- [ ] 3.4 Audit every remaining `except Exception` in `adapters/`: keep (best-effort, documented), fold into `_attempt` / `_handle_com_operation`, or delete as redundant. Record the decisions in `dead-code.md`
-- [ ] 3.5 Dead-code ledger `dead-code.md` (`file:line`, guard, why unreachable); delete those lines. Any adapter behaviour change gets its own `mock_adapter.py` update and test step
-- [ ] 3.6 Remaining `ui/`, `agents/history_db`, `server`, `circuit_breaker`, `mock_adapter` lines
-- [ ] 3.7 Delete every `# pragma: no cover` in `src/` and drop the pragma exclusion from `pyproject.toml`; full run shows 100% with `honest.coveragerc`
+- [x] 3.4 Audit every remaining `except Exception` in `adapters/`: keep (best-effort, documented), fold into `_attempt` / `_handle_com_operation`, or delete as redundant. Record the decisions in `dead-code.md`
+- [x] 3.5 Dead-code ledger `dead-code.md` (`file:line`, guard, why unreachable); delete those lines. Any adapter behaviour change gets its own `mock_adapter.py` update and test step
+- [x] 3.6 Remaining `ui/`, `agents/history_db`, `server`, `circuit_breaker`, `mock_adapter` lines
+- [x] 3.7 Delete every `# pragma: no cover` in `src/` and drop the pragma exclusion from `pyproject.toml`; full run shows 100% with `honest.coveragerc`
 
 ## 4. Test layout mirrors src
 
-- [ ] 4.1 Record the baseline collected-test count (unit + live collect)
-- [ ] 4.2 Split coverage-bucket files by the module they exercise:
+- [x] 4.1 Record the baseline collected-test count (unit + live collect)
+- [x] 4.2 Split coverage-bucket files by the module they exercise:
   - `test_coverage_push_final.py`, `test_coverage_gaps.py`, `test_solidworks_mixins_coverage.py`
   - `tools/test_additional_coverage.py`, `tools/test_exception_coverage.py`
   - `adapters/test_coverage.py`, the `*_coverage*.py` / `*_push*.py` files
   - the files at the `tests/` root
-- [ ] 4.3 `git mv` every remaining test to `tests/solidworks_mcp/<pkg>/test_<module>[_topic].py`; integration tests to `tests/integration/`
-- [ ] 4.4 Collected-test count equals the baseline; the full unit suite passes
+- [x] 4.3 `git mv` every remaining test to `tests/solidworks_mcp/<pkg>/test_<module>[_topic].py`; integration tests to `tests/integration/`
+- [x] 4.4 Collected-test count equals the baseline; the full unit suite passes
+  (2800 collected before = 2781 after + 19 deleted skip-only placeholders; `tests/integration/test_test_layout.py` now enforces the layout)
 
 ## 5. Verify and document
 

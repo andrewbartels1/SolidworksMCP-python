@@ -70,3 +70,23 @@ def test_get_audit_logger_returns_bound_logger() -> None:
     # Loguru bound loggers have a _core attribute or similar; what matters is
     # it doesn't raise and is not None.
     assert audit_logger is not None
+
+
+def test_setup_logging_file_and_audit(tmp_path: Path):
+    # Newer loguru versions may reject "gzip" shorthand in tests; mock add()
+    # so we still execute setup branches deterministically.
+    """Test setup logging file and audit."""
+    from solidworks_mcp.utils import logging as logging_mod
+
+    logging_mod.logger.add = lambda *args, **kwargs: 1
+
+    cfg = SimpleNamespace(
+        log_level="INFO",
+        log_file=tmp_path / "logs" / "app.log",
+        enable_audit_logging=True,
+    )
+    setup_logging(cfg)
+    audit = get_audit_logger()
+    audit.info("audit event", audit_type="security")
+
+    assert (tmp_path / "logs").exists()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from solidworks_mcp.agents.soc_rewind import (
@@ -384,3 +386,23 @@ def test_cli_prints_checkpoint_info(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Checkpoint: base" in out
     assert "file:" in out
+
+
+@pytest.mark.asyncio
+async def test_rewind_to_checkpoint_returns_none_when_no_script(monkeypatch):
+    """rewind_to_checkpoint should return None when script_text is not provided. Covers line 176."""
+    from solidworks_mcp.agents.soc_rewind import rewind_to_checkpoint
+
+    monkeypatch.setattr(
+        "solidworks_mcp.agents.history_db.get_soc_checkpoint",
+        lambda *_a, **_kw: {"file_path": "/tmp/cp.sldprt"},
+    )
+
+    class _Adapter:
+        async def open_model(self, _path):
+            return SimpleNamespace(is_success=True, error="")
+
+    result = await rewind_to_checkpoint(
+        _Adapter(), session_id="s1", label="cp1", script_text=None
+    )
+    assert result is None

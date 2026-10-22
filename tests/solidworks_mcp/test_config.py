@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from solidworks_mcp import config as config_module
-from solidworks_mcp.config import SolidWorksMCPConfig
+from solidworks_mcp.config import AdapterType, SolidWorksMCPConfig, load_config
 
 
 def _clear_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -211,3 +211,61 @@ def test_soc_logging_env_explicit_session_id(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("SOLIDWORKS_MCP_SOC_SESSION_ID", "my-bracket")
     config = SolidWorksMCPConfig.from_env()
     assert config.soc_session_id == "my-bracket"
+
+
+class TestConfigValidatorCoverage:
+    """Test config validator coverage."""
+
+    def test_cache_dir_defaults_when_none(self):
+        """Lines 246-252 — cache_dir=None triggers set_cache_dir to derive path."""
+        cfg = SolidWorksMCPConfig(mock_solidworks=True, cache_dir=None)
+        assert cfg.cache_dir is not None
+        assert cfg.cache_dir.name == "cache"
+
+    def test_log_file_defaults_when_none(self):
+        """Lines 258-264 — log_file=None triggers set_log_file to derive path."""
+        cfg = SolidWorksMCPConfig(mock_solidworks=True, log_file=None)
+        assert cfg.log_file is not None
+        assert cfg.log_file.name == "server.log"
+
+    def test_validate_port_too_low_raises(self):
+        """Lines 336-338 — port < 1 raises ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            SolidWorksMCPConfig(mock_solidworks=True, port=0)
+
+    def test_validate_port_too_high_raises(self):
+        """Lines 336-338 — port > 65535 raises ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            SolidWorksMCPConfig(mock_solidworks=True, port=70000)
+
+    def test_validate_port_boundary_valid(self):
+        """Test validate port boundary valid."""
+
+        cfg = SolidWorksMCPConfig(mock_solidworks=True, port=1)
+        assert cfg.port == 1
+        cfg2 = SolidWorksMCPConfig(mock_solidworks=True, port=65535)
+        assert cfg2.port == 65535
+
+    def test_load_config_no_args_calls_from_env(self, monkeypatch):
+        """Line 417 — load_config() with no path falls back to from_env()."""
+        monkeypatch.delenv("SOLIDWORKS_MCP_CONFIG", raising=False)
+        cfg = load_config(None)
+        assert isinstance(cfg, SolidWorksMCPConfig)
+
+    def test_load_config_json_file(self, tmp_path):
+        """Line 414 — load_config from JSON file."""
+        import json
+
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"mock_solidworks": True, "port": 9000}))
+        cfg = load_config(str(cfg_file))
+        assert cfg.port == 9000
+
+    def test_validate_adapter_type_passthrough(self):
+        """Line 328 — validate_adapter_type just returns the value."""
+        cfg = SolidWorksMCPConfig(mock_solidworks=True, adapter_type=AdapterType.MOCK)
+        assert cfg.adapter_type == AdapterType.MOCK

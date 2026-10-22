@@ -710,3 +710,25 @@ async def test_inspect_family_success_with_checkpoints(monkeypatch) -> None:
     result = await llm_service.inspect_family("s1", "make a bracket")
     assert result == {"ok": True}
     assert replace_calls  # checkpoints were replaced
+
+
+@pytest.mark.asyncio
+async def test_llm_prompt_tool_catalog_only_names_registered_tools(
+    mcp_server, mock_adapter
+) -> None:
+    """Every tool the local-LLM system prompt advertises must really exist (#106)."""
+    import re
+    from pathlib import Path
+
+    import solidworks_mcp.ui.services.llm_service as llm_service
+    from solidworks_mcp.tools import register_tools
+
+    await register_tools(mcp_server, mock_adapter, None)
+    registered = {t.name for t in await mcp_server.list_tools()}
+
+    source = Path(llm_service.__file__).read_text(encoding="utf-8")
+    block = source[source.index("mcp_tool_catalog = (") :]
+    block = block[block.index("rationale fields:") : block.index("Prefer tools")]
+    advertised = re.findall(r"\b([a-z][a-z0-9_]+)(?:\([^)]*\))?(?=,|\n)", block)
+    assert advertised, "catalog parse found no tool names"
+    assert sorted(set(advertised) - registered) == []

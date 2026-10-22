@@ -94,3 +94,56 @@ def test_get_macro_execution_history_returns_dict() -> None:
     adapter = VbaGeneratorAdapter(backing, macro_executor=executor)
     result = adapter.get_macro_execution_history()
     assert result["Macro"]["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_vba_adapter_create_sweep_calls_backing(monkeypatch):
+    """create_sweep should call _run_with_vba_metadata. Covers vba_adapter.py line 153."""
+    from solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
+
+    mock_backing = AsyncMock()
+    mock_backing.create_sweep = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
+
+    adapter = VbaGeneratorAdapter.__new__(VbaGeneratorAdapter)
+    adapter._backing_adapter = mock_backing
+    adapter._generate_sweep_vba = lambda params: "# sweep vba"
+
+    sweep_params = SimpleNamespace(
+        profile_sketch="sketch1",
+        path_sketch="path1",
+        twist_angle=0.0,
+        start_tangent_type="None",
+        end_tangent_type="None",
+    )
+
+    result = await adapter.create_sweep(sweep_params)
+    assert result.is_success
+    mock_backing.create_sweep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_vba_adapter_create_loft_calls_backing(monkeypatch):
+    """create_loft should call _run_with_vba_metadata. Covers vba_adapter.py line 172."""
+    from solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
+
+    mock_backing = AsyncMock()
+    mock_backing.create_loft = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
+    )
+
+    adapter = VbaGeneratorAdapter.__new__(VbaGeneratorAdapter)
+    adapter._backing_adapter = mock_backing
+    adapter._generate_loft_vba = lambda params: "# loft vba"
+
+    loft_params = SimpleNamespace(
+        profile_sketches=["s1", "s2"],
+        guide_curves=[],
+        start_tangent_type="None",
+        end_tangent_type="None",
+    )
+
+    result = await adapter.create_loft(loft_params)
+    assert result.is_success
+    mock_backing.create_loft.assert_awaited_once()

@@ -2107,7 +2107,7 @@ async def test_list_features_assembly_resolves_real_components_and_subassembly(
        every component silently became ``UnresolvedComponent``.
 
     Both bugs passed every mock-adapter unit test in
-    ``tests/solidworks_mcp/adapters/test_list_features_assembly.py`` —
+    ``tests/solidworks_mcp/adapters/solidworks/test_selection_assembly_features.py`` —
     the traversal logic itself was correct — and only surfaced against a
     real, unflagged COM dispatch. This is the only test in the suite that
     would catch either regression coming back. See

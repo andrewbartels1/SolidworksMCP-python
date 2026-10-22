@@ -1,9 +1,25 @@
 """Tests for SolidWorks drawing analysis tools."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import FastMCP
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
+from solidworks_mcp.tools.drawing import (
+    AnnotationInput,
+    DrawingCreationInput,
+    DrawingViewInput,
+    register_drawing_tools,
+)
 from solidworks_mcp.tools.drawing_analysis import (
     AnnotationAnalysisInput,
     ComplianceCheckInput,
@@ -892,3 +908,275 @@ async def test_validate_drawing_completeness_success(mcp_server, mock_config) ->
         "data": {"complete": True, "missing": []},
         "execution_time": 0.2,
     }
+
+
+def _ok(data):
+    """Test helper for ok."""
+    return SimpleNamespace(
+        is_success=True,
+        data=data,
+        error=None,
+        execution_time=0.01,
+    )
+
+
+async def _tool(mcp_server, name: str):
+    """Test helper for tool."""
+    for registered in await mcp_server.list_tools():
+        if registered.name == name:
+            return registered.fn
+    raise AssertionError(f"Tool not found: {name}")
+
+
+class _DrawingAndAnalysisAdapterStub:
+    """Test suite for DrawingAndAnalysisAdapterStub."""
+
+    async def create_technical_drawing(self, *_args, **_kwargs):
+        """Test helper for create technical drawing."""
+        return _ok({"drawing_path": "d.slddrw"})
+
+    async def add_drawing_view(self, *_args, **_kwargs):
+        """Test helper for add drawing view."""
+        return _ok({"view_name": "Front"})
+
+    async def add_annotation(self, *_args, **_kwargs):
+        """Test helper for add annotation."""
+        return _ok({"annotation": "ok"})
+
+    async def update_title_block(self, *_args, **_kwargs):
+        """Test helper for update title block."""
+        return _ok({"title": "T"})
+
+    async def analyze_drawing_comprehensive(self, *_args, **_kwargs):
+        """Test helper for analyze drawing comprehensive."""
+        return _ok({"score": 90})
+
+    async def analyze_drawing_dimensions(self, *_args, **_kwargs):
+        """Test helper for analyze drawing dimensions."""
+        return _ok({"dims": 10})
+
+    async def analyze_drawing_annotations(self, *_args, **_kwargs):
+        """Test helper for analyze drawing annotations."""
+        return _ok({"notes": 3})
+
+    async def check_drawing_compliance(self, *_args, **_kwargs):
+        """Test helper for check drawing compliance."""
+        return _ok({"compliant": True})
+
+    async def analyze_drawing_views(self, *_args, **_kwargs):
+        """Test helper for analyze drawing views."""
+        return _ok({"views": 4})
+
+    async def generate_drawing_report(self, *_args, **_kwargs):
+        """Test helper for generate drawing report."""
+        return _ok({"report": "ok"})
+
+
+@pytest.mark.asyncio
+async def test_drawing_analysis_refuses_without_adapter_support(
+    mcp_server, mock_config
+):
+    """Drawing analysis tools refuse rather than inventing a result when the
+    adapter (a plain `object()` here) has no matching capability."""
+    await register_drawing_analysis_tools(mcp_server, object(), mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_comprehensive"))(
+            input_data=DrawingAnalysisInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_dimensions"))(
+            input_data=DimensionAnalysisInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_annotations"))(
+            input_data=AnnotationAnalysisInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "check_drawing_compliance"))(
+            input_data=ComplianceCheckInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_views"))(
+            input_data={"drawing_path": "a.slddrw"}
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "generate_drawing_report"))(
+            input_data={"drawing_path": "a.slddrw", "report_type": "summary"}
+        )
+    )["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_drawing_and_analysis_adapter_passthrough_success(
+    mcp_server, mock_config
+):
+    """Test drawing and analysis adapter passthrough success."""
+    adapter = _DrawingAndAnalysisAdapterStub()
+    await register_drawing_tools(mcp_server, adapter, mock_config)
+    await register_drawing_analysis_tools(mcp_server, adapter, mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "create_technical_drawing"))(
+            input_data=DrawingCreationInput(output_path="a.slddrw")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_drawing_view"))(
+            input_data=DrawingViewInput(view_name="Front")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_annotation"))(
+            input_data=AnnotationInput(text="n", annotation_type="Note")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "T"})
+    )["status"] == "success"
+
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_comprehensive"))(
+            input_data=DrawingAnalysisInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_dimensions"))(
+            input_data=DimensionAnalysisInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_annotations"))(
+            input_data=AnnotationAnalysisInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "check_drawing_compliance"))(
+            input_data=ComplianceCheckInput(drawing_path="a.slddrw")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "analyze_drawing_views"))(
+            input_data={"drawing_path": "a.slddrw"}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_drawing_report"))(
+            input_data={"drawing_path": "a.slddrw"}
+        )
+    )["status"] == "success"
+
+
+def _make_mcp():
+    """Create a plain FastMCP instance."""
+    mcp = FastMCP("test")
+    return mcp
+
+
+def _make_config():
+    """Test make config."""
+
+    return SolidWorksMCPConfig(
+        deployment_mode=DeploymentMode.LOCAL,
+        security_level=SecurityLevel.MINIMAL,
+        adapter_type=AdapterType.MOCK,
+        mock_solidworks=True,
+    )
+
+
+async def _get_tool(mcp, name: str):
+    """Test get tool."""
+
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
+
+
+class TestDrawingAnalysisExceptionPaths:
+    """Test drawing analysis exception paths."""
+
+    @pytest.mark.asyncio
+    async def test_analyze_drawing_dimensions_adapter_error(self):
+        """Line 294 — adapter returns error result."""
+        from solidworks_mcp.tools.drawing_analysis import (
+            DimensionAnalysisInput,
+            register_drawing_analysis_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.analyze_drawing_dimensions = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="dim error"
+            )
+        )
+        await register_drawing_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "analyze_drawing_dimensions")
+        result = await fn(DimensionAnalysisInput(drawing_path="test.slddrw"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_analyze_drawing_dimensions_exception(self):
+        """Lines 376-378 — exception in analyze_drawing_dimensions."""
+        from solidworks_mcp.tools.drawing_analysis import (
+            DimensionAnalysisInput,
+            register_drawing_analysis_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.analyze_drawing_dimensions = AsyncMock(
+            side_effect=RuntimeError("dim boom")
+        )
+        await register_drawing_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "analyze_drawing_dimensions")
+        result = await fn(DimensionAnalysisInput(drawing_path="test.slddrw"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_analyze_drawing_annotations_exception(self):
+        """Line 415 — exception in analyze_drawing_annotations."""
+        from solidworks_mcp.tools.drawing_analysis import (
+            AnnotationAnalysisInput,
+            register_drawing_analysis_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.analyze_drawing_annotations = AsyncMock(
+            side_effect=RuntimeError("ann boom")
+        )
+        await register_drawing_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "analyze_drawing_annotations")
+        result = await fn(AnnotationAnalysisInput(drawing_path="test.slddrw"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_check_drawing_compliance_exception(self):
+        """Lines 512-514 — exception in check_drawing_compliance."""
+        from solidworks_mcp.tools.drawing_analysis import (
+            ComplianceCheckInput,
+            register_drawing_analysis_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.check_drawing_compliance = AsyncMock(
+            side_effect=RuntimeError("comp boom")
+        )
+        await register_drawing_analysis_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "check_drawing_compliance")
+        result = await fn(
+            ComplianceCheckInput(drawing_path="test.slddrw", standard="ASME")
+        )
+        assert result["status"] == "error"

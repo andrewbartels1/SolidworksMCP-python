@@ -1,9 +1,18 @@
 """Tests for SolidWorks automation tools."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from fastmcp import FastMCP
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
 from solidworks_mcp.tools.automation import (
     BatchProcessInput,
     DesignTableInput,
@@ -628,3 +637,139 @@ class TestAutomationTools:
         )
         assert full_input.file_pattern == "*.sldprt"
         assert full_input.parallel_processing is True
+
+
+def _make_mcp():
+    """Create a plain FastMCP instance."""
+    mcp = FastMCP("test")
+    return mcp
+
+
+def _make_config():
+    """Test make config."""
+
+    return SolidWorksMCPConfig(
+        deployment_mode=DeploymentMode.LOCAL,
+        security_level=SecurityLevel.MINIMAL,
+        adapter_type=AdapterType.MOCK,
+        mock_solidworks=True,
+    )
+
+
+async def _get_tool(mcp, name: str):
+    """Test get tool."""
+
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
+
+
+class TestAutomationExceptionPaths:
+    """Test automation exception paths."""
+
+    @pytest.mark.asyncio
+    async def test_start_macro_recording_adapter_error(self):
+        """Line 341 — adapter has method but returns error."""
+        from solidworks_mcp.tools.automation import (
+            RecordMacroInput,
+            register_automation_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.start_macro_recording = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error="rec error"
+            )
+        )
+        await register_automation_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "automation_start_macro_recording")
+        result = await fn(RecordMacroInput(macro_name="test", description="d"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_start_macro_recording_exception(self):
+        """Lines 387-389 — exception in start_macro_recording."""
+        from solidworks_mcp.tools.automation import (
+            RecordMacroInput,
+            register_automation_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.start_macro_recording = AsyncMock(side_effect=RuntimeError("boom"))
+        await register_automation_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "automation_start_macro_recording")
+        result = await fn(RecordMacroInput(macro_name="test", description="d"))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_stop_macro_recording_exception(self):
+        """Line 412 — exception in stop_macro_recording."""
+        from solidworks_mcp.tools.automation import register_automation_tools
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+
+        # Patch the inner dict-return path to raise
+        with patch("solidworks_mcp.tools.tool_boundary.logger"):
+            await register_automation_tools(mcp, adapter, _make_config())
+            fn = await _get_tool(mcp, "automation_stop_macro_recording")
+
+            # Trigger exception by patching after registration
+
+            async def _raiser(input_data):
+                """Test raiser."""
+
+                raise RuntimeError("stop error")
+
+            with patch.object(
+                fn,
+                "__wrapped__",
+                create=True,
+                new=AsyncMock(side_effect=RuntimeError("stop")),
+            ):
+                # stop_macro_recording refuses unconditionally: no adapter
+                # capability exists for it, so it never fabricates a
+                # "recording stopped" result.
+                result = await fn({})
+                assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_batch_process_files_exception(self):
+        """Line 462 — exception in batch_process_files."""
+        from solidworks_mcp.tools.automation import (
+            BatchProcessInput,
+            register_automation_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.batch_process_files = AsyncMock(side_effect=RuntimeError("batch boom"))
+        await register_automation_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "batch_process_files")
+        result = await fn(
+            BatchProcessInput(source_directory="/tmp", operation_type="rebuild")
+        )
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_manage_design_table_exception(self):
+        """Line 506 — exception in manage_design_table."""
+        from solidworks_mcp.tools.automation import (
+            DesignTableInput,
+            register_automation_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = MockSolidWorksAdapter({})
+        adapter.manage_design_table = AsyncMock(side_effect=RuntimeError("dt boom"))
+        await register_automation_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "manage_design_table")
+        result = await fn(DesignTableInput(table_type="create", excel_file="test.xlsx"))
+        assert result["status"] == "error"

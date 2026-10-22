@@ -1,13 +1,22 @@
 """Tests for SolidWorks modeling tools."""
 
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import FastMCP
 
 from solidworks_mcp.adapters.base import (
     AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
+)
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
 )
 from solidworks_mcp.tools.modeling import (
     AddChamferInput,
@@ -32,6 +41,8 @@ from solidworks_mcp.tools.modeling import (
     OpenModelInput,
     PatternCircularInput,
     RenameFeatureInput,
+    SelectFaceEdgesInput,
+    SelectFeatureInput,
     SetDimensionInput,
     SetUnitsInput,
     SuppressFeatureInput,
@@ -1585,3 +1596,396 @@ class TestMirrorAndPatternTools:
         """PatternCircularInput.model_post_init rejects a count under 2."""
         with pytest.raises(ValueError, match="count must be at least 2"):
             PatternCircularInput(features=["Boss-Extrude1"], axis="Axis1", count=1)
+
+
+class TestModelingInputValidation:
+    """Cover model_post_init validators (lines 347-348, 366-367)."""
+
+    def test_cut_extrude_negative_depth_raises(self) -> None:
+        """CreateCutExtrudeInput rejects depth <= 0 (lines 347-348)."""
+        from solidworks_mcp.tools.modeling import CreateCutExtrudeInput
+
+        with pytest.raises(Exception, match="depth"):
+            CreateCutExtrudeInput(depth=-5.0)
+
+    def test_cut_extrude_zero_depth_raises(self) -> None:
+        from solidworks_mcp.tools.modeling import CreateCutExtrudeInput
+
+        with pytest.raises(Exception, match="depth must be positive"):
+            CreateCutExtrudeInput(depth=0.0)
+
+    def test_fillet_negative_radius_raises(self) -> None:
+        """AddFilletInput rejects radius <= 0 (lines 366-367)."""
+        from solidworks_mcp.tools.modeling import AddFilletInput
+
+        with pytest.raises(Exception, match="radius"):
+            AddFilletInput(radius=-1.0)
+
+    def test_fillet_zero_radius_raises(self) -> None:
+        from solidworks_mcp.tools.modeling import AddFilletInput
+
+        with pytest.raises(Exception, match="radius must be positive"):
+            AddFilletInput(radius=0.0)
+
+    def test_chamfer_negative_distance_raises(self) -> None:
+        """AddChamferInput rejects distance <= 0, mirroring AddFilletInput."""
+        from solidworks_mcp.tools.modeling import AddChamferInput
+
+        with pytest.raises(Exception, match="distance"):
+            AddChamferInput(distance=-1.0)
+
+    def test_chamfer_zero_distance_raises(self) -> None:
+        from solidworks_mcp.tools.modeling import AddChamferInput
+
+        with pytest.raises(Exception, match="distance must be positive"):
+            AddChamferInput(distance=0.0)
+
+
+class TestModelingToolSuccessPaths:
+    """Cover create_cut_extrude and add_fillet success paths (lines 1023-1096)."""
+
+    @pytest.mark.asyncio
+    async def test_create_cut_extrude_success(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        # Mock the adapter method to return a known success so the tool's
+        # success branch (lines 1037-1038) is exercised.
+        mock_adapter.create_cut_extrude = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={"feature_name": "Cut-Extrude1", "name": "Cut-Extrude1"},
+                execution_time=0.01,
+            )
+        )
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_cut_extrude"
+        )
+        result = await tool_fn(input_data={"depth": 5.0})
+        assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_add_fillet_success(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        mock_adapter.add_fillet = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={"feature_name": "Fillet1", "name": "Fillet1"},
+                execution_time=0.01,
+            )
+        )
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_fillet"
+        )
+        result = await tool_fn(input_data={"radius": 2.0, "edge_names": ["Edge<1>"]})
+        assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_create_cut_extrude_exception_path(
+        self, mcp_server, mock_config
+    ) -> None:
+        """Exception inside create_cut_extrude returns error dict (line 1054-1056)."""
+        from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        bad_adapter = MockSolidWorksAdapter({})
+        await bad_adapter.connect()
+        await bad_adapter.create_part()
+        bad_adapter.create_cut_extrude = AsyncMock(side_effect=RuntimeError("COM fail"))
+
+        await register_modeling_tools(mcp_server, bad_adapter, mock_config)
+        tool_fn = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_cut_extrude"
+        )
+        result = await tool_fn(input_data={"depth": 10.0})
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_add_fillet_exception_path(self, mcp_server, mock_config) -> None:
+        """Exception inside add_fillet returns error dict (line ~1100)."""
+        from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        bad_adapter = MockSolidWorksAdapter({})
+        await bad_adapter.connect()
+        await bad_adapter.create_part()
+        bad_adapter.add_fillet = AsyncMock(side_effect=RuntimeError("fillet fail"))
+
+        await register_modeling_tools(mcp_server, bad_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_fillet"
+        )
+        result = await tool_fn(input_data={"radius": 3.0})
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_close_model_success_via_tool(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        """close_model tool returns success when a model is active (line 706)."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        await mock_adapter.create_part()
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "close_model"
+        )
+        result = await tool_fn(input_data={"save": False})
+        assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_empty_name_returns_error(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        """get_dimension with empty name returns error (line 921)."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "get_dimension"
+        )
+        result = await tool_fn(input_data={"name": ""})
+        assert result["status"] == "error"
+        assert "required" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_set_dimension_empty_name_returns_error(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        """set_dimension with empty name returns error (line 967)."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "set_dimension"
+        )
+        result = await tool_fn(input_data={"name": "", "value": 10.0})
+        assert result["status"] == "error"
+        assert "required" in result["message"].lower()
+
+
+def _make_mcp():
+    """Create a plain FastMCP instance."""
+    mcp = FastMCP("test")
+    return mcp
+
+
+def _make_config():
+    """Test make config."""
+
+    return SolidWorksMCPConfig(
+        deployment_mode=DeploymentMode.LOCAL,
+        security_level=SecurityLevel.MINIMAL,
+        adapter_type=AdapterType.MOCK,
+        mock_solidworks=True,
+    )
+
+
+async def _get_tool(mcp, name: str):
+    """Test get tool."""
+
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
+
+
+def _error_adapter(method_name: str, exc=RuntimeError("boom")):
+    """Return a MockSolidWorksAdapter with one method patched to raise."""
+    adapter = MockSolidWorksAdapter({})
+    setattr(adapter, method_name, AsyncMock(side_effect=exc))
+    return adapter
+
+
+class TestModelingCoverage:
+    """Test modeling coverage."""
+
+    def test_create_extrusion_input_depth_zero_raises(self):
+        """Line 134 — depth <= 0 raises ValueError."""
+        from solidworks_mcp.tools.modeling import CreateExtrusionInput
+
+        with pytest.raises(ValueError, match="depth must be positive"):
+            CreateExtrusionInput(sketch_name="Sketch1", depth=-1.0)
+
+    def test_create_extrusion_input_empty_sketch_name_raises(self):
+        """Line 136 — empty sketch_name raises ValueError."""
+        from solidworks_mcp.tools.modeling import CreateExtrusionInput
+
+        with pytest.raises(ValueError, match="sketch_name is required"):
+            CreateExtrusionInput(sketch_name="   ", depth=5.0)
+
+    @pytest.mark.asyncio
+    async def test_close_model_exception(self):
+        """Lines 613-615 — close_model exception → error dict."""
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("close_model")
+        await register_modeling_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "close_model")
+        result = await fn({"save": False})
+        assert result["status"] == "error"
+
+
+async def _tool(mcp_server, name: str):  # noqa: ANN001, ANN202
+    return next(t.fn for t in await mcp_server.list_tools() if t.name == name)
+
+
+async def _box(adapter: Any) -> None:
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    await adapter.add_rectangle(0, 0, 40, 25)
+    await adapter.exit_sketch()
+    await adapter.create_extrusion(ExtrusionParameters(depth=10))
+
+
+def test_select_feature_input_strips_and_rejects_blank() -> None:
+    """feature_name is stripped; blank is refused before any adapter call."""
+    assert SelectFeatureInput(feature_name="  Sketch1 ").feature_name == "Sketch1"
+    with pytest.raises(ValueError, match="feature_name is required"):
+        SelectFeatureInput(feature_name="   ")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "fragment"),
+    [
+        ({}, "exactly one"),
+        ({"side": "top", "point": [0, 0, 0]}, "exactly one"),
+        ({"side": "upward"}, "Unknown side"),
+        ({"side": "top", "edge_type": "spline"}, "edge_type"),
+    ],
+)
+def test_select_face_edges_input_validation(kwargs: dict, fragment: str) -> None:
+    """The schema enforces exactly-one identifier and known tokens."""
+    with pytest.raises(ValueError, match=fragment):
+        SelectFaceEdgesInput(**kwargs)
+
+
+def test_select_face_edges_input_normalises_edge_type() -> None:
+    """edge_type is case-insensitive."""
+    assert (
+        SelectFaceEdgesInput(side="top", edge_type="Circular").edge_type == "circular"
+    )
+
+
+@pytest.mark.asyncio
+async def test_select_feature_tool_success_and_unknown(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    """Known name -> success with count; unknown -> error naming it."""
+    await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+    await _box(mock_adapter)
+    select = await _tool(mcp_server, "select_feature")
+
+    ok = await select({"feature_name": "Sketch1"})
+    assert ok["status"] == "success"
+    assert ok["data"]["selection_count"] == 1
+    assert "Selected Sketch1" in ok["message"]
+
+    appended = await select({"feature_name": "Front Plane", "append": True})
+    assert appended["data"]["selection_count"] == 2
+
+    missing = await select({"feature_name": "NoSuchFeature"})
+    assert missing["status"] == "error"
+    assert "NoSuchFeature" in missing["message"]
+    assert "execution_time" in missing  # review #10: stable payload shape
+
+    blank = await select({"feature_name": " "})
+    assert blank["status"] == "error" and blank["message"].startswith("Invalid input")
+
+
+@pytest.mark.asyncio
+async def test_select_face_edges_tool_paths(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    """Side selection succeeds; impossible filters and bad input are errors."""
+    await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+    await _box(mock_adapter)
+    tool = await _tool(mcp_server, "select_face_edges")
+
+    ok = await tool({"side": "top"})
+    assert ok["status"] == "success"
+    assert ok["data"]["selected_edges"] == 4
+    assert "4 edge(s) (linear)" in ok["message"]
+
+    none = await tool({"side": "top", "edge_type": "circular"})
+    assert none["status"] == "error" and "no circular edges" in none["message"]
+
+    bad = await tool({"side": "top", "plane": "Front Plane"})
+    assert bad["status"] == "error" and bad["message"].startswith("Invalid input")
+
+
+@pytest.mark.asyncio
+async def test_select_face_edges_then_chamfer_uses_live_selection(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    """The documented chain: select edges, then add_chamfer with no edge names."""
+    await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+    await _box(mock_adapter)
+    selected = await (await _tool(mcp_server, "select_face_edges"))({"side": "+Z"})
+    assert selected["status"] == "success"
+    chamfer = await (await _tool(mcp_server, "add_chamfer"))(
+        {"distance": 0.5, "edge_names": []}
+    )
+    assert chamfer["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_rebuild_model_tool_clean(mcp_server, mock_adapter, mock_config) -> None:
+    """A clean rebuild succeeds with no errors and works with no input."""
+    await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+    await _box(mock_adapter)
+    rebuild = await _tool(mcp_server, "rebuild_model")
+    result = await rebuild()
+    assert result["status"] == "success"
+    assert result["data"]["error_count"] == 0
+    assert result["message"] == "Rebuilt cleanly; no rebuild errors."
+
+
+@pytest.mark.asyncio
+async def test_rebuild_model_tool_error_passes_data_through(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    """An ERROR result still hands the per-feature diagnostics to the caller."""
+    data = {
+        "rebuilt": True,
+        "top_level_only": False,
+        "errors": [{"feature": "Fillet1", "severity": "error", "hint": "Reduce it"}],
+        "error_count": 1,
+        "warning_count": 0,
+        "summary": "Rebuild left 1 feature error(s): Fillet1.",
+    }
+    mock_adapter.rebuild_model = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.ERROR, data=data, error=data["summary"]
+        )
+    )
+    await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+    result = await (await _tool(mcp_server, "rebuild_model"))({"top_level_only": True})
+    assert result["status"] == "error"
+    assert result["message"] == data["summary"]
+    assert result["data"]["errors"][0]["hint"] == "Reduce it"
+    mock_adapter.rebuild_model.assert_awaited_once_with(True)
+
+
+@pytest.mark.asyncio
+async def test_rebuild_model_tool_no_model(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    """No active model -> error without data."""
+    await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+    result = await (await _tool(mcp_server, "rebuild_model"))({})
+    assert result["status"] == "error"
+    assert "No active model" in result["message"]
+    assert "data" not in result

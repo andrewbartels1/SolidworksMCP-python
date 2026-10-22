@@ -3,7 +3,7 @@
 import os
 from argparse import Namespace
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -1004,3 +1004,114 @@ def test_cli_main_delegates_to_typer_run():
         cli_main()
 
     mock_run.assert_called_once_with(cli)
+
+
+class TestServerCoverage:
+    """Test server coverage."""
+
+    @pytest.mark.asyncio
+    async def test_run_local_stdio_skips_when_mock_and_stdin_unavailable(self):
+        """Lines 224-225 — mock mode + unreadable stdin → returns without error."""
+        from solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
+        from solidworks_mcp.server import SolidWorksMCPServer
+
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL
+        )
+        server = SolidWorksMCPServer(cfg)
+        await server.setup()
+
+        # Simulate stdin not readable
+        mock_stdin = MagicMock()
+        mock_stdin.closed = True
+        mock_stdin.readable = MagicMock(return_value=False)
+
+        with patch("solidworks_mcp.server.sys") as mock_sys:
+            mock_sys.stdin = mock_stdin
+            # Should return without error
+            await server._run_local_stdio()
+
+    @pytest.mark.asyncio
+    async def test_run_local_stdio_stdin_exception_treated_as_unreadable(self):
+        """Lines 217-225 — stdin.readable() raises → stdin_is_readable=False."""
+        from solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
+        from solidworks_mcp.server import SolidWorksMCPServer
+
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL
+        )
+        server = SolidWorksMCPServer(cfg)
+        await server.setup()
+
+        mock_stdin = MagicMock()
+        mock_stdin.readable = MagicMock(side_effect=OSError("no stdin"))
+
+        with patch("solidworks_mcp.server.sys") as mock_sys:
+            mock_sys.stdin = mock_stdin
+            await server._run_local_stdio()
+
+    @pytest.mark.asyncio
+    async def test_run_local_stdio_uses_run_stdio_async_when_no_run_stdio(self):
+        """Lines 240-242 — falls back to run_stdio_async when run_stdio absent."""
+        from solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
+        from solidworks_mcp.server import SolidWorksMCPServer
+
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=False, deployment_mode=DeploymentMode.LOCAL
+        )
+        server = SolidWorksMCPServer(cfg)
+        await server.setup()
+
+        server.server = MagicMock(spec=[])  # no run_stdio attribute
+        server.server.run_stdio_async = AsyncMock()
+
+        await server._run_local_stdio()
+        server.server.run_stdio_async.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_start_http_server_awaits_coroutine(self):
+        """Lines 279-283 — _start_http_server awaits the coroutine run result."""
+        from solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
+        from solidworks_mcp.server import SolidWorksMCPServer
+
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.REMOTE
+        )
+        server = SolidWorksMCPServer(cfg)
+        await server.setup()
+
+        ran = []
+
+        async def fake_run(**kwargs):
+            """Test fake run."""
+
+            ran.append(kwargs)
+
+        server.mcp.run = lambda **kwargs: fake_run(**kwargs)
+        await server._start_http_server()
+        assert ran
+
+    @pytest.mark.asyncio
+    async def test_start_logs_connection_error_in_mock_mode(self):
+        """Lines 254-259 — adapter.connect raises; mock mode continues."""
+        from solidworks_mcp.config import DeploymentMode, SolidWorksMCPConfig
+        from solidworks_mcp.server import SolidWorksMCPServer
+
+        cfg = SolidWorksMCPConfig(
+            mock_solidworks=True, deployment_mode=DeploymentMode.LOCAL
+        )
+        server = SolidWorksMCPServer(cfg)
+        await server.setup()
+
+        server.adapter = MagicMock()
+        server.adapter.connect = AsyncMock(side_effect=RuntimeError("no sw"))
+
+        # Patch stdio to avoid blocking
+        server.mcp = MagicMock()
+        server.mcp.run_stdio = MagicMock(return_value=None)
+
+        with patch("solidworks_mcp.server.sys") as mock_sys:
+            mock_sys.stdin = MagicMock(closed=True)
+            await server.start()
+
+        assert not server.state.is_connected

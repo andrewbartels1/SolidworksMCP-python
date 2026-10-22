@@ -4,7 +4,16 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import FastMCP
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+from solidworks_mcp.config import (
+    AdapterType,
+    DeploymentMode,
+    SecurityLevel,
+    SolidWorksMCPConfig,
+)
 from solidworks_mcp.tools.sketching import (
     AddArcInput,
     AddCircleInput,
@@ -17,6 +26,7 @@ from solidworks_mcp.tools.sketching import (
     TutorialSimpleHoleInput,
     register_sketching_tools,
 )
+from solidworks_mcp.tools.sketching import AddDimensionInput as SketchAddDimensionInput
 
 
 class TestSketchingTools:
@@ -860,4 +870,446 @@ class TestSketchingToolsBranchCoverage:
                 plane="Top", center_x=0, center_y=0, diameter=5, depth=10
             )
         )
+        assert result["status"] == "error"
+
+
+def _ok(data):
+    """Test helper for ok."""
+    return SimpleNamespace(
+        is_success=True,
+        data=data,
+        error=None,
+        execution_time=0.01,
+    )
+
+
+async def _tool(mcp_server, name: str):
+    """Test helper for tool."""
+    for registered in await mcp_server.list_tools():
+        if registered.name == name:
+            return registered.fn
+    raise AssertionError(f"Tool not found: {name}")
+
+
+class _SketchAdapterStub:
+    """Test suite for SketchAdapterStub."""
+
+    async def create_sketch(self, _plane):
+        """Test helper for create sketch."""
+        return _ok({"sketch_name": "Sketch1"})
+
+    async def add_sketch_line(self, *_args):
+        """Test helper for add sketch line."""
+        return _ok({"entity_id": "Line1"})
+
+    async def add_line(self, *_args):
+        """Test helper for add line."""
+        return _ok("Line2")
+
+    async def add_sketch_circle(self, *_args):
+        """Test helper for add sketch circle."""
+        return _ok({"entity_id": "Circle1"})
+
+    async def add_circle(self, *_args):
+        """Test helper for add circle."""
+        return _ok("Circle2")
+
+    async def add_sketch_rectangle(self, *_args):
+        """Test helper for add sketch rectangle."""
+        return _ok({"entity_id": "Rect1"})
+
+    async def add_rectangle(self, *_args):
+        """Test helper for add rectangle."""
+        return _ok("Rect2")
+
+    async def exit_sketch(self):
+        """Test helper for exit sketch."""
+        return _ok(None)
+
+    async def add_arc(self, *_args):
+        """Test helper for add arc."""
+        return _ok("Arc1")
+
+    async def add_spline(self, *_args):
+        """Test helper for add spline."""
+        return _ok("Spline1")
+
+    async def add_centerline(self, *_args):
+        """Test helper for add centerline."""
+        return _ok("CL1")
+
+    async def add_polygon(self, *_args):
+        """Test helper for add polygon."""
+        return _ok("Poly1")
+
+    async def add_ellipse(self, *_args):
+        """Test helper for add ellipse."""
+        return _ok("Ellipse1")
+
+    async def add_sketch_constraint(self, *_args):
+        """Test helper for add sketch constraint."""
+        return _ok("Constraint1")
+
+    async def add_sketch_dimension(self, *_args):
+        """Test helper for add sketch dimension."""
+        return _ok("Dim1")
+
+    async def sketch_linear_pattern(self, *_args):
+        """Test helper for sketch linear pattern."""
+        return _ok("LP1")
+
+    async def sketch_circular_pattern(self, *_args):
+        """Test helper for sketch circular pattern."""
+        return _ok("CP1")
+
+    async def sketch_mirror(self, *_args):
+        """Test helper for sketch mirror."""
+        return _ok("Mirror1")
+
+    async def sketch_offset(self, *_args):
+        """Test helper for sketch offset."""
+        return _ok("Offset1")
+
+    async def create_cut(self, *_args):
+        """Test helper for create cut."""
+        return _ok("Cut1")
+
+
+@pytest.mark.asyncio
+async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
+    """Test sketching tools uncovered paths."""
+    await register_sketching_tools(mcp_server, _SketchAdapterStub(), mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "create_sketch"))(
+            input_data=CreateSketchInput(plane="Top", sketch_name="S1")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_line"))(
+            input_data=AddLineInput(start_x=0, start_y=0, end_x=5, end_y=0)
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_circle"))(
+            input_data=AddCircleInput(center_x=0, center_y=0, radius=2)
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_rectangle"))(
+            input_data=AddRectangleInput(
+                corner1_x=0, corner1_y=0, corner2_x=5, corner2_y=3
+            )
+        )
+    )["status"] == "success"
+    assert (await (await _tool(mcp_server, "exit_sketch"))())["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_arc"))(
+            input_data=AddArcInput(
+                center_x=0, center_y=0, start_x=1, start_y=0, end_x=0, end_y=1
+            )
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_spline"))(
+            input_data=AddSplineInput(
+                points=[{"x": 0, "y": 0}, {"x": 1, "y": 1}, {"x": 2, "y": 0}]
+            )
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_centerline"))(
+            input_data=AddLineInput(x1=0, y1=0, x2=0, y2=5)
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_polygon"))(
+            input_data={"sides": 6, "radius": 5}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_ellipse"))(
+            input_data={"major_axis": 10, "minor_axis": 5}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_sketch_constraint"))(
+            input_data=AddRelationInput(
+                entity1="L1", entity2="L2", relation_type="parallel"
+            )
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "add_sketch_dimension"))(
+            input_data=SketchAddDimensionInput(
+                entity1="L1", dimension_type="linear", value=10
+            )
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "sketch_linear_pattern"))(
+            input_data={"entities": ["L1"], "count": 3}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "sketch_circular_pattern"))(
+            input_data={"entities": ["L1"], "count": 6}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "sketch_mirror"))(
+            input_data={"entities": ["L1"], "mirror_line": "CL1"}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "sketch_offset"))(
+            input_data={"entities": ["L1"], "offset_distance": 1.5}
+        )
+    )["status"] == "success"
+    assert (await (await _tool(mcp_server, "sketch_tutorial_simple_hole"))())[
+        "status"
+    ] == "success"
+    assert (
+        await (await _tool(mcp_server, "tutorial_simple_hole"))(
+            input_data=TutorialSimpleHoleInput(
+                plane="Top", center_x=0, center_y=0, diameter=5, depth=3
+            )
+        )
+    )["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_sketching_error_branches_with_exceptions(mcp_server, mock_config):
+    """Test sketching error branches with exceptions."""
+    adapter = _SketchAdapterStub()
+    adapter.add_arc = AsyncMock(side_effect=RuntimeError("arc failed"))
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    result = await (await _tool(mcp_server, "add_arc"))(
+        input_data=AddArcInput(
+            center_x=0, center_y=0, start_x=1, start_y=0, end_x=0, end_y=1
+        )
+    )
+    assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_sketching_tool_error_return_branches(mcp_server, mock_config):
+    """Test sketching tool error return branches."""
+    adapter = _SketchAdapterStub()
+    adapter.add_polygon = AsyncMock(
+        return_value=SimpleNamespace(
+            is_success=False, error="poly", execution_time=0.01
+        )
+    )
+    adapter.add_ellipse = AsyncMock(
+        return_value=SimpleNamespace(
+            is_success=False, error="ellipse", execution_time=0.01
+        )
+    )
+    adapter.sketch_mirror = AsyncMock(
+        return_value=SimpleNamespace(
+            is_success=False, error="mirror", execution_time=0.01
+        )
+    )
+    adapter.sketch_offset = AsyncMock(
+        return_value=SimpleNamespace(
+            is_success=False, error="offset", execution_time=0.01
+        )
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    assert (await (await _tool(mcp_server, "add_polygon"))(input_data={"sides": 5}))[
+        "status"
+    ] == "error"
+    assert (
+        await (await _tool(mcp_server, "add_ellipse"))(
+            input_data={"major_axis": 10, "minor_axis": 5}
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "sketch_mirror"))(
+            input_data={"entities": ["L1"], "mirror_line": "CL1"}
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "sketch_offset"))(
+            input_data={"entities": ["L1"], "offset_distance": 1.0}
+        )
+    )["status"] == "error"
+
+
+def _make_mcp():
+    """Create a plain FastMCP instance."""
+    mcp = FastMCP("test")
+    return mcp
+
+
+def _make_config():
+    """Test make config."""
+
+    return SolidWorksMCPConfig(
+        deployment_mode=DeploymentMode.LOCAL,
+        security_level=SecurityLevel.MINIMAL,
+        adapter_type=AdapterType.MOCK,
+        mock_solidworks=True,
+    )
+
+
+async def _get_tool(mcp, name: str):
+    """Test get tool."""
+
+    for tool in await mcp.list_tools():
+        if tool.name == name:
+            return tool.fn
+    raise KeyError(f"Tool {name!r} not registered in list_tools()")
+
+
+def _error_adapter(method_name: str, exc=RuntimeError("boom")):
+    """Return a MockSolidWorksAdapter with one method patched to raise."""
+    adapter = MockSolidWorksAdapter({})
+    setattr(adapter, method_name, AsyncMock(side_effect=exc))
+    return adapter
+
+
+def _error_result_adapter(method_name: str, error_msg="adapter_error"):
+    """Return adapter with method that returns an error AdapterResult."""
+    adapter = MockSolidWorksAdapter({})
+    setattr(
+        adapter,
+        method_name,
+        AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.ERROR, error=error_msg
+            )
+        ),
+    )
+    return adapter
+
+
+class TestSketchingExceptionPaths:
+    """Test sketching exception paths."""
+
+    @pytest.mark.asyncio
+    async def test_create_sketch_exception_handler(self):
+        """Lines 324-326 — create_sketch exception → error dict."""
+        from solidworks_mcp.tools.sketching import (
+            CreateSketchInput,
+            register_sketching_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("create_sketch")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "create_sketch")
+        result = await fn(CreateSketchInput(plane="Front"))
+        assert result["status"] == "error"
+        assert result["error_type"] == "internal"
+
+    @pytest.mark.asyncio
+    async def test_add_line_adapter_error_result(self):
+        """Lines 416-419 — add_sketch_line returns error result → error dict."""
+        from solidworks_mcp.tools.sketching import (
+            AddLineInput,
+            register_sketching_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_result_adapter("add_sketch_line", "line failed")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "add_line")
+        result = await fn(AddLineInput(x1=0, y1=0, x2=1, y2=1))
+        assert result["status"] == "error"
+        assert "line failed" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_add_line_exception_handler(self):
+        """Lines 421-426 — add_line exception → error dict."""
+        from solidworks_mcp.tools.sketching import (
+            AddLineInput,
+            register_sketching_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("add_sketch_line")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "add_line")
+        result = await fn(AddLineInput(x1=0, y1=0, x2=1, y2=1))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_add_circle_exception_handler(self):
+        """Line 463 — add_circle exception → error dict."""
+        from solidworks_mcp.tools.sketching import (
+            AddCircleInput,
+            register_sketching_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("add_sketch_circle")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "add_circle")
+        result = await fn(AddCircleInput(center_x=0, center_y=0, radius=5))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_add_rectangle_adapter_error_result(self):
+        """Lines 563-566 — add_sketch_rectangle returns error → error dict."""
+        from solidworks_mcp.tools.sketching import (
+            AddRectangleInput,
+            register_sketching_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_result_adapter("add_sketch_rectangle", "rect failed")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "add_rectangle")
+        result = await fn(AddRectangleInput(x1=0, y1=0, x2=1, y2=1))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_add_rectangle_exception_handler(self):
+        """Lines 568-570 — add_rectangle exception → error dict."""
+        from solidworks_mcp.tools.sketching import (
+            AddRectangleInput,
+            register_sketching_tools,
+        )
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("add_sketch_rectangle")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "add_rectangle")
+        result = await fn(AddRectangleInput(x1=0, y1=0, x2=1, y2=1))
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_exit_sketch_adapter_error_result(self):
+        """Lines 618-621 — exit_sketch returns error → error dict."""
+        from solidworks_mcp.tools.sketching import register_sketching_tools
+
+        mcp = _make_mcp()
+        adapter = _error_result_adapter("exit_sketch", "exit failed")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "exit_sketch")
+        result = await fn()
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_exit_sketch_exception_handler(self):
+        """Lines 623-625 — exit_sketch exception → error dict."""
+        from solidworks_mcp.tools.sketching import register_sketching_tools
+
+        mcp = _make_mcp()
+        adapter = _error_adapter("exit_sketch")
+        await register_sketching_tools(mcp, adapter, _make_config())
+
+        fn = await _get_tool(mcp, "exit_sketch")
+        result = await fn()
         assert result["status"] == "error"

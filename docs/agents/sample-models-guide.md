@@ -21,7 +21,7 @@ Set the override for non-standard installations:
 
 ```powershell
 $env:SOLIDWORKS_MCP_SAMPLE_MODELS_DIR = "D:\CAD\SOLIDWORKS Samples\learn"
-pytest tests/test_all_endpoints_harness.py -k "TestLevelCRealCOM and c09" -v
+pytest tests/integration/test_all_endpoints_harness.py -k "TestLevelCRealCOM and c09" -v
 ```
 
 ---

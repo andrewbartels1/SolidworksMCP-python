@@ -1,9 +1,11 @@
 """Tests for SolidWorks drawing tools."""
 
+import re
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.tools.drawing import (
     AddDimensionInput,
     AddNoteInput,
@@ -18,6 +20,7 @@ from solidworks_mcp.tools.drawing import (
     UpdateSheetFormatInput,
     register_drawing_tools,
 )
+from solidworks_mcp.tools.drawing import AddDimensionInput as DrawingAddDimensionInput
 
 
 class TestDrawingTools:
@@ -1010,3 +1013,156 @@ class TestDrawingToolsBranchCoverage:
 
         for result in (r1, r2, r3, r4, r5, r6, r7, r8):
             assert result["status"] == "error"
+
+
+async def _tool(mcp_server, name: str):
+    """Test helper for tool."""
+    for registered in await mcp_server.list_tools():
+        if registered.name == name:
+            return registered.fn
+    raise AssertionError(f"Tool not found: {name}")
+
+
+@pytest.mark.asyncio
+async def test_drawing_tools_refuse_without_adapter_support(mcp_server, mock_config):
+    """Drawing tools refuse rather than inventing a result when the adapter
+    (a plain `object()` here) has no matching capability."""
+    await register_drawing_tools(mcp_server, object(), mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "create_drawing_view"))(
+            input_data=CreateDrawingViewInput(model_path="m.sldprt", view_type="front")
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "add_dimension"))(
+            input_data=DrawingAddDimensionInput(
+                dimension_type="linear", entity1="L1", position_x=1, position_y=2
+            )
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "add_note"))(
+            input_data=AddNoteInput(text="n", position_x=1, position_y=2)
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "create_section_view"))(
+            input_data=CreateSectionViewInput(
+                section_line_start=(0, 0),
+                section_line_end=(1, 1),
+                view_position_x=1,
+                view_position_y=2,
+            )
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "create_detail_view"))(
+            input_data=CreateDetailViewInput(
+                center_x=0, center_y=0, radius=2, view_position_x=3, view_position_y=4
+            )
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "update_sheet_format"))(
+            input_data=UpdateSheetFormatInput(format_file="f.slddrt")
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "auto_dimension_view"))(
+            input_data={"view_name": "Front"}
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "check_drawing_standards"))(
+            input_data={"standard": "ANSI"}
+        )
+    )["status"] == "error"
+
+    alias_result = await (await _tool(mcp_server, "add_dimension"))(
+        input_data=DimensionInput(
+            entities=["E1", "E2"], position=[5, 6], dimension_type="linear"
+        )
+    )
+    assert alias_result["status"] == "error"
+
+    assert (
+        await (await _tool(mcp_server, "create_technical_drawing"))(
+            input_data=DrawingCreationInput(
+                output_path="o.slddrw", auto_populate_views=True
+            )
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "add_drawing_view"))(
+            input_data=DrawingViewInput(
+                view_name="Front", view_type="front", position=[1, 1]
+            )
+        )
+    )["status"] == "error"
+    assert (
+        await (await _tool(mcp_server, "update_title_block"))(input_data={"title": "A"})
+    )["status"] == "error"
+
+
+#: Capabilities a tool on this branch already reaches. ``tools/drawing.py``
+#: guards each tool with ``require_capability(adapter, "<name>", ...)``, so a rename here
+#: leaves the tool refusing forever with every adapter test still green.
+GATED_ON_THIS_BRANCH = [
+    "add_drawing_view",
+    "create_technical_drawing",
+    "auto_center_marks",
+]
+
+
+@pytest.mark.parametrize("capability", GATED_ON_THIS_BRANCH)
+def test_capability_names_match_the_tool_gates(capability: str) -> None:
+    """A tool on this branch must reach the adapter by this exact name."""
+    from pathlib import Path
+
+    import solidworks_mcp.tools.drawing as drawing_tools
+
+    source = Path(drawing_tools.__file__).read_text(encoding="utf-8")
+    assert re.search(rf'require_capability\(\s*adapter,\s*"{capability}"', source), (
+        f"no tool in drawing.py gates on adapter.{capability}; either the tool "
+        "gate was renamed or this capability is unreachable"
+    )
+
+
+async def _tool_issue106_tools(mcp_server, name: str):  # noqa: ANN001, ANN202
+    return next(t.fn for t in await mcp_server.list_tools() if t.name == name)
+
+
+@pytest.mark.asyncio
+async def test_list_drawing_views_tool(mcp_server, mock_adapter, mock_config) -> None:
+    """Views are listed with a count; adapter errors are reported."""
+    await register_drawing_tools(mcp_server, mock_adapter, mock_config)
+    tool = await _tool_issue106_tools(mcp_server, "list_drawing_views")
+
+    mock_adapter.list_drawing_views = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data=["Drawing View1", "Drawing View2"]
+        )
+    )
+    ok = await tool()
+    assert ok["status"] == "success"
+    assert ok["count"] == 2 and ok["views"] == ["Drawing View1", "Drawing View2"]
+
+    mock_adapter.list_drawing_views = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data=[])
+    )
+    assert (await tool())["message"] == "The drawing has no views"
+
+    mock_adapter.list_drawing_views = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="This operation requires a drawing document",
+        )
+    )
+    err = await tool()
+    assert err["status"] == "error" and "drawing document" in err["message"]
+
+    mock_adapter.list_drawing_views = AsyncMock(side_effect=RuntimeError("boom"))
+    crashed = await tool()
+    assert crashed["error_type"] == "internal"
+    assert crashed["message"] == "list_drawing_views failed: RuntimeError: boom"

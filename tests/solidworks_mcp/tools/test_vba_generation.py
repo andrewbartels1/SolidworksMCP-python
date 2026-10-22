@@ -642,3 +642,99 @@ class TestVBAGenerationBranchCoverage:
         for result in (part_exc, mate_exc, dim_exc, file_exc, rec_exc):
             assert result["status"] == "error"
             assert result["error_type"] == "internal"
+
+
+async def _tool(mcp_server, name: str):
+    """Test helper for tool."""
+    for registered in await mcp_server.list_tools():
+        if registered.name == name:
+            return registered.fn
+    raise AssertionError(f"Tool not found: {name}")
+
+
+@pytest.mark.asyncio
+async def test_vba_generation_uncovered_branches(mcp_server, mock_config):
+    """Test vba generation uncovered branches."""
+    await register_vba_generation_tools(mcp_server, object(), mock_config)
+
+    assert (
+        await (await _tool(mcp_server, "generate_vba_extrusion"))(
+            input_data=VBAExtrusionInput(depth=5)
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_revolve"))(
+            input_data=VBARevolveInput(angle_degrees=180)
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_assembly_insert"))(
+            input_data=VBAAssemblyInput(component_path="c.sldprt")
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_drawing_views"))(
+            input_data=VBADrawingInput(model_path="m.sldprt", scale=1.0)
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_batch_export"))(
+            input_data=VBABatchInput(
+                operation_type="export",
+                file_pattern="*.sldprt",
+                source_folder="src",
+                target_folder="out",
+            )
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_part_modeling"))(
+            input_data={"operation": "shell", "thickness": 2.0}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_part_modeling"))(
+            input_data={"operation": "fillet", "radius": 3.0}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_assembly_mates"))(
+            input_data={"mate_type": "concentric"}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_drawing_dimensions"))(
+            input_data={"dimension_type": "angular", "precision": 3}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_file_operations"))(
+            input_data={"operation": "pack_and_go", "target_folder": "C:/tmp"}
+        )
+    )["status"] == "success"
+    assert (
+        await (await _tool(mcp_server, "generate_vba_macro_recorder"))(
+            input_data={"operation": "create_template", "macro_name": "MyMacro"}
+        )
+    )["status"] == "success"
+
+    unsupported = await (await _tool(mcp_server, "generate_vba_file_operations"))(
+        input_data={"operation": "unknown"}
+    )
+    assert unsupported["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_vba_generation_unsupported_branches(mcp_server, mock_config):
+    """Test vba generation unsupported branches."""
+    await register_vba_generation_tools(mcp_server, object(), mock_config)
+
+    bad_part = await (await _tool(mcp_server, "generate_vba_part_modeling"))(
+        input_data={"operation": "does_not_exist"}
+    )
+    assert bad_part["status"] == "error"
+
+    bad_macro = await (await _tool(mcp_server, "generate_vba_macro_recorder"))(
+        input_data={"operation": "nope"}
+    )
+    assert bad_macro["status"] == "error"
