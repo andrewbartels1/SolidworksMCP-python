@@ -82,12 +82,34 @@ python -m venv .venv
 
 - Keep tool input schemas strict and explicit.
 - Maintain stable response payload shapes (`status`, `message`, `execution_time`, plus data payload).
+- Every tool runs inside one error boundary (`tools/tool_boundary.py`, applied
+  by `ToolRegistrar` at registration). Do **not** write `try/except` in a tool
+  or build error dicts by hand:
+  - adapter results: `require_success(result, context="Failed to ...")`
+  - bad arguments: `normalize_input(...)` or raise `InvalidInputError`
+  - a missing capability: `require_capability(adapter, "method")`
+  - any other tool-level failure: raise `ToolOperationError(message)`
+- Error payloads always carry `status: "error"`, `message`, `error_type`,
+  `hint` and `execution_time` (`data` only when the adapter returned
+  diagnostics). `error_type` comes from the ordered rule table in
+  `tools/error_classifier.py`; add a category by appending a rule there.
 
 ## Testing Guidance
 
 - Default local path: run non-`solidworks_only` tests first.
 - Real integration path: run `dev-test-full` on Windows with SolidWorks available.
 - Harness and generated report artifacts may write under `tests/.generated/` and `.solidworks_mcp/`.
+- Test layout mirrors `src/` (enforced by `tests/integration/test_test_layout.py`):
+  - `src/solidworks_mcp/<path>/<module>.py` →
+    `tests/solidworks_mcp/<path>/test_<module>[_<topic>].py`
+  - a package's `__init__.py` → `test_init.py`
+  - cross-module / end-to-end tests → `tests/integration/`
+  - real-SolidWorks tests → `tests/live/`
+  - never add "coverage bucket" files (`test_coverage_*.py`); put each test
+    beside the module it exercises
+- Coverage is measured honestly: there is no `# pragma: no cover`. Code no
+  test can reach is deleted, after review, via the dead-code ledger
+  (`openspec/changes/full-coverage-and-error-boundary/dead-code.md`).
 
 ## Documentation Guidance
 
@@ -156,10 +178,10 @@ updated 2026-04-24.
   **NOT** as ``pywintypes.com_error``. The `except com_error` branch in
   ``_handle_com_operation`` therefore misses it, and the generic handler
   flattens the message to the source+method name with no traceback.
-- **Fix (applied 2026-04-24, revised same day):** dedicated STA worker
-  thread. See "COM threading architecture" section below. The earlier
-  thread-local fix (`_tls` / `_swapp_for_thread`) was a band-aid that was
-  replaced by the proper executor-based design.
+- **Fix:** keep every COM call on the thread that ran `connect()`. See
+  "COM threading architecture" below. (History: a dedicated `ComExecutor`
+  thread was used from 2026-04-24; the adapter no longer routes through it,
+  and `ComExecutor` now only serves standalone scripts.)
 
 ### 6. PDM vault files
 
@@ -241,31 +263,43 @@ updated 2026-04-24.
 
 ## COM threading architecture
 
-Invariants every new COM-touching code path must respect. Written 2026-04-24
-after the Phase 1+2 rewrite landed.
+Invariants every new COM-touching code path must respect. Revised 2026-10-21
+to match the code (the earlier ComExecutor design is no longer used by the
+adapter).
 
-### 1. All COM calls run on the adapter's ComExecutor thread
+### 1. All COM calls run on the thread that called `connect()`
 
-The adapter owns a single dedicated worker thread (``PyWin32Adapter._com``,
-instance of ``com_executor.ComExecutor``). COM is initialized on that thread
-once via ``pythoncom.CoInitialize()``. All COM work — ``connect()``, every
-``_handle_com_operation`` closure, every ``disconnect()`` cleanup — is
-submitted to that executor and awaited via ``Future``.
+``_ComSessionCoordinator.connect()`` runs ``pythoncom.CoInitialize()`` and
+acquires ``swApp`` on the calling thread, which is the server's asyncio
+event-loop thread. Every tool is an ``async`` function that calls the adapter
+directly on that loop, and ``_handle_com_operation`` runs its closure
+synchronously, so all COM work stays in that one STA apartment.
 
 Consequences:
 
-- ``self.swApp`` and ``self.currentModel`` are **only** valid when touched
-  from inside an executor job. Reading them from an async tool function
-  or an HTTP handler thread directly will raise the cross-thread
-  ``AttributeError`` described in runbook item #5.
-- Do NOT call ``pythoncom.CoInitialize()`` anywhere else in the adapter
-  code. The executor owns the apartment.
-- Do NOT cache IDispatch references outside instance attributes that are
-  only read from executor jobs.
+- Never move adapter calls onto another thread: no ``asyncio.to_thread``,
+  ``run_in_executor``, thread pools or synchronous FastMCP tools around
+  COM work. ``swApp`` / ``currentModel`` used from another thread raise the
+  cross-thread ``AttributeError`` described in runbook item #5.
+- Do NOT call ``pythoncom.CoInitialize()`` anywhere else in the adapter;
+  ``_ComSessionCoordinator`` owns the apartment.
+- ``com_executor.ComExecutor`` (a dedicated STA worker thread) is still
+  available for standalone scripts such as ``src/utils/convert_step_to_sldprt.py``.
 
-### 2. Late binding is forced, always
+### 2. Every COM operation is followed by a settle pause
 
-``_do_connect`` uses ``win32com.client.dynamic.Dispatch`` instead of
+``_handle_com_operation`` calls ``_settle_after(operation_name)`` in its
+``finally:``: 0.25 s after every operation and 1.0 s after a document
+open/create/close (``SOLIDWORKS_MCP_COM_SETTLE_SECONDS`` /
+``SOLIDWORKS_MCP_DOC_SETTLE_SECONDS``). Driving SolidWorks 2026 back-to-back
+crashed it in its idle-time UI refresh (COM pitfall #26). Route new COM work
+through ``_handle_com_operation`` so it gets the pause; unit tests set both
+values to 0 in ``tests/conftest.py``.
+
+### 3. Late binding is forced, always
+
+Connection acquires ``swApp`` with ``_dynamic_dispatch`` (a thin wrapper over
+``win32com.client.dynamic.Dispatch``) instead of
 ``win32com.client.Dispatch``. Rationale: when the makepy-generated
 ``gen_py`` wrapper is loaded (it is, as soon as ``sw_type_info`` is
 imported), plain ``Dispatch`` would auto-upgrade to an early-bound wrapper.
@@ -276,7 +310,7 @@ for every such call is a much larger change than we want.
 If you add a new COM-touching function: call ``dynamic.Dispatch`` if you
 need to acquire a fresh IDispatch, **not** ``EnsureDispatch``.
 
-### 3. Method flagging via sw_type_info
+### 4. Method flagging via sw_type_info
 
 ``sw_type_info.flag_methods(obj, *interfaces)`` tells pywin32's late
 binding to resolve specific names as methods (``Invoke`` with method
@@ -296,7 +330,7 @@ Interface names come from the gen_py wrapper (run
 ``python -m win32com.client.makepy "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\sldworks.tlb"``
 to regenerate after a SW version upgrade).
 
-### 4. Properties are still properties
+### 5. Properties are still properties
 
 Not every zero-arg accessor is a method. ``IConfiguration.Name``,
 ``ModelDoc2.Visible``, etc. are genuine properties — read them without
@@ -304,19 +338,21 @@ Not every zero-arg accessor is a method. ``IConfiguration.Name``,
 When in doubt, check the gen_py wrapper: methods live in the class body
 as regular defs; properties use ``_prop_map_get_`` / ``_prop_map_put_``.
 
-### 5. Regression tests
+### 6. Regression tests
 
 See ``tests/live/test_live_sw_regression.py`` for the safety net:
 
-- ComExecutor start/stop/exception semantics
+- ComExecutor start/stop/exception semantics (the executor scripts use)
 - flag_methods incrementality + per-interface correctness
 - Late-bound ``swApp`` acquisition
 - ``get_model_info`` fields populate correctly
-- ``get_model_info`` works from a worker thread (the cross-thread bug
-  reproducer)
+- ``get_model_info`` from a worker thread: skipped unless
+  ``SOLIDWORKS_MCP_TEST_ASSEMBLY`` is set, and written for the old
+  ComExecutor design. Under invariant 1 a cross-thread call is not
+  supported, so this test needs rewriting before it is relied on.
 
 Run these after any change to ``pywin32_adapter.py``, ``com_executor.py``,
-or ``sw_type_info.py``::
+``sw_type_info.py`` or the settle pause::
 
     $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1
     .\.venv\Scripts\python.exe -m pytest tests/live/test_live_sw_regression.py -v

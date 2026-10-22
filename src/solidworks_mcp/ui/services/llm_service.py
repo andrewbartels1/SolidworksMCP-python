@@ -425,7 +425,10 @@ async def _run_structured_agent(
         "  rebuild_model, check_interference, analyze_geometry,\n"
         "  generate_vba_code, execute_macro\n"
         "Prefer tools in the order listed above (inspect → classify → plan → execute → verify).\n"
-        "Do not invent tools not in this list."
+        "Do not invent tools not in this list.\n"
+        "A failed tool returns status 'error' with an error_type and a hint: follow the "
+        "hint (open a document, fix the argument, wait for the breaker) instead of "
+        "repeating the same call."
     )
     enriched_system_prompt = (
         "## ROLE AND ORCHESTRATION AGENTS\n"

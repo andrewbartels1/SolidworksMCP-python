@@ -23,7 +23,7 @@ For each module:
 - [x] 2.4 `tools/file_management.py`
 - [x] 2.5 `tools/export.py`, `tools/analysis.py`, `tools/automation.py`
 - [x] 2.6 `tools/docs_discovery.py`, `tools/vba_generation.py`, `tools/macro_recording.py`, `tools/template_management.py`
-- [ ] 2.7 `ui/services/llm_service.py` catalog text and `docs/user-guide/tool-catalog/`: document `error_type` / `hint`
+- [x] 2.7 `ui/services/llm_service.py` catalog text and `docs/user-guide/tool-catalog/`: document `error_type` / `hint`
 
 ## 3. Coverage to 100% (honest config)
 
@@ -58,5 +58,5 @@ For each module:
 ## 5. Verify and document
 
 - [ ] 5.1 Full run (unit + smoke + all live files, warm-up gate on); honest coverage 100%; no new live failures
-- [ ] 5.2 CLAUDE.md: tool contract (`error_type`, `hint`); fix the stale COM-threading section; test-layout rule
-- [ ] 5.3 `openspec validate full-coverage-and-error-boundary --strict`
+- [x] 5.2 CLAUDE.md: tool contract (`error_type`, `hint`); fix the stale COM-threading section; test-layout rule
+- [x] 5.3 `openspec validate full-coverage-and-error-boundary --strict`
