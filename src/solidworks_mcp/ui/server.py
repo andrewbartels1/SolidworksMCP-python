@@ -212,15 +212,15 @@ async def _startup_ingest_design_knowledge() -> None:
 
 
 @app.middleware("http")
-async def log_ui_requests(request: Request, call_next):
-    """Handle log ui requests.
+async def log_ui_requests(request: Request, call_next: Any) -> Any:
+    """Log each UI request (method, path, body) before passing it on.
 
     Args:
-        request (Request): The request value.
-        call_next (Any): The call next value.
+        request (Request): The incoming request.
+        call_next (Any): Starlette's handler for the rest of the chain.
 
     Returns:
-        Any: The result produced by the operation.
+        Any: The downstream response.
     """
 
     if not _should_log_request(request.url.path):

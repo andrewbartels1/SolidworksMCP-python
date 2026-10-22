@@ -331,7 +331,7 @@ C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\U-Joint\Yoke_
 
 ...the part is done.  Commit the generated script as the build artifact.
 
-The hand-authored reference version lives at [`tutorial-parts/build_yoke_male_runbook.py`](tutorial-parts/build_yoke_male_runbook.py) and shows the identical structure.
+The hand-authored reference version lives at [`tutorial-parts/build_yoke_male_artifact.py`](tutorial-parts/build_yoke_male_artifact.py) and shows the identical structure.
 
 ---
 

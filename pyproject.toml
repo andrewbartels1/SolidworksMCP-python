@@ -94,7 +94,9 @@ test = [
     "numpy>=1.26.0",
 ]
 docs = [
-    "mkdocs>=1.5.0",
+    # <2: MkDocs 2 is announced to drop support for existing themes, plugins
+    # and configs (#46); stay on 1.x until the ecosystem moves.
+    "mkdocs>=1.5.0,<2",
     "mkdocs-material>=9.4.0",
     "mkdocs-awesome-pages-plugin>=2.9.0",
     "mkdocs-mermaid2-plugin>=1.1.0",

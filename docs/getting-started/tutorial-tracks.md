@@ -80,8 +80,7 @@ picks, entity-ID rules, count read-back).
 
 [⬇ Download Prompts](tutorial-parts/u_joint_rebuild_prompt.md){ .md-button .md-button--primary download="" }
 
-??? example "View full prompt pack — `u_joint_rebuild_prompt.md`"
-    --8<-- "docs/getting-started/tutorial-parts/u_joint_rebuild_prompt.md"
+Read them online: [U-Joint Rebuild Prompts](tutorial-parts/u_joint_rebuild_prompt.md).
 
 ---
 

@@ -190,8 +190,8 @@ class ComExecutor:
             Whatever ``fn`` returned.
 
         Raises:
-            Any exception raised by ``fn``, re-raised in the caller.
-            TimeoutError: if ``timeout`` elapses before ``fn`` finishes.
+            Exception: Any exception raised by ``fn``, re-raised in the caller.
+            TimeoutError: If ``timeout`` elapses before ``fn`` finishes.
         """
         return self.submit(fn).result(timeout=timeout)
 

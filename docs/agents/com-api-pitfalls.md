@@ -979,5 +979,5 @@ Found 2026-09-05 wiring `execute_macro` end-to-end against live SW 2026 (issue #
 | Is a name a method or property? | In gen_py class: `def Name(...)` = method; `"Name": (...)` in `_prop_map_get_` = property |
 | What DISPID does a method have? | `InvokeTypes(DISPID, ...)` line in the gen_py method body |
 | Does a method return IFeature? | Check return type: `(9, 0)` = VT_DISPATCH (object); `(24, 0)` = VT_I4 (integer) |
-| Full COM threading rules | See "COM threading architecture" in [CLAUDE.md](../../CLAUDE.md) |
-| Runbook for live debugging | See "Troubleshooting Runbook" section in [CLAUDE.md](../../CLAUDE.md) |
+| Full COM threading rules | See "COM threading architecture" in [CLAUDE.md](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CLAUDE.md) |
+| Runbook for live debugging | See "Troubleshooting Runbook" section in [CLAUDE.md](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CLAUDE.md) |
