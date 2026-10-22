@@ -251,14 +251,26 @@ async def test_create_drawing_without_a_template_live(scratch, tmp_path, monkeyp
     await _box_part(adapter)
     part_path = tmp_path / "box.sldprt"
     assert (await adapter.save_file(str(part_path))).is_success
+    evidence("box part saved", part_path.name)
 
     monkeypatch.setattr(adapter, "_resolve_template_path", lambda *a, **kw: None)
     created = await adapter.create_drawing()
-    evidence("create_drawing without template", created)
     assert created.is_success, created.error
-    assert int(adapter.currentModel.GetType()) == 3  # swDocDRAWING
+    model = adapter.currentModel
+    active = adapter.swApp.ActiveDoc
+    window = {
+        "visible": bool(model.Visible),
+        "active_doc": str(adapter._get_attr_or_call(active, "GetTitle"))
+        if active
+        else None,
+    }
+    evidence("create_drawing without template", created)
+    evidence("drawing window", window)
+    assert int(model.GetType()) == 3  # swDocDRAWING
+    assert window["visible"], "the fallback drawing was created hidden"
 
     drawing = await adapter.create_technical_drawing({"model_file": str(part_path)})
+    adapter._attempt(lambda: model.ViewZoomtofit2())
     views = (await adapter.list_drawing_views()).data or []
     evidence("views on the blank drawing", views)
     assert drawing.is_success, drawing.error
