@@ -13,6 +13,8 @@ Set-Location (Resolve-Path "$PSScriptRoot\..\..")
 $env:SOLIDWORKS_MCP_RUN_REAL_INTEGRATION = "true"
 $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
 $env:SW_TEST_PACE_SECONDS = "8"
+# Pause on each [evidence] line so SolidWorks shows the state it proves.
+$env:SW_DEMO_HOLD_SECONDS = "6"
 
 & .\.venv\Scripts\python.exe -m pytest $Test -s -x -n 0 --no-cov -p no:cacheprovider `
     -o addopts="" --asyncio-mode=auto --color=yes 2>&1 |

@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from tests.live.evidence import evidence
 from tests.live.test_live_sw_wave3 import _box_part, _plate_with_hole_drawing
 
 _HOLE_R_MM = 4.0
@@ -57,7 +58,7 @@ def _sel_count(adapter: Any) -> int:
 
 
 def _evidence(label: str, payload: Any) -> None:
-    print(f"\n[evidence] {label}: {payload}")
+    evidence(label, payload)
 
 
 # ---- select_feature ---------------------------------------------------------

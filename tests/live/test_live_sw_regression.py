@@ -41,6 +41,7 @@ import pytest
 # base.py is pure-pydantic (no pywin32), so importing the parameter models at
 # module scope is safe on non-Windows CI even though the SW tests are skipped.
 from solidworks_mcp.adapters.base import LoftParameters, SweepParameters
+from tests.live.evidence import evidence
 
 # Tests that need a real .SLDASM file to exercise OpenDoc6 read the path
 # from this env var. Set it to any local SolidWorks assembly; tests skip
@@ -282,11 +283,13 @@ async def test_com_calls_stay_on_the_connect_thread(connected_adapter) -> None:
     assert not t.is_alive(), "worker thread hung"
 
     refused = worker_result["result"]
+    evidence("call from a worker thread", refused)
     assert refused.is_error
     assert "'pytest-worker'" in refused.error
     assert "belong to the thread that called connect()" in refused.error
 
     still_works = await connected_adapter.list_open_documents()
+    evidence("same call from the connect thread", still_works)
     assert still_works.is_success, still_works.error
 
 
@@ -1778,6 +1781,10 @@ async def test_exit_sketch_clears_leftover_sw_sketch_live(
             return adapter.currentModel.GetActiveSketch2()
 
         pre = adapter._handle_com_operation("probe_pre_exit", _probe_sw_state)
+        evidence(
+            "SW sketch still open, adapter forgot it",
+            {"sw_active_sketch": pre.data is not None, "adapter_sketch": None},
+        )
         assert pre.is_success and pre.data is not None, (
             f"staging failed: SW reports no active sketch ({pre.data!r}); "
             f"err={pre.error}"
@@ -1786,6 +1793,7 @@ async def test_exit_sketch_clears_leftover_sw_sketch_live(
         # --- The actual test: exit_sketch must toggle SW out of the
         #     leftover sketch despite adapter-side state being empty.
         exit_result = await adapter.exit_sketch()
+        evidence("exit_sketch", exit_result)
         assert exit_result.is_success, (
             f"exit_sketch should succeed on SW-side leftover sketch, got "
             f"status={exit_result.status} err={exit_result.error}"
@@ -1793,6 +1801,7 @@ async def test_exit_sketch_clears_leftover_sw_sketch_live(
 
         # Verify SW reports no active sketch afterwards.
         post = adapter._handle_com_operation("probe_post_exit", _probe_sw_state)
+        evidence("SW active sketch after exit", post.data)
         assert post.is_success and post.data is None, (
             f"SW still reports an active sketch after exit_sketch: "
             f"data={post.data!r} err={post.error}"
@@ -1801,6 +1810,7 @@ async def test_exit_sketch_clears_leftover_sw_sketch_live(
         # Final proof: a fresh create_sketch must succeed now, which is
         # exactly the user-visible symptom this bug surfaced as.
         follow_up = await adapter.create_sketch("Front")
+        evidence("new create_sketch('Front') afterwards", follow_up.status)
         assert follow_up.is_success, (
             f"create_sketch after exit_sketch failed: {follow_up.error}"
         )

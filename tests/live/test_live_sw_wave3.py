@@ -18,6 +18,8 @@ import os
 
 import pytest
 
+from tests.live.evidence import evidence
+
 
 async def _box_part(adapter) -> None:  # noqa: ANN001
     """Create a scratch part with a single 40x25x10 mm boss."""
@@ -252,12 +254,12 @@ async def test_create_drawing_without_a_template_live(scratch, tmp_path, monkeyp
 
     monkeypatch.setattr(adapter, "_resolve_template_path", lambda *a, **kw: None)
     created = await adapter.create_drawing()
-    print(f"\n[evidence] create_drawing without template: {created}")
+    evidence("create_drawing without template", created)
     assert created.is_success, created.error
     assert int(adapter.currentModel.GetType()) == 3  # swDocDRAWING
 
     drawing = await adapter.create_technical_drawing({"model_file": str(part_path)})
     views = (await adapter.list_drawing_views()).data or []
-    print(f"[evidence] views on the blank drawing: {views}")
+    evidence("views on the blank drawing", views)
     assert drawing.is_success, drawing.error
     assert views, "no drawing views were placed on the template-less drawing"
