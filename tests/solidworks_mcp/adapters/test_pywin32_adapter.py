@@ -960,8 +960,11 @@ class TestOperationFailureLogging:
 
     @pytest.fixture
     def logged(self, monkeypatch):
-        from loguru import logger
-
+        # Patch the module's logger rather than adding a loguru sink: other
+        # tests reset loguru's global handlers (setup_logging), which removed
+        # a shared sink mid-test on the Linux CI workers.
+        log = Mock()
+        monkeypatch.setattr("solidworks_mcp.adapters.pywin32_adapter.logger", log)
         monkeypatch.setattr(
             "solidworks_mcp.adapters.pywin32_adapter.PYWIN32_AVAILABLE", True
         )
@@ -974,13 +977,10 @@ class TestOperationFailureLogging:
             SimpleNamespace(com_error=RuntimeError),
             raising=False,
         )
-        records: list = []
-        sink = logger.add(lambda m: records.append(m.record), level="WARNING")
-        yield PyWin32Adapter({}), records
-        logger.remove(sink)
+        return PyWin32Adapter({}), log
 
     def test_lookup_error_is_a_one_line_warning(self, logged) -> None:
-        adapter, records = logged
+        adapter, log = logged
 
         def missing():
             raise LookupError("Feature not found: NoSuchFeature")
@@ -990,21 +990,19 @@ class TestOperationFailureLogging:
         assert (
             result.error == "Error in select_feature: Feature not found: NoSuchFeature"
         )
-        [record] = records
-        assert record["level"].name == "WARNING"
-        assert record["exception"] is None
+        log.warning.assert_called_once()
+        log.exception.assert_not_called()
 
     def test_other_failures_log_the_traceback(self, logged) -> None:
-        adapter, records = logged
+        adapter, log = logged
 
         def broken():
             raise ValueError("bad")
 
         adapter._handle_com_operation("add_line", broken)
 
-        [record] = records
-        assert record["level"].name == "ERROR"
-        assert record["exception"] is not None
+        log.exception.assert_called_once()
+        log.warning.assert_not_called()
 
 
 class TestComThreadAffinity:

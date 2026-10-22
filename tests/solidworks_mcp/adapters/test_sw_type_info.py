@@ -234,6 +234,10 @@ def test_load_wrapper_generates_the_wrapper_when_not_cached(monkeypatch) -> None
         SimpleNamespace(GetModuleForTypelib=_get_module, EnsureModule=_ensure_module),
         raising=False,
     )
+    # DispatchBaseClass only exists when pywin32 imports (not on Linux CI).
+    monkeypatch.setattr(
+        sw_type_info, "DispatchBaseClass", type("Dispatch", (), {}), raising=False
+    )
     monkeypatch.setattr(sw_type_info, "PYWIN32_AVAILABLE", True)
     monkeypatch.setattr(sw_type_info, "_wrapper_module", None)
     monkeypatch.setattr(sw_type_info, "_interface_methods", {})
