@@ -160,6 +160,7 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
             r"\bno [\w.-]+( \w+)? found\b",
             r"\bhas no (\w+ )?(edges|faces)\b",
             r"\bhas no [\w-]+ body\b",
+            r"\bno view named\b",
         ),
     ),
 )

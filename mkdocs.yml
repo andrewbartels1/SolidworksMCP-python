@@ -45,6 +45,7 @@ nav:
       - Sketching: user-guide/tool-catalog/sketching.md
       - Drawing: user-guide/tool-catalog/drawing.md
       - Drawing Analysis: user-guide/tool-catalog/drawing-analysis.md
+      - Drawing Automation: user-guide/tool-catalog/drawing-automation.md
       - Engineering Data: user-guide/tool-catalog/engineering-data.md
       - Analysis: user-guide/tool-catalog/analysis.md
       - Export: user-guide/tool-catalog/export.md

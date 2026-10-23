@@ -11,6 +11,9 @@ The author verified these on SolidWorks 2025; they are the sign-off on 2026.
 exporting a copy of the "Simple Sheet Metal Part" sample SolidWorks installs
 (skipped when the samples are not installed).
 
+The drawing-dimension tools (from the same PR) are checked on a drawing of the
+same block: each model dimension shown once, then laid out with no overlaps.
+
 Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 ``tests/live/conftest.py``).
 """
@@ -183,18 +186,88 @@ async def test_export_flat_pattern_writes_a_dxf(scratch, tmp_path):
     assert "ENTITIES" in sections
 
 
-@pytest.mark.asyncio
-async def test_insert_model_dimensions_adds_dimensions(scratch, tmp_path):
+async def _drawing_tools(adapter: Any) -> dict[str, Any]:
+    """Register the drawing-automation tools against ``adapter``; name -> fn."""
+    from fastmcp import FastMCP
+
+    from solidworks_mcp.tools.drawing_automation import (
+        register_drawing_automation_tools,
+    )
+
+    mcp = FastMCP("drawing-automation-live")
+    await register_drawing_automation_tools(mcp, adapter, {})
+    return {t.name: t.fn for t in await mcp.list_tools()}
+
+
+async def _block_drawing(scratch, tmp_path) -> str:  # noqa: ANN001
+    """Save the block and lay out its three standard views on a new drawing."""
     adapter = scratch.adapter
     await _block(adapter)
-    part_path = str(tmp_path / "doc_block.SLDPRT")
-    assert (await adapter.save_file(part_path)).is_success
-    scratch.written_files.append(part_path)
-
+    part = str(tmp_path / "dim_block.SLDPRT")
+    assert (await adapter.save_file(part)).is_success
+    scratch.written_files.append(part)
     assert (await adapter.create_drawing()).is_success
-    views = await adapter.create_technical_drawing({"model_path": part_path})
+    views = await adapter.create_technical_drawing({"model_path": part})
     assert views.is_success, views.error
+    return part
 
-    result = await adapter.insert_model_dimensions()
-    assert result.is_success, result.error
-    assert result.data["dimensions_added"] > 0, result.data["views"]
+
+@pytest.mark.asyncio
+async def test_insert_model_dimensions_shows_each_dimension_once(scratch, tmp_path):
+    """Model dimensions land on the views once each; pictorial views are skipped."""
+    adapter = scratch.adapter
+    part = await _block_drawing(scratch, tmp_path)
+    iso = await adapter.create_drawing_view(
+        {"model_path": part, "orientation": "isometric", "position": [330.0, 220.0]}
+    )
+    assert iso.is_success, iso.error
+    tools = await _drawing_tools(adapter)
+
+    result = await tools["insert_model_dimensions"]({})
+    data = result.get("data") or {}
+    evidence(
+        "insert_model_dimensions",
+        {
+            "message": result.get("message"),
+            "views": [
+                (v["view"], v["dimensions_added"], v["duplicates_removed"])
+                for v in data.get("views", [])
+            ],
+            "unique_dimensions": data.get("unique_dimensions"),
+            "skipped_pictorial_views": data.get("skipped_pictorial_views"),
+        },
+    )
+    assert result["status"] == "success", result
+    assert data["dimensions_added"] > 0
+    shown = sum(v["dimensions_after"] for v in data["views"])
+    assert shown == data["unique_dimensions"]  # each dimension once on the sheet
+    assert iso.data["name"] in data["skipped_pictorial_views"]
+
+    missing = await tools["insert_model_dimensions"]({"view_name": "Side"})
+    evidence("insert_model_dimensions('Side')", missing)
+    assert missing["error_type"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_arrange_dimensions_clears_every_overlap(scratch, tmp_path):
+    """Imported dimensions sit on the part; arranging leaves zero overlaps."""
+    adapter = scratch.adapter
+    await _block_drawing(scratch, tmp_path)
+    tools = await _drawing_tools(adapter)
+    inserted = await tools["insert_model_dimensions"]({})
+    assert inserted["status"] == "success", inserted
+
+    result = await tools["arrange_dimensions"]({})
+    data = result.get("data") or {}
+    evidence(
+        "arrange_dimensions",
+        {
+            "message": result.get("message"),
+            "moved": data.get("moved"),
+            "unplaced": data.get("unplaced"),
+            "remaining_overlaps": data.get("remaining_overlaps"),
+        },
+    )
+    assert result["status"] == "success", result
+    assert data["overlaps_after"] == 0
+    assert data["moved"] > 0

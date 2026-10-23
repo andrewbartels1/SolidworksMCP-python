@@ -1803,8 +1803,6 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"view_name": view_name},
         )
 
-    # --- Standard drawing methods ---
-
 
 class CircuitBreaker:
     """Legacy standalone circuit breaker class expected by tests.

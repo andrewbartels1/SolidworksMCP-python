@@ -1,21 +1,25 @@
-"""Drawing-automation tools: model dimensions, layout, BOM, sheet scale, full drawings.
+"""Drawing-automation tools: model dimensions on drawing views, laid out without overlaps.
 
-``generate_drawing_package`` produces a complete A3 drawing that follows the
-A3 drafting standard in ``adapters/solidworks/drawing_standard.py``.
+Both tools work on the active drawing and call real adapter methods
+(``adapters/solidworks/documentation.py``); the layout geometry is in
+``adapters/solidworks/dimension_layout.py``.
 """
 
 from __future__ import annotations
 
-import functools
-from collections.abc import Awaitable, Callable
-from typing import Any, get_type_hints
+from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import (
+    normalize_input,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 
 class InsertModelDimensionsInput(CompatInput):
@@ -28,7 +32,8 @@ class InsertModelDimensionsInput(CompatInput):
 
     view_name: str | None = Field(
         default=None,
-        description="One view, e.g. 'Drawing View1'; every view when omitted",
+        description="One view, e.g. 'Drawing View1'; every orthographic view "
+        "when omitted. Find names with list_drawing_views.",
     )
     include_hole_wizard: bool = Field(
         default=True, description="Also import Hole Wizard location dimensions"
@@ -44,77 +49,9 @@ class ArrangeDimensionsInput(CompatInput):
 
     view_name: str | None = Field(
         default=None,
-        description="One view, e.g. 'Drawing View1'; every view when omitted",
+        description="Only move this view's dimensions, e.g. 'Drawing View1'; "
+        "every view when omitted. The overlap check always covers the whole sheet.",
     )
-
-
-def _guard(
-    fn: Callable[..., Awaitable[dict[str, Any]]],
-) -> Callable[..., Awaitable[dict[str, Any]]]:
-    """Make a tool accept a plain dict and never raise.
-
-    MCP clients send validated models, but direct callers (and the all-tools
-    smoke harness) pass raw dicts. The dict is validated into the annotated
-    input model; any failure, validation included, becomes an error response.
-
-    Args:
-        fn: A tool coroutine taking one ``input_data`` model.
-
-    Returns:
-        Callable[..., Awaitable[dict[str, Any]]]: The guarded tool.
-    """
-
-    @functools.wraps(fn)
-    async def wrapper(input_data: Any = None) -> dict[str, Any]:
-        try:
-            model = get_type_hints(fn).get("input_data")
-            if not isinstance(input_data, BaseModel) and model is not None:
-                input_data = model.model_validate(input_data or {})
-            return await fn(input_data)
-        except AttributeError as e:
-            if "has no attribute" not in str(e):
-                raise
-            return {
-                "status": "error",
-                "message": f"Active adapter does not support {fn.__name__}; nothing was done.",
-            }
-        except Exception as e:
-            logger.error(f"Error in {fn.__name__} tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Invalid input or unexpected error: {e}",
-            }
-
-    return wrapper
-
-
-async def _run(
-    call: Callable[..., Awaitable[Any]], describe: str, *args: Any
-) -> dict[str, Any]:
-    """Call one adapter method and shape the standard tool response.
-
-    Args:
-        call: The bound adapter method, e.g. ``adapter.get_material``.
-        describe: Short description used in success / error messages.
-        *args: Positional arguments for the adapter method.
-
-    Returns:
-        dict[str, Any]: ``status``, ``message`` and, on success, ``data``.
-    """
-    method = getattr(call, "__name__", "operation")
-    try:
-        result = await call(*args)
-    except Exception as e:
-        logger.error(f"Error in {method} tool: {e}")
-        return {"status": "error", "message": f"Unexpected error: {e}"}
-    if result.is_success:
-        return {
-            "status": "success",
-            "message": f"Successfully {describe}",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-    return {"status": "error", "message": result.error or f"{method} failed"}
 
 
 async def register_drawing_automation_tools(
@@ -131,35 +68,104 @@ async def register_drawing_automation_tools(
         int: Number of tools registered.
     """
 
+    mcp = with_tool_boundary(mcp)
+
+    def _supports(method: str) -> None:
+        require_capability(
+            adapter,
+            method,
+            f"The active adapter does not support {method}; nothing was done.",
+        )
+
     @mcp.tool()
-    @_guard
     async def insert_model_dimensions(
-        input_data: InsertModelDimensionsInput,
+        input_data: InsertModelDimensionsInput | None = None,
     ) -> dict[str, Any]:
-        """Bring the model's dimensions into drawing views (auto-dimension).
+        """Bring the model's dimensions into the active drawing's views.
 
-        Imports the model's "marked for drawing" dimensions and falls back to
-        SolidWorks AutoDimension for any view that stays empty. The response
-        gives before/after dimension counts and the method used per view.
+        Imports the model's "marked for drawing" dimensions view by view, each
+        dimension shown once on the sheet (a repeat in a later view is
+        deleted). Pictorial views (isometric, dimetric, trimetric) are skipped
+        unless named. Falls back to SolidWorks AutoDimension only when nothing
+        could be imported. SolidWorks places imported dimensions inside the
+        views, so run ``arrange_dimensions`` afterwards.
+
+        Args:
+            input_data (InsertModelDimensionsInput | None): ``view_name`` for one
+                view and ``include_hole_wizard``; omit for every view.
+
+        Returns:
+            dict[str, Any]: ``data`` has per-view ``views`` (before/after counts
+            and ``duplicates_removed``), ``dimensions_added``,
+            ``unique_dimensions``, ``skipped_pictorial_views`` and the ``method``
+            used. ``not_found`` for an unknown view; ``wrong_document_type``
+            unless a drawing is active.
+
+        Example:
+            ```python
+            await insert_model_dimensions()
+            await insert_model_dimensions({"view_name": "Drawing View1"})
+            ```
         """
-        return await _run(
-            adapter.insert_model_dimensions,
-            "inserted model dimensions",
-            input_data.view_name,
-            input_data.include_hole_wizard,
+        input_data = normalize_input(input_data, InsertModelDimensionsInput)
+        _supports("insert_model_dimensions")
+        result = await adapter.insert_model_dimensions(
+            input_data.view_name, input_data.include_hole_wizard
         )
+        require_success(result, context="Failed to insert model dimensions")
+        data = result.data or {}
+        return {
+            "status": "success",
+            "message": (
+                f"Added {data.get('dimensions_added', 0)} dimension(s) to "
+                f"{len(data.get('views', []))} view(s) ({data.get('method')})"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
-    @_guard
-    async def arrange_dimensions(input_data: ArrangeDimensionsInput) -> dict[str, Any]:
-        """Move drawing dimensions so nothing overlaps, then verify on the real geometry.
+    async def arrange_dimensions(
+        input_data: ArrangeDimensionsInput | None = None,
+    ) -> dict[str, Any]:
+        """Move drawing dimensions so nothing overlaps, then check the real result.
 
-        Dimensions go outside the views in rows (first 8 mm out, rows 7 mm,
-        columns 9 mm). Returns an error listing every remaining overlap if the
-        rule cannot be met.
+        Dimensions go outside their views in rows (first 8 mm from the
+        outline, rows 7 mm apart, columns 9 mm apart), shortest span nearest
+        the view. After moving them it re-reads every dimension's real text box
+        and lines and checks the whole sheet: no text on text, no line through
+        text, nothing on a view or outside the sheet.
+
+        Args:
+            input_data (ArrangeDimensionsInput | None): ``view_name`` to move
+                only one view's dimensions; omit for every view.
+
+        Returns:
+            dict[str, Any]: ``data`` has ``dimensions``, ``moved``,
+            ``overlaps_before``, ``overlaps_after`` and ``unplaced``. When any
+            overlap remains the call is an error whose ``data`` lists each one
+            in ``remaining_overlaps``; try a smaller sheet scale.
+
+        Example:
+            ```python
+            await insert_model_dimensions()
+            await arrange_dimensions()
+            ```
         """
-        return await _run(
-            adapter.arrange_dimensions, "arranged dimensions", input_data.view_name
-        )
+        input_data = normalize_input(input_data, ArrangeDimensionsInput)
+        _supports("arrange_dimensions")
+        result = await adapter.arrange_dimensions(input_data.view_name)
+        require_success(result, context="Failed to arrange dimensions", with_data=True)
+        data = result.data or {}
+        return {
+            "status": "success",
+            "message": (
+                f"Arranged {data.get('dimensions', 0)} dimension(s): "
+                f"{data.get('overlaps_before', 0)} overlap(s) before, "
+                f"{data.get('overlaps_after', 0)} after"
+            ),
+            "data": data,
+            "execution_time": result.execution_time,
+        }
 
     return 2

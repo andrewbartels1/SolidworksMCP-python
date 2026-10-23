@@ -31,6 +31,15 @@ against SolidWorks 2026:
 - **`export_flat_pattern`** (#138): a sheet-metal part's flat pattern to DXF
   or DWG.
 
+Drawing-dimension tools, also contributed by @SaiqKamran (#117) and signed
+off live against SolidWorks 2026:
+
+- **`insert_model_dimensions`** (#144): the model's dimensions on the active
+  drawing's views, each shown once; pictorial views are skipped unless named.
+- **`arrange_dimensions`** (#145): moves dimensions outside the views in rows
+  and checks the real geometry for overlaps; any that remain are listed in
+  the error.
+
 ## [1.4.0] - 2026-10-22
 
 Minor release. New tools and a uniform error contract; every change is

@@ -63,6 +63,16 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         ),
         "prerequisite": "An active Drawing document open in SolidWorks.",
     },
+    "drawing_automation": {
+        "title": "Drawing Automation Tools",
+        "icon": ":material-ruler:",
+        "description": (
+            "Put the model's dimensions on a drawing and lay them out so nothing "
+            "overlaps: each dimension shown once, placed outside the views in "
+            "rows, and checked against the real geometry SolidWorks reports."
+        ),
+        "prerequisite": "An active Drawing document with views of a model.",
+    },
     "engineering_data": {
         "title": "Engineering Data Tools",
         "icon": ":material-ruler-square:",

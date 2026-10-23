@@ -1457,7 +1457,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Bring model dimensions into drawing views using pool."""
         return await self._execute_with_pool(
             "insert_model_dimensions",
-            lambda adapter: adapter.insert_model_dimensions(view_name, include_hole_wizard),
+            lambda adapter: adapter.insert_model_dimensions(
+                view_name, include_hole_wizard
+            ),
         )
 
     async def arrange_dimensions(
@@ -1469,9 +1471,6 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "arrange_dimensions",
             lambda adapter: adapter.arrange_dimensions(view_name),
         )
-
-
-    # --- Standard drawing methods ---
 
 
 class ConnectionPool:

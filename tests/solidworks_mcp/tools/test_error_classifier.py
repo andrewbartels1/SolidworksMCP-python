@@ -69,6 +69,8 @@ def classifier() -> ErrorClassifier:
         ("The selected face has no edges", "not_found"),
         ("No face found at point [1000, 1000, 1000] mm.", "not_found"),
         ("The active part has no solid body faces.", "not_found"),
+        ("No view named 'Side'. Views: Front, Top", "not_found"),
+        ("No drawing views found to dimension (pictorial ...)", "not_found"),
         (
             "This operation requires a drawing document (active document type is 1).",
             "wrong_document_type",

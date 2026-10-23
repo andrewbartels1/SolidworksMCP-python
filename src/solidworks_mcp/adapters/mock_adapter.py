@@ -3698,7 +3698,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
     async def insert_model_dimensions(
         self, view_name: str | None = None, include_hole_wizard: bool = True
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock importing model dimensions into drawing views."""
+        """Mock importing model dimensions: three per view, never twice.
+
+        Mirrors the live result shape (``views``, ``dimensions_added``,
+        ``unique_dimensions``, ``skipped_pictorial_views``, ``method``,
+        ``autodimension_status``) and its refusals.
+        """
         await asyncio.sleep(self._delays["model_operation"] / 2)
         guard = self._mock_doc_error({"Drawing"}, "insert_model_dimensions")
         if guard is not None:
@@ -3708,7 +3713,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         if unknown or not names:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=f"No view named {unknown[0]!r}" if unknown else "The drawing has no views",
+                error=(
+                    f"No view named {unknown[0]!r}. Views: "
+                    f"{', '.join(self._drawing_views) or 'none'}"
+                    if unknown
+                    else "No drawing views found to dimension; add views with "
+                    "create_technical_drawing or create_drawing_view"
+                ),
             )
         if not hasattr(self, "_view_dimensions"):
             self._view_dimensions: dict[str, int] = {}
@@ -3723,8 +3734,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "dimensions_before": before,
                     "dimensions_after": after,
                     "dimensions_added": after - before,
-                    "method": "insert_model_annotations" if after > before else "none",
-                    "autodimension_status": None,
+                    "duplicates_removed": 0,
                 }
             )
         self._operation_count += 1
@@ -3733,6 +3743,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             data={
                 "views": per_view,
                 "dimensions_added": sum(v["dimensions_added"] for v in per_view),
+                "unique_dimensions": sum(self._view_dimensions.values()),
+                "skipped_pictorial_views": [],
+                "method": "insert_model_annotations",
+                "autodimension_status": None,
             },
         )
 
@@ -3745,12 +3759,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return guard
         if view_name and view_name not in self._drawing_views:
             return AdapterResult(
-                status=AdapterResultStatus.ERROR, error=f"No view named {view_name!r}"
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"No view named {view_name!r}. Views: "
+                    f"{', '.join(self._drawing_views) or 'none'}"
+                ),
             )
         counts = getattr(self, "_view_dimensions", {})
-        total = sum(
-            n for v, n in counts.items() if not view_name or v == view_name
-        )
+        total = sum(n for v, n in counts.items() if not view_name or v == view_name)
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={

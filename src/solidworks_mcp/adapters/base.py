@@ -1756,7 +1756,3 @@ class SolidWorksAdapter(ABC):
             status=AdapterResultStatus.ERROR,
             error="arrange_dimensions is not implemented by this adapter",
         )
-
-
-    # --- Standard drawing methods ---
-

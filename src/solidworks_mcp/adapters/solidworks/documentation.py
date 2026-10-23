@@ -57,21 +57,26 @@ _SW_AUTODIM_STATUS_SUCCESS = 0
 _SW_ANNOTATION_DISPLAY_DIMENSION = 4
 
 
-class _DimensionOverlapError(Exception):
-    """Raised by arrange_dimensions when the no-overlap rule still fails."""
+def _overlap_summary(result: dict[str, Any]) -> str:
+    """Describe the overlaps ``arrange_dimensions`` could not clear.
 
-    def __init__(self, result: dict[str, Any]) -> None:
-        self.result = result
-        kinds = sorted({o["kind"] for o in result.get("remaining_overlaps", [])})
-        sample = "; ".join(
-            f"{o['dimension']} vs {o['conflicts_with']} ({o['kind']})"
-            for o in result.get("remaining_overlaps", [])[:5]
-        )
-        super().__init__(
-            f"{result['overlaps_after']} dimension overlap(s) remain after arranging "
-            f"{result['dimensions']} dimension(s) ({', '.join(kinds)}): {sample}. "
-            "Try a smaller sheet scale or a larger sheet so the views have room."
-        )
+    Args:
+        result: The layout result, carrying ``remaining_overlaps``.
+
+    Returns:
+        str: How many overlaps remain, their kinds, the first five, and what
+        to try next.
+    """
+    overlaps = result.get("remaining_overlaps", [])
+    kinds = sorted({o["kind"] for o in overlaps})
+    sample = "; ".join(
+        f"{o['dimension']} vs {o['conflicts_with']} ({o['kind']})" for o in overlaps[:5]
+    )
+    return (
+        f"{result['overlaps_after']} dimension overlap(s) remain after arranging "
+        f"{result['dimensions']} dimension(s) ({', '.join(kinds)}): {sample}. "
+        "Try a smaller sheet scale or a larger sheet so the views have room."
+    )
 
 
 _DEFAULT_MATERIAL_DATABASE = "SOLIDWORKS Materials"
@@ -828,11 +833,26 @@ class SolidWorksDocumentationMixin:
     # ------------------------------------------------------------------
 
     def _view_dimension_count(self, view: Any) -> int:
+        """Count the display dimensions on a drawing view.
+
+        Args:
+            view: The ``IView``.
+
+        Returns:
+            int: ``IView::GetDisplayDimensionCount``; 0 when unreadable.
+        """
         count = self._attempt(lambda: view.GetDisplayDimensionCount(), default=0)
         return int(count) if isinstance(count, (int, float)) else 0
 
     def _pictorial(self, view: Any) -> bool:
-        """True for isometric/dimetric/trimetric views, which are not dimensioned."""
+        """True for isometric/dimetric/trimetric views, which are not dimensioned.
+
+        Args:
+            view: The ``IView``.
+
+        Returns:
+            bool: Whether the view's orientation name is pictorial.
+        """
         name = str(self._attempt(lambda: view.GetOrientationName(), default="") or "")
         return any(k in name.lower() for k in ("isometric", "dimetric", "trimetric"))
 
@@ -842,7 +862,14 @@ class SolidWorksDocumentationMixin:
         ``IAnnotation::Select3`` selects nothing under late binding (False with
         a null dispatch, type mismatch with ``None``); selecting by
         ``IDisplayDimension::GetNameForSelection`` with type ``DIMENSION`` and
-        ``DeleteSelection2`` works - measured live on SW 2025.
+        ``DeleteSelection2`` works - measured live on SW 2025 (pitfall #30).
+
+        Args:
+            model: The drawing document.
+            an: The dimension's ``IAnnotation``.
+
+        Returns:
+            bool: Whether it was selected and deleted.
         """
         specific = self._attempt(lambda: an.GetSpecificAnnotation(), default=None)
         disp = (
@@ -871,7 +898,15 @@ class SolidWorksDocumentationMixin:
         return deleted
 
     def _dimension_annotations(self, view: Any) -> list[tuple[Any, str | None]]:
-        """(annotation, model dimension name) for each display dimension in a view."""
+        """List the display dimensions in a view with their model names.
+
+        Args:
+            view: The ``IView``.
+
+        Returns:
+            list[tuple[Any, str | None]]: ``(IAnnotation, "D1@Sketch1")`` per
+            dimension; the name is ``None`` when it cannot be read.
+        """
         found: list[tuple[Any, str | None]] = []
         ann = self._attempt(lambda: view.GetFirstAnnotation3(), default=None)
         guard = 0
@@ -907,12 +942,27 @@ class SolidWorksDocumentationMixin:
         include_hole_wizard: bool = True,
         only_views: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Synchronous body of insert_model_dimensions (also used by the standard drawing)."""
+        """Import model dimensions into views; the body of insert_model_dimensions.
+
+        Args:
+            view_name: One view; every orthographic view when ``None``.
+            include_hole_wizard: Also import Hole Wizard location dimensions.
+            only_views: Exactly these views (the standard drawing's layout).
+
+        Returns:
+            dict[str, Any]: Per-view counts and what was done; see
+            :meth:`insert_model_dimensions`.
+
+        Raises:
+            LookupError: ``view_name`` is not on the drawing, or there is no
+                view to dimension.
+            Exception: Nothing could be imported or auto-dimensioned.
+        """
         model = self.currentModel
         drawing = _sw_type_info.flagged(model, "IDrawingDoc")
         all_names = _view_names(self, drawing)
         if view_name and view_name not in all_names:
-            raise Exception(
+            raise LookupError(
                 f"No view named {view_name!r}. Views: {', '.join(all_names) or 'none'}"
             )
         views = {n: _resolve_drawing_view(self, drawing, n) for n in all_names}
@@ -922,6 +972,12 @@ class SolidWorksDocumentationMixin:
         names = [view_name] if view_name else [n for n in all_names if n not in skipped]
         if only_views:
             names = [n for n in only_views if n in all_names]
+        if not names:
+            raise LookupError(
+                "No drawing views found to dimension (pictorial views are skipped "
+                "unless named); add views with create_technical_drawing or "
+                "create_drawing_view"
+            )
         before = {n: self._view_dimension_count(views[n]) for n in names}
 
         types = _SW_INSERT_DIMENSIONS_MARKED_FOR_DRAWING
@@ -1074,6 +1130,13 @@ class SolidWorksDocumentationMixin:
         ``GetTextHeightAtIndex``; lines from ``GetLineAtIndex3``, whose
         endpoints are elements 4-5 and 7-8 of the returned tuple (measured
         live on SW 2025).
+
+        Args:
+            view: The ``IView``.
+            view_name: Its name, used in each dimension's key.
+
+        Returns:
+            list[tuple[Any, Any]]: ``(IAnnotation, DimensionGeometry)`` pairs.
         """
         found: list[tuple[Any, Any]] = []
         ann = self._attempt(lambda: view.GetFirstAnnotation3(), default=None)
@@ -1092,6 +1155,17 @@ class SolidWorksDocumentationMixin:
         return found
 
     def _dimension_geometry(self, an: Any, key: str, view_name: str) -> Any:
+        """Read one dimension's text box and lines from its display data.
+
+        Args:
+            an: The dimension's ``IAnnotation``.
+            key: Stable key for the layout (view name + index).
+            view_name: The owning view.
+
+        Returns:
+            Any: A ``DimensionGeometry``, or ``None`` when the position or any
+            text cannot be read.
+        """
         position = self._attempt(lambda: an.GetPosition(), default=None)
         data = self._attempt(lambda: an.GetDisplayData(), default=None)
         if not isinstance(position, (list, tuple)) or data is None:
@@ -1139,7 +1213,14 @@ class SolidWorksDocumentationMixin:
         )
 
     def _sheet_bounds(self, drawing: Any) -> Any:
-        """Sheet rectangle from ``ISheet::GetProperties2`` (width/height at 5, 6)."""
+        """Sheet rectangle from ``ISheet::GetProperties2`` (width/height at 5, 6).
+
+        Args:
+            drawing: The ``IDrawingDoc``.
+
+        Returns:
+            Any: ``(0, 0, width, height)`` in metres, or ``None`` when unreadable.
+        """
         sheet = self._attempt(lambda: drawing.GetCurrentSheet(), default=None)
         if sheet is None:
             return None
@@ -1160,6 +1241,16 @@ class SolidWorksDocumentationMixin:
     def _collect_layout(
         self, drawing: Any, names: list[str]
     ) -> tuple[dict, list, dict]:
+        """Read every named view's outline and dimension geometry.
+
+        Args:
+            drawing: The ``IDrawingDoc``.
+            names: View names to read.
+
+        Returns:
+            tuple[dict, list, dict]: View outlines by name, every
+            ``DimensionGeometry``, and each geometry key's ``IAnnotation``.
+        """
         outlines: dict[str, tuple[float, float, float, float]] = {}
         annotations: dict[str, Any] = {}
         geometries: list[Any] = []
@@ -1181,14 +1272,28 @@ class SolidWorksDocumentationMixin:
         obstacles: dict[str, Any] | None = None,
         work_area: Any = None,
         move: bool = True,
-        raise_on_overlap: bool = True,
     ) -> dict[str, Any]:
-        """Synchronous body of arrange_dimensions (also used by the standard drawing)."""
+        """Plan, apply and verify the dimension layout; arrange_dimensions' body.
+
+        Args:
+            view_name: Only move this view's dimensions; all when ``None``.
+            obstacles: Named boxes nothing may touch (title block, captions).
+            work_area: The frame's working area; the sheet when ``None``.
+            move: ``False`` only checks the current layout.
+
+        Returns:
+            dict[str, Any]: ``dimensions``, ``moved``, ``unplaced``,
+            ``overlaps_before``/``overlaps_after``, ``remaining_overlaps`` and
+            ``sheet_size_m``. Remaining overlaps are reported, not raised.
+
+        Raises:
+            LookupError: ``view_name`` is not on the drawing.
+        """
         model = self.currentModel
         drawing = _sw_type_info.flagged(model, "IDrawingDoc")
         all_views = _view_names(self, drawing)
         if view_name and view_name not in all_views:
-            raise Exception(
+            raise LookupError(
                 f"No view named {view_name!r}. Views: {', '.join(all_views) or 'none'}"
             )
         sheet = work_area or self._sheet_bounds(drawing)
@@ -1232,8 +1337,6 @@ class SolidWorksDocumentationMixin:
             "remaining_overlaps": after[:50],
             "sheet_size_m": [sheet[2], sheet[3]] if sheet else None,
         }
-        if after and raise_on_overlap:
-            raise _DimensionOverlapError(result)
         return result
 
     async def arrange_dimensions(
@@ -1254,7 +1357,8 @@ class SolidWorksDocumentationMixin:
         Returns:
             AdapterResult[dict[str, Any]]: ``overlaps_before``, ``overlaps_after``
             (each violation listed), ``moved`` and ``unplaced``. ERROR when any
-            overlap remains - the rule is not met.
+            overlap remains - the rule is not met - with the same data, so the
+            caller can see which dimensions still collide.
         """
         guard = self._require_drawing()
         if guard is not None:
@@ -1263,14 +1367,15 @@ class SolidWorksDocumentationMixin:
         def _arrange() -> dict[str, Any]:
             return self._arrange_layout(view_name)
 
-        try:
-            return cast(
-                "AdapterResult[dict[str, Any]]",
-                self._handle_com_operation("arrange_dimensions", _arrange),
-            )
-        except (
-            _DimensionOverlapError
-        ) as exc:  # pragma: no cover - raised only if not wrapped
+        result = cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("arrange_dimensions", _arrange),
+        )
+        if result.is_success and result.data and result.data["overlaps_after"]:
             return AdapterResult(
-                status=AdapterResultStatus.ERROR, error=str(exc), data=exc.result
+                status=AdapterResultStatus.ERROR,
+                error=_overlap_summary(result.data),
+                data=result.data,
+                execution_time=result.execution_time,
             )
+        return result
