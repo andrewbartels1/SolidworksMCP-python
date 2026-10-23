@@ -63,7 +63,13 @@ async def test_material_applies_and_changes_mass(scratch):
     tools = await _tools(adapter)
 
     listed = await tools["list_available_materials"]({"search": "1020"})
-    evidence("list_available_materials('1020')", [m["name"] for m in listed["data"]])
+    evidence(
+        "list_available_materials('1020')",
+        {
+            "message": listed.get("message"),
+            "names": [m["name"] for m in listed.get("data") or []],
+        },
+    )
     assert listed["status"] == "success", listed
     assert any(m["name"] == "AISI 1020" for m in listed["data"])
 

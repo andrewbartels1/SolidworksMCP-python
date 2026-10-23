@@ -166,3 +166,28 @@ async def test_failures_carry_an_actionable_error_type(
     assert result["status"] == "error"
     assert result["error_type"] == error_type, result
     assert result["hint"]
+
+
+@pytest.mark.asyncio
+async def test_list_available_materials_says_what_it_searched(
+    mcp_server, mock_config
+) -> None:
+    from types import SimpleNamespace
+
+    from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+
+    async def list_available_materials(_search):
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=[],
+            metadata={"folders": ["C:/a", "C:/b"], "total": 12},
+        )
+
+    adapter = SimpleNamespace(list_available_materials=list_available_materials)
+    await register_engineering_data_tools(mcp_server, adapter, mock_config)
+
+    result = await (await _tool(mcp_server, "list_available_materials"))(
+        {"search": "1020"}
+    )
+
+    assert result["message"] == "Found 0 material(s) of 12 in C:/a; C:/b"

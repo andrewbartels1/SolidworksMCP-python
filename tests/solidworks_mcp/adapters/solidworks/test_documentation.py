@@ -465,6 +465,10 @@ async def test_list_available_materials_reads_configured_folders(tmp_path) -> No
     result = await _Harness(app=app).list_available_materials()
 
     assert [m["name"] for m in result.data] == ["AISI 1020", "AISI 304", "6061-T6 (SS)"]
+    assert result.metadata == {
+        "folders": [str(tmp_path / "missing"), str(folder)],
+        "total": 3,
+    }
 
 
 @pytest.mark.asyncio

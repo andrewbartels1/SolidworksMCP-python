@@ -286,13 +286,21 @@ async def register_engineering_data_tools(
 
         Returns:
             dict[str, Any]: ``data`` is a list of ``{name, classification,
-            database}``.
+            database}``; ``message`` says how many of the libraries' materials
+            matched and which folders were read.
         """
         input_data = normalize_input(input_data, ListMaterialsInput)
         _supports("list_available_materials")
         result = await adapter.list_available_materials(input_data.search)
         require_success(result, context="Failed to list materials")
-        return _success(result, f"Found {len(result.data or [])} material(s)")
+        searched = result.metadata or {}
+        found = len(result.data or [])
+        message = f"Found {found} material(s)"
+        if "total" in searched:
+            message += (
+                f" of {searched['total']} in {'; '.join(searched.get('folders', []))}"
+            )
+        return _success(result, message)
 
     @mcp.tool()
     async def get_custom_properties(

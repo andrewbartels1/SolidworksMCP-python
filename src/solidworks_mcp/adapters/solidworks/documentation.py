@@ -514,7 +514,9 @@ class SolidWorksDocumentationMixin:
 
         Returns:
             AdapterResult[list[dict[str, str]]]: ``name``, ``classification``
-            and ``database`` per material.
+            and ``database`` per material. ``metadata`` gives the ``folders``
+            read and the ``total`` before filtering, so an empty search can be
+            told apart from an unexpected library location.
         """
         app = getattr(self, "swApp", None)
         if app is None:
@@ -522,6 +524,7 @@ class SolidWorksDocumentationMixin:
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
         needle = (search or "").strip().lower()
+        searched: dict[str, Any] = {}
 
         def _list() -> list[dict[str, str]]:
             folders = str(
@@ -556,6 +559,10 @@ class SolidWorksDocumentationMixin:
                         materials.extend(
                             _parse_material_library(os.path.join(folder, entry))
                         )
+            searched["folders"] = [
+                f for f in (f.strip() for f in folders.split(";")) if f
+            ]
+            searched["total"] = len(materials)
             if not materials:
                 raise LookupError(
                     f"No .sldmat libraries found in: {folders or 'no folders configured'}"
@@ -569,10 +576,13 @@ class SolidWorksDocumentationMixin:
                 ]
             return materials
 
-        return cast(
+        result = cast(
             "AdapterResult[list[dict[str, str]]]",
             self._handle_com_operation("list_available_materials", _list),
         )
+        if result.is_success:
+            result.metadata = dict(searched)
+        return result
 
     async def get_custom_properties(
         self, configuration: str | None = None
