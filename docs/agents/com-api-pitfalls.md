@@ -495,10 +495,23 @@ Found 2026-08-14 while implementing assembly mates against live SolidWorks 2025.
 
 ---
 
-## 18. `InsertModelAnnotations3` inserts nothing — unresolved
+## 18. `InsertModelAnnotations3` inserts nothing — resolved
 
-**Status: open question.** Recorded so the next person does not repeat the search. If you
-know the missing ingredient, please correct this entry.
+**Status: resolved 2026-10-17 on SW 2025.** Live-verified working sequence (used by
+`insert_model_dimensions` in `adapters/solidworks/documentation.py`), per view:
+
+1. `IDrawingDoc::ActivateView(name)`, `ClearSelection2(True)`
+2. `SelectByID2(name, "DRAWINGVIEW", 0, 0, 0, False, 0, <VT_DISPATCH null>, 0)` (see #1)
+3. `InsertModelAnnotations3(0 /* FromEntireModel */, 32768 | 131072 /* MarkedForDrawing |
+   HoleWizardLocations */, False /* AllViews */, False, False, False /* UsePlacementInSketch */)`
+
+`UsePlacementInSketch=False` is the ingredient: with it `True` SolidWorks copies sketch
+positions, which on a drawing view lands every dimension *inside* the view outline, on
+the part. Judge success from `IView::GetDisplayDimensionCount()` before/after, never from
+the return value. Calling per view also imports the same model dimension into several
+views; delete repeats (see #30) so each dimension appears once.
+
+The original investigation, kept for reference:
 
 **Symptom:** `IDrawingDoc::InsertModelAnnotations3` returns `None` and no dimensions
 appear, on a drawing view of a part that carries a real sketch dimension.
@@ -859,6 +872,63 @@ Found 2026-10-13 building `rebuild_model` diagnostics (#106).
 - **Harness rule:** after a crash, `connect()` would COM-launch a bare
   `SLDWORKS.exe -Embedding` per test and crash it again. The live fixtures now
   stop the run when SolidWorks is not running. Use `-x` for live runs.
+## 27. `IView.Position = (x, y)` silently moves the view to x ≈ 1e-310
+
+**Symptom:** Setting a drawing view's `Position` from a Python tuple returns cleanly, but
+reading it back gives `(6.95e-310, y)`: x is garbage, so the view lands off the left edge
+of the sheet. Any layout code that trusts the assignment then "fixes" overlaps by
+shrinking the scale, forever.
+
+**Fix:** pass an explicit `win32com.client.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8,
+[x, y])`, then read `Position` back to confirm. The same applies to `IView.ScaleRatio`.
+Live-verified on SW 2025 (`_double_array` / `_set_view_position` in
+`adapters/solidworks/drawing_standard.py`).
+
+---
+
+## 28. `ICustomPropertyManager::Get6` raises "Parameter not optional"; `GetNames` is a property
+
+Under late binding `Get6(name, False)` raises `(-2147352561, 'Parameter not optional.')`
+because of its four out-parameters, and `Get5`/`Get4`/`GetAll3` do the same. `Get(name)`
+returns the stored text. `GetNames` comes back as a tuple *property*, so calling it raises
+`'tuple' object is not callable`; read it with `_get_attr_or_call`.
+
+---
+
+## 29. `IDimension::FullName` includes the document: `D1@Sketch1@Part1.Part`
+
+The trailing `@<document title>` is not part of the name `IModelDoc2::Parameter` (behind
+`set_dimension`) accepts. Strip the last segment when it contains a `.`.
+
+---
+
+## 30. `IAnnotation::Select3` selects nothing under late binding
+
+`Select3(False, <VT_DISPATCH null>)` returns `False` and `Select3(False, None)` raises a
+type mismatch. To delete a drawing dimension, take
+`IDisplayDimension::GetNameForSelection()` (e.g. `D1@Sketch1@Part1-2@Drawing View2`),
+`SelectByID2(that, "DIMENSION", …)`, then `IModelDocExtension::DeleteSelection2(0)`.
+
+---
+
+## 31. New drawings can block every COM call behind a "Sheet Format/Size" dialog
+
+When the drawing template has no sheet format, `NewDocument` opens a modal *Sheet
+Format/Size* dialog and every later COM call hangs until a person dismisses it. Turn off
+`swDrawingShowSheetFormatDialog` (user-preference toggle **353**) around `create_drawing`,
+restore it after, then apply a format with `IDrawingDoc::SetupSheet5`. Find the `.slddrt`
+through `swFileLocationsSheetFormat` (string preference 7); on a default install the files
+live under `C:\ProgramData\SOLIDWORKS\SOLIDWORKS <year>\lang\<language>\sheetformat`,
+not under the install folder.
+
+---
+
+## 32. `swFileLocationsMaterialDatabases` can read back empty
+
+`GetUserPreferenceStringValue(28)` returned `""` on a SW 2025 install whose libraries
+exist. Fall back to `<GetExecutablePath() folder>\lang\<GetCurrentLanguage()>\sldmaterials`
+(`GetExecutablePath` may include the `.exe`; take its folder). The `.sldmat` files are
+UTF-16 XML: `<classification name>` elements holding `<material name>` children.
 
 ---
 

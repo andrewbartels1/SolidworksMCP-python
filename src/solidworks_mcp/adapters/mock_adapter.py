@@ -3455,3 +3455,369 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             },
             execution_time=self._delays["feature_operation"],
         )
+
+    # --- Engineering-data and drawing-documentation methods ---
+    # Mirrors SolidWorksDocumentationMixin (solidworks/documentation.py): the
+    # same refusals for wrong document types and unknown views, with
+    # self-consistent state so set/get pairs round-trip.
+
+    _MOCK_MATERIALS: tuple[dict[str, str], ...] = (
+        {"name": "AISI 1020", "classification": "Steel", "database": "solidworks materials"},
+        {"name": "AISI 304", "classification": "Steel", "database": "solidworks materials"},
+        {
+            "name": "6061-T6 (SS)",
+            "classification": "Aluminium Alloys",
+            "database": "solidworks materials",
+        },
+        {"name": "ABS", "classification": "Plastics", "database": "solidworks materials"},
+    )
+
+    def _mock_doc_error(self, allowed: set[str], operation: str) -> AdapterResult[Any] | None:
+        """Return an error unless the active mock document type is allowed."""
+        model = self._current_model
+        doc_type = getattr(model, "type", None)
+        if model is None or doc_type not in allowed:
+            wanted = " or ".join(sorted(t.lower() for t in allowed))
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"{operation} needs an active {wanted} document",
+            )
+        return None
+
+    def _mock_doc_key(self) -> str:
+        """Key per-document mock state by path, falling back to name."""
+        model = self._current_model
+        return str(getattr(model, "path", "") or getattr(model, "name", "") or "untitled")
+
+    async def list_model_dimensions(
+        self, feature_name: str | None = None
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """Mock listing model dimensions from the tracked dimension table."""
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        guard = self._mock_doc_error({"Part", "Assembly"}, "list_model_dimensions")
+        if guard is not None:
+            return guard
+        self._operation_count += 1
+        dims = []
+        for full_name, value in self._dimensions.items():
+            feature = full_name.split("@", 1)[1] if "@" in full_name else ""
+            if feature_name and feature.lower() != feature_name.lower():
+                continue
+            dims.append(
+                {
+                    "full_name": full_name,
+                    "feature": feature,
+                    "value": value,
+                    "system_value": value / 1000.0,
+                    "read_only": False,
+                }
+            )
+        if feature_name and not dims:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No dimensions found on feature {feature_name!r}",
+            )
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=dims)
+
+    async def measure_entities(self, entities: list[str]) -> AdapterResult[dict[str, Any]]:
+        """Mock measuring: nominal values with the live adapter's validation."""
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        guard = self._mock_doc_error({"Part", "Assembly"}, "measure_entities")
+        if guard is not None:
+            return guard
+        if not entities or len(entities) > 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="measure_entities takes one or two entity specs",
+            )
+        self._operation_count += 1
+        data: dict[str, Any] = {"selected": list(entities)}
+        if len(entities) == 1:
+            data.update({"area_m2": 0.0025, "perimeter_m": 0.2})
+        else:
+            data.update({"distance_m": 0.05, "angle_rad": 0.0, "is_parallel": True})
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
+
+    async def get_material(
+        self, configuration: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock reading the active part material."""
+        guard = self._mock_doc_error({"Part"}, "get_material")
+        if guard is not None:
+            return guard
+        assigned = getattr(self, "_materials", {}).get(self._mock_doc_key())
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "material": assigned["name"] if assigned else None,
+                "database": assigned["database"] if assigned else None,
+                "configuration": configuration,
+            },
+        )
+
+    async def set_material(
+        self,
+        material_name: str,
+        database: str | None = None,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock assigning a material; unknown names fail as they do live."""
+        guard = self._mock_doc_error({"Part"}, "set_material")
+        if guard is not None:
+            return guard
+        wanted = material_name.strip().lower()
+        match = next((m for m in self._MOCK_MATERIALS if m["name"].lower() == wanted), None)
+        if match is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Material {material_name!r} was not applied (not in the library)",
+            )
+        if not hasattr(self, "_materials"):
+            self._materials: dict[str, dict[str, str]] = {}
+        self._materials[self._mock_doc_key()] = match
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "material": match["name"],
+                "database": database or "SOLIDWORKS Materials",
+                "configuration": configuration,
+            },
+        )
+
+    async def list_available_materials(
+        self, search: str | None = None
+    ) -> AdapterResult[list[dict[str, str]]]:
+        """Mock listing the material library."""
+        needle = (search or "").strip().lower()
+        items = [
+            dict(m)
+            for m in self._MOCK_MATERIALS
+            if not needle or needle in m["name"].lower() or needle in m["classification"].lower()
+        ]
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=items)
+
+    async def get_custom_properties(
+        self, configuration: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock reading custom properties."""
+        if self._current_model is None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+        store = getattr(self, "_custom_properties", {})
+        props = store.get((self._mock_doc_key(), configuration or ""), {})
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "configuration": configuration or "",
+                "properties": {k: {"value": v, "resolved": v} for k, v in props.items()},
+            },
+        )
+
+    async def set_custom_property(
+        self, name: str, value: str, configuration: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock writing one custom property."""
+        if self._current_model is None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
+        if not name.strip():
+            return AdapterResult(status=AdapterResultStatus.ERROR, error="name is required")
+        if not hasattr(self, "_custom_properties"):
+            self._custom_properties: dict[tuple[str, str], dict[str, str]] = {}
+        key = (self._mock_doc_key(), configuration or "")
+        self._custom_properties.setdefault(key, {})[name] = str(value)
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": name,
+                "value": str(value),
+                "resolved": str(value),
+                "configuration": configuration or "",
+            },
+        )
+
+    async def export_flat_pattern(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Mock flat-pattern export: validates the target, writes nothing."""
+        guard = self._mock_doc_error({"Part"}, "export_flat_pattern")
+        if guard is not None:
+            return guard
+        if not file_path.lower().endswith((".dxf", ".dwg")):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="file_path must end in .dxf or .dwg"
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"file_path": file_path, "size_bytes": 0, "mock": True},
+        )
+
+    async def insert_model_dimensions(
+        self, view_name: str | None = None, include_hole_wizard: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock importing model dimensions into drawing views."""
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        guard = self._mock_doc_error({"Drawing"}, "insert_model_dimensions")
+        if guard is not None:
+            return guard
+        names = [view_name] if view_name else list(self._drawing_views)
+        unknown = [n for n in names if n not in self._drawing_views]
+        if unknown or not names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No view named {unknown[0]!r}" if unknown else "The drawing has no views",
+            )
+        if not hasattr(self, "_view_dimensions"):
+            self._view_dimensions: dict[str, int] = {}
+        per_view = []
+        for name in names:
+            before = self._view_dimensions.get(name, 0)
+            after = before or 3
+            self._view_dimensions[name] = after
+            per_view.append(
+                {
+                    "view": name,
+                    "dimensions_before": before,
+                    "dimensions_after": after,
+                    "dimensions_added": after - before,
+                    "method": "insert_model_annotations" if after > before else "none",
+                    "autodimension_status": None,
+                }
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "views": per_view,
+                "dimensions_added": sum(v["dimensions_added"] for v in per_view),
+            },
+        )
+
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock inserting a BOM table."""
+        guard = self._mock_doc_error({"Drawing"}, "insert_bom_table")
+        if guard is not None:
+            return guard
+        if bom_type not in {"top_level_only", "parts_only", "indented"}:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="bom_type must be top_level_only, parts_only or indented",
+            )
+        if view_name not in self._drawing_views:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"No view named {view_name!r}"
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "view": view_name,
+                "bom_type": bom_type,
+                "template": template_path,
+                "row_count": 2,
+            },
+        )
+
+    async def set_sheet_scale(
+        self, numerator: float, denominator: float
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock setting the sheet scale."""
+        guard = self._mock_doc_error({"Drawing"}, "set_sheet_scale")
+        if guard is not None:
+            return guard
+        if numerator <= 0 or denominator <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Scale values must be positive"
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"sheet": "Sheet1", "scale": f"{numerator:g}:{denominator:g}"},
+        )
+
+    # --- Standard drawing methods ---
+
+    async def arrange_dimensions(
+        self, view_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock arranging drawing dimensions: reports a clean layout."""
+        guard = self._mock_doc_error({"Drawing"}, "arrange_dimensions")
+        if guard is not None:
+            return guard
+        if view_name and view_name not in self._drawing_views:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"No view named {view_name!r}"
+            )
+        counts = getattr(self, "_view_dimensions", {})
+        total = sum(
+            n for v, n in counts.items() if not view_name or v == view_name
+        )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "dimensions": total,
+                "moved": total,
+                "unplaced": [],
+                "overlaps_before": total,
+                "overlaps_after": 0,
+                "remaining_overlaps": [],
+                "sheet_size_m": [0.42, 0.297],
+            },
+        )
+
+    async def create_standard_drawing(
+        self,
+        model_path: str,
+        output_dir: str | None = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "",
+        revision: str = "A",
+        company: str = "",
+        drawn_date: str | None = None,
+        notes: list[str] | None = None,
+        include_isometric: bool = True,
+        write_model_properties: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock standard A3 drawing: validates inputs, writes nothing to disk."""
+        import os
+
+        if not os.path.isfile(model_path):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Model file not found: {model_path}",
+            )
+        stem = os.path.splitext(os.path.basename(model_path))[0]
+        number = drawing_number or f"{stem.upper().replace(' ', '-')}-Rev{revision}-01"
+        out_dir = output_dir or os.path.dirname(model_path)
+        views = {
+            "Drawing View1": {"role": "front", "caption": "FRONT ELEVATION"},
+            "Drawing View2": {"role": "plan", "caption": "PLAN"},
+            "Drawing View3": {"role": "side", "caption": "SIDE ELEVATION"},
+        }
+        if include_isometric:
+            views["Drawing View4"] = {"role": "iso", "caption": "ISOMETRIC"}
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "scale": "1:1",
+                "isometric_scale": "1:1" if include_isometric else None,
+                "views": views,
+                "overlap_check": {"overlaps_after": 0, "annotation_overlaps": []},
+                "drawing_number": number,
+                "drawing_path": os.path.join(out_dir, f"{number}.SLDDRW"),
+                "pdf_path": os.path.join(out_dir, f"{number}.pdf"),
+                "properties_written": {
+                    "model": {"Description": title or stem} if write_model_properties else {},
+                    "drawing": {"DrawnBy": author, "Revision": revision},
+                },
+                "notes": ["NOTES", *[n.upper() for n in (notes or [])]],
+                "mock": True,
+            },
+        )

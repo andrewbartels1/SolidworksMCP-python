@@ -1611,3 +1611,210 @@ class SolidWorksAdapter(ABC):
             dict[str, Any]: A dictionary containing the resulting values.
         """
         return self._metrics.copy()
+
+    # --- Engineering-data and drawing-documentation methods ---
+
+    async def list_model_dimensions(
+        self,
+        feature_name: str | None = None,
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List every dimension in the active part or assembly.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_model_dimensions is not implemented by this adapter",
+        )
+
+    async def measure_entities(
+        self,
+        entities: list[str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Measure one or two selected entities.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="measure_entities is not implemented by this adapter",
+        )
+
+    async def get_material(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the material assigned to the active part.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_material is not implemented by this adapter",
+        )
+
+    async def set_material(
+        self,
+        material_name: str,
+        database: str | None = None,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Assign a material to the active part.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_material is not implemented by this adapter",
+        )
+
+    async def list_available_materials(
+        self,
+        search: str | None = None,
+    ) -> AdapterResult[list[dict[str, str]]]:
+        """List materials from the configured material libraries.
+
+        Returns:
+            AdapterResult[list[dict[str, str]]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_available_materials is not implemented by this adapter",
+        )
+
+    async def get_custom_properties(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the custom properties of the active document.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_custom_properties is not implemented by this adapter",
+        )
+
+    async def set_custom_property(
+        self,
+        name: str,
+        value: str,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create or overwrite one custom property.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_custom_property is not implemented by this adapter",
+        )
+
+    async def export_flat_pattern(
+        self,
+        file_path: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Export the active sheet-metal part's flat pattern.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="export_flat_pattern is not implemented by this adapter",
+        )
+
+    async def insert_model_dimensions(
+        self,
+        view_name: str | None = None,
+        include_hole_wizard: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bring model dimensions into drawing views.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="insert_model_dimensions is not implemented by this adapter",
+        )
+
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a BOM table anchored to an assembly drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="insert_bom_table is not implemented by this adapter",
+        )
+
+    async def set_sheet_scale(
+        self,
+        numerator: float,
+        denominator: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set the active drawing sheet's scale.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_sheet_scale is not implemented by this adapter",
+        )
+
+    # --- Standard drawing methods ---
+
+    async def arrange_dimensions(
+        self,
+        view_name: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move drawing dimensions so none overlaps, then verify.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="arrange_dimensions is not implemented by this adapter",
+        )
+
+    async def create_standard_drawing(
+        self,
+        model_path: str,
+        output_dir: str | None = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "",
+        revision: str = "A",
+        company: str = "",
+        drawn_date: str | None = None,
+        notes: list[str] | None = None,
+        include_isometric: bool = True,
+        write_model_properties: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a complete standard A3 drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_standard_drawing is not implemented by this adapter",
+        )

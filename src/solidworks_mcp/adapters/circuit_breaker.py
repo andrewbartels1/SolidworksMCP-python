@@ -1672,6 +1672,217 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             )
             return None
 
+    # --- Engineering-data and drawing-documentation methods ---
+
+    async def list_model_dimensions(
+        self,
+        feature_name: str | None = None,
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List every dimension in the active part or assembly through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_model_dimensions",
+            lambda: self.adapter.list_model_dimensions(feature_name),
+            input_dict={"feature_name": feature_name},
+        )
+
+    async def measure_entities(
+        self,
+        entities: list[str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Measure one or two selected entities through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "measure_entities",
+            lambda: self.adapter.measure_entities(entities),
+            input_dict={"entities": entities},
+        )
+
+    async def get_material(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the material assigned to the active part through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_material",
+            lambda: self.adapter.get_material(configuration),
+            input_dict={"configuration": configuration},
+        )
+
+    async def set_material(
+        self,
+        material_name: str,
+        database: str | None = None,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Assign a material to the active part through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_material",
+            lambda: self.adapter.set_material(material_name, database, configuration),
+            input_dict={
+                "material_name": material_name,
+                "database": database,
+                "configuration": configuration,
+            },
+        )
+
+    async def list_available_materials(
+        self,
+        search: str | None = None,
+    ) -> AdapterResult[list[dict[str, str]]]:
+        """List materials from the configured material libraries through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_available_materials",
+            lambda: self.adapter.list_available_materials(search),
+            input_dict={"search": search},
+        )
+
+    async def get_custom_properties(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the custom properties of the active document through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_custom_properties",
+            lambda: self.adapter.get_custom_properties(configuration),
+            input_dict={"configuration": configuration},
+        )
+
+    async def set_custom_property(
+        self,
+        name: str,
+        value: str,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create or overwrite one custom property through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_custom_property",
+            lambda: self.adapter.set_custom_property(name, value, configuration),
+            input_dict={"name": name, "value": value, "configuration": configuration},
+        )
+
+    async def export_flat_pattern(
+        self,
+        file_path: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Export the active sheet-metal part's flat pattern through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "export_flat_pattern",
+            lambda: self.adapter.export_flat_pattern(file_path),
+            input_dict={"file_path": file_path},
+        )
+
+    async def insert_model_dimensions(
+        self,
+        view_name: str | None = None,
+        include_hole_wizard: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bring model dimensions into drawing views through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "insert_model_dimensions",
+            lambda: self.adapter.insert_model_dimensions(
+                view_name, include_hole_wizard
+            ),
+            input_dict={
+                "view_name": view_name,
+                "include_hole_wizard": include_hole_wizard,
+            },
+        )
+
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a BOM table anchored to an assembly drawing view through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "insert_bom_table",
+            lambda: self.adapter.insert_bom_table(
+                view_name, template_path, bom_type, x_mm, y_mm
+            ),
+            input_dict={
+                "view_name": view_name,
+                "template_path": template_path,
+                "bom_type": bom_type,
+                "x_mm": x_mm,
+                "y_mm": y_mm,
+            },
+        )
+
+    async def set_sheet_scale(
+        self,
+        numerator: float,
+        denominator: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set the active drawing sheet's scale through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_sheet_scale",
+            lambda: self.adapter.set_sheet_scale(numerator, denominator),
+            input_dict={"numerator": numerator, "denominator": denominator},
+        )
+
+    # --- Standard drawing methods ---
+
+    async def arrange_dimensions(
+        self,
+        view_name: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move drawing dimensions so none overlaps, then verify through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "arrange_dimensions",
+            lambda: self.adapter.arrange_dimensions(view_name),
+            input_dict={"view_name": view_name},
+        )
+
+    async def create_standard_drawing(
+        self,
+        model_path: str,
+        output_dir: str | None = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "",
+        revision: str = "A",
+        company: str = "",
+        drawn_date: str | None = None,
+        notes: list[str] | None = None,
+        include_isometric: bool = True,
+        write_model_properties: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a complete standard A3 drawing through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_standard_drawing",
+            lambda: self.adapter.create_standard_drawing(
+                model_path,
+                output_dir,
+                title,
+                subtitle,
+                drawing_number,
+                author,
+                revision,
+                company,
+                drawn_date,
+                notes,
+                include_isometric,
+                write_model_properties,
+            ),
+            input_dict={
+                "model_path": model_path,
+                "output_dir": output_dir,
+                "title": title,
+                "subtitle": subtitle,
+                "drawing_number": drawing_number,
+                "author": author,
+                "revision": revision,
+                "company": company,
+                "drawn_date": drawn_date,
+                "notes": notes,
+                "include_isometric": include_isometric,
+                "write_model_properties": write_model_properties,
+            },
+        )
+
 
 class CircuitBreaker:
     """Legacy standalone circuit breaker class expected by tests.
