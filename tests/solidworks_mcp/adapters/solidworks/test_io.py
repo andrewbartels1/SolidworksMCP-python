@@ -3785,3 +3785,272 @@ def test_payload_helper_accepts_dicts_models_and_none() -> None:
     # model_file and model_path are the same thing on different schemas.
     assert _first({"model_file": "x"}, "model_path", "model_file") == "x"
     assert _first({}, "model_path", default="fallback") == "fallback"
+
+
+# ---- Branches previously reached only by the live suite ----------------------
+
+
+def test_view_names_collects_every_named_view(monkeypatch) -> None:
+    monkeypatch.setattr(_io_module, "_as_com", lambda _a, view, _i: view)
+    drawing = SimpleNamespace(
+        GetViews=lambda: [["Sheet1", _Named("Front"), _Named("")], _Named("Loose")]
+    )
+
+    assert _view_names(_IOHarness(None), drawing) == ["Front", "Loose"]
+
+
+def test_interference_details_of_a_clean_assembly_is_empty() -> None:
+    assert _interference_details(_IOHarness(None), None) == []
+
+
+def test_variant_array_wraps_values_as_a_safearray(monkeypatch) -> None:
+    monkeypatch.setattr(
+        _io_module,
+        "win32com",
+        SimpleNamespace(client=SimpleNamespace(VARIANT=lambda vt, v: (vt, v))),
+    )
+    monkeypatch.setattr(_io_module, "pythoncom", SimpleNamespace(VT_ARRAY=0x2000))
+
+    assert _io_module._variant_array(9, ("a", "b")) == (0x2000 | 9, ["a", "b"])
+
+
+def test_resolve_drawing_view_without_a_match_is_none(monkeypatch) -> None:
+    monkeypatch.setattr(_io_module, "_as_com", lambda _a, view, _i: view)
+    drawing = SimpleNamespace(GetViews=lambda: [["Sheet1", None, _Named("Top")]])
+
+    assert _io_module._resolve_drawing_view(_IOHarness(None), drawing, "front") is None
+
+
+@pytest.mark.asyncio
+async def test_set_units_validates_then_applies(monkeypatch) -> None:
+    applied: list[str] = []
+    monkeypatch.setattr(
+        _io_module,
+        "_apply_unit_system",
+        lambda _a, _m, token: applied.append(token) or {"unit_system": token},
+    )
+    harness = _DocsHarness(SimpleNamespace(), object())
+
+    unknown = await harness.set_units("furlong")
+    done = await harness.set_units("MM")
+
+    assert "Unrecognised unit system 'furlong'" in (unknown.error or "")
+    assert done.data == {"unit_system": applied[0]}
+
+
+@pytest.mark.asyncio
+async def test_list_open_documents_marks_the_active_one() -> None:
+    bracket = _Doc("Bracket.SLDPRT", "C:/parts/bracket.sldprt")
+    other = _Doc("Other.SLDPRT", "C:/parts/other.sldprt")
+    app = SimpleNamespace(GetDocuments=lambda: [bracket, None, other], ActiveDoc=other)
+
+    result = await _DocsHarness(None, app).list_open_documents()
+
+    assert [(d["title"], d["is_active"]) for d in result.data] == [
+        ("Bracket.SLDPRT", False),
+        ("Other.SLDPRT", True),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_activate_document_names_what_is_open_when_nothing_matches() -> None:
+    bracket = _Doc("Bracket.SLDPRT", "C:/parts/bracket.sldprt")
+    app = SimpleNamespace(GetDocuments=lambda: [bracket], ActiveDoc=None)
+
+    result = await _DocsHarness(None, app).activate_document("ghost.sldprt")
+
+    assert result.error == (
+        "No open document matches 'ghost.sldprt'. Open: Bracket.SLDPRT"
+    )
+
+
+class TestAssemblyAndDrawingSuccessPaths:
+    """Successful insert, mate, list, drawing, note and interference calls."""
+
+    @staticmethod
+    def _document(monkeypatch, doc_type: int) -> PyWin32Adapter:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = doc_type
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_insert_component_reports_the_new_component(
+        self, monkeypatch
+    ) -> None:
+        adapter = self._document(monkeypatch, 2)
+        adapter.swApp = MagicMock()
+        snapshots = iter([["base-1"], ["base-1", "bracket-1"]])
+        monkeypatch.setattr(
+            _io_module, "_component_names", lambda _a, _asm: next(snapshots)
+        )
+
+        result = await adapter.insert_component(__file__, 10.0, 0.0, -5.0)
+
+        assert result.is_success, result.error
+        assert result.data["component"] == "bracket-1"
+        assert result.data["position"] == {"x": 10.0, "y": 0.0, "z": -5.0}
+        assert (result.data["components_before"], result.data["components_after"]) == (
+            1,
+            2,
+        )
+
+    @pytest.mark.asyncio
+    async def test_add_mate_reports_which_components_moved(self, monkeypatch) -> None:
+        adapter = self._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(_io_module, "_byref_int", lambda: SimpleNamespace(value=1))
+        transforms = iter(
+            [
+                {"part-1": [0.0] * 16, "part-2": [0.0] * 16},
+                {"part-1": [0.0] * 16, "part-2": [1.0] * 16},
+            ]
+        )
+        monkeypatch.setattr(
+            _io_module, "_component_transforms", lambda _a, _asm: next(transforms)
+        )
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert result.is_success, result.error
+        assert result.data["mate_type"] == "coincident"
+        assert result.data["moved_components"] == ["part-2"]
+        assert result.data["geometry_moved"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_components_returns_their_names(self, monkeypatch) -> None:
+        adapter = self._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_component_names", lambda _a, _asm: ["base-1", "pin-1"]
+        )
+
+        result = await adapter.list_components()
+
+        assert result.data == ["base-1", "pin-1"]
+
+    @pytest.mark.asyncio
+    async def test_technical_drawing_reports_the_new_views(self, monkeypatch) -> None:
+        adapter = self._document(monkeypatch, 3)
+        snapshots = iter([[], ["Drawing View1", "Drawing View2", "Drawing View3"]])
+        monkeypatch.setattr(_io_module, "_view_names", lambda _a, _d: next(snapshots))
+
+        result = await adapter.create_technical_drawing({"model_path": __file__})
+
+        assert result.is_success, result.error
+        assert result.data["views"] == [
+            "Drawing View1",
+            "Drawing View2",
+            "Drawing View3",
+        ]
+        assert result.data["projection"] == "third_angle"
+        assert (result.data["views_before"], result.data["views_after"]) == (0, 3)
+
+    @pytest.mark.asyncio
+    async def test_add_note_positions_and_sizes_the_note(self, monkeypatch) -> None:
+        adapter = self._document(monkeypatch, 3)
+        note = MagicMock()
+        annotation = note.GetAnnotation.return_value
+        annotation.SetPosition.return_value = True
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note(
+            {"text": "MATERIAL: AISI 1018", "position": [120.0, 40.0], "font_size": 12}
+        )
+
+        assert result.data == {
+            "text": "MATERIAL: AISI 1018",
+            "position": {"x": 120.0, "y": 40.0},
+            "positioned": True,
+            "font_size_points": 12.0,
+        }
+        annotation.SetPosition.assert_called_once_with(0.12, 0.04, 0.0)
+        note.SetTextFormat.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_list_drawing_views_returns_the_view_names(self, monkeypatch) -> None:
+        adapter = self._document(monkeypatch, 3)
+        monkeypatch.setattr(_io_module, "_view_names", lambda _a, _d: ["Front", "Top"])
+
+        result = await adapter.list_drawing_views()
+
+        assert result.data == ["Front", "Top"]
+
+    @pytest.mark.asyncio
+    async def test_check_interference_needs_an_assembly(self, monkeypatch) -> None:
+        adapter = self._document(monkeypatch, 1)
+
+        result = await adapter.check_interference()
+
+        assert "requires an assembly document" in (result.error or "")
+        assert "type is 1" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_auto_center_marks_names_the_views_when_one_is_missing(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(_io_module, "_as_com", lambda _a, obj, _i: obj)
+    drawing = SimpleNamespace(
+        GetType=lambda: 3,
+        GetViews=lambda: [["Sheet1", _CenterMarkView([])]],
+        EditRebuild3=lambda: 1,
+    )
+
+    result = await _DocsHarness(drawing, object()).auto_center_marks("Side")
+
+    assert result.error == "No view named 'Side' on the active drawing. Views: Front"
+
+
+@pytest.mark.asyncio
+async def test_auto_center_marks_counts_existing_center_marks(monkeypatch) -> None:
+    monkeypatch.setattr(_io_module, "_as_com", lambda _a, obj, _i: obj)
+    mark = SimpleNamespace(GetType=lambda: _io_module._SW_ANNOTATION_CENTER_MARK)
+    view = _CenterMarkView([mark, SimpleNamespace(GetType=lambda: 0)])
+    drawing = SimpleNamespace(
+        GetType=lambda: 3, GetViews=lambda: [["Sheet1", view]], EditRebuild3=lambda: 1
+    )
+
+    result = await _DocsHarness(drawing, object()).auto_center_marks("Front")
+
+    assert result.data["center_marks_before"] == 1
+
+
+@pytest.mark.asyncio
+async def test_save_body_as_part_names_the_bodies_when_one_is_missing(
+    tmp_path,
+) -> None:
+    part = _part_with([SimpleNamespace(Name="Body2"), SimpleNamespace(Name=None)])
+
+    result = await _DocsHarness(part, object()).save_body_as_part(
+        "Body1", str(tmp_path / "b.sldprt")
+    )
+
+    assert result.error == "Body 'Body1' not found. Solid bodies: Body2"
+
+
+@pytest.mark.asyncio
+async def test_save_body_as_part_writes_the_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        _io_module, "pythoncom", SimpleNamespace(VT_DISPATCH=9, VT_BSTR=8)
+    )
+    target = tmp_path / "body.sldprt"
+    part = _part_with([SimpleNamespace(Name="Body1")], writes=target)
+
+    result = await _DocsHarness(part, object()).save_body_as_part("Body1", str(target))
+
+    assert result.data == {
+        "body": "Body1",
+        "file_path": str(target),
+        "feature": None,
+        "solid_bodies": ["Body1"],
+    }
+    assert target.read_bytes() == b"body"
