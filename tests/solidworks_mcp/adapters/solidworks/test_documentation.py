@@ -286,16 +286,12 @@ class _Measure:
 
 
 def _measurable(
-    selects: bool = True,
-    measure: Any = None,
-    parallel: Any = True,
-    as_property: bool = False,
+    selects: bool = True, measure: Any = None, parallel: Any = True
 ) -> SimpleNamespace:
     if measure is not None:
         measure.IsParallel = parallel
     extension = SimpleNamespace(
-        SelectByID2=lambda *_args: selects,
-        CreateMeasure=measure if as_property else (lambda: measure),
+        SelectByID2=lambda *_args: selects, CreateMeasure=lambda: measure
     )
     return SimpleNamespace(
         GetType=lambda: 1, Extension=extension, ClearSelection2=lambda _all: None
@@ -347,12 +343,20 @@ async def test_measure_entities_reports_an_unselectable_entity() -> None:
 
 
 @pytest.mark.asyncio
-async def test_measure_entities_reads_create_measure_as_a_property() -> None:
-    """SW 2026 late binding resolves the zero-arg CreateMeasure as a property."""
-    harness = _Harness(_measurable(measure=_Measure(), as_property=True))
-    result = await harness.measure_entities(["Edge<1>"])
+async def test_measure_entities_flags_create_measure_as_a_method(monkeypatch) -> None:
+    """Unflagged, late binding reads CreateMeasure as a property (SW 2026)."""
+    flagged: list[tuple[Any, tuple[str, ...]]] = []
+    monkeypatch.setattr(
+        doc._sw_type_info,
+        "flagged",
+        lambda obj, *interfaces: flagged.append((obj, interfaces)) or obj,
+    )
+    model = _measurable(measure=_Measure())
+
+    result = await _Harness(model).measure_entities(["Edge<1>"])
+
     assert result.is_success
-    assert result.data["area_m2"] == 0.0012
+    assert flagged[0] == (model.Extension, ("IModelDocExtension",))
 
 
 @pytest.mark.asyncio

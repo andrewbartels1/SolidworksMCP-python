@@ -379,10 +379,11 @@ class SolidWorksDocumentationMixin:
                         "coordinates (metres)"
                     )
 
-            # Late binding may resolve the zero-arg CreateMeasure as a property
-            # (it did on SW 2026), so read it through _get_attr_or_call. Not
-            # wrapped in _attempt: a COM error should surface with its message.
-            measure = self._get_attr_or_call(model.Extension, "CreateMeasure")
+            # CreateMeasure is a zero-arg method; unflagged, late binding asks
+            # for it as a property and SW 2026 answers "Member not found".
+            # Not wrapped in _attempt: a COM error surfaces with its message.
+            extension = _sw_type_info.flagged(model.Extension, "IModelDocExtension")
+            measure = extension.CreateMeasure()
             if measure is None:
                 raise Exception("CreateMeasure returned nothing")
             measure = _sw_type_info.flagged(measure, "IMeasure")
