@@ -286,12 +286,16 @@ class _Measure:
 
 
 def _measurable(
-    selects: bool = True, measure: Any = None, parallel: Any = True
+    selects: bool = True,
+    measure: Any = None,
+    parallel: Any = True,
+    as_property: bool = False,
 ) -> SimpleNamespace:
     if measure is not None:
         measure.IsParallel = parallel
     extension = SimpleNamespace(
-        SelectByID2=lambda *_args: selects, CreateMeasure=lambda: measure
+        SelectByID2=lambda *_args: selects,
+        CreateMeasure=measure if as_property else (lambda: measure),
     )
     return SimpleNamespace(
         GetType=lambda: 1, Extension=extension, ClearSelection2=lambda _all: None
@@ -340,6 +344,23 @@ async def test_measure_entities_takes_one_or_two_specs(entities) -> None:
 async def test_measure_entities_reports_an_unselectable_entity() -> None:
     result = await _Harness(_measurable(selects=False)).measure_entities(["Edge<9>"])
     assert "No entity found for 'Edge<9>'" in result.error
+
+
+@pytest.mark.asyncio
+async def test_measure_entities_reads_create_measure_as_a_property() -> None:
+    """SW 2026 late binding resolves the zero-arg CreateMeasure as a property."""
+    harness = _Harness(_measurable(measure=_Measure(), as_property=True))
+    result = await harness.measure_entities(["Edge<1>"])
+    assert result.is_success
+    assert result.data["area_m2"] == 0.0012
+
+
+@pytest.mark.asyncio
+async def test_measure_entities_reports_the_com_error() -> None:
+    model = _measurable()
+    model.Extension.CreateMeasure = _raise
+    result = await _Harness(model).measure_entities(["Edge<1>"])
+    assert "COM call failed" in result.error
 
 
 @pytest.mark.asyncio

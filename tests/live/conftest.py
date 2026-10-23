@@ -258,31 +258,17 @@ class _ScratchSession:
                 pass
 
 
-@pytest.fixture(autouse=True)
-def _pace_live_tests() -> Iterator[None]:
-    """After each live test: drain every open document, then idle.
+def _demo_keep_open() -> bool:
+    """True when ``SW_DEMO_KEEP_OPEN`` asks to leave a demo's part on screen.
 
-    Only active when ``SW_TEST_PACE_SECONDS`` is set (``dev-test-combined``
-    sets 4); a bare ``pytest tests/live/`` stays fast. This is what the
-    per-batch ``sw_close_all_and_settle`` drain used to do - the batching
-    itself was subprocess churn, but closing leaked documents and giving
-    SolidWorks a breather between real COM tests is what actually kept a long
-    run from degrading (open assemblies pile up, then ``create_part`` /
-    ``open_model`` start throwing ``RPC_E_DISCONNECTED``). Doing it in-process
-    per test is the same effect without spawning a pytest per batch.
+    ``tests/scripts/live_demo.ps1`` sets it: documents are then closed before
+    the test instead of after it, so the result stays open for inspection.
     """
-    import time
+    return os.getenv("SW_DEMO_KEEP_OPEN", "").lower() in {"1", "true", "yes"}
 
-    yield
 
-    try:
-        pace = float(os.getenv("SW_TEST_PACE_SECONDS", "0"))
-    except ValueError:
-        pace = 0.0
-    if pace <= 0:
-        return
-
-    # Best-effort drain on a throwaway connection (app-global, cheap).
+def _close_all_documents() -> None:
+    """Close every open document on a throwaway connection (best effort)."""
     try:  # pragma: no cover - only meaningful with a live SolidWorks
         import asyncio
 
@@ -301,6 +287,41 @@ def _pace_live_tests() -> Iterator[None]:
         asyncio.run(_drain())
     except Exception:  # noqa: BLE001 - the drain is a courtesy, never a failure
         pass
+
+
+@pytest.fixture(autouse=True)
+def _pace_live_tests() -> Iterator[None]:
+    """After each live test: drain every open document, then idle.
+
+    In a demo (``SW_DEMO_KEEP_OPEN``) the drain runs *before* the test
+    instead, so the test starts clean and its part is left open afterwards.
+
+    Only active when ``SW_TEST_PACE_SECONDS`` is set (``dev-test-combined``
+    sets 4); a bare ``pytest tests/live/`` stays fast. This is what the
+    per-batch ``sw_close_all_and_settle`` drain used to do - the batching
+    itself was subprocess churn, but closing leaked documents and giving
+    SolidWorks a breather between real COM tests is what actually kept a long
+    run from degrading (open assemblies pile up, then ``create_part`` /
+    ``open_model`` start throwing ``RPC_E_DISCONNECTED``). Doing it in-process
+    per test is the same effect without spawning a pytest per batch.
+    """
+    import time
+
+    keep_open = _demo_keep_open()
+    if keep_open:
+        _close_all_documents()
+
+    yield
+
+    try:
+        pace = float(os.getenv("SW_TEST_PACE_SECONDS", "0"))
+    except ValueError:
+        pace = 0.0
+    if pace <= 0:
+        return
+
+    if not keep_open:
+        _close_all_documents()
 
     time.sleep(pace)
 
@@ -327,9 +348,13 @@ async def connected_adapter(live_adapter: object) -> AsyncIterator[object]:
 
 @pytest_asyncio.fixture
 async def scratch(live_adapter: object) -> AsyncIterator[_ScratchSession]:
-    """Yield a scratch session; on teardown close only its docs and files."""
+    """Yield a scratch session; on teardown close only its docs and files.
+
+    In a demo (``SW_DEMO_KEEP_OPEN``) the documents stay open for inspection.
+    """
     session = _ScratchSession(live_adapter)
     try:
         yield session
     finally:
-        session.cleanup()
+        if not _demo_keep_open():
+            session.cleanup()

@@ -120,8 +120,10 @@ async def test_dimensions_list_and_measure(scratch):
     assert any(n.endswith("@Sketch1") for n in names), names
     assert any("Boss-Extrude1" in n for n in names), names
 
-    top = await tools["measure_entities"]({"entities": ["face:0.015,0.0,-0.015"]})
-    evidence("measure top face (expect 0.0009 m^2 = 30x30 mm)", top["data"])
+    # Centre of the top face: the Top-plane sketch spans x, y in [0, 30] mm and
+    # the boss runs from z = 0 down to z = -15 mm (as in the chamfer live tests).
+    top = await tools["measure_entities"]({"entities": ["face:0.015,0.015,0.0"]})
+    evidence("measure top face (expect 0.0009 m^2 = 30x30 mm)", top)
     assert top["status"] == "success", top
     assert abs(top["data"]["area_m2"] - 0.0009) < 1e-6, top["data"]
 

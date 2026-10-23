@@ -379,13 +379,14 @@ class SolidWorksDocumentationMixin:
                         "coordinates (metres)"
                     )
 
-            measure = self._attempt(
-                lambda: model.Extension.CreateMeasure(), default=None
-            )
+            # Late binding may resolve the zero-arg CreateMeasure as a property
+            # (it did on SW 2026), so read it through _get_attr_or_call. Not
+            # wrapped in _attempt: a COM error should surface with its message.
+            measure = self._get_attr_or_call(model.Extension, "CreateMeasure")
             if measure is None:
                 raise Exception("CreateMeasure returned nothing")
             measure = _sw_type_info.flagged(measure, "IMeasure")
-            if not self._attempt(lambda: measure.Calculate(None), default=False):
+            if not measure.Calculate(None):
                 raise Exception("IMeasure.Calculate failed for this selection")
 
             result: dict[str, Any] = {"selected": list(entities)}
