@@ -3694,3 +3694,72 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data={"file_path": file_path, "size_bytes": 0, "mock": True},
         )
+
+    async def insert_model_dimensions(
+        self, view_name: str | None = None, include_hole_wizard: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock importing model dimensions into drawing views."""
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        guard = self._mock_doc_error({"Drawing"}, "insert_model_dimensions")
+        if guard is not None:
+            return guard
+        names = [view_name] if view_name else list(self._drawing_views)
+        unknown = [n for n in names if n not in self._drawing_views]
+        if unknown or not names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No view named {unknown[0]!r}" if unknown else "The drawing has no views",
+            )
+        if not hasattr(self, "_view_dimensions"):
+            self._view_dimensions: dict[str, int] = {}
+        per_view = []
+        for name in names:
+            before = self._view_dimensions.get(name, 0)
+            after = before or 3
+            self._view_dimensions[name] = after
+            per_view.append(
+                {
+                    "view": name,
+                    "dimensions_before": before,
+                    "dimensions_after": after,
+                    "dimensions_added": after - before,
+                    "method": "insert_model_annotations" if after > before else "none",
+                    "autodimension_status": None,
+                }
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "views": per_view,
+                "dimensions_added": sum(v["dimensions_added"] for v in per_view),
+            },
+        )
+
+    async def arrange_dimensions(
+        self, view_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock arranging drawing dimensions: reports a clean layout."""
+        guard = self._mock_doc_error({"Drawing"}, "arrange_dimensions")
+        if guard is not None:
+            return guard
+        if view_name and view_name not in self._drawing_views:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"No view named {view_name!r}"
+            )
+        counts = getattr(self, "_view_dimensions", {})
+        total = sum(
+            n for v, n in counts.items() if not view_name or v == view_name
+        )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "dimensions": total,
+                "moved": total,
+                "unplaced": [],
+                "overlaps_before": total,
+                "overlaps_after": 0,
+                "remaining_overlaps": [],
+                "sheet_size_m": [0.42, 0.297],
+            },
+        )

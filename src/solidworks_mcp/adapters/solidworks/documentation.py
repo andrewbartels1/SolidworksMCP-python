@@ -18,8 +18,16 @@ import defusedxml.ElementTree as ET
 from defusedxml import DefusedXmlException
 
 from ..base import AdapterResult, AdapterResultStatus
+from . import dimension_layout as _layout
 from .features import _null_callout, _parse_edge_spec, _select_edge_by_coord
-from .io import _as_com, _byref_bstr, _doc_type, _sw_type_info
+from .io import (
+    _as_com,
+    _byref_bstr,
+    _doc_type,
+    _resolve_drawing_view,
+    _sw_type_info,
+    _view_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -33,6 +41,37 @@ _SW_CUSTOM_PROPERTY_REPLACE_VALUE = 2
 _SW_EXPORT_SHEET_METAL = 1
 # swBodyType_e
 _SW_SOLID_BODY = 0
+# swInsertAnnotation_e
+_SW_INSERT_DIMENSIONS = 8
+_SW_INSERT_DIMENSIONS_MARKED_FOR_DRAWING = 32768
+_SW_INSERT_HOLE_WIZARD_LOCATION_DIMS = 131072
+# swImportModelItemsSource_e
+_SW_IMPORT_FROM_ENTIRE_MODEL = 0
+# swAutodimEntities_e / swAutodimScheme_e / placements
+_SW_AUTODIM_ENTITIES_ALL = 1
+_SW_AUTODIM_SCHEME_BASELINE = 1
+_SW_AUTODIM_HORIZONTAL_BELOW = -1
+_SW_AUTODIM_VERTICAL_LEFT = -1
+_SW_AUTODIM_STATUS_SUCCESS = 0
+# swAnnotationType_e
+_SW_ANNOTATION_DISPLAY_DIMENSION = 4
+
+
+class _DimensionOverlapError(Exception):
+    """Raised by arrange_dimensions when the no-overlap rule still fails."""
+
+    def __init__(self, result: dict[str, Any]) -> None:
+        self.result = result
+        kinds = sorted({o["kind"] for o in result.get("remaining_overlaps", [])})
+        sample = "; ".join(
+            f"{o['dimension']} vs {o['conflicts_with']} ({o['kind']})"
+            for o in result.get("remaining_overlaps", [])[:5]
+        )
+        super().__init__(
+            f"{result['overlaps_after']} dimension overlap(s) remain after arranging "
+            f"{result['dimensions']} dimension(s) ({', '.join(kinds)}): {sample}. "
+            "Try a smaller sheet scale or a larger sheet so the views have room."
+        )
 
 
 _DEFAULT_MATERIAL_DATABASE = "SOLIDWORKS Materials"
@@ -238,6 +277,8 @@ class SolidWorksDocumentationMixin:
         ) -> Any: ...
 
         def _get_attr_or_call(self, obj: Any, name: str) -> Any: ...
+
+        def _require_drawing(self) -> AdapterResult[Any] | None: ...
 
     def _require_doc_type(
         self, allowed: set[int], operation: str
@@ -781,3 +822,455 @@ class SolidWorksDocumentationMixin:
             "AdapterResult[dict[str, Any]]",
             self._handle_com_operation("export_flat_pattern", _export),
         )
+
+    # ------------------------------------------------------------------
+    # Drawing documentation
+    # ------------------------------------------------------------------
+
+    def _view_dimension_count(self, view: Any) -> int:
+        count = self._attempt(lambda: view.GetDisplayDimensionCount(), default=0)
+        return int(count) if isinstance(count, (int, float)) else 0
+
+    def _pictorial(self, view: Any) -> bool:
+        """True for isometric/dimetric/trimetric views, which are not dimensioned."""
+        name = str(self._attempt(lambda: view.GetOrientationName(), default="") or "")
+        return any(k in name.lower() for k in ("isometric", "dimetric", "trimetric"))
+
+    def _delete_display_dimension(self, model: Any, an: Any) -> bool:
+        """Delete one drawing dimension.
+
+        ``IAnnotation::Select3`` selects nothing under late binding (False with
+        a null dispatch, type mismatch with ``None``); selecting by
+        ``IDisplayDimension::GetNameForSelection`` with type ``DIMENSION`` and
+        ``DeleteSelection2`` works - measured live on SW 2025.
+        """
+        specific = self._attempt(lambda: an.GetSpecificAnnotation(), default=None)
+        disp = (
+            _as_com(self, specific, "IDisplayDimension")
+            if specific is not None
+            else None
+        )
+        sel_name = (
+            self._attempt(lambda: disp.GetNameForSelection(), default=None)
+            if disp
+            else None
+        )
+        if not sel_name:
+            return False
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        selected = self._attempt(
+            lambda: model.Extension.SelectByID2(
+                sel_name, "DIMENSION", 0.0, 0.0, 0.0, False, 0, _null_callout(), 0
+            ),
+            default=False,
+        )
+        deleted = bool(selected) and bool(
+            self._attempt(lambda: model.Extension.DeleteSelection2(0), default=False)
+        )
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        return deleted
+
+    def _dimension_annotations(self, view: Any) -> list[tuple[Any, str | None]]:
+        """(annotation, model dimension name) for each display dimension in a view."""
+        found: list[tuple[Any, str | None]] = []
+        ann = self._attempt(lambda: view.GetFirstAnnotation3(), default=None)
+        guard = 0
+        while ann is not None and guard < 2000:
+            guard += 1
+            an = _sw_type_info.flagged(ann, "IAnnotation")
+            if self._attempt(lambda a=an: a.GetType(), default=None) == (
+                _SW_ANNOTATION_DISPLAY_DIMENSION
+            ):
+                specific = self._attempt(
+                    lambda a=an: a.GetSpecificAnnotation(), default=None
+                )
+                name = None
+                if specific is not None:
+                    disp = _sw_type_info.flagged(specific, "IDisplayDimension")
+                    dim = self._attempt(lambda d=disp: d.GetDimension2(0), default=None)
+                    if dim is not None:
+                        name = _strip_document_suffix(
+                            self._attempt(
+                                lambda d=dim: (
+                                    _sw_type_info.flagged(d, "IDimension").FullName
+                                ),
+                                default=None,
+                            )
+                        )
+                found.append((an, name))
+            ann = self._attempt(lambda a=an: a.GetNext3(), default=None)
+        return found
+
+    def _import_dimensions(
+        self,
+        view_name: str | None = None,
+        include_hole_wizard: bool = True,
+        only_views: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Synchronous body of insert_model_dimensions (also used by the standard drawing)."""
+        model = self.currentModel
+        drawing = _sw_type_info.flagged(model, "IDrawingDoc")
+        all_names = _view_names(self, drawing)
+        if view_name and view_name not in all_names:
+            raise Exception(
+                f"No view named {view_name!r}. Views: {', '.join(all_names) or 'none'}"
+            )
+        views = {n: _resolve_drawing_view(self, drawing, n) for n in all_names}
+        skipped = (
+            [] if view_name else [n for n, v in views.items() if self._pictorial(v)]
+        )
+        names = [view_name] if view_name else [n for n in all_names if n not in skipped]
+        if only_views:
+            names = [n for n in only_views if n in all_names]
+        before = {n: self._view_dimension_count(views[n]) for n in names}
+
+        types = _SW_INSERT_DIMENSIONS_MARKED_FOR_DRAWING
+        if include_hole_wizard:
+            types |= _SW_INSERT_HOLE_WIZARD_LOCATION_DIMS
+        # Dimensions already on the sheet (any view) count as shown.
+        shown: set[str] = set()
+        for name in all_names:
+            if name in names:
+                continue
+            shown.update(n for _, n in self._dimension_annotations(views[name]) if n)
+        removed: dict[str, int] = {}
+        method = "insert_model_annotations"
+        for name in names:
+            self._attempt(lambda n=name: drawing.ActivateView(n), default=None)
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            self._attempt(
+                lambda n=name: model.Extension.SelectByID2(
+                    n, "DRAWINGVIEW", 0.0, 0.0, 0.0, False, 0, _null_callout(), 0
+                ),
+                default=None,
+            )
+            self._attempt(
+                lambda: drawing.InsertModelAnnotations3(
+                    _SW_IMPORT_FROM_ENTIRE_MODEL, types, False, False, False, False
+                ),
+                default=None,
+            )
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            removed[name] = 0
+            for an, dim_name in self._dimension_annotations(views[name]):
+                if dim_name and dim_name in shown:
+                    if self._delete_display_dimension(model, an):
+                        removed[name] += 1
+                elif dim_name:
+                    shown.add(dim_name)
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        self._attempt(lambda: model.EditRebuild3(), default=None)
+
+        autodim_status: Any = None
+        if not shown and all(self._view_dimension_count(views[n]) == 0 for n in names):
+            method = "auto_dimension"
+            for name in names:
+                self._attempt(lambda: model.ClearSelection2(True), default=None)
+                self._attempt(
+                    lambda n=name: model.Extension.SelectByID2(
+                        n,
+                        "DRAWINGVIEW",
+                        0.0,
+                        0.0,
+                        0.0,
+                        False,
+                        0,
+                        _null_callout(),
+                        0,
+                    ),
+                    default=None,
+                )
+                autodim_status = self._attempt(
+                    lambda: drawing.AutoDimension(
+                        _SW_AUTODIM_ENTITIES_ALL,
+                        _SW_AUTODIM_SCHEME_BASELINE,
+                        _SW_AUTODIM_HORIZONTAL_BELOW,
+                        _SW_AUTODIM_SCHEME_BASELINE,
+                        _SW_AUTODIM_VERTICAL_LEFT,
+                    ),
+                    default=None,
+                )
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            self._attempt(lambda: model.EditRebuild3(), default=None)
+
+        per_view = []
+        for name in names:
+            after = self._view_dimension_count(views[name])
+            per_view.append(
+                {
+                    "view": name,
+                    "dimensions_before": before[name],
+                    "dimensions_after": after,
+                    "dimensions_added": after - before[name],
+                    "duplicates_removed": removed.get(name, 0),
+                }
+            )
+        total = sum(v["dimensions_added"] for v in per_view)
+        on_sheet = sum(v["dimensions_after"] for v in per_view)
+        if on_sheet == 0:
+            raise Exception(
+                "No dimensions were added to any view: InsertModelAnnotations3 "
+                f"imported nothing and AutoDimension returned {autodim_status!r} "
+                "(0 = success). See com-api-pitfalls #18."
+            )
+        return {
+            "views": per_view,
+            "dimensions_added": total,
+            "unique_dimensions": len(shown),
+            "skipped_pictorial_views": skipped,
+            "method": method,
+            "autodimension_status": autodim_status,
+        }
+
+    async def insert_model_dimensions(
+        self, view_name: str | None = None, include_hole_wizard: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bring model dimensions into drawing views, each dimension shown once.
+
+        Imports the model's "marked for drawing" dimensions view by view with
+        ``IDrawingDoc::InsertModelAnnotations3`` (``UsePlacementInSketch`` off,
+        so SolidWorks places them rather than copying sketch positions).
+        Drafting rules applied:
+
+        * pictorial views (isometric, dimetric, trimetric) are not dimensioned
+          unless named explicitly;
+        * a model dimension already shown in an earlier view is deleted from
+          later views, so each dimension appears exactly once on the sheet.
+
+        Falls back to ``IDrawingDoc::AutoDimension`` only when nothing at all
+        could be imported. Placement is then made overlap-free by
+        :meth:`arrange_dimensions`.
+
+        Args:
+            view_name: One view to dimension; every orthographic view when omitted.
+            include_hole_wizard: Also import Hole Wizard location dimensions.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Per-view counts, duplicates removed,
+            skipped pictorial views and the ``method`` used.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+
+        def _insert() -> dict[str, Any]:
+            return self._import_dimensions(view_name, include_hole_wizard)
+
+        return cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("insert_model_dimensions", _insert),
+        )
+
+    # ------------------------------------------------------------------
+    # Dimension layout: no dimension may overlap another
+    # ------------------------------------------------------------------
+
+    def _read_view_dimensions(self, view: Any, view_name: str) -> list[tuple[Any, Any]]:
+        """Return ``(annotation, DimensionGeometry)`` for every dimension in a view.
+
+        Geometry comes from ``IAnnotation::GetDisplayData``: text boxes from
+        ``GetTextPositionAtIndex`` (lower-left) with the larger of
+        ``GetTextInBoxWidthAtIndex`` and a width estimated from the text and
+        ``GetTextHeightAtIndex``; lines from ``GetLineAtIndex3``, whose
+        endpoints are elements 4-5 and 7-8 of the returned tuple (measured
+        live on SW 2025).
+        """
+        found: list[tuple[Any, Any]] = []
+        ann = self._attempt(lambda: view.GetFirstAnnotation3(), default=None)
+        index = 0
+        while ann is not None and index < 2000:
+            an = _sw_type_info.flagged(ann, "IAnnotation")
+            kind = self._attempt(lambda a=an: a.GetType(), default=None)
+            if kind == _SW_ANNOTATION_DISPLAY_DIMENSION:
+                geometry = self._dimension_geometry(
+                    an, f"{view_name}#{index}", view_name
+                )
+                if geometry is not None:
+                    found.append((an, geometry))
+                index += 1
+            ann = self._attempt(lambda a=an: a.GetNext3(), default=None)
+        return found
+
+    def _dimension_geometry(self, an: Any, key: str, view_name: str) -> Any:
+        position = self._attempt(lambda: an.GetPosition(), default=None)
+        data = self._attempt(lambda: an.GetDisplayData(), default=None)
+        if not isinstance(position, (list, tuple)) or data is None:
+            return None
+        dd = _sw_type_info.flagged(data, "IDisplayData")
+        boxes: list[tuple[float, float, float, float]] = []
+        for i in range(int(self._attempt(lambda: dd.GetTextCount(), default=0) or 0)):
+            pos = self._attempt(lambda i=i: dd.GetTextPositionAtIndex(i), default=None)
+            if not isinstance(pos, (list, tuple)) or len(pos) < 2:
+                continue
+            text = str(
+                self._attempt(lambda i=i: dd.GetTextAtIndex(i), default="") or ""
+            )
+            height = float(
+                self._attempt(lambda i=i: dd.GetTextHeightAtIndex(i), default=0.0)
+                or 0.0
+            )
+            box_w = float(
+                self._attempt(lambda i=i: dd.GetTextInBoxWidthAtIndex(i), default=0.0)
+                or 0.0
+            )
+            width = max(box_w, len(text.strip()) * height * 0.62)
+            boxes.append((pos[0], pos[1], pos[0] + width, pos[1] + max(height, 0.001)))
+        if not boxes:
+            return None
+        text_box = (
+            min(b[0] for b in boxes),
+            min(b[1] for b in boxes),
+            max(b[2] for b in boxes),
+            max(b[3] for b in boxes),
+        )
+        lines = []
+        for i in range(int(self._attempt(lambda: dd.GetLineCount(), default=0) or 0)):
+            raw = self._attempt(lambda i=i: dd.GetLineAtIndex3(i), default=None)
+            if isinstance(raw, (list, tuple)) and len(raw) >= 9:
+                lines.append(
+                    (float(raw[4]), float(raw[5]), float(raw[7]), float(raw[8]))
+                )
+        return _layout.DimensionGeometry(
+            key=key,
+            view=view_name,
+            text_box=text_box,
+            position=(float(position[0]), float(position[1])),
+            lines=lines,
+        )
+
+    def _sheet_bounds(self, drawing: Any) -> Any:
+        """Sheet rectangle from ``ISheet::GetProperties2`` (width/height at 5, 6)."""
+        sheet = self._attempt(lambda: drawing.GetCurrentSheet(), default=None)
+        if sheet is None:
+            return None
+        props = self._attempt(
+            lambda: _sw_type_info.flagged(sheet, "ISheet").GetProperties2(),
+            default=None,
+        )
+        if isinstance(props, (list, tuple)) and len(props) >= 7:
+            width, height = props[5], props[6]
+            if (
+                isinstance(width, (int, float))
+                and isinstance(height, (int, float))
+                and width > 0
+            ):
+                return (0.0, 0.0, float(width), float(height))
+        return None
+
+    def _collect_layout(
+        self, drawing: Any, names: list[str]
+    ) -> tuple[dict, list, dict]:
+        outlines: dict[str, tuple[float, float, float, float]] = {}
+        annotations: dict[str, Any] = {}
+        geometries: list[Any] = []
+        for name in names:
+            view = _resolve_drawing_view(self, drawing, name)
+            if view is None:
+                continue
+            outline = self._attempt(lambda v=view: v.GetOutline(), default=None)
+            if isinstance(outline, (list, tuple)) and len(outline) >= 4:
+                outlines[name] = tuple(float(c) for c in outline[:4])
+            for an, geometry in self._read_view_dimensions(view, name):
+                annotations[geometry.key] = an
+                geometries.append(geometry)
+        return outlines, geometries, annotations
+
+    def _arrange_layout(
+        self,
+        view_name: str | None = None,
+        obstacles: dict[str, Any] | None = None,
+        work_area: Any = None,
+        move: bool = True,
+        raise_on_overlap: bool = True,
+    ) -> dict[str, Any]:
+        """Synchronous body of arrange_dimensions (also used by the standard drawing)."""
+        model = self.currentModel
+        drawing = _sw_type_info.flagged(model, "IDrawingDoc")
+        all_views = _view_names(self, drawing)
+        if view_name and view_name not in all_views:
+            raise Exception(
+                f"No view named {view_name!r}. Views: {', '.join(all_views) or 'none'}"
+            )
+        sheet = work_area or self._sheet_bounds(drawing)
+        outlines, geometries, annotations = self._collect_layout(drawing, all_views)
+        before = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
+        movable = [g for g in geometries if not view_name or g.view == view_name]
+        fixed = [g for g in geometries if view_name and g.view != view_name]
+        moves, unplaced = (
+            _layout.plan_layout(fixed + movable, outlines, sheet, obstacles)
+            if move
+            else ({}, [])
+        )
+        moved = 0
+        for geometry in movable:
+            delta = moves.get(geometry.key)
+            if not delta or (abs(delta[0]) < 1e-9 and abs(delta[1]) < 1e-9):
+                continue
+            an = annotations[geometry.key]
+            x, y = geometry.position[0] + delta[0], geometry.position[1] + delta[1]
+            current = self._attempt(lambda a=an: a.GetPosition(), default=None)
+            z = (
+                float(current[2])
+                if isinstance(current, (list, tuple)) and len(current) > 2
+                else 0.0
+            )
+            if self._attempt(
+                lambda a=an, x=x, y=y, z=z: a.SetPosition(x, y, z), default=False
+            ):
+                moved += 1
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        self._attempt(lambda: model.EditRebuild3(), default=None)
+        self._attempt(lambda: model.GraphicsRedraw2(), default=None)
+        outlines, geometries, _ = self._collect_layout(drawing, all_views)
+        after = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
+        result = {
+            "dimensions": len(geometries),
+            "moved": moved,
+            "unplaced": unplaced,
+            "overlaps_before": len(before),
+            "overlaps_after": len(after),
+            "remaining_overlaps": after[:50],
+            "sheet_size_m": [sheet[2], sheet[3]] if sheet else None,
+        }
+        if after and raise_on_overlap:
+            raise _DimensionOverlapError(result)
+        return result
+
+    async def arrange_dimensions(
+        self, view_name: str | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move drawing dimensions so none overlaps another, then verify.
+
+        Reads every dimension's text box and lines, plans positions outside
+        the views with :func:`dimension_layout.plan_layout`, applies them with
+        ``IAnnotation::SetPosition``, rebuilds, then **re-reads the real
+        geometry** and checks the rule with :func:`dimension_layout.find_overlaps`.
+        The check covers every view on the sheet, even when only one view is
+        rearranged, because neighbouring views' dimensions can collide.
+
+        Args:
+            view_name: Only move this view's dimensions; all views when omitted.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``overlaps_before``, ``overlaps_after``
+            (each violation listed), ``moved`` and ``unplaced``. ERROR when any
+            overlap remains - the rule is not met.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+
+        def _arrange() -> dict[str, Any]:
+            return self._arrange_layout(view_name)
+
+        try:
+            return cast(
+                "AdapterResult[dict[str, Any]]",
+                self._handle_com_operation("arrange_dimensions", _arrange),
+            )
+        except (
+            _DimensionOverlapError
+        ) as exc:  # pragma: no cover - raised only if not wrapped
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=str(exc), data=exc.result
+            )

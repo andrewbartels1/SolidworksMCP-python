@@ -1449,6 +1449,27 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             lambda adapter: adapter.export_flat_pattern(file_path),
         )
 
+    async def insert_model_dimensions(
+        self,
+        view_name: str | None = None,
+        include_hole_wizard: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bring model dimensions into drawing views using pool."""
+        return await self._execute_with_pool(
+            "insert_model_dimensions",
+            lambda adapter: adapter.insert_model_dimensions(view_name, include_hole_wizard),
+        )
+
+    async def arrange_dimensions(
+        self,
+        view_name: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move drawing dimensions so none overlaps, then verify using pool."""
+        return await self._execute_with_pool(
+            "arrange_dimensions",
+            lambda adapter: adapter.arrange_dimensions(view_name),
+        )
+
 
     # --- Standard drawing methods ---
 

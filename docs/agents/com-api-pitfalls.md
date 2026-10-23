@@ -495,10 +495,23 @@ Found 2026-08-14 while implementing assembly mates against live SolidWorks 2025.
 
 ---
 
-## 18. `InsertModelAnnotations3` inserts nothing — unresolved
+## 18. `InsertModelAnnotations3` inserts nothing — resolved
 
-**Status: open question.** Recorded so the next person does not repeat the search. If you
-know the missing ingredient, please correct this entry.
+**Status: resolved 2026-10-17 on SW 2025.** Live-verified working sequence (used by
+`insert_model_dimensions` in `adapters/solidworks/documentation.py`), per view:
+
+1. `IDrawingDoc::ActivateView(name)`, `ClearSelection2(True)`
+2. `SelectByID2(name, "DRAWINGVIEW", 0, 0, 0, False, 0, <VT_DISPATCH null>, 0)` (see #1)
+3. `InsertModelAnnotations3(0 /* FromEntireModel */, 32768 | 131072 /* MarkedForDrawing |
+   HoleWizardLocations */, False /* AllViews */, False, False, False /* UsePlacementInSketch */)`
+
+`UsePlacementInSketch=False` is the ingredient: with it `True` SolidWorks copies sketch
+positions, which on a drawing view lands every dimension *inside* the view outline, on
+the part. Judge success from `IView::GetDisplayDimensionCount()` before/after, never from
+the return value. Calling per view also imports the same model dimension into several
+views; delete repeats (see #30) so each dimension appears once.
+
+The original investigation, kept for reference:
 
 **Symptom:** `IDrawingDoc::InsertModelAnnotations3` returns `None` and no dimensions
 appear, on a drawing view of a part that carries a real sketch dimension.
@@ -880,6 +893,13 @@ exist, and only `C:\ProgramData\SolidWorks\SOLIDWORKS 2026\Custom Materials`
 library. Always read the built-in folder as well: `<GetExecutablePath() folder>\lang\<GetCurrentLanguage()>\sldmaterials`
 (`GetExecutablePath` may include the `.exe`; take its folder). The `.sldmat` files are
 UTF-16 XML: `<classification name>` elements holding `<material name>` children.
+
+## 30. `IAnnotation::Select3` selects nothing under late binding
+
+`Select3(False, <VT_DISPATCH null>)` returns `False` and `Select3(False, None)` raises a
+type mismatch. To delete a drawing dimension, take
+`IDisplayDimension::GetNameForSelection()` (e.g. `D1@Sketch1@Part1-2@Drawing View2`),
+`SelectByID2(that, "DIMENSION", …)`, then `IModelDocExtension::DeleteSelection2(0)`.
 
 ---
 

@@ -1728,6 +1728,35 @@ class SolidWorksAdapter(ABC):
             error="export_flat_pattern is not implemented by this adapter",
         )
 
+    async def insert_model_dimensions(
+        self,
+        view_name: str | None = None,
+        include_hole_wizard: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bring model dimensions into drawing views.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="insert_model_dimensions is not implemented by this adapter",
+        )
+
+    async def arrange_dimensions(
+        self,
+        view_name: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move drawing dimensions so none overlaps, then verify.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="arrange_dimensions is not implemented by this adapter",
+        )
+
 
     # --- Standard drawing methods ---
 

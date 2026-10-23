@@ -181,3 +181,20 @@ async def test_export_flat_pattern_writes_a_dxf(scratch, tmp_path):
     sections = [s for s in ("HEADER", "ENTITIES", "EOF") if s in text]
     evidence("DXF sections written", sections)
     assert "ENTITIES" in sections
+
+
+@pytest.mark.asyncio
+async def test_insert_model_dimensions_adds_dimensions(scratch, tmp_path):
+    adapter = scratch.adapter
+    await _block(adapter)
+    part_path = str(tmp_path / "doc_block.SLDPRT")
+    assert (await adapter.save_file(part_path)).is_success
+    scratch.written_files.append(part_path)
+
+    assert (await adapter.create_drawing()).is_success
+    views = await adapter.create_technical_drawing({"model_path": part_path})
+    assert views.is_success, views.error
+
+    result = await adapter.insert_model_dimensions()
+    assert result.is_success, result.error
+    assert result.data["dimensions_added"] > 0, result.data["views"]

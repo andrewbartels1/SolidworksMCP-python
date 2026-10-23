@@ -1775,6 +1775,34 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"file_path": file_path},
         )
 
+    async def insert_model_dimensions(
+        self,
+        view_name: str | None = None,
+        include_hole_wizard: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bring model dimensions into drawing views through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "insert_model_dimensions",
+            lambda: self.adapter.insert_model_dimensions(
+                view_name, include_hole_wizard
+            ),
+            input_dict={
+                "view_name": view_name,
+                "include_hole_wizard": include_hole_wizard,
+            },
+        )
+
+    async def arrange_dimensions(
+        self,
+        view_name: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move drawing dimensions so none overlaps, then verify through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "arrange_dimensions",
+            lambda: self.adapter.arrange_dimensions(view_name),
+            input_dict={"view_name": view_name},
+        )
+
     # --- Standard drawing methods ---
 
 
