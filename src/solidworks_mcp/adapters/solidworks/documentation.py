@@ -12,8 +12,10 @@ via ``pythoncom.LoadTypeLib``), not from memory. Live behaviour is covered by
 from __future__ import annotations
 
 import os
-import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Any, cast
+
+import defusedxml.ElementTree as ET
+from defusedxml import DefusedXmlException
 
 from ..base import AdapterResult, AdapterResultStatus
 from .features import _null_callout, _parse_edge_spec, _select_edge_by_coord
@@ -70,18 +72,20 @@ def _parse_material_library(path: str) -> list[dict[str, str]]:
 
     ``.sldmat`` is XML: ``<classification name=...>`` elements hold
     ``<material name=...>`` children. Tags are matched by local name because
-    the root element carries a namespace.
+    the root element carries a namespace. Parsed with ``defusedxml``: library
+    folders can be user-configured, so entity-expansion and external-entity
+    payloads are refused rather than expanded.
 
     Args:
         path: Path to the ``.sldmat`` file.
 
     Returns:
         list[dict[str, str]]: ``name``, ``classification`` and ``database``
-        for each material; empty when the file cannot be parsed.
+        for each material; empty when the file cannot be parsed or is refused.
     """
     try:
         root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError):
+    except (ET.ParseError, OSError, DefusedXmlException):
         return []
     database = os.path.splitext(os.path.basename(path))[0]
     materials: list[dict[str, str]] = []

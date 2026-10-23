@@ -127,6 +127,21 @@ def test_parse_material_library_unreadable_files_are_empty(tmp_path) -> None:
     assert doc._parse_material_library(str(tmp_path / "missing.sldmat")) == []
 
 
+def test_parse_material_library_refuses_entity_expansion(tmp_path) -> None:
+    """A "billion laughs" library is refused, not expanded (Bandit B314)."""
+    bomb = tmp_path / "bomb.sldmat"
+    bomb.write_text(
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE m [<!ENTITY a "lol"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;">]>\n'
+        '<mstns:materials xmlns:mstns="http://www.solidworks.com/sldmaterials">'
+        '<classification name="&b;"><material name="X"/></classification>'
+        "</mstns:materials>",
+        encoding="utf-8",
+    )
+
+    assert doc._parse_material_library(str(bomb)) == []
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
