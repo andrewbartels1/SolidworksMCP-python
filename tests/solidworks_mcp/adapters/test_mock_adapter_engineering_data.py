@@ -89,3 +89,19 @@ async def test_export_flat_pattern_validates_the_extension(part) -> None:
 
     assert bad.error == "file_path must end in .dxf or .dwg"
     assert good.data == {"file_path": "flat.dxf", "size_bytes": 0, "mock": True}
+
+
+@pytest.mark.asyncio
+async def test_set_material_unknown_name_is_not_found(part) -> None:
+    result = await part.set_material("Unobtainium")
+    assert result.error == (
+        "Material 'Unobtainium' not found in 'SOLIDWORKS Materials'; use "
+        "list_available_materials for the exact name and library."
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_available_materials_reports_what_it_searched(part) -> None:
+    result = await part.list_available_materials("abs")
+    assert [m["name"] for m in result.data] == ["ABS"]
+    assert result.metadata == {"folders": ["mock://sldmaterials"], "total": 4}

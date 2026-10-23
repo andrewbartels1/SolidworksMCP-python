@@ -1,4 +1,4 @@
-"""Engineering-data tools: model dimensions, measurement, material, custom properties.
+"""Engineering-data tools: dimensions, measurement, material, properties, flat pattern.
 
 These read and edit the data a drawing, BOM or analysis is built from. Every tool
 calls a real adapter method (``adapters/solidworks/documentation.py``) and returns
@@ -20,6 +20,9 @@ from .tool_boundary import (
     require_success,
     with_tool_boundary,
 )
+
+# Formats ExportToDWG2 writes a flat pattern to.
+_FLAT_PATTERN_SUFFIXES = (".dxf", ".dwg")
 
 
 class ListModelDimensionsInput(CompatInput):
@@ -79,7 +82,8 @@ class SetMaterialInput(CompatInput):
 
     material_name: str = Field(
         description="Exact library name, e.g. 'AISI 1020', '6061-T6 (SS)', 'ABS'. "
-        "Use list_available_materials to find it."
+        "Use list_available_materials to find it.",
+        min_length=1,
     )
     database: str | None = Field(
         default=None, description="Library; 'SOLIDWORKS Materials' when omitted"
@@ -127,7 +131,8 @@ class SetCustomPropertyInput(CompatInput):
     """
 
     name: str = Field(
-        description="Property name, e.g. 'PartNo', 'Description', 'DrawnBy'"
+        description="Property name, e.g. 'PartNo', 'Description', 'DrawnBy'",
+        min_length=1,
     )
     value: str = Field(description='Text value; may be a $PRP:"SW-Mass" style link')
     configuration: str | None = Field(
@@ -143,6 +148,23 @@ class ExportFlatPatternInput(CompatInput):
     """
 
     file_path: str = Field(description="Output path ending in .dxf or .dwg")
+
+    def model_post_init(self, __context: Any) -> None:
+        """Refuse an output path that is not a DXF or DWG file.
+
+        Args:
+            __context (Any): The context value.
+
+        Returns:
+            None: None.
+
+        Raises:
+            ValueError: When ``file_path`` does not end in ``.dxf`` or ``.dwg``.
+        """
+        if not self.file_path.lower().endswith(_FLAT_PATTERN_SUFFIXES):
+            raise ValueError(
+                f"file_path must end in .dxf or .dwg, got {self.file_path!r}"
+            )
 
 
 def _success(result: AdapterResult[Any], message: str) -> dict[str, Any]:
@@ -197,11 +219,21 @@ async def register_engineering_data_tools(
         find and edit any driving dimension in an existing model. Pass
         ``feature_name`` to list one feature's dimensions only.
 
+        Args:
+            input_data (ListModelDimensionsInput | None): ``feature_name`` to
+                list one feature only; omit for every dimension.
+
         Returns:
             dict[str, Any]: ``data`` is a list of ``{full_name, feature, value
             (document units), system_value (metres or radians), read_only}``.
             ``not_found`` when ``feature_name`` has no dimensions;
             ``wrong_document_type`` on a drawing.
+
+        Example:
+            ```python
+            await list_model_dimensions()
+            await list_model_dimensions({"feature_name": "Boss-Extrude1"})
+            ```
         """
         input_data = normalize_input(input_data, ListModelDimensionsInput)
         _supports("list_model_dimensions")
@@ -218,12 +250,26 @@ async def register_engineering_data_tools(
         between them. Entity coordinates are in metres. Clears the selection
         afterwards.
 
+        Args:
+            input_data (MeasureEntitiesInput): One or two entity specs.
+
         Returns:
             dict[str, Any]: ``data`` holds ``selected`` plus whichever of
             ``distance_m``, ``center_distance_m``, ``angle_rad``, ``radius_m``,
             ``diameter_m``, ``length_m``, ``arc_length_m``, ``area_m2``,
-            ``perimeter_m``, ``delta_x_m``/``_y_m``/``_z_m`` and
-            ``is_parallel`` apply to the selection.
+            ``perimeter_m``, ``delta_x_m``/``_y_m``/``_z_m`` and (for two
+            entities) ``is_parallel`` apply to the selection. ``not_found``
+            when an entity cannot be selected.
+
+        Example:
+            ```python
+            # Area of the face through (15, 15, 0) mm.
+            await measure_entities({"entities": ["face:0.015,0.015,0.0"]})
+            # Distance and angle between two faces.
+            await measure_entities(
+                {"entities": ["face:0.015,0.015,0.0", "face:0.015,0.015,-0.015"]}
+            )
+            ```
         """
         input_data = normalize_input(input_data, MeasureEntitiesInput)
         _supports("measure_entities")
@@ -239,9 +285,18 @@ async def register_engineering_data_tools(
 
         Read-only. Parts only (``wrong_document_type`` otherwise).
 
+        Args:
+            input_data (GetMaterialInput | None): ``configuration``; the active
+                one when omitted.
+
         Returns:
             dict[str, Any]: ``data`` is ``{material, database, configuration}``;
             ``material`` is ``None`` when none is assigned.
+
+        Example:
+            ```python
+            await get_material()
+            ```
         """
         input_data = normalize_input(input_data, GetMaterialInput)
         _supports("get_material")
@@ -261,9 +316,19 @@ async def register_engineering_data_tools(
         exactly; find it with ``list_available_materials``. The material is
         read back after assignment, so success means it really applied.
 
+        Args:
+            input_data (SetMaterialInput): ``material_name``, plus optional
+                ``database`` and ``configuration``.
+
         Returns:
             dict[str, Any]: ``data`` is ``{material, database, configuration}``
-            as read back from the part.
+            as read back from the part. ``not_found`` when the library does
+            not hold that name (the part is left unchanged).
+
+        Example:
+            ```python
+            await set_material({"material_name": "AISI 1020"})
+            ```
         """
         input_data = normalize_input(input_data, SetMaterialInput)
         _supports("set_material")
@@ -284,10 +349,19 @@ async def register_engineering_data_tools(
         ``"steel"`` or ``"6061"``) and pass the exact ``name`` to
         ``set_material``.
 
+        Args:
+            input_data (ListMaterialsInput | None): ``search`` to filter;
+                omit for every material.
+
         Returns:
             dict[str, Any]: ``data`` is a list of ``{name, classification,
             database}``; ``message`` says how many of the libraries' materials
             matched and which folders were read.
+
+        Example:
+            ```python
+            await list_available_materials({"search": "1020"})
+            ```
         """
         input_data = normalize_input(input_data, ListMaterialsInput)
         _supports("list_available_materials")
@@ -312,10 +386,19 @@ async def register_engineering_data_tools(
         blocks and BOMs usually link to; pass ``configuration`` for
         configuration-specific ones.
 
+        Args:
+            input_data (CustomPropertiesInput | None): ``configuration``;
+                file-level properties when omitted.
+
         Returns:
             dict[str, Any]: ``data`` is ``{configuration, properties}``, where
             ``properties`` maps each name to ``{value, resolved}`` (``value``
             may be a ``$PRP:`` link; ``resolved`` is what it evaluates to).
+
+        Example:
+            ```python
+            await get_custom_properties()
+            ```
         """
         input_data = normalize_input(input_data, CustomPropertiesInput)
         _supports("get_custom_properties")
@@ -331,9 +414,18 @@ async def register_engineering_data_tools(
         Typical names: ``PartNo``, ``Description``, ``DrawnBy``, ``Revision``.
         The value is read back after writing, so success means it was stored.
 
+        Args:
+            input_data (SetCustomPropertyInput): ``name`` and ``value``, plus
+                an optional ``configuration``.
+
         Returns:
             dict[str, Any]: ``data`` is ``{name, value, resolved,
             configuration}`` as read back.
+
+        Example:
+            ```python
+            await set_custom_property({"name": "PartNo", "value": "LIVE-001"})
+            ```
         """
         input_data = normalize_input(input_data, SetCustomPropertyInput)
         _supports("set_custom_property")
@@ -348,12 +440,21 @@ async def register_engineering_data_tools(
         """Export the active sheet-metal part's flat pattern to DXF or DWG.
 
         Exports the flat-pattern geometry only (no bend lines or sketches),
-        for laser or waterjet cutting. Fails with a clear message when the
-        part has no sheet-metal body.
+        for laser or waterjet cutting. A part without a sheet-metal body is
+        refused (``not_found``) and nothing is written.
+
+        Args:
+            input_data (ExportFlatPatternInput): ``file_path`` ending in
+                ``.dxf`` or ``.dwg``.
 
         Returns:
             dict[str, Any]: ``data`` is ``{file_path, size_bytes}`` of the
             written file.
+
+        Example:
+            ```python
+            await export_flat_pattern({"file_path": "C:/cut/bracket.dxf"})
+            ```
         """
         input_data = normalize_input(input_data, ExportFlatPatternInput)
         _supports("export_flat_pattern")

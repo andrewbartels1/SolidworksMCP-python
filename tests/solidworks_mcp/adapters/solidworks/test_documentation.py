@@ -325,7 +325,15 @@ async def test_measure_entities_reports_applicable_values(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_measure_entities_omits_a_non_boolean_parallel_flag() -> None:
     harness = _Harness(_measurable(measure=_Measure(), parallel=None))
-    result = await harness.measure_entities(["Edge<1>"])
+    result = await harness.measure_entities(["Edge<1>", "Edge<2>"])
+    assert "is_parallel" not in result.data
+
+
+@pytest.mark.asyncio
+async def test_measure_entities_reports_parallelism_only_for_two_entities() -> None:
+    """One face reads IsParallel False on SW 2026; it means nothing alone."""
+    harness = _Harness(_measurable(measure=_Measure(), parallel=False))
+    result = await harness.measure_entities(["face:0.015,0.015,0.0"])
     assert "is_parallel" not in result.data
 
 
@@ -447,8 +455,9 @@ async def test_set_material_reads_it_back() -> None:
 @pytest.mark.asyncio
 async def test_set_material_reports_a_name_that_did_not_apply() -> None:
     result = await _Harness(_part(None)).set_material("Unobtainium", "Custom")
-    assert "'Unobtainium' from 'Custom' was not applied" in result.error
-    assert "no material" in result.error
+    assert "Material 'Unobtainium' not found in 'Custom'" in result.error
+    assert "still reports no material" in result.error
+    assert "list_available_materials" in result.error
 
 
 @pytest.mark.asyncio

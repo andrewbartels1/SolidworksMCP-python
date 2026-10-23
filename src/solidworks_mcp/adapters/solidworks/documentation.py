@@ -133,6 +133,15 @@ def _read_custom_property(adapter: Any, manager: Any, name: str) -> tuple[str, s
     Tries ``Get6`` (value and resolved value) first; under late binding on
     SW 2025 its out-parameters raise ``Parameter not optional``, so it falls
     back to ``Get(name)``, which returns the stored text only.
+
+    Args:
+        adapter: The adapter, for its ``_attempt`` helper.
+        manager: The document's ``ICustomPropertyManager``.
+        name: Property name.
+
+    Returns:
+        tuple[str, str]: The stored value and the resolved value; empty
+        strings when the property cannot be read.
     """
     value, resolved = _unpack_custom_property(
         adapter._attempt(lambda: manager.Get6(name, False), default=None)
@@ -177,6 +186,13 @@ def _strip_document_suffix(full_name: Any) -> str | None:
 
     Live SW 2025 appends ``@<document title>`` to ``IDimension::FullName``;
     ``IModelDoc2::Parameter`` (behind ``set_dimension``) takes the short form.
+
+    Args:
+        full_name: ``IDimension::FullName`` as read.
+
+    Returns:
+        str | None: The name without the document suffix; ``None`` when
+        ``full_name`` is not text.
     """
     if not isinstance(full_name, str):
         return None
@@ -187,7 +203,14 @@ def _strip_document_suffix(full_name: Any) -> str | None:
 
 
 def _sequence(raw: Any) -> list[Any]:
-    """Normalise a COM array return (``None``, scalar or tuple) into a list."""
+    """Normalise a COM array return (``None``, scalar or tuple) into a list.
+
+    Args:
+        raw: What the COM call returned.
+
+    Returns:
+        list[Any]: The non-``None`` items.
+    """
     if raw is None:
         return []
     if isinstance(raw, (list, tuple)):
@@ -343,7 +366,8 @@ class SolidWorksDocumentationMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: Measured values in metres, square
-            metres and radians, plus ``selected``.
+            metres and radians, plus ``selected``; ``is_parallel`` only for
+            two entities.
         """
         guard = self._require_doc_type({1, 2}, "measure_entities")
         if guard is not None:
@@ -408,9 +432,11 @@ class SolidWorksDocumentationMixin:
                 value = self._attempt(lambda p=prop: getattr(measure, p), default=None)
                 if isinstance(value, (int, float)) and value != -1:
                     result[key] = float(value)
-            parallel = self._attempt(lambda: measure.IsParallel, default=None)
-            if isinstance(parallel, bool):
-                result["is_parallel"] = parallel
+            if len(entities) == 2:
+                # Parallelism only means something between two entities.
+                parallel = self._attempt(lambda: measure.IsParallel, default=None)
+                if isinstance(parallel, bool):
+                    result["is_parallel"] = parallel
             self._attempt(lambda: model.ClearSelection2(True), default=None)
             return result
 
@@ -462,6 +488,8 @@ class SolidWorksDocumentationMixin:
 
         Wraps ``IPartDoc::SetMaterialPropertyName2`` (a ``void`` call), then
         reads the material back - the read-back is the only proof it applied.
+        A name the library does not hold leaves the part unchanged and is
+        reported as not found.
 
         Args:
             material_name: Material name exactly as in the library, e.g.
@@ -487,10 +515,11 @@ class SolidWorksDocumentationMixin:
             self._attempt(lambda: self.currentModel.EditRebuild3(), default=None)
             applied, _library = _read_material(part, configuration)
             if applied.lower() != material_name.lower():
-                raise Exception(
-                    f"Material {material_name!r} from {library!r} was not applied "
-                    f"(part reports {applied or 'no material'}). Check the exact "
-                    "name with list_available_materials."
+                # SolidWorks ignores a name its library does not hold.
+                raise LookupError(
+                    f"Material {material_name!r} not found in {library!r}; the "
+                    f"part still reports {applied or 'no material'}. Use "
+                    "list_available_materials for the exact name and library."
                 )
             return {
                 "material": applied,
@@ -721,7 +750,10 @@ class SolidWorksDocumentationMixin:
                 )
                 for b in bodies
             ):
-                raise LookupError("The active part has no sheet-metal body")
+                raise LookupError(
+                    "The active part has no sheet-metal body, so it has no flat "
+                    "pattern to export"
+                )
             os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
             model_path = str(
                 self._attempt(lambda: model.GetPathName(), default="") or ""
