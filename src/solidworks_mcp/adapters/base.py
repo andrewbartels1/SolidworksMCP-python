@@ -12,11 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
-
-T = TypeVar("T")
 
 
 class AdapterHealth(BaseModel):
@@ -93,7 +91,7 @@ class AdapterResultStatus(StrEnum):
 
 
 @dataclass
-class AdapterResult(Generic[T]):
+class AdapterResult[T]:
     """Result wrapper for adapter operations.
 
     Attributes:

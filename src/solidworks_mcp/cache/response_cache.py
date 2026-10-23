@@ -7,9 +7,6 @@ import json
 import time
 from dataclasses import dataclass
 from threading import RLock
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -28,7 +25,7 @@ class CachePolicy:
 
 
 @dataclass
-class _CacheEntry(Generic[T]):
+class _CacheEntry[T]:
     """Internal cache entry with expiration metadata.
 
     Attributes:

@@ -614,7 +614,6 @@ async def test_inspect_family_recoverable_failure_with_feature_order(
     monkeypatch.setattr(llm_service, "insert_tool_call_record", lambda **_kw: None)
     monkeypatch.setattr(llm_service, "insert_evidence_link", lambda **_kw: None)
     monkeypatch.setattr(llm_service, "replace_plan_checkpoints", lambda **_kw: None)
-    monkeypatch.setattr(llm_service, "upsert_design_session", lambda *_a, **_kw: None)
 
     monkeypatch.setattr(
         llm_service,
@@ -688,7 +687,6 @@ async def test_inspect_family_success_with_checkpoints(monkeypatch) -> None:
     monkeypatch.setattr(
         llm_service, "replace_plan_checkpoints", lambda **kw: replace_calls.append(kw)
     )
-    monkeypatch.setattr(llm_service, "upsert_design_session", lambda *_a, **_kw: None)
 
     fake_result = llm_service.FamilyInspection(
         family="extrude",

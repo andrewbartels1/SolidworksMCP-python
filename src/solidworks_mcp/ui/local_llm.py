@@ -34,14 +34,11 @@ import os
 import platform
 import subprocess
 import urllib.parse
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
-
-# TypeVar for structured agent outputs
-_T = TypeVar("_T", bound=BaseModel)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -305,7 +302,7 @@ class LocalModelQueryRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class LocalAgentResult(BaseModel, Generic[_T]):
+class LocalAgentResult[T: BaseModel](BaseModel):
     """Typed envelope wrapping a structured pydantic-ai agent response.
 
     ``data`` holds the validated ``result_type`` instance; ``config`` echoes back the
@@ -607,15 +604,15 @@ async def pull_ollama_model(
 # ---------------------------------------------------------------------------
 # pydantic-ai agent runner — structured local LLM inference
 # ---------------------------------------------------------------------------
-async def run_local_agent(
+async def run_local_agent[T: BaseModel](
     *,
     system_prompt: str,
     user_prompt: str,
-    result_type: type[_T],
+    result_type: type[T],
     config: LocalLLMConfig | None = None,
     rag_query: str | None = None,
     rag_namespace: str = "solidworks-api-docs",
-) -> LocalAgentResult[_T]:
+) -> LocalAgentResult[T]:
     """Run a pydantic-ai ``Agent`` against the local Ollama server and return a.
 
     typed ``LocalAgentResult``.
@@ -635,20 +632,20 @@ async def run_local_agent(
     ``rag_query`` is set.  Defaults to ``"solidworks-api-docs"`` (the COM/VBA surface
     index).
 
-    Returns ------- LocalAgentResult[_T] ``success=True`` with ``data`` set to a validated
+    Returns ------- LocalAgentResult[T] ``success=True`` with ``data`` set to a validated
     ``result_type`` instance, or ``success=False`` with an ``error`` message.
 
     Args:
         system_prompt (str): The system prompt value.
         user_prompt (str): The user prompt value.
-        result_type (type[_T]): The result type value.
+        result_type (type[T]): The result type value.
         config (LocalLLMConfig | None): Configuration values for the operation. Defaults to
                                         None.
         rag_query (str | None): The rag query value. Defaults to None.
         rag_namespace (str): The rag namespace value. Defaults to "solidworks-api-docs".
 
     Returns:
-        LocalAgentResult[_T]: The result produced by the operation.
+        LocalAgentResult[T]: The result produced by the operation.
     """
     from ..agents.schemas import RecoverableFailure  # avoid circular at import time
 
@@ -700,7 +697,7 @@ async def run_local_agent(
     )
     configured_model = OpenAIChatModel(model_id, provider=provider)
 
-    agent: Agent[None, _T | RecoverableFailure] = Agent(
+    agent: Agent[None, T | RecoverableFailure] = Agent(
         configured_model,
         system_prompt=augmented_system_prompt,
         output_type=[result_type, RecoverableFailure],  # type: ignore[list-item]

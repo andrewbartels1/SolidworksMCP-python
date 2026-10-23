@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -21,7 +21,6 @@ except ImportError as exc:
     IMPORT_ERROR = exc
 
 
-TModel = TypeVar("TModel", bound=BaseModel)
 AGENTS_DIR = Path(".github") / "agents"
 
 
@@ -63,7 +62,7 @@ def _extract_data(result: Any) -> Any:
     return result
 
 
-async def run_validated_prompt(
+async def run_validated_prompt[TModel: BaseModel](
     *,
     agent_file_name: str,
     model_name: str,

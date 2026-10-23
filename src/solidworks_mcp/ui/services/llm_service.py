@@ -25,7 +25,6 @@ from ...agents.history_db import (
     insert_evidence_link,
     insert_tool_call_record,
     replace_plan_checkpoints,
-    upsert_design_session,
 )
 from ._utils import (
     DEFAULT_API_ORIGIN,

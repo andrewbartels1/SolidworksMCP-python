@@ -6,7 +6,7 @@ This module preserves historical import paths used by tests and external callers
 
 from __future__ import annotations
 
-import os
+import os as os  # re-exported: tests read service.os
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
@@ -15,11 +15,19 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from ..adapters import create_adapter
+
+# Re-exported (``name as name``) for the legacy ``ui.service.<name>`` imports.
 from ..agents.history_db import (
-    get_design_session,
-    insert_model_state_snapshot,
+    get_design_session as get_design_session,
+)
+from ..agents.history_db import (
+    insert_model_state_snapshot as insert_model_state_snapshot,
+)
+from ..agents.history_db import (
     list_plan_checkpoints,
-    upsert_design_session,
+)
+from ..agents.history_db import (
+    upsert_design_session as upsert_design_session,
 )
 from ..agents.retrieval_index import _chunk_text
 from ..agents.schemas import RecoverableFailure as _AgentRecoverableFailure
