@@ -132,10 +132,12 @@ async def register_drawing_automation_tools(
 
         Dimensions go outside their views in rows (first 8 mm from the
         outline, rows 7 mm apart, columns 9 mm apart), shortest span nearest
-        the view. After moving them it re-reads every dimension's real text box
-        and lines and checks the whole sheet: no text on text, no line through
-        text, no dimension line across another view, nothing on a view or
-        outside the sheet.
+        the view, each on the side its extension lines start from. One with no
+        room on that side stays put and is listed in ``unplaced``. After moving
+        them it re-reads every dimension's real text box and lines and checks
+        the whole sheet: no text on text, no line through text, no line across
+        another view or across its own view, nothing on a view or outside the
+        sheet.
 
         Args:
             input_data (ArrangeDimensionsInput | None): ``view_name`` to move

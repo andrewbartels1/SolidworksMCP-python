@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from solidworks_mcp.adapters.solidworks import dimension_layout as lay
@@ -112,15 +114,15 @@ class TestLayout:
         assert abs(rows[0] - lay.FIRST_OFFSET) < 1e-6
         assert abs(rows[1] - rows[0] - lay.ROW_PITCH) < 1e-6
 
-    def test_obstacles_are_avoided(self) -> None:
+    def test_a_blocked_side_is_not_swapped_for_the_far_side(self) -> None:
+        # Its extension lines start on the bottom edge; above the view they
+        # would run across the whole part.
         dims = [_hdim("w", "View1", 0.05, 0.17, 0.12, 0.10)]
         below = (0.0, 0.0, 0.3, 0.1)  # everything below the view is blocked
-        moves, _ = lay.plan_layout(dims, {"View1": OUTLINE}, None, {"caption": below})
-        moved = _apply(dims, moves)
-        assert moved[0].text_box[1] > OUTLINE[3]  # went above instead
-        assert (
-            lay.find_overlaps(moved, {"View1": OUTLINE}, None, {"caption": below}) == []
+        moves, unplaced = lay.plan_layout(
+            dims, {"View1": OUTLINE}, None, {"caption": below}
         )
+        assert (moves, unplaced) == ({}, ["w"])
 
 
 def _radial(key: str, view: str, cx: float, cy: float) -> lay.DimensionGeometry:
@@ -212,12 +214,15 @@ class TestPlanningChoices:
         tight = (0.049, 0.099, 0.171, 0.171)  # the view fills the sheet
         assert lay.plan_layout(dims, {"View1": OUTLINE}, tight) == ({}, ["w"])
 
-    def test_a_neighbouring_view_is_skipped_over(self) -> None:
-        below = (0.05, 0.06, 0.17, 0.098)  # a second view right underneath
-        dims = [_hdim("w", "View1", 0.05, 0.17, 0.12, 0.10)]
-        moves, _ = lay.plan_layout(dims, {"View1": OUTLINE, "View2": below})
-        moved = lay.shift_box(dims[0].text_box, *moves["w"])
-        assert not lay.box_overlap(moved, below)
+    def test_rows_stop_at_a_neighbouring_view(self) -> None:
+        below = (0.05, 0.06, 0.17, 0.087)  # room for one row, not two
+        dims = [
+            _hdim("w", "View1", 0.05, 0.17, 0.12, 0.10),
+            _hdim("x", "View1", 0.05, 0.17, 0.12, 0.10),
+        ]
+        moves, unplaced = lay.plan_layout(dims, {"View1": OUTLINE, "View2": below})
+        assert list(moves) == ["w"] and unplaced == ["x"]
+        assert not lay.box_overlap(lay.shift_box(dims[0].text_box, *moves["w"]), below)
 
     def test_a_twin_dimension_takes_the_next_row(self) -> None:
         dims = [
@@ -230,8 +235,8 @@ class TestPlanningChoices:
 
     def test_rows_of_neighbouring_views_do_not_touch(self) -> None:
         upper = _hdim("a", "View1", 0.05, 0.17, 0.12, 0.10)  # goes below View1
-        lower = _hdim("b", "View2", 0.05, 0.17, 0.07, 0.08)  # goes above View2
-        outlines = {"View1": OUTLINE, "View2": (0.05, 0.02, 0.17, 0.08)}
+        lower = _hdim("b", "View2", 0.05, 0.17, 0.06, 0.07)  # goes above View2
+        outlines = {"View1": OUTLINE, "View2": (0.05, 0.02, 0.17, 0.07)}
         moves, unplaced = lay.plan_layout([upper, lower], outlines)
         assert not unplaced
         a = lay.shift_box(upper.text_box, *moves["a"])
@@ -239,14 +244,23 @@ class TestPlanningChoices:
         assert not lay.box_overlap(a, b, lay.TEXT_PADDING)
 
     def test_text_is_kept_off_a_placed_dimension_line(self) -> None:
-        upper = _hdim("a", "View1", 0.05, 0.17, 0.12, 0.10)
-        lower = _hdim("b", "View2", 0.05, 0.17, 0.07, 0.08)
-        lower.text_box = (0.145, 0.0684, 0.155, 0.0716)  # right under a's line
-        outlines = {"View1": OUTLINE, "View2": (0.05, 0.02, 0.17, 0.084)}
+        upper = _hdim("a", "View1", 0.05, 0.17, 0.12, 0.10)  # row 1 below View1
+        lower = _hdim("b", "View2", 0.12, 0.16, 0.07, 0.084)  # row 1 above View2
+        outlines = {"View1": OUTLINE, "View2": (0.12, 0.03, 0.16, 0.084)}
         moves, _ = lay.plan_layout([upper, lower], outlines)
         a_line_y = lay.shift_box(upper.text_box, *moves["a"])[1] + 0.0016
-        b = lay.shift_box(lower.text_box, *moves["b"])
+        b = lay.shift_box(lower.text_box, *moves.get("b", (0.0, 0.0)))
         assert not (b[1] <= a_line_y <= b[3])
+
+    def test_columns_of_neighbouring_views_do_not_touch(self) -> None:
+        left = _vdim("a", "View1", 0.10, 0.15, 0.07, 0.10)  # column right of View1
+        right = _vdim("b", "View2", 0.10, 0.15, 0.15, 0.125)  # column left of View2
+        outlines = {
+            "View1": (0.05, 0.10, 0.10, 0.15),
+            "View2": (0.125, 0.10, 0.175, 0.15),
+        }
+        moves, unplaced = lay.plan_layout([left, right], outlines)
+        assert list(moves) == ["a"] and unplaced == ["b"]  # 25 mm: one column
 
     def test_dimension_lines_go_around_an_obstacle(self) -> None:
         dims = [_hdim("w", "View1", 0.05, 0.17, 0.12, 0.10)]
@@ -284,9 +298,10 @@ class TestLinesAcrossOtherViews:
         assert lay.crosses_other_view(touching, "Front", {"Side": self.SIDE}) is None
         assert lay.crosses_other_view(touching, "Side", {"Side": self.SIDE}) is None
 
-    def test_the_planner_goes_round_the_other_view(self) -> None:
+    def test_it_is_brought_back_into_a_gap_that_fits(self) -> None:
         dim = self._height(0.30)
-        outlines = {"Front": self.FRONT, "Side": self.SIDE}
+        side = (0.165, 0.10, 0.20, 0.145)  # 25 mm gap: one column fits
+        outlines = {"Front": self.FRONT, "Side": side}
 
         moves, unplaced = lay.plan_layout([dim], outlines)
 
@@ -300,4 +315,56 @@ class TestLinesAcrossOtherViews:
             lines=lay._projected_segments(dim, dx, dy, self.FRONT),
         )
         assert lay.find_overlaps([moved], outlines) == []
-        assert moved.text_box[2] < self.FRONT[0]  # the free left side
+        assert self.FRONT[2] < moved.text_box[0] < moved.text_box[2] < side[0]
+
+    def test_with_no_gap_it_is_not_sent_across_its_own_view(self) -> None:
+        outlines = {"Front": self.FRONT, "Side": self.SIDE}
+
+        assert lay.plan_layout([self._height(0.30)], outlines) == ({}, ["height"])
+
+
+class TestOwnSide:
+    """A dimension stays on the side of its view its extension lines start from.
+
+    Live on SW 2026 the planner moved the top view's height from its left to
+    its right, and both extension lines ran across the whole view.
+    """
+
+    def test_extension_lines_start_on_the_part(self) -> None:
+        dim = _vdim("h", "View1", 0.10, 0.17, 0.11, 0.05)  # text inside the view
+        assert lay.extension_origins(dim) == [0.05, 0.05]
+        assert lay.extension_origins(_radial("d", "View1", 0.1, 0.1)) == []
+
+    def test_a_line_across_its_own_view_is_reported(self) -> None:
+        across = _vdim("h", "View1", 0.10, 0.17, 0.19, 0.05)  # left edge -> right
+        problems = lay.find_overlaps([across], {"View1": OUTLINE})
+        assert {
+            "dimension": "h",
+            "conflicts_with": "View1",
+            "kind": "line_through_own_view",
+        } in problems
+        beside = _vdim("h", "View1", 0.10, 0.17, 0.03, 0.05)
+        assert not lay.crosses_own_view(beside, OUTLINE)
+        assert not lay.crosses_own_view(_radial("d", "View1", 0.1, 0.1), OUTLINE)
+
+    def test_a_height_on_the_far_side_comes_back(self) -> None:
+        across = _vdim("h", "View1", 0.10, 0.17, 0.19, 0.05)
+
+        moves, unplaced = lay.plan_layout([across], {"View1": OUTLINE})
+
+        assert not unplaced
+        moved = _apply([across], moves)
+        assert moved[0].text_box[2] < OUTLINE[0]
+        assert lay.find_overlaps(moved, {"View1": OUTLINE}) == []
+
+
+class TestTextBox:
+    def test_level_text_runs_right_from_its_corner(self) -> None:
+        assert lay.text_box(0.1, 0.2, 0.014, 0.0035, 0.0) == pytest.approx(
+            (0.1, 0.2, 0.114, 0.2035)
+        )
+
+    def test_vertical_text_runs_up_and_lies_left_of_its_corner(self) -> None:
+        # The live top view's "30.00": corner on the dimension line at x 22.9 mm.
+        box = lay.text_box(0.0229, 0.1656, 0.0142, 0.0035, math.pi / 2)
+        assert box == pytest.approx((0.0194, 0.1656, 0.0229, 0.1798))

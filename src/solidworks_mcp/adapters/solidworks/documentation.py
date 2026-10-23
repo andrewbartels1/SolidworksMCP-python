@@ -1127,7 +1127,8 @@ class SolidWorksDocumentationMixin:
         Geometry comes from ``IAnnotation::GetDisplayData``: text boxes from
         ``GetTextPositionAtIndex`` (lower-left) with the larger of
         ``GetTextInBoxWidthAtIndex`` and a width estimated from the text and
-        ``GetTextHeightAtIndex``; lines from ``GetLineAtIndex3``, whose
+        ``GetTextHeightAtIndex``, turned by ``GetTextAngleAtIndex`` (a vertical
+        dimension's text runs up the sheet); lines from ``GetLineAtIndex3``, whose
         endpoints are elements 4-5 and 7-8 of the returned tuple (measured
         live on SW 2025).
 
@@ -1187,8 +1188,13 @@ class SolidWorksDocumentationMixin:
                 self._attempt(lambda i=i: dd.GetTextInBoxWidthAtIndex(i), default=0.0)
                 or 0.0
             )
+            angle = float(
+                self._attempt(lambda i=i: dd.GetTextAngleAtIndex(i), default=0.0) or 0.0
+            )
             width = max(box_w, len(text.strip()) * height * 0.62)
-            boxes.append((pos[0], pos[1], pos[0] + width, pos[1] + max(height, 0.001)))
+            boxes.append(
+                _layout.text_box(pos[0], pos[1], width, max(height, 0.001), angle)
+            )
         if not boxes:
             return None
         text_box = (

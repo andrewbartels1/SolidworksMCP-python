@@ -3,8 +3,9 @@
 Rule enforced: **nothing on the sheet may overlap.** A dimension's text box must
 not intersect another dimension's text, be crossed by another dimension's lines,
 sit on any view's geometry, touch an obstacle (title block, view captions, note
-blocks) or leave the working area of the frame. A dimension's own lines must not
-cross any view but its own (its extension lines start on its own view).
+blocks) or leave the working area of the frame. A dimension's lines must not
+cross another view, and its extension lines must not run across its own view to
+the far side.
 
 ``InsertModelAnnotations3`` places imported dimensions where they sit in the
 model sketch, which on a drawing view lands them *inside* the view outline, on
@@ -14,8 +15,8 @@ top of the part and of each other (measured live on SW 2025).
 A3 drafting standard
 (``drawing_standard.py``): horizontal dimensions in rows above/below the part, rows 7 mm
 apart; vertical dimensions in columns left/right, 9 mm apart; the first row
-8 mm from the outline. Others (diameters, radii, angles) go diagonally
-outward. Rows are filled shortest span first, so the extension lines of longer
+8 mm from the outline, on the side its extension lines start from. Others
+(diameters, radii, angles) go diagonally outward. Rows are filled shortest span first, so the extension lines of longer
 outer dimensions clear the inner text. Every candidate position is checked
 against everything already placed; the first free one wins.
 
@@ -24,6 +25,7 @@ All coordinates are sheet metres; boxes and segments are ``(x0, y0, x1, y1)``.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 Box = tuple[float, float, float, float]
@@ -45,6 +47,30 @@ MAX_STEPS = 12
 EDGE_TOLERANCE = 0.0002
 #: More than 1 mm of a line on another view is a crossing; touching is not.
 MIN_CROSSING = 0.001
+
+
+def text_box(x: float, y: float, width: float, height: float, angle: float) -> Box:
+    """Sheet box of a text run anchored at its lower-left corner and turned.
+
+    ``IDisplayData`` gives each text's lower-left corner, length, height and
+    angle. A vertical dimension's text is turned 90 degrees, so it runs up the
+    sheet from that corner and lies to its left (measured live on SW 2026).
+
+    Args:
+        x: Lower-left corner x.
+        y: Lower-left corner y.
+        width: Text length along its baseline.
+        height: Text height.
+        angle: Baseline angle in radians, counter-clockwise.
+
+    Returns:
+        Box: The axis-aligned box around the turned text.
+    """
+    c, s = math.cos(angle), math.sin(angle)
+    corners = [(0.0, 0.0), (width, 0.0), (0.0, height), (width, height)]
+    xs = [x + u * c - v * s for u, v in corners]
+    ys = [y + u * s + v * c for u, v in corners]
+    return (min(xs), min(ys), max(xs), max(ys))
 
 
 def crosses_other_view(
@@ -204,20 +230,74 @@ def classify(lines: list[Segment]) -> tuple[str | None, float, list[float]]:
     return None, 0.0, []
 
 
+def extension_origins(dim: DimensionGeometry) -> list[float]:
+    """Where each extension line starts on the part, across the dimension.
+
+    An extension line runs from the part to just past the dimension line, so
+    its start is the end farther from the text: a y for a horizontal
+    dimension, an x for a vertical one.
+
+    Args:
+        dim: The dimension.
+
+    Returns:
+        list[float]: One coordinate per extension line; empty for a leader.
+    """
+    orient = classify(dim.lines)[0]
+    if orient is None:
+        return []
+    axis = 1 if orient == "h" else 0
+    centre = (dim.text_box[axis] + dim.text_box[axis + 2]) / 2.0
+    return [
+        max((s[axis], s[axis + 2]), key=lambda c: abs(c - centre))
+        for s in dim.lines[:2]
+    ]
+
+
+def crosses_own_view(dim: DimensionGeometry, outline: Box) -> bool:
+    """True when an extension line runs across its own view to the far side.
+
+    Measured live on SW 2026: a height dimension moved from the left of the
+    top view to its right drew both extension lines straight across the view.
+
+    Args:
+        dim: The dimension.
+        outline: Its view's outline.
+
+    Returns:
+        bool: ``False`` for leaders, which have no extension lines.
+    """
+    axis = 1 if classify(dim.lines)[0] == "h" else 0
+    low, high = outline[axis], outline[axis + 2]
+    middle = (low + high) / 2.0
+    for start, line in zip(extension_origins(dim), dim.lines, strict=False):
+        end = line[axis + 2] if line[axis] == start else line[axis]
+        if (start < middle and end > high) or (start > middle and end < low):
+            return True
+    return False
+
+
 def _projected_segments(
     dim: DimensionGeometry, dx: float, dy: float, outline: Box
 ) -> list[Segment]:
-    """Approximate a moved dimension's new dimension and extension lines."""
+    """Approximate a moved dimension's new dimension and extension lines.
+
+    The extension lines still start where they did on the part and now reach
+    the moved dimension line.
+    """
     orient, _span, ends = classify(dim.lines)
     box = shift_box(dim.text_box, dx, dy)
+    origins = extension_origins(dim)
     if orient == "h":
         y = (box[1] + box[3]) / 2.0
-        edge = outline[3] if y > outline[3] else outline[1]
-        return [(ends[0], y, ends[1], y)] + [(x, edge, x, y) for x in ends]
+        return [(ends[0], y, ends[1], y)] + [
+            (s[0], o, s[0], y) for s, o in zip(dim.lines, origins, strict=False)
+        ]
     if orient == "v":
         x = (box[0] + box[2]) / 2.0
-        edge = outline[2] if x > outline[2] else outline[0]
-        return [(x, ends[0], x, ends[1])] + [(edge, y, x, y) for y in ends]
+        return [(x, ends[0], x, ends[1])] + [
+            (o, s[1], x, s[1]) for s, o in zip(dim.lines, origins, strict=False)
+        ]
     return [(s[0] + dx, s[1] + dy, s[2] + dx, s[3] + dy) for s in dim.lines]
 
 
@@ -256,6 +336,15 @@ def find_overlaps(
                     "dimension": dim.key,
                     "conflicts_with": crossed,
                     "kind": "line_through_view",
+                }
+            )
+        own = outlines.get(dim.view)
+        if own is not None and crosses_own_view(dim, own):
+            problems.append(
+                {
+                    "dimension": dim.key,
+                    "conflicts_with": dim.view,
+                    "kind": "line_through_own_view",
                 }
             )
         for label, obstacle in (obstacles or {}).items():
@@ -302,14 +391,19 @@ def find_overlaps(
 def _candidates(
     dim: DimensionGeometry, outline: Box, stack_depth: dict[tuple[str, str], float]
 ) -> list[tuple[str, float, float]]:
-    """Ordered (side, dx, dy) moves to try for one dimension."""
+    """Ordered (side, dx, dy) moves to try for one dimension.
+
+    A linear dimension only goes to the side its extension lines start from;
+    on the far side they would cross its own view.
+    """
     tb = dim.text_box
     w, h = tb[2] - tb[0], tb[3] - tb[1]
     cx, cy = (tb[0] + tb[2]) / 2.0, (tb[1] + tb[3]) / 2.0
     ox, oy = (outline[0] + outline[2]) / 2.0, (outline[1] + outline[3]) / 2.0
+    origins = extension_origins(dim)
     out: list[tuple[str, float, float]] = []
     if dim.orientation == "h":
-        sides = ["above", "below"] if cy >= oy else ["below", "above"]
+        sides = list(dict.fromkeys("above" if o >= oy else "below" for o in origins))
         pitch = max(ROW_PITCH, h + STACK_GAP)
         for side in sides:
             base = stack_depth.get((dim.view, side), 0.0)
@@ -318,7 +412,7 @@ def _candidates(
                 target = outline[3] + off if side == "above" else outline[1] - off
                 out.append((side, 0.0, target - cy))
     elif dim.orientation == "v":
-        sides = ["right", "left"] if cx >= ox else ["left", "right"]
+        sides = list(dict.fromkeys("right" if o >= ox else "left" for o in origins))
         pitch = max(COLUMN_PITCH, w + STACK_GAP)
         for side in sides:
             base = stack_depth.get((dim.view, side), 0.0)
