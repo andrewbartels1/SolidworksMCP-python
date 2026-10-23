@@ -1672,6 +1672,107 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             )
             return None
 
+    # --- Engineering-data and drawing-documentation methods ---
+
+    async def list_model_dimensions(
+        self,
+        feature_name: str | None = None,
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List every dimension in the active part or assembly through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_model_dimensions",
+            lambda: self.adapter.list_model_dimensions(feature_name),
+            input_dict={"feature_name": feature_name},
+        )
+
+    async def measure_entities(
+        self,
+        entities: list[str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Measure one or two selected entities through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "measure_entities",
+            lambda: self.adapter.measure_entities(entities),
+            input_dict={"entities": entities},
+        )
+
+    async def get_material(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the material assigned to the active part through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_material",
+            lambda: self.adapter.get_material(configuration),
+            input_dict={"configuration": configuration},
+        )
+
+    async def set_material(
+        self,
+        material_name: str,
+        database: str | None = None,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Assign a material to the active part through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_material",
+            lambda: self.adapter.set_material(material_name, database, configuration),
+            input_dict={
+                "material_name": material_name,
+                "database": database,
+                "configuration": configuration,
+            },
+        )
+
+    async def list_available_materials(
+        self,
+        search: str | None = None,
+    ) -> AdapterResult[list[dict[str, str]]]:
+        """List materials from the configured material libraries through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_available_materials",
+            lambda: self.adapter.list_available_materials(search),
+            input_dict={"search": search},
+        )
+
+    async def get_custom_properties(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the custom properties of the active document through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_custom_properties",
+            lambda: self.adapter.get_custom_properties(configuration),
+            input_dict={"configuration": configuration},
+        )
+
+    async def set_custom_property(
+        self,
+        name: str,
+        value: str,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create or overwrite one custom property through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_custom_property",
+            lambda: self.adapter.set_custom_property(name, value, configuration),
+            input_dict={"name": name, "value": value, "configuration": configuration},
+        )
+
+    async def export_flat_pattern(
+        self,
+        file_path: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Export the active sheet-metal part's flat pattern through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "export_flat_pattern",
+            lambda: self.adapter.export_flat_pattern(file_path),
+            input_dict={"file_path": file_path},
+        )
+
+
+    # --- Standard drawing methods ---
+
 
 class CircuitBreaker:
     """Legacy standalone circuit breaker class expected by tests.

@@ -1363,6 +1363,95 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    # --- Engineering-data and drawing-documentation methods ---
+
+    async def list_model_dimensions(
+        self,
+        feature_name: str | None = None,
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List every dimension in the active part or assembly using pool."""
+        return await self._execute_with_pool(
+            "list_model_dimensions",
+            lambda adapter: adapter.list_model_dimensions(feature_name),
+        )
+
+    async def measure_entities(
+        self,
+        entities: list[str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Measure one or two selected entities using pool."""
+        return await self._execute_with_pool(
+            "measure_entities",
+            lambda adapter: adapter.measure_entities(entities),
+        )
+
+    async def get_material(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the material assigned to the active part using pool."""
+        return await self._execute_with_pool(
+            "get_material",
+            lambda adapter: adapter.get_material(configuration),
+        )
+
+    async def set_material(
+        self,
+        material_name: str,
+        database: str | None = None,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Assign a material to the active part using pool."""
+        return await self._execute_with_pool(
+            "set_material",
+            lambda adapter: adapter.set_material(material_name, database, configuration),
+        )
+
+    async def list_available_materials(
+        self,
+        search: str | None = None,
+    ) -> AdapterResult[list[dict[str, str]]]:
+        """List materials from the configured material libraries using pool."""
+        return await self._execute_with_pool(
+            "list_available_materials",
+            lambda adapter: adapter.list_available_materials(search),
+        )
+
+    async def get_custom_properties(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the custom properties of the active document using pool."""
+        return await self._execute_with_pool(
+            "get_custom_properties",
+            lambda adapter: adapter.get_custom_properties(configuration),
+        )
+
+    async def set_custom_property(
+        self,
+        name: str,
+        value: str,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create or overwrite one custom property using pool."""
+        return await self._execute_with_pool(
+            "set_custom_property",
+            lambda adapter: adapter.set_custom_property(name, value, configuration),
+        )
+
+    async def export_flat_pattern(
+        self,
+        file_path: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Export the active sheet-metal part's flat pattern using pool."""
+        return await self._execute_with_pool(
+            "export_flat_pattern",
+            lambda adapter: adapter.export_flat_pattern(file_path),
+        )
+
+
+    # --- Standard drawing methods ---
+
 
 class ConnectionPool:
     """Legacy alias class expected by tests.

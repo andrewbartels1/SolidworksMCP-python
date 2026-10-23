@@ -860,6 +860,25 @@ Found 2026-10-13 building `rebuild_model` diagnostics (#106).
   `SLDWORKS.exe -Embedding` per test and crash it again. The live fixtures now
   stop the run when SolidWorks is not running. Use `-x` for live runs.
 
+## 27. `ICustomPropertyManager::Get6` raises "Parameter not optional"; `GetNames` is a property
+
+Under late binding `Get6(name, False)` raises `(-2147352561, 'Parameter not optional.')`
+because of its four out-parameters, and `Get5`/`Get4`/`GetAll3` do the same. `Get(name)`
+returns the stored text. `GetNames` comes back as a tuple *property*, so calling it raises
+`'tuple' object is not callable`; read it with `_get_attr_or_call`.
+
+## 28. `IDimension::FullName` includes the document: `D1@Sketch1@Part1.Part`
+
+The trailing `@<document title>` is not part of the name `IModelDoc2::Parameter` (behind
+`set_dimension`) accepts. Strip the last segment when it contains a `.`.
+
+## 29. `swFileLocationsMaterialDatabases` can read back empty
+
+`GetUserPreferenceStringValue(28)` returned `""` on a SW 2025 install whose libraries
+exist. Fall back to `<GetExecutablePath() folder>\lang\<GetCurrentLanguage()>\sldmaterials`
+(`GetExecutablePath` may include the `.exe`; take its folder). The `.sldmat` files are
+UTF-16 XML: `<classification name>` elements holding `<material name>` children.
+
 ---
 
 ## Adapter wiring traps — not COM, same silent-failure shape

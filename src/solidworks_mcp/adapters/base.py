@@ -1611,3 +1611,125 @@ class SolidWorksAdapter(ABC):
             dict[str, Any]: A dictionary containing the resulting values.
         """
         return self._metrics.copy()
+
+    # --- Engineering-data and drawing-documentation methods ---
+
+    async def list_model_dimensions(
+        self,
+        feature_name: str | None = None,
+    ) -> AdapterResult[list[dict[str, Any]]]:
+        """List every dimension in the active part or assembly.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_model_dimensions is not implemented by this adapter",
+        )
+
+    async def measure_entities(
+        self,
+        entities: list[str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Measure one or two selected entities.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="measure_entities is not implemented by this adapter",
+        )
+
+    async def get_material(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the material assigned to the active part.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_material is not implemented by this adapter",
+        )
+
+    async def set_material(
+        self,
+        material_name: str,
+        database: str | None = None,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Assign a material to the active part.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_material is not implemented by this adapter",
+        )
+
+    async def list_available_materials(
+        self,
+        search: str | None = None,
+    ) -> AdapterResult[list[dict[str, str]]]:
+        """List materials from the configured material libraries.
+
+        Returns:
+            AdapterResult[list[dict[str, str]]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_available_materials is not implemented by this adapter",
+        )
+
+    async def get_custom_properties(
+        self,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the custom properties of the active document.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_custom_properties is not implemented by this adapter",
+        )
+
+    async def set_custom_property(
+        self,
+        name: str,
+        value: str,
+        configuration: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create or overwrite one custom property.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_custom_property is not implemented by this adapter",
+        )
+
+    async def export_flat_pattern(
+        self,
+        file_path: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Export the active sheet-metal part's flat pattern.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="export_flat_pattern is not implemented by this adapter",
+        )
+
+
+    # --- Standard drawing methods ---
+

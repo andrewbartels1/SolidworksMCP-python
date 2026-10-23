@@ -13,6 +13,7 @@ from .automation import register_automation_tools
 from .docs_discovery import register_docs_discovery_tools
 from .drawing import register_drawing_tools
 from .drawing_analysis import register_drawing_analysis_tools
+from .engineering_data import register_engineering_data_tools
 from .export import register_export_tools
 from .file_management import register_file_management_tools
 from .macro_recording import register_macro_recording_tools
@@ -40,6 +41,7 @@ async def register_tools(mcp: FastMCP, adapter: Any, config: Any) -> int:
     await register_sketching_tools(mcp, adapter, config)
     await register_drawing_tools(mcp, adapter, config)
     await register_drawing_analysis_tools(mcp, adapter, config)
+    await register_engineering_data_tools(mcp, adapter, config)
     await register_analysis_tools(mcp, adapter, config)
     await register_export_tools(mcp, adapter, config)
     await register_automation_tools(mcp, adapter, config)
