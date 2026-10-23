@@ -274,6 +274,27 @@ class _ByrefFallback:
         return f"_ByrefFallback({self.value!r})"
 
 
+def _byref_bstr() -> Any:
+    """Return a byref string VARIANT for a SolidWorks ``String`` out-parameter.
+
+    Under forced late binding an omitted out-parameter raises "Parameter not
+    optional", and ``pythoncom.Missing`` cannot be converted to a COM VARIANT,
+    so pass ``VARIANT(VT_BYREF | VT_BSTR, "")`` and read ``.value`` afterwards
+    (e.g. ``IPartDoc::GetMaterialPropertyName2``'s ``Database``; confirmed live
+    on R2026x).
+
+    Returns:
+        Any: The byref VARIANT, or a ``_ByrefFallback("")`` without pywin32.
+    """
+    variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
+    if not callable(variant_ctor):
+        return _ByrefFallback("")
+    return variant_ctor(
+        int(getattr(pythoncom, "VT_BYREF", 0)) | int(getattr(pythoncom, "VT_BSTR", 0)),
+        "",
+    )
+
+
 def _byref_int() -> Any:
     """Return a byref long VARIANT for a SolidWorks out-parameter.
 

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
 from .features import _null_callout, _parse_edge_spec, _select_edge_by_coord
-from .io import _as_com, _doc_type, _sw_type_info
+from .io import _as_com, _byref_bstr, _doc_type, _sw_type_info
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -142,6 +142,34 @@ def _read_custom_property(adapter: Any, manager: Any, name: str) -> tuple[str, s
     plain = adapter._attempt(lambda: manager.Get(name), default=None)
     text = str(plain) if isinstance(plain, str) else ""
     return text, text
+
+
+def _read_material(part: Any, configuration: str | None) -> tuple[str, str]:
+    """Read ``(material, database)`` from ``IPartDoc::GetMaterialPropertyName2``.
+
+    ``Database`` is a ``String`` out-parameter: under late binding on SW 2026
+    omitting it raises "Parameter not optional", so it is passed as a byref
+    BSTR and read back from ``.value``. Older pywin32 builds may instead return
+    ``(name, database)`` as a tuple; both shapes are accepted.
+
+    Args:
+        part: The active ``IPartDoc``.
+        configuration: Configuration name; the active one when ``None``.
+
+    Returns:
+        tuple[str, str]: Material name and library; empty strings when unset.
+    """
+    database = _byref_bstr()
+    raw = part.GetMaterialPropertyName2(configuration or "", database)
+    if isinstance(raw, (list, tuple)):
+        strings = [str(s) for s in raw if isinstance(s, str)]
+        name = strings[0] if strings else ""
+        library = strings[1] if len(strings) > 1 else ""
+    else:
+        name = raw if isinstance(raw, str) else ""
+        library = ""
+    stored = getattr(database, "value", "")
+    return name, library or (stored if isinstance(stored, str) else "")
 
 
 def _strip_document_suffix(full_name: Any) -> str | None:
@@ -394,8 +422,8 @@ class SolidWorksDocumentationMixin:
     ) -> AdapterResult[dict[str, Any]]:
         """Read the material assigned to the active part.
 
-        Wraps ``IPartDoc::GetMaterialPropertyName2``, whose ``Database`` is an
-        out-parameter: the late-bound call returns ``(name, database)``.
+        Wraps ``IPartDoc::GetMaterialPropertyName2``; see
+        :func:`_read_material` for its ``Database`` out-parameter.
 
         Args:
             configuration: Configuration name; the active one when omitted.
@@ -410,14 +438,7 @@ class SolidWorksDocumentationMixin:
 
         def _get() -> dict[str, Any]:
             part = _sw_type_info.flagged(self.currentModel, "IPartDoc")
-            raw = part.GetMaterialPropertyName2(configuration or "")
-            name, database = "", ""
-            if isinstance(raw, (list, tuple)):
-                strings = [str(s) for s in raw if isinstance(s, str)]
-                name = strings[0] if strings else ""
-                database = strings[1] if len(strings) > 1 else ""
-            elif isinstance(raw, str):
-                name = raw
+            name, database = _read_material(part, configuration)
             return {
                 "material": name or None,
                 "database": database or None,
@@ -462,11 +483,7 @@ class SolidWorksDocumentationMixin:
             part = _sw_type_info.flagged(self.currentModel, "IPartDoc")
             part.SetMaterialPropertyName2(configuration or "", library, material_name)
             self._attempt(lambda: self.currentModel.EditRebuild3(), default=None)
-            raw = self._attempt(
-                lambda: part.GetMaterialPropertyName2(configuration or ""), default=None
-            )
-            strings = [str(s) for s in _sequence(raw) if isinstance(s, str)]
-            applied = strings[0] if strings else ""
+            applied, _library = _read_material(part, configuration)
             if applied.lower() != material_name.lower():
                 raise Exception(
                     f"Material {material_name!r} from {library!r} was not applied "

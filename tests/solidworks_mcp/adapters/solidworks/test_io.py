@@ -135,6 +135,7 @@ def test_com_value_helpers_fall_back_without_pywin32(monkeypatch) -> None:
 
     assert _io_module._byref_variant().value is None
     assert _io_module._byref_bool().value is False
+    assert _io_module._byref_bstr().value == ""
     assert _io_module._variant_array(9, (1, 2)) == [1, 2]
 
 

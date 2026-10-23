@@ -369,11 +369,18 @@ def _part(material: Any) -> SimpleNamespace:
 
     def set_material(_config, _library, name):
         if name != "Unobtainium":
-            state["material"] = (name, "SOLIDWORKS Materials")
+            state["material"] = (name, "SOLIDWORKS Materials", "byref")
+
+    def get_material(_config, database):
+        raw = state["material"]
+        if isinstance(raw, tuple) and len(raw) == 3:  # SW 2026: name + byref db
+            database.value = raw[1]
+            return raw[0]
+        return raw
 
     return SimpleNamespace(
         GetType=lambda: 1,
-        GetMaterialPropertyName2=lambda _config: state["material"],
+        GetMaterialPropertyName2=get_material,
         SetMaterialPropertyName2=set_material,
         EditRebuild3=lambda: True,
     )
@@ -384,6 +391,11 @@ def _part(material: Any) -> SimpleNamespace:
     ("raw", "material", "database"),
     [
         (("AISI 1020", "SOLIDWORKS Materials"), "AISI 1020", "SOLIDWORKS Materials"),
+        (
+            ("AISI 304", "SOLIDWORKS Materials", "byref"),
+            "AISI 304",
+            "SOLIDWORKS Materials",
+        ),
         ("ABS", "ABS", None),
         (None, None, None),
     ],
