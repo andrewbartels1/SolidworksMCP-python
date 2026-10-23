@@ -17,10 +17,24 @@ from solidworks_mcp.agents.schemas import (
 
 async def _run_or_skip(**kwargs):
     """Wrap run_validated_prompt and skip the test on auth/connection/outage errors."""
-    from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
+    from pydantic_ai.exceptions import (
+        ModelAPIError,
+        ModelHTTPError,
+        UnexpectedModelBehavior,
+    )
 
     try:
         return await run_validated_prompt(**kwargs)
+    except UnexpectedModelBehavior as exc:
+        # A non-JSON body (an outage or retirement page) is the provider being
+        # unavailable. Anything else - e.g. output that fails validation - is a
+        # real failure and still raises.
+        if "expected JSON data" in str(exc):
+            pytest.skip(
+                "LLM provider returned a non-JSON reply (outage or retirement "
+                "page) — provide ANTHROPIC_API_KEY or retry later"
+            )
+        raise
     except ModelHTTPError as exc:
         if exc.status_code == 401:
             pytest.skip(
