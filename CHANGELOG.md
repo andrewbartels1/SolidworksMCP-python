@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > pywin32 MCP server and restarted its own versioning at `1.0.0`; `1.x`
 > entries are the current line.
 
+## [Unreleased]
+
+### Added
+
+Engineering-data tools, contributed by @SaiqKamran (#117) and signed off live
+against SolidWorks 2026:
+
+- **`list_model_dimensions`** (#131): every dimension's editable full name
+  (`D1@Sketch1`), value and system value, optionally for one feature.
+- **`measure_entities`** (#132): area, perimeter, length, radius, distance
+  and angle of one or two faces, edges or vertices.
+- **`get_material`** (#133) and **`set_material`** (#134): read and assign a
+  part's library material; the assignment is read back, and an unknown name
+  is `not_found`.
+- **`list_available_materials`** (#135): search the configured and built-in
+  `.sldmat` libraries.
+- **`get_custom_properties`** (#136) and **`set_custom_property`** (#137):
+  read and write title-block/BOM properties, with resolved `$PRP:` values.
+- **`export_flat_pattern`** (#138): a sheet-metal part's flat pattern to DXF
+  or DWG.
+
 ## [1.4.0] - 2026-10-22
 
 Minor release. New tools and a uniform error contract; every change is
