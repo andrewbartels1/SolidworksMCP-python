@@ -212,6 +212,78 @@ async def _block_drawing(scratch, tmp_path) -> str:  # noqa: ANN001
     return part
 
 
+def _layout_snapshot(adapter: Any) -> dict[str, Any]:
+    """What arrange_dimensions reads: view outlines, dimension geometry, overlaps.
+
+    Read-only, through the same calls arrange_dimensions makes, on the
+    connect thread via ``_handle_com_operation``. Millimetres on the sheet.
+    """
+    from solidworks_mcp.adapters.solidworks import dimension_layout as lay
+    from solidworks_mcp.adapters.solidworks.io import _sw_type_info, _view_names
+
+    def mm(values: Any) -> list[float]:
+        return [round(float(v) * 1000, 1) for v in values]
+
+    def read() -> dict[str, Any]:
+        drawing = _sw_type_info.flagged(adapter.currentModel, "IDrawingDoc")
+        outlines, geometries, _ = adapter._collect_layout(
+            drawing, _view_names(adapter, drawing)
+        )
+        sheet = adapter._sheet_bounds(drawing)
+        return {
+            "overlaps": [
+                f"{o['dimension']} {o['kind']} {o['conflicts_with']}"
+                for o in lay.find_overlaps(geometries, outlines, sheet)
+            ],
+            "views_mm": {name: mm(box) for name, box in outlines.items()},
+            "dimensions": [
+                {
+                    "key": g.key,
+                    "orientation": lay.classify(g.lines)[0],
+                    "text_mm": mm(g.text_box),
+                    "lines_mm": [mm(line) for line in g.lines],
+                }
+                for g in geometries
+            ],
+        }
+
+    snapshot = adapter._handle_com_operation("layout_snapshot", read)
+    assert snapshot.is_success, snapshot.error
+    return snapshot.data
+
+
+def _pile_onto_views(adapter: Any) -> None:
+    """Drag every dimension's text onto the middle of its view (worst case).
+
+    On this block SolidWorks imports the dimensions cleanly, so the demo
+    stages the mess arrange_dimensions exists to fix: every dimension on its
+    part and on the others. Same ``IAnnotation::SetPosition`` call the tool
+    makes, on the connect thread.
+    """
+    from solidworks_mcp.adapters.solidworks.io import _sw_type_info, _view_names
+
+    def pile() -> int:
+        model = adapter.currentModel
+        drawing = _sw_type_info.flagged(model, "IDrawingDoc")
+        outlines, geometries, annotations = adapter._collect_layout(
+            drawing, _view_names(adapter, drawing)
+        )
+        moved = 0
+        for g in geometries:
+            o = outlines[g.view]
+            dx = (o[0] + o[2]) / 2 - (g.text_box[0] + g.text_box[2]) / 2
+            dy = (o[1] + o[3]) / 2 - (g.text_box[1] + g.text_box[3]) / 2
+            an = annotations[g.key]
+            z = an.GetPosition()[2]
+            moved += bool(an.SetPosition(g.position[0] + dx, g.position[1] + dy, z))
+        model.EditRebuild3()
+        model.GraphicsRedraw2()
+        return moved
+
+    piled = adapter._handle_com_operation("pile_dimensions", pile)
+    assert piled.is_success and piled.data, piled.error
+
+
 @pytest.mark.asyncio
 async def test_insert_model_dimensions_shows_each_dimension_once(scratch, tmp_path):
     """Model dimensions land on the views once each; pictorial views are skipped."""
@@ -250,12 +322,16 @@ async def test_insert_model_dimensions_shows_each_dimension_once(scratch, tmp_pa
 
 @pytest.mark.asyncio
 async def test_arrange_dimensions_clears_every_overlap(scratch, tmp_path):
-    """Imported dimensions sit on the part; arranging leaves zero overlaps."""
+    """Dimensions piled on the views are moved off them: zero overlaps after."""
     adapter = scratch.adapter
     await _block_drawing(scratch, tmp_path)
     tools = await _drawing_tools(adapter)
     inserted = await tools["insert_model_dimensions"]({})
     assert inserted["status"] == "success", inserted
+    _pile_onto_views(adapter)
+    before = _layout_snapshot(adapter)
+    evidence("BEFORE: every dimension dragged onto its view (staged)", before)
+    assert before["overlaps"], "staging left nothing to fix"
 
     result = await tools["arrange_dimensions"]({})
     data = result.get("data") or {}
@@ -268,6 +344,7 @@ async def test_arrange_dimensions_clears_every_overlap(scratch, tmp_path):
             "remaining_overlaps": data.get("remaining_overlaps"),
         },
     )
+    evidence("AFTER arranging", _layout_snapshot(adapter))
     assert result["status"] == "success", result
     assert data["overlaps_after"] == 0
     assert data["moved"] > 0
