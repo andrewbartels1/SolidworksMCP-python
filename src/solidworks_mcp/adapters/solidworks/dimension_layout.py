@@ -3,7 +3,8 @@
 Rule enforced: **nothing on the sheet may overlap.** A dimension's text box must
 not intersect another dimension's text, be crossed by another dimension's lines,
 sit on any view's geometry, touch an obstacle (title block, view captions, note
-blocks) or leave the working area of the frame.
+blocks) or leave the working area of the frame. A dimension's own lines must not
+cross any view but its own (its extension lines start on its own view).
 
 ``InsertModelAnnotations3`` places imported dimensions where they sit in the
 model sketch, which on a drawing view lands them *inside* the view outline, on
@@ -40,6 +41,41 @@ COLUMN_PITCH = 0.009
 STACK_GAP = 0.0035
 #: Outward steps tried per side before giving up on that side.
 MAX_STEPS = 12
+#: Another view's outline is grown by 0.2 mm, so a line along its edge counts.
+EDGE_TOLERANCE = 0.0002
+#: More than 1 mm of a line on another view is a crossing; touching is not.
+MIN_CROSSING = 0.001
+
+
+def crosses_other_view(
+    lines: list[Segment], own_view: str, outlines: dict[str, Box]
+) -> str | None:
+    """Return the first other view any of ``lines`` runs across or along.
+
+    A dimension's extension lines start on its own view's geometry, so its own
+    outline is exempt. On any other view, more than :data:`MIN_CROSSING` of a
+    line inside that outline (grown by :data:`EDGE_TOLERANCE`, so a line lying
+    along its edge counts) is a crossing; a line ending at the edge is not.
+    Measured live on SW 2026: a front view's height dimension parked beyond
+    the side view drew its extension lines along the side view's top and
+    bottom edges, straight across it.
+
+    Args:
+        lines: The dimension's line segments.
+        own_view: The view the dimension belongs to.
+        outlines: View name -> view outline.
+
+    Returns:
+        str | None: The crossed view's name, or ``None`` when clear.
+    """
+    t = EDGE_TOLERANCE
+    for view, o in outlines.items():
+        if view == own_view:
+            continue
+        grown = (o[0] - t, o[1] - t, o[2] + t, o[3] + t)
+        if any(length_inside(s, grown) > MIN_CROSSING for s in lines):
+            return view
+    return None
 
 
 @dataclass
@@ -108,6 +144,39 @@ def segment_hits_box(seg: Segment, box: Box) -> bool:
         if t0 > t1:
             return False
     return True
+
+
+def length_inside(seg: Segment, box: Box) -> float:
+    """Length of the part of a segment that lies inside a box (Liang-Barsky).
+
+    Args:
+        seg: The segment.
+        box: The box.
+
+    Returns:
+        float: 0.0 when the segment misses the box.
+    """
+    x0, y0, x1, y1 = seg
+    dx, dy = x1 - x0, y1 - y0
+    t0, t1 = 0.0, 1.0
+    for p, q in (
+        (-dx, x0 - box[0]),
+        (dx, box[2] - x0),
+        (-dy, y0 - box[1]),
+        (dy, box[3] - y0),
+    ):
+        if abs(p) < 1e-12:
+            if q < 0:
+                return 0.0
+            continue
+        t = q / p
+        if p < 0:
+            t0 = max(t0, t)
+        else:
+            t1 = min(t1, t)
+        if t0 > t1:
+            return 0.0
+    return (t1 - t0) * (dx * dx + dy * dy) ** 0.5
 
 
 def shift_box(box: Box, dx: float, dy: float) -> Box:
@@ -180,6 +249,15 @@ def find_overlaps(
                         "kind": "on_view_geometry",
                     }
                 )
+        crossed = crosses_other_view(dim.lines, dim.view, outlines)
+        if crossed is not None:
+            problems.append(
+                {
+                    "dimension": dim.key,
+                    "conflicts_with": crossed,
+                    "kind": "line_through_view",
+                }
+            )
         for label, obstacle in (obstacles or {}).items():
             if box_overlap(dim.text_box, obstacle, TEXT_PADDING / 2) or any(
                 segment_hits_box(s, obstacle) for s in dim.lines
@@ -314,6 +392,8 @@ def plan_layout(
             if any(segment_hits_box(s, box) for s in placed_lines):
                 continue
             segs = _projected_segments(dim, dx, dy, outline)
+            if crosses_other_view(segs, dim.view, outlines) is not None:
+                continue
             if any(
                 segment_hits_box(s, p) for s in segs for p in placed_boxes + blocked
             ):

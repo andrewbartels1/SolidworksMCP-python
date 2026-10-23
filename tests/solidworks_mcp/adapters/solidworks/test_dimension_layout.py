@@ -254,3 +254,50 @@ class TestPlanningChoices:
         moves, _ = lay.plan_layout(dims, {"View1": OUTLINE}, None, marker)
         row = lay.shift_box(dims[0].text_box, *moves["w"])
         assert abs((OUTLINE[1] - (row[1] + row[3]) / 2) - lay.FIRST_OFFSET) > 1e-6
+
+
+class TestLinesAcrossOtherViews:
+    """A front view's height dimension must not stretch across the side view.
+
+    Live on SW 2026 the planner parked it beyond the side view: its text was
+    clear, but its extension lines ran straight across that view.
+    """
+
+    FRONT = (0.05, 0.10, 0.14, 0.145)
+    SIDE = (0.15, 0.10, 0.20, 0.145)  # too close to fit a column in the gap
+
+    def _height(self, x_line: float) -> lay.DimensionGeometry:
+        return _vdim("height", "Front", 0.10, 0.145, x_line, self.FRONT[2])
+
+    def test_a_line_across_another_view_is_reported(self) -> None:
+        problems = lay.find_overlaps(
+            [self._height(0.30)], {"Front": self.FRONT, "Side": self.SIDE}
+        )
+        assert {
+            "dimension": "height",
+            "conflicts_with": "Side",
+            "kind": "line_through_view",
+        } in problems
+
+    def test_a_line_that_only_touches_a_view_is_fine(self) -> None:
+        touching = [(0.10, 0.12, 0.15, 0.12)]  # ends on Side's left edge
+        assert lay.crosses_other_view(touching, "Front", {"Side": self.SIDE}) is None
+        assert lay.crosses_other_view(touching, "Side", {"Side": self.SIDE}) is None
+
+    def test_the_planner_goes_round_the_other_view(self) -> None:
+        dim = self._height(0.30)
+        outlines = {"Front": self.FRONT, "Side": self.SIDE}
+
+        moves, unplaced = lay.plan_layout([dim], outlines)
+
+        assert not unplaced
+        dx, dy = moves["height"]
+        moved = lay.DimensionGeometry(
+            key="height",
+            view="Front",
+            text_box=lay.shift_box(dim.text_box, dx, dy),
+            position=dim.position,
+            lines=lay._projected_segments(dim, dx, dy, self.FRONT),
+        )
+        assert lay.find_overlaps([moved], outlines) == []
+        assert moved.text_box[2] < self.FRONT[0]  # the free left side
