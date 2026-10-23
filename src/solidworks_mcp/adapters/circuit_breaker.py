@@ -1683,6 +1683,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "list_model_dimensions",
             lambda: self.adapter.list_model_dimensions(feature_name),
             input_dict={"feature_name": feature_name},
+            error_results_are_failures=False,
         )
 
     async def measure_entities(
@@ -1694,6 +1695,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "measure_entities",
             lambda: self.adapter.measure_entities(entities),
             input_dict={"entities": entities},
+            error_results_are_failures=False,
         )
 
     async def get_material(
@@ -1705,6 +1707,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "get_material",
             lambda: self.adapter.get_material(configuration),
             input_dict={"configuration": configuration},
+            error_results_are_failures=False,
         )
 
     async def set_material(
@@ -1733,6 +1736,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "list_available_materials",
             lambda: self.adapter.list_available_materials(search),
             input_dict={"search": search},
+            error_results_are_failures=False,
         )
 
     async def get_custom_properties(
@@ -1744,6 +1748,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "get_custom_properties",
             lambda: self.adapter.get_custom_properties(configuration),
             input_dict={"configuration": configuration},
+            error_results_are_failures=False,
         )
 
     async def set_custom_property(
@@ -1769,7 +1774,6 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             lambda: self.adapter.export_flat_pattern(file_path),
             input_dict={"file_path": file_path},
         )
-
 
     # --- Standard drawing methods ---
 

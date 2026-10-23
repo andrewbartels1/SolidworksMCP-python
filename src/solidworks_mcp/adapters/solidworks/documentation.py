@@ -1,9 +1,7 @@
-"""Model-data and drawing-documentation mixin for PyWin32 SolidWorks operations.
+"""Model-data mixin for PyWin32 SolidWorks operations.
 
-Covers the engineering data a drawing or BOM is built from - model dimensions,
-measurements, material, custom properties, sheet-metal flat patterns - and the
-drawing steps that consume it: importing model dimensions into views, placing a
-BOM table, and setting sheet scale.
+Covers the engineering data a drawing or BOM is built from: model dimensions,
+measurements, material, custom properties and sheet-metal flat patterns.
 
 Every method name, argument order and enum value below was read from the
 SOLIDWORKS 2025 type libraries (``sldworks.tlb`` via gen_py, ``swconst.tlb``
@@ -21,7 +19,7 @@ from ..base import AdapterResult, AdapterResultStatus
 from .features import _null_callout, _parse_edge_spec, _select_edge_by_coord
 from .io import _as_com, _doc_type, _sw_type_info
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from collections.abc import Callable
 
 # swUserPreferenceStringValue_e
@@ -172,7 +170,7 @@ def _sequence(raw: Any) -> list[Any]:
 class SolidWorksDocumentationMixin:
     """Expose model-data and drawing-documentation methods through a mixin."""
 
-    if TYPE_CHECKING:  # pragma: no cover
+    if TYPE_CHECKING:
         currentModel: Any
         swApp: Any
 
@@ -184,7 +182,7 @@ class SolidWorksDocumentationMixin:
             self, operation: Callable[[], Any], default: Any = None
         ) -> Any: ...
 
-        def _require_drawing(self) -> AdapterResult[Any] | None: ...
+        def _get_attr_or_call(self, obj: Any, name: str) -> Any: ...
 
     def _require_doc_type(
         self, allowed: set[int], operation: str
@@ -290,7 +288,10 @@ class SolidWorksDocumentationMixin:
                         )
                 feature = self._attempt(lambda f=feat: f.GetNextFeature(), default=None)
             if target and not dims:
-                raise Exception(f"No dimensions found on feature {feature_name!r}")
+                raise LookupError(
+                    f"No dimensions found on feature {feature_name!r}; list "
+                    "the feature tree with list_features for exact names"
+                )
             return dims
 
         return cast(
@@ -345,7 +346,10 @@ class SolidWorksDocumentationMixin:
                 else:
                     ok = _select_edge_by_coord(self, x, y, z, append, 0, kind)
                 if not ok:
-                    raise Exception(f"Could not select {spec!r}")
+                    raise LookupError(
+                        f"No entity found for {spec!r}; check the name or the "
+                        "coordinates (metres)"
+                    )
 
             measure = self._attempt(
                 lambda: model.Extension.CreateMeasure(), default=None
@@ -536,7 +540,7 @@ class SolidWorksDocumentationMixin:
                             _parse_material_library(os.path.join(folder, entry))
                         )
             if not materials:
-                raise Exception(
+                raise LookupError(
                     f"No .sldmat libraries found in: {folders or 'no folders configured'}"
                 )
             if needle:
@@ -686,7 +690,7 @@ class SolidWorksDocumentationMixin:
                 )
                 for b in bodies
             ):
-                raise Exception("The active part has no sheet-metal body")
+                raise LookupError("The active part has no sheet-metal body")
             os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
             model_path = str(
                 self._attempt(lambda: model.GetPathName(), default="") or ""
@@ -710,13 +714,3 @@ class SolidWorksDocumentationMixin:
             "AdapterResult[dict[str, Any]]",
             self._handle_com_operation("export_flat_pattern", _export),
         )
-
-    # ------------------------------------------------------------------
-    # Drawing documentation
-    # ------------------------------------------------------------------
-
-
-    # ------------------------------------------------------------------
-    # Dimension layout: no dimension may overlap another
-    # ------------------------------------------------------------------
-

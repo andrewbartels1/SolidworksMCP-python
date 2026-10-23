@@ -7,16 +7,19 @@ the adapter's own result - nothing here is simulated.
 
 from __future__ import annotations
 
-import functools
-from collections.abc import Awaitable, Callable
-from typing import Any, get_type_hints
+from typing import Any
 
 from fastmcp import FastMCP
-from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from ..adapters.base import SolidWorksAdapter
+from ..adapters.base import AdapterResult, SolidWorksAdapter
 from .input_compat import CompatInput
+from .tool_boundary import (
+    normalize_input,
+    require_capability,
+    require_success,
+    with_tool_boundary,
+)
 
 
 class ListModelDimensionsInput(CompatInput):
@@ -142,73 +145,22 @@ class ExportFlatPatternInput(CompatInput):
     file_path: str = Field(description="Output path ending in .dxf or .dwg")
 
 
-def _guard(
-    fn: Callable[..., Awaitable[dict[str, Any]]],
-) -> Callable[..., Awaitable[dict[str, Any]]]:
-    """Make a tool accept a plain dict and never raise.
-
-    MCP clients send validated models, but direct callers (and the all-tools
-    smoke harness) pass raw dicts. The dict is validated into the annotated
-    input model; any failure, validation included, becomes an error response.
+def _success(result: AdapterResult[Any], message: str) -> dict[str, Any]:
+    """Shape a successful adapter result as the standard tool response.
 
     Args:
-        fn: A tool coroutine taking one ``input_data`` model.
+        result: The adapter's successful result.
+        message: What was done, for the ``message`` field.
 
     Returns:
-        Callable[..., Awaitable[dict[str, Any]]]: The guarded tool.
+        dict[str, Any]: ``status``, ``message``, ``data`` and ``execution_time``.
     """
-
-    @functools.wraps(fn)
-    async def wrapper(input_data: Any = None) -> dict[str, Any]:
-        try:
-            model = get_type_hints(fn).get("input_data")
-            if not isinstance(input_data, BaseModel) and model is not None:
-                input_data = model.model_validate(input_data or {})
-            return await fn(input_data)
-        except AttributeError as e:
-            if "has no attribute" not in str(e):
-                raise
-            return {
-                "status": "error",
-                "message": f"Active adapter does not support {fn.__name__}; nothing was done.",
-            }
-        except Exception as e:
-            logger.error(f"Error in {fn.__name__} tool: {e}")
-            return {
-                "status": "error",
-                "message": f"Invalid input or unexpected error: {e}",
-            }
-
-    return wrapper
-
-
-async def _run(
-    call: Callable[..., Awaitable[Any]], describe: str, *args: Any
-) -> dict[str, Any]:
-    """Call one adapter method and shape the standard tool response.
-
-    Args:
-        call: The bound adapter method, e.g. ``adapter.get_material``.
-        describe: Short description used in success / error messages.
-        *args: Positional arguments for the adapter method.
-
-    Returns:
-        dict[str, Any]: ``status``, ``message`` and, on success, ``data``.
-    """
-    method = getattr(call, "__name__", "operation")
-    try:
-        result = await call(*args)
-    except Exception as e:
-        logger.error(f"Error in {method} tool: {e}")
-        return {"status": "error", "message": f"Unexpected error: {e}"}
-    if result.is_success:
-        return {
-            "status": "success",
-            "message": f"Successfully {describe}",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-    return {"status": "error", "message": result.error or f"{method} failed"}
+    return {
+        "status": "success",
+        "message": message,
+        "data": result.data,
+        "execution_time": result.execution_time,
+    }
 
 
 async def register_engineering_data_tools(
@@ -225,97 +177,181 @@ async def register_engineering_data_tools(
         int: Number of tools registered.
     """
 
+    mcp = with_tool_boundary(mcp)
+
+    def _supports(method: str) -> None:
+        require_capability(
+            adapter,
+            method,
+            f"The active adapter does not support {method}; nothing was done.",
+        )
+
     @mcp.tool()
-    @_guard
     async def list_model_dimensions(
-        input_data: ListModelDimensionsInput,
+        input_data: ListModelDimensionsInput | None = None,
     ) -> dict[str, Any]:
         """List every dimension in the active part or assembly with its full name.
 
-        Each ``full_name`` (e.g. ``"D1@Sketch1"``) can be passed to
-        ``set_dimension`` to change that parameter, so this is the way to find
-        and edit any driving dimension in an existing model.
+        Read-only. Each entry's ``full_name`` (e.g. ``"D1@Sketch1"``) is the
+        name ``set_dimension`` / ``get_dimension`` accept, so this is how to
+        find and edit any driving dimension in an existing model. Pass
+        ``feature_name`` to list one feature's dimensions only.
+
+        Returns:
+            dict[str, Any]: ``data`` is a list of ``{full_name, feature, value
+            (document units), system_value (metres or radians), read_only}``.
+            ``not_found`` when ``feature_name`` has no dimensions;
+            ``wrong_document_type`` on a drawing.
         """
-        return await _run(
-            adapter.list_model_dimensions,
-            "listed model dimensions",
-            input_data.feature_name,
-        )
+        input_data = normalize_input(input_data, ListModelDimensionsInput)
+        _supports("list_model_dimensions")
+        result = await adapter.list_model_dimensions(input_data.feature_name)
+        require_success(result, context="Failed to list model dimensions")
+        return _success(result, f"Listed {len(result.data or [])} dimension(s)")
 
     @mcp.tool()
-    @_guard
     async def measure_entities(input_data: MeasureEntitiesInput) -> dict[str, Any]:
         """Measure faces, edges or vertices with SolidWorks' Measure tool.
 
-        Returns distance, angle, radius, diameter, length, area and perimeter as
-        applicable (SI units: metres, square metres, radians).
+        One face gives its area and perimeter; one edge its length (and radius
+        and diameter for an arc); two entities give the distance and angle
+        between them. Entity coordinates are in metres. Clears the selection
+        afterwards.
+
+        Returns:
+            dict[str, Any]: ``data`` holds ``selected`` plus whichever of
+            ``distance_m``, ``center_distance_m``, ``angle_rad``, ``radius_m``,
+            ``diameter_m``, ``length_m``, ``arc_length_m``, ``area_m2``,
+            ``perimeter_m``, ``delta_x_m``/``_y_m``/``_z_m`` and
+            ``is_parallel`` apply to the selection.
         """
-        return await _run(
-            adapter.measure_entities, "measured entities", input_data.entities
+        input_data = normalize_input(input_data, MeasureEntitiesInput)
+        _supports("measure_entities")
+        result = await adapter.measure_entities(input_data.entities)
+        require_success(result, context="Failed to measure")
+        return _success(result, f"Measured {', '.join(input_data.entities)}")
+
+    @mcp.tool()
+    async def get_material(
+        input_data: GetMaterialInput | None = None,
+    ) -> dict[str, Any]:
+        """Read the material assigned to the active part.
+
+        Read-only. Parts only (``wrong_document_type`` otherwise).
+
+        Returns:
+            dict[str, Any]: ``data`` is ``{material, database, configuration}``;
+            ``material`` is ``None`` when none is assigned.
+        """
+        input_data = normalize_input(input_data, GetMaterialInput)
+        _supports("get_material")
+        result = await adapter.get_material(input_data.configuration)
+        require_success(result, context="Failed to read the material")
+        material = (result.data or {}).get("material")
+        return _success(
+            result, f"Material: {material}" if material else "No material assigned"
         )
 
     @mcp.tool()
-    @_guard
-    async def get_material(input_data: GetMaterialInput) -> dict[str, Any]:
-        """Read the material assigned to the active part."""
-        return await _run(
-            adapter.get_material, "read the material", input_data.configuration
-        )
-
-    @mcp.tool()
-    @_guard
     async def set_material(input_data: SetMaterialInput) -> dict[str, Any]:
-        """Assign a library material to the active part (drives mass properties)."""
-        return await _run(
-            adapter.set_material,
-            f"assigned {input_data.material_name}",
-            input_data.material_name,
-            input_data.database,
-            input_data.configuration,
+        """Assign a library material to the active part.
+
+        The material drives mass properties (``get_mass_properties``) and what
+        a title block's Material field shows. The name must match the library
+        exactly; find it with ``list_available_materials``. The material is
+        read back after assignment, so success means it really applied.
+
+        Returns:
+            dict[str, Any]: ``data`` is ``{material, database, configuration}``
+            as read back from the part.
+        """
+        input_data = normalize_input(input_data, SetMaterialInput)
+        _supports("set_material")
+        result = await adapter.set_material(
+            input_data.material_name, input_data.database, input_data.configuration
         )
+        require_success(result, context="Failed to assign the material")
+        return _success(result, f"Assigned {input_data.material_name}")
 
     @mcp.tool()
-    @_guard
     async def list_available_materials(
-        input_data: ListMaterialsInput,
+        input_data: ListMaterialsInput | None = None,
     ) -> dict[str, Any]:
-        """List materials in the SolidWorks material libraries, optionally filtered."""
-        return await _run(
-            adapter.list_available_materials, "listed materials", input_data.search
-        )
+        """List materials in the installed SolidWorks material libraries.
+
+        Read-only; parses every ``.sldmat`` library SolidWorks is configured
+        to use. Filter with ``search`` (name or classification substring, e.g.
+        ``"steel"`` or ``"6061"``) and pass the exact ``name`` to
+        ``set_material``.
+
+        Returns:
+            dict[str, Any]: ``data`` is a list of ``{name, classification,
+            database}``.
+        """
+        input_data = normalize_input(input_data, ListMaterialsInput)
+        _supports("list_available_materials")
+        result = await adapter.list_available_materials(input_data.search)
+        require_success(result, context="Failed to list materials")
+        return _success(result, f"Found {len(result.data or [])} material(s)")
 
     @mcp.tool()
-    @_guard
     async def get_custom_properties(
-        input_data: CustomPropertiesInput,
+        input_data: CustomPropertiesInput | None = None,
     ) -> dict[str, Any]:
-        """Read the active document's custom properties (title block / BOM data)."""
-        return await _run(
-            adapter.get_custom_properties,
-            "read custom properties",
-            input_data.configuration,
-        )
+        """Read the active document's custom properties.
+
+        Read-only. File-level properties (the default) are what drawing title
+        blocks and BOMs usually link to; pass ``configuration`` for
+        configuration-specific ones.
+
+        Returns:
+            dict[str, Any]: ``data`` is ``{configuration, properties}``, where
+            ``properties`` maps each name to ``{value, resolved}`` (``value``
+            may be a ``$PRP:`` link; ``resolved`` is what it evaluates to).
+        """
+        input_data = normalize_input(input_data, CustomPropertiesInput)
+        _supports("get_custom_properties")
+        result = await adapter.get_custom_properties(input_data.configuration)
+        require_success(result, context="Failed to read custom properties")
+        count = len((result.data or {}).get("properties", {}))
+        return _success(result, f"Read {count} custom propert(ies)")
 
     @mcp.tool()
-    @_guard
     async def set_custom_property(input_data: SetCustomPropertyInput) -> dict[str, Any]:
-        """Create or overwrite one text custom property on the active document."""
-        return await _run(
-            adapter.set_custom_property,
-            f"set custom property {input_data.name}",
-            input_data.name,
-            input_data.value,
-            input_data.configuration,
+        """Create or overwrite one text custom property on the active document.
+
+        Typical names: ``PartNo``, ``Description``, ``DrawnBy``, ``Revision``.
+        The value is read back after writing, so success means it was stored.
+
+        Returns:
+            dict[str, Any]: ``data`` is ``{name, value, resolved,
+            configuration}`` as read back.
+        """
+        input_data = normalize_input(input_data, SetCustomPropertyInput)
+        _supports("set_custom_property")
+        result = await adapter.set_custom_property(
+            input_data.name, input_data.value, input_data.configuration
         )
+        require_success(result, context="Failed to set the custom property")
+        return _success(result, f"Set custom property {input_data.name}")
 
     @mcp.tool()
-    @_guard
     async def export_flat_pattern(input_data: ExportFlatPatternInput) -> dict[str, Any]:
-        """Export the active sheet-metal part's flat pattern to DXF or DWG."""
-        return await _run(
-            adapter.export_flat_pattern,
-            f"exported the flat pattern to {input_data.file_path}",
-            input_data.file_path,
-        )
+        """Export the active sheet-metal part's flat pattern to DXF or DWG.
+
+        Exports the flat-pattern geometry only (no bend lines or sketches),
+        for laser or waterjet cutting. Fails with a clear message when the
+        part has no sheet-metal body.
+
+        Returns:
+            dict[str, Any]: ``data`` is ``{file_path, size_bytes}`` of the
+            written file.
+        """
+        input_data = normalize_input(input_data, ExportFlatPatternInput)
+        _supports("export_flat_pattern")
+        result = await adapter.export_flat_pattern(input_data.file_path)
+        require_success(result, context="Failed to export the flat pattern")
+        written = (result.data or {}).get("file_path")
+        return _success(result, f"Exported the flat pattern to {written}")
 
     return 8

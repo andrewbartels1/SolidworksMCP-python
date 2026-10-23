@@ -63,6 +63,17 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         ),
         "prerequisite": "An active Drawing document open in SolidWorks.",
     },
+    "engineering_data": {
+        "title": "Engineering Data Tools",
+        "icon": ":material-ruler-square:",
+        "description": (
+            "Read and edit the data drawings, BOMs and analyses are built from: "
+            "every model dimension by name, measurements between faces, edges "
+            "and vertices, materials, custom properties, and sheet-metal flat "
+            "patterns."
+        ),
+        "prerequisite": "An active Part (or Assembly, for dimensions and measuring) document.",
+    },
     "analysis": {
         "title": "Analysis Tools",
         "icon": ":material-chart-line:",

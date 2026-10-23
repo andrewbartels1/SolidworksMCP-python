@@ -75,6 +75,18 @@ def classifier() -> ErrorClassifier:
         ),
         ("select_face_edges requires an active part document", "wrong_document_type"),
         ("save_body_as_part requires an active part document", "wrong_document_type"),
+        (
+            "get_material needs an active part document (active document is drawing).",
+            "wrong_document_type",
+        ),
+        (
+            "list_model_dimensions needs an active part or assembly document",
+            "wrong_document_type",
+        ),
+        ("No dimensions found on feature 'Fillet9'", "not_found"),
+        ("No entity found for 'Edge<9>'; check the name", "not_found"),
+        ("No .sldmat libraries found in: C:/x", "not_found"),
+        ("The active part has no sheet-metal body", "not_found"),
     ],
 )
 def test_known_messages_are_categorised(

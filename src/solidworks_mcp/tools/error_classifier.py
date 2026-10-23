@@ -129,7 +129,10 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
             "activate the right one (create_part, create_assembly, "
             "create_drawing or activate_document), then retry."
         ),
-        patterns=(r"requires an? (active )?(part|assembly|drawing) document",),
+        patterns=(
+            r"(requires|needs) an? (active )?(part|assembly|drawing)"
+            r"( or (part|assembly|drawing))? document",
+        ),
     ),
     ErrorRule(
         error_type="no_active_sketch",
@@ -154,9 +157,9 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
             r"\bnot found\b",
             r"does not exist",
             r"\bno such\b",
-            r"\bno face found\b",
+            r"\bno [\w.-]+( \w+)? found\b",
             r"\bhas no (\w+ )?(edges|faces)\b",
-            r"\bhas no solid body\b",
+            r"\bhas no [\w-]+ body\b",
         ),
     ),
 )

@@ -1,16 +1,14 @@
-"""Real-SolidWorks checks for the engineering-data and drawing-automation tools.
+"""Real-SolidWorks checks for the engineering-data tools (from PR #117).
 
-None of ``adapters/solidworks/documentation.py`` had run against a live
-session when it was written - every signature and enum came from the SW 2025
-type libraries, not from a working call. These tests are the proof step. Each
-asserts an observable effect (material read back, property read back, volume-
-consistent area, dimension count rising on a real view, files on disk), never
-just a reported status, following the lesson of com-api-pitfalls #19/#20.
+Each test calls the registered MCP tool (the exact path an MCP client hits)
+and asserts an observable effect: a material read back and a mass that matches
+it, a property read back, a face area that matches the sketch, the model's own
+dimension names. Evidence lines (``tests.live.evidence``) hold SolidWorks on
+each proven state during a demo.
 
-``test_insert_model_dimensions_adds_dimensions`` is the one most likely to
-fail: it targets the open question in com-api-pitfalls #18. If it does, the
-``views`` entries in the failure message say which path (import or
-AutoDimension) produced nothing - record that in #18.
+The author verified these on SolidWorks 2025; they are the sign-off on 2026.
+``export_flat_pattern`` has no sheet-metal part to work on here, so its live
+check is the refusal on a solid part; its export path is unit-tested.
 
 Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 ``tests/live/conftest.py``).
@@ -18,8 +16,11 @@ Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 
 from __future__ import annotations
 
+from typing import Any
 
 import pytest
+
+from tests.live.evidence import evidence
 
 
 async def _block(adapter, depth_mm: float = 15.0) -> None:  # noqa: ANN001
@@ -32,52 +33,108 @@ async def _block(adapter, depth_mm: float = 15.0) -> None:  # noqa: ANN001
     left = await adapter.add_line(0, 30, 0, 0)
     assert (await adapter.add_line(30, 0, 30, 30)).is_success
     assert (await adapter.add_line(30, 30, 0, 30)).is_success
-    assert (await adapter.add_sketch_dimension(bottom.data, None, "linear", 30.0)).is_success
-    assert (await adapter.add_sketch_dimension(left.data, None, "linear", 30.0)).is_success
+    assert (
+        await adapter.add_sketch_dimension(bottom.data, None, "linear", 30.0)
+    ).is_success
+    assert (
+        await adapter.add_sketch_dimension(left.data, None, "linear", 30.0)
+    ).is_success
     assert (await adapter.exit_sketch()).is_success
     boss = await adapter.create_extrusion(ExtrusionParameters(depth=depth_mm))
     assert boss.is_success, boss.error
 
 
+async def _tools(adapter: Any) -> dict[str, Any]:
+    """Register the engineering-data tools against ``adapter``; name -> fn."""
+    from fastmcp import FastMCP
+
+    from solidworks_mcp.tools.engineering_data import register_engineering_data_tools
+
+    mcp = FastMCP("engineering-data-live")
+    await register_engineering_data_tools(mcp, adapter, {})
+    return {t.name: t.fn for t in await mcp.list_tools()}
+
+
 @pytest.mark.asyncio
 async def test_material_applies_and_changes_mass(scratch):
+    """list -> set -> get material; the mass follows the density."""
     adapter = scratch.adapter
     await _block(adapter)
-    listed = await adapter.list_available_materials("1020")
-    assert listed.is_success, listed.error
-    assert any(m["name"] == "AISI 1020" for m in listed.data)
+    tools = await _tools(adapter)
 
-    result = await adapter.set_material("AISI 1020")
-    assert result.is_success, result.error
-    assert (await adapter.get_material()).data["material"] == "AISI 1020"
+    listed = await tools["list_available_materials"]({"search": "1020"})
+    evidence("list_available_materials('1020')", [m["name"] for m in listed["data"]])
+    assert listed["status"] == "success", listed
+    assert any(m["name"] == "AISI 1020" for m in listed["data"])
+
+    applied = await tools["set_material"]({"material_name": "AISI 1020"})
+    read = await tools["get_material"]({})
+    evidence("set_material + get_material", read["data"])
+    assert applied["status"] == "success", applied
+    assert read["data"]["material"] == "AISI 1020"
 
     mass = await adapter.get_mass_properties()
     assert mass.is_success, mass.error
+    evidence("mass of 30x30x15 mm AISI 1020 (expect ~0.106 kg)", mass.data.mass)
     # 30*30*15 mm = 13.5 cm^3 at ~7.87 g/cm^3 for AISI 1020 -> ~0.106 kg.
     assert 0.09 < float(mass.data.mass) < 0.12, mass.data
+
+    wrong = await tools["set_material"]({"material_name": "Unobtainium"})
+    evidence("set_material('Unobtainium')", wrong)
+    assert wrong["status"] == "error"
 
 
 @pytest.mark.asyncio
 async def test_custom_property_round_trip(scratch):
+    """A property written by set_custom_property reads back."""
     adapter = scratch.adapter
     await _block(adapter)
-    assert (await adapter.set_custom_property("PartNo", "LIVE-001")).is_success
-    props = await adapter.get_custom_properties()
-    assert props.is_success, props.error
-    assert props.data["properties"]["PartNo"]["value"] == "LIVE-001"
+    tools = await _tools(adapter)
+
+    written = await tools["set_custom_property"](
+        {"name": "PartNo", "value": "LIVE-001"}
+    )
+    props = await tools["get_custom_properties"]({})
+    evidence("get_custom_properties after set PartNo", props["data"]["properties"])
+    assert written["status"] == "success", written
+    assert props["data"]["properties"]["PartNo"]["value"] == "LIVE-001"
 
 
 @pytest.mark.asyncio
 async def test_dimensions_list_and_measure(scratch):
+    """The model's own dimension names, and a face area matching the sketch."""
     adapter = scratch.adapter
     await _block(adapter)
-    dims = await adapter.list_model_dimensions()
-    assert dims.is_success, dims.error
-    names = {d["full_name"] for d in dims.data}
+    tools = await _tools(adapter)
+
+    dims = await tools["list_model_dimensions"]({})
+    names = {d["full_name"] for d in dims["data"]}
+    evidence("list_model_dimensions", sorted(names))
+    assert dims["status"] == "success", dims
     assert any(n.endswith("@Sketch1") for n in names), names
     assert any("Boss-Extrude1" in n for n in names), names
 
-    top = await adapter.measure_entities(["face:0.015,0.0,-0.015"])
-    assert top.is_success, top.error
-    assert abs(top.data["area_m2"] - 0.0009) < 1e-6, top.data  # 30 x 30 mm
+    top = await tools["measure_entities"]({"entities": ["face:0.015,0.0,-0.015"]})
+    evidence("measure top face (expect 0.0009 m^2 = 30x30 mm)", top["data"])
+    assert top["status"] == "success", top
+    assert abs(top["data"]["area_m2"] - 0.0009) < 1e-6, top["data"]
 
+    missing = await tools["list_model_dimensions"]({"feature_name": "Fillet9"})
+    evidence("list_model_dimensions('Fillet9')", missing)
+    assert missing["error_type"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_export_flat_pattern_refuses_a_solid_part(scratch, tmp_path):
+    """A part without a sheet-metal body is refused clearly; nothing is written."""
+    adapter = scratch.adapter
+    await _block(adapter)
+    tools = await _tools(adapter)
+    target = tmp_path / "flat.dxf"
+
+    result = await tools["export_flat_pattern"]({"file_path": str(target)})
+    evidence("export_flat_pattern on a solid block", result)
+    assert result["status"] == "error"
+    assert result["error_type"] == "not_found"
+    assert "sheet-metal" in result["message"]
+    assert not target.exists()
