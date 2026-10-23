@@ -7,8 +7,9 @@ dimension names. Evidence lines (``tests.live.evidence``) hold SolidWorks on
 each proven state during a demo.
 
 The author verified these on SolidWorks 2025; they are the sign-off on 2026.
-``export_flat_pattern`` has no sheet-metal part to work on here, so its live
-check is the refusal on a solid part; its export path is unit-tested.
+``export_flat_pattern`` is checked both ways: refusing a solid block, and
+exporting a copy of the "Simple Sheet Metal Part" sample SolidWorks installs
+(skipped when the samples are not installed).
 
 Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 ``tests/live/conftest.py``).
@@ -16,6 +17,8 @@ Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -146,3 +149,35 @@ async def test_export_flat_pattern_refuses_a_solid_part(scratch, tmp_path):
     assert result["error_type"] == "not_found"
     assert "sheet-metal" in result["message"]
     assert not target.exists()
+
+
+_SHEET_METAL_SAMPLE = Path(
+    r"C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn"
+    r"\Sheet Metal\Simple Sheet Metal Part.SLDPRT"
+)
+
+
+@pytest.mark.asyncio
+async def test_export_flat_pattern_writes_a_dxf(scratch, tmp_path):
+    """A real sheet-metal part's flat pattern is written as a DXF."""
+    if not _SHEET_METAL_SAMPLE.exists():
+        pytest.skip(f"SolidWorks sample not installed: {_SHEET_METAL_SAMPLE}")
+    adapter = scratch.adapter
+    # Work on a copy: the shared sample is never opened for writing.
+    part = tmp_path / "sheet_metal_copy.SLDPRT"
+    shutil.copyfile(_SHEET_METAL_SAMPLE, part)
+    scratch.written_files.append(str(part))
+    opened = await adapter.open_model(str(part))
+    assert opened.is_success, opened.error
+    tools = await _tools(adapter)
+    target = tmp_path / "flat.dxf"
+
+    result = await tools["export_flat_pattern"]({"file_path": str(target)})
+    evidence("export_flat_pattern on the sheet-metal sample", result)
+
+    assert result["status"] == "success", result
+    assert target.exists() and target.stat().st_size > 0
+    text = target.read_text(encoding="latin-1")
+    sections = [s for s in ("HEADER", "ENTITIES", "EOF") if s in text]
+    evidence("DXF sections written", sections)
+    assert "ENTITIES" in sections
