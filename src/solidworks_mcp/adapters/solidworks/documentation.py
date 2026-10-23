@@ -506,8 +506,10 @@ class SolidWorksDocumentationMixin:
     ) -> AdapterResult[list[dict[str, str]]]:
         """List materials from the configured SolidWorks material libraries.
 
-        Reads the library folders from ``swFileLocationsMaterialDatabases``
-        (a ``;``-separated list) and parses every ``.sldmat`` file in them.
+        Reads the custom library folders from
+        ``swFileLocationsMaterialDatabases`` (a ``;``-separated list) plus the
+        install's built-in ``sldmaterials`` folder, and parses every
+        ``.sldmat`` file in them.
 
         Args:
             search: Case-insensitive substring filter on name or classification.
@@ -527,7 +529,7 @@ class SolidWorksDocumentationMixin:
         searched: dict[str, Any] = {}
 
         def _list() -> list[dict[str, str]]:
-            folders = str(
+            configured = str(
                 self._attempt(
                     lambda: app.GetUserPreferenceStringValue(
                         _SW_PREF_MATERIAL_DATABASES
@@ -536,22 +538,26 @@ class SolidWorksDocumentationMixin:
                 )
                 or ""
             )
-            if not folders.strip():
-                # Measured live on SW 2025: swFileLocationsMaterialDatabases
-                # reads back "" although the libraries exist, so fall back to
-                # <install>\lang\<language>\sldmaterials beside the executable.
-                exe_dir = str(
-                    self._attempt(lambda: app.GetExecutablePath(), default="") or ""
-                )
-                language = str(
-                    self._attempt(lambda: app.GetCurrentLanguage(), default="")
-                    or "english"
-                )
-                if exe_dir.lower().endswith(".exe"):
-                    exe_dir = os.path.dirname(exe_dir)
-                folders = os.path.join(exe_dir, "lang", language, "sldmaterials")
+            # swFileLocationsMaterialDatabases lists only the folders the user
+            # added: "" on a fresh SW 2025 install, just "Custom Materials" on
+            # SW 2026 (both measured live). SolidWorks always shows its
+            # built-in <install>\lang\<language>\sldmaterials library as
+            # well, so read that too.
+            exe_dir = str(
+                self._attempt(lambda: app.GetExecutablePath(), default="") or ""
+            )
+            language = str(
+                self._attempt(lambda: app.GetCurrentLanguage(), default="") or "english"
+            )
+            if exe_dir.lower().endswith(".exe"):
+                exe_dir = os.path.dirname(exe_dir)
+            built_in = os.path.join(exe_dir, "lang", language, "sldmaterials")
+            folder_list = [f.strip() for f in configured.split(";") if f.strip()]
+            if os.path.normcase(built_in) not in map(os.path.normcase, folder_list):
+                folder_list.append(built_in)
+            folders = ";".join(folder_list)
             materials: list[dict[str, str]] = []
-            for folder in filter(None, (f.strip() for f in folders.split(";"))):
+            for folder in folder_list:
                 if not os.path.isdir(folder):
                     continue
                 for entry in sorted(os.listdir(folder)):
@@ -559,14 +565,10 @@ class SolidWorksDocumentationMixin:
                         materials.extend(
                             _parse_material_library(os.path.join(folder, entry))
                         )
-            searched["folders"] = [
-                f for f in (f.strip() for f in folders.split(";")) if f
-            ]
+            searched["folders"] = folder_list
             searched["total"] = len(materials)
             if not materials:
-                raise LookupError(
-                    f"No .sldmat libraries found in: {folders or 'no folders configured'}"
-                )
+                raise LookupError(f"No .sldmat libraries found in: {folders}")
             if needle:
                 materials = [
                     m

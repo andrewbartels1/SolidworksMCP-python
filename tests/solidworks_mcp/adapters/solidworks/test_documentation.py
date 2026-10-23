@@ -466,9 +466,50 @@ async def test_list_available_materials_reads_configured_folders(tmp_path) -> No
 
     assert [m["name"] for m in result.data] == ["AISI 1020", "AISI 304", "6061-T6 (SS)"]
     assert result.metadata == {
-        "folders": [str(tmp_path / "missing"), str(folder)],
+        "folders": [
+            str(tmp_path / "missing"),
+            str(folder),
+            os.path.join("", "lang", "english", "sldmaterials"),
+        ],
         "total": 3,
     }
+
+
+@pytest.mark.asyncio
+async def test_list_available_materials_adds_the_built_in_library(tmp_path) -> None:
+    """SW 2026 lists only the custom folder; the built-in one is read too."""
+    custom = tmp_path / "Custom Materials"
+    custom.mkdir()
+    (custom / "custom.sldmat").write_text(
+        _SLDMAT.replace("AISI 1020", "House Blend")
+        .replace("AISI 304", "X")
+        .replace("6061-T6 (SS)", "Y"),
+        encoding="utf-8",
+    )
+    install = tmp_path / "SOLIDWORKS"
+    built_in = install / "lang" / "english" / "sldmaterials"
+    built_in.parent.mkdir(parents=True)
+    _library_folder(tmp_path).rename(built_in)
+    app = _app(str(custom), exe=str(install / "SLDWORKS.exe"))
+
+    result = await _Harness(app=app).list_available_materials("1020")
+
+    assert [m["name"] for m in result.data] == ["AISI 1020"]
+    assert result.metadata["folders"] == [str(custom), str(built_in)]
+    assert result.metadata["total"] == 6
+
+
+@pytest.mark.asyncio
+async def test_list_available_materials_does_not_read_a_folder_twice(tmp_path) -> None:
+    install = tmp_path / "SOLIDWORKS"
+    built_in = install / "lang" / "english" / "sldmaterials"
+    built_in.parent.mkdir(parents=True)
+    _library_folder(tmp_path).rename(built_in)
+    app = _app(str(built_in), exe=str(install / "SLDWORKS.exe"))
+
+    result = await _Harness(app=app).list_available_materials()
+
+    assert result.metadata == {"folders": [str(built_in)], "total": 3}
 
 
 @pytest.mark.asyncio

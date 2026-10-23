@@ -872,10 +872,12 @@ returns the stored text. `GetNames` comes back as a tuple *property*, so calling
 The trailing `@<document title>` is not part of the name `IModelDoc2::Parameter` (behind
 `set_dimension`) accepts. Strip the last segment when it contains a `.`.
 
-## 29. `swFileLocationsMaterialDatabases` can read back empty
+## 29. `swFileLocationsMaterialDatabases` lists only the custom material folders
 
 `GetUserPreferenceStringValue(28)` returned `""` on a SW 2025 install whose libraries
-exist. Fall back to `<GetExecutablePath() folder>\lang\<GetCurrentLanguage()>\sldmaterials`
+exist, and only `C:\ProgramData\SolidWorks\SOLIDWORKS 2026\Custom Materials`
+(one material) on SW 2026: it lists the folders the user added, never the built-in
+library. Always read the built-in folder as well: `<GetExecutablePath() folder>\lang\<GetCurrentLanguage()>\sldmaterials`
 (`GetExecutablePath` may include the `.exe`; take its folder). The `.sldmat` files are
 UTF-16 XML: `<classification name>` elements holding `<material name>` children.
 
