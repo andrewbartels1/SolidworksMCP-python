@@ -55,23 +55,45 @@ def _test_name() -> str:
     return re.sub(r"[^\w-]+", "_", current.split("::")[-1]).strip("_") or "demo"
 
 
-def _solidworks_window_image() -> Any:
-    """Copy the SolidWorks main window's pixels, even if it is covered."""
+def _area(hwnd: int) -> int:
+    """A window's on-screen area in pixels."""
     import win32gui
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    return (right - left) * (bottom - top)
+
+
+def _solidworks_window_image() -> Any:
+    """Copy the SolidWorks main window's pixels, even if it is covered.
+
+    The window is the largest one owned by ``sldworks.exe``. A title match
+    also caught an editor with this repo open ("SolidworksMCP-python - Visual
+    Studio Code") and captured it whenever it was in front.
+    """
+    import win32api
+    import win32gui
+    import win32process
     import win32ui
     from PIL import Image
 
     found: list[int] = []
 
     def _match(hwnd: int, _: Any) -> None:
-        title = win32gui.GetWindowText(hwnd)
-        if win32gui.IsWindowVisible(hwnd) and title.upper().startswith("SOLIDWORKS"):
+        if not win32gui.IsWindowVisible(hwnd) or not win32gui.GetWindowText(hwnd):
+            return
+        pid = win32process.GetWindowThreadProcessId(hwnd)[1]
+        try:
+            process = win32api.OpenProcess(0x1000, False, pid)  # query limited
+            exe = win32process.GetModuleFileNameEx(process, 0)
+        except Exception:  # noqa: BLE001 - another user's or a protected process
+            return
+        if Path(exe).name.lower() == "sldworks.exe":
             found.append(hwnd)
 
     win32gui.EnumWindows(_match, None)
     if not found:
         raise RuntimeError("no SolidWorks window")
-    hwnd = found[0]
+    hwnd = max(found, key=_area)  # the main window, not a floating toolbar
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     width, height = right - left, bottom - top
     window_dc = win32gui.GetWindowDC(hwnd)
