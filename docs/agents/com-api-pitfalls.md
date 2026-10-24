@@ -903,6 +903,32 @@ type mismatch. To delete a drawing dimension, take
 
 ---
 
+## 31. `IView.Position = (x, y)` silently moves the view to x ≈ 1e-310
+
+**Symptom:** Setting a drawing view's `Position` from a Python tuple returns cleanly, but
+reading it back gives `(6.95e-310, y)`: x is garbage, so the view lands off the left edge
+of the sheet. Any layout code that trusts the assignment then "fixes" overlaps by
+shrinking the scale, forever.
+
+**Fix:** pass an explicit `win32com.client.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8,
+[x, y])`, then read `Position` back to confirm. The same applies to `IView.ScaleRatio`.
+Live-verified on SW 2025 (`_double_array` / `_set_view_position` in
+`adapters/solidworks/drawing_standard.py`).
+
+---
+
+## 32. New drawings can block every COM call behind a "Sheet Format/Size" dialog
+
+When the drawing template has no sheet format, `NewDocument` opens a modal *Sheet
+Format/Size* dialog and every later COM call hangs until a person dismisses it. Turn off
+`swDrawingShowSheetFormatDialog` (user-preference toggle **353**) around `create_drawing`,
+restore it after, then apply a format with `IDrawingDoc::SetupSheet5`. Find the `.slddrt`
+through `swFileLocationsSheetFormat` (string preference 7); on a default install the files
+live under `C:\ProgramData\SOLIDWORKS\SOLIDWORKS <year>\lang\<language>\sheetformat`,
+not under the install folder.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests

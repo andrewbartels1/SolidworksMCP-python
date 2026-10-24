@@ -1756,3 +1756,61 @@ class SolidWorksAdapter(ABC):
             status=AdapterResultStatus.ERROR,
             error="arrange_dimensions is not implemented by this adapter",
         )
+
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a BOM table anchored to an assembly drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="insert_bom_table is not implemented by this adapter",
+        )
+
+    async def set_sheet_scale(
+        self,
+        numerator: float,
+        denominator: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set the active drawing sheet's scale.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_sheet_scale is not implemented by this adapter",
+        )
+
+    async def create_standard_drawing(
+        self,
+        model_path: str,
+        output_dir: str | None = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "",
+        revision: str = "A",
+        company: str = "",
+        drawn_date: str | None = None,
+        notes: list[str] | None = None,
+        include_isometric: bool = True,
+        write_model_properties: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a complete standard A3 drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_standard_drawing is not implemented by this adapter",
+        )

@@ -3779,3 +3779,104 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "sheet_size_m": [0.42, 0.297],
             },
         )
+
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock inserting a BOM table."""
+        guard = self._mock_doc_error({"Drawing"}, "insert_bom_table")
+        if guard is not None:
+            return guard
+        if bom_type not in {"top_level_only", "parts_only", "indented"}:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="bom_type must be top_level_only, parts_only or indented",
+            )
+        if view_name not in self._drawing_views:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=f"No view named {view_name!r}"
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "view": view_name,
+                "bom_type": bom_type,
+                "template": template_path,
+                "row_count": 2,
+            },
+        )
+
+    async def set_sheet_scale(
+        self, numerator: float, denominator: float
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock setting the sheet scale."""
+        guard = self._mock_doc_error({"Drawing"}, "set_sheet_scale")
+        if guard is not None:
+            return guard
+        if numerator <= 0 or denominator <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Scale values must be positive"
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"sheet": "Sheet1", "scale": f"{numerator:g}:{denominator:g}"},
+        )
+
+    async def create_standard_drawing(
+        self,
+        model_path: str,
+        output_dir: str | None = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "",
+        revision: str = "A",
+        company: str = "",
+        drawn_date: str | None = None,
+        notes: list[str] | None = None,
+        include_isometric: bool = True,
+        write_model_properties: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock standard A3 drawing: validates inputs, writes nothing to disk."""
+        import os
+
+        if not os.path.isfile(model_path):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Model file not found: {model_path}",
+            )
+        stem = os.path.splitext(os.path.basename(model_path))[0]
+        number = drawing_number or f"{stem.upper().replace(' ', '-')}-Rev{revision}-01"
+        out_dir = output_dir or os.path.dirname(model_path)
+        views = {
+            "Drawing View1": {"role": "front", "caption": "FRONT ELEVATION"},
+            "Drawing View2": {"role": "plan", "caption": "PLAN"},
+            "Drawing View3": {"role": "side", "caption": "SIDE ELEVATION"},
+        }
+        if include_isometric:
+            views["Drawing View4"] = {"role": "iso", "caption": "ISOMETRIC"}
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "scale": "1:1",
+                "isometric_scale": "1:1" if include_isometric else None,
+                "views": views,
+                "overlap_check": {"overlaps_after": 0, "annotation_overlaps": []},
+                "drawing_number": number,
+                "drawing_path": os.path.join(out_dir, f"{number}.SLDDRW"),
+                "pdf_path": os.path.join(out_dir, f"{number}.pdf"),
+                "properties_written": {
+                    "model": {"Description": title or stem} if write_model_properties else {},
+                    "drawing": {"DrawnBy": author, "Revision": revision},
+                },
+                "notes": ["NOTES", *[n.upper() for n in (notes or [])]],
+                "mock": True,
+            },
+        )

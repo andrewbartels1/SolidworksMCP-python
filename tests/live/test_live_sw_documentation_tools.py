@@ -354,3 +354,33 @@ async def test_arrange_dimensions_clears_every_overlap(scratch, tmp_path):
     assert result["status"] == "success", result
     assert data["overlaps_after"] == 0
     assert data["moved"] > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_drawing_package_writes_files(scratch, tmp_path):
+    from fastmcp import FastMCP
+
+    from solidworks_mcp.tools.drawing_automation import (
+        GenerateDrawingPackageInput,
+        register_drawing_automation_tools,
+    )
+
+    adapter = scratch.adapter
+    await _block(adapter)
+    part_path = str(tmp_path / "pkg_block.SLDPRT")
+    assert (await adapter.save_file(part_path)).is_success
+    scratch.written_files.append(part_path)
+
+    mcp = FastMCP("documentation-live-test")
+    await register_drawing_automation_tools(mcp, adapter, {})
+    tool = next(t.fn for t in await mcp.list_tools() if t.name == "generate_drawing_package")
+    out_dir = tmp_path / "out"
+    response = await tool(
+        input_data=GenerateDrawingPackageInput(model_path=part_path, output_dir=str(out_dir))
+    )
+    for path in (response.get("drawing_path"), response.get("pdf_path")):
+        if path:
+            scratch.written_files.append(path)
+    assert response["status"] in {"success", "partial"}, response["steps"]
+    assert response["drawing_path"] and os.path.exists(response["drawing_path"])
+    assert response["pdf_path"] and os.path.getsize(response["pdf_path"]) > 0

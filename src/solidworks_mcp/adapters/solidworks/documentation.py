@@ -34,6 +34,13 @@ if TYPE_CHECKING:
 
 # swUserPreferenceStringValue_e
 _SW_PREF_MATERIAL_DATABASES = 28
+_SW_PREF_BOM_TEMPLATES = 22
+# swBomType_e
+_SW_BOM_TYPES = {"parts_only": 1, "top_level_only": 2, "indented": 3, "flattened": 4}
+# swBOMConfigurationAnchorType_e
+_SW_BOM_ANCHOR_TOP_LEFT = 1
+# swNumberingType_e
+_SW_NUMBERING_NONE = 0
 # swCustomInfoType_e / swCustomPropertyAddOption_e
 _SW_CUSTOM_INFO_TEXT = 30
 _SW_CUSTOM_PROPERTY_REPLACE_VALUE = 2
@@ -1385,3 +1392,152 @@ class SolidWorksDocumentationMixin:
                 execution_time=result.execution_time,
             )
         return result
+
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a bill-of-materials table anchored to an assembly drawing view.
+
+        Wraps ``IView::InsertBomTable4``. With no position the table snaps to
+        the sheet format's BOM anchor (``UseAnchorPoint=True``). With no
+        template the library default ``bom-standard.sldbomtbt`` from the BOM
+        templates folder is used.
+
+        Args:
+            view_name: A view of an assembly on the active drawing.
+            template_path: ``.sldbomtbt`` table template.
+            bom_type: ``top_level_only``, ``parts_only`` or ``indented``.
+            x_mm: Optional table position on the sheet.
+            y_mm: Optional table position on the sheet.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The view, BOM type and row count.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+        if bom_type not in _SW_BOM_TYPES or bom_type == "flattened":
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="bom_type must be top_level_only, parts_only or indented",
+            )
+
+        def _insert() -> dict[str, Any]:
+            drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
+            view = _resolve_drawing_view(self, drawing, view_name)
+            if view is None:
+                raise Exception(
+                    f"No view named {view_name!r}. Views: "
+                    f"{', '.join(_view_names(self, drawing)) or 'none'}"
+                )
+            template = template_path
+            if not template:
+                folder = str(
+                    self._attempt(
+                        lambda: self.swApp.GetUserPreferenceStringValue(
+                            _SW_PREF_BOM_TEMPLATES
+                        ),
+                        default="",
+                    )
+                    or ""
+                ).split(";")[0]
+                candidate = os.path.join(folder, "bom-standard.sldbomtbt")
+                template = candidate if os.path.exists(candidate) else ""
+            use_anchor = x_mm is None or y_mm is None
+            config = str(
+                self._attempt(lambda: view.ReferencedConfiguration, default="") or ""
+            )
+            numbering = 1 if bom_type == "indented" else _SW_NUMBERING_NONE
+            table = view.InsertBomTable4(
+                use_anchor,
+                (x_mm or 0.0) / 1000.0,
+                (y_mm or 0.0) / 1000.0,
+                _SW_BOM_ANCHOR_TOP_LEFT,
+                _SW_BOM_TYPES[bom_type],
+                config,
+                template,
+                False,
+                numbering,
+                False,
+            )
+            if table is None:
+                raise Exception(
+                    f"InsertBomTable4 returned nothing for view {view_name!r}. "
+                    "A BOM needs a view of an assembly"
+                    + ("" if template else " and a BOM template (none found)")
+                    + "."
+                )
+            rows = self._attempt(
+                lambda: _sw_type_info.flagged(table, "ITableAnnotation").RowCount,
+                default=None,
+            )
+            return {
+                "view": view_name,
+                "bom_type": bom_type,
+                "template": template or None,
+                "row_count": rows,
+            }
+
+        return cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("insert_bom_table", _insert),
+        )
+
+    async def set_sheet_scale(
+        self, numerator: float, denominator: float
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set the active drawing sheet's scale, e.g. 1:2.
+
+        Wraps ``ISheet::SetScale``; views set to "use sheet scale" follow it.
+
+        Args:
+            numerator: Scale numerator.
+            denominator: Scale denominator.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The sheet name and new scale.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+        if numerator <= 0 or denominator <= 0:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Scale values must be positive"
+            )
+
+        def _scale() -> dict[str, Any]:
+            drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
+            sheet = _sw_type_info.flagged(drawing.GetCurrentSheet(), "ISheet")
+            if not sheet.SetScale(float(numerator), float(denominator), True, False):
+                raise Exception("ISheet.SetScale returned False")
+            self._attempt(lambda: self.currentModel.EditRebuild3(), default=None)
+            name = self._attempt(lambda: sheet.GetName(), default=None)
+            return {"sheet": name, "scale": f"{numerator:g}:{denominator:g}"}
+
+        return cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("set_sheet_scale", _scale),
+        )
+
+    def _insert_dimensions_sync(
+        self, drawing: Any, model: Any, names: list[str]
+    ) -> dict[str, Any]:
+        """Import dimensions into the named views (standard-drawing helper)."""
+        return self._import_dimensions(None, True, only_views=names)
+
+    def _arrange_sync(
+        self,
+        drawing: Any,
+        model: Any,
+        names: list[str],
+        obstacles: dict[str, Any],
+        work_area: Any,
+        move: bool = True,
+    ) -> dict[str, Any]:
+        """Arrange and check all dimensions against obstacles (standard-drawing helper)."""
+        return self._arrange_layout(None, obstacles, work_area, move)

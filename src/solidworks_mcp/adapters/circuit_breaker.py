@@ -1803,6 +1803,89 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"view_name": view_name},
         )
 
+    async def insert_bom_table(
+        self,
+        view_name: str,
+        template_path: str | None = None,
+        bom_type: str = "top_level_only",
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a BOM table anchored to an assembly drawing view through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "insert_bom_table",
+            lambda: self.adapter.insert_bom_table(
+                view_name, template_path, bom_type, x_mm, y_mm
+            ),
+            input_dict={
+                "view_name": view_name,
+                "template_path": template_path,
+                "bom_type": bom_type,
+                "x_mm": x_mm,
+                "y_mm": y_mm,
+            },
+        )
+
+    async def set_sheet_scale(
+        self,
+        numerator: float,
+        denominator: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set the active drawing sheet's scale through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_sheet_scale",
+            lambda: self.adapter.set_sheet_scale(numerator, denominator),
+            input_dict={"numerator": numerator, "denominator": denominator},
+        )
+
+    async def create_standard_drawing(
+        self,
+        model_path: str,
+        output_dir: str | None = None,
+        title: str | None = None,
+        subtitle: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "",
+        revision: str = "A",
+        company: str = "",
+        drawn_date: str | None = None,
+        notes: list[str] | None = None,
+        include_isometric: bool = True,
+        write_model_properties: bool = True,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Create a complete standard A3 drawing through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_standard_drawing",
+            lambda: self.adapter.create_standard_drawing(
+                model_path,
+                output_dir,
+                title,
+                subtitle,
+                drawing_number,
+                author,
+                revision,
+                company,
+                drawn_date,
+                notes,
+                include_isometric,
+                write_model_properties,
+            ),
+            input_dict={
+                "model_path": model_path,
+                "output_dir": output_dir,
+                "title": title,
+                "subtitle": subtitle,
+                "drawing_number": drawing_number,
+                "author": author,
+                "revision": revision,
+                "company": company,
+                "drawn_date": drawn_date,
+                "notes": notes,
+                "include_isometric": include_isometric,
+                "write_model_properties": write_model_properties,
+            },
+        )
+
 
 class CircuitBreaker:
     """Legacy standalone circuit breaker class expected by tests.
