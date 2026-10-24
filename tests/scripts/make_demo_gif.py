@@ -3,7 +3,8 @@
 ``tests/live/evidence.py`` saves ``<test>-<NN>.png`` frames when
 ``SW_DEMO_CAPTURE_DIR`` is set. This groups them by test and writes
 ``<test>.gif`` beside them, scaled to ``--width`` pixels, each frame held for
-``--seconds``::
+``--seconds``. Frames are padded to one size at the bottom and each replaces
+the last outright, so a shorter caption leaves no trace of a longer one::
 
     python tests/scripts/make_demo_gif.py docs/assets/demos/engineering-data
 """
@@ -18,6 +19,8 @@ from pathlib import Path
 from PIL import Image
 
 _FRAME = re.compile(r"^(?P<test>.+)-(?P<index>\d{2})\.png$")
+#: The caption panel's background in ``tests/live/evidence.py``.
+_CAPTION_BACKGROUND = (24, 24, 28)
 
 
 def build_gifs(directory: Path, width: int, seconds: float) -> list[Path]:
@@ -29,13 +32,19 @@ def build_gifs(directory: Path, width: int, seconds: float) -> list[Path]:
             frames[match["test"]].append(path)
     written = []
     for test, paths in sorted(frames.items()):
-        images = []
+        scaled = []
         for path in paths:
             image = Image.open(path).convert("RGB")
             if image.width > width:
                 height = round(image.height * width / image.width)
                 image = image.resize((width, height), Image.LANCZOS)
-            images.append(image.quantize(colors=256, method=Image.MEDIANCUT))
+            scaled.append(image)
+        size = (max(i.width for i in scaled), max(i.height for i in scaled))
+        images = []
+        for image in scaled:
+            padded = Image.new("RGB", size, _CAPTION_BACKGROUND)
+            padded.paste(image, (0, 0))
+            images.append(padded.quantize(colors=256, method=Image.MEDIANCUT))
         target = directory / f"{test}.gif"
         images[0].save(
             target,
@@ -43,7 +52,8 @@ def build_gifs(directory: Path, width: int, seconds: float) -> list[Path]:
             append_images=images[1:],
             duration=int(seconds * 1000),
             loop=0,
-            optimize=True,
+            disposal=2,
+            optimize=False,
         )
         written.append(target)
     return written

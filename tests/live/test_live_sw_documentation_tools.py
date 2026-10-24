@@ -298,7 +298,7 @@ async def test_insert_model_dimensions_shows_each_dimension_once(scratch, tmp_pa
     result = await tools["insert_model_dimensions"]({})
     data = result.get("data") or {}
     evidence(
-        "insert_model_dimensions",
+        "dimensions on the three views, the isometric skipped",
         {
             "message": result.get("message"),
             "views": [
@@ -308,6 +308,7 @@ async def test_insert_model_dimensions_shows_each_dimension_once(scratch, tmp_pa
             "unique_dimensions": data.get("unique_dimensions"),
             "skipped_pictorial_views": data.get("skipped_pictorial_views"),
         },
+        call="insert_model_dimensions({})",
     )
     assert result["status"] == "success", result
     assert data["dimensions_added"] > 0
@@ -316,7 +317,11 @@ async def test_insert_model_dimensions_shows_each_dimension_once(scratch, tmp_pa
     assert iso.data["name"] in data["skipped_pictorial_views"]
 
     missing = await tools["insert_model_dimensions"]({"view_name": "Side"})
-    evidence("insert_model_dimensions('Side')", missing)
+    evidence(
+        "an unknown view is not_found",
+        missing,
+        call='insert_model_dimensions({"view_name": "Side"})',
+    )
     assert missing["error_type"] == "not_found"
 
 
@@ -336,13 +341,14 @@ async def test_arrange_dimensions_clears_every_overlap(scratch, tmp_path):
     result = await tools["arrange_dimensions"]({})
     data = result.get("data") or {}
     evidence(
-        "arrange_dimensions",
+        "every dimension moved off the views",
         {
             "message": result.get("message"),
             "moved": data.get("moved"),
             "unplaced": data.get("unplaced"),
             "remaining_overlaps": data.get("remaining_overlaps"),
         },
+        call="arrange_dimensions({})",
     )
     evidence("AFTER arranging", _layout_snapshot(adapter))
     assert result["status"] == "success", result
