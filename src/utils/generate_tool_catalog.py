@@ -67,11 +67,15 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         "title": "Drawing Automation Tools",
         "icon": ":material-ruler:",
         "description": (
-            "Put the model's dimensions on a drawing and lay them out so nothing "
-            "overlaps: each dimension shown once, placed outside the views in "
-            "rows, and checked against the real geometry SolidWorks reports."
+            "Finish drawings: put the model's dimensions on the views and lay "
+            "them out so nothing overlaps, add a bill of materials, set the "
+            "sheet scale, or make a complete A3 drawing with a filled title "
+            "block and a PDF in one call."
         ),
-        "prerequisite": "An active Drawing document with views of a model.",
+        "prerequisite": (
+            "An active Drawing document with views of a model; "
+            "generate_drawing_package only needs the model file."
+        ),
     },
     "engineering_data": {
         "title": "Engineering Data Tools",
@@ -237,6 +241,11 @@ def _parse_pydantic_model(tree: ast.Module, class_name: str) -> list[dict[str, A
                                 default_val = ast.literal_eval(kw.value)
                             except Exception:
                                 default_val = ast.unparse(kw.value)
+                        elif kw.arg == "default_factory":
+                            factory = ast.unparse(kw.value)
+                            default_val = {"list": [], "dict": {}}.get(
+                                factory, f"{factory}()"
+                            )
                     # If first positional arg is a default value
                     if stmt.value.args:
                         try:
@@ -432,6 +441,9 @@ def _make_sample_payload(fields: list[dict[str, Any]]) -> dict[str, Any]:
         "output_dir": "C:\\Temp\\mcp_demo\\docs-index",
         "template": None,
         "model_path": None,
+        "view_name": "Drawing View1",
+        "numerator": 1,
+        "denominator": 2,
     }
     for f in fields:
         if f["required"]:

@@ -1,7 +1,9 @@
 """Model-data mixin for PyWin32 SolidWorks operations.
 
-Covers the engineering data a drawing or BOM is built from: model dimensions,
-measurements, material, custom properties and sheet-metal flat patterns.
+Covers the engineering data a drawing or BOM is built from (model dimensions,
+measurements, material, custom properties and sheet-metal flat patterns) and
+the drawing work that uses it: model dimensions on views laid out without
+overlaps, BOM tables and the sheet scale.
 
 Every method name, argument order and enum value below was read from the
 SOLIDWORKS 2025 type libraries (``sldworks.tlb`` via gen_py, ``swconst.tlb``
@@ -36,11 +38,16 @@ if TYPE_CHECKING:
 _SW_PREF_MATERIAL_DATABASES = 28
 _SW_PREF_BOM_TEMPLATES = 22
 # swBomType_e
-_SW_BOM_TYPES = {"parts_only": 1, "top_level_only": 2, "indented": 3, "flattened": 4}
+_SW_BOM_TYPES = {"top_level_only": 2, "parts_only": 1, "indented": 3}
 # swBOMConfigurationAnchorType_e
 _SW_BOM_ANCHOR_TOP_LEFT = 1
 # swNumberingType_e
 _SW_NUMBERING_NONE = 0
+_SW_NUMBERING_DETAILED = 1
+# swDocumentTypes_e
+_SW_DOC_ASSEMBLY = 2
+#: The library BOM template used when the caller names none.
+_BOM_DEFAULT_TEMPLATE = "bom-standard.sldbomtbt"
 # swCustomInfoType_e / swCustomPropertyAddOption_e
 _SW_CUSTOM_INFO_TEXT = 30
 _SW_CUSTOM_PROPERTY_REPLACE_VALUE = 2
@@ -1393,6 +1400,41 @@ class SolidWorksDocumentationMixin:
             )
         return result
 
+    # ------------------------------------------------------------------
+    # Bill of materials and sheet scale
+    # ------------------------------------------------------------------
+
+    def _bom_template(self, template_path: str | None) -> str:
+        """The BOM template to use: the caller's, else ``bom-standard``.
+
+        Args:
+            template_path: The caller's ``.sldbomtbt``, if any.
+
+        Returns:
+            str: An existing template file.
+
+        Raises:
+            LookupError: The template does not exist, or no BOM templates
+                folder holds ``bom-standard.sldbomtbt``.
+        """
+        if template_path:
+            if not os.path.isfile(template_path):
+                raise LookupError(f"BOM template not found: {template_path}")
+            return template_path
+        raw = self._attempt(
+            lambda: self.swApp.GetUserPreferenceStringValue(_SW_PREF_BOM_TEMPLATES),
+            default="",
+        )
+        folders = [f.strip() for f in str(raw or "").split(";") if f.strip()]
+        for folder in folders:
+            candidate = os.path.join(folder, _BOM_DEFAULT_TEMPLATE)
+            if os.path.isfile(candidate):
+                return candidate
+        raise LookupError(
+            f"No BOM template found: {_BOM_DEFAULT_TEMPLATE} is not in the BOM "
+            f"templates folder ({'; '.join(folders) or 'not set'}); pass template_path"
+        )
+
     async def insert_bom_table(
         self,
         view_name: str,
@@ -1401,60 +1443,64 @@ class SolidWorksDocumentationMixin:
         x_mm: float | None = None,
         y_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Insert a bill-of-materials table anchored to an assembly drawing view.
+        """Insert a bill-of-materials table for a view of an assembly.
 
         Wraps ``IView::InsertBomTable4``. With no position the table snaps to
         the sheet format's BOM anchor (``UseAnchorPoint=True``). With no
         template the library default ``bom-standard.sldbomtbt`` from the BOM
-        templates folder is used.
+        templates folder (``swFileLocationsBOMTemplates``) is used. The BOM
+        lists the view's referenced configuration; an indented BOM is
+        numbered by level.
 
         Args:
             view_name: A view of an assembly on the active drawing.
             template_path: ``.sldbomtbt`` table template.
             bom_type: ``top_level_only``, ``parts_only`` or ``indented``.
-            x_mm: Optional table position on the sheet.
-            y_mm: Optional table position on the sheet.
+            x_mm: Table position on the sheet; the anchor unless both are given.
+            y_mm: Table position on the sheet.
 
         Returns:
-            AdapterResult[dict[str, Any]]: The view, BOM type and row count.
+            AdapterResult[dict[str, Any]]: ``view``, ``bom_type``, ``template``,
+            ``configuration`` and ``row_count`` (the table's rows, header
+            included). ``not_found`` for an unknown view or template;
+            ``wrong_document_type`` for a view of a part.
         """
         guard = self._require_drawing()
         if guard is not None:
             return cast("AdapterResult[dict[str, Any]]", guard)
-        if bom_type not in _SW_BOM_TYPES or bom_type == "flattened":
+        if bom_type not in _SW_BOM_TYPES:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error="bom_type must be top_level_only, parts_only or indented",
+                error=f"bom_type must be one of {', '.join(_SW_BOM_TYPES)}",
             )
 
         def _insert() -> dict[str, Any]:
             drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
             view = _resolve_drawing_view(self, drawing, view_name)
             if view is None:
-                raise Exception(
+                raise LookupError(
                     f"No view named {view_name!r}. Views: "
                     f"{', '.join(_view_names(self, drawing)) or 'none'}"
                 )
-            template = template_path
-            if not template:
-                folder = str(
-                    self._attempt(
-                        lambda: self.swApp.GetUserPreferenceStringValue(
-                            _SW_PREF_BOM_TEMPLATES
-                        ),
-                        default="",
-                    )
-                    or ""
-                ).split(";")[0]
-                candidate = os.path.join(folder, "bom-standard.sldbomtbt")
-                template = candidate if os.path.exists(candidate) else ""
-            use_anchor = x_mm is None or y_mm is None
+            referenced = self._attempt(lambda: view.ReferencedDocument, default=None)
+            kind = self._attempt(
+                lambda: _sw_type_info.flagged(referenced, "IModelDoc2").GetType(),
+                default=None,
+            )
+            if kind is not None and kind != _SW_DOC_ASSEMBLY:
+                raise ValueError(
+                    "insert_bom_table needs an assembly document in the view: "
+                    f"{view_name!r} shows a part. Use a view of an assembly."
+                )
+            template = self._bom_template(template_path)
             config = str(
                 self._attempt(lambda: view.ReferencedConfiguration, default="") or ""
             )
-            numbering = 1 if bom_type == "indented" else _SW_NUMBERING_NONE
+            numbering = (
+                _SW_NUMBERING_DETAILED if bom_type == "indented" else _SW_NUMBERING_NONE
+            )
             table = view.InsertBomTable4(
-                use_anchor,
+                x_mm is None or y_mm is None,
                 (x_mm or 0.0) / 1000.0,
                 (y_mm or 0.0) / 1000.0,
                 _SW_BOM_ANCHOR_TOP_LEFT,
@@ -1466,11 +1512,9 @@ class SolidWorksDocumentationMixin:
                 False,
             )
             if table is None:
-                raise Exception(
-                    f"InsertBomTable4 returned nothing for view {view_name!r}. "
-                    "A BOM needs a view of an assembly"
-                    + ("" if template else " and a BOM template (none found)")
-                    + "."
+                raise RuntimeError(
+                    f"InsertBomTable4 made no table for view {view_name!r} "
+                    f"with template {template}"
                 )
             rows = self._attempt(
                 lambda: _sw_type_info.flagged(table, "ITableAnnotation").RowCount,
@@ -1479,7 +1523,8 @@ class SolidWorksDocumentationMixin:
             return {
                 "view": view_name,
                 "bom_type": bom_type,
-                "template": template or None,
+                "template": template,
+                "configuration": config or None,
                 "row_count": rows,
             }
 
@@ -1494,50 +1539,49 @@ class SolidWorksDocumentationMixin:
         """Set the active drawing sheet's scale, e.g. 1:2.
 
         Wraps ``ISheet::SetScale``; views set to "use sheet scale" follow it.
+        The scale is read back from ``ISheet::GetProperties2`` (elements 2
+        and 3), so success means the sheet really has it.
 
         Args:
             numerator: Scale numerator.
             denominator: Scale denominator.
 
         Returns:
-            AdapterResult[dict[str, Any]]: The sheet name and new scale.
+            AdapterResult[dict[str, Any]]: ``sheet`` and the ``scale`` read
+            back, e.g. ``"1:2"``.
         """
         guard = self._require_drawing()
         if guard is not None:
             return cast("AdapterResult[dict[str, Any]]", guard)
         if numerator <= 0 or denominator <= 0:
             return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="Scale values must be positive"
+                status=AdapterResultStatus.ERROR,
+                error=f"Scale values must be positive, not {numerator:g}:{denominator:g}",
             )
 
         def _scale() -> dict[str, Any]:
             drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
             sheet = _sw_type_info.flagged(drawing.GetCurrentSheet(), "ISheet")
             if not sheet.SetScale(float(numerator), float(denominator), True, False):
-                raise Exception("ISheet.SetScale returned False")
+                raise RuntimeError(
+                    f"ISheet::SetScale refused {numerator:g}:{denominator:g}"
+                )
             self._attempt(lambda: self.currentModel.EditRebuild3(), default=None)
-            name = self._attempt(lambda: sheet.GetName(), default=None)
-            return {"sheet": name, "scale": f"{numerator:g}:{denominator:g}"}
+            props = self._attempt(lambda: sheet.GetProperties2(), default=None)
+            if not isinstance(props, (list, tuple)) or len(props) < 4:
+                raise RuntimeError("The sheet's scale could not be read back")
+            got = (float(props[2]), float(props[3]))
+            if abs(got[0] / got[1] - numerator / denominator) > 1e-9:
+                raise RuntimeError(
+                    f"The sheet reads back {got[0]:g}:{got[1]:g}, "
+                    f"not {numerator:g}:{denominator:g}"
+                )
+            return {
+                "sheet": self._attempt(lambda: sheet.GetName(), default=None),
+                "scale": f"{got[0]:g}:{got[1]:g}",
+            }
 
         return cast(
             "AdapterResult[dict[str, Any]]",
             self._handle_com_operation("set_sheet_scale", _scale),
         )
-
-    def _insert_dimensions_sync(
-        self, drawing: Any, model: Any, names: list[str]
-    ) -> dict[str, Any]:
-        """Import dimensions into the named views (standard-drawing helper)."""
-        return self._import_dimensions(None, True, only_views=names)
-
-    def _arrange_sync(
-        self,
-        drawing: Any,
-        model: Any,
-        names: list[str],
-        obstacles: dict[str, Any],
-        work_area: Any,
-        move: bool = True,
-    ) -> dict[str, Any]:
-        """Arrange and check all dimensions against obstacles (standard-drawing helper)."""
-        return self._arrange_layout(None, obstacles, work_area, move)

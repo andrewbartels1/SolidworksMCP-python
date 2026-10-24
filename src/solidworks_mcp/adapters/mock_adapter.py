@@ -3788,18 +3788,33 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         x_mm: float | None = None,
         y_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock inserting a BOM table."""
+        """Mock a BOM table: a header and two component rows.
+
+        Args:
+            view_name (str): A view on the active drawing.
+            template_path (str | None): The table template.
+            bom_type (str): ``top_level_only``, ``parts_only`` or ``indented``.
+            x_mm (float | None): Table position.
+            y_mm (float | None): Table position.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The live adapter's fields.
+        """
         guard = self._mock_doc_error({"Drawing"}, "insert_bom_table")
         if guard is not None:
             return guard
         if bom_type not in {"top_level_only", "parts_only", "indented"}:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error="bom_type must be top_level_only, parts_only or indented",
+                error="bom_type must be one of top_level_only, parts_only, indented",
             )
         if view_name not in self._drawing_views:
             return AdapterResult(
-                status=AdapterResultStatus.ERROR, error=f"No view named {view_name!r}"
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"No view named {view_name!r}. Views: "
+                    f"{', '.join(self._drawing_views) or 'none'}"
+                ),
             )
         self._operation_count += 1
         return AdapterResult(
@@ -3807,21 +3822,31 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             data={
                 "view": view_name,
                 "bom_type": bom_type,
-                "template": template_path,
-                "row_count": 2,
+                "template": template_path or "bom-standard.sldbomtbt",
+                "configuration": "Default",
+                "row_count": 3,
             },
         )
 
     async def set_sheet_scale(
         self, numerator: float, denominator: float
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock setting the sheet scale."""
+        """Mock setting the sheet scale.
+
+        Args:
+            numerator (float): Scale numerator.
+            denominator (float): Scale denominator.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``sheet`` and ``scale``.
+        """
         guard = self._mock_doc_error({"Drawing"}, "set_sheet_scale")
         if guard is not None:
             return guard
         if numerator <= 0 or denominator <= 0:
             return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="Scale values must be positive"
+                status=AdapterResultStatus.ERROR,
+                error=f"Scale values must be positive, not {numerator:g}:{denominator:g}",
             )
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -3843,7 +3868,25 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         include_isometric: bool = True,
         write_model_properties: bool = True,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock standard A3 drawing: validates inputs, writes nothing to disk."""
+        """Mock standard A3 drawing: validates inputs, writes nothing to disk.
+
+        Args:
+            model_path (str): Part or assembly; it must exist.
+            output_dir (str | None): Folder for the files.
+            title (str | None): TITLE.
+            subtitle (str | None): Company field fallback.
+            drawing_number (str | None): DWG NO.
+            author (str): DRAWN name.
+            revision (str): Revision letter.
+            company (str): Company name.
+            drawn_date (str | None): DRAWN date.
+            notes (list[str] | None): Extra note lines.
+            include_isometric (bool): Add the isometric view.
+            write_model_properties (bool): Write the model properties.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The live adapter's fields.
+        """
         import os
 
         if not os.path.isfile(model_path):
@@ -3868,12 +3911,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "scale": "1:1",
                 "isometric_scale": "1:1" if include_isometric else None,
                 "views": views,
+                "dimensions": {"dimensions_added": 3, "unique_dimensions": 3},
                 "overlap_check": {"overlaps_after": 0, "annotation_overlaps": []},
+                "sheet_format": "a3 - iso.slddrt",
+                "steps": [],
                 "drawing_number": number,
                 "drawing_path": os.path.join(out_dir, f"{number}.SLDDRW"),
                 "pdf_path": os.path.join(out_dir, f"{number}.pdf"),
                 "properties_written": {
-                    "model": {"Description": title or stem} if write_model_properties else {},
+                    "model": {"Description": title or stem}
+                    if write_model_properties
+                    else {},
                     "drawing": {"DrawnBy": author, "Revision": revision},
                 },
                 "notes": ["NOTES", *[n.upper() for n in (notes or [])]],

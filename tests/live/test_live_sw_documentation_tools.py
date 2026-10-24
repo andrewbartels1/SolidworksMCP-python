@@ -13,6 +13,8 @@ exporting a copy of the "Simple Sheet Metal Part" sample SolidWorks installs
 
 The drawing-dimension tools (from the same PR) are checked on a drawing of the
 same block: each model dimension shown once, then laid out with no overlaps.
+So are the drawing-package tools: the sheet scale read back, a BOM for a
+two-part assembly, and a complete A3 drawing of the block with its PDF.
 
 Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 ``tests/live/conftest.py``).
@@ -356,31 +358,129 @@ async def test_arrange_dimensions_clears_every_overlap(scratch, tmp_path):
     assert data["moved"] > 0
 
 
+def _views_mm(adapter: Any) -> dict[str, list[float]]:
+    """Each view's outline on the sheet in mm (read-only)."""
+    return _layout_snapshot(adapter)["views_mm"]
+
+
 @pytest.mark.asyncio
-async def test_generate_drawing_package_writes_files(scratch, tmp_path):
-    from fastmcp import FastMCP
+async def test_set_sheet_scale_shrinks_the_views(scratch, tmp_path):
+    """The sheet reads back 1:2 and every view gets smaller; 0 is refused."""
+    adapter = scratch.adapter
+    await _block_drawing(scratch, tmp_path)
+    tools = await _drawing_tools(adapter)
+    before = _views_mm(adapter)
+    evidence("views before, at the drawing's own scale (mm)", before)
 
-    from solidworks_mcp.tools.drawing_automation import (
-        GenerateDrawingPackageInput,
-        register_drawing_automation_tools,
+    result = await tools["set_sheet_scale"]({"numerator": 1, "denominator": 2})
+    evidence("the sheet reads back 1:2", result, call="set_sheet_scale(1:2)")
+    after = _views_mm(adapter)
+    evidence("views after (mm): every one smaller", after)
+    assert result["status"] == "success", result
+    assert result["data"]["scale"] == "1:2"
+    for name, box in after.items():
+        assert box[2] - box[0] < before[name][2] - before[name][0], name
+
+    zero = await tools["set_sheet_scale"]({"numerator": 0, "denominator": 2})
+    evidence(
+        "a zero scale is refused",
+        zero,
+        call='set_sheet_scale({"numerator": 0, "denominator": 2})',
     )
+    assert zero["error_type"] == "invalid_input"
 
+
+@pytest.mark.asyncio
+async def test_insert_bom_table_lists_the_assembly(scratch, tmp_path):
+    """A two-part assembly's drawing gets a BOM with a row per part."""
+    adapter = scratch.adapter
+    parts = []
+    for name, depth in (("bom_block", 15.0), ("bom_plate", 5.0)):
+        await _block(adapter, depth)
+        path = str(tmp_path / f"{name}.SLDPRT")
+        assert (await adapter.save_file(path)).is_success
+        scratch.written_files.append(path)
+        parts.append(path)
+    assert (await adapter.create_assembly()).is_success
+    assert (await adapter.insert_component(parts[0], 0.0, 0.0, 0.0)).is_success
+    assert (await adapter.insert_component(parts[1], 0.05, 0.0, 0.0)).is_success
+    assembly = str(tmp_path / "bom_frame.SLDASM")
+    assert (await adapter.save_file(assembly)).is_success
+    scratch.written_files.append(assembly)
+    assert (await adapter.create_drawing()).is_success
+    views = await adapter.create_technical_drawing({"model_path": assembly})
+    assert views.is_success, views.error
+    tools = await _drawing_tools(adapter)
+
+    result = await tools["insert_bom_table"]({"view_name": "Drawing View1"})
+    evidence(
+        "a BOM for the two-part assembly",
+        result,
+        call='insert_bom_table({"view_name": "Drawing View1"})',
+    )
+    assert result["status"] == "success", result
+    assert result["data"]["row_count"] >= 3  # the header and one row per part
+
+    missing = await tools["insert_bom_table"]({"view_name": "Side"})
+    evidence(
+        "an unknown view is not_found",
+        missing,
+        call='insert_bom_table({"view_name": "Side"})',
+    )
+    assert missing["error_type"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_generate_drawing_package_makes_a_complete_a3_drawing(scratch, tmp_path):
+    """One call: A3 sheet, filled title block, views, dimensions, notes, PDF."""
     adapter = scratch.adapter
     await _block(adapter)
-    part_path = str(tmp_path / "pkg_block.SLDPRT")
-    assert (await adapter.save_file(part_path)).is_success
-    scratch.written_files.append(part_path)
-
-    mcp = FastMCP("documentation-live-test")
-    await register_drawing_automation_tools(mcp, adapter, {})
-    tool = next(t.fn for t in await mcp.list_tools() if t.name == "generate_drawing_package")
-    out_dir = tmp_path / "out"
-    response = await tool(
-        input_data=GenerateDrawingPackageInput(model_path=part_path, output_dir=str(out_dir))
+    material = await (await _tools(adapter))["set_material"](
+        {"material_name": "AISI 1020"}
     )
-    for path in (response.get("drawing_path"), response.get("pdf_path")):
-        if path:
-            scratch.written_files.append(path)
-    assert response["status"] in {"success", "partial"}, response["steps"]
-    assert response["drawing_path"] and os.path.exists(response["drawing_path"])
-    assert response["pdf_path"] and os.path.getsize(response["pdf_path"]) > 0
+    assert material["status"] == "success", material
+    part = str(tmp_path / "pkg_block.SLDPRT")
+    assert (await adapter.save_file(part)).is_success
+    scratch.written_files.append(part)
+    tools = await _drawing_tools(adapter)
+    payload = {
+        "model_path": part,
+        "output_dir": str(tmp_path / "out"),
+        "title": "Demo Block",
+        "author": "SolidWorks MCP",
+        "notes": ["Break all edges 0.5 mm"],
+    }
+
+    result = await tools["generate_drawing_package"](payload)
+    data = result.get("data") or {}
+    for key in ("drawing_path", "pdf_path"):
+        if data.get(key):
+            scratch.written_files.append(data[key])
+    evidence(
+        "a complete A3 drawing of the block",
+        {
+            "message": result.get("message"),
+            "scale": data.get("scale"),
+            "views": {n: v["role"] for n, v in (data.get("views") or {}).items()},
+            "dimensions_added": (data.get("dimensions") or {}).get("dimensions_added"),
+            "overlaps_after": (data.get("overlap_check") or {}).get("overlaps_after"),
+            "failed_steps": [
+                s["step"] for s in data.get("steps", []) if s["status"] != "success"
+            ],
+            "pdf_bytes": Path(data["pdf_path"]).stat().st_size
+            if data.get("pdf_path")
+            else None,
+        },
+        call="generate_drawing_package("
+        '{"model_path": "pkg_block.SLDPRT", "title": "Demo Block", ...})',
+    )
+    assert result["status"] == "success", result
+    assert Path(data["drawing_path"]).is_file()
+    assert Path(data["pdf_path"]).stat().st_size > 0
+    assert data["overlap_check"]["overlaps_after"] == 0
+    assert sorted(v["role"] for v in data["views"].values()) == [
+        "front",
+        "iso",
+        "plan",
+        "side",
+    ]

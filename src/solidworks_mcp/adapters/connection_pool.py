@@ -1483,7 +1483,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Insert a BOM table anchored to an assembly drawing view using pool."""
         return await self._execute_with_pool(
             "insert_bom_table",
-            lambda adapter: adapter.insert_bom_table(view_name, template_path, bom_type, x_mm, y_mm),
+            lambda adapter: adapter.insert_bom_table(
+                view_name, template_path, bom_type, x_mm, y_mm
+            ),
         )
 
     async def set_sheet_scale(
@@ -1515,7 +1517,20 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Create a complete standard A3 drawing using pool."""
         return await self._execute_with_pool(
             "create_standard_drawing",
-            lambda adapter: adapter.create_standard_drawing(model_path, output_dir, title, subtitle, drawing_number, author, revision, company, drawn_date, notes, include_isometric, write_model_properties),
+            lambda adapter: adapter.create_standard_drawing(
+                model_path,
+                output_dir,
+                title,
+                subtitle,
+                drawing_number,
+                author,
+                revision,
+                company,
+                drawn_date,
+                notes,
+                include_isometric,
+                write_model_properties,
+            ),
         )
 
 

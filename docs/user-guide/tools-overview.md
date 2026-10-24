@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 148 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+The SolidWorks MCP Server provides 151 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
 
 ## Read this first
 
@@ -107,9 +107,9 @@ The SolidWorks MCP Server provides 148 specialized tools for CAD automation. Thi
 
     ---
 
-    Model dimensions on drawing views, each shown once and laid out so nothing overlaps.
+    Model dimensions laid out so nothing overlaps, BOM tables, the sheet scale, and a complete A3 drawing with a PDF in one call.
 
-    [**2 tools available** :octicons-arrow-right-24:](tool-catalog/drawing-automation.md)
+    [**5 tools available** :octicons-arrow-right-24:](tool-catalog/drawing-automation.md)
 
 - :material-ruler-square:{ .lg .middle } **Engineering Data**
 
@@ -137,7 +137,7 @@ The SolidWorks MCP Server provides 148 specialized tools for CAD automation. Thi
 | **Sketching** | 19 | Medium | 2D geometry and constraint management |
 | **Drawing** | 14 | Medium | Technical documentation creation |
 | **Drawing Analysis** | 8 | Medium | Quality assurance and compliance |
-| **Drawing Automation** | 2 | Medium | Model dimensions on drawings, laid out without overlaps |
+| **Drawing Automation** | 5 | Medium | Dimensions laid out without overlaps, BOM, sheet scale, complete A3 drawings |
 | **Engineering Data** | 8 | Medium | Dimensions, measuring, materials and properties |
 | **Analysis** | 5 | High | Engineering validation and analysis |
 | **Export** | 7 | Low | File format conversion and sharing |
@@ -148,7 +148,7 @@ The SolidWorks MCP Server provides 148 specialized tools for CAD automation. Thi
 | **Macro Recording** | 7 | High | Workflow capture and optimization |
 | **Docs Discovery** | 2 | Medium | API and COM discovery workflows |
 
-**Total: 148 Tools**
+**Total: 151 Tools**
 
 ## Tool Design Principles
 

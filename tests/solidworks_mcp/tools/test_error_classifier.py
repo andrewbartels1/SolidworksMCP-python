@@ -89,6 +89,13 @@ def classifier() -> ErrorClassifier:
         ("No entity found for 'Edge<9>'; check the name", "not_found"),
         ("No .sldmat libraries found in: C:/x", "not_found"),
         ("The active part has no sheet-metal body", "not_found"),
+        ("BOM template not found: C:/t.sldbomtbt", "not_found"),
+        ("No BOM template found: bom-standard.sldbomtbt is not in ...", "not_found"),
+        ("Sheet format 'a3 - iso.slddrt' not found in ...", "not_found"),
+        (
+            "insert_bom_table needs an assembly document in the view: 'V' shows a part",
+            "wrong_document_type",
+        ),
     ],
 )
 def test_known_messages_are_categorised(
