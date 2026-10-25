@@ -20,6 +20,7 @@ _DRAWING_ARGS = (
     ["Deburr"],
     False,
     False,
+    3.0,
 )
 
 

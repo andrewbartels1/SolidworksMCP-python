@@ -464,6 +464,7 @@ async def test_generate_drawing_package_makes_a_complete_a3_drawing(scratch, tmp
             "views": {n: v["role"] for n, v in (data.get("views") or {}).items()},
             "dimensions_added": (data.get("dimensions") or {}).get("dimensions_added"),
             "overlaps_after": (data.get("overlap_check") or {}).get("overlaps_after"),
+            "title_block": data.get("title_block"),
             "failed_steps": [
                 s["step"] for s in data.get("steps", []) if s["status"] != "success"
             ],
@@ -478,6 +479,7 @@ async def test_generate_drawing_package_makes_a_complete_a3_drawing(scratch, tmp
     assert Path(data["drawing_path"]).is_file()
     assert Path(data["pdf_path"]).stat().st_size > 0
     assert data["overlap_check"]["overlaps_after"] == 0
+    assert data["title_block"]["drawing number"]["fits"] is True
     assert sorted(v["role"] for v in data["views"].values()) == [
         "front",
         "iso",

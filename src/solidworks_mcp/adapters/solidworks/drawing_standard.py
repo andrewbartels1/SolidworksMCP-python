@@ -17,6 +17,11 @@ Implements an A3 ISO drafting standard on SolidWorks:
   (first 8 mm out, rows 7 mm, columns 9 mm), trailing zeros removed.
 * **Notes** - a NOTES block in its own cell (material, units, projection, plus
   caller lines).
+* **Title-block fields fit their boxes** - the DWG NO. (the drawing's file
+  name) and TITLE notes of the sheet format are shrunk, down to 2 mm, until
+  they fill at most 90% of the room before the next field in their row; one
+  that still runs over is an overlap. ``title_block_text_height_mm`` caps
+  their height for smaller text.
 * **No overlap anywhere** - checked against the real read-back geometry.
   The scale is chosen once to fit the sheet and is never stepped down;
   overlaps are resolved by moving dimensions.
@@ -75,6 +80,24 @@ CAPTION_HEIGHT = 0.0032
 NOTE_HEIGHT = 0.003
 #: The NOTES block holds at most this many numbered lines.
 MAX_NOTE_LINES = 7
+#: Title-block fields fitted to their boxes: linked property -> field name.
+#: The ``a3 - iso`` format shows the drawing's file name as the DWG NO. and
+#: the model's ``Description`` as the TITLE (measured live on SW 2026: a
+#: default drawing number ran across the size box at the format's height).
+TITLE_BLOCK_FIELDS = {"SW-File Name": "drawing number", "Description": "title"}
+#: A fitted field's text is never made smaller than this.
+MIN_FIELD_HEIGHT = 0.002
+#: Clearance kept between a fitted field and the next field in its row.
+FIELD_GAP = 0.002
+#: A fitted field fills at most this share of its room, so it is not cramped.
+FIELD_FILL = 0.9
+#: What to tell a caller whose title-block field does not fit.
+FIELD_HINT = (
+    "pass title_block_text_height_mm (e.g. 3) for smaller title-block text, "
+    "or a shorter drawing_number or title"
+)
+#: swTextFormat: the note uses its own format, not the document's.
+_SW_NOTE_OWN_FORMAT = 0
 #: Standard notes, after the material line.
 STANDARD_NOTES = (
     "ALL DIMENSIONS IN MILLIMETRES",
@@ -310,6 +333,29 @@ def view_roles(
     return role
 
 
+def field_room(box: Box, others: list[Box], limit: float) -> float:
+    """How far right a title-block field may run: to the next note in its row.
+
+    A note is in the field's row when its vertical centre lies within the
+    field's height, and it is to the right when it starts more than 5 mm
+    after the field does (the field's own label sits at about its start).
+
+    Args:
+        box: The field's text box.
+        others: Every other note's box in the title block.
+        limit: The title block's right edge.
+
+    Returns:
+        float: The x the field's text must end before.
+    """
+    right = limit
+    for o in others:
+        centre = (o[1] + o[3]) / 2
+        if box[1] <= centre <= box[3] and o[0] > box[0] + 0.005:
+            right = min(right, o[0] - FIELD_GAP)
+    return right
+
+
 def find_sheet_format(adapter: Any, name: str = "a3 - iso.slddrt") -> str | None:
     """Locate a sheet format file: SolidWorks' configured folder, then ProgramData.
 
@@ -361,6 +407,8 @@ class _Sheet:
         captions: View name -> caption text.
         notes: ``(label, IAnnotation)`` for every caption and note line.
         note_lines: The NOTES block's text.
+        title_block: Field name -> how it was fitted to its box.
+        field_height: The caller's cap on the fitted fields' text height.
     """
 
     path: str
@@ -378,6 +426,8 @@ class _Sheet:
     captions: dict[str, str] = field(default_factory=dict)
     notes: list[tuple[str, Any]] = field(default_factory=list)
     note_lines: list[str] = field(default_factory=list)
+    title_block: dict[str, dict[str, Any]] = field(default_factory=dict)
+    field_height: float | None = None
 
 
 def _step(steps: list[dict[str, Any]], name: str, result: AdapterResult[Any]) -> None:
@@ -780,6 +830,113 @@ class SolidWorksDrawingStandardMixin:
         self._attempt(lambda: model.EditRebuild3(), default=None)
         return {"captions": dict(s.captions), "notes": list(s.note_lines)}
 
+    def _note_extent(self, note: Any) -> Box | None:
+        """A note's box from ``INote::GetExtent`` (lower-left, upper-right)."""
+        raw = self._attempt(lambda: note.GetExtent(), default=None)
+        if isinstance(raw, (list, tuple)) and len(raw) >= 6:
+            return (float(raw[0]), float(raw[1]), float(raw[3]), float(raw[4]))
+        return None
+
+    def _format_notes(self, drawing: Any) -> list[tuple[Any, str, Box | None]]:
+        """The notes on the sheet's own view: ``(INote, linked text, box)``.
+
+        While the sheet format is being edited, these are the format's notes:
+        its title-block fields and labels.
+        """
+        sheet_view = self._attempt(
+            lambda: _sw_type_info.flagged(drawing.GetFirstView(), "IView"),
+            default=None,
+        )
+        found = []
+        note = self._attempt(lambda: sheet_view.GetFirstNote(), default=None)
+        while note is not None and len(found) < 500:
+            n = _sw_type_info.flagged(note, "INote")
+            linked = str(
+                self._attempt(lambda n=n: n.PropertyLinkedText, default="") or ""
+            )
+            found.append((n, linked, self._note_extent(n)))
+            note = self._attempt(lambda n=n: n.GetNext(), default=None)
+        return found
+
+    def _fit_field(
+        self, note: Any, right: float, cap: float | None = None
+    ) -> dict[str, Any]:
+        """Shrink one note's text until it fills at most 90% of its room.
+
+        Args:
+            note: The field's ``INote``.
+            right: The x its text must end before.
+            cap: The caller's largest text height in metres, applied first.
+
+        Returns:
+            dict[str, Any]: ``fits``, the text height before and after (mm)
+            and the final box (mm).
+        """
+        model = self.currentModel
+        box = self._note_extent(note)
+        tf = self._attempt(
+            lambda: _as_com(self, note.GetTextFormat(), "ITextFormat"), default=None
+        )
+        before = float(self._attempt(lambda: tf.CharHeight, default=0.0) or 0.0)
+        height = before
+
+        def apply(h: float) -> Box | None:
+            self._attempt(lambda: setattr(tf, "CharHeight", h), default=None)
+            self._attempt(
+                lambda: note.SetTextFormat(_SW_NOTE_OWN_FORMAT, tf), default=None
+            )
+            self._attempt(lambda: model.EditRebuild3(), default=None)
+            return self._note_extent(note)
+
+        if cap is not None and height > cap:
+            height = max(MIN_FIELD_HEIGHT, cap)
+            box = apply(height)
+        for _ in range(4):
+            if box is None or height <= MIN_FIELD_HEIGHT:
+                break
+            room = max(right - box[0], 0.0)
+            if box[2] - box[0] <= room * FIELD_FILL:
+                break
+            height = max(
+                MIN_FIELD_HEIGHT, height * room * FIELD_FILL / (box[2] - box[0])
+            )
+            box = apply(height)
+        return {
+            "fits": box is not None and box[2] <= right + 1e-6,
+            "height_mm_before": round(before * 1000, 2),
+            "height_mm": round(height * 1000, 2),
+            "box_mm": [round(c * 1000, 1) for c in box] if box else None,
+            "room_ends_mm": round(right * 1000, 1),
+        }
+
+    def _fit_title_block(self, s: _Sheet) -> dict[str, dict[str, Any]]:
+        """Fit the DWG NO. and TITLE fields of the sheet format to their boxes.
+
+        Edits the sheet format (``EditTemplate``), always returning to the
+        sheet (``EditSheet``). Run after the drawing is saved: the DWG NO.
+        shows the file name, which is ``Draw1`` until then.
+        """
+        model = self.currentModel
+        drawing = self._drawing()
+        self._attempt(lambda: drawing.EditTemplate(), default=None)
+        try:
+            notes = self._format_notes(drawing)
+            for prop, name in TITLE_BLOCK_FIELDS.items():
+                match = next((n for n in notes if f'"{prop}"' in n[1]), None)
+                if match is None or match[2] is None:
+                    s.title_block[name] = {"found": match is not None, "fits": None}
+                    continue
+                others = [n[2] for n in notes if n is not match and n[2] is not None]
+                right = field_room(match[2], others, TITLE_BLOCK[2])
+                s.title_block[name] = {
+                    "found": True,
+                    **self._fit_field(match[0], right, s.field_height),
+                }
+        finally:
+            self._attempt(lambda: drawing.EditSheet(), default=None)
+            self._attempt(lambda: model.EditRebuild3(), default=None)
+        return dict(s.title_block)
+
     def _check_sheet(self, s: _Sheet) -> dict[str, Any]:
         """Check the finished sheet: dimensions, captions and notes, read back."""
         final = self._arrange_layout(None, self._obstacles(s), WORK_AREA, move=False)
@@ -840,6 +997,7 @@ class SolidWorksDrawingStandardMixin:
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete A3 drawing that follows the drawing standard.
 
@@ -864,6 +1022,9 @@ class SolidWorksDrawingStandardMixin:
             write_model_properties: Write Description/Material/Weight custom
                 properties into the model (the format reads them from there)
                 and save the model.
+            title_block_text_height_mm: Largest text height for the DWG NO.
+                and TITLE fields, e.g. 3 for smaller text; they are shrunk
+                further when they still do not fit.
 
         Returns:
             AdapterResult[dict[str, Any]]: Files, scale, views, dimension
@@ -963,6 +1124,11 @@ class SolidWorksDrawingStandardMixin:
             include_isometric=include_isometric,
             material=material,
             extra_notes=list(notes or []),
+            field_height=(
+                title_block_text_height_mm / 1000.0
+                if title_block_text_height_mm
+                else None
+            ),
         )
         for name, build in (
             ("sheet", self._setup_a3_sheet),
@@ -1012,6 +1178,25 @@ class SolidWorksDrawingStandardMixin:
             return failed(
                 f"Drawing built but not saved to {drawing_path}: {saved.error}"
             )
+
+        # 5. The title block, now that the DWG NO. shows the saved file name.
+        fitted = self._handle_com_operation(
+            "standard_drawing_title_block", lambda: self._fit_title_block(s)
+        )
+        _step(steps, "fit_title_block", fitted)
+        data["title_block"] = fitted.data if fitted.is_success else None
+        check = data["overlap_check"]
+        for name, field_fit in (data["title_block"] or {}).items():
+            if field_fit.get("fits") is False:
+                check["annotation_overlaps"].append(
+                    {
+                        "dimension": f"title block {name}",
+                        "conflicts_with": "the next title-block field",
+                        "kind": "field_overflow",
+                    }
+                )
+                check["overlaps_after"] = check.get("overlaps_after", 0) + 1
+        _step(steps, "save_drawing_again", await self.save_file(drawing_path))
         pdf = await self.export_file(pdf_path, "pdf")
         _step(steps, "export_pdf", pdf)
         data["pdf_path"] = pdf_path if pdf.is_success else None
@@ -1021,9 +1206,13 @@ class SolidWorksDrawingStandardMixin:
             )
 
         overlaps = data["overlap_check"].get("overlaps_after", 0)
+        overflowing = any(
+            f.get("fits") is False for f in (data.get("title_block") or {}).values()
+        )
         if overlaps:
             return failed(
                 f"Drawing saved but {overlaps} overlap(s) remain - the no-overlap "
                 "rule is not met; see overlap_check"
+                + (f". For a title-block field, {FIELD_HINT}" if overflowing else "")
             )
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)

@@ -107,6 +107,7 @@ Create a complete A3 drawing of a part or assembly, saved with a PDF.
 | `notes` | `List[str]` | — | `[]` | Extra note lines after the standard ones (material, units, projection, deburr); seven lines are shown at most |
 | `include_isometric` | `bool` | — | `True` | Add an isometric view |
 | `write_model_properties` | `bool` | — | `True` | Write Description/Material/Weight into the model so the title block shows them, and save the model |
+| `title_block_text_height_mm` | `float?` | — | `None` | Largest text height (mm) for the title block's DWG NO. and TITLE, e.g. 3 for smaller text. By default they keep the sheet format's height and are only shrunk to fit their boxes. |
 
 **Sample call:**
 

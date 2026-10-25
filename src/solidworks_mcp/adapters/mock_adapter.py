@@ -3868,6 +3868,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mock standard A3 drawing: validates inputs, writes nothing to disk.
 
@@ -3884,6 +3885,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             notes (list[str] | None): Extra note lines.
             include_isometric (bool): Add the isometric view.
             write_model_properties (bool): Write the model properties.
+            title_block_text_height_mm (float | None): DWG NO./TITLE height cap.
 
         Returns:
             AdapterResult[dict[str, Any]]: The live adapter's fields.
@@ -3915,6 +3917,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "dimensions": {"dimensions_added": 3, "unique_dimensions": 3},
                 "overlap_check": {"overlaps_after": 0, "annotation_overlaps": []},
                 "sheet_format": "a3 - iso.slddrt",
+                "title_block": {
+                    "drawing number": {"found": True, "fits": True},
+                    "title": {"found": True, "fits": True},
+                },
                 "steps": [],
                 "drawing_number": number,
                 "drawing_path": os.path.join(out_dir, f"{number}.SLDDRW"),

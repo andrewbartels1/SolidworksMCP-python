@@ -1513,6 +1513,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete standard A3 drawing using pool."""
         return await self._execute_with_pool(
@@ -1530,6 +1531,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
                 notes,
                 include_isometric,
                 write_model_properties,
+                title_block_text_height_mm,
             ),
         )
 

@@ -188,6 +188,12 @@ class TestDrawingAutomationTools:
             "invalid_input",
         ),
         ("generate_drawing_package", {}, "views", "invalid_input"),
+        (
+            "generate_drawing_package",
+            {"model_path": "C:/parts/b.SLDPRT", "title_block_text_height_mm": 0},
+            "views",
+            "invalid_input",
+        ),
     ],
 )
 async def test_failures_carry_an_actionable_error_type(

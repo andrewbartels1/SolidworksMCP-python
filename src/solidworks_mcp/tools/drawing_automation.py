@@ -138,6 +138,7 @@ class GenerateDrawingPackageInput(CompatInput):
         notes (list[str]): Extra note lines.
         include_isometric (bool): Add the isometric view.
         write_model_properties (bool): Write title-block properties into the model.
+        title_block_text_height_mm (float | None): Cap on DWG NO./TITLE text height.
     """
 
     model_path: str = Field(description="Full path to the .SLDPRT or .SLDASM")
@@ -172,6 +173,13 @@ class GenerateDrawingPackageInput(CompatInput):
         default=True,
         description="Write Description/Material/Weight into the model so the "
         "title block shows them, and save the model",
+    )
+    title_block_text_height_mm: float | None = Field(
+        default=None,
+        gt=0,
+        description="Largest text height (mm) for the title block's DWG NO. and "
+        "TITLE, e.g. 3 for smaller text. By default they keep the sheet "
+        "format's height and are only shrunk to fit their boxes.",
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -406,6 +414,11 @@ async def register_drawing_automation_tools(
         out in rows; bold view captions; a NOTES block; and a check that
         nothing overlaps. Saves ``<drawing_number>.SLDDRW`` and a PDF.
 
+        The DWG NO. and TITLE are shrunk to fit their title-block boxes. For
+        smaller title-block text, pass ``title_block_text_height_mm`` (e.g.
+        ``3``); a field that cannot fit even at 2 mm is reported as an
+        overlap, with that hint.
+
         Args:
             input_data (GenerateDrawingPackageInput): ``model_path``, plus the
                 title-block fields, extra ``notes``, ``output_dir`` and
@@ -414,7 +427,8 @@ async def register_drawing_automation_tools(
         Returns:
             dict[str, Any]: ``data`` has ``drawing_path``, ``pdf_path``,
             ``drawing_number``, ``scale``, ``views`` (role and caption),
-            ``dimensions``, ``overlap_check``, ``properties_written`` and each
+            ``dimensions``, ``overlap_check``, ``title_block`` (whether the DWG NO.
+            and TITLE fit their boxes), ``properties_written`` and each
             build ``steps`` outcome. ``not_found`` for a missing model or
             sheet format; ``invalid_input`` for a file that isn't a part or
             assembly. An error keeps the data when a step failed, a file was
@@ -427,6 +441,11 @@ async def register_drawing_automation_tools(
                 "title": "Bracket",
                 "author": "A. Bartels",
                 "notes": ["Break all edges 0.5 mm"],
+            })
+            # Smaller DWG NO. and TITLE text in the title block:
+            await generate_drawing_package({
+                "model_path": "C:/parts/bracket.SLDPRT",
+                "title_block_text_height_mm": 3,
             })
             ```
         """
@@ -445,6 +464,7 @@ async def register_drawing_automation_tools(
             input_data.notes,
             input_data.include_isometric,
             input_data.write_model_properties,
+            input_data.title_block_text_height_mm,
         )
         require_success(
             result, context="Failed to generate the drawing package", with_data=True

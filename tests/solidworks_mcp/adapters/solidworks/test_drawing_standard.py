@@ -260,16 +260,80 @@ class _Sheet:
         return True
 
 
+class _FormatNote:
+    """A sheet-format note whose width grows with its text height."""
+
+    def __init__(
+        self, text: str, linked: str, x: float, y: float, height: float
+    ) -> None:
+        self.text = text
+        self.PropertyLinkedText = linked
+        self.x, self.y = x, y
+        self.format = SimpleNamespace(CharHeight=height)
+        self.next: Any = None
+
+    def GetExtent(self):  # noqa: N802
+        height = self.format.CharHeight
+        return (
+            self.x,
+            self.y,
+            0.0,
+            self.x + 0.8 * height * len(self.text),
+            self.y + height,
+            0.0,
+        )
+
+    def GetTextFormat(self):  # noqa: N802
+        return self.format
+
+    def SetTextFormat(self, _kind, text_format):  # noqa: N802
+        self.format = text_format
+        return True
+
+    def GetNext(self):  # noqa: N802
+        return self.next
+
+
+def _title_block(drawing_number: str = "MOUNTING-PLATE-RevA-01") -> list[_FormatNote]:
+    """The ISO title block's notes: DWG NO. runs into the size box at 7 mm."""
+    return [
+        _FormatNote("DWG NO.", "", 0.249, 0.028, 0.002),  # the label above
+        _FormatNote(drawing_number, '$PRP:"SW-File Name"', 0.25, 0.02, 0.007),
+        _FormatNote("A3", "", 0.33, 0.021, 0.005),  # the size box
+        _FormatNote("Mounting Plate", '$PRPSHEET:"Description"', 0.23, 0.045, 0.005),
+    ]
+
+
 class _Drawing:
     """A drawing: views are added by the view-creation calls."""
 
-    def __init__(self, *, accepts_format: bool = True, views: str = "three") -> None:
+    def __init__(
+        self,
+        *,
+        accepts_format: bool = True,
+        views: str = "three",
+        format_notes: list[_FormatNote] | None = None,
+    ) -> None:
         self.accepts_format = accepts_format
         self.make = views
         self.views: dict[str, _View] = {}
         self.sheet = _Sheet()
         self.notes: list[_Annotation] = []
         self.preferences: dict[int, Any] = {}
+        self.format_notes = _title_block() if format_notes is None else format_notes
+        for note, after in zip(self.format_notes, self.format_notes[1:], strict=False):
+            note.next = after
+        self.editing = "sheet"
+
+    def EditTemplate(self):  # noqa: N802
+        self.editing = "format"
+
+    def EditSheet(self):  # noqa: N802
+        self.editing = "sheet"
+
+    def GetFirstView(self):  # noqa: N802
+        first = self.format_notes[0] if self.format_notes else None
+        return SimpleNamespace(GetFirstNote=lambda: first)
 
     def GetType(self):  # noqa: N802
         return 3
@@ -495,7 +559,123 @@ async def test_a_part_becomes_a_complete_a3_drawing(files) -> None:
         "standard_drawing_dimensions",
         "standard_drawing_notes",
         "standard_drawing_check",
+        "standard_drawing_title_block",
     ]
+
+
+@pytest.mark.asyncio
+async def test_the_drawing_number_is_shrunk_to_fit_its_box(files) -> None:
+    drawing = _Drawing()
+    adapter = _adapter(files, drawing)
+
+    result = await adapter.create_standard_drawing(files.part)
+
+    number = result.data["title_block"]["drawing number"]
+    assert number["found"] is True and number["fits"] is True
+    assert number["height_mm_before"] == 7.0
+    assert std.MIN_FIELD_HEIGHT * 1000 < number["height_mm"] < 7.0
+    assert number["box_mm"][2] <= number["room_ends_mm"]  # clear of the A3 box
+    assert result.data["title_block"]["title"]["height_mm"] == 5.0  # fitted already
+    assert drawing.editing == "sheet"  # back from editing the sheet format
+    steps = [step["step"] for step in result.data["steps"]]
+    assert steps.index("save_drawing") < steps.index("fit_title_block")
+    assert steps.index("fit_title_block") < steps.index("save_drawing_again")
+
+
+@pytest.mark.asyncio
+async def test_a_field_too_long_for_its_box_is_an_overlap(files) -> None:
+    drawing = _Drawing(format_notes=_title_block("X" * 60))
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    number = result.data["title_block"]["drawing number"]
+    assert number["fits"] is False
+    assert number["height_mm"] == std.MIN_FIELD_HEIGHT * 1000
+    assert {
+        "dimension": "title block drawing number",
+        "conflicts_with": "the next title-block field",
+        "kind": "field_overflow",
+    } in result.data["overlap_check"]["annotation_overlaps"]
+    assert "1 overlap(s) remain" in result.error
+
+
+@pytest.mark.asyncio
+async def test_a_format_without_the_fields_says_they_were_not_found(files) -> None:
+    unmeasurable = _FormatNote("TITLE", '$PRPSHEET:"Description"', 0.23, 0.045, 0.005)
+    unmeasurable.GetExtent = lambda: None
+    drawing = _Drawing(format_notes=[unmeasurable])
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    assert result.is_success, result.error
+    assert result.data["title_block"] == {
+        "drawing number": {"found": False, "fits": None},
+        "title": {"found": True, "fits": None},
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_failed_fit_is_recorded_and_the_drawing_still_saved(files) -> None:
+    adapter = _adapter(files)
+
+    def fail(_s):
+        raise RuntimeError("EditTemplate refused")
+
+    adapter._fit_title_block = fail
+
+    result = await adapter.create_standard_drawing(files.part)
+
+    assert result.is_success, result.error
+    assert result.data["title_block"] is None
+    step = next(s for s in result.data["steps"] if s["step"] == "fit_title_block")
+    assert step["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_a_caller_can_ask_for_smaller_title_block_text(files) -> None:
+    result = await _adapter(files).create_standard_drawing(
+        files.part, title_block_text_height_mm=3
+    )
+
+    title_block = result.data["title_block"]
+    assert title_block["title"]["height_mm"] == 3.0  # capped though it fitted
+    assert title_block["drawing number"]["height_mm"] == 3.0  # fits at 3 mm
+    assert title_block["drawing number"]["fits"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_field_too_long_even_at_the_cap_is_shrunk_further(files) -> None:
+    drawing = _Drawing(format_notes=_title_block("X" * 30))
+
+    result = await _adapter(files, drawing).create_standard_drawing(
+        files.part, title_block_text_height_mm=5
+    )
+
+    number = result.data["title_block"]["drawing number"]
+    assert std.MIN_FIELD_HEIGHT * 1000 < number["height_mm"] < 5.0
+    assert number["fits"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_overflow_says_how_to_make_the_text_smaller(files) -> None:
+    drawing = _Drawing(format_notes=_title_block("X" * 60))
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    assert result.error.endswith(f". For a title-block field, {std.FIELD_HINT}")
+    assert "title_block_text_height_mm" in std.FIELD_HINT
+
+
+def test_field_room_stops_at_the_next_field_in_the_row() -> None:
+    field = (0.25, 0.02, 0.37, 0.027)
+    others = [
+        (0.249, 0.028, 0.26, 0.030),  # its label, above
+        (0.33, 0.021, 0.34, 0.026),  # the size box, in the row
+        (0.30, 0.05, 0.31, 0.055),  # another row
+        (0.252, 0.02, 0.26, 0.027),  # starts with the field
+    ]
+    assert std.field_room(field, others, 0.412) == pytest.approx(0.328)
+    assert std.field_room(field, [], 0.412) == 0.412
 
 
 @pytest.mark.asyncio
