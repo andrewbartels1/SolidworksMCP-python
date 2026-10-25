@@ -159,6 +159,7 @@ _DOCUMENT_OPERATIONS = frozenset(
         "open_model",
         "pack_and_go_assembly",
         "save_body_as_part",
+        "standard_drawing_views",
     }
 )
 # Defaults in seconds; override with the environment variables below.

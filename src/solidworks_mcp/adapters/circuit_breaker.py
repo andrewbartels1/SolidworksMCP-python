@@ -1852,6 +1852,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete standard A3 drawing through circuit breaker."""
         return await self._execute_with_circuit_breaker(
@@ -1869,6 +1870,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 notes,
                 include_isometric,
                 write_model_properties,
+                title_block_text_height_mm,
             ),
             input_dict={
                 "model_path": model_path,
@@ -1883,6 +1885,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "notes": notes,
                 "include_isometric": include_isometric,
                 "write_model_properties": write_model_properties,
+                "title_block_text_height_mm": title_block_text_height_mm,
             },
         )
 

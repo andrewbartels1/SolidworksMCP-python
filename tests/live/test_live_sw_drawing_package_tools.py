@@ -165,6 +165,8 @@ async def test_insert_bom_table_lists_both_parts(scratch, tmp_path):
         call=f'insert_bom_table({{"view_name": "{view}"}})',
     )
     assert result["status"] == "success", result
+    box = result["data"]["table_box_mm"]  # on the 420 x 297 mm sheet
+    assert box and box[0] >= 0 and box[1] >= 0, box
     text = " ".join(" ".join(row) for row in cells)
     assert "bom_plate" in text and "bom_block" in text
 
@@ -230,12 +232,14 @@ async def test_generate_drawing_package_on_a_block(scratch, tmp_path):
             "overlaps_after": (data.get("overlap_check") or {}).get("overlaps_after"),
             "files": [drawing.exists(), pdf.exists()],
             "title_block": title_block,
+            "title_block_fit": data.get("title_block"),
         },
         call='generate_drawing_package({"model_path": "Package Block.SLDPRT", ...})',
     )
     assert result["status"] == "success", result
     assert drawing.exists() and pdf.stat().st_size > 0
     assert data["overlap_check"]["overlaps_after"] == 0
+    assert data["title_block"]["drawing number"]["fits"] is True
     assert "AISI 1020" in shown
     assert "Package Block" in shown
     # 13.5 cm^3 of AISI 1020 (7.87 g/cm^3) is about 106 g; the format shows grams.

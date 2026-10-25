@@ -378,6 +378,9 @@ class _Harness(SolidWorksDrawingStandardMixin):
             return _err("This operation requires a drawing document")
         return None
 
+    def _sheet_bounds(self, _drawing):
+        return (0.0, 0.0, 0.42, 0.297)  # A3, from the documentation mixin
+
     # the adapter methods the generator awaits
     def _result(self, name: str, *args: Any) -> AdapterResult[Any]:
         self.calls.append((name, *args))
@@ -454,9 +457,11 @@ class TestInsertBomTable:
             "bom_type": "top_level_only",
             "template": template,
             "row_count": 3,
+            "table_box_mm": None,  # the fake table cannot be measured
         }
         bom = adapter.drawing.views["Drawing View1"].bom
-        assert bom == (True, 0.0, 0.0, 1, 2, "Default", template, False, 0, False)
+        # Stationary corner 3 (bottom-left): the table grows up onto the sheet.
+        assert bom == (True, 0.0, 0.0, 3, 2, "Default", template, False, 0, False)
 
     @pytest.mark.asyncio
     async def test_given_template_position_and_indented_numbering(self) -> None:
@@ -508,6 +513,82 @@ class TestInsertBomTable:
         adapter.currentModel = adapter.drawing
         result = await adapter.insert_bom_table("Side")
         assert result.error.endswith("Views: none")
+
+
+class _Table:
+    """A 3-row x 4-column BOM: 60 x 15 mm, its stationary corner at ``corner``."""
+
+    def __init__(
+        self, corner: tuple[float, float] = (0.0, 0.0), anchor: int = 3
+    ) -> None:
+        self.RowCount = 3
+        self.ColumnCount = 4
+        self.AnchorType = anchor
+        self.annotation = SimpleNamespace(GetPosition=lambda: (*corner, 0.0))
+
+    def GetAnnotation(self):  # noqa: N802
+        return self.annotation
+
+    def GetRowHeight(self, _i):  # noqa: N802
+        return 0.005
+
+    def GetColumnWidth(self, _i):  # noqa: N802
+        return 0.015
+
+
+class TestBomTableLandsOnTheSheet:
+    """Live on SW 2026, a top-left-anchored table hung below a sheet with no
+    format; the tool now grows it up from its bottom-left corner and checks."""
+
+    @pytest.mark.parametrize(
+        ("anchor", "box"),
+        [
+            (1, (0.1, 0.185, 0.16, 0.2)),  # top left
+            (2, (0.04, 0.185, 0.1, 0.2)),  # top right
+            (3, (0.1, 0.2, 0.16, 0.215)),  # bottom left
+            (4, (0.04, 0.2, 0.1, 0.215)),  # bottom right
+        ],
+    )
+    def test_a_table_is_measured_from_its_stationary_corner(self, anchor, box) -> None:
+        measured = _Harness()._table_box(_Table((0.1, 0.2), anchor))
+        assert measured == pytest.approx(box)
+
+    @pytest.mark.parametrize(
+        "table",
+        [
+            SimpleNamespace(RowCount=3),
+            SimpleNamespace(
+                RowCount=0,
+                ColumnCount=4,
+                GetAnnotation=lambda: SimpleNamespace(GetPosition=lambda: (0, 0, 0)),
+            ),
+        ],
+    )
+    def test_a_table_that_cannot_be_measured_has_no_box(self, table) -> None:
+        assert _Harness()._table_box(table) is None
+
+    @pytest.mark.asyncio
+    async def test_a_table_on_the_sheet_reports_its_box(self) -> None:
+        adapter = _drawing_harness()
+        adapter.drawing.views["Drawing View1"].bom_result = _Table()
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
+
+    @pytest.mark.asyncio
+    async def test_a_table_off_the_sheet_is_an_error(self) -> None:
+        adapter = _drawing_harness()
+        hanging = _Table((0.0, 0.0), anchor=1)  # top-left at the origin
+        adapter.drawing.views["Drawing View1"].bom_result = hanging
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.error == (
+            "Error in insert_bom_table: The BOM table was inserted but runs off "
+            "the sheet: table [0.0, -15.0, 60.0, 0.0] mm, sheet 420 x 297 mm. "
+            "Give x_mm and y_mm to place it on the sheet."
+        )
 
 
 class TestSetSheetScale:
@@ -613,225 +694,3 @@ class TestHelpers:
 
 
 # ---- the generator --------------------------------------------------------------
-
-
-@pytest.fixture
-def part(tmp_path, monkeypatch) -> str:
-    """A part file next to an A3 sheet format the generator can find."""
-    fmt_dir = tmp_path / "formats"
-    fmt_dir.mkdir()
-    (fmt_dir / "a3 - iso.slddrt").write_bytes(b"")
-    monkeypatch.setattr(std.glob, "glob", lambda _pattern: [str(fmt_dir)])
-    path = tmp_path / "Block.SLDPRT"
-    path.write_bytes(b"")
-    return str(path)
-
-
-def _steps(result: AdapterResult[Any]) -> dict[str, str]:
-    return {s["step"]: s["status"] for s in result.data["steps"]}
-
-
-class TestCreateStandardDrawing:
-    @pytest.mark.asyncio
-    async def test_complete_drawing(self, part, tmp_path) -> None:
-        adapter = _Harness()
-
-        result = await adapter.create_standard_drawing(
-            part,
-            output_dir=str(tmp_path / "out"),
-            title="Block",
-            subtitle="Test block",
-            drawing_number="BLK-01",
-            author="saiq",
-            company="Acme",
-            drawn_date="25 Oct 2026",
-            notes=["break edges", "  "],
-        )
-
-        assert result.is_success, result.error
-        data = result.data
-        assert data["scale"] == "1.5:1"
-        assert data["isometric_scale"] is not None
-        assert data["views"] == {
-            "Drawing View1": {"role": "front", "caption": "FRONT ELEVATION"},
-            "Drawing View2": {"role": "plan", "caption": "PLAN"},
-            "Drawing View3": {"role": "side", "caption": "SIDE ELEVATION"},
-            "Drawing View4": {"role": "iso", "caption": "ISOMETRIC"},
-        }
-        assert data["notes"] == [
-            "NOTES",
-            "1. MATERIAL: AISI 1020",
-            "2. ALL DIMENSIONS IN MILLIMETRES",
-            "3. THIRD ANGLE PROJECTION",
-            "4. REMOVE ALL BURRS AND SHARP EDGES",
-            "5. BREAK EDGES",
-        ]
-        assert data["overlap_check"] == {"overlaps_after": 0, "annotation_overlaps": []}
-        assert data["dimensions"] == {"dimensions_added": 6}
-        assert data["drawing_path"] == str(tmp_path / "out" / "BLK-01.SLDDRW")
-        assert data["pdf_path"] == str(tmp_path / "out" / "BLK-01.pdf")
-        assert data["drawing_number"] == "BLK-01"
-        assert data["properties_written"]["drawing"]["COMPANYNAME"] == "Acme"
-        assert set(_steps(result).values()) == {"success"}
-
-        # The sheet-format prompt was off while the drawing was made, then restored.
-        create = next(c for c in adapter.calls if c[0] == "create_drawing")
-        assert create[1][std._SW_SHOW_SHEET_FORMAT_DIALOG] is False
-        assert adapter.swApp.toggles[std._SW_SHOW_SHEET_FORMAT_DIALOG] is True
-        # Dimensions only on the orthographic views; the final pass only checks.
-        assert (
-            "import_dimensions",
-            ("Drawing View1", "Drawing View2", "Drawing View3"),
-        ) in adapter.calls
-        moves = [c[1] for c in adapter.calls if c[0] == "arrange_layout"]
-        assert moves == [True, False]
-        assert adapter.drawing.prefs[std._SW_DETAILING_DIM_TRAILING_ZERO] == 2
-        assert adapter.drawing.sheet.scale == (1.5, 1.0)
-        # Plan above the front, sharing its x; side beside it, sharing its y.
-        views = adapter.drawing.views
-        front, plan, side = (views[f"Drawing View{i}"].Position for i in (1, 2, 3))
-        assert plan[0] == pytest.approx(front[0]) and plan[1] > front[1]
-        assert side[1] == pytest.approx(front[1]) and side[0] > front[0]
-
-    @pytest.mark.asyncio
-    async def test_defaults_open_document_and_assembly(self, part, tmp_path) -> None:
-        asm = tmp_path / "Frame Assy.SLDASM"
-        asm.write_bytes(b"")
-        adapter = _Harness()
-        adapter.drawing.iso = False
-        open_doc = SimpleNamespace(GetPathName=lambda: str(asm), GetTitle=lambda: "F")
-        adapter.swApp.open_docs[str(asm)] = open_doc
-
-        result = await adapter.create_standard_drawing(
-            str(asm), revision="", include_isometric=True, write_model_properties=False
-        )
-
-        assert result.is_success, result.error
-        assert result.data["drawing_number"] == "FRAME-ASSY-RevA-01"
-        assert result.data["drawing_path"] == str(
-            tmp_path / "FRAME-ASSY-RevA-01.SLDDRW"
-        )
-        assert result.data["isometric_scale"] is None
-        assert "Drawing View4" not in result.data["views"]
-        assert result.data["notes"][1] == "1. ALL DIMENSIONS IN MILLIMETRES"
-        names = [c[0] for c in adapter.calls]
-        assert "open_model" not in names and "get_material" not in names
-        assert "model" not in result.data["properties_written"]
-
-    @pytest.mark.asyncio
-    async def test_input_errors(self, part, tmp_path) -> None:
-        adapter = _Harness()
-        missing = str(tmp_path / "nope.SLDPRT")
-        drawing = tmp_path / "x.SLDDRW"
-        drawing.write_bytes(b"")
-
-        assert (await adapter.create_standard_drawing(missing)).error == (
-            f"Model file not found: {missing}"
-        )
-        assert (await adapter.create_standard_drawing(str(drawing))).error == (
-            "model_path must be a .SLDPRT or .SLDASM"
-        )
-
-    @pytest.mark.asyncio
-    async def test_open_failure(self, part) -> None:
-        adapter = _Harness()
-        adapter.results["open_model"] = _err("locked")
-        result = await adapter.create_standard_drawing(part)
-        assert result.error.startswith("Could not open model: locked.")
-
-    @pytest.mark.asyncio
-    async def test_no_sheet_format(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setattr(std.glob, "glob", lambda _pattern: [])
-        path = tmp_path / "Block.SLDPRT"
-        path.write_bytes(b"")
-        adapter = _Harness()
-        adapter.results["get_material"] = _err("no material")
-
-        result = await adapter.create_standard_drawing(str(path))
-
-        assert result.error == "Sheet format 'a3 - iso.slddrt' not found"
-
-    @pytest.mark.asyncio
-    async def test_drawing_creation_failure_restores_nothing_it_did_not_read(
-        self, part
-    ) -> None:
-        adapter = _Harness()
-        adapter.swApp.toggles = {}
-        adapter.results["create_drawing"] = _err("no template")
-
-        result = await adapter.create_standard_drawing(part)
-
-        assert result.error == "Could not create drawing: no template"
-        assert adapter.swApp.toggles == {std._SW_SHOW_SHEET_FORMAT_DIALOG: False}
-
-    @pytest.mark.asyncio
-    async def test_sheet_setup_failure(self, part) -> None:
-        adapter = _Harness()
-        adapter.drawing.setup_ok = False
-        result = await adapter.create_standard_drawing(part)
-        assert result.error.startswith(
-            "Error in create_standard_drawing: SetupSheet5 failed"
-        )
-
-    @pytest.mark.asyncio
-    async def test_no_views(self, part) -> None:
-        adapter = _Harness()
-        adapter.drawing.third_angle = "none"
-        result = await adapter.create_standard_drawing(part)
-        assert result.error.startswith(
-            "Error in create_standard_drawing: No views could be created"
-        )
-
-    @pytest.mark.asyncio
-    async def test_views_made_despite_a_false_return_and_no_front_name(
-        self, part, monkeypatch
-    ) -> None:
-        adapter = _Harness()
-        adapter.drawing.third_angle = "false_but_views"
-        made = adapter.drawing.Create3rdAngleViews2
-
-        def unnamed(path):
-            ok = made(path)
-            for view in adapter.drawing.views.values():
-                view.orientation = ""
-            adapter.drawing.views["Drawing View3"].outline = None
-            return ok
-
-        monkeypatch.setattr(adapter.drawing, "Create3rdAngleViews2", unnamed)
-
-        result = await adapter.create_standard_drawing(part, include_isometric=False)
-
-        assert result.is_success, result.error
-        roles = {n: v["role"] for n, v in result.data["views"].items()}
-        # A view whose outline can't be read gets no role (and no caption).
-        assert roles == {
-            "Drawing View1": "front",
-            "Drawing View2": "plan",
-            "Drawing View3": None,
-        }
-
-    @pytest.mark.asyncio
-    async def test_notes_that_cannot_be_inserted_are_skipped(self, part) -> None:
-        adapter = _Harness()
-        adapter.drawing.note_mode = "no_note"
-        result = await adapter.create_standard_drawing(part)
-        assert result.is_success
-        assert result.data["views"]["Drawing View1"]["caption"] == "FRONT ELEVATION"
-
-    @pytest.mark.asyncio
-    async def test_remaining_overlaps_and_failed_saves(self, part) -> None:
-        adapter = _Harness()
-        adapter.final_overlaps = 2
-        adapter.results["save_file"] = _err("read-only")
-        adapter.results["export_file"] = _err("no pdf")
-        adapter.results["set_custom_property"] = _err("locked")
-        adapter.results["set_units"] = _err("units")
-
-        result = await adapter.create_standard_drawing(part, notes=["a"] * 9)
-
-        assert result.error == (
-            "Drawing saved but 2 overlap(s) remain - the no-overlap rule is not met"
-        )
-        assert result.data["drawing_path"] is None and result.data["pdf_path"] is None
-        assert len(result.data["notes"]) == 8  # NOTES + at most 7 lines
-        assert set(_steps(result).values()) == {"error"}

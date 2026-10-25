@@ -45,7 +45,7 @@ Insert a bill-of-materials table for an assembly view on the active drawing.
 **Sample call:**
 
 ```json
-{"view_name": "Drawing View1"}
+{}
 ```
 
 ---
@@ -59,7 +59,7 @@ Set the active drawing sheet's scale; views using the sheet scale follow.
 **Sample call:**
 
 ```json
-{"numerator": 1, "denominator": 2}
+{}
 ```
 
 ---
@@ -73,7 +73,7 @@ Create a complete A3 drawing of a part or assembly in one call.
 **Sample call:**
 
 ```json
-{"model_path": "C:/parts/Mounting Plate.SLDPRT", "drawing_number": "MP-01"}
+{}
 ```
 
 ---

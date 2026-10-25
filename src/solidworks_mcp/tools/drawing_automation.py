@@ -106,6 +106,7 @@ class GenerateDrawingPackageInput(CompatInput):
         notes (list[str]): Extra note lines.
         include_isometric (bool): Add the isometric view.
         write_model_properties (bool): Write title-block properties into the model.
+        title_block_text_height_mm (float | None): Cap on DWG NO./TITLE text height.
     """
 
     model_path: str = Field(description="Full path to the .SLDPRT or .SLDASM")
@@ -135,6 +136,13 @@ class GenerateDrawingPackageInput(CompatInput):
     write_model_properties: bool = Field(
         default=True,
         description="Write Description/Material/Weight into the model so the title block shows them, and save it",
+    )
+    title_block_text_height_mm: float | None = Field(
+        default=None,
+        gt=0,
+        description="Largest text height (mm) for the title block's DWG NO. and "
+        "TITLE, e.g. 3 for smaller text. By default they keep the sheet "
+        "format's height and are only shrunk to fit their boxes.",
     )
 
     @field_validator("model_path")
@@ -350,13 +358,19 @@ async def register_drawing_automation_tools(
         captions; a NOTES block; nothing overlapping, checked on the read-back
         geometry. Saves ``<drawing_number>.SLDDRW`` and a PDF.
 
+        The DWG NO. and TITLE are shrunk to fit their title-block boxes. For
+        smaller title-block text, pass ``title_block_text_height_mm`` (e.g.
+        ``3``); a field that cannot fit even at 2 mm is reported as an
+        overlap, with that hint.
+
         Args:
             input_data (GenerateDrawingPackageInput | None): ``model_path`` plus
                 optional title-block fields, ``notes`` and output folder.
 
         Returns:
             dict[str, Any]: ``data`` has ``scale``, ``views``, ``dimensions``,
-            ``overlap_check``, ``drawing_path``, ``pdf_path`` and ``steps``. The
+            ``overlap_check``, ``title_block`` (whether the DWG NO. and TITLE
+            fit their boxes), ``drawing_path``, ``pdf_path`` and ``steps``. The
             call is an error, with that data, when any overlap remains. A
             missing model is ``not_found``; a file that is not a part or
             assembly is ``invalid_input``.
@@ -368,6 +382,11 @@ async def register_drawing_automation_tools(
                 "title": "Mounting Plate",
                 "drawing_number": "MP-01",
                 "author": "J. Smith",
+            })
+            # Smaller DWG NO. and TITLE text in the title block:
+            await generate_drawing_package({
+                "model_path": "C:/parts/Mounting Plate.SLDPRT",
+                "title_block_text_height_mm": 3,
             })
             ```
         """
@@ -391,6 +410,7 @@ async def register_drawing_automation_tools(
             input_data.notes,
             input_data.include_isometric,
             input_data.write_model_properties,
+            input_data.title_block_text_height_mm,
         )
         require_success(
             result, context="Failed to create the standard drawing", with_data=True

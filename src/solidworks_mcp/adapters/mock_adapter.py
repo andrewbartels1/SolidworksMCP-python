@@ -3814,6 +3814,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "bom_type": bom_type,
                 "template": template_path,
                 "row_count": 2,
+                "table_box_mm": [0.0, 0.0, 60.0, 15.0],
             },
         )
 
@@ -3851,6 +3852,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mock standard A3 drawing: validates inputs, writes nothing to disk."""
         if not os.path.isfile(model_path):
@@ -3886,6 +3888,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "drawing": {"DrawnBy": author, "Revision": revision},
                 },
                 "notes": ["NOTES", *[n.upper() for n in (notes or [])]],
+                "title_block": {
+                    "drawing number": {"found": True, "fits": True},
+                    "title": {"found": True, "fits": True},
+                },
                 "mock": True,
             },
         )

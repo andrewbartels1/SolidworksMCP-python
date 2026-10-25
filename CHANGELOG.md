@@ -54,6 +54,22 @@ Drawing-package tools, the last part of @SaiqKamran's #117:
   NOTES block, checked for overlaps on the read-back geometry, saved as
   `<drawing number>.SLDDRW` plus a PDF.
 
+### Fixed
+
+Found in the live sign-off of the drawing-package tools on SolidWorks 2026:
+
+- **`generate_drawing_package`** builds the sheet in separate COM steps
+  (sheet, views, layout, dimensions, notes, check, title block), each followed
+  by the settle pause; one long burst of drawing calls is the pattern that
+  crashed SolidWorks 2026 (COM pitfall #26).
+- **`generate_drawing_package`**: the DWG NO. and TITLE are shrunk to fit
+  their title-block boxes, so a long drawing number no longer runs into the
+  size box. A field that still does not fit is reported as an overlap. The new
+  `title_block_text_height_mm` option sets a smaller text height.
+- **`insert_bom_table`**: the table grows up from its bottom-left corner, so
+  on a sheet with no format it no longer hangs below the sheet. The result
+  includes the table's box, and a table that runs off the sheet is an error.
+
 ## [1.4.0] - 2026-10-22
 
 Minor release. New tools and a uniform error contract; every change is

@@ -1804,6 +1804,7 @@ class SolidWorksAdapter(ABC):
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete standard A3 drawing.
 

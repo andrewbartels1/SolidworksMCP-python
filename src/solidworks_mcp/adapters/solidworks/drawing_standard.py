@@ -1,6 +1,6 @@
 """Standard A3 drawing generation for the PyWin32 adapter.
 
-Implements an A3 drafting standard on SolidWorks:
+Implements an A3 ISO drafting standard on SolidWorks:
 
 * **Sheet** - A3 landscape 420 x 297 mm with the SolidWorks ``a3 - iso``
   sheet format (zoned border, ISO title block). Working area x 15-405,
@@ -17,9 +17,19 @@ Implements an A3 drafting standard on SolidWorks:
   (first 8 mm out, rows 7 mm, columns 9 mm), trailing zeros removed.
 * **Notes** - a NOTES block in its own cell (material, units, projection, plus
   caller lines).
+* **Title-block fields fit their boxes** - the DWG NO. (the drawing's file
+  name) and TITLE notes of the sheet format are shrunk, down to 2 mm, until
+  they fill at most 90% of the room before the next field in their row; one
+  that still runs over is an overlap. ``title_block_text_height_mm`` caps
+  their height for smaller text.
 * **No overlap anywhere** - checked against the real read-back geometry.
   The scale is chosen once to fit the sheet and is never stepped down;
   overlaps are resolved by moving dimensions.
+
+The drawing is built in separate COM steps (sheet, views, layout,
+dimensions, notes, check), each through ``_handle_com_operation`` so each
+gets its settle pause: one long burst of drawing calls is the pattern that
+crashed SolidWorks 2026 in its idle-time refresh (COM pitfall #26).
 """
 
 from __future__ import annotations
@@ -27,6 +37,7 @@ from __future__ import annotations
 import glob
 import ntpath
 import os
+from dataclasses import dataclass, field
 from datetime import date as _date
 from typing import TYPE_CHECKING, Any, cast
 
@@ -81,7 +92,11 @@ _SW_TEMPLATE_CUSTOM = 12
 # swNumberingType_e (used by insert_bom_table)
 _SW_PREF_BOM_TEMPLATES = 22
 _SW_BOM_TYPES = {"parts_only": 1, "top_level_only": 2, "indented": 3}
+# swBOMConfigurationAnchorType_e: the table corner that stays put
 _SW_BOM_ANCHOR_TOP_LEFT = 1
+_SW_BOM_ANCHOR_TOP_RIGHT = 2
+_SW_BOM_ANCHOR_BOTTOM_LEFT = 3
+_SW_BOM_ANCHOR_BOTTOM_RIGHT = 4
 _SW_NUMBERING_NONE = 0
 
 
@@ -96,6 +111,11 @@ def _double_array(values: list[float]) -> Any:
         )
     except ImportError:  # non-Windows
         return tuple(values)
+
+
+def _grow(box: tuple[float, ...], by: float) -> Box:
+    """``box`` grown by ``by`` on every side."""
+    return (box[0] - by, box[1] - by, box[2] + by, box[3] + by)
 
 
 def scale_label(scale: tuple[float, float]) -> str:
@@ -250,8 +270,172 @@ def find_sheet_format(adapter: Any, name: str = "a3 - iso.slddrt") -> str | None
     return None
 
 
+#: The NOTES block holds at most this many numbered lines.
+MAX_NOTE_LINES = 7
+
+#: Title-block fields fitted to their boxes: linked property -> field name.
+#: The ``a3 - iso`` format shows the drawing's file name as the DWG NO. and
+#: the model's ``Description`` as the TITLE (measured live on SW 2026: a
+#: default drawing number ran across the size box at the format's height).
+TITLE_BLOCK_FIELDS = {"SW-File Name": "drawing number", "Description": "title"}
+
+#: A fitted field's text is never made smaller than this.
+MIN_FIELD_HEIGHT = 0.002
+
+#: Clearance kept between a fitted field and the next field in its row.
+FIELD_GAP = 0.002
+
+#: A fitted field fills at most this share of its room, so it is not cramped.
+FIELD_FILL = 0.9
+
+#: What to tell a caller whose title-block field does not fit.
+FIELD_HINT = (
+    "pass title_block_text_height_mm (e.g. 3) for smaller title-block text, "
+    "or a shorter drawing_number or title"
+)
+
+#: swTextFormat: the note uses its own format, not the document's.
+_SW_NOTE_OWN_FORMAT = 0
+
+#: Standard notes, after the material line.
+STANDARD_NOTES = (
+    "ALL DIMENSIONS IN MILLIMETRES",
+    "THIRD ANGLE PROJECTION",
+    "REMOVE ALL BURRS AND SHARP EDGES",
+)
+
+#: Where the isometric view is first dropped, before it is moved to its cell.
+_ISO_DROP_POINT = (0.31, 0.23)
+
+
+def note_lines(material: str | None, extra: list[str] | None) -> list[str]:
+    """The NOTES block: a heading, then at most seven numbered lines.
+
+    Args:
+        material: The part's material, first when known.
+        extra: The caller's lines, after the standard ones.
+
+    Returns:
+        list[str]: ``["NOTES", "1. ...", ...]`` in capitals.
+    """
+    body = [f"MATERIAL: {material.upper()}"] if material else []
+    body += list(STANDARD_NOTES)
+    body += [line.upper() for line in (extra or []) if line.strip()]
+    numbered = [f"{i}. {line}" for i, line in enumerate(body[:MAX_NOTE_LINES], start=1)]
+    return ["NOTES", *numbered]
+
+
+def view_roles(
+    views: dict[str, Any], outlines: dict[str, Box | None], orientations: dict[str, str]
+) -> dict[str, str]:
+    """Name each orthographic view's role: ``front``, ``plan`` or ``side``.
+
+    The front is the view whose orientation says "front" (else the first);
+    a view centred above the front is the plan, any other is the side.
+
+    Args:
+        views: View name -> ``IView``, in creation order.
+        outlines: View name -> outline, ``None`` when unreadable.
+        orientations: View name -> orientation name, e.g. ``*Front``.
+
+    Returns:
+        dict[str, str]: View name -> role; a view whose outline is unknown
+        gets no role.
+    """
+    names = list(views)
+    front = next(
+        (n for n in names if "front" in orientations.get(n, "").lower()), names[0]
+    )
+    role = {front: "front"}
+    fo = outlines.get(front)
+    for name in names:
+        o = outlines.get(name)
+        if name == front or o is None or fo is None:
+            continue
+        above = (o[1] + o[3]) / 2 > (fo[1] + fo[3]) / 2 + 1e-4
+        role[name] = "plan" if above else "side"
+    return role
+
+
+def field_room(box: Box, others: list[Box], limit: float) -> float:
+    """How far right a title-block field may run: to the next note in its row.
+
+    A note is in the field's row when its vertical centre lies within the
+    field's height, and it is to the right when it starts more than 5 mm
+    after the field does (the field's own label sits at about its start).
+
+    Args:
+        box: The field's text box.
+        others: Every other note's box in the title block.
+        limit: The title block's right edge.
+
+    Returns:
+        float: The x the field's text must end before.
+    """
+    right = limit
+    for o in others:
+        centre = (o[1] + o[3]) / 2
+        if box[1] <= centre <= box[3] and o[0] > box[0] + 0.005:
+            right = min(right, o[0] - FIELD_GAP)
+    return right
+
+
+@dataclass
+class _Sheet:
+    """What the generator's steps share while they build one drawing.
+
+    Attributes:
+        path: The model being drawn.
+        sheet_format: The ``.slddrt`` applied to the sheet.
+        include_isometric: Whether to add the isometric view.
+        material: The part's material, for the notes.
+        extra_notes: The caller's note lines.
+        views: View name -> ``IView``, orthographic first.
+        role: View name -> ``front``, ``plan``, ``side`` or ``iso``.
+        ortho: The orthographic view names.
+        iso_name: The isometric view's name, when one was made.
+        scale: The sheet scale.
+        cells: Role -> cell on the sheet.
+        iso_scale: The isometric view's own scale.
+        captions: View name -> caption text.
+        notes: ``(label, IAnnotation)`` for every caption and note line.
+        note_lines: The NOTES block's text.
+        title_block: Field name -> how it was fitted to its box.
+        field_height: The caller's cap on the fitted fields' text height.
+    """
+
+    path: str
+    sheet_format: str
+    include_isometric: bool = True
+    material: str | None = None
+    extra_notes: list[str] = field(default_factory=list)
+    views: dict[str, Any] = field(default_factory=dict)
+    role: dict[str, str] = field(default_factory=dict)
+    ortho: list[str] = field(default_factory=list)
+    iso_name: str | None = None
+    scale: tuple[float, float] = (1, 1)
+    cells: dict[str, Box] = field(default_factory=dict)
+    iso_scale: tuple[float, float] | None = None
+    captions: dict[str, str] = field(default_factory=dict)
+    notes: list[tuple[str, Any]] = field(default_factory=list)
+    note_lines: list[str] = field(default_factory=list)
+    title_block: dict[str, dict[str, Any]] = field(default_factory=dict)
+    field_height: float | None = None
+
+
+def _step(steps: list[dict[str, Any]], name: str, result: AdapterResult[Any]) -> None:
+    """Record one step's outcome in the generator's ``steps`` list."""
+    steps.append(
+        {
+            "step": name,
+            "status": "success" if result.is_success else "error",
+            "error": result.error,
+        }
+    )
+
+
 class SolidWorksDrawingStandardMixin:
-    """Create complete standard A3 drawings."""
+    """Create complete standard A3 drawings, BOM tables and the sheet scale."""
 
     if TYPE_CHECKING:
         currentModel: Any
@@ -267,7 +451,97 @@ class SolidWorksDrawingStandardMixin:
 
         def _require_drawing(self) -> AdapterResult[Any] | None: ...
 
+        def _sheet_bounds(self, drawing: Any) -> Any: ...
+
+        def _dimension_geometry(self, an: Any, key: str, view_name: str) -> Any: ...
+
+        def _import_dimensions(
+            self,
+            view_name: str | None = None,
+            include_hole_wizard: bool = True,
+            only_views: list[str] | None = None,
+        ) -> dict[str, Any]: ...
+
+        def _arrange_layout(
+            self,
+            view_name: str | None = None,
+            obstacles: dict[str, Any] | None = None,
+            work_area: Any = None,
+            move: bool = True,
+        ) -> dict[str, Any]: ...
+
+        def _collect_layout(
+            self, drawing: Any, names: list[str]
+        ) -> tuple[dict, list, dict]: ...
+
+        async def open_model(self, file_path: str) -> AdapterResult[Any]: ...
+
+        async def get_material(
+            self, configuration: str | None = None
+        ) -> AdapterResult[Any]: ...
+
+        async def set_custom_property(
+            self, name: str, value: str, configuration: str | None = None
+        ) -> AdapterResult[Any]: ...
+
+        async def save_file(
+            self, file_path: str | None = None
+        ) -> AdapterResult[Any]: ...
+
+        async def create_drawing(
+            self, name: str | None = None
+        ) -> AdapterResult[Any]: ...
+
+        async def set_units(self, unit_system: str) -> AdapterResult[Any]: ...
+
+        async def export_file(
+            self, file_path: str, format_type: str
+        ) -> AdapterResult[Any]: ...
+
     # -- BOM and sheet scale -------------------------------------------
+
+    def _table_box(self, table: Any) -> Box | None:
+        """A table's box on the sheet, from its stationary corner and cell sizes.
+
+        ``IAnnotation::GetPosition`` gives the stationary corner named by
+        ``ITableAnnotation::AnchorType`` (measured live on SW 2026); the table
+        spans the sum of its column widths and row heights from there.
+
+        Args:
+            table: The ``ITableAnnotation``.
+
+        Returns:
+            Box | None: ``(x0, y0, x1, y1)`` in sheet metres, or ``None`` when
+            the table cannot be measured.
+        """
+        t = _sw_type_info.flagged(table, "ITableAnnotation")
+        an = self._attempt(
+            lambda: _sw_type_info.flagged(t.GetAnnotation(), "IAnnotation"),
+            default=None,
+        )
+        pos = self._attempt(lambda: an.GetPosition(), default=None)
+        rows = int(self._attempt(lambda: t.RowCount, default=0) or 0)
+        cols = int(self._attempt(lambda: t.ColumnCount, default=0) or 0)
+        if not isinstance(pos, (list, tuple)) or len(pos) < 2 or not rows or not cols:
+            return None
+        height = sum(
+            float(self._attempt(lambda i=i: t.GetRowHeight(i), default=0.0) or 0.0)
+            for i in range(rows)
+        )
+        width = sum(
+            float(self._attempt(lambda i=i: t.GetColumnWidth(i), default=0.0) or 0.0)
+            for i in range(cols)
+        )
+        anchor = self._attempt(lambda: t.AnchorType, default=None)
+        x, y = float(pos[0]), float(pos[1])
+        right_anchored = anchor in (
+            _SW_BOM_ANCHOR_TOP_RIGHT,
+            _SW_BOM_ANCHOR_BOTTOM_RIGHT,
+        )
+        top_anchored = anchor in (_SW_BOM_ANCHOR_TOP_LEFT, _SW_BOM_ANCHOR_TOP_RIGHT)
+        left = x - width if right_anchored else x
+        bottom = y - height if top_anchored else y
+        return (left, bottom, left + width, bottom + height)
 
     async def insert_bom_table(
         self,
@@ -280,8 +554,13 @@ class SolidWorksDrawingStandardMixin:
         """Insert a bill-of-materials table anchored to an assembly drawing view.
 
         Wraps ``IView::InsertBomTable4``. With no position the table snaps to
-        the sheet format's BOM anchor. With no template the library default
-        ``bom-standard.sldbomtbt`` from the BOM templates folder is used.
+        the sheet format's BOM anchor, or to the sheet's bottom-left corner
+        when the sheet has no format. Its stationary corner is the
+        bottom-left, so the table grows up onto the sheet; with the top-left
+        it hung below the sheet (measured live on SW 2026). The table's box is
+        read back and must lie on the sheet. With no template the library
+        default ``bom-standard.sldbomtbt`` from the BOM templates folder is
+        used.
 
         Args:
             view_name: A view of an assembly on the active drawing.
@@ -291,7 +570,9 @@ class SolidWorksDrawingStandardMixin:
             y_mm: Optional table position on the sheet.
 
         Returns:
-            AdapterResult[dict[str, Any]]: The view, BOM type, template and row count.
+            AdapterResult[dict[str, Any]]: The view, BOM type, template, row
+            count and ``table_box_mm``; an error naming the box when the
+            table runs off the sheet.
         """
         guard = self._require_drawing()
         if guard is not None:
@@ -332,7 +613,7 @@ class SolidWorksDrawingStandardMixin:
                 use_anchor,
                 (x_mm or 0.0) / 1000.0,
                 (y_mm or 0.0) / 1000.0,
-                _SW_BOM_ANCHOR_TOP_LEFT,
+                _SW_BOM_ANCHOR_BOTTOM_LEFT,
                 _SW_BOM_TYPES[bom_type],
                 config,
                 template,
@@ -351,11 +632,21 @@ class SolidWorksDrawingStandardMixin:
                 lambda: _sw_type_info.flagged(table, "ITableAnnotation").RowCount,
                 default=None,
             )
+            box = self._table_box(table)
+            box_mm = [round(c * 1000, 1) for c in box] if box else None
+            sheet = self._sheet_bounds(drawing)
+            if box and sheet and not _layout.inside(box, _grow(sheet, 1e-6)):
+                raise RuntimeError(
+                    f"The BOM table was inserted but runs off the sheet: table "
+                    f"{box_mm} mm, sheet {sheet[2] * 1000:g} x {sheet[3] * 1000:g} "
+                    "mm. Give x_mm and y_mm to place it on the sheet."
+                )
             return {
                 "view": view_name,
                 "bom_type": bom_type,
                 "template": template or None,
                 "row_count": rows,
+                "table_box_mm": box_mm,
             }
 
         return cast(
@@ -413,7 +704,16 @@ class SolidWorksDrawingStandardMixin:
 
         A plain tuple is mis-marshalled under late binding (x arrives as
         ~1e-310 and the view stays off the sheet); an explicit
-        ``VARIANT(VT_ARRAY | VT_R8)`` works - measured live on SW 2025.
+        ``VARIANT(VT_ARRAY | VT_R8)`` works (pitfall #31, measured live on
+        SW 2025).
+
+        Args:
+            view: The ``IView``.
+            x: Sheet x of the view's centre.
+            y: Sheet y of the view's centre.
+
+        Returns:
+            bool: Whether the view reads back at (x, y).
         """
         self._attempt(
             lambda: setattr(view, "Position", _double_array([x, y])), default=None
@@ -427,7 +727,14 @@ class SolidWorksDrawingStandardMixin:
         )
 
     def _use_open_document(self, path: str) -> bool:
-        """Make an already-open copy of ``path`` the active model, if there is one."""
+        """Make an already-open copy of ``path`` the active model, if there is one.
+
+        Args:
+            path: The model's absolute path.
+
+        Returns:
+            bool: ``True`` when that exact file was open and is now active.
+        """
         app = self.swApp
         doc = self._attempt(lambda: app.GetOpenDocumentByName(path), default=None)
         if doc is None:
@@ -442,6 +749,7 @@ class SolidWorksDrawingStandardMixin:
         return True
 
     def _view_outline(self, view: Any) -> Box | None:
+        """A view's outline on the sheet, or ``None`` when unreadable."""
         raw = self._attempt(lambda: view.GetOutline(), default=None)
         if isinstance(raw, (list, tuple)) and len(raw) >= 4:
             return (float(raw[0]), float(raw[1]), float(raw[2]), float(raw[3]))
@@ -450,7 +758,18 @@ class SolidWorksDrawingStandardMixin:
     def _insert_sheet_note(
         self, text: str, x: float, y: float, height: float, bold: bool
     ) -> Any:
-        """Insert a sheet note with its top-left at (x, y); returns the IAnnotation."""
+        """Insert a sheet note at (x, y) in the given height and weight.
+
+        Args:
+            text: The note.
+            x: Sheet x.
+            y: Sheet y.
+            height: Character height in metres.
+            bold: Bold text.
+
+        Returns:
+            Any: The note's ``IAnnotation``, or ``None`` when it was not made.
+        """
         model = self.currentModel
         self._attempt(lambda: model.ClearSelection2(True), default=None)
         note = self._attempt(lambda: model.InsertNote(text), default=None)
@@ -483,7 +802,19 @@ class SolidWorksDrawingStandardMixin:
         centre_x: float | None = None,
         bottom: float | None = None,
     ) -> Box:
-        """Shift a note so its measured box meets the given edges; return the box."""
+        """Shift a note so its measured box meets the given edges.
+
+        Args:
+            an: The note's ``IAnnotation``.
+            text: Its text, for the fallback size estimate.
+            left: Wanted left edge.
+            top: Wanted top edge.
+            centre_x: Wanted horizontal centre.
+            bottom: Wanted bottom edge.
+
+        Returns:
+            Box: The note's box after the move.
+        """
         box = self._note_box(an, text, 0.0, 0.0, NOTE_HEIGHT)
         dx = dy = 0.0
         if left is not None:
@@ -507,6 +838,18 @@ class SolidWorksDrawingStandardMixin:
     def _note_box(
         self, an: Any, fallback_text: str, x: float, y: float, height: float
     ) -> Box:
+        """A note's measured box; estimated from its text when unreadable.
+
+        Args:
+            an: The note's ``IAnnotation``.
+            fallback_text: Its text, for the estimate.
+            x: Estimate's left edge.
+            y: Estimate's top edge.
+            height: Estimate's text height.
+
+        Returns:
+            Box: The note's box on the sheet.
+        """
         geometry = self._attempt(
             lambda: self._dimension_geometry(an, "note", "sheet"), default=None
         )
@@ -515,7 +858,326 @@ class SolidWorksDrawingStandardMixin:
         width = 0.62 * height * len(fallback_text)
         return (x, y - height, x + width, y)
 
-    # -- the generator --------------------------------------------------
+    def _drawing(self) -> Any:
+        """The active document as an ``IDrawingDoc``."""
+        return _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
+
+    def _obstacles(self, s: _Sheet) -> dict[str, Box]:
+        """What dimensions must keep clear of: title block, notes, captions."""
+        result: dict[str, Box] = {"title block": TITLE_BLOCK, "notes": s.cells["notes"]}
+        for r in s.role.values():
+            c = s.cells[r]
+            result[f"{r} caption"] = (c[0], c[1], c[2], c[1] + CAPTION_STRIP)
+        return result
+
+    # -- the generator's COM steps --------------------------------------
+
+    def _setup_a3_sheet(self, s: _Sheet) -> dict[str, Any]:
+        """Apply the A3 ISO sheet format and drop trailing zeros.
+
+        Raises:
+            RuntimeError: ``SetupSheet5`` refused the format.
+        """
+        model = self.currentModel
+        drawing = self._drawing()
+        sheet = _as_com(self, drawing.GetCurrentSheet(), "ISheet")
+        sheet_name = self._attempt(lambda: sheet.GetName(), default="Sheet1")
+        if not drawing.SetupSheet5(
+            sheet_name,
+            _SW_PAPER_A3,
+            _SW_TEMPLATE_CUSTOM,
+            1.0,
+            1.0,
+            False,
+            s.sheet_format,
+            SHEET_SIZE[0],
+            SHEET_SIZE[1],
+            "Default",
+            True,
+        ):
+            raise RuntimeError(f"SetupSheet5 refused the sheet format {s.sheet_format}")
+        self._attempt(
+            lambda: model.SetUserPreferenceIntegerValue(
+                _SW_DETAILING_DIM_TRAILING_ZERO, _SW_DIM_REMOVE_TRAILING_ZEROES
+            ),
+            default=None,
+        )
+        return {"sheet": sheet_name, "sheet_format": s.sheet_format}
+
+    def _create_views(self, s: _Sheet) -> dict[str, Any]:
+        """Create the third-angle views, name their roles, add the isometric.
+
+        Raises:
+            RuntimeError: No view could be made from the model.
+        """
+        drawing = self._drawing()
+        before = set(_view_names(self, drawing))
+        self._attempt(lambda: drawing.Create3rdAngleViews2(s.path), default=False)
+        s.ortho = [n for n in _view_names(self, drawing) if n not in before]
+        if not s.ortho:
+            raise RuntimeError(f"No views could be created from {s.path}")
+        s.views = {n: _resolve_drawing_view(self, drawing, n) for n in s.ortho}
+        outlines = {n: self._view_outline(v) for n, v in s.views.items()}
+        orientations = {
+            n: str(self._attempt(lambda v=v: v.GetOrientationName(), default="") or "")
+            for n, v in s.views.items()
+        }
+        s.role = view_roles(s.views, outlines, orientations)
+        if s.include_isometric:
+            before_iso = set(_view_names(self, drawing))
+            self._attempt(
+                lambda: drawing.CreateDrawViewFromModelView3(
+                    s.path, "*Isometric", *_ISO_DROP_POINT, 0.0
+                ),
+                default=None,
+            )
+            s.iso_name = next(
+                (n for n in _view_names(self, drawing) if n not in before_iso), None
+            )
+            if s.iso_name:
+                s.views[s.iso_name] = _resolve_drawing_view(self, drawing, s.iso_name)
+                s.role[s.iso_name] = "iso"
+        return {"views": dict(s.role)}
+
+    def _view_sizes(self, s: _Sheet) -> dict[str, tuple[float, float]]:
+        """Each view's size at 1:1 (outline / view scale), by role."""
+        result = {}
+        for n, v in s.views.items():
+            o = self._view_outline(v)
+            scale = float(self._attempt(lambda v=v: v.ScaleDecimal, default=1.0) or 1.0)
+            if n in s.role and o is not None and scale > 0:
+                result[s.role[n]] = ((o[2] - o[0]) / scale, (o[3] - o[1]) / scale)
+        return result
+
+    def _fit_views(self, s: _Sheet) -> dict[str, Any]:
+        """Pick the scale, then centre each view in its cell.
+
+        The plan follows the front's x and the side its y, so the views stay
+        aligned for third-angle projection.
+        """
+        model = self.currentModel
+        sizes = self._view_sizes(s)
+        iso_size = sizes.pop("iso", None)
+        s.scale, s.cells = choose_layout(sizes)
+        sheet = _as_com(self, self._drawing().GetCurrentSheet(), "ISheet")
+        sheet.SetScale(float(s.scale[0]), float(s.scale[1]), True, False)
+        self._attempt(lambda: model.EditRebuild3(), default=None)
+        if s.iso_name and iso_size:
+            s.iso_scale = iso_fit_scale(iso_size, s.cells["iso"])
+            iso = s.views[s.iso_name]
+            ratio = _double_array([float(s.iso_scale[0]), float(s.iso_scale[1])])
+            self._attempt(lambda: setattr(iso, "UseSheetScale", False), default=None)
+            self._attempt(lambda: setattr(iso, "ScaleRatio", ratio), default=None)
+        fc = content_box(s.cells["front"])
+        fcx, fcy = (fc[0] + fc[2]) / 2, (fc[1] + fc[3]) / 2
+        placed = {}
+        for n, r in sorted(s.role.items(), key=lambda item: item[1] != "front"):
+            c = content_box(s.cells[r])
+            x, y = (c[0] + c[2]) / 2, (c[1] + c[3]) / 2
+            if r == "plan":
+                x = fcx
+            elif r == "side":
+                y = fcy
+            placed[n] = self._set_view_position(s.views[n], x, y)
+        self._attempt(lambda: model.EditRebuild3(), default=None)
+        return {
+            "scale": scale_label(s.scale),
+            "isometric_scale": scale_label(s.iso_scale) if s.iso_scale else None,
+            "positioned": placed,
+        }
+
+    def _dimension_views(self, s: _Sheet) -> dict[str, Any]:
+        """Import the model dimensions and lay them out clear of everything."""
+        dims = self._import_dimensions(None, True, only_views=list(s.ortho))
+        self._arrange_layout(None, self._obstacles(s), WORK_AREA)
+        return dims
+
+    def _annotate(self, s: _Sheet) -> dict[str, Any]:
+        """Add a bold caption under each view and the NOTES block.
+
+        Each note is placed from its measured box, so lines cannot run into
+        each other.
+        """
+        model = self.currentModel
+        for n, r in s.role.items():
+            text = CAPTIONS[r]
+            c = s.cells[r]
+            s.captions[n] = text
+            an = self._insert_sheet_note(
+                text, c[0] + 0.01, c[1] + CAPTION_STRIP, CAPTION_HEIGHT, True
+            )
+            if an is not None:
+                self._place_note(
+                    an, text, centre_x=(c[0] + c[2]) / 2, bottom=c[1] + 0.0015
+                )
+                s.notes.append((f"caption {r}", an))
+        s.note_lines = note_lines(s.material, s.extra_notes)
+        nc = CELLS["notes"]
+        top = nc[3] - 0.003
+        for i, line in enumerate(s.note_lines):
+            height = CAPTION_HEIGHT if i == 0 else NOTE_HEIGHT
+            an = self._insert_sheet_note(line, nc[0] + 0.010, top, height, i == 0)
+            if an is None:
+                continue
+            box = self._place_note(an, line, left=nc[0] + 0.010, top=top)
+            s.notes.append((f"note line {i}", an))
+            top = box[1] - 0.0015
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        self._attempt(lambda: model.EditRebuild3(), default=None)
+        return {"captions": dict(s.captions), "notes": list(s.note_lines)}
+
+    def _note_extent(self, note: Any) -> Box | None:
+        """A note's box from ``INote::GetExtent`` (lower-left, upper-right)."""
+        raw = self._attempt(lambda: note.GetExtent(), default=None)
+        if isinstance(raw, (list, tuple)) and len(raw) >= 6:
+            return (float(raw[0]), float(raw[1]), float(raw[3]), float(raw[4]))
+        return None
+
+    def _format_notes(self, drawing: Any) -> list[tuple[Any, str, Box | None]]:
+        """The notes on the sheet's own view: ``(INote, linked text, box)``.
+
+        While the sheet format is being edited, these are the format's notes:
+        its title-block fields and labels.
+        """
+        sheet_view = self._attempt(
+            lambda: _sw_type_info.flagged(drawing.GetFirstView(), "IView"),
+            default=None,
+        )
+        found = []
+        note = self._attempt(lambda: sheet_view.GetFirstNote(), default=None)
+        while note is not None and len(found) < 500:
+            n = _sw_type_info.flagged(note, "INote")
+            linked = str(
+                self._attempt(lambda n=n: n.PropertyLinkedText, default="") or ""
+            )
+            found.append((n, linked, self._note_extent(n)))
+            note = self._attempt(lambda n=n: n.GetNext(), default=None)
+        return found
+
+    def _fit_field(
+        self, note: Any, right: float, cap: float | None = None
+    ) -> dict[str, Any]:
+        """Shrink one note's text until it fills at most 90% of its room.
+
+        Args:
+            note: The field's ``INote``.
+            right: The x its text must end before.
+            cap: The caller's largest text height in metres, applied first.
+
+        Returns:
+            dict[str, Any]: ``fits``, the text height before and after (mm)
+            and the final box (mm).
+        """
+        model = self.currentModel
+        box = self._note_extent(note)
+        tf = self._attempt(
+            lambda: _as_com(self, note.GetTextFormat(), "ITextFormat"), default=None
+        )
+        before = float(self._attempt(lambda: tf.CharHeight, default=0.0) or 0.0)
+        height = before
+
+        def apply(h: float) -> Box | None:
+            self._attempt(lambda: setattr(tf, "CharHeight", h), default=None)
+            self._attempt(
+                lambda: note.SetTextFormat(_SW_NOTE_OWN_FORMAT, tf), default=None
+            )
+            self._attempt(lambda: model.EditRebuild3(), default=None)
+            return self._note_extent(note)
+
+        if cap is not None and height > cap:
+            height = max(MIN_FIELD_HEIGHT, cap)
+            box = apply(height)
+        for _ in range(4):
+            if box is None or height <= MIN_FIELD_HEIGHT:
+                break
+            room = max(right - box[0], 0.0)
+            if box[2] - box[0] <= room * FIELD_FILL:
+                break
+            height = max(
+                MIN_FIELD_HEIGHT, height * room * FIELD_FILL / (box[2] - box[0])
+            )
+            box = apply(height)
+        return {
+            "fits": box is not None and box[2] <= right + 1e-6,
+            "height_mm_before": round(before * 1000, 2),
+            "height_mm": round(height * 1000, 2),
+            "box_mm": [round(c * 1000, 1) for c in box] if box else None,
+            "room_ends_mm": round(right * 1000, 1),
+        }
+
+    def _fit_title_block(self, s: _Sheet) -> dict[str, dict[str, Any]]:
+        """Fit the DWG NO. and TITLE fields of the sheet format to their boxes.
+
+        Edits the sheet format (``EditTemplate``), always returning to the
+        sheet (``EditSheet``). Run after the drawing is saved: the DWG NO.
+        shows the file name, which is ``Draw1`` until then.
+        """
+        model = self.currentModel
+        drawing = self._drawing()
+        self._attempt(lambda: drawing.EditTemplate(), default=None)
+        try:
+            notes = self._format_notes(drawing)
+            for prop, name in TITLE_BLOCK_FIELDS.items():
+                match = next((n for n in notes if f'"{prop}"' in n[1]), None)
+                if match is None or match[2] is None:
+                    s.title_block[name] = {"found": match is not None, "fits": None}
+                    continue
+                others = [n[2] for n in notes if n is not match and n[2] is not None]
+                right = field_room(match[2], others, TITLE_BLOCK[2])
+                s.title_block[name] = {
+                    "found": True,
+                    **self._fit_field(match[0], right, s.field_height),
+                }
+        finally:
+            self._attempt(lambda: drawing.EditSheet(), default=None)
+            self._attempt(lambda: model.EditRebuild3(), default=None)
+        return dict(s.title_block)
+
+    def _check_sheet(self, s: _Sheet) -> dict[str, Any]:
+        """Check the finished sheet: dimensions, captions and notes, read back."""
+        final = self._arrange_layout(None, self._obstacles(s), WORK_AREA, move=False)
+        drawing = self._drawing()
+        outlines, dims, _ = self._collect_layout(drawing, _view_names(self, drawing))
+        boxes = {
+            label: self._note_box(an, label, 0.0, 0.0, NOTE_HEIGHT)
+            for label, an in s.notes
+        }
+        problems = _layout.find_annotation_overlaps(
+            boxes, dims, outlines, WORK_AREA, {"title block": TITLE_BLOCK}
+        )
+        final["annotation_overlaps"] = problems
+        final["overlaps_after"] = final.get("overlaps_after", 0) + len(problems)
+        return final
+
+    # -- the generator ----------------------------------------------------
+
+    def _new_drawing_without_dialog(self) -> bool | None:
+        """Read and turn off the Sheet Format/Size prompt (pitfall #32).
+
+        Returns:
+            bool | None: The toggle's previous value, ``None`` when unreadable.
+        """
+        app = self.swApp
+        previous = self._attempt(
+            lambda: app.GetUserPreferenceToggle(_SW_SHOW_SHEET_FORMAT_DIALOG),
+            default=None,
+        )
+        self._attempt(
+            lambda: app.SetUserPreferenceToggle(_SW_SHOW_SHEET_FORMAT_DIALOG, False),
+            default=None,
+        )
+        return None if previous is None else bool(previous)
+
+    def _restore_dialog(self, previous: bool | None) -> None:
+        """Put the Sheet Format/Size prompt back as it was."""
+        if previous is not None:
+            app = self.swApp
+            self._attempt(
+                lambda: app.SetUserPreferenceToggle(
+                    _SW_SHOW_SHEET_FORMAT_DIALOG, previous
+                ),
+                default=None,
+            )
 
     async def create_standard_drawing(
         self,
@@ -531,29 +1193,40 @@ class SolidWorksDrawingStandardMixin:
         notes: list[str] | None = None,
         include_isometric: bool = True,
         write_model_properties: bool = True,
+        title_block_text_height_mm: float | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete A3 drawing that follows the drawing standard.
+
+        Opens the model (or uses its open copy), writes the title-block
+        properties into it, makes a drawing on the A3 ISO format, builds the
+        sheet in separate COM steps, writes the drawing properties, saves
+        ``<drawing_number>.SLDDRW`` and exports a PDF.
 
         Args:
             model_path: Part (.SLDPRT) or assembly (.SLDASM) to draw.
             output_dir: Folder for the .SLDDRW and PDF; the model's folder by default.
             title: Title block TITLE; the model file name by default.
-            subtitle: Sheet title appended to the TITLE, e.g. "Base support".
+            subtitle: Company field when ``company`` is empty.
             drawing_number: DWG NO.; also the drawing file name. Default
                 ``<MODEL>-Rev<revision>-01``.
             author: DRAWN name.
             revision: Revision letter.
             company: Company name field.
             drawn_date: DRAWN date; today (e.g. "17 Oct 2026") by default.
-            notes: Extra note lines (3-7 lines in total are expected).
+            notes: Extra note lines (at most seven lines in total are shown).
             include_isometric: Add the isometric view in its cell.
             write_model_properties: Write Description/Material/Weight custom
                 properties into the model (the format reads them from there)
                 and save the model.
+            title_block_text_height_mm: Largest text height for the DWG NO.
+                and TITLE fields, e.g. 3 for smaller text; they are shrunk
+                further when they still do not fit.
 
         Returns:
             AdapterResult[dict[str, Any]]: Files, scale, views, dimension
-            counts, the overlap check and every property written.
+            counts, the overlap check, every property written and each step's
+            outcome. ERROR, with that data, when a step fails, the drawing or
+            PDF could not be saved, or any overlap remains.
         """
         path = os.path.abspath(model_path)
         if not os.path.isfile(path):
@@ -564,7 +1237,7 @@ class SolidWorksDrawingStandardMixin:
         if ext not in {".sldprt", ".sldasm"}:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error="model_path must be a .SLDPRT or .SLDASM",
+                error=f"model_path must be a .SLDPRT or .SLDASM, not {ext or 'no extension'}",
             )
         stem = os.path.splitext(os.path.basename(path))[0]
         rev = (revision or "A").strip()
@@ -572,355 +1245,170 @@ class SolidWorksDrawingStandardMixin:
         out_dir = os.path.abspath(output_dir or os.path.dirname(path))
         drawing_path = os.path.join(out_dir, f"{number}.SLDDRW")
         pdf_path = os.path.join(out_dir, f"{number}.pdf")
-        today = drawn_date or _date.today().strftime("%d %b %Y")
         steps: list[dict[str, Any]] = []
         written: dict[str, dict[str, str]] = {}
+        data: dict[str, Any] = {"drawing_number": number, "steps": steps}
 
-        # 1. Model: properties the title block reads, and the material name.
-        if not self._use_open_document(path):
-            opened = await self.open_model(path)  # type: ignore[attr-defined]
+        def failed(error: str) -> AdapterResult[dict[str, Any]]:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error=error, data=data
+            )
+
+        # 1. The model: open it, read its material, write the title-block properties.
+        active = self._handle_com_operation(
+            "activate_document", lambda: self._use_open_document(path)
+        )
+        if not (active.is_success and active.data):
+            opened = await self.open_model(path)
             if not opened.is_success:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error=(
-                        f"Could not open model: {opened.error}. If a different file "
-                        "with the same name is open in SolidWorks, close it first."
-                    ),
+                return failed(
+                    f"Could not open model: {opened.error}. If a different file "
+                    "with the same name is open in SolidWorks, close it first."
                 )
         material = None
         if ext == ".sldprt":
-            mat = await self.get_material()  # type: ignore[attr-defined]
+            mat = await self.get_material()
             material = (mat.data or {}).get("material") if mat.is_success else None
         model_props, drawing_props = title_block_properties(
             model_file=path,
             title=title or stem,
             subtitle=subtitle,
             author=author,
-            drawn_date=today,
+            drawn_date=drawn_date or _date.today().strftime("%d %b %Y"),
             revision=rev,
             company=company,
         )
         if write_model_properties:
             for name, value in model_props.items():
-                r = await self.set_custom_property(name, value)  # type: ignore[attr-defined]
-                steps.append(
-                    {
-                        "step": f"model_property:{name}",
-                        "status": "success" if r.is_success else "error",
-                        "error": r.error,
-                    }
+                _step(
+                    steps,
+                    f"model_property:{name}",
+                    await self.set_custom_property(name, value),
                 )
-            saved_model = await self.save_file()  # type: ignore[attr-defined]
-            steps.append(
-                {
-                    "step": "save_model",
-                    "status": "success" if saved_model.is_success else "error",
-                    "error": saved_model.error,
-                }
-            )
+            _step(steps, "save_model", await self.save_file())
             written["model"] = model_props
 
-        # 2. Drawing on the A3 ISO format, without the sheet-format prompt.
-        fmt = find_sheet_format(self)
-        if fmt is None:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error="Sheet format 'a3 - iso.slddrt' not found",
-            )
-        app = self.swApp
-        previous = self._attempt(
-            lambda: app.GetUserPreferenceToggle(_SW_SHOW_SHEET_FORMAT_DIALOG),
-            default=None,
+        # 2. A drawing on the A3 ISO format, without the Sheet Format/Size prompt.
+        found = self._handle_com_operation(
+            "standard_drawing_format", lambda: find_sheet_format(self)
         )
-        self._attempt(
-            lambda: app.SetUserPreferenceToggle(_SW_SHOW_SHEET_FORMAT_DIALOG, False),
-            default=None,
+        if not (found.is_success and found.data):
+            return failed(
+                "Sheet format 'a3 - iso.slddrt' not found in SolidWorks' sheet "
+                "format folders or under C:\\ProgramData\\SOLIDWORKS"
+            )
+        prompt = self._handle_com_operation(
+            "standard_drawing_dialog", self._new_drawing_without_dialog
         )
         try:
-            created = await self.create_drawing()  # type: ignore[attr-defined]
+            created = await self.create_drawing()
         finally:
-            if previous is not None:
-                self._attempt(
-                    lambda: app.SetUserPreferenceToggle(
-                        _SW_SHOW_SHEET_FORMAT_DIALOG, bool(previous)
-                    ),
-                    default=None,
-                )
+            self._handle_com_operation(
+                "standard_drawing_dialog",
+                lambda: self._restore_dialog(
+                    prompt.data if prompt.is_success else None
+                ),
+            )
         if not created.is_success:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=f"Could not create drawing: {created.error}",
-            )
-        units = await self.set_units("mm")  # type: ignore[attr-defined]
-        steps.append(
-            {
-                "step": "drawing_units_mm",
-                "status": "success" if units.is_success else "error",
-                "error": units.error,
-            }
+            return failed(f"Could not create drawing: {created.error}")
+        _step(steps, "drawing_units_mm", await self.set_units("mm"))
+
+        # 3. The sheet, one COM step at a time.
+        s = _Sheet(
+            path=path,
+            sheet_format=str(found.data),
+            include_isometric=include_isometric,
+            material=material,
+            extra_notes=list(notes or []),
+            field_height=(
+                title_block_text_height_mm / 1000.0
+                if title_block_text_height_mm
+                else None
+            ),
         )
-
-        def _build() -> dict[str, Any]:
-            model = self.currentModel
-            drawing = _sw_type_info.flagged(model, "IDrawingDoc")
-            sheet = _as_com(self, drawing.GetCurrentSheet(), "ISheet")
-            sheet_name = self._attempt(lambda: sheet.GetName(), default="Sheet1")
-            if not drawing.SetupSheet5(
-                sheet_name,
-                _SW_PAPER_A3,
-                _SW_TEMPLATE_CUSTOM,
-                1.0,
-                1.0,
-                False,
-                fmt,
-                SHEET_SIZE[0],
-                SHEET_SIZE[1],
-                "Default",
-                True,
-            ):
-                raise Exception(f"SetupSheet5 failed for {fmt}")
-            self._attempt(
-                lambda: model.SetUserPreferenceIntegerValue(
-                    _SW_DETAILING_DIM_TRAILING_ZERO, _SW_DIM_REMOVE_TRAILING_ZEROES
-                ),
-                default=None,
+        for name, build in (
+            ("sheet", self._setup_a3_sheet),
+            ("views", self._create_views),
+            ("layout", self._fit_views),
+            ("dimensions", self._dimension_views),
+            ("notes", self._annotate),
+            ("check", self._check_sheet),
+        ):
+            done = self._handle_com_operation(
+                f"standard_drawing_{name}", lambda build=build: build(s)
             )
-            before = set(_view_names(self, drawing))
-            if not self._attempt(
-                lambda: drawing.Create3rdAngleViews2(path), default=False
-            ):
-                new = [n for n in _view_names(self, drawing) if n not in before]
-                if not new:
-                    raise Exception(f"No views could be created from {path}")
-            ortho = [n for n in _view_names(self, drawing) if n not in before]
-            views = {n: _resolve_drawing_view(self, drawing, n) for n in ortho}
-            outlines = {n: self._view_outline(v) for n, v in views.items()}
-            front = next(
-                (
-                    n
-                    for n, v in views.items()
-                    if "front"
-                    in str(
-                        self._attempt(lambda v=v: v.GetOrientationName(), default="")
-                    ).lower()
-                ),
-                ortho[0],
-            )
-            fo = outlines[front]
-            role: dict[str, str] = {front: "front"}
-            for n in ortho:
-                if n == front or outlines.get(n) is None or fo is None:
-                    continue
-                o = outlines[n]
-                role[n] = (
-                    "plan" if (o[1] + o[3]) / 2 > (fo[1] + fo[3]) / 2 + 1e-4 else "side"
-                )
-            iso_name = None
-            if include_isometric:
-                before_iso = set(_view_names(self, drawing))
-                self._attempt(
-                    lambda: drawing.CreateDrawViewFromModelView3(
-                        path, "*Isometric", 0.31, 0.23, 0.0
-                    ),
-                    default=None,
-                )
-                iso_name = next(
-                    (n for n in _view_names(self, drawing) if n not in before_iso), None
-                )
-                if iso_name:
-                    views[iso_name] = _resolve_drawing_view(self, drawing, iso_name)
-                    role[iso_name] = "iso"
-
-            def sizes_now() -> dict[str, tuple[float, float]]:
-                result = {}
-                for n, v in views.items():
-                    o = self._view_outline(v)
-                    s = float(
-                        self._attempt(lambda v=v: v.ScaleDecimal, default=1.0) or 1.0
-                    )
-                    if o is not None and s > 0:
-                        result[role[n]] = ((o[2] - o[0]) / s, (o[3] - o[1]) / s)
-                return result
-
-            model_sizes = sizes_now()
-            ortho_sizes = {k: v for k, v in model_sizes.items() if k != "iso"}
-            # Isometric size at 1:1 (outline / view scale), for its own fit.
-            iso_size = model_sizes.get("iso")
-
-            def apply_layout(
-                scale: tuple[float, float], cells: dict[str, Box]
-            ) -> tuple[float, float] | None:
-                sheet.SetScale(float(scale[0]), float(scale[1]), True, False)
-                self._attempt(lambda: model.EditRebuild3(), default=None)
-                iso_scale = None
-                if iso_name and iso_size:
-                    iso_scale = iso_fit_scale(iso_size, cells["iso"])
-                    iv = views[iso_name]
-                    self._attempt(
-                        lambda: setattr(iv, "UseSheetScale", False), default=None
-                    )
-                    self._attempt(
-                        lambda: setattr(
-                            iv,
-                            "ScaleRatio",
-                            _double_array([float(iso_scale[0]), float(iso_scale[1])]),
-                        ),
-                        default=None,
-                    )
-                # Centre each view in its cell's content area (front first:
-                # plan and side follow its alignment along one axis).
-                fc = content_box(cells["front"])
-                fcx, fcy = (fc[0] + fc[2]) / 2, (fc[1] + fc[3]) / 2
-                for n, r in sorted(role.items(), key=lambda item: item[1] != "front"):
-                    c = content_box(cells[r])
-                    x, y = (c[0] + c[2]) / 2, (c[1] + c[3]) / 2
-                    if r == "plan":
-                        x = fcx
-                    elif r == "side":
-                        y = fcy
-                    self._set_view_position(views[n], x, y)
-                self._attempt(lambda: model.EditRebuild3(), default=None)
-                return iso_scale
-
-            def obstacles_for(cells: dict[str, Box]) -> dict[str, Box]:
-                result: dict[str, Box] = {
-                    "title block": TITLE_BLOCK,
-                    "notes": cells["notes"],
-                }
-                for r in role.values():
-                    c = cells[r]
-                    result[f"{r} caption"] = (c[0], c[1], c[2], c[1] + CAPTION_STRIP)
-                return result
-
-            scale, cells = choose_layout(ortho_sizes)
-            iso_scale = apply_layout(scale, cells)
-            dims = self._import_dimensions(None, True, only_views=list(ortho))
-
-            # The scale is chosen once, to fit the sheet, and never stepped down:
-            # overlaps are resolved by moving dimensions, not by shrinking views.
-            obstacles = obstacles_for(cells)
-            self._arrange_layout(None, obstacles, WORK_AREA, True)
-
-            # Captions (view name only) and notes. Each note is placed from
-            # its measured box, so lines cannot run into each other.
-            labels: dict[str, str] = {}
-            sheet_notes: list[tuple[str, Any]] = []
-            for n, r in role.items():
-                text = CAPTIONS[r]
-                c = cells[r]
-                an = self._insert_sheet_note(
-                    text, c[0] + 0.01, c[1] + CAPTION_STRIP, CAPTION_HEIGHT, True
-                )
-                labels[n] = text
-                if an is not None:
-                    self._place_note(
-                        an, text, centre_x=(c[0] + c[2]) / 2, bottom=c[1] + 0.0015
-                    )
-                    sheet_notes.append((f"caption {r}", an))
-            body = []
-            if material:
-                body.append(f"MATERIAL: {material.upper()}")
-            body += [
-                "ALL DIMENSIONS IN MILLIMETRES",
-                "THIRD ANGLE PROJECTION",
-                "REMOVE ALL BURRS AND SHARP EDGES",
-            ]
-            body += [line.upper() for line in (notes or []) if line.strip()]
-            note_lines = ["NOTES"] + [
-                f"{i}. {line}" for i, line in enumerate(body[:7], start=1)
-            ]
-            nc = CELLS["notes"]
-            top = nc[3] - 0.003
-            for i, line in enumerate(note_lines):
-                height = CAPTION_HEIGHT if i == 0 else NOTE_HEIGHT
-                an = self._insert_sheet_note(line, nc[0] + 0.010, top, height, i == 0)
-                if an is None:
-                    continue
-                box = self._place_note(an, line, left=nc[0] + 0.010, top=top)
-                sheet_notes.append((f"note line {i}", an))
-                top = box[1] - 0.0015
-            self._attempt(lambda: model.ClearSelection2(True), default=None)
-            self._attempt(lambda: model.EditRebuild3(), default=None)
-
-            final = self._arrange_layout(None, obstacles, WORK_AREA, False)
-            outlines_now, dims_now, _ = self._collect_layout(
-                drawing, _view_names(self, drawing)
-            )
-            note_boxes = {
-                label: self._note_box(an, label, 0.0, 0.0, NOTE_HEIGHT)
-                for label, an in sheet_notes
-            }
-            annotation_problems = _layout.find_annotation_overlaps(
-                note_boxes,
-                dims_now,
-                outlines_now,
-                WORK_AREA,
-                {"title block": TITLE_BLOCK},
-            )
-            final["annotation_overlaps"] = annotation_problems
-            final["overlaps_after"] = final.get("overlaps_after", 0) + len(
-                annotation_problems
-            )
-            return {
-                "scale": scale_label(scale),
-                "isometric_scale": scale_label(iso_scale) if iso_scale else None,
-                "views": {
-                    n: {"role": role.get(n), "caption": labels.get(n)} for n in views
-                },
-                "dimensions": dims,
-                "overlap_check": final,
-                "sheet_format": fmt,
-                "notes": note_lines,
-            }
-
-        built = self._handle_com_operation("create_standard_drawing", _build)
-        if not built.is_success:
-            return cast("AdapterResult[dict[str, Any]]", built)
-        data = dict(built.data or {})
-
-        for name, value in drawing_props.items():
-            r = await self.set_custom_property(name, value)  # type: ignore[attr-defined]
-            steps.append(
-                {
-                    "step": f"drawing_property:{name}",
-                    "status": "success" if r.is_success else "error",
-                    "error": r.error,
-                }
-            )
-        written["drawing"] = drawing_props
-
-        os.makedirs(out_dir, exist_ok=True)
-        saved = await self.save_file(drawing_path)  # type: ignore[attr-defined]
-        steps.append(
-            {
-                "step": "save_drawing",
-                "status": "success" if saved.is_success else "error",
-                "error": saved.error,
-            }
-        )
-        pdf = await self.export_file(pdf_path, "pdf")  # type: ignore[attr-defined]
-        steps.append(
-            {
-                "step": "export_pdf",
-                "status": "success" if pdf.is_success else "error",
-                "error": pdf.error,
-            }
-        )
-
-        overlaps = (data.get("overlap_check") or {}).get("overlaps_after", 0)
+            _step(steps, f"build_{name}", done)
+            if not done.is_success:
+                return failed(f"Drawing step '{name}' failed: {done.error}")
+            if name == "dimensions":
+                data["dimensions"] = done.data
+            if name == "check":
+                data["overlap_check"] = done.data
         data.update(
             {
-                "drawing_path": drawing_path if saved.is_success else None,
-                "pdf_path": pdf_path if pdf.is_success else None,
-                "drawing_number": number,
-                "properties_written": written,
-                "steps": steps,
+                "scale": scale_label(s.scale),
+                "isometric_scale": scale_label(s.iso_scale) if s.iso_scale else None,
+                "views": {
+                    n: {"role": s.role.get(n), "caption": s.captions.get(n)}
+                    for n in s.views
+                },
+                "sheet_format": s.sheet_format,
+                "notes": s.note_lines,
             }
         )
+
+        # 4. Drawing properties, then the files.
+        for name, value in drawing_props.items():
+            _step(
+                steps,
+                f"drawing_property:{name}",
+                await self.set_custom_property(name, value),
+            )
+        written["drawing"] = drawing_props
+        data["properties_written"] = written
+        os.makedirs(out_dir, exist_ok=True)
+        saved = await self.save_file(drawing_path)
+        _step(steps, "save_drawing", saved)
+        data["drawing_path"] = drawing_path if saved.is_success else None
+        if not saved.is_success:
+            return failed(
+                f"Drawing built but not saved to {drawing_path}: {saved.error}"
+            )
+
+        # 5. The title block, now that the DWG NO. shows the saved file name.
+        fitted = self._handle_com_operation(
+            "standard_drawing_title_block", lambda: self._fit_title_block(s)
+        )
+        _step(steps, "fit_title_block", fitted)
+        data["title_block"] = fitted.data if fitted.is_success else None
+        check = data["overlap_check"]
+        for name, field_fit in (data["title_block"] or {}).items():
+            if field_fit.get("fits") is False:
+                check["annotation_overlaps"].append(
+                    {
+                        "dimension": f"title block {name}",
+                        "conflicts_with": "the next title-block field",
+                        "kind": "field_overflow",
+                    }
+                )
+                check["overlaps_after"] = check.get("overlaps_after", 0) + 1
+        _step(steps, "save_drawing_again", await self.save_file(drawing_path))
+        pdf = await self.export_file(pdf_path, "pdf")
+        _step(steps, "export_pdf", pdf)
+        data["pdf_path"] = pdf_path if pdf.is_success else None
+        if not pdf.is_success:
+            return failed(
+                f"Drawing saved to {drawing_path} but the PDF export failed: {pdf.error}"
+            )
+
+        overlaps = data["overlap_check"].get("overlaps_after", 0)
+        overflowing = any(
+            f.get("fits") is False for f in (data.get("title_block") or {}).values()
+        )
         if overlaps:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=f"Drawing saved but {overlaps} overlap(s) remain - the no-overlap rule is not met",
-                data=data,
+            return failed(
+                f"Drawing saved but {overlaps} overlap(s) remain - the no-overlap "
+                "rule is not met; see overlap_check"
+                + (f". For a title-block field, {FIELD_HINT}" if overflowing else "")
             )
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)

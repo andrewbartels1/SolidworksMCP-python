@@ -20,6 +20,7 @@ PACKAGE_ARGS = (
     ["DEBURR"],
     False,
     False,
+    3.0,
 )
 
 
