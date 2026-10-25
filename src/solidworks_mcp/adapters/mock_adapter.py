@@ -3825,6 +3825,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "template": template_path or "bom-standard.sldbomtbt",
                 "configuration": "Default",
                 "row_count": 3,
+                "table_box_mm": [0.0, 0.0, 60.0, 15.0],
             },
         )
 

@@ -41,6 +41,9 @@ _SW_PREF_BOM_TEMPLATES = 22
 _SW_BOM_TYPES = {"top_level_only": 2, "parts_only": 1, "indented": 3}
 # swBOMConfigurationAnchorType_e
 _SW_BOM_ANCHOR_TOP_LEFT = 1
+_SW_BOM_ANCHOR_TOP_RIGHT = 2
+_SW_BOM_ANCHOR_BOTTOM_LEFT = 3
+_SW_BOM_ANCHOR_BOTTOM_RIGHT = 4
 # swNumberingType_e
 _SW_NUMBERING_NONE = 0
 _SW_NUMBERING_DETAILED = 1
@@ -241,6 +244,11 @@ def _read_material(part: Any, configuration: str | None) -> tuple[str, str]:
         library = ""
     stored = getattr(database, "value", "")
     return name, library or (stored if isinstance(stored, str) else "")
+
+
+def _grow(box: tuple[float, ...], by: float) -> tuple[float, float, float, float]:
+    """``box`` grown by ``by`` on every side."""
+    return (box[0] - by, box[1] - by, box[2] + by, box[3] + by)
 
 
 def _strip_document_suffix(full_name: Any) -> str | None:
@@ -1435,6 +1443,52 @@ class SolidWorksDocumentationMixin:
             f"templates folder ({'; '.join(folders) or 'not set'}); pass template_path"
         )
 
+    def _table_box(self, table: Any) -> tuple[float, float, float, float] | None:
+        """A table's box on the sheet, from its stationary corner and cell sizes.
+
+        ``IAnnotation::GetPosition`` gives the stationary corner named by
+        ``ITableAnnotation::AnchorType``; the table spans the sum of its
+        column widths and row heights from there.
+
+        Args:
+            table: The ``ITableAnnotation``.
+
+        Returns:
+            tuple[float, float, float, float] | None: ``(x0, y0, x1, y1)`` in
+            sheet metres, or ``None`` when the table cannot be measured.
+        """
+        t = _sw_type_info.flagged(table, "ITableAnnotation")
+        an = self._attempt(
+            lambda: _sw_type_info.flagged(t.GetAnnotation(), "IAnnotation"),
+            default=None,
+        )
+        pos = self._attempt(lambda: an.GetPosition(), default=None)
+        rows = int(self._attempt(lambda: t.RowCount, default=0) or 0)
+        cols = int(self._attempt(lambda: t.ColumnCount, default=0) or 0)
+        if not isinstance(pos, (list, tuple)) or len(pos) < 2 or not rows or not cols:
+            return None
+        height = sum(
+            float(self._attempt(lambda i=i: t.GetRowHeight(i), default=0.0) or 0.0)
+            for i in range(rows)
+        )
+        width = sum(
+            float(self._attempt(lambda i=i: t.GetColumnWidth(i), default=0.0) or 0.0)
+            for i in range(cols)
+        )
+        anchor = self._attempt(lambda: t.AnchorType, default=None)
+        x, y = float(pos[0]), float(pos[1])
+        left = (
+            x - width
+            if anchor in (_SW_BOM_ANCHOR_TOP_RIGHT, _SW_BOM_ANCHOR_BOTTOM_RIGHT)
+            else x
+        )
+        bottom = (
+            y - height
+            if anchor in (_SW_BOM_ANCHOR_TOP_LEFT, _SW_BOM_ANCHOR_TOP_RIGHT)
+            else y
+        )
+        return (left, bottom, left + width, bottom + height)
+
     async def insert_bom_table(
         self,
         view_name: str,
@@ -1446,10 +1500,14 @@ class SolidWorksDocumentationMixin:
         """Insert a bill-of-materials table for a view of an assembly.
 
         Wraps ``IView::InsertBomTable4``. With no position the table snaps to
-        the sheet format's BOM anchor (``UseAnchorPoint=True``). With no
-        template the library default ``bom-standard.sldbomtbt`` from the BOM
-        templates folder (``swFileLocationsBOMTemplates``) is used. The BOM
-        lists the view's referenced configuration; an indented BOM is
+        the sheet format's BOM anchor (``UseAnchorPoint=True``), or to the
+        sheet's bottom-left corner when the sheet has no format. Its
+        stationary corner is the bottom-left, so the table grows up onto the
+        sheet; with the top-left it hung below the sheet (measured live on
+        SW 2026). The table's box is read back and must lie on the sheet. With
+        no template the library default ``bom-standard.sldbomtbt`` from the
+        BOM templates folder (``swFileLocationsBOMTemplates``) is used. The
+        BOM lists the view's referenced configuration; an indented BOM is
         numbered by level.
 
         Args:
@@ -1461,9 +1519,10 @@ class SolidWorksDocumentationMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: ``view``, ``bom_type``, ``template``,
-            ``configuration`` and ``row_count`` (the table's rows, header
-            included). ``not_found`` for an unknown view or template;
-            ``wrong_document_type`` for a view of a part.
+            ``configuration``, ``row_count`` (the table's rows, header
+            included) and ``table_box_mm``. ``not_found`` for an unknown view
+            or template; ``wrong_document_type`` for a view of a part; an
+            error naming the box when the table runs off the sheet.
         """
         guard = self._require_drawing()
         if guard is not None:
@@ -1503,7 +1562,7 @@ class SolidWorksDocumentationMixin:
                 x_mm is None or y_mm is None,
                 (x_mm or 0.0) / 1000.0,
                 (y_mm or 0.0) / 1000.0,
-                _SW_BOM_ANCHOR_TOP_LEFT,
+                _SW_BOM_ANCHOR_BOTTOM_LEFT,
                 _SW_BOM_TYPES[bom_type],
                 config,
                 template,
@@ -1520,12 +1579,22 @@ class SolidWorksDocumentationMixin:
                 lambda: _sw_type_info.flagged(table, "ITableAnnotation").RowCount,
                 default=None,
             )
+            box = self._table_box(table)
+            box_mm = [round(c * 1000, 1) for c in box] if box else None
+            sheet = self._sheet_bounds(drawing)
+            if box and sheet and not _layout.inside(box, _grow(sheet, 1e-6)):
+                raise RuntimeError(
+                    f"The BOM table was inserted but runs off the sheet: table "
+                    f"{box_mm} mm, sheet {sheet[2] * 1000:g} x {sheet[3] * 1000:g} "
+                    "mm. Give x_mm and y_mm to place it on the sheet."
+                )
             return {
                 "view": view_name,
                 "bom_type": bom_type,
                 "template": template,
                 "configuration": config or None,
                 "row_count": rows,
+                "table_box_mm": box_mm,
             }
 
         return cast(

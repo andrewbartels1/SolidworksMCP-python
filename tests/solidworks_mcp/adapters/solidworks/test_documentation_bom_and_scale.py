@@ -62,11 +62,32 @@ class _Harness(SolidWorksDocumentationMixin):
         return None
 
 
+class _Table:
+    """A 3-row x 4-column BOM: 60 x 15 mm, its stationary corner at ``corner``."""
+
+    def __init__(
+        self, corner: tuple[float, float] = (0.0, 0.0), anchor: int = 3
+    ) -> None:
+        self.RowCount = 3
+        self.ColumnCount = 4
+        self.AnchorType = anchor
+        self.annotation = SimpleNamespace(GetPosition=lambda: (*corner, 0.0))
+
+    def GetAnnotation(self):  # noqa: N802
+        return self.annotation
+
+    def GetRowHeight(self, _i):  # noqa: N802
+        return 0.005
+
+    def GetColumnWidth(self, _i):  # noqa: N802
+        return 0.015
+
+
 class _View:
     def __init__(self, shows: Any = 2, table: Any = "table") -> None:
         self.ReferencedDocument = SimpleNamespace(GetType=lambda: shows)
         self.ReferencedConfiguration = "Default"
-        self.table = SimpleNamespace(RowCount=3) if table == "table" else table
+        self.table = _Table() if table == "table" else table
         self.bom_args: tuple[Any, ...] = ()
 
     def InsertBomTable4(self, *args):  # noqa: N802
@@ -133,12 +154,14 @@ async def test_bom_uses_the_library_template_and_the_sheet_anchor(template) -> N
         "template": str(template),
         "configuration": "Default",
         "row_count": 3,
+        "table_box_mm": [0.0, 0.0, 60.0, 15.0],
     }
-    use_anchor, x, y, _corner, bom_type, config, used, *_rest = view.bom_args
-    assert (use_anchor, x, y, bom_type, config, used) == (
+    use_anchor, x, y, corner, bom_type, config, used, *_rest = view.bom_args
+    assert (use_anchor, x, y, corner, bom_type, config, used) == (
         True,
         0.0,
         0.0,
+        3,  # swBOMConfigurationAnchor_BottomLeft: the table grows up the sheet
         2,
         "Default",
         str(template),
@@ -215,6 +238,59 @@ async def test_bom_failures_say_what_is_wrong(
     result = await adapter.insert_bom_table("Side", template_path)
 
     assert result.error == error
+
+
+@pytest.mark.parametrize(
+    ("anchor", "corner", "box"),
+    [
+        (1, (0.1, 0.2), (0.1, 0.185, 0.16, 0.2)),  # top left
+        (2, (0.1, 0.2), (0.04, 0.185, 0.1, 0.2)),  # top right
+        (3, (0.1, 0.2), (0.1, 0.2, 0.16, 0.215)),  # bottom left
+        (4, (0.1, 0.2), (0.04, 0.2, 0.1, 0.215)),  # bottom right
+    ],
+)
+def test_a_table_is_measured_from_its_stationary_corner(anchor, corner, box) -> None:
+    measured = _Harness(_Drawing())._table_box(_Table(corner, anchor))
+
+    assert measured == pytest.approx(box)
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        SimpleNamespace(RowCount=3),
+        SimpleNamespace(
+            RowCount=0,
+            ColumnCount=4,
+            GetAnnotation=lambda: SimpleNamespace(GetPosition=lambda: (0, 0, 0)),
+        ),
+    ],
+)
+def test_a_table_that_cannot_be_measured_has_no_box(table) -> None:
+    assert _Harness(_Drawing())._table_box(table) is None
+
+
+@pytest.mark.asyncio
+async def test_a_table_that_cannot_be_measured_is_not_checked(template) -> None:
+    adapter = _Harness(_Drawing(Front=_View(table=SimpleNamespace(RowCount=3))))
+
+    result = await adapter.insert_bom_table("Front", str(template))
+
+    assert result.data["table_box_mm"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_table_off_the_sheet_is_an_error(template) -> None:
+    hanging = _Table((0.0, 0.0), anchor=1)  # top-left at the origin: below the sheet
+    adapter = _Harness(_Drawing(Front=_View(table=hanging)))
+
+    result = await adapter.insert_bom_table("Front", str(template))
+
+    assert result.error == (
+        "Error in insert_bom_table: The BOM table was inserted but runs off the "
+        "sheet: table [0.0, -15.0, 60.0, 0.0] mm, sheet 420 x 297 mm. Give x_mm "
+        "and y_mm to place it on the sheet."
+    )
 
 
 @pytest.mark.asyncio

@@ -30,6 +30,7 @@ async def test_bom_reports_the_live_fields(drawing) -> None:
         "template",
         "configuration",
         "row_count",
+        "table_box_mm",
     }
     assert result.data["template"] == "bom-standard.sldbomtbt"
 

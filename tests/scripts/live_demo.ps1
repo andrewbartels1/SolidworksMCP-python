@@ -7,8 +7,8 @@
 # and the test's part is left open afterwards. SolidWorks must be open, idle
 # and running for 8+ minutes (tests/live/conftest.py waits otherwise). Each
 # step is paced so a person can follow it in the SolidWorks window. Live tests
-# print "[evidence] <label>: <payload>" lines; those, plus the pass/fail
-# summary, are all that is shown.
+# print "[evidence] <label>: <payload>" lines; those, the "[live]" warm-up
+# notice and the pass/fail summary are all that is shown.
 #
 # -CaptureDir <folder> also saves each evidence step as a PNG of the
 # SolidWorks window with the payload captioned beneath it, then builds one GIF
@@ -30,8 +30,16 @@ $env:SW_DEMO_CAPTURE_DIR = $CaptureDir
 
 & .\.venv\Scripts\python.exe -m pytest $Test -s -x -n 0 --no-cov -p no:cacheprovider `
     -o addopts="" --asyncio-mode=auto --color=yes 2>&1 |
-    Select-String -Pattern "\[evidence\]|PASSED|FAILED|SKIPPED|passed|failed|skipped|Error" |
-    ForEach-Object { $_.Line }
+    ForEach-Object -Begin { $inEvidence = $false } -Process {
+        # Evidence prints over several lines (label, call, result), ending
+        # at a blank line; keep all of it plus the notices and the summary.
+        $line = "$_"
+        if ($line -match "\[evidence\]") { $inEvidence = $true }
+        elseif ($line.Trim() -eq "") { $inEvidence = $false }
+        if ($inEvidence -or $line -match "\[live\]|PASSED|FAILED|SKIPPED|passed|failed|skipped|Error") {
+            $line
+        }
+    }
 
 if ($CaptureDir) {
     & .\.venv\Scripts\python.exe tests\scripts\make_demo_gif.py $CaptureDir
