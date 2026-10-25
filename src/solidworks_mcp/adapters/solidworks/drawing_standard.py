@@ -35,6 +35,7 @@ crashed SolidWorks 2026 in its idle-time refresh (COM pitfall #26).
 from __future__ import annotations
 
 import glob
+import ntpath
 import os
 from dataclasses import dataclass, field
 from datetime import date as _date
@@ -269,7 +270,8 @@ def title_block_properties(
         tuple: (model properties, drawing properties); empty drawing
         properties are left out.
     """
-    base = os.path.basename(model_file)
+    # SolidWorks paths are Windows paths, whatever the platform this runs on.
+    base = ntpath.basename(model_file)
     model_props = {
         "Description": title,
         "Material": f'"SW-Material@{base}"',
