@@ -79,13 +79,9 @@ class _FakeAdapter:
         from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 
         try:
-            return AdapterResult(
-                status=AdapterResultStatus.SUCCESS, data=operation()
-            )
+            return AdapterResult(status=AdapterResultStatus.SUCCESS, data=operation())
         except Exception as exc:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error=str(exc)
-            )
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
 
 
 def _mixin_for(adapter: _FakeAdapter) -> Any:
@@ -178,9 +174,7 @@ async def test_failed_save_as_leaves_the_existing_target_intact(
             return False
 
     model = _RefusingModel(str(part))
-    result = await _mixin_for(_FakeAdapter(model, _FakeApp())).save_file(
-        str(target)
-    )
+    result = await _mixin_for(_FakeAdapter(model, _FakeApp())).save_file(str(target))
 
     assert not result.is_success
     # The old file survives, because nothing is deleted up front.

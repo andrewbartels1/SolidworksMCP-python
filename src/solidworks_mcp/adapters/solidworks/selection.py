@@ -208,8 +208,6 @@ class SolidWorksSelectionMixin:
             result.error = strip_op_prefix(result.error, operation_name)
         return cast("AdapterResult[dict[str, Any]]", result)
 
-
-
     async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
         """Report the faces/edges/vertices currently highlighted in the live
         SolidWorks UI, so an agent can see exactly what the user clicked on
@@ -250,9 +248,7 @@ class SolidWorksSelectionMixin:
                 default=0,
             )
             count = (
-                self._attempt(
-                    lambda: sel_mgr.GetSelectedObjectCount2(-1), default=0
-                )
+                self._attempt(lambda: sel_mgr.GetSelectedObjectCount2(-1), default=0)
                 or 0
             )
 

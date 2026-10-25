@@ -655,9 +655,7 @@ class SolidWorksMCPConfig(BaseModel):
         # Give SoC logging a session id to write under when it's enabled
         # without one being named explicitly.
         if self.soc_logging_enabled and not self.soc_session_id:
-            self.soc_session_id = (
-                f"soc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
-            )
+            self.soc_session_id = f"soc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
 
     @property
     def is_windows(self) -> bool:

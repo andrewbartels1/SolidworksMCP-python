@@ -785,7 +785,9 @@ class TestConnectionPoolAdapterExtras:
             async def disconnect(self):
                 return None
 
-            async def create_reference_plane(self, reference, offset=0.0, angle=0.0, flip=False):
+            async def create_reference_plane(
+                self, reference, offset=0.0, angle=0.0, flip=False
+            ):
                 return _ok("plane")
 
             async def create_axis(self, reference):
@@ -881,7 +883,9 @@ class TestConnectionPoolAdapterExtras:
         async def _exercise_every_passthrough(wrapped) -> None:
             assert (await wrapped.create_reference_plane("Top")).is_success
             assert (await wrapped.create_axis("Top")).is_success
-            assert (await wrapped.create_reference_point("along_curve", 0, 0, 0)).is_success
+            assert (
+                await wrapped.create_reference_point("along_curve", 0, 0, 0)
+            ).is_success
             assert (await wrapped.mirror_feature(["F1"], "Right")).is_success
             assert (await wrapped.pattern_circular(["F1"], "Axis1", 4)).is_success
             assert (await wrapped.set_units("mm")).is_success
@@ -905,9 +909,13 @@ class TestConnectionPoolAdapterExtras:
             assert (await wrapped.add_chamfer(1.0, ["Edge1"])).is_success
             assert (await wrapped.get_selected_entities()).is_success
 
-        await _exercise_every_passthrough(CircuitBreakerAdapter(adapter=_FullStubAdapter()))
+        await _exercise_every_passthrough(
+            CircuitBreakerAdapter(adapter=_FullStubAdapter())
+        )
 
-        pool = ConnectionPoolAdapter(adapter_factory=lambda: _FullStubAdapter(), max_size=1)
+        pool = ConnectionPoolAdapter(
+            adapter_factory=lambda: _FullStubAdapter(), max_size=1
+        )
         await pool.connect()
         try:
             await _exercise_every_passthrough(pool)

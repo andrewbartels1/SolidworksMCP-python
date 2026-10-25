@@ -676,7 +676,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Create reference plane using pool."""
         return await self._execute_with_pool(
             "create_reference_plane",
-            lambda adapter: adapter.create_reference_plane(reference, offset, angle, flip),
+            lambda adapter: adapter.create_reference_plane(
+                reference, offset, angle, flip
+            ),
         )
 
     async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
@@ -1404,7 +1406,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Assign a material to the active part using pool."""
         return await self._execute_with_pool(
             "set_material",
-            lambda adapter: adapter.set_material(material_name, database, configuration),
+            lambda adapter: adapter.set_material(
+                material_name, database, configuration
+            ),
         )
 
     async def list_available_materials(

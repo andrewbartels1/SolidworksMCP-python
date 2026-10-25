@@ -635,12 +635,19 @@ async def test_base_defaults_report_missing_capability() -> None:
     assert "add_mate" in (mate_result.error or "")
 
 
-CAPABILITIESFeatureEditingCapability = ["delete_feature", "suppress_feature", "rename_feature", "undo"]
+CAPABILITIESFeatureEditingCapability = [
+    "delete_feature",
+    "suppress_feature",
+    "rename_feature",
+    "undo",
+]
 
 
 @pytest.mark.parametrize("capability", CAPABILITIESFeatureEditingCapability)
 @pytest.mark.parametrize("cls", WRAPPERS, ids=lambda c: c.__name__)
-def test_capability_exists_on_every_layer_feature_editing(capability: str, cls: type) -> None:
+def test_capability_exists_on_every_layer_feature_editing(
+    capability: str, cls: type
+) -> None:
     """A capability missing from a wrapper degrades silently at runtime."""
     method = getattr(cls, capability, None)
     assert method is not None, f"{cls.__name__} is missing {capability}"
@@ -651,7 +658,9 @@ def test_capability_exists_on_every_layer_feature_editing(capability: str, cls: 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("capability", CAPABILITIESFeatureEditingCapability)
-async def test_base_defaults_report_missing_capability_feature_editing(capability: str) -> None:
+async def test_base_defaults_report_missing_capability_feature_editing(
+    capability: str,
+) -> None:
     """The base defaults name the missing capability, not a fabrication."""
     method = getattr(SolidWorksAdapter, capability)
     args: tuple[object, ...]
@@ -822,7 +831,9 @@ CAPABILITIESOpenDocumentsCapability = ["list_open_documents", "activate_document
 
 @pytest.mark.parametrize("capability", CAPABILITIESOpenDocumentsCapability)
 @pytest.mark.parametrize("cls", WRAPPERS, ids=lambda c: c.__name__)
-def test_capability_exists_on_every_layer_open_documents(capability: str, cls: type) -> None:
+def test_capability_exists_on_every_layer_open_documents(
+    capability: str, cls: type
+) -> None:
     """Every adapter layer defines the capability as an async method."""
     method = getattr(cls, capability, None)
     assert method is not None, f"{cls.__name__} is missing {capability}"
@@ -833,7 +844,9 @@ def test_capability_exists_on_every_layer_open_documents(capability: str, cls: t
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("capability", CAPABILITIESOpenDocumentsCapability)
-async def test_base_defaults_report_missing_capability_open_documents(capability: str) -> None:
+async def test_base_defaults_report_missing_capability_open_documents(
+    capability: str,
+) -> None:
     """The base default returns an error that names the missing capability."""
     method = getattr(SolidWorksAdapter, capability)
     result = await (
@@ -852,7 +865,9 @@ CAPABILITYPatternCapability = "pattern_circular"
 def test_capability_exists_on_every_layer_pattern(cls: type) -> None:
     """A capability missing from a wrapper degrades silently at runtime."""
     method = getattr(cls, CAPABILITYPatternCapability, None)
-    assert method is not None, f"{cls.__name__} is missing {CAPABILITYPatternCapability}"
+    assert method is not None, (
+        f"{cls.__name__} is missing {CAPABILITYPatternCapability}"
+    )
     assert inspect.iscoroutinefunction(method), (
         f"{cls.__name__}.{CAPABILITYPatternCapability} must be async"
     )
@@ -960,7 +975,9 @@ CAPABILITIESReferenceGeometryCapability = [
 
 @pytest.mark.parametrize("capability", CAPABILITIESReferenceGeometryCapability)
 @pytest.mark.parametrize("cls", WRAPPERS, ids=lambda c: c.__name__)
-def test_capability_exists_on_every_layer_reference_geometry(capability: str, cls: type) -> None:
+def test_capability_exists_on_every_layer_reference_geometry(
+    capability: str, cls: type
+) -> None:
     """A capability missing from a wrapper degrades silently at runtime."""
     method = getattr(cls, capability, None)
     assert method is not None, f"{cls.__name__} is missing {capability}"
@@ -1137,7 +1154,9 @@ def test_every_capability_is_accounted_for() -> None:
     to be explicit rather than forgotten.
     """
     classified = set(GATED_ON_THIS_BRANCH) | set(GATED_ONCE_REFUSAL_PR_LANDS)
-    unclassified = set(CAPABILITIESDrawingCapabilities) - classified - {"list_drawing_views"}
+    unclassified = (
+        set(CAPABILITIESDrawingCapabilities) - classified - {"list_drawing_views"}
+    )
     assert not unclassified, (
         f"{sorted(unclassified)} reach no tool and are not recorded as "
         "pending; add the gate or say why it is deferred"

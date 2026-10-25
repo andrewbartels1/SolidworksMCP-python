@@ -26,7 +26,9 @@ from solidworks_mcp.tools.drawing import (
     register_drawing_tools,
 )
 
-TOOLS_DIR = pathlib.Path(__file__).resolve().parents[2] / "src" / "solidworks_mcp" / "tools"
+TOOLS_DIR = (
+    pathlib.Path(__file__).resolve().parents[2] / "src" / "solidworks_mcp" / "tools"
+)
 
 #: Tools that legitimately never touch SolidWorks: they generate VBA text,
 #: search local documentation, delegate to a sibling tool, or compare files on

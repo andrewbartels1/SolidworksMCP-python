@@ -334,7 +334,9 @@ def build_component_tree(features: list[Mapping[str, Any]] | None) -> dict[str, 
     for name, node in nodes.items():
         parent = parent_of.get(name)
         parent_node = nodes.get(parent) if parent else None
-        target = parent_node["components"] if parent_node is not None else root["components"]
+        target = (
+            parent_node["components"] if parent_node is not None else root["components"]
+        )
         target[name] = node
 
     return root

@@ -205,7 +205,12 @@ def test_build_component_tree_part_only_has_no_components() -> None:
 def test_build_component_tree_flat_top_level_components() -> None:
     """Two top-level components (component_parent=None) become sibling nodes."""
     features = [
-        {"name": "Mates", "type": "MateGroup", "component": None, "component_path": None},
+        {
+            "name": "Mates",
+            "type": "MateGroup",
+            "component": None,
+            "component_path": None,
+        },
         {
             "name": "Boss1",
             "type": "Boss",

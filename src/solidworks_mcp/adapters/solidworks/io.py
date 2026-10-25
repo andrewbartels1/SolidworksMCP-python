@@ -142,9 +142,7 @@ def _payload(data: Any) -> dict[str, Any]:
     dump = getattr(data, "model_dump", None)
     if callable(dump):
         return cast("dict[str, Any]", dump())
-    return {
-        key: value for key, value in vars(data).items() if not key.startswith("_")
-    }
+    return {key: value for key, value in vars(data).items() if not key.startswith("_")}
 
 
 def _first(payload: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -429,9 +427,7 @@ def _interference_details(adapter: Any, interferences: Any) -> list[dict[str, An
         # ``Components`` is a property, not a method. ``GetComponents()``
         # does not exist on IInterference and ``IGetComponents(n)`` rejects
         # its own documented argument with "Invalid number of parameters".
-        raw_components = adapter._attempt(
-            lambda w=wrapped: w.Components, default=None
-        )
+        raw_components = adapter._attempt(lambda w=wrapped: w.Components, default=None)
 
         names: list[str] = []
         if isinstance(raw_components, (list, tuple)):
@@ -445,7 +441,9 @@ def _interference_details(adapter: Any, interferences: Any) -> list[dict[str, An
         details.append(
             {
                 "components": names,
-                "component_count": int(component_count) if component_count else len(names),
+                "component_count": int(component_count)
+                if component_count
+                else len(names),
                 "volume_mm3": volume_mm3,
             }
         )
@@ -1158,9 +1156,7 @@ class SolidWorksIOMixin:
                 # A units failure must not lose the part that was just made;
                 # record it and carry on.
                 try:
-                    properties["units"] = _apply_unit_system(
-                        adapter, model, unit_token
-                    )
+                    properties["units"] = _apply_unit_system(adapter, model, unit_token)
                 except Exception as exc:  # noqa: BLE001 - surfaced, not raised
                     properties["units_error"] = str(exc)
             return SolidWorksModel(
@@ -1477,18 +1473,14 @@ class SolidWorksIOMixin:
                         if callable(save_fn):
                             save_fn()
                     if not os.path.exists(resolved_path):
-                        raise Exception(
-                            f"File not written after save: {resolved_path}"
-                        )
+                        raise Exception(f"File not written after save: {resolved_path}")
                     return
 
                 # A *different* document may be holding the target path open.
                 # Close that one by name only - never the document being saved.
                 if adapter.swApp:
                     adapter._attempt(
-                        lambda: adapter.swApp.CloseDoc(
-                            os.path.basename(resolved_path)
-                        )
+                        lambda: adapter.swApp.CloseDoc(os.path.basename(resolved_path))
                     )
 
                 # Deliberately no os.remove here: SaveAs3 overwrites, and
@@ -1588,9 +1580,7 @@ class SolidWorksIOMixin:
         )
         if not result.is_success:
             result.error = strip_op_prefix(result.error, "rebuild_model")
-        elif result.data and (
-            result.data["error_count"] or not result.data["rebuilt"]
-        ):
+        elif result.data and (result.data["error_count"] or not result.data["rebuilt"]):
             result.status = AdapterResultStatus.ERROR
             result.error = result.data["summary"]
         return result
@@ -1683,8 +1673,8 @@ class SolidWorksIOMixin:
             docs = _coerce_dispatch_sequence(
                 adapter._attempt(lambda: app.GetDocuments(), default=None)
             )
-            active = (
-                adapter._attempt(lambda: getattr(app, "ActiveDoc", None), default=None)
+            active = adapter._attempt(
+                lambda: getattr(app, "ActiveDoc", None), default=None
             )
             active_title = (
                 adapter._attempt(
@@ -1803,7 +1793,8 @@ class SolidWorksIOMixin:
                 )
                 adapter._attempt(
                     lambda: _sw_type_info.flag_doc(
-                        model, int(type_raw) if isinstance(type_raw, (int, float)) else 1
+                        model,
+                        int(type_raw) if isinstance(type_raw, (int, float)) else 1,
                     ),
                     default=0,
                 )
@@ -2081,366 +2072,377 @@ class SolidWorksIOMixin:
         )
 
     async def insert_component(
-            self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
-        ) -> AdapterResult[dict[str, Any]]:
-            """Insert a part or sub-assembly into the active assembly.
+        self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0
+    ) -> AdapterResult[dict[str, Any]]:
+        """Insert a part or sub-assembly into the active assembly.
 
-            Wraps ``IAssemblyDoc::AddComponent4(CompName, ConfigName, X, Y, Z)``,
-            falling back to ``AddComponent5``.  Position is in **millimetres**.
+        Wraps ``IAssemblyDoc::AddComponent4(CompName, ConfigName, X, Y, Z)``,
+        falling back to ``AddComponent5``.  Position is in **millimetres**.
 
-            **The component file must contain solid geometry.**  SolidWorks
-            silently refuses to insert an empty part — every overload returns
-            ``None`` and the component count stays put.  That behaviour is what
-            made this look unimplementable until the ``save_file`` bug that was
-            writing empty parts got fixed.
+        **The component file must contain solid geometry.**  SolidWorks
+        silently refuses to insert an empty part — every overload returns
+        ``None`` and the component count stays put.  That behaviour is what
+        made this look unimplementable until the ``save_file`` bug that was
+        writing empty parts got fixed.
 
-            Success is confirmed by the assembly's component count going up, since
-            ``AddComponent*`` gives no usable failure signal.
+        Success is confirmed by the assembly's component count going up, since
+        ``AddComponent*`` gives no usable failure signal.
 
-            Args:
-                file_path (str): Absolute path to the ``.sldprt`` or ``.sldasm``.
-                x (float): X position in millimetres.
-                y (float): Y position in millimetres.
-                z (float): Z position in millimetres.
+        Args:
+            file_path (str): Absolute path to the ``.sldprt`` or ``.sldasm``.
+            x (float): X position in millimetres.
+            y (float): Y position in millimetres.
+            z (float): Z position in millimetres.
 
-            Returns:
-                AdapterResult[dict[str, Any]]: Component name and before/after
-                counts.  ``ERROR`` when the active document is not an assembly, the
-                file is missing, or nothing was inserted.
+        Returns:
+            AdapterResult[dict[str, Any]]: Component name and before/after
+            counts.  ``ERROR`` when the active document is not an assembly, the
+            file is missing, or nothing was inserted.
 
-            Raises:
-                Exception: Propagated through ``_handle_com_operation``.
+        Raises:
+            Exception: Propagated through ``_handle_com_operation``.
 
-            Example::
+        Example::
 
-                await adapter.insert_component(r"C:\\parts\\bracket.sldprt", 0, 0, 0)
-            """
-            adapter = self._adapter(self)
-            if not adapter.currentModel:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR, error="No active model"
-                )
-
-            path = os.path.abspath(file_path)
-            if not os.path.exists(path):
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error=f"Component file not found: {file_path}",
-                )
-
-            doc_type = _doc_type(adapter)
-            if doc_type != 2:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error=(
-                        "insert_component requires an assembly document "
-                        f"(active document type is {doc_type!r}, expected 2). "
-                        "Call create_assembly first."
-                    ),
-                )
-
-            def _insert() -> dict[str, Any]:
-                assembly = _sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
-                before = _component_names(adapter, assembly)
-
-                # The document has to be loaded before it can be inserted, and the
-                # errors/warnings out-parameters must be byref VARIANTs: with
-                # pythoncom.Missing OpenDoc6 returns None and the part stays
-                # unloaded, after which every AddComponent overload does nothing.
-                app = adapter.swApp
-                opened = adapter._attempt(
-                    lambda: app.OpenDoc6(
-                        path,
-                        2 if path.lower().endswith(".sldasm") else 1,
-                        1,
-                        "",
-                        _byref_int(),
-                        _byref_int(),
-                    ),
-                    default=None,
-                )
-                if not opened:
-                    raise Exception(
-                        f"Could not load '{file_path}' - OpenDoc6 returned nothing."
-                    )
-
-                title = adapter._attempt(
-                    lambda: _sw_type_info.flagged(
-                        adapter.currentModel, "IModelDoc2"
-                    ).GetTitle(),
-                    default=None,
-                )
-                if title:
-                    adapter._attempt(
-                        lambda: app.ActivateDoc3(title, False, 0, _byref_int()),
-                        default=None,
-                    )
-
-                component = adapter._attempt(
-                    lambda: assembly.AddComponent4(
-                        path, "", x / 1000.0, y / 1000.0, z / 1000.0
-                    ),
-                    default=None,
-                )
-                if component is None:
-                    component = adapter._attempt(
-                        lambda: assembly.AddComponent5(
-                            path, 0, "", False, "",
-                            x / 1000.0, y / 1000.0, z / 1000.0,
-                        ),
-                        default=None,
-                    )
-
-                adapter._attempt(lambda: assembly.EditRebuild3(), default=None)
-
-                after = _component_names(adapter, assembly)
-                if len(after) <= len(before):
-                    raise Exception(
-                        f"Component was not inserted - the assembly still has "
-                        f"{len(after)} component(s). The most common cause is a "
-                        f"part with no solid geometry: SolidWorks refuses those "
-                        f"silently. Check '{file_path}' opens with a body."
-                    )
-
-                added = [n for n in after if n not in before]
-                return {
-                    "component": added[-1] if added else after[-1],
-                    "file_path": path,
-                    "position": {"x": x, "y": y, "z": z},
-                    "components_before": len(before),
-                    "components_after": len(after),
-                }
-
-            return cast(
-                AdapterResult[dict[str, Any]],
-                adapter._handle_com_operation("insert_component", _insert),
+            await adapter.insert_component(r"C:\\parts\\bracket.sldprt", 0, 0, 0)
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
             )
+
+        path = os.path.abspath(file_path)
+        if not os.path.exists(path):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Component file not found: {file_path}",
+            )
+
+        doc_type = _doc_type(adapter)
+        if doc_type != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "insert_component requires an assembly document "
+                    f"(active document type is {doc_type!r}, expected 2). "
+                    "Call create_assembly first."
+                ),
+            )
+
+        def _insert() -> dict[str, Any]:
+            assembly = _sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
+            before = _component_names(adapter, assembly)
+
+            # The document has to be loaded before it can be inserted, and the
+            # errors/warnings out-parameters must be byref VARIANTs: with
+            # pythoncom.Missing OpenDoc6 returns None and the part stays
+            # unloaded, after which every AddComponent overload does nothing.
+            app = adapter.swApp
+            opened = adapter._attempt(
+                lambda: app.OpenDoc6(
+                    path,
+                    2 if path.lower().endswith(".sldasm") else 1,
+                    1,
+                    "",
+                    _byref_int(),
+                    _byref_int(),
+                ),
+                default=None,
+            )
+            if not opened:
+                raise Exception(
+                    f"Could not load '{file_path}' - OpenDoc6 returned nothing."
+                )
+
+            title = adapter._attempt(
+                lambda: _sw_type_info.flagged(
+                    adapter.currentModel, "IModelDoc2"
+                ).GetTitle(),
+                default=None,
+            )
+            if title:
+                adapter._attempt(
+                    lambda: app.ActivateDoc3(title, False, 0, _byref_int()),
+                    default=None,
+                )
+
+            component = adapter._attempt(
+                lambda: assembly.AddComponent4(
+                    path, "", x / 1000.0, y / 1000.0, z / 1000.0
+                ),
+                default=None,
+            )
+            if component is None:
+                component = adapter._attempt(
+                    lambda: assembly.AddComponent5(
+                        path,
+                        0,
+                        "",
+                        False,
+                        "",
+                        x / 1000.0,
+                        y / 1000.0,
+                        z / 1000.0,
+                    ),
+                    default=None,
+                )
+
+            adapter._attempt(lambda: assembly.EditRebuild3(), default=None)
+
+            after = _component_names(adapter, assembly)
+            if len(after) <= len(before):
+                raise Exception(
+                    f"Component was not inserted - the assembly still has "
+                    f"{len(after)} component(s). The most common cause is a "
+                    f"part with no solid geometry: SolidWorks refuses those "
+                    f"silently. Check '{file_path}' opens with a body."
+                )
+
+            added = [n for n in after if n not in before]
+            return {
+                "component": added[-1] if added else after[-1],
+                "file_path": path,
+                "position": {"x": x, "y": y, "z": z},
+                "components_before": len(before),
+                "components_after": len(after),
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("insert_component", _insert),
+        )
 
     async def add_mate(
-            self,
-            component_a: str,
-            component_b: str,
-            entity_a: str = "Front Plane",
-            entity_b: str = "Front Plane",
-            mate_type: str = "coincident",
-            alignment: str = "aligned",
-            distance: float = 0.0,
-            angle: float = 0.0,
-        ) -> AdapterResult[dict[str, Any]]:
-            """Mate two components together.
+        self,
+        component_a: str,
+        component_b: str,
+        entity_a: str = "Front Plane",
+        entity_b: str = "Front Plane",
+        mate_type: str = "coincident",
+        alignment: str = "aligned",
+        distance: float = 0.0,
+        angle: float = 0.0,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mate two components together.
 
-            Wraps ``IAssemblyDoc::AddMate5``.  The two entities are selected via
-            ``IComponent2::FeatureByName`` + ``IFeature::Select2`` rather than
-            ``SelectByID2``, which raises ``Type mismatch`` on this build.
+        Wraps ``IAssemblyDoc::AddMate5``.  The two entities are selected via
+        ``IComponent2::FeatureByName`` + ``IFeature::Select2`` rather than
+        ``SelectByID2``, which raises ``Type mismatch`` on this build.
 
-            That restricts the entities to *named tree features* — the reference
-            planes and axes of each component.  Plane-to-plane mating covers
-            alignment and stacking, which is the common case; mating to a specific
-            face or edge needs entity names this adapter cannot enumerate.
+        That restricts the entities to *named tree features* — the reference
+        planes and axes of each component.  Plane-to-plane mating covers
+        alignment and stacking, which is the common case; mating to a specific
+        face or edge needs entity names this adapter cannot enumerate.
 
-            Args:
-                component_a (str): First component instance name, as reported by
-                    :meth:`list_components`.
-                component_b (str): Second component instance name.
-                entity_a (str): Named feature on the first component.
-                entity_b (str): Named feature on the second component.
-                mate_type (str): ``coincident``, ``concentric``, ``perpendicular``,
-                    ``parallel``, ``tangent``, ``distance`` or ``angle``.
-                alignment (str): ``aligned``, ``anti_aligned`` or ``closest``.
-                distance (float): Distance in millimetres, for a distance mate.
-                angle (float): Angle in degrees, for an angle mate.
+        Args:
+            component_a (str): First component instance name, as reported by
+                :meth:`list_components`.
+            component_b (str): Second component instance name.
+            entity_a (str): Named feature on the first component.
+            entity_b (str): Named feature on the second component.
+            mate_type (str): ``coincident``, ``concentric``, ``perpendicular``,
+                ``parallel``, ``tangent``, ``distance`` or ``angle``.
+            alignment (str): ``aligned``, ``anti_aligned`` or ``closest``.
+            distance (float): Distance in millimetres, for a distance mate.
+            angle (float): Angle in degrees, for an angle mate.
 
-            Returns:
-                AdapterResult[dict[str, Any]]: The mate created, plus the bounding
-                box before and after so the caller can see what moved.  ``ERROR``
-                when the entities cannot be selected or SolidWorks rejects the
-                mate.
+        Returns:
+            AdapterResult[dict[str, Any]]: The mate created, plus the bounding
+            box before and after so the caller can see what moved.  ``ERROR``
+            when the entities cannot be selected or SolidWorks rejects the
+            mate.
 
-            Raises:
-                Exception: Propagated through ``_handle_com_operation``.
+        Raises:
+            Exception: Propagated through ``_handle_com_operation``.
 
-            Example::
+        Example::
 
-                await adapter.add_mate("plate-1", "plate-2")
-            """
-            adapter = self._adapter(self)
-            if _doc_type(adapter) != 2:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error="add_mate requires an assembly document",
-                )
-
-            mate_key = str(mate_type).strip().lower()
-            if mate_key not in _MATE_TYPES:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error=(
-                        f"Unknown mate type '{mate_type}'. "
-                        f"Use one of: {', '.join(sorted(_MATE_TYPES))}."
-                    ),
-                )
-            align_key = str(alignment).strip().lower()
-            if align_key not in _MATE_ALIGNMENTS:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error=(
-                        f"Unknown alignment '{alignment}'. "
-                        f"Use one of: {', '.join(sorted(_MATE_ALIGNMENTS))}."
-                    ),
-                )
-
-            def _mate() -> dict[str, Any]:
-                import math
-
-                model = adapter.currentModel
-                assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
-
-                components = adapter._attempt(
-                    lambda: assembly.GetComponents(True), default=None
-                )
-                if not isinstance(components, (list, tuple)):
-                    raise Exception("Could not read the assembly's components")
-
-                wanted = {component_a: entity_a, component_b: entity_b}
-                found: dict[str, Any] = {}
-                for component in components:
-                    wrapped = _as_com(adapter, component, "IComponent2")
-                    if wrapped is None:
-                        continue
-                    name = adapter._attempt(lambda w=wrapped: w.Name2, default=None)
-                    if name and str(name) in wanted:
-                        found[str(name)] = wrapped
-
-                missing = [n for n in (component_a, component_b) if n not in found]
-                if missing:
-                    available = [
-                        str(adapter._attempt(lambda c=c: _as_com(adapter, c, "IComponent2").Name2, default="?"))
-                        for c in components
-                    ]
-                    raise Exception(
-                        f"Component(s) not found: {', '.join(missing)}. "
-                        f"The assembly holds: {', '.join(available)}."
-                    )
-
-                adapter._attempt(lambda: model.ClearSelection2(True), default=None)
-                for index, component_name in enumerate((component_a, component_b)):
-                    wrapped = found[component_name]
-                    entity_name = wanted[component_name]
-                    feature = adapter._attempt(
-                        lambda w=wrapped, e=entity_name: w.FeatureByName(e), default=None
-                    )
-                    if feature is None:
-                        raise Exception(
-                            f"'{entity_name}' not found on {component_name}. "
-                            "Only named tree features (reference planes and axes) "
-                            "can be selected here."
-                        )
-                    flagged = _as_com(adapter, feature, "IFeature")
-                    if flagged is None or not adapter._attempt(
-                        lambda f=flagged, a=index > 0: f.Select2(a, 0), default=False
-                    ):
-                        raise Exception(
-                            f"Failed to select '{entity_name}' on {component_name}"
-                        )
-
-                selected = adapter._attempt(
-                    lambda: model.SelectionManager.GetSelectedObjectCount2(-1), default=0
-                )
-                if selected != 2:
-                    raise Exception(
-                        f"Expected 2 selected entities for the mate, got {selected}"
-                    )
-
-                transforms_before = _component_transforms(adapter, assembly)
-                status = _byref_int()
-                mate = adapter._attempt(
-                    lambda: assembly.AddMate5(
-                        _MATE_TYPES[mate_key],
-                        _MATE_ALIGNMENTS[align_key],
-                        False,  # Flip
-                        distance / 1000.0,  # Distance (m)
-                        distance / 1000.0,  # upper limit
-                        distance / 1000.0,  # lower limit
-                        0.0,  # gear ratio numerator
-                        0.0,  # gear ratio denominator
-                        math.radians(float(angle)),
-                        math.radians(float(angle)),
-                        math.radians(float(angle)),
-                        False,  # ForPositioningOnly
-                        False,  # LockRotation
-                        0,  # WidthMateOption
-                        status,
-                    ),
-                    default=None,
-                )
-                adapter._attempt(lambda: model.EditRebuild3(), default=None)
-
-                error_status = getattr(status, "value", None)
-                # swAddMateError_e reports 1 for success on this build (measured:
-                # a mate that demonstrably moved a component returned 1).
-                if mate is None or (error_status not in (None, 1)):
-                    raise Exception(
-                        f"SolidWorks rejected the {mate_key} mate "
-                        f"(error status {error_status!r}). Check the two entities "
-                        "can actually satisfy this mate type."
-                    )
-
-                transforms_after = _component_transforms(adapter, assembly)
-                moved = sorted(
-                    name
-                    for name, matrix in transforms_after.items()
-                    if name in transforms_before and transforms_before[name] != matrix
-                )
-                # An empty snapshot means no transform could be read, which is
-                # not the same as "nothing moved" - report it as unknown rather
-                # than as a negative result the caller would read as fact.
-                comparable = bool(transforms_before and transforms_after)
-                return {
-                    "mate_type": mate_key,
-                    "alignment": align_key,
-                    "components": [component_a, component_b],
-                    "entities": [entity_a, entity_b],
-                    "distance": distance or None,
-                    "angle": angle or None,
-                    "moved_components": moved,
-                    "geometry_moved": bool(moved) if comparable else None,
-                }
-
-            return cast(
-                AdapterResult[dict[str, Any]],
-                adapter._handle_com_operation("add_mate", _mate),
+            await adapter.add_mate("plate-1", "plate-2")
+        """
+        adapter = self._adapter(self)
+        if _doc_type(adapter) != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="add_mate requires an assembly document",
             )
+
+        mate_key = str(mate_type).strip().lower()
+        if mate_key not in _MATE_TYPES:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown mate type '{mate_type}'. "
+                    f"Use one of: {', '.join(sorted(_MATE_TYPES))}."
+                ),
+            )
+        align_key = str(alignment).strip().lower()
+        if align_key not in _MATE_ALIGNMENTS:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown alignment '{alignment}'. "
+                    f"Use one of: {', '.join(sorted(_MATE_ALIGNMENTS))}."
+                ),
+            )
+
+        def _mate() -> dict[str, Any]:
+            import math
+
+            model = adapter.currentModel
+            assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
+
+            components = adapter._attempt(
+                lambda: assembly.GetComponents(True), default=None
+            )
+            if not isinstance(components, (list, tuple)):
+                raise Exception("Could not read the assembly's components")
+
+            wanted = {component_a: entity_a, component_b: entity_b}
+            found: dict[str, Any] = {}
+            for component in components:
+                wrapped = _as_com(adapter, component, "IComponent2")
+                if wrapped is None:
+                    continue
+                name = adapter._attempt(lambda w=wrapped: w.Name2, default=None)
+                if name and str(name) in wanted:
+                    found[str(name)] = wrapped
+
+            missing = [n for n in (component_a, component_b) if n not in found]
+            if missing:
+                available = [
+                    str(
+                        adapter._attempt(
+                            lambda c=c: _as_com(adapter, c, "IComponent2").Name2,
+                            default="?",
+                        )
+                    )
+                    for c in components
+                ]
+                raise Exception(
+                    f"Component(s) not found: {', '.join(missing)}. "
+                    f"The assembly holds: {', '.join(available)}."
+                )
+
+            adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+            for index, component_name in enumerate((component_a, component_b)):
+                wrapped = found[component_name]
+                entity_name = wanted[component_name]
+                feature = adapter._attempt(
+                    lambda w=wrapped, e=entity_name: w.FeatureByName(e), default=None
+                )
+                if feature is None:
+                    raise Exception(
+                        f"'{entity_name}' not found on {component_name}. "
+                        "Only named tree features (reference planes and axes) "
+                        "can be selected here."
+                    )
+                flagged = _as_com(adapter, feature, "IFeature")
+                if flagged is None or not adapter._attempt(
+                    lambda f=flagged, a=index > 0: f.Select2(a, 0), default=False
+                ):
+                    raise Exception(
+                        f"Failed to select '{entity_name}' on {component_name}"
+                    )
+
+            selected = adapter._attempt(
+                lambda: model.SelectionManager.GetSelectedObjectCount2(-1), default=0
+            )
+            if selected != 2:
+                raise Exception(
+                    f"Expected 2 selected entities for the mate, got {selected}"
+                )
+
+            transforms_before = _component_transforms(adapter, assembly)
+            status = _byref_int()
+            mate = adapter._attempt(
+                lambda: assembly.AddMate5(
+                    _MATE_TYPES[mate_key],
+                    _MATE_ALIGNMENTS[align_key],
+                    False,  # Flip
+                    distance / 1000.0,  # Distance (m)
+                    distance / 1000.0,  # upper limit
+                    distance / 1000.0,  # lower limit
+                    0.0,  # gear ratio numerator
+                    0.0,  # gear ratio denominator
+                    math.radians(float(angle)),
+                    math.radians(float(angle)),
+                    math.radians(float(angle)),
+                    False,  # ForPositioningOnly
+                    False,  # LockRotation
+                    0,  # WidthMateOption
+                    status,
+                ),
+                default=None,
+            )
+            adapter._attempt(lambda: model.EditRebuild3(), default=None)
+
+            error_status = getattr(status, "value", None)
+            # swAddMateError_e reports 1 for success on this build (measured:
+            # a mate that demonstrably moved a component returned 1).
+            if mate is None or (error_status not in (None, 1)):
+                raise Exception(
+                    f"SolidWorks rejected the {mate_key} mate "
+                    f"(error status {error_status!r}). Check the two entities "
+                    "can actually satisfy this mate type."
+                )
+
+            transforms_after = _component_transforms(adapter, assembly)
+            moved = sorted(
+                name
+                for name, matrix in transforms_after.items()
+                if name in transforms_before and transforms_before[name] != matrix
+            )
+            # An empty snapshot means no transform could be read, which is
+            # not the same as "nothing moved" - report it as unknown rather
+            # than as a negative result the caller would read as fact.
+            comparable = bool(transforms_before and transforms_after)
+            return {
+                "mate_type": mate_key,
+                "alignment": align_key,
+                "components": [component_a, component_b],
+                "entities": [entity_a, entity_b],
+                "distance": distance or None,
+                "angle": angle or None,
+                "moved_components": moved,
+                "geometry_moved": bool(moved) if comparable else None,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("add_mate", _mate),
+        )
 
     async def list_components(self) -> AdapterResult[list[str]]:
-            """List the top-level components of the active assembly.
+        """List the top-level components of the active assembly.
 
-            Returns:
-                AdapterResult[list[str]]: Component names, or an error when the
-                active document is not an assembly.
-            """
-            adapter = self._adapter(self)
-            if not adapter.currentModel:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR, error="No active model"
-                )
-            doc_type = _doc_type(adapter)
-            if doc_type != 2:
-                return AdapterResult(
-                    status=AdapterResultStatus.ERROR,
-                    error=(
-                        "list_components requires an assembly document "
-                        f"(active document type is {doc_type!r}, expected 2)"
-                    ),
-                )
-
-            def _list() -> list[str]:
-                assembly = _sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
-                return _component_names(adapter, assembly)
-
-            return cast(
-                AdapterResult[list[str]],
-                adapter._handle_com_operation("list_components", _list),
+        Returns:
+            AdapterResult[list[str]]: Component names, or an error when the
+            active document is not an assembly.
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
             )
+        doc_type = _doc_type(adapter)
+        if doc_type != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "list_components requires an assembly document "
+                    f"(active document type is {doc_type!r}, expected 2)"
+                ),
+            )
+
+        def _list() -> list[str]:
+            assembly = _sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
+            return _component_names(adapter, assembly)
+
+        return cast(
+            AdapterResult[list[str]],
+            adapter._handle_com_operation("list_components", _list),
+        )
 
     def _require_drawing(self) -> AdapterResult[Any] | None:
         """Return an error result unless the active document is a drawing.
@@ -2547,9 +2549,7 @@ class SolidWorksIOMixin:
             app = adapter.swApp
             doc_type = 2 if path.lower().endswith(".sldasm") else 1
             opened = adapter._attempt(
-                lambda: app.OpenDoc6(
-                    path, doc_type, 1, "", _byref_int(), _byref_int()
-                ),
+                lambda: app.OpenDoc6(path, doc_type, 1, "", _byref_int(), _byref_int()),
                 default=None,
             )
             if not opened:
@@ -2785,9 +2785,7 @@ class SolidWorksIOMixin:
             model = adapter.currentModel
             adapter._attempt(lambda: model.ClearSelection2(True), default=None)
 
-            note = adapter._attempt(
-                lambda: model.InsertNote(str(text)), default=None
-            )
+            note = adapter._attempt(lambda: model.InsertNote(str(text)), default=None)
             if note is None:
                 raise Exception(
                     "InsertNote returned nothing - the note was not created."
@@ -2950,11 +2948,11 @@ class SolidWorksIOMixin:
                     True,  # LinearSlotCenter
                     True,  # ArcSlotCenter
                     True,  # UseDocumentDefaults
-                    0.0,   # Size (ignored when UseDocumentDefaults)
-                    0.0,   # Gap
+                    0.0,  # Size (ignored when UseDocumentDefaults)
+                    0.0,  # Gap
                     True,  # ExtendedLines
                     False,  # CenterLineFont
-                    0.0,   # Angle
+                    0.0,  # Angle
                 ),
                 default=None,
             )
@@ -2974,9 +2972,7 @@ class SolidWorksIOMixin:
                     default=None,
                 )
 
-            adapter._attempt(
-                lambda: adapter.currentModel.EditRebuild3(), default=None
-            )
+            adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
 
             after = _center_mark_count()
 

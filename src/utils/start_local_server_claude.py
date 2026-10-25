@@ -87,7 +87,10 @@ async def main() -> None:
         help="Use real SolidWorks adapter (requires Windows + SolidWorks)",
     )
     parser.add_argument(
-        "--port", type=int, default=8000, help="Reserved for remote mode; unused over stdio"
+        "--port",
+        type=int,
+        default=8000,
+        help="Reserved for remote mode; unused over stdio",
     )
     parser.add_argument(
         "--year", type=int, default=None, help="SolidWorks year hint (e.g., 2026, 2025)"

@@ -606,6 +606,7 @@ def _render_checkpoint_script(
 # Direct-execution helpers
 # ---------------------------------------------------------------------------
 
+
 def _pf(planned: dict[str, Any], *keys: str, default: float = 0.0) -> float:
     """Return the first float-convertible value found under any of *keys*."""
     for key in keys:

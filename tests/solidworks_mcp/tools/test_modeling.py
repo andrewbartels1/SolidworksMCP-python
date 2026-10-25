@@ -787,7 +787,9 @@ class TestModelingTools:
         }
 
         mock_adapter.add_chamfer = AsyncMock(
-            return_value=Mock(is_success=True, data=Mock(name="Chamfer1"), execution_time=0.01)
+            return_value=Mock(
+                is_success=True, data=Mock(name="Chamfer1"), execution_time=0.01
+            )
         )
         success_result = await tool["add_chamfer"](
             AddChamferInput(distance=1.5, edge_names=["Edge<1>", "Edge<2>"])
@@ -798,7 +800,9 @@ class TestModelingTools:
         mock_adapter.add_chamfer.assert_awaited_once_with(1.5, ["Edge<1>", "Edge<2>"])
 
         mock_adapter.add_chamfer = AsyncMock(
-            return_value=Mock(is_success=False, error="chamfer distance exceeds edge length")
+            return_value=Mock(
+                is_success=False, error="chamfer distance exceeds edge length"
+            )
         )
         error_result = await tool["add_chamfer"](
             AddChamferInput(distance=50.0, edge_names=["Edge<1>"])
@@ -889,8 +893,12 @@ class TestAssemblyTools:
             for registered in await mcp_server.list_tools()
         }
 
-        await tool["insert_component"](InsertComponentInput(file_path="C:/parts/a.sldprt"))
-        await tool["insert_component"](InsertComponentInput(file_path="C:/parts/b.sldprt"))
+        await tool["insert_component"](
+            InsertComponentInput(file_path="C:/parts/a.sldprt")
+        )
+        await tool["insert_component"](
+            InsertComponentInput(file_path="C:/parts/b.sldprt")
+        )
 
         result = await tool["list_components"]()
 
@@ -947,7 +955,9 @@ class TestAssemblyTools:
         tool_func = next(
             t.fn for t in await mcp_server.list_tools() if t.name == "insert_component"
         )
-        result = await tool_func(InsertComponentInput(file_path="C:/parts/empty.sldprt"))
+        result = await tool_func(
+            InsertComponentInput(file_path="C:/parts/empty.sldprt")
+        )
 
         assert result["status"] == "error"
         assert "no solid geometry" in result["message"]
@@ -1046,7 +1056,9 @@ class TestFeatureEditingTools:
         assert "Feature not found: Ghost1" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_suppress_feature_success(self, mcp_server, mock_adapter, mock_config):
+    async def test_suppress_feature_success(
+        self, mcp_server, mock_adapter, mock_config
+    ):
         """suppress_feature suppresses a known feature and reports the verb used."""
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
         name = await self._part_with_extrusion(mock_adapter)
@@ -1203,7 +1215,9 @@ class TestFeatureEditingTools:
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
         await self._part_with_extrusion(mock_adapter)
 
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "undo"
+        )
         result = await tool_func(UndoInput(count=1))
 
         assert result["status"] == "success"
@@ -1218,7 +1232,9 @@ class TestFeatureEditingTools:
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
         await mock_adapter.create_part()
 
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "undo"
+        )
         result = await tool_func(UndoInput(count=1))
 
         assert result["status"] == "success"
@@ -1233,7 +1249,9 @@ class TestFeatureEditingTools:
         await register_modeling_tools(mcp_server, mock_adapter, mock_config)
         await self._part_with_extrusion(mock_adapter)
 
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "undo"
+        )
         result = await tool_func(None)
 
         assert result["status"] == "success"
@@ -1245,7 +1263,9 @@ class TestFeatureEditingTools:
     ):
         """A bare object() adapter has no undo - report error, not a fabrication."""
         await register_modeling_tools(mcp_server, object(), mock_config)
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "undo"
+        )
         result = await tool_func(UndoInput())
         assert result["status"] == "error"
 
@@ -1259,7 +1279,9 @@ class TestFeatureEditingTools:
             return_value=Mock(is_success=False, error="nothing to undo here")
         )
 
-        tool_func = next(t.fn for t in await mcp_server.list_tools() if t.name == "undo")
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "undo"
+        )
         result = await tool_func(UndoInput())
 
         assert result["status"] == "error"
@@ -1407,9 +1429,7 @@ class TestReferenceGeometryTools:
             if t.name == "create_reference_point"
         )
         result = await tool_func(
-            CreateReferencePointInput(
-                mode="along_curve", x=10, y=0, z=5, percent=50
-            )
+            CreateReferencePointInput(mode="along_curve", x=10, y=0, z=5, percent=50)
         )
 
         assert result["status"] == "success"
@@ -1574,9 +1594,7 @@ class TestMirrorAndPatternTools:
             t.fn for t in await mcp_server.list_tools() if t.name == "pattern_circular"
         )
         result = await tool_func(
-            PatternCircularInput(
-                features=["Boss-Extrude1"], axis="NoSuchAxis", count=4
-            )
+            PatternCircularInput(features=["Boss-Extrude1"], axis="NoSuchAxis", count=4)
         )
 
         assert result["status"] == "error"

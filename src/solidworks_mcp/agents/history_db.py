@@ -387,9 +387,7 @@ def _ensure_columns(engine: Any) -> None:
     for table, columns in _ADDED_COLUMNS.items():
         present = {col["name"] for col in inspector.get_columns(table)}
         missing = {
-            name: sql_type
-            for name, sql_type in columns.items()
-            if name not in present
+            name: sql_type for name, sql_type in columns.items() if name not in present
         }
         if not missing:
             continue

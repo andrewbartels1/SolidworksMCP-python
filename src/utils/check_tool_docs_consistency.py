@@ -153,7 +153,9 @@ def check_fixable(true_total: int, fix: bool) -> list[str]:
         text = loc.path.read_text(encoding="utf-8")
         match = re.search(loc.pattern, text, flags=re.MULTILINE)
         if not match:
-            problems.append(f"PATTERN NOT FOUND: {loc.label} in {loc.path.relative_to(REPO_ROOT)}")
+            problems.append(
+                f"PATTERN NOT FOUND: {loc.label} in {loc.path.relative_to(REPO_ROOT)}"
+            )
             continue
         found = int(match.group(2))
         if found == true_total:
@@ -189,7 +191,9 @@ def check_categories(per_file: dict[str, int]) -> list[str]:
     for filename, true_count in per_file.items():
         label = CATEGORY_LABELS.get(filename)
         if label is None:
-            problems.append(f"UNMAPPED FILE: {filename} has no entry in CATEGORY_LABELS")
+            problems.append(
+                f"UNMAPPED FILE: {filename} has no entry in CATEGORY_LABELS"
+            )
             continue
         seen_labels.add(label)
         # Match this category's card by its bold heading, then the first
@@ -199,9 +203,13 @@ def check_categories(per_file: dict[str, int]) -> list[str]:
         heading_pattern = rf"\*\*{re.escape(label)}( Tools)?\*\*"
         heading_match = re.search(heading_pattern, text)
         if heading_match is None:
-            problems.append(f"MISSING CARD: '{label}' ({true_count} tools) has no card in tools-overview.md at all")
+            problems.append(
+                f"MISSING CARD: '{label}' ({true_count} tools) has no card in tools-overview.md at all"
+            )
             continue
-        count_match = re.search(r"\*\*(\d+) tools? available\*\*", text[heading_match.end() :])
+        count_match = re.search(
+            r"\*\*(\d+) tools? available\*\*", text[heading_match.end() :]
+        )
         match = count_match
         if match is None:
             problems.append(
@@ -232,14 +240,20 @@ def check_categories(per_file: dict[str, int]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fix", action="store_true", help="Rewrite fixable locations in place")
     parser.add_argument(
-        "--category", action="store_true", help="Also check per-category counts (report only)"
+        "--fix", action="store_true", help="Rewrite fixable locations in place"
+    )
+    parser.add_argument(
+        "--category",
+        action="store_true",
+        help="Also check per-category counts (report only)",
     )
     args = parser.parse_args()
 
     true_total, per_file = get_true_counts()
-    print(f"Ground truth (AST-counted): {true_total} tools across {len(per_file)} files\n")
+    print(
+        f"Ground truth (AST-counted): {true_total} tools across {len(per_file)} files\n"
+    )
 
     problems = check_fixable(true_total, fix=args.fix)
 
@@ -251,7 +265,9 @@ def main() -> int:
         return 0
 
     verb = "Fixed" if args.fix else "Found"
-    print(f"{verb} {len([p for p in problems if p.startswith('DRIFT')])} drift issue(s):\n")
+    print(
+        f"{verb} {len([p for p in problems if p.startswith('DRIFT')])} drift issue(s):\n"
+    )
     for p in problems:
         print(f"  - {p}")
 

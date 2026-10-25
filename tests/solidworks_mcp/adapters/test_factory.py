@@ -71,7 +71,9 @@ class TestAdapterFactory:
         assert adapter.soc_session_id and adapter.soc_session_id.startswith("soc-")
 
     @pytest.mark.asyncio
-    async def test_soc_logging_explicit_session_and_db_path(self, mock_config, tmp_path):
+    async def test_soc_logging_explicit_session_and_db_path(
+        self, mock_config, tmp_path
+    ):
         """An explicit session id and db path are passed straight through."""
         mock_config.soc_logging_enabled = True
         mock_config.soc_session_id = "my-bracket"

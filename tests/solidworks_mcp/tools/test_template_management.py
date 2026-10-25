@@ -517,9 +517,7 @@ class TestTemplateManagementTools:
         await register_template_management_tools(mcp_server, object(), mock_config)
 
         compare_tool = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "compare_templates"
+            t.fn for t in await mcp_server.list_tools() if t.name == "compare_templates"
         )
 
         tpl_a = tmp_path / "a.prtdot"

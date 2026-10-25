@@ -1384,9 +1384,7 @@ async def test_granular_lookup_tools_registered_and_callable(
     assert missing["status"] == "success"
     assert missing["result"]["found"] is False  # no-match, not an error
 
-    related = await tools["find_related_api_members"](
-        {**common, "name": "CloseDoc"}
-    )
+    related = await tools["find_related_api_members"]({**common, "name": "CloseDoc"})
     assert related["status"] == "success"
     assert related["result"]["related"]
 

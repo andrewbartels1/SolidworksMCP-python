@@ -730,7 +730,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 {
                     "index": 1,
                     "type": "FACE",
-                    "bounding_box_mm": {"min": [0.0, 0.0, 0.0], "max": [30.0, 30.0, 0.0]},
+                    "bounding_box_mm": {
+                        "min": [0.0, 0.0, 0.0],
+                        "max": [30.0, 30.0, 0.0],
+                    },
                     "center_mm": [15.0, 15.0, 0.0],
                     "area_mm2": 900.0,
                     "normal": [0.0, 0.0, 1.0],
@@ -2669,9 +2672,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._operation_count += 1
         before = self._center_marks.get(view_name, 0)
         # Nominal: two marks per selected feature type, added once.
-        added = 0 if before else 2 * sum(
-            (mark_holes, mark_fillets, mark_slots)
-        )
+        added = 0 if before else 2 * sum((mark_holes, mark_fillets, mark_slots))
         after = before + added
         self._center_marks[view_name] = after
 
@@ -2906,9 +2907,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="new_name must not be empty"
             )
 
-        key = next(
-            (k for k, f in self._features.items() if f.name == old_name), None
-        )
+        key = next((k for k, f in self._features.items() if f.name == old_name), None)
         if key is None:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -2929,8 +2928,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=(
-                    f"Cannot rename to '{new}': a feature with that name "
-                    "already exists"
+                    f"Cannot rename to '{new}': a feature with that name already exists"
                 ),
             )
 
@@ -3220,9 +3218,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         if key not in ("along_curve", "face_center"):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=(
-                    f"Unknown mode {mode!r}. Use 'along_curve' or 'face_center'."
-                ),
+                error=(f"Unknown mode {mode!r}. Use 'along_curve' or 'face_center'."),
             )
         if key == "along_curve":
             if (distance is None) == (percent is None):

@@ -564,7 +564,9 @@ class TestDrawingAnalysisTools:
         assert "corrupted or invalid" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_drawing_analysis_fallback_paths_refuse(self, mcp_server, mock_config):
+    async def test_drawing_analysis_fallback_paths_refuse(
+        self, mcp_server, mock_config
+    ):
         """Drawing analysis tools refuse rather than inventing results when the
         adapter has no matching capability."""
         await register_drawing_analysis_tools(mcp_server, object(), mock_config)
@@ -597,32 +599,36 @@ class TestDrawingAnalysisTools:
             input_data=DrawingAnalysisInput(drawing_path="demo.slddrw")
         )
         assert comprehensive_result["status"] == "error"
-        assert "does not support analyze_drawing_comprehensive" in (
-            comprehensive_result["message"]
+        assert (
+            "does not support analyze_drawing_comprehensive"
+            in (comprehensive_result["message"])
         )
 
         dimension_result = await dimension_tool(
             input_data=DimensionAnalysisInput(drawing_path="demo.slddrw")
         )
         assert dimension_result["status"] == "error"
-        assert "does not support analyze_drawing_dimensions" in (
-            dimension_result["message"]
+        assert (
+            "does not support analyze_drawing_dimensions"
+            in (dimension_result["message"])
         )
 
         annotation_result = await annotation_tool(
             input_data=AnnotationAnalysisInput(drawing_path="demo.slddrw")
         )
         assert annotation_result["status"] == "error"
-        assert "does not support analyze_drawing_annotations" in (
-            annotation_result["message"]
+        assert (
+            "does not support analyze_drawing_annotations"
+            in (annotation_result["message"])
         )
 
         compliance_result = await compliance_tool(
             input_data=ComplianceCheckInput(drawing_path="demo.slddrw", standard="ISO")
         )
         assert compliance_result["status"] == "error"
-        assert "does not support check_drawing_compliance" in (
-            compliance_result["message"]
+        assert (
+            "does not support check_drawing_compliance"
+            in (compliance_result["message"])
         )
 
         completeness_result = await completeness_tool(
@@ -632,8 +638,9 @@ class TestDrawingAnalysisTools:
             }
         )
         assert completeness_result["status"] == "error"
-        assert "does not support validate_drawing_completeness" in (
-            completeness_result["message"]
+        assert (
+            "does not support validate_drawing_completeness"
+            in (completeness_result["message"])
         )
 
     @pytest.mark.asyncio

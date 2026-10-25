@@ -890,7 +890,9 @@ class TestCircuitBreaker:
                 return AdapterResult(status=AdapterResultStatus.ERROR, error="boom")
 
         cb = CircuitBreakerAdapter(
-            adapter=_AlwaysFailingCutAdapter(), failure_threshold=1, recovery_timeout=10.0
+            adapter=_AlwaysFailingCutAdapter(),
+            failure_threshold=1,
+            recovery_timeout=10.0,
         )
         params = ExtrusionParameters(depth=6.0)
 
@@ -926,11 +928,18 @@ def test_wrappers_do_not_silently_fall_through_to_base(capability: str) -> None:
         )
 
 
-CAPABILITIESFeatureEditingCapability = ["delete_feature", "suppress_feature", "rename_feature", "undo"]
+CAPABILITIESFeatureEditingCapability = [
+    "delete_feature",
+    "suppress_feature",
+    "rename_feature",
+    "undo",
+]
 
 
 @pytest.mark.parametrize("capability", CAPABILITIESFeatureEditingCapability)
-def test_wrappers_do_not_silently_fall_through_to_base_feature_editing(capability: str) -> None:
+def test_wrappers_do_not_silently_fall_through_to_base_feature_editing(
+    capability: str,
+) -> None:
     """The breaker and pool must define their own pass-through, not inherit."""
     for cls in (CircuitBreakerAdapter, ConnectionPoolAdapter):
         assert capability in vars(cls), (
@@ -978,7 +987,9 @@ CAPABILITIESOpenDocumentsCapability = ["list_open_documents", "activate_document
 
 
 @pytest.mark.parametrize("capability", CAPABILITIESOpenDocumentsCapability)
-def test_wrappers_do_not_silently_fall_through_to_base_open_documents(capability: str) -> None:
+def test_wrappers_do_not_silently_fall_through_to_base_open_documents(
+    capability: str,
+) -> None:
     """The breaker and pool define their own pass-through, not inherit the stub."""
     for cls in (CircuitBreakerAdapter, ConnectionPoolAdapter):
         assert capability in vars(cls), (
@@ -1008,7 +1019,9 @@ CAPABILITIESReferenceGeometryCapability = [
 
 
 @pytest.mark.parametrize("capability", CAPABILITIESReferenceGeometryCapability)
-def test_wrappers_do_not_silently_fall_through_to_base_reference_geometry(capability: str) -> None:
+def test_wrappers_do_not_silently_fall_through_to_base_reference_geometry(
+    capability: str,
+) -> None:
     """The breaker and pool must define their own pass-through, not inherit."""
     for cls in (CircuitBreakerAdapter, ConnectionPoolAdapter):
         assert capability in vars(cls), (

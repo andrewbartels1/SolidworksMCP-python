@@ -787,7 +787,9 @@ class TestScriptLineColumn:
             script_line="# hand-written override",
             db_path=db,
         )
-        assert _query_all(db, ToolCallRecord)[0].script_line == "# hand-written override"
+        assert (
+            _query_all(db, ToolCallRecord)[0].script_line == "# hand-written override"
+        )
 
     def test_init_db_adds_column_to_a_legacy_database(self, tmp_path: Path):
         from sqlmodel import Session, text
@@ -796,9 +798,7 @@ class TestScriptLineColumn:
         init_db(db)  # fresh DB — has the column
         engine = _build_engine(db)
         with Session(engine) as session:
-            session.exec(
-                text("ALTER TABLE toolcallrecord DROP COLUMN script_line")
-            )
+            session.exec(text("ALTER TABLE toolcallrecord DROP COLUMN script_line"))
             session.commit()
         engine.dispose()
 
@@ -828,6 +828,7 @@ def test_insert_tool_call_record_survives_a_render_failure(
 ) -> None:
     """A script-line render error must not block the log write (line stays None)."""
     from solidworks_mcp.agents import soc_exporter
+
     def _boom(*_args, **_kwargs):
         raise RuntimeError("render failed")
 

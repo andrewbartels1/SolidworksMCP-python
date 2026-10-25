@@ -95,7 +95,9 @@ async def test_assembly_depth_limit(mock_adapter: MockSolidWorksAdapter) -> None
                 "Nested": {
                     "type": "Part",
                     "path": "Mock://Nested.sldprt",
-                    "features": [{"name": "Boss1", "type": "Boss", "suppressed": False}],
+                    "features": [
+                        {"name": "Boss1", "type": "Boss", "suppressed": False}
+                    ],
                 },
             },
         },
@@ -114,7 +116,9 @@ async def test_assembly_depth_limit(mock_adapter: MockSolidWorksAdapter) -> None
 
 
 @pytest.mark.asyncio
-async def test_assembly_unresolved_component(mock_adapter: MockSolidWorksAdapter) -> None:
+async def test_assembly_unresolved_component(
+    mock_adapter: MockSolidWorksAdapter,
+) -> None:
     """An Unresolved-type component yields one UnresolvedComponent row."""
     await mock_adapter.open_model("C:\\mock\\Assem1.sldasm")
     mock_adapter._assembly_components = {

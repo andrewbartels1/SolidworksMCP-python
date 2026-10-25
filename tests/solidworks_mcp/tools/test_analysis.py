@@ -333,7 +333,9 @@ class TestAnalysisTools:
         await register_analysis_tools(mcp_server, bare_adapter, mock_config)
 
         check_tool = next(
-            t.fn for t in await mcp_server.list_tools() if t.name == "check_interference"
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "check_interference"
         )
         result = await check_tool(input_data=InterferenceCheckInput())
         assert result["status"] == "error"

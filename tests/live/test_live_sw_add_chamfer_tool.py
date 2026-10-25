@@ -169,9 +169,7 @@ async def test_add_chamfer_tool_whole_top_face(scratch):
     mp_before = await adapter.get_mass_properties()
     assert mp_before.is_success, mp_before.error
 
-    response = await add_chamfer(
-        AddChamferInput(distance=0.5, edge_names=[_TOP_FACE])
-    )
+    response = await add_chamfer(AddChamferInput(distance=0.5, edge_names=[_TOP_FACE]))
     assert response["status"] == "success", response
     assert response["chamfer"]["distance"] == 0.5
     assert response["chamfer"]["name"] == "Chamfer1"
@@ -217,9 +215,7 @@ async def test_add_chamfer_tool_multiple_entries_mixed_face_and_edge(scratch):
     assert mp_before.is_success, mp_before.error
 
     response = await add_chamfer(
-        AddChamferInput(
-            distance=0.5, edge_names=[_TOP_FACE, _VERTICAL_CORNER_EDGE]
-        )
+        AddChamferInput(distance=0.5, edge_names=[_TOP_FACE, _VERTICAL_CORNER_EDGE])
     )
     assert response["status"] == "success", response
     assert response["chamfer"]["edges"] == [_TOP_FACE, _VERTICAL_CORNER_EDGE]

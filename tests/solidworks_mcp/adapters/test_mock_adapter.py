@@ -1713,7 +1713,9 @@ async def test_mock_create_reference_plane_rejects_nonzero_angle() -> None:
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
 
-    result = await adapter.create_reference_plane("Front Plane", offset=10.0, angle=15.0)
+    result = await adapter.create_reference_plane(
+        "Front Plane", offset=10.0, angle=15.0
+    )
     assert not result.is_success
 
 
@@ -1790,9 +1792,7 @@ async def test_mock_create_reference_point_along_curve_success_shape() -> None:
     assert first.data["distance_mm"] is None
     assert first.data["features_after"] == first.data["features_before"] + 1
 
-    second = await adapter.create_reference_point(
-        "along_curve", 0, 0, 0, distance=3.0
-    )
+    second = await adapter.create_reference_point("along_curve", 0, 0, 0, distance=3.0)
     assert second.is_success
     assert second.data["name"] == "Point2"
     assert second.data["distance_mm"] == 3.0

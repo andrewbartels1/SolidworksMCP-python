@@ -117,9 +117,7 @@ class SolidWorksFeaturesMixin:
             AdapterResult[dict[str, Any]]: Delegates to
             :func:`_create_reference_point_impl`; see it for the payload shape.
         """
-        return _create_reference_point_impl(
-            self, mode, x, y, z, distance, percent
-        )
+        return _create_reference_point_impl(self, mode, x, y, z, distance, percent)
 
     async def pattern_circular(
         self,
@@ -167,7 +165,9 @@ class SolidWorksFeaturesMixin:
             before.data.volume if before.is_success and before.data else None
         )
 
-        result = _pattern_circular_impl(self, features, axis, count, angle, equal_spacing)
+        result = _pattern_circular_impl(
+            self, features, axis, count, angle, equal_spacing
+        )
         if not result.is_success:
             return result
 
@@ -248,7 +248,9 @@ class SolidWorksFeaturesMixin:
             )
 
         before = await self.get_mass_properties()
-        volume_before = before.data.volume if before.is_success and before.data else None
+        volume_before = (
+            before.data.volume if before.is_success and before.data else None
+        )
 
         result = _mirror_feature_impl(
             self, features, mirror_plane, merge, mirror_bodies
@@ -1268,8 +1270,7 @@ def _create_cut_extrude_impl(
                 "suppressed, or not be a valid selectable profile."
             )
             raise Exception(
-                f"Failed to select sketch '{target_sketch}' via SelectByID2."
-                + reason
+                f"Failed to select sketch '{target_sketch}' via SelectByID2." + reason
             )
         adapter._last_sketch_name = target_sketch
 
@@ -1861,7 +1862,13 @@ def _add_chamfer_impl(
                 append = idx > 0
                 if sel_name == "":
                     selected = _select_edge_by_coord(
-                        adapter, cx, cy, cz, append=append, mark=0, entity_type=entity_type
+                        adapter,
+                        cx,
+                        cy,
+                        cz,
+                        append=append,
+                        mark=0,
+                        entity_type=entity_type,
                     )
                 else:
                     selected = adapter._attempt(
@@ -2287,11 +2294,7 @@ def _undo_impl(adapter: Any, count: int) -> AdapterResult[dict[str, Any]]:
 
         # None means the count could not be read, which is not evidence that
         # nothing happened - so tree_changed stays None rather than False.
-        changed = (
-            None
-            if before is None or after is None
-            else before != after
-        )
+        changed = None if before is None or after is None else before != after
         return {
             "requested_steps": steps,
             "features_before": before,
@@ -2399,7 +2402,9 @@ def _null_callout() -> Any:
     return _win32com.VARIANT(pythoncom.VT_DISPATCH, None)
 
 
-def _select_reference_entity(adapter: Any, reference: str, mark: int, append: bool) -> bool:
+def _select_reference_entity(
+    adapter: Any, reference: str, mark: int, append: bool
+) -> bool:
     """Select a named plane or planar face under a given selection mark.
 
     Prefers ``FeatureByName`` + ``IFeature::Select2``, which is reliable
@@ -2869,8 +2874,15 @@ def _mirror_feature_impl(
                     adapter._attempt(
                         lambda n=name, a=append: (
                             adapter.currentModel.Extension.SelectByID2(
-                                n, entity_type, 0.0, 0.0, 0.0, a, source_mark,
-                                callout, 0,
+                                n,
+                                entity_type,
+                                0.0,
+                                0.0,
+                                0.0,
+                                a,
+                                source_mark,
+                                callout,
+                                0,
                             )
                         ),
                         default=False,
@@ -3014,8 +3026,15 @@ def _pattern_circular_impl(
             selected = bool(
                 adapter._attempt(
                     lambda n=name: adapter.currentModel.Extension.SelectByID2(
-                        n, "BODYFEATURE", 0.0, 0.0, 0.0, True,
-                        _PATTERN_MARK_FEATURES, callout, 0,
+                        n,
+                        "BODYFEATURE",
+                        0.0,
+                        0.0,
+                        0.0,
+                        True,
+                        _PATTERN_MARK_FEATURES,
+                        callout,
+                        0,
                     ),
                     default=False,
                 )
@@ -3032,20 +3051,20 @@ def _pattern_circular_impl(
         )
         feature = adapter._attempt(
             lambda: feature_manager.FeatureCircularPattern5(
-                int(count),                      # Number
-                math.radians(float(angle)),      # Spacing (radians)
-                False,                           # FlipDirection
-                axis,                            # DName
-                False,                           # GeometryPattern
-                bool(equal_spacing),             # EqualSpacing
-                False,                           # VaryInstance
-                False,                           # SyncSubAssemblies
-                False,                           # BDir2
-                False,                           # BSymmetric
-                0,                               # Number2
-                0.0,                             # Spacing2
-                "",                              # DName2
-                False,                           # EqualSpacing2
+                int(count),  # Number
+                math.radians(float(angle)),  # Spacing (radians)
+                False,  # FlipDirection
+                axis,  # DName
+                False,  # GeometryPattern
+                bool(equal_spacing),  # EqualSpacing
+                False,  # VaryInstance
+                False,  # SyncSubAssemblies
+                False,  # BDir2
+                False,  # BSymmetric
+                0,  # Number2
+                0.0,  # Spacing2
+                "",  # DName2
+                False,  # EqualSpacing2
             ),
             default=None,
         )

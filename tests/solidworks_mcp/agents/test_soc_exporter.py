@@ -626,9 +626,7 @@ def test_render_single_create_extrusion():
 
 
 def test_render_single_unknown_tool_uses_generic_fallback():
-    line = render_single(
-        "some_custom_tool", json.dumps({"foo": "bar", "n": 42}), None
-    )
+    line = render_single("some_custom_tool", json.dumps({"foo": "bar", "n": 42}), None)
     assert "adapter.some_custom_tool(foo='bar', n=42)" in line
 
 

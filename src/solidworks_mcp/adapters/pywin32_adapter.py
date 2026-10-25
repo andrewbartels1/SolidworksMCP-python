@@ -1497,9 +1497,7 @@ class _FeatureSelectionService:
         # make every Assembly document look like doc_type 0. Route through
         # _get_attr_or_call so both forms work regardless of flagging state.
         doc_type = self._adapter._attempt(
-            lambda: int(
-                self._adapter._get_attr_or_call(document, "GetType") or 0
-            ),
+            lambda: int(self._adapter._get_attr_or_call(document, "GetType") or 0),
             default=0,
         )
         if doc_type == self._adapter.constants.get("swDocASSEMBLY", 2):
@@ -1669,9 +1667,7 @@ class _FeatureSelectionService:
                 default=0,
             )
             resolved_doc = self._adapter._attempt(
-                lambda c=component: self._adapter._get_attr_or_call(
-                    c, "GetModelDoc2"
-                ),
+                lambda c=component: self._adapter._get_attr_or_call(c, "GetModelDoc2"),
                 default=None,
             )
             if resolved_doc is None:

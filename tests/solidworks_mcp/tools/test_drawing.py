@@ -326,9 +326,7 @@ class TestDrawingTools:
         )
 
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "auto_center_marks"
+            t.fn for t in await mcp_server.list_tools() if t.name == "auto_center_marks"
         )
         result = await tool_func(
             input_data=AutoCenterMarksInput(view_name="Drawing View1")
@@ -352,13 +350,9 @@ class TestDrawingTools:
         )
 
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "auto_center_marks"
+            t.fn for t in await mcp_server.list_tools() if t.name == "auto_center_marks"
         )
-        result = await tool_func(
-            input_data=AutoCenterMarksInput(view_name="Ghost")
-        )
+        result = await tool_func(input_data=AutoCenterMarksInput(view_name="Ghost"))
 
         assert result["status"] == "error"
         assert "No view named 'Ghost'" in result["message"]
@@ -370,9 +364,7 @@ class TestDrawingTools:
         """A bare object() adapter reports an error, not a fabrication."""
         await register_drawing_tools(mcp_server, object(), mock_config)
         tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "auto_center_marks"
+            t.fn for t in await mcp_server.list_tools() if t.name == "auto_center_marks"
         )
         result = await tool_func(
             input_data=AutoCenterMarksInput(view_name="Drawing View1")
