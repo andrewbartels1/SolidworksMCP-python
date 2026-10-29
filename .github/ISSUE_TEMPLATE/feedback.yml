@@ -1,0 +1,49 @@
+name: Tried it — feedback
+description: Tell us how your first (or latest) run went, good or bad
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying the server. Short answers are fine; skip anything you don't know.
+        For a specific crash or wrong result, a Bug Report gets you a faster fix.
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What did you try?
+      description: The prompt or workflow, e.g. "asked Claude to model a bracket and export a STEP".
+    validations:
+      required: true
+
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked?
+
+  - type: textarea
+    id: didnt
+    attributes:
+      label: What didn't work, or was confusing?
+      description: Including install and client setup.
+
+  - type: input
+    id: solidworks
+    attributes:
+      label: SolidWorks version
+      placeholder: e.g. 2025 SP2
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and model
+      placeholder: e.g. Claude Desktop + Sonnet, VS Code + Copilot
+
+  - type: dropdown
+    id: again
+    attributes:
+      label: Would you use it again?
+      options:
+        - "Yes"
+        - Maybe, once something is fixed
+        - "No"

@@ -12,7 +12,7 @@ Python MCP server for SolidWorks automation with 151 tools, plus an optional age
 
 ## Overview
 
-> ⚠️ **Project Status:** This project is under active construction. Features, APIs, documentation, and setup steps may change as the Python and UI implementation is finalized. This is a hobby/research product, please feel free to make an issue if you have questions or feedback! ⚠️
+> **Tried it?** Tell us what worked and what didn't in a [feedback issue](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=feedback.yml). Reports from real setups decide what gets fixed next.
 
 This project focuses on practical SolidWorks automation with an AI-friendly loop:
 
