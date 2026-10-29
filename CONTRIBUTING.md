@@ -28,7 +28,7 @@ python -m venv .venv
 Before opening a pull request, run the local CI script to reproduce the same test environment used in GitHub Actions:
 
 ```powershell
-.\run-ci-local.ps1
+.\scripts\run-ci-local.ps1
 ```
 
 This builds a Docker image from `.ci/Dockerfile` and runs `make test` inside it — the exact command GitHub CI executes. A clean pass here means your PR will not fail CI on test issues.
@@ -45,10 +45,10 @@ The first invocation builds the Docker image (a few minutes). Subsequent runs re
 
 ```powershell
 # Force image rebuild
-.\run-ci-local.ps1
+.\scripts\run-ci-local.ps1
 
 # Skip rebuild (faster after first run)
-.\run-ci-local.ps1 -NoBuild
+.\scripts\run-ci-local.ps1 -NoBuild
 ```
 
 ## Recommended Commands
@@ -90,7 +90,7 @@ Current docs structure:
 
 ## Pull Request Guidelines
 
-- Run `.\run-ci-local.ps1` and confirm it passes before opening a PR (see above).
+- Run `.\scripts\run-ci-local.ps1` and confirm it passes before opening a PR (see above).
 - Use concise commit messages that describe intent.
 - Keep unrelated generated/local artifacts out of commits.
 - Include validation notes (tests/docs build) in the PR description.

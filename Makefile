@@ -39,7 +39,7 @@ install: ## Install dependencies and setup environment
 		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \
 		exit 1; \
 	fi
-	zsh -i install.sh
+	zsh -i scripts/install.sh
 
 test: ## Run test suite with coverage
 	@echo "$(BLUE)Running tests...$(NC)"

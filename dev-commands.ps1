@@ -385,7 +385,7 @@ function dev-ui {
     # FastAPI backend (solidworks_mcp.ui.server:app) - still real,
     # independent infrastructure other things build on.
     Write-Host "Starting UI backend (FastAPI)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "run-ui.ps1")
+    & (Join-Path $PSScriptRoot "scriptsun-ui.ps1")
 }
 
 function dev-docs {

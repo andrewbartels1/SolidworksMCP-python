@@ -316,7 +316,7 @@ Write-Host "2. Restart VS Code so MCP config reloads."
 Write-Host "3. In VS Code, start server solidworks-mcp-server."
 Write-Host ""
 Write-Host "To start the SolidWorks UI backend:" -ForegroundColor Cyan
-Write-Host "  .\dev-commands.ps1 dev-ui         # or: .\run-ui.ps1"
+Write-Host "  .\dev-commands.ps1 dev-ui         # or: .\scripts\run-ui.ps1"
 Write-Host ""
 Write-Host "Manual MCP start command:" -ForegroundColor Cyan
 Write-Host ".\\.venv\\Scripts\\python.exe -m solidworks_mcp.server"

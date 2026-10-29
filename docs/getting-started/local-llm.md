@@ -76,10 +76,10 @@ Set the model in your environment before starting the UI server:
 ```powershell
 # Option A — environment variable for the current shell
 $env:SOLIDWORKS_UI_MODEL = "local:gemma4:e4b"
-.\run-ui.ps1
+.\scripts\run-ui.ps1
 
 # Option B — one-line launch
-$env:SOLIDWORKS_UI_MODEL = "local:gemma4:e4b"; .\run-ui.ps1
+$env:SOLIDWORKS_UI_MODEL = "local:gemma4:e4b"; .\scripts\run-ui.ps1
 ```
 
 Available `SOLIDWORKS_UI_MODEL` values for local inference:

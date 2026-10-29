@@ -17,9 +17,6 @@ What this deliberately does NOT touch, and why:
 - ``CHANGELOG.md`` — each entry is a historical, point-in-time record of what
   shipped in that release. "Rewriting history" to match today's count would
   make the changelog lie about what that version actually had.
-- ``SWChecklist.md`` — its tool-count lines describe the original Node.js/
-  winax implementation (explicitly marked as a historical document; see the
-  banner at the top of that file). It is not a claim about current state.
 - ``docs/planning/solidworks-api-coverage.md`` — its "~75 tools" figure is an
   approximate, dated audit snapshot with a whole coverage table built around
   it; swapping just the headline number without re-auditing the table would
