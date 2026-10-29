@@ -10,11 +10,11 @@
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Servidor MCP de Python para la automatización de SolidWorks con 109 herramientas, más una capa opcional de agente/pruebas de prompts para flujos de trabajo asistidos por IA.
+Servidor MCP de Python para la automatización de SolidWorks con 151 herramientas, más una capa opcional de agente/pruebas de prompts para flujos de trabajo asistidos por IA.
 
 ## Descripción General
 
-> ⚠️ **Estado del proyecto:** Este proyecto está en construcción activa. Las características, API, documentación y pasos de configuración pueden cambiar a medida que se finalicen las implementaciones de Python y la interfaz de usuario. Este es un producto de pasatiempo/investigación, ¡no dudes en crear un issue si tienes preguntas o comentarios! ⚠️
+> **¿Lo has probado?** Cuéntanos qué funcionó y qué no en un [issue de comentarios](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=feedback.yml). Los informes de instalaciones reales deciden qué se corrige primero.
 
 Este proyecto se centra en la automatización práctica de SolidWorks con un ciclo amigable para la IA:
 
