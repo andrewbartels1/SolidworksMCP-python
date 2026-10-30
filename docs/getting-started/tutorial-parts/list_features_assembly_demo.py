@@ -4,7 +4,7 @@ r"""Demo: assembly-aware ``list_features`` (GitHub issue #21).
 Connects to a running SolidWorks instance and calls ``list_features`` on
 both a Part and an Assembly from the built-in U-Joint sample set, showing
 the behavior added by the ``assembly-aware-list-features`` OpenSpec change
-(see ``openspec/changes/assembly-aware-list-features/``):
+(see ``openspec/changes/archive/2026-10-30-assembly-aware-list-features/``):
 
 - A Part's own features are unchanged from before this change.
 - An Assembly's response flattens in every resolved component's features

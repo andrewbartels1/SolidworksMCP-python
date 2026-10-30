@@ -107,5 +107,6 @@
   - `rebuild_model`: clean part → no errors; fillet-loses-edge → ERROR whose entry names the fillet, with `code_name`, `parents` and `hint`
   - `list_drawing_views`: a generated drawing lists its views; a part → ERROR
 - [x] 12.2 Run the new live test plus `test_live_sw_wave3.py`, `test_live_sw_regression.py` and the add_chamfer live test against real SolidWorks. Capture the printed evidence
-- [ ] 12.3 Present the live evidence to the user **one tool at a time** for sign-off. Do not open the PR or start #101 until the user approves every tool
-- [ ] 12.4 Open the PR (closes #106) with the live evidence in the body
+- [x] 12.3 Present the live evidence to the user **one tool at a time** for sign-off. Do not open the PR or start #101 until the user approves every tool
+- [x] 12.4 Open the PR (closes #106) with the live evidence in the body.
+      Done: PR #118, merged 2026-10-22, with the per-tool live sign-off table

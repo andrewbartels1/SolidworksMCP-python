@@ -11,7 +11,7 @@ Split into three single-purpose pieces so each can be tested on its own:
   active part and performs the multi-selection.
 
 Live behaviour this relies on (R2026x, 2026-10-13) is recorded in
-``openspec/changes/wire-unwired-adapter-tools/design.md``: every dispatch must
+``openspec/changes/archive/2026-10-30-wire-unwired-adapter-tools/design.md``: every dispatch must
 be method-flagged, ``IFace2.Normal`` is ``[0,0,0]`` for non-planar faces,
 ``IFace2.GetClosestPointOn`` returns the closest point in its first three
 values, a full-circle edge has no vertices, ``IRefPlane.Transform.ArrayData``

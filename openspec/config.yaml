@@ -18,8 +18,9 @@ context: |
   - Tool response payloads keep a stable shape: status, message,
     execution_time, plus a data payload.
   - Real SolidWorks COM is single-threaded apartment (STA); all COM calls run
-    on a dedicated executor thread (see "COM threading architecture" in
-    CLAUDE.md) - never touch swApp/currentModel off that thread.
+    on the thread that called connect() (the server's event-loop thread),
+    through _handle_com_operation (see "COM threading architecture" in
+    CLAUDE.md) - never move adapter calls onto another thread.
   - Late binding is forced (win32com.client.dynamic.Dispatch); zero-arg SW
     methods need explicit method-flagging via sw_type_info, or they resolve
     as properties and raise TypeError.

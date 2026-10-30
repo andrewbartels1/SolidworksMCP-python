@@ -57,6 +57,7 @@ For each module:
 
 ## 5. Verify and document
 
-- [ ] 5.1 Full run (unit + smoke + all live files, warm-up gate on); honest coverage 100%; no new live failures
+- [x] 5.1 Full run (unit + smoke + all live files, warm-up gate on); honest coverage 100%; no new live failures.
+      Done: PR #118 ("unit + live runs reach 100%"), merged 2026-10-22
 - [x] 5.2 CLAUDE.md: tool contract (`error_type`, `hint`); fix the stale COM-threading section; test-layout rule
 - [x] 5.3 `openspec validate full-coverage-and-error-boundary --strict`

@@ -1,6 +1,6 @@
 # Roadmap
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-10-30
 
 This page tracks the order the open backlog gets worked in. It replaces the
 old `docs/planning/ROADMAP_2026_2027.md`, which described a GUI-dashboard-first,
@@ -9,34 +9,85 @@ project pivoted to [SolidWorks-as-Code](../getting-started/solidworks-as-code.md
 and deleted along with the rest of `docs/planning/`. That plan's dated,
 quarter-by-quarter phases (`Phase 1A`, `Phase 2C`, etc.) no longer describe
 where this project is headed, so this page doesn't reuse them — issues are
-grouped by what actually blocks what, not by calendar quarter.
+ranked by priority and by what blocks what, not by calendar quarter.
 
 For per-tool SolidWorks COM API coverage (what's implemented vs. missing at
 the interface/method level), see
 [SolidWorks API Coverage](solidworks-api-coverage.md).
 
-## In progress
+## How work is ordered
 
-**[`close-tool-surface-gaps-and-housekeeping`](https://github.com/andrewbartels1/SolidworksMCP-python/tree/main/openspec/changes/close-tool-surface-gaps-and-housekeeping)**
-— 12 small issues bundled into one OpenSpec change: #6, #28, #46, #58, #59,
-#60, #61, #62, #63, #64, #79, #81. Full ordering, task breakdown, and
-rationale live in that change's `tasks.md` — not duplicated here to avoid
-the two going out of sync.
+Open issues are ranked in four tiers, then by order within each tier:
 
-## Backlog: what's ready to start now
+- **P0 — first impression:** what a new user sees and installs.
+- **P1 — trust and quality:** claims backed by evidence, bugs, agent ergonomics.
+- **P2 — capability gaps:** new or deeper tools.
+- **P3 — research and long horizon.**
 
-No blockers. Can be picked up in any order, based on priority:
+Sizes are rough: **S** about a day, **M** 2–4 days, **L** 1–2 weeks, **XL**
+several weeks. Each issue becomes an OpenSpec change under
+[`openspec/changes/`](https://github.com/andrewbartels1/SolidworksMCP-python/tree/main/openspec/changes)
+before it is built; finished changes are archived under
+`openspec/changes/archive/`, and their specs merge into
+[`openspec/specs/`](https://github.com/andrewbartels1/SolidworksMCP-python/tree/main/openspec/specs),
+which describes what the server does today.
 
-| Issue | What | Why it's unblocked |
-|---|---|---|
-| [#29](https://github.com/andrewbartels1/SolidworksMCP-python/issues/29) | SoC: wire rewind's DB revert + feature suppression | `revert_tool_call_records()` already exists, just unwired |
-| [#30](https://github.com/andrewbartels1/SolidworksMCP-python/issues/30) | SoC: pickup reads live dimension values | Extends existing `pickup_changes()` diffing, no new deps |
-| [#75](https://github.com/andrewbartels1/SolidworksMCP-python/issues/75) | Portable, installable MCP server setup | Prerequisite #74 already merged |
-| [#57](https://github.com/andrewbartels1/SolidworksMCP-python/issues/57) | Sheet metal feature support | Fully uncovered area, no dependency on other backlog items |
-| [#77](https://github.com/andrewbartels1/SolidworksMCP-python/issues/77) | `sketch_from_face_loop` + `thin_extrude` | Standalone tools; see note on #76 synergy below |
-| [#42](https://github.com/andrewbartels1/SolidworksMCP-python/issues/42) | CAD-generation skill-routing layer | Foundational — gates #43 and #44, itself has no blocker |
-| [#78](https://github.com/andrewbartels1/SolidworksMCP-python/issues/78) | SolidWorks Simulation COM API wrapper | Foundational for #76's paid-Simulation path, no blocker itself |
-| [#22](https://github.com/andrewbartels1/SolidworksMCP-python/issues/22) | Context and glossary injection engine (TAG-style domain context) | Confirmed direction (2026-08-27) — #12, the overlapping alternative, was closed in favor of this. Gates #13, see below |
+**Done recently:** the 12-issue `close-tool-surface-gaps-and-housekeeping`
+batch (#79 moved out), the unwired adapter tools (#106), one error boundary
+and honest coverage (PR #118), the drawing-package tools (#117), repo
+clean-up (PR #177), and the release pipeline (PR #178, which superseded #75).
+
+## P0 — first impression
+
+| Order | Issue | What | Size | Note |
+|---|---|---|---|---|
+| 1 | [#171](https://github.com/andrewbartels1/SolidworksMCP-python/issues/171) | Repo clean-up: description, topics, community files, tidy root | S | Mostly done in PR #177; social-preview image and `good first issue` labels left |
+| 2 | [#172](https://github.com/andrewbartels1/SolidworksMCP-python/issues/172) | Publish to PyPI, GitHub Releases and the MCP Registry | M | Pipeline merged in PR #178; first release is 1.5.0, after #173 |
+| 3 | [#173](https://github.com/andrewbartels1/SolidworksMCP-python/issues/173) | `verify_model`: check a part or assembly against expected values, plus measured change on extrude, revolve and cut | M | **In progress** (change `verify-model-against-expectations`): built, live tests next. The demo's final step |
+| 4 | [#147](https://github.com/andrewbartels1/SolidworksMCP-python/issues/147) | Bracket-assembly demo: one prompt to an assembly, read back and verified, ending in a drawing package with BOM | M–L | The README's demo GIF; the gaps it finds become issues |
+| 5 | — | README rewrite: demo first, three-line install, only claims the status matrix backs, specific "not yet supported" list | M | Issue to be filed; after #172 and #147 |
+
+## P1 — trust and quality
+
+| Order | Issue | What | Size | Note |
+|---|---|---|---|---|
+| 6 | [#79](https://github.com/andrewbartels1/SolidworksMCP-python/issues/79) | Per-tool status: verified live / pilot / simulated | M | Prerequisite for any public tool-count claim |
+| 7 | [#179](https://github.com/andrewbartels1/SolidworksMCP-python/issues/179) | `--selftest` command and a compatibility-report issue template | M | Feeds #79 with real results from other SolidWorks versions |
+| 8 | [#174](https://github.com/andrewbartels1/SolidworksMCP-python/issues/174) | Consolidate duplicate and overlapping tools | S–M | Honest count, smaller tool list |
+| 9 | [#175](https://github.com/andrewbartels1/SolidworksMCP-python/issues/175) | Agent skill and server guidance for using the tools well | M | Builds on #82 and the COM pitfall catalogue |
+| 10 | [#82](https://github.com/andrewbartels1/SolidworksMCP-python/issues/82) | Audit tool docstrings and error messages for LLM usefulness | L | Runtime-error half done in PR #118; feeds #175 and #176 |
+| 11 | [#156](https://github.com/andrewbartels1/SolidworksMCP-python/issues/156) | Tool catalog pages drift from the generator | S | Add a check |
+| 12 | [#155](https://github.com/andrewbartels1/SolidworksMCP-python/issues/155) | `docs_discovery` can launch a hidden SolidWorks; misleading hint | S | Bug |
+| 13 | [#101](https://github.com/andrewbartels1/SolidworksMCP-python/issues/101) | `save_body_as_part` leaves a linked assembly open | S | Bug |
+| 14 | [#23](https://github.com/andrewbartels1/SolidworksMCP-python/issues/23) | Reply to the contributor's tool-expansion proposal | S | An active outside contributor; see [scoping notes](#open-scoping-questions-before-scheduling) |
+
+## P2 — capability gaps
+
+| Order | Issue | What | Size | Note |
+|---|---|---|---|---|
+| 15 | [#176](https://github.com/andrewbartels1/SolidworksMCP-python/issues/176) | Optional tool-discovery mode to cut schema context | M | Measure the tool-list size first |
+| 16 | [#83](https://github.com/andrewbartels1/SolidworksMCP-python/issues/83) | Real startup banner and better logging | S | First-run impression |
+| 17 | [#157](https://github.com/andrewbartels1/SolidworksMCP-python/issues/157) | Remove stale `validate_coverage.py`; decide on mypy in CI | S |  |
+| 18 | [#115](https://github.com/andrewbartels1/SolidworksMCP-python/issues/115) | `reset_circuit_breaker` tool | S | Follow-up from PR #118 |
+| 19 | [#97](https://github.com/andrewbartels1/SolidworksMCP-python/issues/97) | `execute_macro` hangs on a modal macro | M | Issue text predates the COM threading change; refresh it |
+| 20 | [#158](https://github.com/andrewbartels1/SolidworksMCP-python/issues/158) | Drawing-tool follow-ups from the live sign-off | M |  |
+| 21 | [#102](https://github.com/andrewbartels1/SolidworksMCP-python/issues/102) | Live COM for `add_dimension` / `auto_dimension_view` | M | Check overlap with `insert_model_dimensions` (#146) first; may close |
+| 22 | [#105](https://github.com/andrewbartels1/SolidworksMCP-python/issues/105) | `sketch_convert_entities` tool | M |  |
+| 23 | [#77](https://github.com/andrewbartels1/SolidworksMCP-python/issues/77) | `sketch_from_face_loop` + `thin_extrude` | M | Foundation for #76 |
+| 24 | [#57](https://github.com/andrewbartels1/SolidworksMCP-python/issues/57) | Sheet metal features | L |  |
+
+## P3 — research and long horizon
+
+| Order | Issue | What | Size | Note |
+|---|---|---|---|---|
+| 25 | [#95](https://github.com/andrewbartels1/SolidworksMCP-python/issues/95) | `lookup_api_enum` enum value lookup | S | Needs the swconst enums indexed |
+| 26 | #29 · #30 · #31 | SolidWorks-as-Code: rewind, pickup, tutorial | M each | #31 is gated on #29 and #30 (below) |
+| 27 | [#96](https://github.com/andrewbartels1/SolidworksMCP-python/issues/96) | Generate a runnable binary `.swp` from VBA source | L |  |
+| 28 | [#80](https://github.com/andrewbartels1/SolidworksMCP-python/issues/80) | Prompt-to-SolidWorks tutorials | L | Rescope: SimulationXpress has no COM API (see #76 notes) |
+| 29 | [#13](https://github.com/andrewbartels1/SolidworksMCP-python/issues/13) | End-to-end agent test | L | Gated on #22 |
+| 30 | [#22](https://github.com/andrewbartels1/SolidworksMCP-python/issues/22) | Context and glossary injection engine | L | Partly overlaps #175 |
+| 31 | #78 · #76 | Simulation COM wrapper; topology-optimisation loop | XL | See scoping notes below |
+| 32 | #42 · #43 · #44 | Generation-intent router, text-to-CAD branch, live render panel | XL | Long horizon |
 
 ## Backlog: gated, in dependency order
 
@@ -94,7 +145,7 @@ path, SolidWorks crash/hung-window health probes, and — directly relevant
 to this repo's current batch — **a `rename_feature` adapter method**
 (commit `bde0ff1`, their PR #73) already implementing what this repo's #59
 task 2 is about to build from scratch (see that task's prior-art note).
-Their fork's own README claims 156 tools, well past this repo's 122.
+Their fork's own README claims 156 tools, well past this repo's 122 at the time (152 as of 2026-10-30).
 
 This changes the recommended next step: a re-audit of #23 as originally
 scoped (the same pattern used for #6/#58/#59) would miss most of what's
@@ -128,8 +179,8 @@ described a layer between retrieval and prompt construction that decides
 what the model actually sees — #12 framed around the UI/RAG path, #22
 framed around a structured glossary/domain-knowledge injection pattern.
 **Maintainer decision:** #12 isn't the direction the project is headed —
-closed, with #22 confirmed as the actual scope for this work (now listed
-in "ready to start now" above). #13 tests #22's deliverable specifically.
+closed, with #22 confirmed as the actual scope for this work (now ranked in
+P3 above). #13 tests #22's deliverable specifically.
 
 ### #76 vs. #78 — confirmed, not a contradiction: Option B needs re-scoping
 
@@ -161,10 +212,9 @@ dependency of #76, but both describe "topology-robust" cutting/sketching
 against face geometry — worth building #77 first as a foundation even
 though nothing requires it.
 
-## Not yet triaged into this roadmap
+## Keeping this page current
 
-Everything above accounts for every open issue except the 12 already in
-`close-tool-surface-gaps-and-housekeeping`. If a new issue is filed, add it
-to one of the three sections above (ready now / gated / needs a decision)
-rather than leaving it off this page — an untracked issue is exactly the
-kind of drift this page exists to prevent.
+The four tiers above account for every open issue as of 2026-10-30. When an
+issue is filed, give it a tier, an order and a size here rather than leaving
+it off this page; an untracked issue is exactly the drift this page exists to
+prevent.
