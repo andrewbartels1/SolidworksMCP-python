@@ -46,17 +46,13 @@ lists the names it counted.
 
 ## Status
 
-Built and unit-tested without SolidWorks (sections 1–6 of
-[tasks.md](tasks.md)). What remains needs real SolidWorks and the
-maintainer's go-ahead, run at `SW_TEST_PACE_SECONDS=4` on new scratch
-documents closed without saving:
+Built, unit-tested, and verified live on SolidWorks 2026 on 2026-10-30: all
+six live tests in `tests/live/test_live_sw_verify_model.py` pass, and their
+GIFs are in `docs/assets/demos/verify-model/`. The first live run found that
+the selection-based volume read returns nothing while a sketch is selected,
+so part volume is now summed per body (design D2, COM pitfall #33).
 
-1. A safe probe on a 100 × 50 × 10 block: extreme-point size, volume 50 000
-   mm³, one body, selection untouched.
-2. Live tests: a Ø20 shaft, a two-part assembly with two mates, an extrude
-   and a cut checked against hand calculations.
-3. A COM pitfall note on the extreme-point read, from what the probe shows.
-4. A live demo to the maintainer, then the PR that closes #173.
+What remains is the PR that closes #173.
 
 When every task is done, archive the change (`openspec archive
 verify-model-against-expectations`), which merges these specs into
