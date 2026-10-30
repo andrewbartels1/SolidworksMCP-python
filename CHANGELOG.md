@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+Packaging (#172):
+
+- **PyPI and MCP Registry release.** Pushing a `v*` tag builds the package,
+  publishes it to PyPI, creates the GitHub Release from this changelog and
+  publishes `server.json` to the official MCP Registry. Both registries use
+  the workflow's GitHub identity; no tokens are stored.
+- **`uvx solidworks-mcp-python`** runs the server without cloning the repo
+  (new `solidworks-mcp-python` entry point alongside `solidworks-mcp`).
+- The server now reports the package version to MCP clients instead of
+  FastMCP's default.
+
 Engineering-data tools, contributed by @SaiqKamran (#117) and signed off live
 against SolidWorks 2026:
 

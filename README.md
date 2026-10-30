@@ -1,5 +1,7 @@
 # SolidWorks CAD Assistant & MCP Server
 
+<!-- mcp-name: io.github.andrewbartels1/solidworks-mcp-python -->
+
 **Languages:** [English](README.md) | [Español](README.es-ES.md)
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
