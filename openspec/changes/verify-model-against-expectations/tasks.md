@@ -11,8 +11,8 @@
 
 ## 2. Mock adapter (own step, per the adapter rule)
 
-- [x] 2.1 Add `self._mates` state, reset wherever `_components` is reset, and
-      append to it in mock `add_mate` on success
+- [x] 2.1 Add `self._mates` state, living for the adapter session like
+      `_components`, and append to it in mock `add_mate` on success
 - [x] 2.2 Implement mock `get_model_geometry_summary`. It returns `null` for
       volume, box and bodies, plus component and mate counts for assemblies,
       and errors for no model or a drawing (design D9)
@@ -110,8 +110,10 @@
 - [x] 6.2 Document `measured_change` on the modelling tools page, and add
       `verify_model` as the closing step in the agent workflow docs under
       `docs/agents/`
-- [ ] 6.3 Add a COM pitfall entry for whatever the live probe in 7.1 finds
-      about `GetExtremePoint` out-params (or note that it worked as written)
+- [x] 6.3 Add a COM pitfall entry for whatever the live probe in 7.1 finds
+      about `GetExtremePoint` out-params (or note that it worked as written).
+      Pitfall #33: `GetExtremePoint` worked as written; the entry records the
+      selection-dependent `CreateMassProperty` volume the probe found instead
 - [x] 6.4 CHANGELOG `Unreleased → Added` entries for `verify_model` and
       `measured_change`
 - [x] 6.5 Run `ruff check src tests`, the mock-only test suite and
@@ -120,10 +122,15 @@
 
 ## 7. Live verification (only after the maintainer says go; `SW_TEST_PACE_SECONDS=4`)
 
-- [ ] 7.1 Non-destructive probe on a new scratch part: block 100 × 50 × 10.
+- [x] 7.1 Non-destructive probe on a new scratch part: block 100 × 50 × 10.
       Check the extreme-point box against the part box, volume = 50000, and
-      body count 1
-- [ ] 7.2 `tests/live/test_live_sw_verify_model.py`:
+      body count 1. Done 2026-10-30 on SW 2026 as the first live test. The
+      first run read no volume at all (selection-dependent
+      `CreateMassProperty`, pitfall #33); fixed by summing body volumes, and
+      the rerun passed
+- [x] 7.2 `tests/live/test_live_sw_verify_model.py` (all six passed live
+      2026-10-30, 3 min 49 s at demo pace; revolve was a separate test and
+      also passed, its first live run on SW 2026):
       - block part → `verify_model` passes with exact expectations and fails
         with a wrong volume;
       - Ø20 × 40 revolve → box within 0.1 mm via extreme points;

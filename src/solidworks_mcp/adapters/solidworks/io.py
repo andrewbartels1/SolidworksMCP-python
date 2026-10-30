@@ -919,11 +919,17 @@ def _solid_bodies(adapter: Any, part: Any) -> list[Any] | None:
 
     Returns:
         list[Any] | None: The bodies (possibly empty), or ``None`` when
-        ``GetBodies2`` could not be read at all.
+        ``GetBodies2`` could not be read at all. A part with no bodies yet
+        answers null rather than an empty array, so null without an error
+        is an empty list.
     """
-    raw = adapter._attempt(lambda: part.GetBodies2(_SW_SOLID_BODY, False), default=None)
-    if raw is None:
+    raw, error = adapter._attempt_with_error(
+        lambda: part.GetBodies2(_SW_SOLID_BODY, False)
+    )
+    if error is not None:
         return None
+    if raw is None:
+        return []
     items = list(raw) if isinstance(raw, (list, tuple)) else [raw]
     return [_as_com(adapter, body, "IBody2") or body for body in items if body]
 
@@ -961,6 +967,37 @@ def _extreme_point_box(adapter: Any, bodies: list[Any]) -> dict[str, Any] | None
             else:
                 low[axis] = min(low[axis], float(value))
     return _box_from_metres([*low, *high], "extreme_points")
+
+
+def _bodies_volume_mm3(adapter: Any, bodies: list[Any] | None) -> float | None:
+    """Sum the solid bodies' volumes, independent of the selection.
+
+    ``IModelDocExtension.CreateMassProperty`` computes for the current
+    selection and returns no volume while a sketch or plane is selected,
+    which is the state a feature call runs in. ``IBody2.GetMassProperties``
+    reads each body directly; element 3 of its array is the volume in m³.
+    The density argument only affects mass, which is not used here.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        bodies: Wrapped ``IBody2`` dispatches, ``[]`` for an empty part.
+
+    Returns:
+        float | None: Volume in mm³ (``0.0`` for no bodies), or ``None`` when
+        the bodies or any body's volume could not be read.
+    """
+    if bodies is None:
+        return None
+    total = 0.0
+    for body in bodies:
+        props = adapter._attempt(lambda b=body: b.GetMassProperties(1.0), default=None)
+        if not isinstance(props, (list, tuple)) or len(props) < 4:
+            return None
+        volume = props[3]
+        if not isinstance(volume, (int, float)):
+            return None
+        total += float(volume)
+    return round(total * 1e9, 4)
 
 
 def _model_volume_mm3(adapter: Any, model: Any) -> float | None:
@@ -2209,12 +2246,14 @@ class SolidWorksIOMixin:
 
         def _summarise() -> dict[str, Any]:
             model = adapter.currentModel
-            summary: dict[str, Any] = {
-                "volume_mm3": _model_volume_mm3(adapter, model),
-            }
+            summary: dict[str, Any] = {}
             if doc_type == 1:
                 part = _sw_type_info.flagged(model, "IPartDoc")
                 bodies = _solid_bodies(adapter, part)
+                volume = _bodies_volume_mm3(adapter, bodies)
+                summary["volume_mm3"] = (
+                    volume if volume is not None else _model_volume_mm3(adapter, model)
+                )
                 box = _extreme_point_box(adapter, bodies or [])
                 if box is None:
                     box = _box_from_metres(
@@ -2225,6 +2264,7 @@ class SolidWorksIOMixin:
                 summary["solid_body_count"] = None if bodies is None else len(bodies)
             else:
                 assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
+                summary["volume_mm3"] = _model_volume_mm3(adapter, model)
                 box = _box_from_metres(
                     adapter._attempt(lambda: assembly.GetBox(0), default=None),
                     "assembly_box",

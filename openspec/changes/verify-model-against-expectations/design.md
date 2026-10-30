@@ -55,8 +55,13 @@ duplicate the mass, feature and interference logic per adapter and bypass
 existing fixes (pitfalls #13 and #14).
 
 ### D2. Volume comes from the summary, not `get_mass_properties`
-The summary reads volume through `Extension.CreateMassProperty()` without a
-rebuild. Volume is geometric and independent of material. Mass depends on
+For parts, the summary sums `IBody2.GetMassProperties(...)[3]` over the solid
+bodies, without a rebuild; a part with no bodies yet has volume 0. The first
+live run (2026-10-30) showed why: `Extension.CreateMassProperty()` computes
+for the current selection and returns no volume while a sketch is selected,
+which is the state every extrude, revolve and cut runs in. It is kept as the
+fallback when the bodies cannot be read, and for assemblies. Volume is
+geometric and independent of material. Mass depends on
 the assigned material: SolidWorks falls back to its default density when
 none is assigned. The `mass_kg` check therefore reports the material name in
 its `note` when the adapter can read it, so a mismatch caused by a missing
@@ -159,8 +164,9 @@ surfaced to the agent.
 ### D9. Mock adapter
 - `get_model_geometry_summary` returns `null` for volume, box and bodies.
 - For assemblies it returns `len(self._components)` and `len(self._mates)`.
-- `add_mate` appends to `self._mates`, which is reset with the document like
-  `_components`.
+- `add_mate` appends to `self._mates`. Like `_components`, the list lives for
+  the adapter session and is not reset when a document opens or closes; tests
+  get a fresh adapter per test.
 
 Tool tests that need numbers monkeypatch the adapter's summary, mass and
 interference reads with fixed values, rather than teaching the mock fake
@@ -174,12 +180,10 @@ no opt-out flag in v1; one can be added if batch users ask.
 
 ## Risks / Trade-offs
 
-- **[Risk] `CreateMassProperty` may itself touch the selection,** e.g. compute
-  on selected bodies only. → Mitigation: the live test selects an edge, reads
-  the summary, and asserts the selection count is unchanged and the volume
-  equals the whole-part volume. If it fails, read the volume from the body
-  list instead (sum of `IBody2.GetMassProperties(0)[3]`), still with no
-  rebuild.
+- **[Risk, happened] `CreateMassProperty` depends on the selection.** The first
+  live run returned no volume before or after an extrude. → Done: parts read
+  volume from the body list (see D2). The live selection test still asserts
+  the selection count is unchanged and the volume is the whole-part volume.
 - **[Risk] `GetExtremePoint` signature or out-params misbehave under late
   binding.** It returns its point via ByRef out-params (pitfall #25 shape).
   → Mitigation: probe it non-destructively in the first live session on a

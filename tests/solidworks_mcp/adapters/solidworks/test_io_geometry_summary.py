@@ -43,8 +43,16 @@ def _build_adapter(monkeypatch) -> PyWin32Adapter:
 class _Body:
     """An axis-aligned box body answering GetExtremePoint like SolidWorks."""
 
-    def __init__(self, low, high, *, fails: bool = False) -> None:
+    def __init__(self, low, high, *, fails: bool = False, volume: object = ...) -> None:
         self.low, self.high, self.fails = low, high, fails
+        if volume is ...:
+            volume = 1.0
+            for lo, hi in zip(low, high, strict=True):
+                volume *= hi - lo
+        self.volume = volume
+
+    def GetMassProperties(self, _density):  # noqa: N802
+        return [0.0, 0.0, 0.0, self.volume, 0.0, 0.0]
 
     def GetExtremePoint(self, dx, dy, dz, ox, oy, oz):  # noqa: N802
         if self.fails:
@@ -60,6 +68,7 @@ class _Model:
     def __init__(self, doc_type: int, volume_m3: float | None = 5e-5) -> None:
         self.doc_type = doc_type
         self.forbidden: list[str] = []
+        self.bodies_error: Exception | None = None
         props = None if volume_m3 is None else SimpleNamespace(Volume=volume_m3)
         self.Extension = SimpleNamespace(CreateMassProperty=lambda: props)
         self.bodies: object = []
@@ -78,6 +87,8 @@ class _Model:
         self.forbidden.append("ClearSelection2")
 
     def GetBodies2(self, _body_type, _visible_only):  # noqa: N802
+        if self.bodies_error is not None:
+            raise self.bodies_error
         return self.bodies
 
     def GetPartBox(self, _no_update):  # noqa: N802
@@ -132,7 +143,9 @@ async def test_part_uses_extreme_points_and_reads_bodies_and_volume(
     monkeypatch,
 ) -> None:
     adapter = _build_adapter(monkeypatch)
-    model = _Model(1)
+    # A feature call runs with its sketch selected, and then CreateMassProperty
+    # gives no volume; the bodies must still answer.
+    model = _Model(1, volume_m3=None)
     model.bodies = [_Body((0.0, 0.0, 0.0), (0.1, 0.05, 0.01))]
     model.part_box = [-1.0, -1.0, -1.0, 1.0, 1.0, 1.0]  # loose; must not be used
     adapter.currentModel = model
@@ -163,6 +176,7 @@ async def test_multiple_bodies_combine_into_one_box(monkeypatch) -> None:
     result = await adapter.get_model_geometry_summary()
 
     assert result.data["solid_body_count"] == 2
+    assert result.data["volume_mm3"] == pytest.approx(1000.0 + 500.0)
     assert result.data["bounding_box_mm"]["min"] == pytest.approx([0.0, -10.0, 0.0])
     assert result.data["bounding_box_mm"]["max"] == pytest.approx([30.0, 10.0, 10.0])
 
@@ -185,22 +199,50 @@ async def test_extreme_point_failure_falls_back_to_part_box(monkeypatch) -> None
 async def test_empty_part_reports_zero_bodies_and_no_box(monkeypatch) -> None:
     adapter = _build_adapter(monkeypatch)
     model = _Model(1, volume_m3=None)
-    model.bodies = None
+    model.bodies = None  # what GetBodies2 answers before the first feature
     adapter.currentModel = model
 
     result = await adapter.get_model_geometry_summary()
 
     assert result.is_success
-    assert result.data["solid_body_count"] is None
+    assert result.data["solid_body_count"] == 0
+    assert result.data["volume_mm3"] == 0.0
     assert result.data["bounding_box_mm"] is None
     assert result.data["bounding_box_method"] is None
-    assert result.data["volume_mm3"] is None
+
+
+@pytest.mark.asyncio
+async def test_unreadable_bodies_fall_back_to_the_mass_property(monkeypatch) -> None:
+    adapter = _build_adapter(monkeypatch)
+    model = _Model(1, volume_m3=5e-5)
+    model.bodies_error = RuntimeError("Member not found")
+    adapter.currentModel = model
+
+    result = await adapter.get_model_geometry_summary()
+
+    assert result.data["solid_body_count"] is None
+    assert result.data["volume_mm3"] == pytest.approx(50000.0)
+
+
+@pytest.mark.asyncio
+async def test_unreadable_body_volume_falls_back_to_the_mass_property(
+    monkeypatch,
+) -> None:
+    adapter = _build_adapter(monkeypatch)
+    model = _Model(1, volume_m3=2e-5)
+    model.bodies = [_Body((0, 0, 0), (0.01, 0.01, 0.01), volume="n/a")]
+    adapter.currentModel = model
+
+    result = await adapter.get_model_geometry_summary()
+
+    assert result.data["volume_mm3"] == pytest.approx(20000.0)
 
 
 @pytest.mark.asyncio
 async def test_non_numeric_volume_is_reported_unknown(monkeypatch) -> None:
     adapter = _build_adapter(monkeypatch)
     model = _Model(1)
+    model.bodies = [_Body((0, 0, 0), (0.01, 0.01, 0.01), volume=None)]
     model.Extension = SimpleNamespace(
         CreateMassProperty=lambda: SimpleNamespace(Volume=None)
     )
@@ -208,6 +250,21 @@ async def test_non_numeric_volume_is_reported_unknown(monkeypatch) -> None:
 
     result = await adapter.get_model_geometry_summary()
 
+    assert result.data["volume_mm3"] is None
+
+
+@pytest.mark.asyncio
+async def test_no_mass_properties_anywhere_is_reported_unknown(monkeypatch) -> None:
+    adapter = _build_adapter(monkeypatch)
+    model = _Model(1, volume_m3=None)
+    body = _Body((0, 0, 0), (0.01, 0.01, 0.01))
+    body.GetMassProperties = lambda _density: None  # type: ignore[method-assign]
+    model.bodies = [body]
+    adapter.currentModel = model
+
+    result = await adapter.get_model_geometry_summary()
+
+    assert result.data["solid_body_count"] == 1
     assert result.data["volume_mm3"] is None
 
 
@@ -250,6 +307,7 @@ async def test_assembly_counts_components_and_mates(monkeypatch) -> None:
     assert data["component_count"] == 2
     assert data["mate_count"] == 2  # coincident + the one in the folder
     assert data["solid_body_count"] is None
+    assert data["volume_mm3"] == pytest.approx(50000.0)
     assert data["bounding_box_method"] == "assembly_box"
     assert data["bounding_box_mm"]["size"] == pytest.approx([120.0, 80.0, 60.0])
     assert model.forbidden == []

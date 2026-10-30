@@ -276,7 +276,7 @@ doc_type = adapter._attempt(
 
 Found and fixed 2026-08-11 while verifying assembly-aware `list_features`
 (`_FeatureSelectionService.list_features` in `pywin32_adapter.py`) against a live
-SolidWorks session — see `openspec/changes/assembly-aware-list-features/`.
+SolidWorks session — see `openspec/changes/archive/2026-10-30-assembly-aware-list-features/`.
 
 ## 12. `IComponent2.GetModelDoc2` raises "Member not found" unless `IComponent2` is flagged first
 
@@ -926,6 +926,24 @@ restore it after, then apply a format with `IDrawingDoc::SetupSheet5`. Find the 
 through `swFileLocationsSheetFormat` (string preference 7); on a default install the files
 live under `C:\ProgramData\SOLIDWORKS\SOLIDWORKS <year>\lang\<language>\sheetformat`,
 not under the install folder.
+
+---
+
+## 33. `CreateMassProperty().Volume` is empty while a sketch or plane is selected
+
+`IModelDocExtension::CreateMassProperty` computes for the current selection. With a
+sketch selected (the state every extrude, revolve and cut runs in) its `Volume` came back
+unreadable both before and after the feature on SW 2026, so a before/after comparison
+saw nothing. `get_mass_properties` hides this with `ForceRebuild3`, which clears the
+selection (#23). To read a part's volume without touching the selection, sum
+`IBody2::GetMassProperties(density)[3]` (m³) over `IPartDoc::GetBodies2(swSolidBody,
+False)`. `GetBodies2` answers null, not an empty array, on a part with no bodies yet:
+treat null without an exception as zero bodies.
+
+`IBody2::GetExtremePoint(dx, dy, dz, x, y, z)` with byref-double out-params worked as
+written under late binding, giving exact sizes on a Ø20 cylinder where `GetPartBox`
+agreed. Both live-verified 2026-10-30 (`get_model_geometry_summary` in
+`adapters/solidworks/io.py`, `tests/live/test_live_sw_verify_model.py`).
 
 ---
 
