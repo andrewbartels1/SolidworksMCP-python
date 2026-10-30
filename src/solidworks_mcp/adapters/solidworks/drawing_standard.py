@@ -543,6 +543,40 @@ class SolidWorksDrawingStandardMixin:
         bottom = y - height if top_anchored else y
         return (left, bottom, left + width, bottom + height)
 
+    def _slide_onto_sheet(self, table: Any, box: Box, sheet: Box) -> bool:
+        """Move a table by the least distance that puts its box on the sheet.
+
+        The ISO A3 format's BOM anchor is at the top of the sheet, and a table
+        grown up from it there runs off the top (measured live on SW 2026).
+
+        Args:
+            table: The ``ITableAnnotation``.
+            box: Its box on the sheet, in metres.
+            sheet: The sheet's box, in metres.
+
+        Returns:
+            bool: Whether the table was moved. ``False`` when it is larger
+            than the sheet or its position cannot be read.
+        """
+        if (
+            box[2] - box[0] > sheet[2] - sheet[0]
+            or box[3] - box[1] > sheet[3] - sheet[1]
+        ):
+            return False
+        dx = max(sheet[0] - box[0], 0.0) + min(sheet[2] - box[2], 0.0)
+        dy = max(sheet[1] - box[1], 0.0) + min(sheet[3] - box[3], 0.0)
+        t = _sw_type_info.flagged(table, "ITableAnnotation")
+        an = self._attempt(
+            lambda: _sw_type_info.flagged(t.GetAnnotation(), "IAnnotation"),
+            default=None,
+        )
+        pos = self._attempt(lambda: an.GetPosition(), default=None)
+        if not isinstance(pos, (list, tuple)) or len(pos) < 2:
+            return False
+        x, y = float(pos[0]) + dx, float(pos[1]) + dy
+        self._attempt(lambda: an.SetPosition(x, y, 0.0), default=None)
+        return True
+
     async def insert_bom_table(
         self,
         view_name: str,
@@ -558,7 +592,10 @@ class SolidWorksDrawingStandardMixin:
         when the sheet has no format. Its stationary corner is the
         bottom-left, so the table grows up onto the sheet; with the top-left
         it hung below the sheet (measured live on SW 2026). The table's box is
-        read back and must lie on the sheet. With no template the library
+        read back and must lie on the sheet. An anchor near the top of the
+        sheet (the ISO A3 format's) makes it grow off the top, so a table
+        placed by the anchor is slid back onto the sheet; one placed at a
+        given ``x_mm``/``y_mm`` is never moved. With no template the library
         default ``bom-standard.sldbomtbt`` from the BOM templates folder is
         used.
 
@@ -571,8 +608,8 @@ class SolidWorksDrawingStandardMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: The view, BOM type, template, row
-            count and ``table_box_mm``; an error naming the box when the
-            table runs off the sheet.
+            count, ``table_box_mm`` and ``moved_onto_sheet``; an error naming
+            the box when the table still runs off the sheet.
         """
         guard = self._require_drawing()
         if guard is not None:
@@ -633,9 +670,20 @@ class SolidWorksDrawingStandardMixin:
                 default=None,
             )
             box = self._table_box(table)
-            box_mm = [round(c * 1000, 1) for c in box] if box else None
             sheet = self._sheet_bounds(drawing)
-            if box and sheet and not _layout.inside(box, _grow(sheet, 1e-6)):
+            on_sheet = _grow(sheet, 1e-6) if sheet else None
+            moved = False
+            if (
+                use_anchor
+                and box
+                and on_sheet
+                and not _layout.inside(box, on_sheet)
+                and self._slide_onto_sheet(table, box, sheet)
+            ):
+                moved = True
+                box = self._table_box(table)
+            box_mm = [round(c * 1000, 1) for c in box] if box else None
+            if box and on_sheet and not _layout.inside(box, on_sheet):
                 raise RuntimeError(
                     f"The BOM table was inserted but runs off the sheet: table "
                     f"{box_mm} mm, sheet {sheet[2] * 1000:g} x {sheet[3] * 1000:g} "
@@ -647,6 +695,7 @@ class SolidWorksDrawingStandardMixin:
                 "template": template or None,
                 "row_count": rows,
                 "table_box_mm": box_mm,
+                "moved_onto_sheet": moved,
             }
 
         return cast(

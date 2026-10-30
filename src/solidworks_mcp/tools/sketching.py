@@ -440,7 +440,7 @@ async def register_sketching_tools(
 
         require_success(result, context="Failed to add line")
         line_id = (
-            result.data.get("entity_id")
+            result.data.get("entity_id") or result.data.get("id")
             if isinstance(result.data, dict)
             else result.data
         )

@@ -3851,6 +3851,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "template": template_path,
                 "row_count": 2,
                 "table_box_mm": [0.0, 0.0, 60.0, 15.0],
+                "moved_onto_sheet": False,
             },
         )
 

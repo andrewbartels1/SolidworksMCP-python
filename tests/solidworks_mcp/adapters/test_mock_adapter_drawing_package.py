@@ -33,6 +33,7 @@ async def test_bom_on_a_known_view(drawing) -> None:
         "template": None,
         "row_count": 2,
         "table_box_mm": [0.0, 0.0, 60.0, 15.0],
+        "moved_onto_sheet": False,
     }
 
 
