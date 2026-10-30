@@ -235,6 +235,14 @@ class TestSolidWorksMCPServer:
         assert server.server is None
         assert server._setup_complete is False
 
+    def test_server_reports_package_version(self, mock_config):
+        """MCP clients see the package version, not FastMCP's default."""
+        from solidworks_mcp.version import __version__
+
+        server = SolidWorksMCPServer(mock_config)
+
+        assert server.mcp.version == __version__
+
     @pytest.mark.asyncio
     async def test_server_setup(self, mock_config):
         """Test server setup process."""

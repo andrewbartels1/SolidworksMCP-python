@@ -31,6 +31,7 @@ from .agents.history_db import insert_tool_event
 from .cache.response_cache import CachePolicy, ResponseCache
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
 from .exceptions import SolidWorksMCPError
+from .version import __version__
 
 AGENT_SYSTEM_PROMPT = (
     "You are a SolidWorks automation expert. You have access to comprehensive "
@@ -85,7 +86,7 @@ class SolidWorksMCPServer:
         """
         self.config = config
         self.state = MCPServerState(config=config)
-        self.mcp = FastMCP("SolidWorks MCP Server")
+        self.mcp = FastMCP("SolidWorks MCP Server", version=__version__)
         self.server: FastMCP | None = None
         self._setup_complete = False
         self._db_logging_enabled = self._env_truthy(

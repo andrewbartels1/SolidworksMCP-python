@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.andrewbartels1/solidworks-mcp-python",
+  "title": "SolidWorks MCP",
+  "description": "Drive SolidWorks from AI agents: parts, assemblies, drawings and export over the COM API.",
+  "repository": {
+    "url": "https://github.com/andrewbartels1/SolidworksMCP-python",
+    "source": "github"
+  },
+  "websiteUrl": "https://andrewbartels1.com/SolidworksMCP-python/",
+  "version": "1.4.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "solidworks-mcp-python",
+      "version": "1.4.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

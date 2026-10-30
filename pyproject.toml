@@ -5,16 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "solidworks-mcp-python"
 version = "1.4.0"
-description = "SolidWorks MCP Server with FastMCP and PydanticAI - Python Implementation"
+description = "Python MCP server for SolidWorks: lets Claude and other AI agents build parts, assemblies and drawings through the SolidWorks COM API."
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
 authors = [
-    { name = "Andrew", email = "your-email@example.com" },
+    { name = "Andrew Bartels" },
 ]
 maintainers = [
-    { name = "Andrew", email = "your-email@example.com" },
+    { name = "Andrew Bartels" },
 ]
+keywords = ["solidworks", "mcp", "model-context-protocol", "mcp-server", "cad", "cad-automation", "solidworks-api", "pywin32", "claude", "ai-agents"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -126,12 +127,16 @@ rag = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/solidworks-mcp-python"
-"Bug Reports" = "https://github.com/yourusername/solidworks-mcp-python/issues"
-"Source" = "https://github.com/yourusername/solidworks-mcp-python"
+"Homepage" = "https://github.com/andrewbartels1/SolidworksMCP-python"
+"Documentation" = "https://andrewbartels1.com/SolidworksMCP-python/"
+"Bug Reports" = "https://github.com/andrewbartels1/SolidworksMCP-python/issues"
+"Source" = "https://github.com/andrewbartels1/SolidworksMCP-python"
+"Changelog" = "https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CHANGELOG.md"
 
 [project.scripts]
 solidworks-mcp = "solidworks_mcp.server:cli_main"
+# Same entry point under the package name, so `uvx solidworks-mcp-python` works.
+solidworks-mcp-python = "solidworks_mcp.server:cli_main"
 
 [tool.uv]
 # Force resolution past known CVEs flagged by Trivy against uv.lock. Most of
