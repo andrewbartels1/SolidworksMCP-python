@@ -3,17 +3,20 @@
 Use these after a model or assembly already exists. Recommended order:
 calculate_mass_properties or get_mass_properties, then check_interference, then
 analyze_geometry, then get_material_properties. These tools are for validation and
-inspection, not for creating geometry.
+inspection, not for creating geometry. verify_model checks the finished model
+against expected values in one call.
 """
 
 from typing import Any
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
 from .tool_boundary import (
+    InvalidInputError,
+    normalize_input,
     require_capability,
     require_success,
     with_tool_boundary,
@@ -94,6 +97,203 @@ class GeometryAnalysisInput(BaseModel):
     )
     parameters: dict[str, Any] | None = Field(
         default=None, description="Analysis-specific parameters"
+    )
+
+
+class VerifyModelInput(BaseModel):
+    """Expectations for ``verify_model``; every field is optional.
+
+    Unknown fields are rejected so a misspelt expectation (``volume`` for
+    ``volume_mm3``) fails loudly instead of silently not being checked.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mass_kg: float | None = Field(
+        default=None, description="Expected mass in kg (depends on the material)"
+    )
+    volume_mm3: float | None = Field(default=None, description="Expected volume, mm³")
+    bounding_box_mm: tuple[float, float, float] | None = Field(
+        default=None,
+        description="Expected overall size [x, y, z] in mm, in model axes",
+    )
+    feature_count: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Expected number of modelling features (extrudes, cuts, fillets, "
+            "patterns...); sketches, the origin, folders and the three "
+            "default planes are not counted"
+        ),
+    )
+    solid_body_count: int | None = Field(
+        default=None, ge=0, description="Expected number of solid bodies (parts)"
+    )
+    component_count: int | None = Field(
+        default=None, ge=0, description="Expected top-level components (assemblies)"
+    )
+    mate_count: int | None = Field(
+        default=None, ge=0, description="Expected unsuppressed mates (assemblies)"
+    )
+    no_interference: bool | None = Field(
+        default=None,
+        description="true to require that no components overlap (assemblies)",
+    )
+    relative_tolerance: float = Field(
+        default=0.01,
+        ge=0,
+        description="Allowed relative error for mass and volume (0.01 = 1 %)",
+    )
+    length_tolerance_mm: float = Field(
+        default=0.1, ge=0, description="Allowed error per bounding-box axis, mm"
+    )
+
+
+#: Assembly-only expectations; asking for them on a part is a caller mistake.
+_ASSEMBLY_ONLY = ("component_count", "mate_count", "no_interference")
+
+#: ``GetTypeName2`` values that are tree furniture, not modelling features.
+_NON_MODELLING_TYPES = frozenset(
+    {
+        "ProfileFeature",
+        "3DProfileFeature",
+        "OriginProfileFeature",
+        "DetailCabinet",
+        "MateGroup",
+        "MateReferenceGroup",
+        "MaterialFolder",
+    }
+)
+
+#: SolidWorks always puts the three default planes first in the tree.
+_DEFAULT_PLANE_COUNT = 3
+
+
+def _count_modelling_features(descriptors: list[dict[str, Any]]) -> list[str]:
+    """Return the names of the document's own modelling features.
+
+    Skips component features, sketches, the origin, folders, the mate group
+    and the first three reference planes (the default ones, matched by
+    position so it works in any SolidWorks language).
+
+    Args:
+        descriptors: ``list_features`` rows.
+
+    Returns:
+        list[str]: Counted feature names, in tree order.
+    """
+    names: list[str] = []
+    planes_seen = 0
+    for row in descriptors:
+        if row.get("component") is not None:
+            continue
+        kind = str(row.get("type") or "")
+        if kind == "RefPlane":
+            planes_seen += 1
+            if planes_seen <= _DEFAULT_PLANE_COUNT:
+                continue
+        if kind in _NON_MODELLING_TYPES or kind.endswith("Folder"):
+            continue
+        names.append(str(row.get("name") or ""))
+    return names
+
+
+def _check(
+    name: str,
+    expected: Any,
+    actual: Any,
+    unit: str | None,
+    passed: bool | None,
+    tolerance: Any = None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Build one ``checks`` entry."""
+    entry: dict[str, Any] = {
+        "name": name,
+        "expected": expected,
+        "actual": actual,
+        "tolerance": tolerance,
+        "unit": unit,
+        "passed": passed,
+    }
+    if note:
+        entry["note"] = note
+    elif passed is None:
+        entry["note"] = "Could not be measured"
+    return entry
+
+
+def _relative_check(
+    name: str, expected: float, actual: Any, tolerance: float, unit: str
+) -> dict[str, Any]:
+    """Compare within a relative tolerance; ``None`` actual is unmeasured."""
+    if not isinstance(actual, (int, float)):
+        return _check(name, expected, None, unit, None, tolerance)
+    passed = abs(actual - expected) <= tolerance * abs(expected)
+    return _check(name, expected, actual, unit, passed, tolerance)
+
+
+def _exact_check(name: str, expected: int, actual: Any, unit: str) -> dict[str, Any]:
+    """Compare a count exactly; ``None`` actual is unmeasured."""
+    if not isinstance(actual, int):
+        return _check(name, expected, None, unit, None)
+    return _check(name, expected, actual, unit, actual == expected)
+
+
+def _box_check(
+    expected: tuple[float, float, float], box: Any, tolerance: float
+) -> dict[str, Any]:
+    """Compare bounding-box size per axis.
+
+    When the axes fail but the sorted sizes match, the note says so: the part
+    is right but was built in a different orientation than expected.
+    """
+    want = list(expected)
+    size = box.get("size") if isinstance(box, dict) else None
+    if not isinstance(size, list) or len(size) != 3:
+        return _check("bounding_box_mm", want, None, "mm", None, tolerance)
+    passed = all(abs(a - e) <= tolerance for a, e in zip(size, want, strict=True))
+    note = None
+    if not passed and all(
+        abs(a - e) <= tolerance for a, e in zip(sorted(size), sorted(want), strict=True)
+    ):
+        note = (
+            "Sizes match with the axes reordered: the part is the right size "
+            "but oriented differently (check which plane each sketch is on)"
+        )
+    return _check("bounding_box_mm", want, size, "mm", passed, tolerance, note)
+
+
+def _verdict(checks: list[dict[str, Any]]) -> str:
+    """Overall verdict: fail beats inconclusive beats pass."""
+    if not checks:
+        return "report_only"
+    outcomes = [check["passed"] for check in checks]
+    if False in outcomes:
+        return "fail"
+    if None in outcomes:
+        return "inconclusive"
+    return "pass"
+
+
+def _verdict_message(verdict: str, checks: list[dict[str, Any]], doc: str) -> str:
+    """One-line summary naming the checks that need attention."""
+    total = len(checks)
+    passed = sum(1 for check in checks if check["passed"] is True)
+    failed = [check["name"] for check in checks if check["passed"] is False]
+    unknown = [check["name"] for check in checks if check["passed"] is None]
+    if verdict == "report_only":
+        return f"Measured the active {doc}; no expectations were given"
+    if verdict == "pass":
+        return f"Verification passed: {passed} of {total} checks passed"
+    if verdict == "fail":
+        return (
+            f"Verification failed: {passed} of {total} checks passed "
+            f"(failed: {', '.join(failed)})"
+        )
+    return (
+        f"Verification inconclusive: {passed} of {total} checks passed, "
+        f"could not measure: {', '.join(unknown)}"
     )
 
 
@@ -334,6 +534,182 @@ async def register_analysis_tools(
             "message": "Material properties retrieved successfully",
             "data": result.data,
             "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def verify_model(
+        input_data: VerifyModelInput | dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Check the active part or assembly against what you meant to build.
+
+        Call this as the last step of a build (and whenever a step looks
+        suspicious). A modelling tool returning success does not prove the
+        geometry is right; this reads the model back and compares it with
+        your expectations. Give only the expectations you know; each becomes
+        one check. With no expectations it just reports what it measured.
+
+        Units: mm, mm³ and kg. ``bounding_box_mm`` is the overall size
+        ``[x, y, z]`` in model axes (a sketch on the Front Plane extrudes
+        along z). Widen ``relative_tolerance`` when your hand calculation
+        ignores fillets or chamfers, and ``length_tolerance_mm`` when
+        ``measured.bounding_box_method`` is ``assembly_box`` (SolidWorks'
+        assembly box can be slightly larger than the parts). Mass depends on
+        the assigned material; without one SolidWorks uses a default density.
+
+        Each check reports ``expected``, ``actual``, ``tolerance`` and
+        ``passed``: ``true``, ``false``, or ``null`` when the value could not
+        be measured (never counted as a pass). ``verdict`` is ``pass``,
+        ``fail``, ``inconclusive`` (nothing failed, something unmeasured) or
+        ``report_only``. ``status`` stays ``success`` when the model does not
+        match: the tool worked, the model is what failed.
+
+        Args:
+            input_data (VerifyModelInput | dict[str, Any] | None): Expectations
+                and tolerances. Defaults to None (report only).
+
+        Returns:
+            dict[str, Any]: ``verdict``, ``checks``, ``measured`` and the usual
+            ``status``/``message``/``execution_time``.
+
+        Example:
+            ```python
+            await verify_model({
+                "volume_mm3": 50000,
+                "bounding_box_mm": [100, 50, 10],
+                "feature_count": 1,
+                "solid_body_count": 1,
+            })
+            ```
+        """
+        expectations = normalize_input(input_data, VerifyModelInput)
+        require_capability(
+            adapter,
+            "get_model_geometry_summary",
+            "Active adapter cannot read the model back, so nothing was verified.",
+        )
+        summary_result = await adapter.get_model_geometry_summary()
+        require_success(summary_result, context="Failed to read the model back")
+        summary = dict(summary_result.data or {})
+        is_assembly = summary.get("document_type") == "assembly"
+
+        if not is_assembly:
+            misplaced = [
+                name
+                for name in _ASSEMBLY_ONLY
+                if getattr(expectations, name) is not None
+            ]
+            if misplaced:
+                raise InvalidInputError(
+                    f"{', '.join(misplaced)} only apply to assemblies; the active "
+                    "document is a part"
+                )
+
+        measured: dict[str, Any] = dict(summary)
+        checks: list[dict[str, Any]] = []
+        rel = expectations.relative_tolerance
+
+        if expectations.mass_kg is not None:
+            mass_result = await adapter.get_mass_properties()
+            mass = (
+                mass_result.data.mass
+                if mass_result.is_success and mass_result.data
+                else None
+            )
+            material_result = await adapter.get_material()
+            material = (
+                (material_result.data or {}).get("material")
+                if material_result.is_success
+                else None
+            )
+            measured["mass_kg"] = mass
+            measured["material"] = material
+            check = _relative_check("mass_kg", expectations.mass_kg, mass, rel, "kg")
+            if check["passed"] is False:
+                check["note"] = (
+                    f"Material: {material}"
+                    if material
+                    else "No material assigned; SolidWorks used a default density"
+                )
+            checks.append(check)
+
+        if expectations.volume_mm3 is not None:
+            checks.append(
+                _relative_check(
+                    "volume_mm3",
+                    expectations.volume_mm3,
+                    summary.get("volume_mm3"),
+                    rel,
+                    "mm³",
+                )
+            )
+
+        if expectations.bounding_box_mm is not None:
+            checks.append(
+                _box_check(
+                    expectations.bounding_box_mm,
+                    summary.get("bounding_box_mm"),
+                    expectations.length_tolerance_mm,
+                )
+            )
+
+        if expectations.feature_count is not None:
+            features_result = await adapter.list_features()
+            names = (
+                _count_modelling_features(features_result.data or [])
+                if features_result.is_success
+                else None
+            )
+            measured["features"] = names
+            checks.append(
+                _exact_check(
+                    "feature_count",
+                    expectations.feature_count,
+                    None if names is None else len(names),
+                    "features",
+                )
+            )
+
+        for name, unit in (
+            ("solid_body_count", "bodies"),
+            ("component_count", "components"),
+            ("mate_count", "mates"),
+        ):
+            expected = getattr(expectations, name)
+            if expected is not None:
+                checks.append(_exact_check(name, expected, summary.get(name), unit))
+
+        if expectations.no_interference is not None:
+            interference = await adapter.check_interference({})
+            found = (
+                (interference.data or {}).get("interference_found")
+                if interference.is_success
+                else None
+            )
+            measured["interference"] = (
+                interference.data if interference.is_success else None
+            )
+            clear = None if found is None else not found
+            checks.append(
+                _check(
+                    "no_interference",
+                    expectations.no_interference,
+                    clear,
+                    None,
+                    None if clear is None else clear == expectations.no_interference,
+                    note=None if interference.is_success else interference.error,
+                )
+            )
+
+        verdict = _verdict(checks)
+        return {
+            "status": "success",
+            "message": _verdict_message(
+                verdict, checks, str(summary.get("document_type") or "document")
+            ),
+            "verdict": verdict,
+            "checks": checks,
+            "measured": measured,
+            "execution_time": summary_result.execution_time,
         }
 
     # Future analysis tools:

@@ -14,6 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+Model verification (#173):
+
+- **`verify_model`** checks the active part or assembly against what you
+  expected, in one call. It covers mass and volume within a tolerance,
+  overall size, feature count and solid-body count; for assemblies also
+  component count, mate count and no interference. Each check reports
+  expected, actual and pass/fail. A value that cannot be measured reports
+  `null`, never a pass. With no expectations it reports what it measured.
+- **`measured_change`** on `create_extrusion`, `create_revolve` and
+  `create_cut_extrude`: volume, overall size and body count before and after
+  the feature. A feature that succeeds without changing the volume gets a
+  `warning`.
+- New adapter read `get_model_geometry_summary`: bounding box from each
+  body's exact extreme points, solid-body count, volume, component and mate
+  counts. It never rebuilds the model or clears the selection.
+
 Packaging (#172):
 
 - **PyPI and MCP Registry release.** Pushing a `v*` tag builds the package,

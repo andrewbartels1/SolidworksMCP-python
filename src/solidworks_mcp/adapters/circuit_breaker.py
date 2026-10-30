@@ -1360,6 +1360,18 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={},
         )
 
+    async def get_model_geometry_summary(self) -> AdapterResult[dict[str, Any]]:
+        """Summarise the active document through circuit breaker.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "get_model_geometry_summary",
+            lambda: self.adapter.get_model_geometry_summary(),
+            input_dict={},
+        )
+
     async def create_drawing_view(
         self, payload: Any = None
     ) -> AdapterResult[dict[str, Any]]:

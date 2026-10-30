@@ -6,6 +6,17 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 **Total tools in this category: 12**
 
+## Measured change
+
+`create_extrusion`, `create_revolve` and `create_cut_extrude` report what the feature
+actually did. Their success reply carries a `measured_change` block with
+`volume_before_mm3`, `volume_after_mm3` and `volume_delta_mm3`; the bounding-box size
+before and after; and the solid-body count before and after. If the feature reports
+success but the volume did not change, the reply also has a `warning`: that is how
+SolidWorks shows a feature it accepted without doing anything. Measuring never fails
+the feature; any value that can't be read is `null` with a `note`. Finish a build with
+`verify_model` (see [Analysis tools](analysis.md)).
+
 ---
 
 ### `open_model`

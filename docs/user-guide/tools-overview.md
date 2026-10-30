@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 151 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+The SolidWorks MCP Server provides 152 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
 
 ## Read this first
 
@@ -43,9 +43,9 @@ The SolidWorks MCP Server provides 151 specialized tools for CAD automation. Thi
 
     ---
 
-    Mass properties, interference checking, structural analysis, and validation.
+    Verify a build against expected values, mass properties, interference checking.
 
-    [**5 tools available** :octicons-arrow-right-24:](#analysis-tools)
+    [**6 tools available** :octicons-arrow-right-24:](#analysis-tools)
 
 - :material-export:{ .lg .middle } **Export Tools**
 
@@ -139,7 +139,7 @@ The SolidWorks MCP Server provides 151 specialized tools for CAD automation. Thi
 | **Drawing Analysis** | 8 | Medium | Quality assurance and compliance |
 | **Drawing Automation** | 5 | Medium | Model dimensions without overlaps, BOMs, sheet scale, A3 drawing packages |
 | **Engineering Data** | 8 | Medium | Dimensions, measuring, materials and properties |
-| **Analysis** | 5 | High | Engineering validation and analysis |
+| **Analysis** | 6 | High | Engineering validation and analysis |
 | **Export** | 7 | Low | File format conversion and sharing |
 | **Automation** | 8 | High | Workflow orchestration and batch processing |
 | **File Management** | 19 | Low | File operations, session, and organization |
@@ -148,7 +148,7 @@ The SolidWorks MCP Server provides 151 specialized tools for CAD automation. Thi
 | **Macro Recording** | 7 | High | Workflow capture and optimization |
 | **Docs Discovery** | 2 | Medium | API and COM discovery workflows |
 
-**Total: 151 Tools**
+**Total: 152 Tools**
 
 ## Tool Design Principles
 
@@ -448,14 +448,15 @@ await insert_model_view(
 
 ## Analysis Tools {#analysis-tools}
 
-:material-chart-line: **5 Tools** | Engineering analysis and validation
+:material-chart-line: **6 Tools** | Engineering analysis and validation
 
 | Tool Name | Description | Complexity | Use Case |
 |-----------|-------------|------------|----------|
+| `verify_model` | Check a part or assembly against expected values | Low | Final check of a build |
 | `calculate_mass_properties` | Mass, volume, center of mass | Low | Weight analysis |
-| `interference_detection` | Check part collisions | Medium | Assembly validation |
-| `measure_entities` | Distances, angles, areas | Low | Geometric measurements |
-| `validate_geometry` | Check model integrity | High | Quality assurance |
+| `check_interference` | Check part collisions | Medium | Assembly validation |
+| `analyze_geometry` | Curvature, draft, thickness | High | Quality assurance |
+| `get_material_properties` | Assigned material's properties | Low | Engineering data |
 
 ### Example Usage
 

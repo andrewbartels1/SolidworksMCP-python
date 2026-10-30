@@ -1155,6 +1155,17 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "list_components", lambda adapter: adapter.list_components()
         )
 
+    async def get_model_geometry_summary(self) -> AdapterResult[dict[str, Any]]:
+        """Summarise the active document using pool.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "get_model_geometry_summary",
+            lambda adapter: adapter.get_model_geometry_summary(),
+        )
+
     async def create_drawing_view(
         self, payload: Any = None
     ) -> AdapterResult[dict[str, Any]]:
