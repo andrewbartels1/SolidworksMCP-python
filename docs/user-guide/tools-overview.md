@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 148 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+The SolidWorks MCP Server provides 151 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
 
 ## Read this first
 

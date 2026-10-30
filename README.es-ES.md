@@ -119,13 +119,13 @@ Comandos comunes:
 Para replicar localmente la CI de GitHub Actions (Ubuntu + entorno conda desde `solidworks_mcp.yml` + `make test`), ejecuta:
 
 ```powershell
-.\run-ci-local.ps1
+.\scripts\run-ci-local.ps1
 ```
 
 La primera ejecución compila la imagen. Vuelve a ejecutar sin recompilar cuando solo se ejecuten pruebas:
 
 ```powershell
-.\run-ci-local.ps1 -NoBuild
+.\scripts\run-ci-local.ps1 -NoBuild
 ```
 
 ## Configuración de MCP para VS Code (Windows)

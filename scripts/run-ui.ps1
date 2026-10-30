@@ -8,10 +8,10 @@
 # dashboard API, etc.) still depend on independent of any particular frontend.
 #
 # Usage:
-#   .\run-ui.ps1
-#   .\run-ui.ps1 -BackendPort 8766
-#   .\run-ui.ps1 -NoNewWindow
-#   .\run-ui.ps1 -DryRun
+#   .\scripts\run-ui.ps1
+#   .\scripts\run-ui.ps1 -BackendPort 8766
+#   .\scripts\run-ui.ps1 -NoNewWindow
+#   .\scripts\run-ui.ps1 -DryRun
 
 param(
     [int]$BackendPort = 8766,
@@ -21,7 +21,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)  # repo root (this script lives in scripts/)
 $srcPath = Join-Path $scriptDir "src"
 $uiLogDir = Join-Path $scriptDir ".solidworks_mcp\ui_logs"
 $backendLog = Join-Path $uiLogDir "fastapi_server.log"

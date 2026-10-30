@@ -118,13 +118,13 @@ Common commands:
 To mirror GitHub Actions CI locally (Ubuntu + conda env from `solidworks_mcp.yml` + `make test`), run:
 
 ```powershell
-.\run-ci-local.ps1
+.\scripts\run-ci-local.ps1
 ```
 
 The first run builds the image. Re-run without rebuild when only executing tests:
 
 ```powershell
-.\run-ci-local.ps1 -NoBuild
+.\scripts\run-ci-local.ps1 -NoBuild
 ```
 
 ## MCP Client Configuration (Windows)
