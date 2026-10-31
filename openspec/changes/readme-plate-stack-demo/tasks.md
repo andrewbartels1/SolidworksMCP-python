@@ -28,8 +28,16 @@
 - [x] 2.7 `auto_center_marks` normalises its input (a dict raised); test
 - [x] 2.8 `add_line` reads the mock wrapper's `id` key; test
 
-## 3. Second live run (only after the maintainer says go)
+## 3. Live runs (only after the maintainer says go)
 
+- [x] 3.0 Second run (2026-10-30): the first hole's line-to-circle
+      dimension failed; `Extension.AddDimension` with the line's own
+      placement returned nothing. `add_sketch_dimension` now places a
+      two-entity linear dimension midway between them and tries
+      `AddDimension2`, then the circle's centre point, then
+      `Extension.AddDimension`; unit-tested, `sketch.py` at 100 %
+- [x] 3.0a The README links every runnable demo script (Demos section);
+      the Pack-and-Go demo is left out because it needs a local file
 - [ ] 3.1 Run it with `live_demo.ps1 -CaptureDir docs/assets/demos/readme`.
       Untested live until now: a line-to-circle linear dimension, the
       sketch's fully-defined state, a drawing of an assembly without an
