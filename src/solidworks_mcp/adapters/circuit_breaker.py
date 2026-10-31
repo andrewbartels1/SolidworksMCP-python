@@ -1850,6 +1850,64 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"numerator": numerator, "denominator": denominator},
         )
 
+    async def add_gtol(
+        self,
+        characteristic: str,
+        tolerance: float,
+        x_mm: float,
+        y_mm: float,
+        diameter_zone: bool = False,
+        material_condition: str = "none",
+        datums: list[str] | None = None,
+        attach_at_mm: tuple[float, float] | None = None,
+        dimension: tuple[str, str] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a GD&T feature control frame through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_gtol",
+            lambda: self.adapter.add_gtol(
+                characteristic,
+                tolerance,
+                x_mm,
+                y_mm,
+                diameter_zone,
+                material_condition,
+                datums,
+                attach_at_mm,
+                dimension,
+            ),
+            input_dict={
+                "characteristic": characteristic,
+                "tolerance": tolerance,
+                "x_mm": x_mm,
+                "y_mm": y_mm,
+                "diameter_zone": diameter_zone,
+                "material_condition": material_condition,
+                "datums": datums,
+                "attach_at_mm": attach_at_mm,
+                "dimension": dimension,
+            },
+        )
+
+    async def add_datum_tag(
+        self,
+        label: str,
+        attach_at_mm: tuple[float, float],
+        x_mm: float,
+        y_mm: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a datum feature symbol through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_datum_tag",
+            lambda: self.adapter.add_datum_tag(label, attach_at_mm, x_mm, y_mm),
+            input_dict={
+                "label": label,
+                "attach_at_mm": attach_at_mm,
+                "x_mm": x_mm,
+                "y_mm": y_mm,
+            },
+        )
+
     async def create_standard_drawing(
         self,
         model_path: str,
@@ -1865,6 +1923,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         include_isometric: bool = True,
         write_model_properties: bool = True,
         title_block_text_height_mm: float | None = None,
+        include_bom: bool = False,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete standard A3 drawing through circuit breaker."""
         return await self._execute_with_circuit_breaker(
@@ -1883,6 +1942,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 include_isometric,
                 write_model_properties,
                 title_block_text_height_mm,
+                include_bom,
             ),
             input_dict={
                 "model_path": model_path,
@@ -1898,6 +1958,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "include_isometric": include_isometric,
                 "write_model_properties": write_model_properties,
                 "title_block_text_height_mm": title_block_text_height_mm,
+                "include_bom": include_bom,
             },
         )
 

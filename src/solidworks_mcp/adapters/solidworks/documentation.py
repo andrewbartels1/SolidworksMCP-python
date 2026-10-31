@@ -83,6 +83,8 @@ _DEFAULT_MATERIAL_DATABASE = "SOLIDWORKS Materials"
 
 # SelectByID2 entity types accepted by measure_entities, keyed by spec prefix.
 _MEASURE_PREFIXES = {"face": "FACE", "edge": "EDGE", "vertex": "VERTEX"}
+#: Layout passes: one full plan, then re-plans of what is still in conflict.
+_LAYOUT_PASSES = 3
 
 
 def _parse_measure_spec(spec: str) -> tuple[str, float, float, float, str]:
@@ -871,6 +873,23 @@ class SolidWorksDocumentationMixin:
         Returns:
             bool: Whether it was selected and deleted.
         """
+        selected = self._select_display_dimension(model, an)
+        deleted = selected and bool(
+            self._attempt(lambda: model.Extension.DeleteSelection2(0), default=False)
+        )
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        return deleted
+
+    def _select_display_dimension(self, model: Any, an: Any) -> bool:
+        """Select one drawing dimension, alone (pitfall #30: by its selection name).
+
+        Args:
+            model: The drawing document.
+            an: The dimension's ``IAnnotation``.
+
+        Returns:
+            bool: Whether it is now the selection.
+        """
         specific = self._attempt(lambda: an.GetSpecificAnnotation(), default=None)
         disp = (
             _as_com(self, specific, "IDisplayDimension")
@@ -885,17 +904,14 @@ class SolidWorksDocumentationMixin:
         if not sel_name:
             return False
         self._attempt(lambda: model.ClearSelection2(True), default=None)
-        selected = self._attempt(
-            lambda: model.Extension.SelectByID2(
-                sel_name, "DIMENSION", 0.0, 0.0, 0.0, False, 0, _null_callout(), 0
-            ),
-            default=False,
+        return bool(
+            self._attempt(
+                lambda: model.Extension.SelectByID2(
+                    sel_name, "DIMENSION", 0.0, 0.0, 0.0, False, 0, _null_callout(), 0
+                ),
+                default=False,
+            )
         )
-        deleted = bool(selected) and bool(
-            self._attempt(lambda: model.Extension.DeleteSelection2(0), default=False)
-        )
-        self._attempt(lambda: model.ClearSelection2(True), default=None)
-        return deleted
 
     def _dimension_annotations(self, view: Any) -> list[tuple[Any, str | None]]:
         """List the display dimensions in a view with their model names.
@@ -991,6 +1007,7 @@ class SolidWorksDocumentationMixin:
             shown.update(n for _, n in self._dimension_annotations(views[name]) if n)
         removed: dict[str, int] = {}
         method = "insert_model_annotations"
+        imported: dict[str, list[tuple[Any, str | None]]] = {}
         for name in names:
             self._attempt(lambda n=name: drawing.ActivateView(n), default=None)
             self._attempt(lambda: model.ClearSelection2(True), default=None)
@@ -1007,8 +1024,14 @@ class SolidWorksDocumentationMixin:
                 default=None,
             )
             self._attempt(lambda: model.ClearSelection2(True), default=None)
+            imported[name] = self._dimension_annotations(views[name])
+        # Each dimension stays in the view that took the most dimensions: the
+        # one that shows the sketch's true shape (a sketch on the Top plane is
+        # dimensioned in the plan, not projected edge-on into the front view,
+        # where holes stack up). Ties keep the view order.
+        for name in sorted(names, key=lambda n: -len(imported[n])):
             removed[name] = 0
-            for an, dim_name in self._dimension_annotations(views[name]):
+            for an, dim_name in imported[name]:
                 if dim_name and dim_name in shown:
                     if self._delete_display_dimension(model, an):
                         removed[name] += 1
@@ -1191,7 +1214,7 @@ class SolidWorksDocumentationMixin:
             angle = float(
                 self._attempt(lambda i=i: dd.GetTextAngleAtIndex(i), default=0.0) or 0.0
             )
-            width = max(box_w, len(text.strip()) * height * 0.62)
+            width = max(box_w, _layout.shown_length(text) * height * 0.62)
             boxes.append(
                 _layout.text_box(pos[0], pos[1], width, max(height, 0.001), angle)
             )
@@ -1278,6 +1301,7 @@ class SolidWorksDocumentationMixin:
         obstacles: dict[str, Any] | None = None,
         work_area: Any = None,
         move: bool = True,
+        attached: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Plan, apply and verify the dimension layout; arrange_dimensions' body.
 
@@ -1286,9 +1310,12 @@ class SolidWorksDocumentationMixin:
             obstacles: Named boxes nothing may touch (title block, captions).
             work_area: The frame's working area; the sheet when ``None``.
             move: ``False`` only checks the current layout.
+            attached: Dimension key -> box hanging off it (a GD&T frame),
+                relative to its position; counted as part of its text.
 
         Returns:
             dict[str, Any]: ``dimensions``, ``moved``, ``unplaced``,
+            ``passes``, ``trace`` (each pass's plan, moves and overlaps),
             ``overlaps_before``/``overlaps_after``, ``remaining_overlaps`` and
             ``sheet_size_m``. Remaining overlaps are reported, not raised.
 
@@ -1304,18 +1331,94 @@ class SolidWorksDocumentationMixin:
             )
         sheet = work_area or self._sheet_bounds(drawing)
         outlines, geometries, annotations = self._collect_layout(drawing, all_views)
+        _layout.attach_boxes(geometries, attached or {})
         before = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
-        movable = [g for g in geometries if not view_name or g.view == view_name]
-        fixed = [g for g in geometries if view_name and g.view != view_name]
-        moves, unplaced = (
-            _layout.plan_layout(fixed + movable, outlines, sheet, obstacles)
-            if move
-            else ({}, [])
-        )
+        after = before
+        moved, unplaced, passes, trace = 0, [], 0, []
+        # The first pass plans every movable dimension from where it was
+        # imported. SolidWorks does not always draw a dimension where the
+        # plan put it, so later passes re-plan only the dimensions still in
+        # conflict, from the real read-back geometry, with the rest fixed.
+        retry: set[str] | None = None
+        while move and passes < _LAYOUT_PASSES and (retry is None or retry):
+            passes += 1
+            allowed = {
+                g.key for g in geometries if not view_name or g.view == view_name
+            }
+            movable = allowed if retry is None else allowed & retry
+            fixed = {g.key for g in geometries} - movable
+            moves, unplaced = _layout.plan_layout(
+                geometries,
+                outlines,
+                sheet,
+                obstacles,
+                fixed=fixed,
+                inside_first=set(attached or {}),
+            )
+            applied = self._apply_moves(geometries, annotations, moves, movable)
+            moved += applied
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            self._attempt(lambda: model.EditRebuild3(), default=None)
+            self._attempt(lambda: model.GraphicsRedraw2(), default=None)
+            outlines, geometries, annotations = self._collect_layout(drawing, all_views)
+            _layout.attach_boxes(geometries, attached or {})
+            after = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
+            # Both sides of a conflict are re-planned: a leader that grazes a
+            # dimension's text is as likely the one to move as the text.
+            keys = {g.key for g in geometries}
+            retry = {
+                k
+                for p in after
+                for k in (p["dimension"], p["conflicts_with"])
+                if k in keys
+            }
+            trace.append(
+                {
+                    "pass": passes,
+                    "movable": sorted(movable),
+                    "planned": {k: [round(d, 5) for d in v] for k, v in moves.items()},
+                    "moved": applied,
+                    "unplaced": unplaced,
+                    "overlaps": after[:50],
+                }
+            )
+        result = {
+            "dimensions": len(geometries),
+            "moved": moved,
+            "unplaced": unplaced,
+            "passes": passes,
+            "trace": trace,
+            "overlaps_before": len(before),
+            "overlaps_after": len(after),
+            "remaining_overlaps": after[:50],
+            "sheet_size_m": [sheet[2], sheet[3]] if sheet else None,
+        }
+        return result
+
+    def _apply_moves(
+        self,
+        geometries: list[Any],
+        annotations: dict[str, Any],
+        moves: dict[str, tuple[float, float]],
+        movable: set[str],
+    ) -> int:
+        """Move each movable dimension by its planned offset; return how many moved.
+
+        Args:
+            geometries: Every dimension's geometry, as read.
+            annotations: Geometry key -> ``IAnnotation``.
+            moves: Planned ``(dx, dy)`` per key.
+            movable: Keys this pass may move.
+
+        Returns:
+            int: Dimensions ``SetPosition`` accepted.
+        """
         moved = 0
-        for geometry in movable:
+        for geometry in geometries:
             delta = moves.get(geometry.key)
-            if not delta or (abs(delta[0]) < 1e-9 and abs(delta[1]) < 1e-9):
+            if geometry.key not in movable or not delta:
+                continue
+            if abs(delta[0]) < 1e-9 and abs(delta[1]) < 1e-9:
                 continue
             an = annotations[geometry.key]
             x, y = geometry.position[0] + delta[0], geometry.position[1] + delta[1]
@@ -1329,21 +1432,7 @@ class SolidWorksDocumentationMixin:
                 lambda a=an, x=x, y=y, z=z: a.SetPosition(x, y, z), default=False
             ):
                 moved += 1
-        self._attempt(lambda: model.ClearSelection2(True), default=None)
-        self._attempt(lambda: model.EditRebuild3(), default=None)
-        self._attempt(lambda: model.GraphicsRedraw2(), default=None)
-        outlines, geometries, _ = self._collect_layout(drawing, all_views)
-        after = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
-        result = {
-            "dimensions": len(geometries),
-            "moved": moved,
-            "unplaced": unplaced,
-            "overlaps_before": len(before),
-            "overlaps_after": len(after),
-            "remaining_overlaps": after[:50],
-            "sheet_size_m": [sheet[2], sheet[3]] if sheet else None,
-        }
-        return result
+        return moved
 
     async def arrange_dimensions(
         self, view_name: str | None = None

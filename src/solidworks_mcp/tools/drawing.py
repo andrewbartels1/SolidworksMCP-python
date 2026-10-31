@@ -13,6 +13,7 @@ from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
 from .tool_boundary import (
     UnsupportedOperationError,
+    normalize_input,
     require_capability,
     require_success,
     with_tool_boundary,
@@ -989,6 +990,7 @@ async def register_drawing_tools(
             "Active adapter does not support auto_center_marks; "
             "no centre marks were inserted.",
         )
+        input_data = normalize_input(input_data, AutoCenterMarksInput)
         result = await adapter.auto_center_marks(
             input_data.view_name,
             input_data.mark_holes,

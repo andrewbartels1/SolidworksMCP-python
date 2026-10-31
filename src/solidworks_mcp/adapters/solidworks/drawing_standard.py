@@ -12,7 +12,7 @@ Implements an A3 ISO drafting standard on SolidWorks:
 * **Views** - third-angle front, plan and side view plus an isometric, each in
   its own cell, at the largest standard scale where the part, its dimension
   rows and its caption fit (cells sized from the part, so it fills the sheet).
-  Each view gets a bold capital caption with its name, e.g. ``FRONT ELEVATION``.
+  Each view gets a bold capital caption with its name, e.g. ``FRONT VIEW``.
 * **Dimensions** - imported from the model, each shown once, laid out in rows
   (first 8 mm out, rows 7 mm, columns 9 mm), trailing zeros removed.
 * **Notes** - a NOTES block in its own cell (material, units, projection, plus
@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
 from . import dimension_layout as _layout
+from .features import _null_callout
 from .io import _as_com, _resolve_drawing_view, _sw_type_info, _view_names
 
 if TYPE_CHECKING:
@@ -70,13 +71,16 @@ CELLS: dict[str, Box] = {
     "notes": (0.015, 0.015, 0.215, 0.075),
 }
 CAPTIONS = {
-    "front": "FRONT ELEVATION",
-    "plan": "PLAN",
-    "side": "SIDE ELEVATION",
-    "iso": "ISOMETRIC",
+    "front": "FRONT VIEW",
+    "plan": "TOP VIEW",
+    "side": "SIDE VIEW",
+    "iso": "ISOMETRIC VIEW",
 }
 #: Caption strip at the bottom of every view cell.
 CAPTION_STRIP = 0.009
+#: A BOM placed by the generator sits 5 mm inside its cell's top-right corner,
+#: and the isometric below it keeps 5 mm clear of it.
+BOM_GAP = 0.005
 CAPTION_HEIGHT = 0.0032
 NOTE_HEIGHT = 0.003
 
@@ -89,6 +93,10 @@ _SW_PREF_SHEET_FORMAT_FOLDER = 7
 _SW_PAPER_A3 = 8
 _SW_TEMPLATE_CUSTOM = 12
 # swUserPreferenceStringValue_e / swBomType_e / swBOMConfigurationAnchorType_e /
+#: swDisplayMode_e.swHIDDEN_GREYED: "Hidden Lines Visible", drawn dashed on a
+#: drawing (read from swconst.tlb, SW 2026).
+_SW_HIDDEN_LINES_VISIBLE = 1
+
 # swNumberingType_e (used by insert_bom_table)
 _SW_PREF_BOM_TEMPLATES = 22
 _SW_BOM_TYPES = {"parts_only": 1, "top_level_only": 2, "indented": 3}
@@ -98,6 +106,48 @@ _SW_BOM_ANCHOR_TOP_RIGHT = 2
 _SW_BOM_ANCHOR_BOTTOM_LEFT = 3
 _SW_BOM_ANCHOR_BOTTOM_RIGHT = 4
 _SW_NUMBERING_NONE = 0
+#: GD&T characteristic -> SolidWorks GTOL symbol code (IGtol::SetFrameSymbols2).
+_GTOL_SYMBOLS = {
+    "position": "<IGTOL-POSI>",
+    "flatness": "<IGTOL-FLAT>",
+    "perpendicularity": "<IGTOL-PERP>",
+    "parallelism": "<IGTOL-PARA>",
+    "profile_surface": "<IGTOL-SPROF>",
+    "concentricity": "<IGTOL-CONC>",
+}
+#: Material condition -> modifier symbol code.
+_GTOL_MODIFIERS = {"none": "", "mmc": "<MOD-MMC>", "lmc": "<MOD-LMC>"}
+
+
+def gtol_problem(
+    characteristic: str,
+    tolerance: float,
+    material_condition: str,
+    datums: list[str] | None,
+) -> str | None:
+    """Why a feature control frame's inputs are invalid, or ``None`` when valid.
+
+    Shared by the real and mock adapters so both refuse the same inputs.
+
+    Args:
+        characteristic: The GD&T characteristic name.
+        tolerance: The tolerance value.
+        material_condition: ``none``, ``mmc`` or ``lmc``.
+        datums: Datum letters, primary first.
+
+    Returns:
+        str | None: The problem, in words.
+    """
+    letters = [d.strip() for d in datums or []]
+    if characteristic not in _GTOL_SYMBOLS:
+        return f"characteristic must be one of {', '.join(_GTOL_SYMBOLS)}"
+    if material_condition not in _GTOL_MODIFIERS:
+        return f"material_condition must be one of {', '.join(_GTOL_MODIFIERS)}"
+    if tolerance <= 0:
+        return "tolerance must be positive"
+    if len(letters) > 3 or any(len(d) != 1 or not d.isalpha() for d in letters):
+        return "at most three datums, each a single letter"
+    return None
 
 
 def _double_array(values: list[float]) -> Any:
@@ -388,6 +438,7 @@ class _Sheet:
         path: The model being drawn.
         sheet_format: The ``.slddrt`` applied to the sheet.
         include_isometric: Whether to add the isometric view.
+        include_bom: Whether to put a BOM above the isometric.
         material: The part's material, for the notes.
         extra_notes: The caller's note lines.
         views: View name -> ``IView``, orthographic first.
@@ -397,16 +448,20 @@ class _Sheet:
         scale: The sheet scale.
         cells: Role -> cell on the sheet.
         iso_scale: The isometric view's own scale.
+        iso_size: The isometric's model size, for fitting it to a cell.
+        bom_box: The BOM table's box on the sheet, once placed.
         captions: View name -> caption text.
         notes: ``(label, IAnnotation)`` for every caption and note line.
         note_lines: The NOTES block's text.
         title_block: Field name -> how it was fitted to its box.
+        format_links: The property links the sheet format's notes show.
         field_height: The caller's cap on the fitted fields' text height.
     """
 
     path: str
     sheet_format: str
     include_isometric: bool = True
+    include_bom: bool = False
     material: str | None = None
     extra_notes: list[str] = field(default_factory=list)
     views: dict[str, Any] = field(default_factory=dict)
@@ -416,10 +471,13 @@ class _Sheet:
     scale: tuple[float, float] = (1, 1)
     cells: dict[str, Box] = field(default_factory=dict)
     iso_scale: tuple[float, float] | None = None
+    iso_size: tuple[float, float] | None = None
+    bom_box: Box | None = None
     captions: dict[str, str] = field(default_factory=dict)
     notes: list[tuple[str, Any]] = field(default_factory=list)
     note_lines: list[str] = field(default_factory=list)
     title_block: dict[str, dict[str, Any]] = field(default_factory=dict)
+    format_links: list[str] = field(default_factory=list)
     field_height: float | None = None
 
 
@@ -451,6 +509,12 @@ class SolidWorksDrawingStandardMixin:
 
         def _require_drawing(self) -> AdapterResult[Any] | None: ...
 
+        def _get_attr_or_call(self, obj: Any, attr_name: str) -> Any: ...
+
+        def _dimension_annotations(self, view: Any) -> list[tuple[Any, str | None]]: ...
+
+        def _select_display_dimension(self, model: Any, an: Any) -> bool: ...
+
         def _sheet_bounds(self, drawing: Any) -> Any: ...
 
         def _dimension_geometry(self, an: Any, key: str, view_name: str) -> Any: ...
@@ -468,6 +532,7 @@ class SolidWorksDrawingStandardMixin:
             obstacles: dict[str, Any] | None = None,
             work_area: Any = None,
             move: bool = True,
+            attached: dict[str, Any] | None = None,
         ) -> dict[str, Any]: ...
 
         def _collect_layout(
@@ -543,6 +608,40 @@ class SolidWorksDrawingStandardMixin:
         bottom = y - height if top_anchored else y
         return (left, bottom, left + width, bottom + height)
 
+    def _slide_onto_sheet(self, table: Any, box: Box, sheet: Box) -> bool:
+        """Move a table by the least distance that puts its box on the sheet.
+
+        The ISO A3 format's BOM anchor is at the top of the sheet, and a table
+        grown up from it there runs off the top (measured live on SW 2026).
+
+        Args:
+            table: The ``ITableAnnotation``.
+            box: Its box on the sheet, in metres.
+            sheet: The sheet's box, in metres.
+
+        Returns:
+            bool: Whether the table was moved. ``False`` when it is larger
+            than the sheet or its position cannot be read.
+        """
+        if (
+            box[2] - box[0] > sheet[2] - sheet[0]
+            or box[3] - box[1] > sheet[3] - sheet[1]
+        ):
+            return False
+        dx = max(sheet[0] - box[0], 0.0) + min(sheet[2] - box[2], 0.0)
+        dy = max(sheet[1] - box[1], 0.0) + min(sheet[3] - box[3], 0.0)
+        t = _sw_type_info.flagged(table, "ITableAnnotation")
+        an = self._attempt(
+            lambda: _sw_type_info.flagged(t.GetAnnotation(), "IAnnotation"),
+            default=None,
+        )
+        pos = self._attempt(lambda: an.GetPosition(), default=None)
+        if not isinstance(pos, (list, tuple)) or len(pos) < 2:
+            return False
+        x, y = float(pos[0]) + dx, float(pos[1]) + dy
+        self._attempt(lambda: an.SetPosition(x, y, 0.0), default=None)
+        return True
+
     async def insert_bom_table(
         self,
         view_name: str,
@@ -558,7 +657,10 @@ class SolidWorksDrawingStandardMixin:
         when the sheet has no format. Its stationary corner is the
         bottom-left, so the table grows up onto the sheet; with the top-left
         it hung below the sheet (measured live on SW 2026). The table's box is
-        read back and must lie on the sheet. With no template the library
+        read back and must lie on the sheet. An anchor near the top of the
+        sheet (the ISO A3 format's) makes it grow off the top, so a table
+        placed by the anchor is slid back onto the sheet; one placed at a
+        given ``x_mm``/``y_mm`` is never moved. With no template the library
         default ``bom-standard.sldbomtbt`` from the BOM templates folder is
         used.
 
@@ -571,8 +673,8 @@ class SolidWorksDrawingStandardMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: The view, BOM type, template, row
-            count and ``table_box_mm``; an error naming the box when the
-            table runs off the sheet.
+            count, ``table_box_mm`` and ``moved_onto_sheet``; an error naming
+            the box when the table still runs off the sheet.
         """
         guard = self._require_drawing()
         if guard is not None:
@@ -583,76 +685,109 @@ class SolidWorksDrawingStandardMixin:
                 error="bom_type must be top_level_only, parts_only or indented",
             )
 
-        def _insert() -> dict[str, Any]:
-            drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
-            view = _resolve_drawing_view(self, drawing, view_name)
-            if view is None:
-                raise LookupError(
-                    f"No view named {view_name!r}. Views: "
-                    f"{', '.join(_view_names(self, drawing)) or 'none'}"
-                )
-            template = template_path
-            if not template:
-                folder = str(
-                    self._attempt(
-                        lambda: self.swApp.GetUserPreferenceStringValue(
-                            _SW_PREF_BOM_TEMPLATES
-                        ),
-                        default="",
-                    )
-                    or ""
-                ).split(";")[0]
-                candidate = os.path.join(folder, "bom-standard.sldbomtbt")
-                template = candidate if os.path.exists(candidate) else ""
-            use_anchor = x_mm is None or y_mm is None
-            config = str(
-                self._attempt(lambda: view.ReferencedConfiguration, default="") or ""
-            )
-            numbering = 1 if bom_type == "indented" else _SW_NUMBERING_NONE
-            table = view.InsertBomTable4(
-                use_anchor,
-                (x_mm or 0.0) / 1000.0,
-                (y_mm or 0.0) / 1000.0,
-                _SW_BOM_ANCHOR_BOTTOM_LEFT,
-                _SW_BOM_TYPES[bom_type],
-                config,
-                template,
-                False,
-                numbering,
-                False,
-            )
-            if table is None:
-                raise Exception(
-                    f"InsertBomTable4 returned nothing for view {view_name!r}. "
-                    "A BOM needs a view of an assembly"
-                    + ("" if template else " and a BOM template (none found)")
-                    + "."
-                )
-            rows = self._attempt(
-                lambda: _sw_type_info.flagged(table, "ITableAnnotation").RowCount,
-                default=None,
-            )
-            box = self._table_box(table)
-            box_mm = [round(c * 1000, 1) for c in box] if box else None
-            sheet = self._sheet_bounds(drawing)
-            if box and sheet and not _layout.inside(box, _grow(sheet, 1e-6)):
-                raise RuntimeError(
-                    f"The BOM table was inserted but runs off the sheet: table "
-                    f"{box_mm} mm, sheet {sheet[2] * 1000:g} x {sheet[3] * 1000:g} "
-                    "mm. Give x_mm and y_mm to place it on the sheet."
-                )
-            return {
-                "view": view_name,
-                "bom_type": bom_type,
-                "template": template or None,
-                "row_count": rows,
-                "table_box_mm": box_mm,
-            }
-
         return cast(
             "AdapterResult[dict[str, Any]]",
-            self._handle_com_operation("insert_bom_table", _insert),
+            self._handle_com_operation(
+                "insert_bom_table",
+                lambda: self._insert_bom(
+                    view_name, template_path, bom_type, x_mm, y_mm
+                )[1],
+            ),
         )
+
+    def _insert_bom(
+        self,
+        view_name: str,
+        template_path: str | None,
+        bom_type: str,
+        x_mm: float | None,
+        y_mm: float | None,
+    ) -> tuple[Any, dict[str, Any]]:
+        """Insert a BOM table on a view; insert_bom_table's body.
+
+        Returns:
+            tuple: The ``ITableAnnotation`` and what insert_bom_table reports.
+
+        Raises:
+            LookupError: No such view.
+            RuntimeError: The table runs off the sheet.
+        """
+        drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
+        view = _resolve_drawing_view(self, drawing, view_name)
+        if view is None:
+            raise LookupError(
+                f"No view named {view_name!r}. Views: "
+                f"{', '.join(_view_names(self, drawing)) or 'none'}"
+            )
+        template = template_path
+        if not template:
+            folder = str(
+                self._attempt(
+                    lambda: self.swApp.GetUserPreferenceStringValue(
+                        _SW_PREF_BOM_TEMPLATES
+                    ),
+                    default="",
+                )
+                or ""
+            ).split(";")[0]
+            candidate = os.path.join(folder, "bom-standard.sldbomtbt")
+            template = candidate if os.path.exists(candidate) else ""
+        use_anchor = x_mm is None or y_mm is None
+        config = str(
+            self._attempt(lambda: view.ReferencedConfiguration, default="") or ""
+        )
+        numbering = 1 if bom_type == "indented" else _SW_NUMBERING_NONE
+        table = view.InsertBomTable4(
+            use_anchor,
+            (x_mm or 0.0) / 1000.0,
+            (y_mm or 0.0) / 1000.0,
+            _SW_BOM_ANCHOR_BOTTOM_LEFT,
+            _SW_BOM_TYPES[bom_type],
+            config,
+            template,
+            False,
+            numbering,
+            False,
+        )
+        if table is None:
+            raise Exception(
+                f"InsertBomTable4 returned nothing for view {view_name!r}. "
+                "A BOM needs a view of an assembly"
+                + ("" if template else " and a BOM template (none found)")
+                + "."
+            )
+        rows = self._attempt(
+            lambda: _sw_type_info.flagged(table, "ITableAnnotation").RowCount,
+            default=None,
+        )
+        box = self._table_box(table)
+        sheet = self._sheet_bounds(drawing)
+        on_sheet = _grow(sheet, 1e-6) if sheet else None
+        moved = False
+        if (
+            use_anchor
+            and box
+            and on_sheet
+            and not _layout.inside(box, on_sheet)
+            and self._slide_onto_sheet(table, box, sheet)
+        ):
+            moved = True
+            box = self._table_box(table)
+        box_mm = [round(c * 1000, 1) for c in box] if box else None
+        if box and on_sheet and not _layout.inside(box, on_sheet):
+            raise RuntimeError(
+                f"The BOM table was inserted but runs off the sheet: table "
+                f"{box_mm} mm, sheet {sheet[2] * 1000:g} x {sheet[3] * 1000:g} "
+                "mm. Give x_mm and y_mm to place it on the sheet."
+            )
+        return table, {
+            "view": view_name,
+            "bom_type": bom_type,
+            "template": template or None,
+            "row_count": rows,
+            "table_box_mm": box_mm,
+            "moved_onto_sheet": moved,
+        }
 
     async def set_sheet_scale(
         self, numerator: float, denominator: float
@@ -695,6 +830,296 @@ class SolidWorksDrawingStandardMixin:
         return cast(
             "AdapterResult[dict[str, Any]]",
             self._handle_com_operation("set_sheet_scale", _scale),
+        )
+
+    # -- GD&T ------------------------------------------------------------
+
+    def _select_edge_at(self, point_mm: tuple[float, float]) -> bool:
+        """Select the drawing edge nearest a sheet point, given in mm."""
+        model = self.currentModel
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        x, y = point_mm[0] / 1000.0, point_mm[1] / 1000.0
+        return bool(
+            self._attempt(
+                lambda: model.Extension.SelectByID2(
+                    "", "EDGE", x, y, 0.0, False, 0, _null_callout(), 0
+                ),
+                default=False,
+            )
+        )
+
+    def _place_annotation(self, item: Any, x_mm: float, y_mm: float) -> None:
+        """Move an annotation-owning object (frame, datum tag) to a sheet point."""
+        an = self._attempt(lambda: self._get_attr_or_call(item, "GetAnnotation"))
+        if an is not None:
+            an = _sw_type_info.flagged(an, "IAnnotation")
+            self._attempt(
+                lambda: an.SetPosition(x_mm / 1000.0, y_mm / 1000.0, 0.0),
+                default=None,
+            )
+
+    async def add_gtol(
+        self,
+        characteristic: str,
+        tolerance: float,
+        x_mm: float,
+        y_mm: float,
+        diameter_zone: bool = False,
+        material_condition: str = "none",
+        datums: list[str] | None = None,
+        attach_at_mm: tuple[float, float] | None = None,
+        dimension: tuple[str, str] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a feature control frame (GD&T) to the active drawing.
+
+        ``IModelDoc2::InsertGtol`` creates the frame on whatever is selected:
+        a drawing dimension (``dimension``; the frame sits under its text and
+        moves with it, the usual place for a hole's position tolerance), the
+        edge picked at ``attach_at_mm`` (with a leader), or nothing
+        (free-standing);
+        ``IGtol::SetFrameSymbols2`` sets the characteristic, the Ø zone and
+        the material condition, and ``IGtol::SetFrameValues`` the tolerance
+        and datums. The values are read back with ``GetFrameValues``, so a
+        frame SolidWorks did not fill in is an error, not a success.
+
+        Args:
+            characteristic: ``position``, ``flatness``, ``perpendicularity``,
+                ``parallelism``, ``profile_surface`` or ``concentricity``.
+            tolerance: The tolerance value, in drawing units.
+            x_mm: Where the frame goes on the sheet.
+            y_mm: Where the frame goes on the sheet.
+            diameter_zone: Prefix the tolerance with Ø (a cylindrical zone).
+            material_condition: ``none``, ``mmc`` (Ⓜ) or ``lmc`` (Ⓛ).
+            datums: Up to three datum letters, primary first.
+            attach_at_mm: A sheet point on the edge the leader points to.
+            dimension: ``(view name, model dimension name)``, e.g.
+                ``("Drawing View2", "D3@Sketch1")``: attach the frame to that
+                drawing dimension. ``x_mm``/``y_mm`` are then not used.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The frame as read back.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+        problem = gtol_problem(characteristic, tolerance, material_condition, datums)
+        if problem is not None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=problem)
+        symbol = _GTOL_SYMBOLS[characteristic]
+        modifier = _GTOL_MODIFIERS[material_condition]
+        letters = [d.strip().upper() for d in datums or []]
+
+        def _insert() -> dict[str, Any]:
+            model = self.currentModel
+            target = None
+            if dimension is not None:
+                target = self._drawing_dimension(*dimension)
+                if target is None or not self._select_display_dimension(model, target):
+                    raise LookupError(
+                        f"No dimension {dimension[1]!r} in view {dimension[0]!r}"
+                    )
+                attached: Any = dimension[1]
+            elif attach_at_mm is not None:
+                if not self._select_edge_at(attach_at_mm):
+                    raise LookupError(
+                        f"No drawing edge found at {list(attach_at_mm)} mm"
+                    )
+                attached = True
+            else:
+                attached = False
+            gtol = self._get_attr_or_call(model, "InsertGtol")
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            if gtol is None:
+                raise Exception("InsertGtol returned nothing; no frame was added")
+            gtol = _sw_type_info.flagged(gtol, "IGtol")
+            padded = [*letters, "", "", ""][:3]
+            text = f"{tolerance:g}"
+            gtol.SetFrameSymbols2(
+                1, symbol, diameter_zone, modifier, False, "", "", "", ""
+            )
+            gtol.SetFrameValues(1, text, "", *padded)
+            if dimension is None:
+                self._place_annotation(gtol, x_mm, y_mm)
+            self._attempt(lambda: model.GraphicsRedraw2(), default=None)
+            values = self._attempt(lambda: gtol.GetFrameValues(1), default=None)
+            read = [str(v) for v in values] if isinstance(values, (list, tuple)) else []
+            if not read or read[0] != text or read[2:5] != padded:
+                raise Exception(
+                    f"The frame did not take its values: read back {read or None}, "
+                    f"expected tolerance {text!r} and datums {padded}"
+                )
+            return {
+                "characteristic": characteristic,
+                "tolerance": text,
+                "diameter_zone": diameter_zone,
+                "material_condition": material_condition,
+                "datums": letters,
+                "attached": attached,
+                "position_mm": None if dimension is not None else [x_mm, y_mm],
+                "layout": (
+                    None
+                    if dimension is None
+                    else self._clear_attached_frame(dimension[0], target, gtol)
+                ),
+            }
+
+        result = cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("add_gtol", _insert),
+        )
+        layout = (result.data or {}).get("layout") if result.is_success else None
+        if layout and layout["overlaps_after"]:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"The frame was added but {layout['overlaps_after']} overlap(s) "
+                    "remain on the sheet - the no-overlap rule is not met; see layout"
+                ),
+                data=result.data,
+                execution_time=result.execution_time,
+            )
+        return result
+
+    def _drawing_dimension(self, view_name: str, name: str) -> Any:
+        """The drawing dimension ``name`` (e.g. ``D3@Sketch1``) in a view, or None.
+
+        On an assembly drawing a part's dimension can carry its component
+        too (``D3@Sketch1@Demo Plate-1@Plate Stack``), so the part's own name
+        followed by ``@`` matches as well.
+        """
+        drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
+        view = _resolve_drawing_view(self, drawing, view_name)
+        if view is None:
+            return None
+        return next(
+            (
+                an
+                for an, n in self._dimension_annotations(view)
+                if n is not None and (n == name or n.startswith(f"{name}@"))
+            ),
+            None,
+        )
+
+    def _frame_box(self, gtol: Any) -> Box:
+        """A frame's box on the sheet: its texts and its lines, as drawn.
+
+        Raises:
+            RuntimeError: SolidWorks gave no display data for the frame.
+        """
+        an = self._attempt(lambda: self._get_attr_or_call(gtol, "GetAnnotation"))
+        geometry = (
+            None
+            if an is None
+            else self._attempt(
+                lambda: self._dimension_geometry(
+                    _sw_type_info.flagged(an, "IAnnotation"), "frame", "sheet"
+                )
+            )
+        )
+        if geometry is None:
+            raise RuntimeError("Cannot measure the frame, so it cannot be kept clear")
+        tb = geometry.text_box
+        xs = [tb[0], tb[2], *(p for seg in geometry.lines for p in (seg[0], seg[2]))]
+        ys = [tb[1], tb[3], *(p for seg in geometry.lines for p in (seg[1], seg[3]))]
+        return (min(xs), min(ys), max(xs), max(ys))
+
+    def _clear_attached_frame(self, view_name: str, an: Any, gtol: Any) -> dict:
+        """Lay the view out again with the frame counted as part of its dimension.
+
+        SolidWorks hangs the frame under the dimension's text; the layout
+        placed that dimension for its text alone, so the frame can land on
+        its neighbours (seen live on SW 2026). The frame moves with the
+        dimension, so its box is taken relative to the dimension's position.
+
+        Args:
+            view_name: The dimension's view.
+            an: The dimension's ``IAnnotation``.
+            gtol: The frame just attached to it.
+
+        Returns:
+            dict: The layout result; ``overlaps_after`` counts the frame.
+
+        Raises:
+            LookupError: The dimension is not among the view's read dimensions.
+        """
+        model = self.currentModel
+        self._attempt(lambda: model.EditRebuild3(), default=None)
+        frame = self._frame_box(gtol)
+        x, y = (float(v) for v in an.GetPosition()[:2])
+        drawing = self._drawing()
+        _, geometries, _ = self._collect_layout(drawing, [view_name])
+        key = next(
+            (
+                g.key
+                for g in geometries
+                if abs(g.position[0] - x) < 1e-6 and abs(g.position[1] - y) < 1e-6
+            ),
+            None,
+        )
+        if key is None:
+            raise LookupError("The frame's dimension is not among the view's")
+        rel = (frame[0] - x, frame[1] - y, frame[2] - x, frame[3] - y)
+        obstacles = {"title block": TITLE_BLOCK, **self._sheet_note_boxes(drawing)}
+        result = self._arrange_layout(
+            view_name, obstacles, WORK_AREA, attached={key: rel}
+        )
+        result["frame_box_mm"] = [round(v * 1000, 1) for v in frame]
+        result["obstacles"] = sorted(obstacles)
+        return result
+
+    async def add_datum_tag(
+        self,
+        label: str,
+        attach_at_mm: tuple[float, float],
+        x_mm: float,
+        y_mm: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a datum feature symbol (a datum tag) on a drawing edge.
+
+        ``IModelDoc2::InsertDatumTag2`` attaches the tag to the edge picked at
+        ``attach_at_mm``; ``IDatumTag::SetLabel`` names it, and the label is
+        read back with ``GetLabel``.
+
+        Args:
+            label: The datum letter, e.g. ``A``.
+            attach_at_mm: A sheet point on the edge or face line it marks.
+            x_mm: Where the tag goes on the sheet.
+            y_mm: Where the tag goes on the sheet.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The label as read back.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+        letter = label.strip().upper()
+        if len(letter) != 1 or not letter.isalpha():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="label must be a single letter, e.g. 'A'",
+            )
+
+        def _insert() -> dict[str, Any]:
+            model = self.currentModel
+            if not self._select_edge_at(attach_at_mm):
+                raise LookupError(f"No drawing edge found at {list(attach_at_mm)} mm")
+            tag = self._get_attr_or_call(model, "InsertDatumTag2")
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            if tag is None:
+                raise Exception("InsertDatumTag2 returned nothing; no tag was added")
+            tag = _sw_type_info.flagged(tag, "IDatumTag")
+            tag.SetLabel(letter)
+            self._place_annotation(tag, x_mm, y_mm)
+            read = str(
+                self._attempt(lambda: self._get_attr_or_call(tag, "GetLabel")) or ""
+            )
+            if read != letter:
+                raise Exception(f"The datum tag reads {read!r}, not {letter!r}")
+            return {"label": letter, "position_mm": [x_mm, y_mm]}
+
+        return cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("add_datum_tag", _insert),
         )
 
     # -- small COM helpers ---------------------------------------------
@@ -862,10 +1287,16 @@ class SolidWorksDrawingStandardMixin:
         """The active document as an ``IDrawingDoc``."""
         return _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
 
-    def _obstacles(self, s: _Sheet) -> dict[str, Box]:
-        """What dimensions must keep clear of: title block, notes, captions."""
+    def _obstacles(self, s: _Sheet, captions: bool = True) -> dict[str, Box]:
+        """What dimensions must keep clear of: title block, notes, captions.
+
+        Args:
+            s: The sheet plan.
+            captions: Keep each view's whole caption strip clear. ``False``
+                once the captions are on the sheet and measured instead.
+        """
         result: dict[str, Box] = {"title block": TITLE_BLOCK, "notes": s.cells["notes"]}
-        for r in s.role.values():
+        for r in s.role.values() if captions else ():
             c = s.cells[r]
             result[f"{r} caption"] = (c[0], c[1], c[2], c[1] + CAPTION_STRIP)
         return result
@@ -923,6 +1354,9 @@ class SolidWorksDrawingStandardMixin:
             for n, v in s.views.items()
         }
         s.role = view_roles(s.views, outlines, orientations)
+        # Orthographic views show hidden edges dashed (a through hole in the
+        # front and side views); the isometric stays as it is.
+        hidden = {n: self._show_hidden_lines(v) for n, v in s.views.items()}
         if s.include_isometric:
             before_iso = set(_view_names(self, drawing))
             self._attempt(
@@ -937,7 +1371,25 @@ class SolidWorksDrawingStandardMixin:
             if s.iso_name:
                 s.views[s.iso_name] = _resolve_drawing_view(self, drawing, s.iso_name)
                 s.role[s.iso_name] = "iso"
-        return {"views": dict(s.role)}
+        return {"views": dict(s.role), "hidden_lines_visible": hidden}
+
+    def _show_hidden_lines(self, view: Any) -> bool | None:
+        """Draw a view's hidden edges dashed (``IView::SetDisplayMode4``).
+
+        Returns:
+            bool | None: Whether the view reads back as hidden lines visible;
+            ``None`` when its mode cannot be read.
+        """
+        self._attempt(
+            lambda: view.SetDisplayMode4(
+                False, _SW_HIDDEN_LINES_VISIBLE, False, False, False
+            ),
+            default=None,
+        )
+        mode = self._attempt(
+            lambda: self._get_attr_or_call(view, "GetDisplayMode2"), default=None
+        )
+        return None if mode is None else mode == _SW_HIDDEN_LINES_VISIBLE
 
     def _view_sizes(self, s: _Sheet) -> dict[str, tuple[float, float]]:
         """Each view's size at 1:1 (outline / view scale), by role."""
@@ -962,12 +1414,9 @@ class SolidWorksDrawingStandardMixin:
         sheet = _as_com(self, self._drawing().GetCurrentSheet(), "ISheet")
         sheet.SetScale(float(s.scale[0]), float(s.scale[1]), True, False)
         self._attempt(lambda: model.EditRebuild3(), default=None)
+        s.iso_size = iso_size
         if s.iso_name and iso_size:
-            s.iso_scale = iso_fit_scale(iso_size, s.cells["iso"])
-            iso = s.views[s.iso_name]
-            ratio = _double_array([float(s.iso_scale[0]), float(s.iso_scale[1])])
-            self._attempt(lambda: setattr(iso, "UseSheetScale", False), default=None)
-            self._attempt(lambda: setattr(iso, "ScaleRatio", ratio), default=None)
+            self._fit_iso(s)
         fc = content_box(s.cells["front"])
         fcx, fcy = (fc[0] + fc[2]) / 2, (fc[1] + fc[3]) / 2
         placed = {}
@@ -986,10 +1435,61 @@ class SolidWorksDrawingStandardMixin:
             "positioned": placed,
         }
 
+    def _fit_iso(self, s: _Sheet) -> None:
+        """Scale the isometric to the largest standard scale that fits its cell."""
+        s.iso_scale = iso_fit_scale(s.iso_size, s.cells["iso"])
+        iso = s.views[s.iso_name]
+        ratio = _double_array([float(s.iso_scale[0]), float(s.iso_scale[1])])
+        self._attempt(lambda: setattr(iso, "UseSheetScale", False), default=None)
+        self._attempt(lambda: setattr(iso, "ScaleRatio", ratio), default=None)
+
+    def _bom_above_iso(self, s: _Sheet) -> dict[str, Any] | None:
+        """Put the BOM in the top of the isometric's cell; fit the isometric below.
+
+        The table is inserted, measured, and moved so its top-right corner sits
+        ``BOM_GAP`` inside the cell's. The cell then ends below the table, and
+        the isometric is scaled and centred in what is left, so they never meet.
+
+        Raises:
+            RuntimeError: The table cannot be measured once inserted.
+        """
+        if not s.include_bom:
+            return None
+        cell = s.cells["iso"]
+        front = next(n for n, r in s.role.items() if r == "front")
+        table, info = self._insert_bom(
+            front, None, "top_level_only", cell[0] * 1000 + 10, cell[1] * 1000 + 20
+        )
+        box = self._table_box(table)
+        if box is None:
+            raise RuntimeError("The BOM was inserted but cannot be measured")
+        an = _sw_type_info.flagged(
+            _sw_type_info.flagged(table, "ITableAnnotation").GetAnnotation(),
+            "IAnnotation",
+        )
+        x, y = (float(v) for v in an.GetPosition()[:2])
+        an.SetPosition(
+            x + cell[2] - BOM_GAP - box[2], y + cell[3] - BOM_GAP - box[3], 0.0
+        )
+        box = self._table_box(table)
+        if box is None:
+            raise RuntimeError("The BOM was moved but cannot be measured")
+        s.bom_box = box
+        s.cells["iso"] = (cell[0], cell[1], cell[2], box[1] - BOM_GAP)
+        if s.iso_name and s.iso_size:
+            self._fit_iso(s)
+            c = content_box(s.cells["iso"])
+            self._set_view_position(
+                s.views[s.iso_name], (c[0] + c[2]) / 2, (c[1] + c[3]) / 2
+            )
+        self._attempt(lambda: self.currentModel.EditRebuild3(), default=None)
+        info["table_box_mm"] = [round(v * 1000, 1) for v in box]
+        return info
+
     def _dimension_views(self, s: _Sheet) -> dict[str, Any]:
         """Import the model dimensions and lay them out clear of everything."""
         dims = self._import_dimensions(None, True, only_views=list(s.ortho))
-        self._arrange_layout(None, self._obstacles(s), WORK_AREA)
+        dims["layout"] = self._arrange_layout(None, self._obstacles(s), WORK_AREA)
         return dims
 
     def _annotate(self, s: _Sheet) -> dict[str, Any]:
@@ -1117,6 +1617,9 @@ class SolidWorksDrawingStandardMixin:
         self._attempt(lambda: drawing.EditTemplate(), default=None)
         try:
             notes = self._format_notes(drawing)
+            # The properties the format shows, e.g. $PRPSHEET:"SW-Material":
+            # which model property each title-block field reads.
+            s.format_links = sorted({n[1] for n in notes if n[1]})
             for prop, name in TITLE_BLOCK_FIELDS.items():
                 match = next((n for n in notes if f'"{prop}"' in n[1]), None)
                 if match is None or match[2] is None:
@@ -1133,15 +1636,62 @@ class SolidWorksDrawingStandardMixin:
             self._attempt(lambda: model.EditRebuild3(), default=None)
         return dict(s.title_block)
 
+    def _sheet_note_boxes(self, drawing: Any) -> dict[str, Box]:
+        """Every note on the sheet (view captions, the NOTES block) by its box.
+
+        A note inserted with nothing selected goes into whichever view is
+        active, not onto the sheet, so the notes of the sheet and of every
+        view are read. Each is measured from its display data, as dimensions
+        are, so dimensions keep clear of the text as SolidWorks placed it.
+        """
+        boxes: dict[str, Box] = {}
+        view = self._attempt(lambda: drawing.GetFirstView(), default=None)
+        while view is not None:
+            v = _sw_type_info.flagged(view, "IView")
+            note = self._attempt(lambda v=v: v.GetFirstNote(), default=None)
+            while note is not None and len(boxes) < 500:
+                n = _sw_type_info.flagged(note, "INote")
+                box = self._measured_note(n)
+                if box is not None:
+                    boxes[f"note {len(boxes)}"] = box
+                note = self._attempt(lambda n=n: n.GetNext(), default=None)
+            view = self._attempt(lambda v=v: v.GetNextView(), default=None)
+        return boxes
+
+    def _measured_note(self, note: Any) -> Box | None:
+        """A note's box from its display data; its extent when that is unreadable."""
+        an = self._attempt(lambda: note.GetAnnotation(), default=None)
+        geometry = (
+            None
+            if an is None
+            else self._attempt(
+                lambda: self._dimension_geometry(
+                    _sw_type_info.flagged(an, "IAnnotation"), "note", "sheet"
+                )
+            )
+        )
+        return geometry.text_box if geometry is not None else self._note_extent(note)
+
     def _check_sheet(self, s: _Sheet) -> dict[str, Any]:
-        """Check the finished sheet: dimensions, captions and notes, read back."""
-        final = self._arrange_layout(None, self._obstacles(s), WORK_AREA, move=False)
+        """Lay the dimensions out on the finished sheet, then check it, read back.
+
+        The layout runs again here: the steps after the first layout (captions,
+        notes, the title block, the save) can leave dimensions where they were
+        imported (seen live on SW 2026), and only now is every note on the sheet,
+        so each caption is kept clear as measured, not its whole strip.
+        """
         drawing = self._drawing()
+        obstacles = {**self._obstacles(s, False), **self._sheet_note_boxes(drawing)}
+        if s.bom_box is not None:
+            obstacles["bom"] = s.bom_box
+        final = self._arrange_layout(None, obstacles, WORK_AREA)
         outlines, dims, _ = self._collect_layout(drawing, _view_names(self, drawing))
         boxes = {
             label: self._note_box(an, label, 0.0, 0.0, NOTE_HEIGHT)
             for label, an in s.notes
         }
+        if s.bom_box is not None:
+            boxes["bom"] = s.bom_box
         problems = _layout.find_annotation_overlaps(
             boxes, dims, outlines, WORK_AREA, {"title block": TITLE_BLOCK}
         )
@@ -1194,6 +1744,7 @@ class SolidWorksDrawingStandardMixin:
         include_isometric: bool = True,
         write_model_properties: bool = True,
         title_block_text_height_mm: float | None = None,
+        include_bom: bool = False,
     ) -> AdapterResult[dict[str, Any]]:
         """Create a complete A3 drawing that follows the drawing standard.
 
@@ -1221,6 +1772,8 @@ class SolidWorksDrawingStandardMixin:
             title_block_text_height_mm: Largest text height for the DWG NO.
                 and TITLE fields, e.g. 3 for smaller text; they are shrunk
                 further when they still do not fit.
+            include_bom: Assemblies only: a top-level BOM in the top of the
+                isometric's cell, the isometric fitted below it.
 
         Returns:
             AdapterResult[dict[str, Any]]: Files, scale, views, dimension
@@ -1238,6 +1791,11 @@ class SolidWorksDrawingStandardMixin:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"model_path must be a .SLDPRT or .SLDASM, not {ext or 'no extension'}",
+            )
+        if include_bom and ext != ".sldasm":
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="include_bom needs an assembly (.SLDASM); a part has no BOM",
             )
         stem = os.path.splitext(os.path.basename(path))[0]
         rev = (revision or "A").strip()
@@ -1278,6 +1836,10 @@ class SolidWorksDrawingStandardMixin:
             revision=rev,
             company=company,
         )
+        if ext == ".sldasm":
+            # An assembly has no material of its own: a link to it shows
+            # "<not specified>". Its own Material property is left as set.
+            model_props.pop("Material")
         if write_model_properties:
             for name, value in model_props.items():
                 _step(
@@ -1318,6 +1880,7 @@ class SolidWorksDrawingStandardMixin:
             path=path,
             sheet_format=str(found.data),
             include_isometric=include_isometric,
+            include_bom=include_bom,
             material=material,
             extra_notes=list(notes or []),
             field_height=(
@@ -1330,6 +1893,7 @@ class SolidWorksDrawingStandardMixin:
             ("sheet", self._setup_a3_sheet),
             ("views", self._create_views),
             ("layout", self._fit_views),
+            ("bom", self._bom_above_iso),
             ("dimensions", self._dimension_views),
             ("notes", self._annotate),
             ("check", self._check_sheet),
@@ -1342,6 +1906,10 @@ class SolidWorksDrawingStandardMixin:
                 return failed(f"Drawing step '{name}' failed: {done.error}")
             if name == "dimensions":
                 data["dimensions"] = done.data
+            if name == "bom":
+                data["bom"] = done.data
+            if name == "views":
+                data["hidden_lines_visible"] = done.data["hidden_lines_visible"]
             if name == "check":
                 data["overlap_check"] = done.data
         data.update(
@@ -1381,6 +1949,7 @@ class SolidWorksDrawingStandardMixin:
         )
         _step(steps, "fit_title_block", fitted)
         data["title_block"] = fitted.data if fitted.is_success else None
+        data["format_links"] = s.format_links
         check = data["overlap_check"]
         for name, field_fit in (data["title_block"] or {}).items():
             if field_fit.get("fits") is False:
@@ -1406,9 +1975,19 @@ class SolidWorksDrawingStandardMixin:
             f.get("fits") is False for f in (data.get("title_block") or {}).values()
         )
         if overlaps:
+            check = data["overlap_check"]
+            found = [
+                *check.get("remaining_overlaps", []),
+                *check.get("annotation_overlaps", []),
+            ]
+            named = "; ".join(
+                f"{o['dimension']} vs {o['conflicts_with']} ({o['kind']})"
+                for o in found[:5]
+            )
             return failed(
                 f"Drawing saved but {overlaps} overlap(s) remain - the no-overlap "
                 "rule is not met; see overlap_check"
+                + (f": {named}" if named else "")
                 + (f". For a title-block field, {FIELD_HINT}" if overflowing else "")
             )
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)

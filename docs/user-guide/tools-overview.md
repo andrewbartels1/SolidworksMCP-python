@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 152 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
+The SolidWorks MCP Server provides 154 specialized tools for CAD automation. This page is a navigation map, not a tutorial.
 
 ## Read this first
 
@@ -137,7 +137,7 @@ The SolidWorks MCP Server provides 152 specialized tools for CAD automation. Thi
 | **Sketching** | 19 | Medium | 2D geometry and constraint management |
 | **Drawing** | 14 | Medium | Technical documentation creation |
 | **Drawing Analysis** | 8 | Medium | Quality assurance and compliance |
-| **Drawing Automation** | 5 | Medium | Model dimensions without overlaps, BOMs, sheet scale, A3 drawing packages |
+| **Drawing Automation** | 7 | Medium | Model dimensions without overlaps, BOMs, sheet scale, A3 drawing packages, GD&T frames and datum tags |
 | **Engineering Data** | 8 | Medium | Dimensions, measuring, materials and properties |
 | **Analysis** | 6 | High | Engineering validation and analysis |
 | **Export** | 7 | Low | File format conversion and sharing |
@@ -148,7 +148,7 @@ The SolidWorks MCP Server provides 152 specialized tools for CAD automation. Thi
 | **Macro Recording** | 7 | High | Workflow capture and optimization |
 | **Docs Discovery** | 2 | Medium | API and COM discovery workflows |
 
-**Total: 152 Tools**
+**Total: 154 Tools**
 
 ## Tool Design Principles
 

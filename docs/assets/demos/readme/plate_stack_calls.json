@@ -1,0 +1,577 @@
+{
+  "prompt": "Make a 100 x 50 x 10 mm AISI 1020 mounting plate with four M5 clearance holes, 10 mm in from each edge, and draw it fully dimensioned. Stack two of them 10 mm apart, check the result, and draw the assembly with a BOM.",
+  "plan": [
+    "1. sketch on Top: 100 x 50 outline from the origin, four Ø5.5 circles",
+    "   (one Ø, the rest equal), each located from two edges; extrude 10 mm",
+    "2. AISI 1020, then verify_model: 49049.7 mm³, 0.3875 kg, 1 feature",
+    "3. plate drawing: A3, model dimensions, centre marks, notes, title block;",
+    "   GD&T: datums A, B, C and position Ø0.2 (M) on the holes",
+    "4. assembly: the plate twice; Front and Right coincident, Top planes 60",
+    "   mm apart, brought down to 20 (a 10 mm gap); verify_model: 2 parts,",
+    "   3 mates, no overlap",
+    "5. assembly drawing with a BOM (the plate, QTY 2) and the same GD&T"
+  ],
+  "calls": [
+    {
+      "tool": "create_sketch",
+      "args": {
+        "plane": "Top"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_line",
+      "args": {
+        "x1": 0.0,
+        "y1": 0.0,
+        "x2": 100.0,
+        "y2": 0.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_line",
+      "args": {
+        "x1": 100.0,
+        "y1": 0.0,
+        "x2": 100.0,
+        "y2": 50.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_line",
+      "args": {
+        "x1": 100.0,
+        "y1": 50.0,
+        "x2": 0.0,
+        "y2": 50.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_line",
+      "args": {
+        "x1": 0.0,
+        "y1": 50.0,
+        "x2": 0.0,
+        "y2": 0.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_1",
+        "entity2": null,
+        "dimension_type": "linear",
+        "value": 100.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_4",
+        "entity2": null,
+        "dimension_type": "linear",
+        "value": 50.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_circle",
+      "args": {
+        "center_x": 10.0,
+        "center_y": 10.0,
+        "radius": 2.75
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Circle_7",
+        "entity2": null,
+        "dimension_type": "diameter",
+        "value": 5.5
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_4",
+        "entity2": "Circle_7",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_1",
+        "entity2": "Circle_7",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_circle",
+      "args": {
+        "center_x": 90.0,
+        "center_y": 10.0,
+        "radius": 2.75
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_constraint",
+      "args": {
+        "entity1": "Circle_7",
+        "entity2": "Circle_11",
+        "relation_type": "equal"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_2",
+        "entity2": "Circle_11",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_1",
+        "entity2": "Circle_11",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_circle",
+      "args": {
+        "center_x": 90.0,
+        "center_y": 40.0,
+        "radius": 2.75
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_constraint",
+      "args": {
+        "entity1": "Circle_7",
+        "entity2": "Circle_15",
+        "relation_type": "equal"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_2",
+        "entity2": "Circle_15",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_3",
+        "entity2": "Circle_15",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_circle",
+      "args": {
+        "center_x": 10.0,
+        "center_y": 40.0,
+        "radius": 2.75
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_constraint",
+      "args": {
+        "entity1": "Circle_7",
+        "entity2": "Circle_19",
+        "relation_type": "equal"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_4",
+        "entity2": "Circle_19",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_sketch_dimension",
+      "args": {
+        "entity1": "Line_3",
+        "entity2": "Circle_19",
+        "dimension_type": "linear",
+        "value": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "exit_sketch",
+      "args": {},
+      "status": "success"
+    },
+    {
+      "tool": "check_sketch_fully_defined",
+      "args": {
+        "sketch_name": "Sketch1"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "create_extrusion",
+      "args": {
+        "sketch_name": "Sketch1",
+        "depth": 10.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "list_model_dimensions",
+      "args": {
+        "feature_name": "Sketch1"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_material",
+      "args": {
+        "material_name": "AISI 1020"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "verify_model",
+      "args": {
+        "volume_mm3": 49049.7,
+        "mass_kg": 0.3875,
+        "bounding_box_mm": [
+          100.0,
+          10.0,
+          50.0
+        ],
+        "feature_count": 1,
+        "solid_body_count": 1
+      },
+      "status": "success"
+    },
+    {
+      "tool": "generate_drawing_package",
+      "args": {
+        "model_path": "Demo Plate.SLDPRT",
+        "output_dir": "drawings",
+        "title": "Demo Plate",
+        "drawing_number": "PS-01",
+        "author": "solidworks-mcp",
+        "notes": [
+          "4 X Ø5.5 THRU, M5 CLEARANCE",
+          "GENERAL TOLERANCES ISO 2768-m",
+          "QTY 2 PER ASSEMBLY PS-02"
+        ]
+      },
+      "status": "success"
+    },
+    {
+      "tool": "auto_center_marks",
+      "args": {
+        "view_name": "Drawing View2"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_datum_tag",
+      "args": {
+        "label": "A",
+        "attach_x_mm": 86.25,
+        "attach_y_mm": 108.75,
+        "x_mm": 86.25,
+        "y_mm": 96.75
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_datum_tag",
+      "args": {
+        "label": "B",
+        "attach_x_mm": 56.25,
+        "attach_y_mm": 116.25,
+        "x_mm": 42.25,
+        "y_mm": 116.25
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_datum_tag",
+      "args": {
+        "label": "C",
+        "attach_x_mm": 288.75,
+        "attach_y_mm": 116.25,
+        "x_mm": 274.75,
+        "y_mm": 116.25
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_gtol",
+      "args": {
+        "characteristic": "position",
+        "tolerance": 0.2,
+        "diameter_zone": true,
+        "material_condition": "mmc",
+        "datums": [
+          "A",
+          "B",
+          "C"
+        ],
+        "dimension_view": "Drawing View2",
+        "dimension_name": "D3@Sketch1"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "insert_component",
+      "args": {
+        "file_path": "Demo Plate.SLDPRT"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "insert_component",
+      "args": {
+        "file_path": "Demo Plate.SLDPRT",
+        "y": 40.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "list_components",
+      "args": {},
+      "status": "success"
+    },
+    {
+      "tool": "add_mate",
+      "args": {
+        "component_a": "Demo Plate-1",
+        "component_b": "Demo Plate-2",
+        "entity_a": "Front Plane",
+        "entity_b": "Front Plane",
+        "mate_type": "coincident",
+        "distance": 0.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_mate",
+      "args": {
+        "component_a": "Demo Plate-1",
+        "component_b": "Demo Plate-2",
+        "entity_a": "Right Plane",
+        "entity_b": "Right Plane",
+        "mate_type": "coincident",
+        "distance": 0.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_mate",
+      "args": {
+        "component_a": "Demo Plate-1",
+        "component_b": "Demo Plate-2",
+        "entity_a": "Top Plane",
+        "entity_b": "Top Plane",
+        "mate_type": "distance",
+        "distance": 60.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 56.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 52.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 48.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 44.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 40.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 36.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 32.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 28.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 24.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_dimension",
+      "args": {
+        "name": "D1@Distance1",
+        "value": 20.0
+      },
+      "status": "success"
+    },
+    {
+      "tool": "verify_model",
+      "args": {
+        "component_count": 2,
+        "mate_count": 3,
+        "no_interference": true
+      },
+      "status": "success"
+    },
+    {
+      "tool": "set_custom_property",
+      "args": {
+        "name": "Material",
+        "value": "AISI 1020"
+      },
+      "status": "success"
+    },
+    {
+      "tool": "generate_drawing_package",
+      "args": {
+        "model_path": "Plate Stack.SLDASM",
+        "output_dir": "drawings",
+        "title": "Plate Stack",
+        "drawing_number": "PS-02",
+        "author": "solidworks-mcp",
+        "notes": [
+          "2 X DEMO PLATE PS-01, AISI 1020",
+          "PLATES SPACED 10 MM APART"
+        ],
+        "include_bom": true
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_datum_tag",
+      "args": {
+        "label": "A",
+        "attach_x_mm": 105.0,
+        "attach_y_mm": 111.25,
+        "x_mm": 105.0,
+        "y_mm": 99.25
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_datum_tag",
+      "args": {
+        "label": "B",
+        "attach_x_mm": 75.0,
+        "attach_y_mm": 116.25,
+        "x_mm": 61.0,
+        "y_mm": 116.25
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_datum_tag",
+      "args": {
+        "label": "C",
+        "attach_x_mm": 295.0,
+        "attach_y_mm": 116.25,
+        "x_mm": 281.0,
+        "y_mm": 116.25
+      },
+      "status": "success"
+    },
+    {
+      "tool": "add_gtol",
+      "args": {
+        "characteristic": "position",
+        "tolerance": 0.2,
+        "diameter_zone": true,
+        "material_condition": "mmc",
+        "datums": [
+          "A",
+          "B",
+          "C"
+        ],
+        "dimension_view": "Drawing View2",
+        "dimension_name": "D3@Sketch1"
+      },
+      "status": "success"
+    }
+  ]
+}
