@@ -3888,6 +3888,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     dimension[1] if dimension is not None else attach_at_mm is not None
                 ),
                 "position_mm": None if dimension is not None else [x_mm, y_mm],
+                "layout": None,
             },
         )
 
@@ -3949,6 +3950,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         include_isometric: bool = True,
         write_model_properties: bool = True,
         title_block_text_height_mm: float | None = None,
+        include_bom: bool = False,
     ) -> AdapterResult[dict[str, Any]]:
         """Mock standard A3 drawing: validates inputs, writes nothing to disk."""
         if not os.path.isfile(model_path):
@@ -3960,12 +3962,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         number = drawing_number or f"{stem.upper().replace(' ', '-')}-Rev{revision}-01"
         out_dir = output_dir or os.path.dirname(model_path)
         views = {
-            "Drawing View1": {"role": "front", "caption": "FRONT ELEVATION"},
-            "Drawing View2": {"role": "plan", "caption": "PLAN"},
-            "Drawing View3": {"role": "side", "caption": "SIDE ELEVATION"},
+            "Drawing View1": {"role": "front", "caption": "FRONT VIEW"},
+            "Drawing View2": {"role": "plan", "caption": "TOP VIEW"},
+            "Drawing View3": {"role": "side", "caption": "SIDE VIEW"},
         }
         if include_isometric:
-            views["Drawing View4"] = {"role": "iso", "caption": "ISOMETRIC"}
+            views["Drawing View4"] = {"role": "iso", "caption": "ISOMETRIC VIEW"}
         self._operation_count += 1
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -3973,6 +3975,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "scale": "1:1",
                 "isometric_scale": "1:1" if include_isometric else None,
                 "views": views,
+                "hidden_lines_visible": {
+                    n: True for n, v in views.items() if v["role"] != "iso"
+                },
+                "bom": {"bom_type": "top_level_only", "table_box_mm": None}
+                if include_bom
+                else None,
                 "overlap_check": {"overlaps_after": 0, "annotation_overlaps": []},
                 "drawing_number": number,
                 "drawing_path": os.path.join(out_dir, f"{number}.SLDDRW"),

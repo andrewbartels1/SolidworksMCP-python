@@ -152,6 +152,7 @@ async def test_a_position_frame_with_a_leader_to_a_hole() -> None:
         "datums": ["A", "B", "C"],
         "attached": True,
         "position_mm": [60.0, 250.0],
+        "layout": None,
     }
 
 
@@ -264,7 +265,8 @@ def on_plan(monkeypatch):
     )
     gtol = _Gtol()
     harness = _Harness(_Model(gtol=gtol))
-    first, hole = object(), object()
+    first = object()
+    hole = SimpleNamespace(GetPosition=lambda: (0.03, 0.16, 0.0))
     harness._dimension_annotations = lambda _view: [
         (first, "D1@Sketch1"),
         (hole, "D3@Sketch1"),
@@ -273,6 +275,27 @@ def on_plan(monkeypatch):
     harness._select_display_dimension = lambda _model, an: (
         harness.selected.append(an) or True
     )
+    # The frame hangs under the Ø text: its texts, and a line wider than them.
+    harness.frame = SimpleNamespace(
+        text_box=(0.031, 0.150, 0.050, 0.155), lines=[(0.028, 0.149, 0.052, 0.149)]
+    )
+    harness._dimension_geometry = lambda _an, _key, _view: harness.frame
+    harness._drawing = lambda: "drawing"
+    harness._sheet_note_boxes = lambda _drawing: {"note 0": (0.1, 0.1, 0.12, 0.11)}
+    harness._collect_layout = lambda _d, names: (
+        {},
+        [SimpleNamespace(key=f"{names[0]}#2", position=(0.03, 0.16))],
+        {},
+    )
+    harness.remaining = 0
+    harness.laid_out = []
+
+    def _arrange(view_name, obstacles, work_area=None, attached=None):
+        harness.laid_out.append((view_name, sorted(obstacles), attached))
+        assert work_area == std.WORK_AREA
+        return {"overlaps_after": harness.remaining, "remaining_overlaps": []}
+
+    harness._arrange_layout = _arrange
     return harness, gtol, hole
 
 
@@ -296,6 +319,84 @@ async def test_a_position_frame_on_the_hole_dimension(on_plan) -> None:
     assert result.data["attached"] == "D3@Sketch1"
     assert result.data["position_mm"] is None
     assert gtol.annotation.position is None  # SolidWorks keeps it under the text
+    # The view is laid out again with the frame counted as part of the Ø
+    # dimension, relative to where that dimension sits.
+    ((view, obstacles, attached),) = harness.laid_out
+    assert view == "Drawing View2"
+    assert obstacles == ["note 0", "title block"]
+    assert attached == {
+        "Drawing View2#2": pytest.approx((-0.002, -0.011, 0.022, -0.005))
+    }
+    assert result.data["layout"]["overlaps_after"] == 0
+    # What the layout used is reported, so a frame placed badly can be traced.
+    assert result.data["layout"]["frame_box_mm"] == pytest.approx(
+        [28.0, 149.0, 52.0, 155.0]
+    )
+    assert result.data["layout"]["obstacles"] == ["note 0", "title block"]
+
+
+@pytest.mark.asyncio
+async def test_a_frame_that_leaves_an_overlap_is_an_error(on_plan) -> None:
+    harness, _gtol, _hole = on_plan
+    harness.remaining = 2
+
+    result = await harness.add_gtol(
+        "position", 0.2, 0.0, 0.0, dimension=("Drawing View2", "D3@Sketch1")
+    )
+
+    assert result.error == (
+        "The frame was added but 2 overlap(s) remain on the sheet - the "
+        "no-overlap rule is not met; see layout"
+    )
+    assert result.data["layout"]["overlaps_after"] == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("break_it", "message"),
+    [
+        (
+            lambda h, g: setattr(h, "frame", None),
+            "Cannot measure the frame, so it cannot be kept clear",
+        ),
+        (
+            lambda h, g: setattr(g, "annotation", None),
+            "Cannot measure the frame, so it cannot be kept clear",
+        ),
+        (
+            lambda h, g: setattr(h, "_collect_layout", lambda _d, _n: ({}, [], {})),
+            "The frame's dimension is not among the view's",
+        ),
+    ],
+    ids=["no display data", "no annotation", "dimension not read"],
+)
+async def test_a_frame_that_cannot_be_kept_clear_is_an_error(
+    on_plan, break_it, message
+) -> None:
+    harness, gtol, _hole = on_plan
+    break_it(harness, gtol)
+
+    result = await harness.add_gtol(
+        "position", 0.2, 0.0, 0.0, dimension=("Drawing View2", "D3@Sketch1")
+    )
+
+    assert message in result.error
+
+
+@pytest.mark.asyncio
+async def test_a_part_dimension_on_an_assembly_drawing_is_found(on_plan) -> None:
+    harness, _gtol, hole = on_plan
+    harness._dimension_annotations = lambda _view: [
+        (object(), None),
+        (hole, "D3@Sketch1@Demo Plate-1@Plate Stack"),
+    ]
+
+    result = await harness.add_gtol(
+        "position", 0.2, 0.0, 0.0, dimension=("Drawing View2", "D3@Sketch1")
+    )
+
+    assert result.is_success, result.error
+    assert harness.selected == [hole]
 
 
 @pytest.mark.asyncio

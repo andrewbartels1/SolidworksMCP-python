@@ -214,6 +214,35 @@ class TestPlanningChoices:
         assert not lay.box_overlap(moved, OUTLINE)
         assert moved[0] > 0.14 and moved[1] > OUTLINE[3]
 
+    def test_a_leader_keeps_clear_of_text_it_would_only_just_miss(self) -> None:
+        # A text box 1 mm off the leader's first spot: an exact check passes
+        # it, but SolidWorks draws the leader a little differently, so the
+        # planner keeps 2 mm and moves on.
+        hole = _radial("dia", "View1", 0.15, 0.16)
+        first = lay._candidates(hole, OUTLINE)[0]
+        box = lay.shift_box(hole.text_box, first[1], first[2])
+        leader = lay._leader_to((0.14, 0.15), box)
+        # Near the text end of the leader, well away from the hole it starts at.
+        mx = leader[0] + 0.9 * (leader[2] - leader[0])
+        my = leader[1] + 0.9 * (leader[3] - leader[1])
+        dx, dy = leader[2] - leader[0], leader[3] - leader[1]
+        length = (dx * dx + dy * dy) ** 0.5
+        # A 1 mm square whose nearest corner is about 1 mm off the leader.
+        cx, cy = mx - dy / length * 0.0018, my + dx / length * 0.0018
+        near = _hdim("w", "View1", 0.05, 0.17, 0.12, 0.10)
+        near.text_box = (cx - 0.0005, cy - 0.0005, cx + 0.0005, cy + 0.0005)
+        assert not lay.segment_hits_box(leader, near.text_box)
+
+        moves, unplaced = lay.plan_layout([hole, near], {"View1": OUTLINE}, fixed={"w"})
+
+        assert not unplaced
+        assert moves["dia"] != (first[1], first[2])
+        chosen = lay.shift_box(hole.text_box, *moves["dia"])
+        path = lay._leader_to((0.14, 0.15), chosen)
+        assert not lay.segment_hits_box(
+            path, lay._grown(near.text_box, lay.LEADER_CLEARANCE)
+        )
+
     def test_a_leader_never_runs_through_another_dimensions_text(self) -> None:
         # A dimension's text sits on the up-right diagonal from the hole; the
         # leader takes another direction rather than crossing it.
@@ -230,12 +259,28 @@ class TestPlanningChoices:
 
     def test_fixed_dimensions_stay_and_push_the_next_row_out(self) -> None:
         first = _hdim("a", "View1", 0.05, 0.17, 0.12, 0.10)
-        first.text_box = shift = lay.shift_box(first.text_box, 0.0, -0.033)  # row 1
+        row1 = OUTLINE[1] - lay.FIRST_OFFSET
+        first.text_box = shift = lay.shift_box(first.text_box, 0.0, row1 - 0.12)
         second = _hdim("b", "View1", 0.06, 0.16, 0.12, 0.10)
         moves, _ = lay.plan_layout([first, second], {"View1": OUTLINE}, fixed={"a"})
         assert "a" not in moves
         row2 = lay.shift_box(second.text_box, *moves["b"])
         assert row2[3] < shift[1]  # below the fixed row, not on it
+
+    def test_dimensions_that_do_not_touch_share_a_row(self) -> None:
+        # The hole positions at each end of a plate go in the first row; the
+        # overall length, whose line spans both, goes in the next one out.
+        left = _hdim("left", "View1", 0.05, 0.07, 0.12, 0.10)
+        right = _hdim("right", "View1", 0.15, 0.17, 0.12, 0.10)
+        total = _hdim("total", "View1", 0.05, 0.17, 0.12, 0.10)
+        moves, unplaced = lay.plan_layout([total, left, right], {"View1": OUTLINE})
+        assert not unplaced
+        y = {
+            k: lay.shift_box(d.text_box, *moves[k])[1]
+            for k, d in (("left", left), ("right", right), ("total", total))
+        }
+        assert y["left"] == pytest.approx(y["right"])
+        assert y["total"] < y["left"]
 
     def test_a_fixed_dimension_of_an_unknown_view_is_still_an_obstacle(self) -> None:
         ghost = _hdim("g", "Ghost", 0.05, 0.17, 0.12, 0.10)
@@ -393,6 +438,102 @@ class TestOwnSide:
         moved = _apply([across], moves)
         assert moved[0].text_box[2] < OUTLINE[0]
         assert lay.find_overlaps(moved, {"View1": OUTLINE}) == []
+
+
+class TestInsideTheView:
+    """A hole note (a leader with its GD&T frame) may sit inside the part."""
+
+    def _plate(self) -> tuple[lay.DimensionGeometry, lay.DimensionGeometry]:
+        # A 10 mm hole position from the left edge, and the hole's Ø leader.
+        pos = _hdim("pos", "View1", 0.050, 0.065, 0.09, 0.105)
+        hole = _radial("dia", "View1", 0.060, 0.095)
+        hole.lines = [(0.0675, 0.1125, 0.070, 0.115)]  # anchor on the hole
+        return pos, hole
+
+    def test_feature_points_are_the_line_ends_inside_the_view(self) -> None:
+        pos, hole = self._plate()
+        points = lay.feature_points([pos, hole], "View1", OUTLINE, skip="dia")
+        assert points == [(0.065, 0.105)]  # the hole centre the 10 starts from
+
+    @pytest.mark.parametrize(
+        ("box", "clear"),
+        [
+            ((0.09, 0.13, 0.12, 0.14), True),
+            ((0.052, 0.13, 0.07, 0.14), False),  # too near the outline
+            ((0.064, 0.109, 0.08, 0.115), False),  # on the hole
+        ],
+        ids=["clear", "near the edge", "near a feature"],
+    )
+    def test_clear_inside(self, box, clear) -> None:
+        assert lay.clear_inside(box, OUTLINE, [(0.065, 0.105)]) is clear
+
+    def test_the_note_is_planned_inside_near_its_hole(self) -> None:
+        pos, hole = self._plate()
+        hole.text_box = (0.0, 0.0, 0.03, 0.012)  # Ø text with its frame
+        moves, unplaced = lay.plan_layout(
+            [pos, hole], {"View1": OUTLINE}, inside_first={"dia"}
+        )
+        assert not unplaced
+        box = lay.shift_box(hole.text_box, *moves["dia"])
+        assert lay.clear_inside(box, OUTLINE, [(0.065, 0.105), (0.070, 0.115)])
+        hole.text_box = box
+        hole.lines = lay._projected_segments(hole, *moves["dia"], OUTLINE)
+        pos.text_box = lay.shift_box(pos.text_box, *moves["pos"])
+        pos.lines = lay._projected_segments(pos, *moves["pos"], OUTLINE)
+        assert lay.find_overlaps([pos, hole], {"View1": OUTLINE}) == []
+
+    def test_no_room_inside_falls_back_to_outside(self) -> None:
+        pos, hole = self._plate()
+        hole.text_box = (0.0, 0.0, 0.2, 0.012)  # wider than the view
+        moves, unplaced = lay.plan_layout(
+            [pos, hole], {"View1": OUTLINE}, inside_first={"dia"}
+        )
+        assert not unplaced
+        box = lay.shift_box(hole.text_box, *moves["dia"])
+        assert not lay.box_overlap(box, OUTLINE)
+
+    def test_text_inside_is_still_on_the_view_unless_it_is_clear(self) -> None:
+        pos, hole = self._plate()
+        hole.text_box = (0.064, 0.109, 0.08, 0.115)  # on the hole
+        kinds = {
+            (p["dimension"], p["kind"])
+            for p in lay.find_overlaps([pos, hole], {"View1": OUTLINE})
+        }
+        assert ("dia", "on_view_geometry") in kinds
+        pos.text_box = (0.09, 0.13, 0.10, 0.135)  # a linear dimension's text
+        kinds = {
+            (p["dimension"], p["kind"])
+            for p in lay.find_overlaps([pos], {"View1": OUTLINE})
+        }
+        assert ("pos", "on_view_geometry") in kinds
+
+    def test_a_leader_without_lines_is_never_inside(self) -> None:
+        bare = lay.DimensionGeometry(
+            "x", "View1", (0.09, 0.13, 0.1, 0.135), (0.09, 0.13)
+        )
+        assert lay._leader_inside(bare, [bare], OUTLINE) is False
+
+
+class TestAttachedBoxes:
+    def test_a_frame_grows_its_dimensions_text_and_nothing_else(self) -> None:
+        dia = _hdim("dia", "View1", 0.05, 0.17, 0.12, 0.10)
+        other = _hdim("w", "View1", 0.05, 0.17, 0.09, 0.10)
+        before = other.text_box
+        lay.attach_boxes([dia, other], {"dia": (-0.01, -0.012, 0.02, -0.002)})
+        x, y = dia.position
+        assert dia.text_box == pytest.approx(
+            (x - 0.01, y - 0.012, x + 0.02, y + 0.0016)
+        )
+        assert other.text_box == before
+
+
+class TestShownLength:
+    @pytest.mark.parametrize(
+        ("text", "shown"),
+        [("<MOD-DIAM>5.5", 4), ("100", 3), (" 10 ", 2), ("<MOD-DIAM><HOLE-DEPTH>3", 3)],
+    )
+    def test_each_code_is_one_symbol(self, text: str, shown: int) -> None:
+        assert lay.shown_length(text) == shown
 
 
 class TestTextBox:

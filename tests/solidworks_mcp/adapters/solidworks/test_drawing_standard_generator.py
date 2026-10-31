@@ -108,6 +108,15 @@ class _View:
         self.UseSheetScale = True
         self.ScaleRatio = None
         self._position: Any = None
+        self.display_mode = 2  # hidden lines removed, SolidWorks' default here
+
+    def SetDisplayMode4(self, _use_parent, mode, *_flags):  # noqa: N802
+        if self.orientation != "*Locked":
+            self.display_mode = mode
+        return True
+
+    def GetDisplayMode2(self):  # noqa: N802
+        return self.display_mode
 
     def GetOutline(self):  # noqa: N802
         return self.outline
@@ -320,6 +329,10 @@ class _Harness(std.SolidWorksDrawingStandardMixin):
         except Exception:
             return default
 
+    def _get_attr_or_call(self, obj, attr_name):
+        value = getattr(obj, attr_name)
+        return value() if callable(value) else value
+
     def _result(self, name: str, *args: Any) -> AdapterResult[Any]:
         self.calls.append((name, *args))
         return self.results.get(name, OK)
@@ -340,7 +353,7 @@ class _Harness(std.SolidWorksDrawingStandardMixin):
         self, view_name=None, obstacles=None, work_area=None, move=True
     ):
         self.calls.append(("arrange", move, tuple(sorted(obstacles or {}))))
-        return {"overlaps_after": 0 if move else self.overlaps, "moved": 3}
+        return {"overlaps_after": self.overlaps, "moved": 3}
 
     def _collect_layout(self, _drawing, _names):
         return {}, [], {}
@@ -425,22 +438,30 @@ async def test_a_part_becomes_a_complete_a3_drawing(files) -> None:
     assert data["drawing_path"] == str(files.out / "MOUNTING-PLATE-RevA-01.SLDDRW")
     assert data["pdf_path"] == str(files.out / "MOUNTING-PLATE-RevA-01.pdf")
     assert data["views"] == {
-        "Drawing View1": {"role": "front", "caption": "FRONT ELEVATION"},
-        "Drawing View2": {"role": "plan", "caption": "PLAN"},
-        "Drawing View3": {"role": "side", "caption": "SIDE ELEVATION"},
-        "Drawing View4": {"role": "iso", "caption": "ISOMETRIC"},
+        "Drawing View1": {"role": "front", "caption": "FRONT VIEW"},
+        "Drawing View2": {"role": "plan", "caption": "TOP VIEW"},
+        "Drawing View3": {"role": "side", "caption": "SIDE VIEW"},
+        "Drawing View4": {"role": "iso", "caption": "ISOMETRIC VIEW"},
     }
     assert data["notes"][1] == "1. MATERIAL: AISI 1020"
     assert data["notes"][-1] == "5. LASER CUT"
-    assert data["dimensions"] == {"dimensions_added": 3}
+    assert data["dimensions"] == {
+        "dimensions_added": 3,
+        "layout": {"overlaps_after": 0, "moved": 3},
+    }
     assert data["overlap_check"]["overlaps_after"] == 0
     assert data["overlap_check"]["annotation_overlaps"] == []
+    assert data["format_links"] == [
+        '$PRP:"SW-File Name"',
+        '$PRPSHEET:"Description"',
+    ]
     assert data["properties_written"]["drawing"]["DrawnBy"] == "J. Smith"
     assert all(step["status"] == "success" for step in data["steps"])
     assert [s["step"] for s in data["steps"] if s["step"].startswith("build_")] == [
         "build_sheet",
         "build_views",
         "build_layout",
+        "build_bom",
         "build_dimensions",
         "build_notes",
         "build_check",
@@ -453,6 +474,7 @@ async def test_a_part_becomes_a_complete_a3_drawing(files) -> None:
         "standard_drawing_sheet",
         "standard_drawing_views",
         "standard_drawing_layout",
+        "standard_drawing_bom",
         "standard_drawing_dimensions",
         "standard_drawing_notes",
         "standard_drawing_check",
@@ -795,6 +817,163 @@ async def test_files_that_were_not_written_are_errors(
     assert result.data["scale"]
 
 
+def _with_bom(adapter: _Harness, boxes: list[Any] | None = None) -> list[Any]:
+    """Give the harness a 100 x 20 mm BOM table; return what was inserted."""
+    table_an = _Annotation("bom")
+    table = SimpleNamespace(GetAnnotation=lambda: table_an)
+    inserted: list[Any] = []
+
+    def insert(view, template, kind, x_mm, y_mm):
+        table_an.position = (x_mm / 1000, y_mm / 1000, 0.0)
+        inserted.append((view, template, kind))
+        return table, {"view": view, "bom_type": kind, "row_count": 3}
+
+    def measure(_table):
+        if boxes:
+            return boxes.pop(0)
+        x, y, _ = table_an.position
+        return (x, y, x + 0.1, y + 0.02)
+
+    adapter._insert_bom = insert
+    adapter._table_box = measure
+    return inserted
+
+
+@pytest.mark.asyncio
+async def test_an_assembly_gets_its_bom_above_the_isometric(files) -> None:
+    adapter = _adapter(files)
+    inserted = _with_bom(adapter)
+    cells: list[Any] = []
+    place = adapter._bom_above_iso
+    adapter._bom_above_iso = lambda s: cells.append(s.cells["iso"]) or place(s)
+
+    result = await adapter.create_standard_drawing(
+        files.assembly, write_model_properties=False, include_bom=True
+    )
+
+    assert result.is_success, result.error
+    assert inserted == [("Drawing View1", None, "top_level_only")]
+    box = [v / 1000 for v in result.data["bom"]["table_box_mm"]]
+    # Its top-right corner sits BOM_GAP inside the top-right of the iso cell,
+    # and the isometric is centred below it.
+    iso_cell = cells[0]
+    assert box[2] == pytest.approx(iso_cell[2] - std.BOM_GAP, abs=1e-4)
+    assert box[3] == pytest.approx(iso_cell[3] - std.BOM_GAP, abs=1e-4)
+    iso_y = adapter.drawing.views["Drawing View4"]._position[1]
+    assert iso_y < box[1] - std.BOM_GAP
+    final = [c for c in adapter.calls if c[0] == "arrange"][-1]
+    assert "bom" in final[2]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("boxes", "message"),
+    [
+        ([None], "The BOM was inserted but cannot be measured"),
+        ([(0.3, 0.2, 0.4, 0.22), None], "The BOM was moved but cannot be measured"),
+    ],
+    ids=["after inserting", "after moving"],
+)
+async def test_a_bom_that_cannot_be_measured_stops_the_build(
+    files, boxes, message
+) -> None:
+    adapter = _adapter(files)
+    _with_bom(adapter, boxes)
+
+    result = await adapter.create_standard_drawing(
+        files.assembly, write_model_properties=False, include_bom=True
+    )
+
+    assert (
+        result.error
+        == f"Drawing step 'bom' failed: Error in standard_drawing_bom: {message}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_assemblys_own_material_is_left_as_set(files) -> None:
+    # A link to an assembly's material shows "<not specified>", so its own
+    # Material property (set by the caller) is not overwritten.
+    adapter = _adapter(files)
+
+    result = await adapter.create_standard_drawing(files.assembly)
+
+    assert result.is_success, result.error
+    written = [c[1] for c in adapter.calls if c[0] == "set_custom_property"]
+    assert "Material" not in written
+    assert written[:2] == ["Description", "Weight"]
+
+
+@pytest.mark.asyncio
+async def test_a_part_has_no_bom(files) -> None:
+    result = await _adapter(files).create_standard_drawing(files.part, include_bom=True)
+
+    assert result.error == "include_bom needs an assembly (.SLDASM); a part has no BOM"
+
+
+@pytest.mark.asyncio
+async def test_orthographic_views_show_hidden_lines(files) -> None:
+    drawing = _Drawing()
+    adapter = _adapter(files, drawing)
+
+    result = await adapter.create_standard_drawing(files.part)
+
+    assert result.is_success, result.error
+    views = drawing.views
+    assert {n: views[n].display_mode for n in views} == {
+        "Drawing View1": 1,
+        "Drawing View2": 1,
+        "Drawing View3": 1,
+        "Drawing View4": 2,  # the isometric is left as it was
+    }
+    assert result.data["hidden_lines_visible"] == {
+        "Drawing View1": True,
+        "Drawing View2": True,
+        "Drawing View3": True,
+    }
+
+
+def test_a_view_that_keeps_its_mode_or_cannot_say_is_reported(files) -> None:
+    adapter = _adapter(files)
+    locked = _View((0, 0, 1, 1), "*Locked")
+    silent = SimpleNamespace(SetDisplayMode4=lambda *a: True)
+
+    assert adapter._show_hidden_lines(locked) is False
+    assert adapter._show_hidden_lines(silent) is None
+
+
+def test_notes_inside_views_are_obstacles_too(files) -> None:
+    # A caption inserted with nothing selected lands in the active view, so
+    # the notes of every view are read, measured from their display data.
+    adapter = _adapter(files)
+    caption = _Annotation("TOP VIEW")
+    caption.position = (0.1, 0.15, 0.0)
+    in_view = SimpleNamespace(GetAnnotation=lambda: caption, GetNext=lambda: None)
+    plan = SimpleNamespace(GetFirstNote=lambda: in_view, GetNextView=lambda: None)
+    on_sheet = _FormatNote("DWG NO.", "", 0.249, 0.028, 0.002)
+    sheet = SimpleNamespace(GetFirstNote=lambda: on_sheet, GetNextView=lambda: plan)
+
+    boxes = adapter._sheet_note_boxes(SimpleNamespace(GetFirstView=lambda: sheet))
+
+    assert boxes == {
+        "note 0": pytest.approx((0.249, 0.028, 0.249 + 0.0016 * 7, 0.030)),
+        "note 1": pytest.approx((0.1, 0.147, 0.1 + 0.0019 * 8, 0.15)),
+    }
+
+
+@pytest.mark.asyncio
+async def test_the_finished_sheet_is_laid_out_clear_of_every_note(files) -> None:
+    adapter = _adapter(files)
+
+    await adapter.create_standard_drawing(files.part)
+
+    final = [c for c in adapter.calls if c[0] == "arrange"][-1]
+    assert final[1] is True
+    # The captions are measured now: kept clear as drawn, not as whole strips.
+    assert {"note 0", "note 3", "title block", "notes"} <= set(final[2])
+    assert "plan caption" not in final[2]
+
+
 @pytest.mark.asyncio
 async def test_remaining_overlaps_fail_the_no_overlap_rule(files) -> None:
     result = await _adapter(files, overlaps=2).create_standard_drawing(files.part)
@@ -804,6 +983,27 @@ async def test_remaining_overlaps_fail_the_no_overlap_rule(files) -> None:
         "see overlap_check"
     )
     assert result.data["drawing_path"]
+
+
+@pytest.mark.asyncio
+async def test_the_overlaps_left_are_named_in_the_error(files) -> None:
+    adapter = _adapter(files, overlaps=1)
+    found = {
+        "dimension": "Drawing View2#2",
+        "conflicts_with": "bom",
+        "kind": "on_obstacle",
+    }
+    arrange = adapter._arrange_layout
+    adapter._arrange_layout = lambda *a, **k: {
+        **arrange(*a, **k),
+        "remaining_overlaps": [found],
+    }
+
+    result = await adapter.create_standard_drawing(files.part)
+
+    assert result.error.endswith(
+        "see overlap_check: Drawing View2#2 vs bom (on_obstacle)"
+    )
 
 
 @pytest.mark.asyncio

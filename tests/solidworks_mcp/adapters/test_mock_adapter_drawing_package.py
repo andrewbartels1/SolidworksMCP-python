@@ -119,6 +119,7 @@ async def test_gtol_and_datum_tag_on_a_drawing(drawing) -> None:
         "datums": ["A", "B"],
         "attached": True,
         "position_mm": [60.0, 250.0],
+        "layout": None,
     }
     assert free.data["attached"] is False and free.data["datums"] == []
     assert tag.data == {"label": "B", "position_mm": [15.0, 25.0]}

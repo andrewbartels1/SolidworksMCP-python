@@ -1214,7 +1214,7 @@ class SolidWorksDocumentationMixin:
             angle = float(
                 self._attempt(lambda i=i: dd.GetTextAngleAtIndex(i), default=0.0) or 0.0
             )
-            width = max(box_w, len(text.strip()) * height * 0.62)
+            width = max(box_w, _layout.shown_length(text) * height * 0.62)
             boxes.append(
                 _layout.text_box(pos[0], pos[1], width, max(height, 0.001), angle)
             )
@@ -1301,6 +1301,7 @@ class SolidWorksDocumentationMixin:
         obstacles: dict[str, Any] | None = None,
         work_area: Any = None,
         move: bool = True,
+        attached: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Plan, apply and verify the dimension layout; arrange_dimensions' body.
 
@@ -1309,9 +1310,12 @@ class SolidWorksDocumentationMixin:
             obstacles: Named boxes nothing may touch (title block, captions).
             work_area: The frame's working area; the sheet when ``None``.
             move: ``False`` only checks the current layout.
+            attached: Dimension key -> box hanging off it (a GD&T frame),
+                relative to its position; counted as part of its text.
 
         Returns:
             dict[str, Any]: ``dimensions``, ``moved``, ``unplaced``,
+            ``passes``, ``trace`` (each pass's plan, moves and overlaps),
             ``overlaps_before``/``overlaps_after``, ``remaining_overlaps`` and
             ``sheet_size_m``. Remaining overlaps are reported, not raised.
 
@@ -1327,9 +1331,10 @@ class SolidWorksDocumentationMixin:
             )
         sheet = work_area or self._sheet_bounds(drawing)
         outlines, geometries, annotations = self._collect_layout(drawing, all_views)
+        _layout.attach_boxes(geometries, attached or {})
         before = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
         after = before
-        moved, unplaced, passes = 0, [], 0
+        moved, unplaced, passes, trace = 0, [], 0, []
         # The first pass plans every movable dimension from where it was
         # imported. SolidWorks does not always draw a dimension where the
         # plan put it, so later passes re-plan only the dimensions still in
@@ -1343,21 +1348,46 @@ class SolidWorksDocumentationMixin:
             movable = allowed if retry is None else allowed & retry
             fixed = {g.key for g in geometries} - movable
             moves, unplaced = _layout.plan_layout(
-                geometries, outlines, sheet, obstacles, fixed=fixed
+                geometries,
+                outlines,
+                sheet,
+                obstacles,
+                fixed=fixed,
+                inside_first=set(attached or {}),
             )
-            moved += self._apply_moves(geometries, annotations, moves, movable)
+            applied = self._apply_moves(geometries, annotations, moves, movable)
+            moved += applied
             self._attempt(lambda: model.ClearSelection2(True), default=None)
             self._attempt(lambda: model.EditRebuild3(), default=None)
             self._attempt(lambda: model.GraphicsRedraw2(), default=None)
             outlines, geometries, annotations = self._collect_layout(drawing, all_views)
+            _layout.attach_boxes(geometries, attached or {})
             after = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
+            # Both sides of a conflict are re-planned: a leader that grazes a
+            # dimension's text is as likely the one to move as the text.
             keys = {g.key for g in geometries}
-            retry = {p["dimension"] for p in after if p["dimension"] in keys}
+            retry = {
+                k
+                for p in after
+                for k in (p["dimension"], p["conflicts_with"])
+                if k in keys
+            }
+            trace.append(
+                {
+                    "pass": passes,
+                    "movable": sorted(movable),
+                    "planned": {k: [round(d, 5) for d in v] for k, v in moves.items()},
+                    "moved": applied,
+                    "unplaced": unplaced,
+                    "overlaps": after[:50],
+                }
+            )
         result = {
             "dimensions": len(geometries),
             "moved": moved,
             "unplaced": unplaced,
             "passes": passes,
+            "trace": trace,
             "overlaps_before": len(before),
             "overlaps_after": len(after),
             "remaining_overlaps": after[:50],

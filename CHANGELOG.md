@@ -37,6 +37,36 @@ Drawing layout:
   conflict after the first pass (up to three passes).
 - `insert_bom_table` slides a table placed by the sheet's anchor back onto
   the sheet (`moved_onto_sheet`).
+- Dimensions that do not touch share a row: the hole positions at each end
+  of a plate sit in one row, its overall length in the next.
+- A dimension's text width counts each SolidWorks code (`<MOD-DIAM>` for
+  Ø) as one symbol, not as ten characters.
+- `generate_drawing_package` lays the dimensions out again on the finished
+  sheet, clear of each view's caption and note as drawn, before checking it.
+- `add_gtol` on a dimension lays the view out again with the frame counted
+  as part of that dimension, so the frame does not land on its neighbours.
+- `generate_drawing_package` takes `include_bom` (assemblies): the BOM goes
+  in the top of the isometric view's cell, with the isometric fitted below.
+- `generate_drawing_package` draws the front, plan and side views with hidden
+  lines visible (dashed), so through holes show in the front and side views;
+  `hidden_lines_visible` reports each view as read back.
+- A hole note with its GD&T frame may sit inside the part, near its hole on a
+  short leader, when it is well inside the view and clear of every feature
+  the dimensions start from; `add_gtol` tries there first. The overlap check
+  allows the same and nothing else inside a view.
+- Notes inside views (SolidWorks puts a caption into the active view) are
+  kept clear of, as well as notes on the sheet.
+- On an assembly, `generate_drawing_package` leaves the model's own
+  Material property alone: a link to an assembly's material showed
+  "<not specified>".
+- View captions read FRONT VIEW, TOP VIEW, SIDE VIEW and ISOMETRIC VIEW
+  (were FRONT ELEVATION, PLAN, SIDE ELEVATION, ISOMETRIC).
+- `add_gtol` finds a part's dimension on an assembly drawing, where its name
+  can carry the component (`D3@Sketch1@Demo Plate-1@...`).
+- The README opens with a recorded demo: a prompt answered in 58 tool calls,
+  from sketch to an assembly drawing with GD&T and a BOM.
+  `tests/scripts/live_demo.ps1 -Record` records a live test (changed frames
+  only, captions as each step starts) and builds a sped-up GIF.
 
 Model verification (#173):
 

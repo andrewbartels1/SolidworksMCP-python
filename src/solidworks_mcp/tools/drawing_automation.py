@@ -196,6 +196,7 @@ class GenerateDrawingPackageInput(CompatInput):
         include_isometric (bool): Add the isometric view.
         write_model_properties (bool): Write title-block properties into the model.
         title_block_text_height_mm (float | None): Cap on DWG NO./TITLE text height.
+        include_bom (bool): Put a BOM above the isometric view (assemblies).
     """
 
     model_path: str = Field(description="Full path to the .SLDPRT or .SLDASM")
@@ -232,6 +233,11 @@ class GenerateDrawingPackageInput(CompatInput):
         description="Largest text height (mm) for the title block's DWG NO. and "
         "TITLE, e.g. 3 for smaller text. By default they keep the sheet "
         "format's height and are only shrunk to fit their boxes.",
+    )
+    include_bom: bool = Field(
+        default=False,
+        description="Assemblies only: put a bill of materials in the top of the "
+        "isometric view's cell, with the isometric fitted below it",
     )
 
     @field_validator("model_path")
@@ -602,6 +608,7 @@ async def register_drawing_automation_tools(
             input_data.include_isometric,
             input_data.write_model_properties,
             input_data.title_block_text_height_mm,
+            input_data.include_bom,
         )
         require_success(
             result, context="Failed to create the standard drawing", with_data=True

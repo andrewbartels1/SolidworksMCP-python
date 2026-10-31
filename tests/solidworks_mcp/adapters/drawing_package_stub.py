@@ -21,6 +21,7 @@ PACKAGE_ARGS = (
     False,
     False,
     3.0,
+    True,
 )
 
 
