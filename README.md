@@ -31,6 +31,24 @@ It includes:
 - tool coverage across modeling, sketching, drawing, analysis, export, automation, templates, and macros
 - optional agent orchestration/testing utilities under `src/solidworks_mcp/agents/`
 
+## Demos
+
+Each demo below drives a real SolidWorks session through the same tools an MCP client calls. Open the file to see the exact calls; run it to watch SolidWorks build the result. They need Windows, SolidWorks open, and the project's `.venv`.
+
+| Demo | What it builds | Run it |
+| --- | --- | --- |
+| [README demo](tests/live/test_live_sw_readme_demo.py) | A prompt answered end to end: a fully dimensioned AISI 1020 plate checked with `verify_model`, its drawing, then two plates stacked 10 mm apart with an assembly drawing and BOM | `powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 -Test tests/live/test_live_sw_readme_demo.py` |
+| [Sketches](scripts/demo_sketches.py) | A decorative plate using every sketch tool: splines, arcs, polygons, ellipses, patterns, mirror, offset | `.\.venv\Scripts\python.exe scripts\demo_sketches.py` |
+| [Features](scripts/demo_features.py) | A revolved ring with a cut slot, a fillet and a chamfer | `.\.venv\Scripts\python.exe scripts\demo_features.py` |
+| [Sweep and loft](scripts/demo_sweep_loft.py) | A lofted cone and a swept coil spring in one multibody part | `.\.venv\Scripts\python.exe scripts\demo_sweep_loft.py` |
+| [Analysis](scripts/demo_analysis.py) | Model info, features, configurations and mass properties read back, and a dimension read and changed | `.\.venv\Scripts\python.exe scripts\demo_analysis.py` |
+| [Export](scripts/demo_export.py) | One part exported to STEP, STL, IGES and PNG (PDF and DWG need a drawing) | `.\.venv\Scripts\python.exe scripts\demo_export.py` |
+| [Save safeguards](scripts/demo_save_validation.py) | Saving refuses a missing folder and an existing file unless overwrite is set, for parts and assemblies | `.\.venv\Scripts\python.exe scripts\demo_save_validation.py` |
+| [Heat-set insert coupon](docs/getting-started/tutorial-parts/demo_recording_heat_insert.py) | A recording-friendly build that prints the prompt and its own source first | `.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\demo_recording_heat_insert.py` |
+| [Assembly feature tree](docs/getting-started/tutorial-parts/list_features_assembly_demo.py) | `list_features` on a part and an assembly from the SolidWorks sample set | `.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\list_features_assembly_demo.py` |
+
+Recorded runs of the live tests, with each tool call and its result captioned under SolidWorks, are in [`docs/assets/demos/`](docs/assets/demos/): checking a model against expected values, drawing packages, drawing dimensions, and engineering data.
+
 ## Supported Today
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.

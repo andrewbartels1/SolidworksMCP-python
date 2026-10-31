@@ -1307,6 +1307,15 @@ def _add_sketch_dimension_impl(
 
         if dim_type == "angular":
             display_dim = _try_create_angular_dimension()
+        elif dim_type == "linear" and entity2_obj is not None:
+            adapter.currentModel.ClearSelection2(True)
+            if not adapter._select_sketch_entity(entity1_obj, append=False):
+                raise Exception(f"Failed to select primary entity '{entity1}'")
+            if not adapter._select_sketch_entity(entity2_obj, append=True):
+                raise Exception(f"Failed to select secondary entity '{entity2}'")
+            display_dim = _two_entity_linear_dimension(
+                adapter, entity1_obj, entity2_obj, direction
+            )
         else:
             adapter.currentModel.ClearSelection2(True)
             if not adapter._select_sketch_entity(entity1_obj, append=False):
@@ -1374,6 +1383,87 @@ def _add_sketch_dimension_impl(
         AdapterResult[str],
         adapter._handle_com_operation("add_sketch_dimension", _dimension_operation),
     )
+
+
+def _sketch_point_xyz(adapter: Any, entity: Any) -> tuple[float, float, float] | None:
+    """A sketch entity's reference point in metres: a circle's centre, a line's midpoint.
+
+    Args:
+        adapter: A ``PyWin32Adapter``.
+        entity: A registered ``ISketchArc`` or ``ISketchLine`` dispatch.
+
+    Returns:
+        tuple[float, float, float] | None: The point, or ``None`` when it
+        cannot be read.
+    """
+    adapter._attempt(
+        lambda: _sw_type_info.flag_methods(entity, "ISketchArc"), default=0
+    )
+    centre = adapter._attempt(lambda: entity.GetCenterPoint(), default=None)
+    if isinstance(centre, (list, tuple)) and len(centre) >= 3:
+        return (float(centre[0]), float(centre[1]), float(centre[2]))
+    ends = adapter._attempt(
+        lambda: adapter._sketch_geometry.read_segment_endpoints(entity), default=None
+    )
+    if ends is None:
+        return None
+    (x1, y1, z1), (x2, y2, z2) = ends
+    return ((x1 + x2) / 2.0, (y1 + y2) / 2.0, (z1 + z2) / 2.0)
+
+
+def _two_entity_linear_dimension(
+    adapter: Any, entity1: Any, entity2: Any, direction: int
+) -> Any:
+    """A linear dimension between two sketch entities, e.g. a line and a circle.
+
+    The text goes midway between the two. ``Extension.AddDimension`` with the
+    first entity's single-line placement returned nothing for a line and a
+    circle on SW 2026, so the calls are tried in turn until one returns a
+    display dimension: ``IModelDoc2::AddDimension2`` with both entities
+    selected (what the macro recorder writes for a smart dimension), the same
+    with the circle's centre point selected, then ``Extension.AddDimension``.
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with an open sketch.
+        entity1: The first entity, usually a line.
+        entity2: The second entity, usually a circle.
+        direction: ``swSmartDimensionDirection_e`` for the last attempt.
+
+    Returns:
+        Any: The display dimension, or ``None`` when every attempt failed
+        (an attempt whose entities cannot be selected is skipped). The caller
+        has already checked that both entities can be selected.
+
+    Raises:
+        Exception: When the entities' positions cannot be read.
+    """
+    model = adapter.currentModel
+    points = [_sketch_point_xyz(adapter, e) for e in (entity1, entity2)]
+    if points[0] is None or points[1] is None:
+        raise Exception("Cannot read where the two entities are to place the dimension")
+    text = tuple((a + b) / 2.0 for a, b in zip(points[0], points[1], strict=True))
+    centre = adapter._attempt(
+        lambda: adapter._get_attr_or_call(entity2, "GetCenterPoint2"), default=None
+    )
+
+    def _selected(second: Any) -> bool:
+        adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+        return adapter._select_sketch_entity(
+            entity1, append=False
+        ) and adapter._select_sketch_entity(second, append=True)
+
+    attempts = [
+        (entity2, lambda: model.AddDimension2(*text)),
+        *([(centre, lambda: model.AddDimension2(*text))] if centre is not None else []),
+        (entity2, lambda: model.Extension.AddDimension(*text, direction)),
+    ]
+    for second, create in attempts:
+        if not _selected(second):
+            continue
+        display_dim = adapter._attempt(create, default=None)
+        if display_dim:
+            return display_dim
+    return None
 
 
 def _select_sketch_entities(adapter: Any, entity_ids: list[str], mark: int) -> None:
