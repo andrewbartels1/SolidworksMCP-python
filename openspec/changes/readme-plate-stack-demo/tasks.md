@@ -46,6 +46,18 @@
       sketch dimension text placed outside the outline; a general-tolerance
       note (ISO 2768-m). Feature control frames wait for #182
 - [x] 3.0c `add_sketch_constraint` normalises its input (a dict raised); test
+- [x] 3.0d Fourth run: everything landed in the plan view; 4 overlaps were
+      left, all from the layout's model of the drawing being wrong, not from
+      COM. The Ø leader was modelled as moving with its text (it stays on
+      the hole), and the layout never re-planned from what SolidWorks really
+      drew. Fixed in `dimension_layout.py` (leader anchored on its feature,
+      outward candidates, `fixed` dimensions) and `_arrange_layout` (up to
+      three passes from read-back geometry); 100 % coverage
+- [x] 3.0e GD&T, at the maintainer's request: `add_gtol` (feature control
+      frame, on a drawing dimension, an edge or free) and `add_datum_tag`,
+      in the adapter, all four layers, the mock and the tools, with tests;
+      the demo puts datums A, B, C on the plate and ⊕ Ø0.2 Ⓜ A|B|C on the
+      Ø5.5. First live use of `InsertGtol` and `InsertDatumTag2`
 - [ ] 3.1 Run it with `live_demo.ps1 -CaptureDir docs/assets/demos/readme`.
       Untested live until now: a line-to-circle linear dimension, the
       sketch's fully-defined state, a drawing of an assembly without an

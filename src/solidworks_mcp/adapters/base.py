@@ -1809,6 +1809,45 @@ class SolidWorksAdapter(ABC):
             error="set_sheet_scale is not implemented by this adapter",
         )
 
+    async def add_gtol(
+        self,
+        characteristic: str,
+        tolerance: float,
+        x_mm: float,
+        y_mm: float,
+        diameter_zone: bool = False,
+        material_condition: str = "none",
+        datums: list[str] | None = None,
+        attach_at_mm: tuple[float, float] | None = None,
+        dimension: tuple[str, str] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a GD&T feature control frame to the active drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_gtol is not implemented by this adapter",
+        )
+
+    async def add_datum_tag(
+        self,
+        label: str,
+        attach_at_mm: tuple[float, float],
+        x_mm: float,
+        y_mm: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a datum feature symbol on a drawing edge.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_datum_tag is not implemented by this adapter",
+        )
+
     async def create_standard_drawing(
         self,
         model_path: str,

@@ -29,6 +29,7 @@ from .base import (
     SolidWorksModel,
     SweepParameters,
 )
+from .solidworks.drawing_standard import gtol_problem
 from .solidworks.features import _AXIS_PLANE_PAIRS
 from .solidworks.io import _normalise_unit_system as _normalise_mock_unit_system
 from .solidworks.sketch import RELATION_NAME_MAP
@@ -3853,6 +3854,64 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "table_box_mm": [0.0, 0.0, 60.0, 15.0],
                 "moved_onto_sheet": False,
             },
+        )
+
+    async def add_gtol(
+        self,
+        characteristic: str,
+        tolerance: float,
+        x_mm: float,
+        y_mm: float,
+        diameter_zone: bool = False,
+        material_condition: str = "none",
+        datums: list[str] | None = None,
+        attach_at_mm: tuple[float, float] | None = None,
+        dimension: tuple[str, str] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding a feature control frame; refuses what the real one refuses."""
+        guard = self._mock_doc_error({"Drawing"}, "add_gtol")
+        if guard is not None:
+            return guard
+        problem = gtol_problem(characteristic, tolerance, material_condition, datums)
+        if problem is not None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=problem)
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "characteristic": characteristic,
+                "tolerance": f"{tolerance:g}",
+                "diameter_zone": diameter_zone,
+                "material_condition": material_condition,
+                "datums": [d.strip().upper() for d in datums or []],
+                "attached": (
+                    dimension[1] if dimension is not None else attach_at_mm is not None
+                ),
+                "position_mm": None if dimension is not None else [x_mm, y_mm],
+            },
+        )
+
+    async def add_datum_tag(
+        self,
+        label: str,
+        attach_at_mm: tuple[float, float],
+        x_mm: float,
+        y_mm: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding a datum tag; refuses what the real one refuses."""
+        guard = self._mock_doc_error({"Drawing"}, "add_datum_tag")
+        if guard is not None:
+            return guard
+        letter = label.strip().upper()
+        if len(letter) != 1 or not letter.isalpha():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="label must be a single letter, e.g. 'A'",
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"label": letter, "position_mm": [x_mm, y_mm]},
         )
 
     async def set_sheet_scale(

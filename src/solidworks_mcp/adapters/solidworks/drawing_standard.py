@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
 from . import dimension_layout as _layout
+from .features import _null_callout
 from .io import _as_com, _resolve_drawing_view, _sw_type_info, _view_names
 
 if TYPE_CHECKING:
@@ -98,6 +99,48 @@ _SW_BOM_ANCHOR_TOP_RIGHT = 2
 _SW_BOM_ANCHOR_BOTTOM_LEFT = 3
 _SW_BOM_ANCHOR_BOTTOM_RIGHT = 4
 _SW_NUMBERING_NONE = 0
+#: GD&T characteristic -> SolidWorks GTOL symbol code (IGtol::SetFrameSymbols2).
+_GTOL_SYMBOLS = {
+    "position": "<IGTOL-POSI>",
+    "flatness": "<IGTOL-FLAT>",
+    "perpendicularity": "<IGTOL-PERP>",
+    "parallelism": "<IGTOL-PARA>",
+    "profile_surface": "<IGTOL-SPROF>",
+    "concentricity": "<IGTOL-CONC>",
+}
+#: Material condition -> modifier symbol code.
+_GTOL_MODIFIERS = {"none": "", "mmc": "<MOD-MMC>", "lmc": "<MOD-LMC>"}
+
+
+def gtol_problem(
+    characteristic: str,
+    tolerance: float,
+    material_condition: str,
+    datums: list[str] | None,
+) -> str | None:
+    """Why a feature control frame's inputs are invalid, or ``None`` when valid.
+
+    Shared by the real and mock adapters so both refuse the same inputs.
+
+    Args:
+        characteristic: The GD&T characteristic name.
+        tolerance: The tolerance value.
+        material_condition: ``none``, ``mmc`` or ``lmc``.
+        datums: Datum letters, primary first.
+
+    Returns:
+        str | None: The problem, in words.
+    """
+    letters = [d.strip() for d in datums or []]
+    if characteristic not in _GTOL_SYMBOLS:
+        return f"characteristic must be one of {', '.join(_GTOL_SYMBOLS)}"
+    if material_condition not in _GTOL_MODIFIERS:
+        return f"material_condition must be one of {', '.join(_GTOL_MODIFIERS)}"
+    if tolerance <= 0:
+        return "tolerance must be positive"
+    if len(letters) > 3 or any(len(d) != 1 or not d.isalpha() for d in letters):
+        return "at most three datums, each a single letter"
+    return None
 
 
 def _double_array(values: list[float]) -> Any:
@@ -451,6 +494,12 @@ class SolidWorksDrawingStandardMixin:
 
         def _require_drawing(self) -> AdapterResult[Any] | None: ...
 
+        def _get_attr_or_call(self, obj: Any, attr_name: str) -> Any: ...
+
+        def _dimension_annotations(self, view: Any) -> list[tuple[Any, str | None]]: ...
+
+        def _select_display_dimension(self, model: Any, an: Any) -> bool: ...
+
         def _sheet_bounds(self, drawing: Any) -> Any: ...
 
         def _dimension_geometry(self, an: Any, key: str, view_name: str) -> Any: ...
@@ -744,6 +793,201 @@ class SolidWorksDrawingStandardMixin:
         return cast(
             "AdapterResult[dict[str, Any]]",
             self._handle_com_operation("set_sheet_scale", _scale),
+        )
+
+    # -- GD&T ------------------------------------------------------------
+
+    def _select_edge_at(self, point_mm: tuple[float, float]) -> bool:
+        """Select the drawing edge nearest a sheet point, given in mm."""
+        model = self.currentModel
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        x, y = point_mm[0] / 1000.0, point_mm[1] / 1000.0
+        return bool(
+            self._attempt(
+                lambda: model.Extension.SelectByID2(
+                    "", "EDGE", x, y, 0.0, False, 0, _null_callout(), 0
+                ),
+                default=False,
+            )
+        )
+
+    def _place_annotation(self, item: Any, x_mm: float, y_mm: float) -> None:
+        """Move an annotation-owning object (frame, datum tag) to a sheet point."""
+        an = self._attempt(lambda: self._get_attr_or_call(item, "GetAnnotation"))
+        if an is not None:
+            an = _sw_type_info.flagged(an, "IAnnotation")
+            self._attempt(
+                lambda: an.SetPosition(x_mm / 1000.0, y_mm / 1000.0, 0.0),
+                default=None,
+            )
+
+    async def add_gtol(
+        self,
+        characteristic: str,
+        tolerance: float,
+        x_mm: float,
+        y_mm: float,
+        diameter_zone: bool = False,
+        material_condition: str = "none",
+        datums: list[str] | None = None,
+        attach_at_mm: tuple[float, float] | None = None,
+        dimension: tuple[str, str] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a feature control frame (GD&T) to the active drawing.
+
+        ``IModelDoc2::InsertGtol`` creates the frame on whatever is selected:
+        a drawing dimension (``dimension``; the frame sits under its text and
+        moves with it, the usual place for a hole's position tolerance), the
+        edge picked at ``attach_at_mm`` (with a leader), or nothing
+        (free-standing);
+        ``IGtol::SetFrameSymbols2`` sets the characteristic, the Ø zone and
+        the material condition, and ``IGtol::SetFrameValues`` the tolerance
+        and datums. The values are read back with ``GetFrameValues``, so a
+        frame SolidWorks did not fill in is an error, not a success.
+
+        Args:
+            characteristic: ``position``, ``flatness``, ``perpendicularity``,
+                ``parallelism``, ``profile_surface`` or ``concentricity``.
+            tolerance: The tolerance value, in drawing units.
+            x_mm: Where the frame goes on the sheet.
+            y_mm: Where the frame goes on the sheet.
+            diameter_zone: Prefix the tolerance with Ø (a cylindrical zone).
+            material_condition: ``none``, ``mmc`` (Ⓜ) or ``lmc`` (Ⓛ).
+            datums: Up to three datum letters, primary first.
+            attach_at_mm: A sheet point on the edge the leader points to.
+            dimension: ``(view name, model dimension name)``, e.g.
+                ``("Drawing View2", "D3@Sketch1")``: attach the frame to that
+                drawing dimension. ``x_mm``/``y_mm`` are then not used.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The frame as read back.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+        problem = gtol_problem(characteristic, tolerance, material_condition, datums)
+        if problem is not None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=problem)
+        symbol = _GTOL_SYMBOLS[characteristic]
+        modifier = _GTOL_MODIFIERS[material_condition]
+        letters = [d.strip().upper() for d in datums or []]
+
+        def _insert() -> dict[str, Any]:
+            model = self.currentModel
+            if dimension is not None:
+                if not self._select_drawing_dimension(*dimension):
+                    raise LookupError(
+                        f"No dimension {dimension[1]!r} in view {dimension[0]!r}"
+                    )
+                attached: Any = dimension[1]
+            elif attach_at_mm is not None:
+                if not self._select_edge_at(attach_at_mm):
+                    raise LookupError(
+                        f"No drawing edge found at {list(attach_at_mm)} mm"
+                    )
+                attached = True
+            else:
+                attached = False
+            gtol = self._get_attr_or_call(model, "InsertGtol")
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            if gtol is None:
+                raise Exception("InsertGtol returned nothing; no frame was added")
+            gtol = _sw_type_info.flagged(gtol, "IGtol")
+            padded = [*letters, "", "", ""][:3]
+            text = f"{tolerance:g}"
+            gtol.SetFrameSymbols2(
+                1, symbol, diameter_zone, modifier, False, "", "", "", ""
+            )
+            gtol.SetFrameValues(1, text, "", *padded)
+            if dimension is None:
+                self._place_annotation(gtol, x_mm, y_mm)
+            self._attempt(lambda: model.GraphicsRedraw2(), default=None)
+            values = self._attempt(lambda: gtol.GetFrameValues(1), default=None)
+            read = [str(v) for v in values] if isinstance(values, (list, tuple)) else []
+            if not read or read[0] != text or read[2:5] != padded:
+                raise Exception(
+                    f"The frame did not take its values: read back {read or None}, "
+                    f"expected tolerance {text!r} and datums {padded}"
+                )
+            return {
+                "characteristic": characteristic,
+                "tolerance": text,
+                "diameter_zone": diameter_zone,
+                "material_condition": material_condition,
+                "datums": letters,
+                "attached": attached,
+                "position_mm": None if dimension is not None else [x_mm, y_mm],
+            }
+
+        return cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("add_gtol", _insert),
+        )
+
+    def _select_drawing_dimension(self, view_name: str, name: str) -> bool:
+        """Select the drawing dimension ``name`` (e.g. ``D3@Sketch1``) in a view."""
+        drawing = _sw_type_info.flagged(self.currentModel, "IDrawingDoc")
+        view = _resolve_drawing_view(self, drawing, view_name)
+        if view is None:
+            return False
+        for an, dim_name in self._dimension_annotations(view):
+            if dim_name == name:
+                return self._select_display_dimension(self.currentModel, an)
+        return False
+
+    async def add_datum_tag(
+        self,
+        label: str,
+        attach_at_mm: tuple[float, float],
+        x_mm: float,
+        y_mm: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a datum feature symbol (a datum tag) on a drawing edge.
+
+        ``IModelDoc2::InsertDatumTag2`` attaches the tag to the edge picked at
+        ``attach_at_mm``; ``IDatumTag::SetLabel`` names it, and the label is
+        read back with ``GetLabel``.
+
+        Args:
+            label: The datum letter, e.g. ``A``.
+            attach_at_mm: A sheet point on the edge or face line it marks.
+            x_mm: Where the tag goes on the sheet.
+            y_mm: Where the tag goes on the sheet.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The label as read back.
+        """
+        guard = self._require_drawing()
+        if guard is not None:
+            return cast("AdapterResult[dict[str, Any]]", guard)
+        letter = label.strip().upper()
+        if len(letter) != 1 or not letter.isalpha():
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="label must be a single letter, e.g. 'A'",
+            )
+
+        def _insert() -> dict[str, Any]:
+            model = self.currentModel
+            if not self._select_edge_at(attach_at_mm):
+                raise LookupError(f"No drawing edge found at {list(attach_at_mm)} mm")
+            tag = self._get_attr_or_call(model, "InsertDatumTag2")
+            self._attempt(lambda: model.ClearSelection2(True), default=None)
+            if tag is None:
+                raise Exception("InsertDatumTag2 returned nothing; no tag was added")
+            tag = _sw_type_info.flagged(tag, "IDatumTag")
+            tag.SetLabel(letter)
+            self._place_annotation(tag, x_mm, y_mm)
+            read = str(
+                self._attempt(lambda: self._get_attr_or_call(tag, "GetLabel")) or ""
+            )
+            if read != letter:
+                raise Exception(f"The datum tag reads {read!r}, not {letter!r}")
+            return {"label": letter, "position_mm": [x_mm, y_mm]}
+
+        return cast(
+            "AdapterResult[dict[str, Any]]",
+            self._handle_com_operation("add_datum_tag", _insert),
         )
 
     # -- small COM helpers ---------------------------------------------

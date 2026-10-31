@@ -147,10 +147,17 @@ class TestGeometryEdges:
     def test_a_parallel_segment_beside_the_box_misses_it(self) -> None:
         assert not lay.segment_hits_box((-1, 2, -1, 3), (0, 0, 1, 1))
 
-    def test_a_leader_moves_with_its_text(self) -> None:
+    def test_a_leader_stays_on_its_feature(self) -> None:
+        # The leader starts at the hole (0.09, 0.12) and reaches the moved
+        # text's nearest edge; it does not move with the text.
         dim = _radial("d", "View1", 0.1, 0.13)
         moved = lay._projected_segments(dim, 0.02, -0.01, OUTLINE)
-        assert moved == [pytest.approx((0.11, 0.11, 0.12, 0.12))]
+        assert moved == [pytest.approx((0.09, 0.12, 0.116, 0.12))]
+
+    def test_a_leader_without_lines_has_no_anchor(self) -> None:
+        dim = lay.DimensionGeometry("d", "View1", (0, 0, 0.01, 0.01), (0, 0))
+        assert lay.leader_anchor(dim) is None
+        assert lay._projected_segments(dim, 0.01, 0.0, OUTLINE) == []
 
 
 class TestOverlapReport:
@@ -197,13 +204,43 @@ class TestOverlapReport:
 
 
 class TestPlanningChoices:
-    def test_a_diameter_goes_to_a_free_corner(self) -> None:
+    def test_a_diameter_steps_outward_from_its_hole(self) -> None:
+        # The hole (0.14, 0.15) is up and right of the view's centre, so the
+        # text goes up and right of the hole, clear of the view.
         dims = [_radial("dia", "View1", 0.15, 0.16)]
         moves, unplaced = lay.plan_layout(dims, {"View1": OUTLINE})
         assert not unplaced
         moved = lay.shift_box(dims[0].text_box, *moves["dia"])
         assert not lay.box_overlap(moved, OUTLINE)
-        assert moved[0] > OUTLINE[2] and moved[1] > OUTLINE[3]  # upper right
+        assert moved[0] > 0.14 and moved[1] > OUTLINE[3]
+
+    def test_a_leader_never_runs_through_another_dimensions_text(self) -> None:
+        # A dimension's text sits on the up-right diagonal from the hole; the
+        # leader takes another direction rather than crossing it.
+        hole = _radial("dia", "View1", 0.15, 0.16)
+        blocker = _hdim("w", "View1", 0.05, 0.17, 0.12, 0.10)
+        blocker.text_box = (0.155, 0.168, 0.185, 0.2)
+        moves, unplaced = lay.plan_layout(
+            [hole, blocker], {"View1": OUTLINE}, fixed={"w"}
+        )
+        assert not unplaced and "w" not in moves
+        box = lay.shift_box(hole.text_box, *moves["dia"])
+        leader = lay._leader_to((0.14, 0.15), box)
+        assert not lay.segment_hits_box(leader, blocker.text_box)
+
+    def test_fixed_dimensions_stay_and_push_the_next_row_out(self) -> None:
+        first = _hdim("a", "View1", 0.05, 0.17, 0.12, 0.10)
+        first.text_box = shift = lay.shift_box(first.text_box, 0.0, -0.033)  # row 1
+        second = _hdim("b", "View1", 0.06, 0.16, 0.12, 0.10)
+        moves, _ = lay.plan_layout([first, second], {"View1": OUTLINE}, fixed={"a"})
+        assert "a" not in moves
+        row2 = lay.shift_box(second.text_box, *moves["b"])
+        assert row2[3] < shift[1]  # below the fixed row, not on it
+
+    def test_a_fixed_dimension_of_an_unknown_view_is_still_an_obstacle(self) -> None:
+        ghost = _hdim("g", "Ghost", 0.05, 0.17, 0.12, 0.10)
+        moves, unplaced = lay.plan_layout([ghost], {"View1": OUTLINE}, fixed={"g"})
+        assert moves == {} and unplaced == []
 
     def test_a_dimension_of_an_unknown_view_stays_put(self) -> None:
         dims = [_hdim("x", "Ghost", 0.05, 0.17, 0.12, 0.10)]

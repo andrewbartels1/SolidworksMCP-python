@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+GD&T on drawings (first step of #182):
+
+- **`add_gtol`** adds a feature control frame (position, flatness,
+  perpendicularity, parallelism, surface profile, concentricity) with a Ø
+  zone, a material condition and up to three datums. It goes on a drawing
+  dimension (the usual place for a hole's position tolerance), on an edge
+  with a leader, or free on the sheet. The frame is read back, so one
+  SolidWorks did not fill in is an error.
+- **`add_datum_tag`** puts a datum feature symbol (A, B, C, ...) on a drawing
+  edge.
+
+Drawing layout:
+
+- Each model dimension is kept in the view that shows most of the model's
+  dimensions, so a plate sketched on Top is dimensioned in its plan rather
+  than edge-on in the front view.
+- A diameter or radius leader stays on its feature when its text is moved,
+  and its text steps outward from the feature; a leader no longer runs
+  through another dimension's text.
+- The layout re-plans, from the real geometry, whatever is still in
+  conflict after the first pass (up to three passes).
+- `insert_bom_table` slides a table placed by the sheet's anchor back onto
+  the sheet (`moved_onto_sheet`).
+
 Model verification (#173):
 
 - **`verify_model`** checks the active part or assembly against what you

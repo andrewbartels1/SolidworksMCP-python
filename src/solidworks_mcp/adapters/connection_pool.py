@@ -1514,6 +1514,47 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             lambda adapter: adapter.set_sheet_scale(numerator, denominator),
         )
 
+    async def add_gtol(
+        self,
+        characteristic: str,
+        tolerance: float,
+        x_mm: float,
+        y_mm: float,
+        diameter_zone: bool = False,
+        material_condition: str = "none",
+        datums: list[str] | None = None,
+        attach_at_mm: tuple[float, float] | None = None,
+        dimension: tuple[str, str] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a GD&T feature control frame using pool."""
+        return await self._execute_with_pool(
+            "add_gtol",
+            lambda adapter: adapter.add_gtol(
+                characteristic,
+                tolerance,
+                x_mm,
+                y_mm,
+                diameter_zone,
+                material_condition,
+                datums,
+                attach_at_mm,
+                dimension,
+            ),
+        )
+
+    async def add_datum_tag(
+        self,
+        label: str,
+        attach_at_mm: tuple[float, float],
+        x_mm: float,
+        y_mm: float,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a datum feature symbol using pool."""
+        return await self._execute_with_pool(
+            "add_datum_tag",
+            lambda adapter: adapter.add_datum_tag(label, attach_at_mm, x_mm, y_mm),
+        )
+
     async def create_standard_drawing(
         self,
         model_path: str,

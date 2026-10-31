@@ -79,6 +79,95 @@ class InsertBomTableInput(CompatInput):
     y_mm: float | None = Field(default=None, description="Table Y on the sheet (mm)")
 
 
+class AddGtolInput(CompatInput):
+    """Input schema for a GD&T feature control frame.
+
+    Attributes:
+        characteristic (str): The geometric characteristic.
+        tolerance (float): Tolerance value in drawing units.
+        diameter_zone (bool): Ø before the tolerance.
+        material_condition (str): none, mmc or lmc.
+        datums (list[str]): Datum letters, primary first.
+        x_mm (float): Frame position on the sheet.
+        y_mm (float): Frame position on the sheet.
+        attach_x_mm (float | None): A point on the edge the leader points to.
+        attach_y_mm (float | None): A point on the edge the leader points to.
+        dimension_view (str | None): View holding the dimension to attach to.
+        dimension_name (str | None): Model dimension to attach to.
+    """
+
+    characteristic: Literal[
+        "position",
+        "flatness",
+        "perpendicularity",
+        "parallelism",
+        "profile_surface",
+        "concentricity",
+    ] = Field(description="Geometric characteristic")
+    tolerance: float = Field(gt=0, description="Tolerance value, e.g. 0.2")
+    diameter_zone: bool = Field(
+        default=False, description="Cylindrical zone: Ø before the tolerance"
+    )
+    material_condition: Literal["none", "mmc", "lmc"] = Field(
+        default="none", description="Material condition modifier"
+    )
+    datums: list[str] = Field(
+        default_factory=list, max_length=3, description="Datum letters, primary first"
+    )
+    x_mm: float = Field(
+        default=0.0,
+        description="Frame X on the sheet (mm); not used when on a dimension",
+    )
+    y_mm: float = Field(
+        default=0.0,
+        description="Frame Y on the sheet (mm); not used when on a dimension",
+    )
+    attach_x_mm: float | None = Field(
+        default=None, description="X of a point on the edge the leader points to"
+    )
+    attach_y_mm: float | None = Field(
+        default=None, description="Y of a point on the edge the leader points to"
+    )
+    dimension_view: str | None = Field(
+        default=None, description="View holding the dimension to attach to"
+    )
+    dimension_name: str | None = Field(
+        default=None,
+        description="Model dimension to attach to, e.g. 'D3@Sketch1' (see "
+        "list_model_dimensions); the frame sits under its text",
+    )
+
+    def attach_point(self) -> tuple[float, float] | None:
+        """The leader's attach point, when both coordinates are given."""
+        if self.attach_x_mm is None or self.attach_y_mm is None:
+            return None
+        return (self.attach_x_mm, self.attach_y_mm)
+
+    def attach_dimension(self) -> tuple[str, str] | None:
+        """``(view, dimension)`` to attach to, when both are given."""
+        if not self.dimension_view or not self.dimension_name:
+            return None
+        return (self.dimension_view, self.dimension_name)
+
+
+class AddDatumTagInput(CompatInput):
+    """Input schema for a datum feature symbol.
+
+    Attributes:
+        label (str): The datum letter.
+        attach_x_mm (float): A point on the edge it marks.
+        attach_y_mm (float): A point on the edge it marks.
+        x_mm (float): Tag position on the sheet.
+        y_mm (float): Tag position on the sheet.
+    """
+
+    label: str = Field(min_length=1, max_length=1, description="Datum letter, e.g. 'A'")
+    attach_x_mm: float = Field(description="X of a point on the edge it marks (mm)")
+    attach_y_mm: float = Field(description="Y of a point on the edge it marks (mm)")
+    x_mm: float = Field(description="Tag X on the sheet (mm)")
+    y_mm: float = Field(description="Tag Y on the sheet (mm)")
+
+
 class SetSheetScaleInput(CompatInput):
     """Input schema for the sheet scale.
 
@@ -313,6 +402,108 @@ async def register_drawing_automation_tools(
         }
 
     @mcp.tool()
+    async def add_gtol(input_data: AddGtolInput | None = None) -> dict[str, Any]:
+        """Add a GD&T feature control frame, e.g. position Ø0.2 (M) to A|B|C.
+
+        Args:
+            input_data (AddGtolInput | None): ``characteristic`` (position,
+                flatness, perpendicularity, ...), ``tolerance``,
+                ``diameter_zone``, ``material_condition``, up to three
+                ``datums``, and what it is on: a drawing dimension
+                (``dimension_view`` + ``dimension_name``; the frame sits under
+                its text - the usual place for a hole's position tolerance),
+                or ``x_mm``/``y_mm`` on the sheet with an optional leader to
+                the edge at ``attach_x_mm``/``attach_y_mm``.
+
+        Returns:
+            dict[str, Any]: ``data`` is the frame as read back from SolidWorks.
+            Bad inputs are ``invalid_input``; no edge at the attach point is
+            ``not_found``; anything other than a drawing is
+            ``wrong_document_type``.
+
+        Example:
+            ```python
+            await add_gtol({
+                "characteristic": "position", "tolerance": 0.2,
+                "diameter_zone": True, "material_condition": "mmc",
+                "datums": ["A", "B", "C"],
+                "dimension_view": "Drawing View2", "dimension_name": "D3@Sketch1",
+            })
+            await add_gtol({
+                "characteristic": "flatness", "tolerance": 0.05,
+                "x_mm": 60, "y_mm": 90, "attach_x_mm": 80, "attach_y_mm": 107,
+            })
+            ```
+        """
+        _supports("add_gtol")
+        input_data = normalize_input(input_data, AddGtolInput)
+        attach = input_data.attach_point()
+        result = await adapter.add_gtol(
+            input_data.characteristic,
+            input_data.tolerance,
+            input_data.x_mm,
+            input_data.y_mm,
+            input_data.diameter_zone,
+            input_data.material_condition,
+            input_data.datums,
+            attach,
+            input_data.attach_dimension(),
+        )
+        require_success(result, context="Failed to add the feature control frame")
+        return {
+            "status": "success",
+            "message": (
+                f"Added a {input_data.characteristic} frame "
+                f"({input_data.tolerance:g}"
+                + (f" to {'|'.join(input_data.datums)}" if input_data.datums else "")
+                + ")"
+            ),
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_datum_tag(
+        input_data: AddDatumTagInput | None = None,
+    ) -> dict[str, Any]:
+        """Add a datum feature symbol (A, B, C, ...) on a drawing edge.
+
+        Args:
+            input_data (AddDatumTagInput | None): ``label``, a point on the
+                edge it marks (``attach_x_mm``/``attach_y_mm``) and where the
+                tag goes (``x_mm``/``y_mm``), all on the sheet in mm.
+
+        Returns:
+            dict[str, Any]: ``data`` has the ``label`` as read back. A label
+            that is not one letter is ``invalid_input``; no edge at the point
+            is ``not_found``; anything other than a drawing is
+            ``wrong_document_type``.
+
+        Example:
+            ```python
+            await add_datum_tag({
+                "label": "A", "attach_x_mm": 120, "attach_y_mm": 95,
+                "x_mm": 120, "y_mm": 85,
+            })
+            ```
+        """
+        _supports("add_datum_tag")
+        input_data = normalize_input(input_data, AddDatumTagInput)
+        result = await adapter.add_datum_tag(
+            input_data.label,
+            (input_data.attach_x_mm, input_data.attach_y_mm),
+            input_data.x_mm,
+            input_data.y_mm,
+        )
+        require_success(result, context="Failed to add the datum tag")
+        return {
+            "status": "success",
+            "message": f"Added datum {input_data.label.strip().upper()}",
+            "data": result.data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
     async def set_sheet_scale(
         input_data: SetSheetScaleInput | None = None,
     ) -> dict[str, Any]:
@@ -426,4 +617,4 @@ async def register_drawing_automation_tools(
             "execution_time": result.execution_time,
         }
 
-    return 5
+    return 7

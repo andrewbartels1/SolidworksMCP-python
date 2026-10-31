@@ -24,6 +24,19 @@ PACKAGE_ARGS = (
 )
 
 
+GTOL_ARGS = (
+    "position",
+    0.2,
+    60.0,
+    250.0,
+    True,
+    "mmc",
+    ["A", "B"],
+    (62.0, 218.0),
+    ("Drawing View2", "D3@Sketch1"),
+)
+
+
 class DrawingPackageStub:
     """Records every drawing-package call and answers SUCCESS."""
 
@@ -34,6 +47,8 @@ class DrawingPackageStub:
         ),
         ("set_sheet_scale", (1.0, 2.0)),
         ("create_standard_drawing", PACKAGE_ARGS),
+        ("add_gtol", GTOL_ARGS),
+        ("add_datum_tag", ("A", (10.0, 20.0), 15.0, 25.0)),
     ]
 
     def __init__(self) -> None:
@@ -61,6 +76,12 @@ class DrawingPackageStub:
     async def create_standard_drawing(self, *args):
         return self._record("create_standard_drawing", *args)
 
+    async def add_gtol(self, *args):
+        return self._record("add_gtol", *args)
+
+    async def add_datum_tag(self, *args):
+        return self._record("add_datum_tag", *args)
+
 
 async def exercise_drawing_package(wrapped: Any) -> None:
     """Call every drawing-package method once through ``wrapped``."""
@@ -70,5 +91,7 @@ async def exercise_drawing_package(wrapped: Any) -> None:
         ),
         await wrapped.set_sheet_scale(1.0, 2.0),
         await wrapped.create_standard_drawing(*PACKAGE_ARGS),
+        await wrapped.add_gtol(*GTOL_ARGS),
+        await wrapped.add_datum_tag("A", (10.0, 20.0), 15.0, 25.0),
     ]
     assert all(r.is_success for r in results), [r.error for r in results]

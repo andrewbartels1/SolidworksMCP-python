@@ -60,7 +60,8 @@ PLAN = [
     "1. sketch on Top: 100 x 50 outline from the origin, four Ø5.5 circles",
     "   (one Ø, the rest equal), each located from two edges; extrude 10 mm",
     "2. AISI 1020, then verify_model: 49049.7 mm³, 0.3875 kg, 1 feature",
-    "3. plate drawing: A3, model dimensions, centre marks, notes, title block",
+    "3. plate drawing: A3, model dimensions, centre marks, notes, title block;",
+    "   GD&T: datums A, B, C and position Ø0.2 (M) on the holes",
     "4. assembly: the plate twice; Front and Right coincident, Top planes 20",
     "   mm apart (a 10 mm gap); verify_model: 2 parts, 3 mates, no overlap",
     "5. assembly drawing with a BOM: the plate, QTY 2",
@@ -216,6 +217,80 @@ def _role(package: dict[str, Any], role: str) -> str:
     return next(name for name, v in views.items() if v.get("role") == role)
 
 
+def _part_box_mm(
+    adapter: Any, view: str, scale: float, size_mm: tuple[float, float]
+) -> tuple[float, float, float, float]:
+    """Where a view draws the part on the sheet, in mm.
+
+    The view's outline is centred on the part; the part is ``size_mm`` (its
+    width and height in that view) times the sheet scale.
+    """
+    from solidworks_mcp.adapters.solidworks.io import (
+        _resolve_drawing_view,
+        _sw_type_info,
+    )
+
+    drawing = _sw_type_info.flagged(adapter.currentModel, "IDrawingDoc")
+    x0, y0, x1, y1 = _resolve_drawing_view(adapter, drawing, view).GetOutline()[:4]
+    cx, cy = (x0 + x1) * 500.0, (y0 + y1) * 500.0
+    w, h = size_mm[0] * scale / 2.0, size_mm[1] * scale / 2.0
+    return (cx - w, cy - h, cx + w, cy + h)
+
+
+async def _gdt(
+    call: _Session, adapter: Any, package: dict[str, Any], hole_dim: str
+) -> dict[str, Any]:
+    """Datums A (bottom face), B (left end), C (near side) and the holes' position.
+
+    A is the face the plate sits on, seen edge-on as the front view's bottom
+    line; B the x = 0 end, the front view's left line; C the edge the holes
+    are dimensioned from in depth, the side view's left line. The position
+    tolerance goes on the Ø5.5 dimension: every hole within Ø0.2 of true
+    position at maximum material, to A, B and C.
+    """
+    num, den = (float(v) for v in str(package["data"]["scale"]).split(":"))
+    scale = num / den
+    front = _part_box_mm(
+        adapter, _role(package, "front"), scale, (_WIDTH_MM, _THICKNESS_MM)
+    )
+    side = _part_box_mm(
+        adapter, _role(package, "side"), scale, (_DEPTH_MM, _THICKNESS_MM)
+    )
+    mid_front = (front[1] + front[3]) / 2.0
+    mid_side = (side[1] + side[3]) / 2.0
+    tags = {
+        "A": ((front[0] + 30.0, front[1]), (front[0] + 30.0, front[1] - 12.0)),
+        "B": ((front[0], mid_front), (front[0] - 14.0, mid_front)),
+        "C": ((side[0], mid_side), (side[0] - 14.0, mid_side)),
+    }
+    placed = {}
+    for label, ((ax, ay), (tx, ty)) in tags.items():
+        await call(
+            "add_datum_tag",
+            {
+                "label": label,
+                "attach_x_mm": round(ax, 2),
+                "attach_y_mm": round(ay, 2),
+                "x_mm": round(tx, 2),
+                "y_mm": round(ty, 2),
+            },
+        )
+        placed[label] = [round(ax, 1), round(ay, 1)]
+    frame = await call(
+        "add_gtol",
+        {
+            "characteristic": "position",
+            "tolerance": 0.2,
+            "diameter_zone": True,
+            "material_condition": "mmc",
+            "datums": ["A", "B", "C"],
+            "dimension_view": _role(package, "plan"),
+            "dimension_name": hole_dim,
+        },
+    )
+    return {"datum_tags_on_mm": placed, "position_frame": frame["data"]}
+
+
 @pytest.mark.asyncio
 async def test_plate_stack_from_prompt_to_drawing(scratch, tmp_path, monkeypatch):
     """A fully dimensioned plate and its drawing; two stacked 10 mm apart, with a BOM."""
@@ -251,6 +326,13 @@ async def test_plate_stack_from_prompt_to_drawing(scratch, tmp_path, monkeypatch
     )
     assert boss["measured_change"]["volume_delta_mm3"] == pytest.approx(
         _PLATE_MM3, rel=1e-4
+    )
+    # The hole's Ø dimension, by value: the position tolerance attaches to it.
+    listed = await call("list_model_dimensions", {"feature_name": sketch})
+    hole_dim = next(
+        d["full_name"]
+        for d in listed["data"]
+        if abs(float(d["value"]) - _HOLE_DIAMETER_MM) < 1e-6
     )
 
     await call("set_material", {"material_name": "AISI 1020"})
@@ -288,8 +370,6 @@ async def test_plate_stack_from_prompt_to_drawing(scratch, tmp_path, monkeypatch
     plan_view = _role(detail, "plan")
     marks = await call("auto_center_marks", {"view_name": plan_view})
     shown = _sheet_texts(adapter)
-    assert (await adapter.save_file(str(out / "PS-01.SLDDRW"))).is_success
-    assert (await adapter.export_file(str(out / "PS-01.pdf"), "pdf")).is_success
     evidence(
         "step 3: the plate drawing: dimensions, centre marks, AISI 1020",
         {
@@ -302,6 +382,19 @@ async def test_plate_stack_from_prompt_to_drawing(scratch, tmp_path, monkeypatch
     )
     assert detail["data"]["overlap_check"]["overlaps_after"] == 0
     assert "AISI 1020" in shown
+
+    gdt = await _gdt(call, adapter, detail, hole_dim)
+    evidence(
+        "step 3: GD&T: datums A, B, C and the holes' position tolerance",
+        gdt,
+        call=(
+            'add_gtol({"characteristic": "position", "tolerance": 0.2, '
+            '"diameter_zone": true, "material_condition": "mmc", '
+            f'"datums": ["A", "B", "C"], "dimension_name": "{hole_dim}"}})'
+        ),
+    )
+    assert (await adapter.save_file(str(out / "PS-01.SLDDRW"))).is_success
+    assert (await adapter.export_file(str(out / "PS-01.pdf"), "pdf")).is_success
 
     # Two plates, 10 mm apart.
     assert (await adapter.create_assembly()).is_success

@@ -586,3 +586,18 @@ def test_collect_layout_skips_missing_views_and_outlines() -> None:
 
     assert list(outlines) == ["Front"]
     assert len(geometries) == len(annotations) == 3
+
+
+def test_apply_moves_skips_zero_and_fixed_moves() -> None:
+    harness = _Harness(_three_views())
+    still = SimpleNamespace(key="still", position=(0.1, 0.1))
+    held = SimpleNamespace(key="held", position=(0.1, 0.1))
+
+    moved = harness._apply_moves(
+        [still, held],
+        {"still": object(), "held": object()},
+        {"still": (0.0, 0.0), "held": (0.01, 0.0)},
+        movable={"still"},
+    )
+
+    assert moved == 0
