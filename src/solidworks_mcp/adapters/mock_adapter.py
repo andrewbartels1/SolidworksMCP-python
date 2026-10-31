@@ -198,6 +198,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # Assembly components inserted via insert_component, keyed by
         # insertion order. See insert_component/list_components/add_mate.
         self._components: list[str] = []
+        # Mates added via add_mate, in order, so the geometry summary can
+        # report a mate count without real geometry.
+        self._mates: list[dict[str, Any]] = []
         # Drawing views placed via create_drawing_view / add_drawing_view /
         # create_technical_drawing, in sheet order. See list_drawing_views.
         self._drawing_views: list[str] = []
@@ -2450,6 +2453,40 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"] / 2,
         )
 
+    async def get_model_geometry_summary(self) -> AdapterResult[dict[str, Any]]:
+        """Mock summary of the active part or assembly.
+
+        The mock has no geometry, so volume, bounding box and body count are
+        ``None`` ("not determinable") rather than invented numbers a caller
+        could mistake for a measurement. Component and mate counts are real:
+        they come from ``insert_component`` and ``add_mate`` this session.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        guard = self._mock_doc_error({"Part", "Assembly"}, "get_model_geometry_summary")
+        if guard is not None:
+            return guard
+        await asyncio.sleep(self._delays["model_operation"] / 2)
+        self._operation_count += 1
+
+        is_assembly = self._current_model.type == "Assembly"
+        summary: dict[str, Any] = {
+            "document_type": "assembly" if is_assembly else "part",
+            "volume_mm3": None,
+            "bounding_box_mm": None,
+            "bounding_box_method": None,
+            "solid_body_count": None,
+        }
+        if is_assembly:
+            summary["component_count"] = len(self._components)
+            summary["mate_count"] = len(self._mates)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=summary,
+            execution_time=self._delays["model_operation"] / 2,
+        )
+
     # Drawing Operations
     def _mock_place_view(self, payload: Any) -> AdapterResult[dict[str, Any]]:
         """Record a drawing view so ``list_drawing_views`` reflects it.
@@ -3032,6 +3069,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         await asyncio.sleep(self._delays["model_operation"])
         self._operation_count += 1
+        self._mates.append(
+            {"mate_type": mate_type, "components": [component_a, component_b]}
+        )
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,

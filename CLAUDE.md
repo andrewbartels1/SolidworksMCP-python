@@ -109,7 +109,7 @@ python -m venv .venv
     beside the module it exercises
 - Coverage is measured honestly: there is no `# pragma: no cover`. Code no
   test can reach is deleted, after review, via the dead-code ledger
-  (`openspec/changes/full-coverage-and-error-boundary/dead-code.md`).
+  (`openspec/changes/archive/2026-10-30-full-coverage-and-error-boundary/dead-code.md`).
 
 ## Documentation Guidance
 

@@ -20,7 +20,7 @@ for the user (or `/opsx:update`) to act on.
 **Gate, not a formality.** The point of this skill is to catch stale or
 invented claims *before* design.md/tasks.md get treated as ready to
 implement — this repo has a documented history of exactly that problem
-(see `openspec/changes/close-tool-surface-gaps-and-housekeeping/proposal.md`
+(see `openspec/changes/archive/2026-10-30-close-tool-surface-gaps-and-housekeeping/proposal.md`
 for a real example: three issues turned out to be already partly shipped
 by merged PRs the issue text didn't know about). A proposal that "reads
 well" is not the bar. A proposal whose every checkable claim has been

@@ -347,6 +347,25 @@ def _byref_bool() -> Any:
     )
 
 
+def _byref_double() -> Any:
+    """Return a byref double VARIANT for a SolidWorks ``Double`` out-parameter.
+
+    ``IBody2::GetExtremePoint`` reports its point through three of these. See
+    :func:`_byref_bstr` for why ``pythoncom.Missing`` does not work.
+
+    Returns:
+        Any: A ``VARIANT(VT_BYREF | VT_R8, 0.0)``, or a ``_ByrefFallback(0.0)``
+        without pywin32.
+    """
+    variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
+    if not callable(variant_ctor):
+        return _ByrefFallback(0.0)
+    return variant_ctor(
+        int(getattr(pythoncom, "VT_BYREF", 0)) | int(getattr(pythoncom, "VT_R8", 0)),
+        0.0,
+    )
+
+
 def _doc_type(adapter: Any) -> int | None:
     """Return the active document's type: 1 part, 2 assembly, 3 drawing.
 
@@ -839,6 +858,247 @@ def _describe_open_document(
         "type": type_name,
         "is_active": is_active,
     }
+
+
+# --- Geometry summary ------------------------------------------------------
+# Read-only helpers for ``get_model_geometry_summary``. None of them rebuilds
+# the model or touches the selection (COM pitfall #23), so the summary can be
+# read immediately before a feature call.
+
+_FEATURE_WALK_MEMBERS = (
+    "GetTypeName2",
+    "GetNextFeature",
+    "GetFirstSubFeature",
+    "GetNextSubFeature",
+    "IsSuppressed",
+)
+
+#: The six ``GetExtremePoint`` directions, as (axis, is_max, direction).
+_EXTREME_DIRECTIONS = (
+    (0, False, (-1.0, 0.0, 0.0)),
+    (0, True, (1.0, 0.0, 0.0)),
+    (1, False, (0.0, -1.0, 0.0)),
+    (1, True, (0.0, 1.0, 0.0)),
+    (2, False, (0.0, 0.0, -1.0)),
+    (2, True, (0.0, 0.0, 1.0)),
+)
+
+
+def _box_from_metres(raw: Any, method: str) -> dict[str, Any] | None:
+    """Turn a SolidWorks ``[x1, y1, z1, x2, y2, z2]`` box in metres into mm.
+
+    Args:
+        raw: The six-value box, or anything else.
+        method: How the box was measured, reported back to the caller.
+
+    Returns:
+        dict[str, Any] | None: ``min``, ``max``, ``size`` (mm) and ``method``,
+        or ``None`` when ``raw`` is not a six-number box.
+    """
+    if not isinstance(raw, (list, tuple)) or len(raw) < 6:
+        return None
+    if not all(isinstance(v, (int, float)) for v in raw[:6]):
+        return None
+    values = [float(v) * 1000.0 for v in raw[:6]]
+    low = [min(values[i], values[i + 3]) for i in range(3)]
+    high = [max(values[i], values[i + 3]) for i in range(3)]
+    return {
+        "min": [round(v, 4) for v in low],
+        "max": [round(v, 4) for v in high],
+        "size": [round(high[i] - low[i], 4) for i in range(3)],
+        "method": method,
+    }
+
+
+def _solid_bodies(adapter: Any, part: Any) -> list[Any] | None:
+    """Return the part's solid bodies as wrapped ``IBody2`` dispatches.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        part: The part document, flagged for ``IPartDoc``.
+
+    Returns:
+        list[Any] | None: The bodies (possibly empty), or ``None`` when
+        ``GetBodies2`` could not be read at all. A part with no bodies yet
+        answers null rather than an empty array, so null without an error
+        is an empty list.
+    """
+    raw, error = adapter._attempt_with_error(
+        lambda: part.GetBodies2(_SW_SOLID_BODY, False)
+    )
+    if error is not None:
+        return None
+    if raw is None:
+        return []
+    items = list(raw) if isinstance(raw, (list, tuple)) else [raw]
+    return [_as_com(adapter, body, "IBody2") or body for body in items if body]
+
+
+def _extreme_point_box(adapter: Any, bodies: list[Any]) -> dict[str, Any] | None:
+    """Tight bounding box from each body's six extreme points.
+
+    ``GetPartBox`` can be loose on curved faces; ``GetExtremePoint`` returns
+    the actual farthest point of the body in a direction.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        bodies: Wrapped ``IBody2`` dispatches.
+
+    Returns:
+        dict[str, Any] | None: The box, or ``None`` when there are no bodies
+        or any extreme point could not be read.
+    """
+    if not bodies:
+        return None
+    low = [float("inf")] * 3
+    high = [float("-inf")] * 3
+    for body in bodies:
+        for axis, is_max, direction in _EXTREME_DIRECTIONS:
+            out = (_byref_double(), _byref_double(), _byref_double())
+            found = adapter._attempt(
+                lambda b=body, d=direction, o=out: b.GetExtremePoint(*d, *o),
+                default=None,
+            )
+            value = out[axis].value
+            if not found or not isinstance(value, (int, float)):
+                return None
+            if is_max:
+                high[axis] = max(high[axis], float(value))
+            else:
+                low[axis] = min(low[axis], float(value))
+    return _box_from_metres([*low, *high], "extreme_points")
+
+
+def _bodies_volume_mm3(adapter: Any, bodies: list[Any] | None) -> float | None:
+    """Sum the solid bodies' volumes, independent of the selection.
+
+    ``IModelDocExtension.CreateMassProperty`` computes for the current
+    selection and returns no volume while a sketch or plane is selected,
+    which is the state a feature call runs in. ``IBody2.GetMassProperties``
+    reads each body directly; element 3 of its array is the volume in m³.
+    The density argument only affects mass, which is not used here.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        bodies: Wrapped ``IBody2`` dispatches, ``[]`` for an empty part.
+
+    Returns:
+        float | None: Volume in mm³ (``0.0`` for no bodies), or ``None`` when
+        the bodies or any body's volume could not be read.
+    """
+    if bodies is None:
+        return None
+    total = 0.0
+    for body in bodies:
+        props = adapter._attempt(lambda b=body: b.GetMassProperties(1.0), default=None)
+        if not isinstance(props, (list, tuple)) or len(props) < 4:
+            return None
+        volume = props[3]
+        if not isinstance(volume, (int, float)):
+            return None
+        total += float(volume)
+    return round(total * 1e9, 4)
+
+
+def _model_volume_mm3(adapter: Any, model: Any) -> float | None:
+    """Read the model's volume without forcing a rebuild.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        model: The active ``IModelDoc2``.
+
+    Returns:
+        float | None: Volume in mm³, or ``None`` when it cannot be read.
+    """
+    mass_props = adapter._attempt(
+        lambda: model.Extension.CreateMassProperty(), default=None
+    )
+    if mass_props is None:
+        return None
+    volume = adapter._attempt(lambda: mass_props.Volume, default=None)
+    if not isinstance(volume, (int, float)):
+        return None
+    return round(float(volume) * 1e9, 4)
+
+
+def _sub_features(adapter: Any, parent: Any) -> list[Any]:
+    """Return a feature's sub-features, each flagged for the tree walk.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        parent: The parent ``IFeature``.
+
+    Returns:
+        list[Any]: The sub-features in tree order.
+    """
+    children: list[Any] = []
+    child = adapter._attempt(lambda: parent.GetFirstSubFeature(), default=None)
+    while child is not None and len(children) < 10000:
+        adapter._attempt(
+            lambda c=child: _sw_type_info.flag_members(c, *_FEATURE_WALK_MEMBERS),
+            default=0,
+        )
+        children.append(child)
+        child = adapter._attempt(lambda c=child: c.GetNextSubFeature(), default=None)
+    return children
+
+
+def _count_mates(adapter: Any, mate_group: Any) -> int:
+    """Count the unsuppressed mates under the assembly's mate group.
+
+    Mates are sub-features whose type name starts with ``Mate``; a mate
+    folder (any ``...Folder`` type) is entered one level deep.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        mate_group: The ``MateGroup`` feature.
+
+    Returns:
+        int: The number of unsuppressed mates.
+    """
+    count = 0
+    for child in _sub_features(adapter, mate_group):
+        kind = str(adapter._attempt(lambda c=child: c.GetTypeName2(), default="") or "")
+        members = _sub_features(adapter, child) if kind.endswith("Folder") else [child]
+        for mate in members:
+            mate_kind = str(
+                adapter._attempt(lambda m=mate: m.GetTypeName2(), default="") or ""
+            )
+            suppressed = adapter._attempt(
+                lambda m=mate: m.IsSuppressed(), default=False
+            )
+            if mate_kind.startswith("Mate") and not suppressed:
+                count += 1
+    return count
+
+
+def _assembly_mate_count(adapter: Any, model: Any) -> int | None:
+    """Find the ``MateGroup`` feature and count its mates.
+
+    Args:
+        adapter: A connected ``PyWin32Adapter``.
+        model: The active assembly ``IModelDoc2``.
+
+    Returns:
+        int | None: The mate count (``0`` when there is no mate group), or
+        ``None`` when the feature tree could not be read.
+    """
+    feature = adapter._attempt(lambda: model.FirstFeature(), default=None)
+    if feature is None:
+        return None
+    guard = 0
+    while feature is not None and guard < 10000:
+        guard += 1
+        adapter._attempt(
+            lambda f=feature: _sw_type_info.flag_members(f, *_FEATURE_WALK_MEMBERS),
+            default=0,
+        )
+        if adapter._attempt(lambda f=feature: f.GetTypeName2(), default="") == (
+            "MateGroup"
+        ):
+            return _count_mates(adapter, feature)
+        feature = adapter._attempt(lambda f=feature: f.GetNextFeature(), default=None)
+    return 0
 
 
 class SolidWorksIOMixin:
@@ -1956,6 +2216,70 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[MassProperties],
             adapter._handle_com_operation("get_mass_properties", _get),
+        )
+
+    async def get_model_geometry_summary(self) -> AdapterResult[dict[str, Any]]:
+        """Summarise the active part or assembly without rebuilding it.
+
+        Unlike ``get_mass_properties`` this never calls ``ForceRebuild3``, so
+        it leaves the live selection intact (COM pitfall #23) and can be read
+        right before a feature call. A value that cannot be read is ``None``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: See
+            ``SolidWorksAdapter.get_model_geometry_summary``.
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        doc_type = _doc_type(adapter)
+        if doc_type not in (1, 2):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    "get_model_geometry_summary needs an active part or assembly "
+                    f"(active document type is {doc_type!r})"
+                ),
+            )
+
+        def _summarise() -> dict[str, Any]:
+            model = adapter.currentModel
+            summary: dict[str, Any] = {}
+            if doc_type == 1:
+                part = _sw_type_info.flagged(model, "IPartDoc")
+                bodies = _solid_bodies(adapter, part)
+                volume = _bodies_volume_mm3(adapter, bodies)
+                summary["volume_mm3"] = (
+                    volume if volume is not None else _model_volume_mm3(adapter, model)
+                )
+                box = _extreme_point_box(adapter, bodies or [])
+                if box is None:
+                    box = _box_from_metres(
+                        adapter._attempt(lambda: part.GetPartBox(True), default=None),
+                        "part_box",
+                    )
+                summary["document_type"] = "part"
+                summary["solid_body_count"] = None if bodies is None else len(bodies)
+            else:
+                assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
+                summary["volume_mm3"] = _model_volume_mm3(adapter, model)
+                box = _box_from_metres(
+                    adapter._attempt(lambda: assembly.GetBox(0), default=None),
+                    "assembly_box",
+                )
+                summary["document_type"] = "assembly"
+                summary["solid_body_count"] = None
+                summary["component_count"] = len(_component_names(adapter, assembly))
+                summary["mate_count"] = _assembly_mate_count(adapter, model)
+            summary["bounding_box_method"] = box.pop("method") if box else None
+            summary["bounding_box_mm"] = box
+            return summary
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("get_model_geometry_summary", _summarise),
         )
 
     async def pack_and_go_assembly(

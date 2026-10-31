@@ -23,7 +23,7 @@ plan instead of 12 one-off PRs.
 | #64 | Split `search_solidworks_api_help` into granular lookups (method/interface/enum/related). Lowest priority in this batch. |
 | #28 | Add a `script_line` column to `ToolCallRecord`, rendered at write time. |
 | #46 | Fix broken doc links/orphaned pages; pin `mkdocs-material` `<10`. |
-| #79 | Add a COM-API coverage table (`docs/api-coverage.md`, wired into the docs build, plus a concise version in `README.md`), once the above tools exist to audit. License-tier tags are deferred to a future change (see design.md). |
+| #79 | Add a COM-API coverage table (`docs/api-coverage.md`, wired into the docs build, plus a concise version in `README.md`), once the above tools exist to audit. License-tier tags are deferred to a future change (see design.md). **Moved out on 2026-10-30; gets its own change when picked up.** |
 | #81 | Remove three ad-hoc debug scripts from repo root (`test_*.py`, never collected by pytest — clutter, not a test-suite defect). |
 
 Every item except #28/#46/#79/#81 adds real COM calls, so each gets its own

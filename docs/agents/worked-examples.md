@@ -5,7 +5,10 @@ This page shows three practical reconstruction examples using the same inspect -
 1. Read the original model state.
 2. Classify the feature family before writing geometry.
 3. Build with direct MCP tools only when the family supports it.
-4. Compare against mass properties and visual output.
+4. Compare against mass properties and visual output. `verify_model` does this in
+   one call: give it the volume, overall size and feature count you expect and it
+   returns a pass/fail per check. Extrude, revolve and cut also report their
+   `measured_change`, so a feature that did nothing shows up immediately.
 5. Reflect and tighten the next prompt.
 
 ## Example 1: Paper Airplane (Feature-Tree Audit)

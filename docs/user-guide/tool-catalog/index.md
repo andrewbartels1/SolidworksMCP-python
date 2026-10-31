@@ -1,6 +1,6 @@
-# Tool Catalog — All 151 Tools
+# Tool Catalog — All 152 Tools
 
-This reference documents all **151 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **152 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -15,7 +15,7 @@ Each section covers one functional category with parameter tables and copy-paste
 | [Drawing Analysis Tools](drawing-analysis.md) | 8 | Quality-gate your drawings by analyzing dimensions, annotations, view coverage, standards compliance, and completeness. |
 | [Drawing Automation Tools](drawing-automation.md) | 5 | Model dimensions laid out without overlaps, BOM tables, sheet scale and complete A3 drawings. |
 | [Engineering Data Tools](engineering-data.md) | 8 | Read and edit the data drawings and BOMs are built from: model dimensions by name, measurements, materials, custom properties and sheet-metal flat patterns. |
-| [Analysis Tools](analysis.md) | 5 | Extract engineering properties from models, including mass, volume, center of mass, inertia, and material metadata. |
+| [Analysis Tools](analysis.md) | 6 | Check a finished part or assembly against expected values, and extract mass, volume, center of mass, inertia, interference and material metadata. |
 | [Export Tools](export.md) | 7 | Convert SolidWorks models to industry-standard interchange and manufacturing formats such as STEP, IGES, STL, DWG, PDF, and images. |
 | [File Management Tools](file-management.md) | 19 | Open, save, and manage SolidWorks documents; load parts and assemblies, switch the active document, enumerate what's open, inspect model metadata, classify model families, and read the live UI selection. |
 | [Automation Tools](automation.md) | 8 | Orchestrate multi-step workflows, run batch file processing, manage design tables, and tune performance settings. |

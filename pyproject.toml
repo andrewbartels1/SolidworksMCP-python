@@ -241,7 +241,7 @@ omit = [
 
 # Only genuinely non-executable lines are excluded. There is no
 # "pragma: no cover": unreachable code is deleted, not hidden (see
-# openspec/changes/full-coverage-and-error-boundary/dead-code.md).
+# openspec/changes/archive/2026-10-30-full-coverage-and-error-boundary/dead-code.md).
 [tool.coverage.report]
 exclude_lines = [
     "if TYPE_CHECKING:",

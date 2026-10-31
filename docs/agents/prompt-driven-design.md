@@ -349,6 +349,7 @@ This returns a validated `ReconstructionPlan` JSON — a structured, typed plan 
 | Check against the sample | `"Open [sample path], run list_features(), close without saving. Compare to my part."` |
 | Export for 3D printing | `"Export as STL: export_stl(file_path='bat.stl')"` |
 | Check mass and dimensions | `"Run get_mass_properties() on the open part."` |
+| Verify the finished build | `"Run verify_model with the volume, overall size and feature count you expect. Fix anything that fails."` |
 
 ---
 

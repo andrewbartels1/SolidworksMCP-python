@@ -2069,7 +2069,7 @@ async def test_create_loft_too_few_profiles_returns_error(connected_adapter) -> 
 
 # ---- list_features assembly-aware live regression (GitHub issue #21) ----
 #
-# openspec/changes/assembly-aware-list-features/ has the full proposal/
+# openspec/changes/archive/2026-10-30-assembly-aware-list-features/ has the full proposal/
 # design/spec/tasks. Uses SolidWorks' own built-in U-Joint sample, which
 # ships with every SW install under samples/learn/U-Joint/ and conveniently
 # already contains a two-level assembly (UJoint.SLDASM containing a nested

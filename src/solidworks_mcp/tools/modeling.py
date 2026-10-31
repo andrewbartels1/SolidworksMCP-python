@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
 from ..adapters.base import (
+    AdapterResult,
     ExtrusionParameters,
     LoftParameters,
     RevolveParameters,
@@ -49,6 +50,86 @@ def _result_value(data: Any, *keys: str, default: Any = None) -> Any:
             if value is not None:
                 return value
     return default
+
+
+async def _read_summary(adapter: Any) -> AdapterResult[dict[str, Any]] | None:
+    """Read the geometry summary, or ``None`` if the adapter has no such read.
+
+    Args:
+        adapter: The active adapter.
+
+    Returns:
+        AdapterResult[dict[str, Any]] | None: The summary result.
+    """
+    reader = getattr(adapter, "get_model_geometry_summary", None)
+    if reader is None:
+        return None
+    result: AdapterResult[dict[str, Any]] = await reader()
+    return result
+
+
+def _box_size(summary: dict[str, Any]) -> Any:
+    """Return a summary's bounding-box size ``[x, y, z]``, or ``None``."""
+    box = summary.get("bounding_box_mm")
+    return box.get("size") if isinstance(box, dict) else None
+
+
+def _attach_measured_change(
+    reply: dict[str, Any],
+    before: AdapterResult[dict[str, Any]] | None,
+    after: AdapterResult[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """Add the feature's measured volume and size change to its reply.
+
+    Best-effort: when the "before" read failed (or the adapter has none) the
+    reply is returned unchanged; anything else unmeasurable is ``None`` with a
+    ``note``. A feature that succeeded without changing the volume gets a
+    ``warning``, since that is how SolidWorks reports a silent no-op.
+
+    Args:
+        reply: The feature tool's success reply.
+        before: Summary read before the feature.
+        after: Summary read after the feature.
+
+    Returns:
+        dict[str, Any]: ``reply``, with ``measured_change`` when measurable.
+    """
+    if before is None or not before.is_success:
+        return reply
+    old = before.data or {}
+    new = (after.data or {}) if after is not None and after.is_success else None
+    volume_before = old.get("volume_mm3")
+    volume_after = new.get("volume_mm3") if new is not None else None
+    numbers = (int, float)
+    delta = (
+        round(volume_after - volume_before, 4)
+        if isinstance(volume_before, numbers) and isinstance(volume_after, numbers)
+        else None
+    )
+    change: dict[str, Any] = {
+        "volume_before_mm3": volume_before,
+        "volume_after_mm3": volume_after,
+        "volume_delta_mm3": delta,
+        "bounding_box_before_mm": _box_size(old),
+        "bounding_box_after_mm": _box_size(new) if new is not None else None,
+        "solid_body_count_before": old.get("solid_body_count"),
+        "solid_body_count_after": (
+            new.get("solid_body_count") if new is not None else None
+        ),
+    }
+    if new is None:
+        error = after.error if after is not None else None
+        change["note"] = f"Could not read the model after the feature: {error}"
+    elif delta is None:
+        change["note"] = "Volume is not determinable with the active adapter"
+    reply["measured_change"] = change
+    if delta == 0:
+        reply["warning"] = (
+            "The feature reported success but changed no volume; SolidWorks "
+            "may have accepted it without doing anything. Check the sketch, "
+            "the direction and the depth."
+        )
+    return reply
 
 
 class OpenModelInput(BaseModel):
@@ -1139,11 +1220,13 @@ async def register_modeling_tools(
             auto_select=True,
         )
 
+        before = await _read_summary(adapter)
         result = await adapter.create_extrusion(params)
 
         require_success(result, context="Failed to create extrusion")
+        after = await _read_summary(adapter) if before is not None else None
         feature = result.data
-        return {
+        reply = {
             "status": "success",
             "message": f"Created extrusion: {_result_value(feature, 'feature_name', 'name', default='Extrusion')}",
             "extrusion": {
@@ -1156,6 +1239,7 @@ async def register_modeling_tools(
             },
             "execution_time": result.execution_time,
         }
+        return _attach_measured_change(reply, before, after)
 
     @mcp.tool()
     async def create_revolve(input_data: CreateRevolveInput) -> dict[str, Any]:
@@ -1204,11 +1288,13 @@ async def register_modeling_tools(
             merge_result=input_data.merge_result,
         )
 
+        before = await _read_summary(adapter)
         result = await adapter.create_revolve(params)
 
         require_success(result, context="Failed to create revolve")
+        after = await _read_summary(adapter) if before is not None else None
         feature = result.data
-        return {
+        reply = {
             "status": "success",
             "message": f"Created revolve: {_result_value(feature, 'feature_name', 'name', default='Revolve')}",
             "revolve": {
@@ -1222,6 +1308,7 @@ async def register_modeling_tools(
             },
             "execution_time": result.execution_time,
         }
+        return _attach_measured_change(reply, before, after)
 
     @mcp.tool()
     async def get_dimension(input_data: GetDimensionInput) -> dict[str, Any]:
@@ -1389,8 +1476,10 @@ async def register_modeling_tools(
             auto_select=True,
             sketch_name=input_data.sketch_name,
         )
+        before = await _read_summary(adapter)
         result = await adapter.create_cut_extrude(params)
         require_success(result, context="Failed to create cut-extrude")
+        after = await _read_summary(adapter) if before is not None else None
         feature = result.data
         feature_params = _result_value(feature, "parameters", default={})
         sketch_used = (
@@ -1398,7 +1487,7 @@ async def register_modeling_tools(
             if isinstance(feature_params, dict)
             else None
         ) or input_data.sketch_name
-        return {
+        reply = {
             "status": "success",
             "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
             "cut_extrude": {
@@ -1410,6 +1499,7 @@ async def register_modeling_tools(
             },
             "execution_time": result.execution_time,
         }
+        return _attach_measured_change(reply, before, after)
 
     @mcp.tool()
     async def add_fillet(input_data: AddFilletInput) -> dict[str, Any]:

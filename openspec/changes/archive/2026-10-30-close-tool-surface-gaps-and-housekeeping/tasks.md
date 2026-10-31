@@ -10,14 +10,14 @@
       fallback. Also fixed a stale "check_interference [mocked until
       wired]" mention in `llm_service.py`'s local-agent tool-catalog prompt
       text, found while checking for other references.
-- [ ] 1.2 Run the mock-only suite; confirm a checkpoint exercising
+- [x] 1.2 Run the mock-only suite; confirm a checkpoint exercising
       `check_interference` reports a real result, not `status: "mocked"`;
       open a PR closing #6. Suite run + new/updated tests done (7 stale
       "check_interference is mocked" test assertions found and fixed
       across `test_checkpoint_service.py`, `test_service_coverage_push.py`,
       `test_service_helpers.py`, `test_session_service.py`; 2 new dedicated
-      dispatch tests added). PR not yet opened — pending commit/PR strategy
-      decision.
+      dispatch tests added). Shipped in PR #85, which closed #6 on
+      2026-09-02.
 
 ## 2. #59 — rename_feature
 
@@ -134,7 +134,7 @@
       Alembic; add `render_single()` to `soc_exporter.py` (shipped in PR #93)
 - [x] 9.2 Wire `script_line` through `insert_tool_call_record` and its
       call sites (shipped in PR #93)
-- [ ] 9.3 Update `export_session` to join stored `script_line` with a
+- [x] 9.3 Update `export_session` to join stored `script_line` with a
       fallback re-render for legacy rows — **deviation:** `render_single`
       is captured at write time on every new row, so `export_session` needs
       no join or fallback path; legacy rows without a stored line are the
@@ -148,7 +148,7 @@
 
 ## 10. #46 — Docs housekeeping
 
-- [ ] 10.1 Fix the broken links and orphaned pages listed in the issue;
+- [x] 10.1 Fix the broken links and orphaned pages listed in the issue;
        verify with `dev-docs-build`. Fully resolved ahead of implementation
        (2026-08-27) for the 7 orphaned pages found beyond the issue's own
        list: 4 with real inbound links from in-nav content were added to
@@ -158,32 +158,21 @@
        in the repo were deleted (`agent-invocation-reference.md`,
        `ai-assisted-design-workflow.md`, `docs-discovery-tool-design.md`).
        `dev-docs-build` confirms zero orphaned pages remain. Still open:
-       the issue's own original broken-links table (Part 1)
-- [ ] 10.2 Fix the docstring/mkdocstrings warnings, pin `mkdocs-material`
+       the issue's own original broken-links table (Part 1). Finished in
+       PR #118, which closed #46
+- [x] 10.2 Fix the docstring/mkdocstrings warnings, pin `mkdocs-material`
        to `<10` in `pyproject.toml`, and record the theme-migration
-       decision (even "stay pinned, revisit later")
-- [ ] 10.3 Run `dev-docs-build` and `dev-docs-strict`; verify a clean run
+       decision (even "stay pinned, revisit later"). **Deviation:** PR #118
+       pinned `mkdocs<2` instead, since MkDocs 2.0 is the breaking upgrade
+       and Material follows it; decision: stay pinned, revisit when MkDocs 2
+       is stable
+- [x] 10.3 Run `dev-docs-build` and `dev-docs-strict`; verify a clean run.
+       `mkdocs.yml` now sets `strict: true` (PR #118)
 
 ## 11. #79 — API coverage audit
 
-- [ ] 11.1 Re-audit COM-domain-vs-MCP-tool coverage against the surface as
-       it stands after tasks 1–8, write `docs/api-coverage.md`, and add it
-       to `mkdocs.yml`'s `nav:` so it builds automatically through the
-       existing `deploy-docs.yml` workflow (already runs on every push/PR
-       to `main` — no new CI wiring needed)
-- [ ] 11.2 Add a "SolidWorks API Coverage" section to `README.md`: a
-       concise summary table inline (not just a link) plus a link to the
-       full `docs/api-coverage.md` page; while touching it, fix
-       `mkdocs.yml`'s `site_description` stale tool count to match the
-       audited total
-- [ ] 11.3 Run `dev-docs-build` and `dev-docs-strict`; verify both the new
-       page and the README section render cleanly
-
-**Deferred to a future change:** per-tool license-tier tags
-(`[Maker]`/`[Standard]`/`[Professional]`/`[Simulation]`/`[PDM]`) — needs a
-live check against SolidWorks's current Maker-plan feature list, which
-isn't verifiable during planning and is more scope than this housekeeping
-batch warrants. Tracked as a backlog item in `SWChecklist.md`.
+Moved out on 2026-10-30 so this change could be archived; #79 gets its
+own OpenSpec change when it is picked up. License-tier tags stay deferred.
 
 ## 12. #81 — Remove root-level debug scripts
 

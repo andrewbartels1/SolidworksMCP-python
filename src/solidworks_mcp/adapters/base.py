@@ -1225,6 +1225,25 @@ class SolidWorksAdapter(ABC):
             error="list_components is not implemented by this adapter",
         )
 
+    async def get_model_geometry_summary(self) -> AdapterResult[dict[str, Any]]:
+        """Summarise the active part or assembly without changing it.
+
+        Must not rebuild the model, modify it, or clear the selection, so
+        callers can read it around a feature call. Values the adapter cannot
+        determine are ``None``, never guessed.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``document_type`` (``"part"`` or
+            ``"assembly"``), ``volume_mm3``, ``bounding_box_mm`` (``min``,
+            ``max`` and ``size`` as ``[x, y, z]``), ``bounding_box_method``,
+            ``solid_body_count``, and for assemblies ``component_count`` and
+            ``mate_count``. Error when there is no active part or assembly.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_model_geometry_summary is not implemented by this adapter",
+        )
+
     async def add_mate(
         self,
         component_a: str,

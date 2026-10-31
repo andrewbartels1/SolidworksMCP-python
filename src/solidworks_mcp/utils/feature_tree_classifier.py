@@ -285,7 +285,7 @@ def build_component_tree(features: list[Mapping[str, Any]] | None) -> dict[str, 
     ``list_features`` result.
 
     ``list_features`` returns a single flat list — see
-    ``openspec/changes/assembly-aware-list-features/design.md`` for why:
+    ``openspec/changes/archive/2026-10-30-assembly-aware-list-features/design.md`` for why:
     several existing callers (feature-tree diffing, feature-family
     classification, the MCP tool's ``count`` field) assume
     ``AdapterResult.data`` is a flat ``list[dict]`` unconditionally, so the
