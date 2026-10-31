@@ -211,8 +211,12 @@ def test_basic_entity_success_paths_register_entities() -> None:
         CreateArc=lambda *args: SimpleNamespace(Name="A"),
     )
 
-    assert sketch._add_line_impl(adapter, 0, 0, 10, 0).data.startswith("Line_")
-    assert sketch._add_circle_impl(adapter, 0, 0, 5).data.startswith("Circle_")
+    line = sketch._add_line_impl(adapter, 0, 0, 10, 0).data
+    circle = sketch._add_circle_impl(adapter, 3, 4, 5).data
+    assert line.startswith("Line_") and circle.startswith("Circle_")
+    # Each records the point a dimension to it is placed at, in mm.
+    assert adapter._sketch_entity_centers[line] == (5.0, 0.0)
+    assert adapter._sketch_entity_centers[circle] == (3, 4)
     assert sketch._add_rectangle_impl(adapter, 0, 0, 5, 5).data.startswith("Rectangle_")
     assert sketch._add_arc_impl(adapter, 0, 0, 5, 0, 0, 5).data.startswith("Arc_")
 
@@ -2331,3 +2335,20 @@ def test_diameter_dimension_with_an_unselectable_second_entity_is_an_error() -> 
     result = sketch._add_sketch_dimension_impl(adapter, "L1", "L2", "diameter", 5.0)
 
     assert "Failed to select secondary entity 'L2'" in (result.error or "")
+
+
+def test_line_to_circle_dimension_uses_the_points_recorded_at_creation() -> None:
+    # Live on SW 2026 the circle's centre could not be read back; the line
+    # and circle record their points (mm) when they are created.
+    adapter, calls = _line_and_circle_adapter(
+        add_dimension2=[_display_dimension()], positions=False
+    )
+    adapter._sketch_geometry = SimpleNamespace(read_segment_endpoints=lambda _e: None)
+    adapter._sketch_entity_centers = {"Line_1": (0.0, 25.0), "Circle_2": (10.0, 10.0)}
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert result.is_success, result.error
+    assert calls == [("AddDimension2", "circle", pytest.approx((0.005, 0.0175, 0.0)))]

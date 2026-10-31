@@ -431,7 +431,10 @@ def _add_line_impl(
         )
         if not line:
             raise Exception("Failed to create line")
-        return adapter._register_sketch_entity("Line", line)  # type: ignore[no-any-return]
+        entity_id: str = adapter._register_sketch_entity("Line", line)
+        # The midpoint, in mm: where a dimension to this line is placed.
+        adapter._sketch_entity_centers[entity_id] = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+        return entity_id
 
     return cast(
         AdapterResult[str], adapter._handle_com_operation("add_line", _line_operation)
@@ -481,7 +484,10 @@ def _add_circle_impl(
         )
         if not circle:
             raise Exception("Failed to create circle")
-        return adapter._register_sketch_entity("Circle", circle)  # type: ignore[no-any-return]
+        entity_id: str = adapter._register_sketch_entity("Circle", circle)
+        # The centre, in mm: where a dimension to this circle is placed.
+        adapter._sketch_entity_centers[entity_id] = (center_x, center_y)
+        return entity_id
 
     return cast(
         AdapterResult[str],
@@ -1314,7 +1320,7 @@ def _add_sketch_dimension_impl(
             if not adapter._select_sketch_entity(entity2_obj, append=True):
                 raise Exception(f"Failed to select secondary entity '{entity2}'")
             display_dim = _two_entity_linear_dimension(
-                adapter, entity1_obj, entity2_obj, direction
+                adapter, (entity1, entity2), entity1_obj, entity2_obj, direction
             )
         else:
             adapter.currentModel.ClearSelection2(True)
@@ -1385,17 +1391,28 @@ def _add_sketch_dimension_impl(
     )
 
 
-def _sketch_point_xyz(adapter: Any, entity: Any) -> tuple[float, float, float] | None:
+def _sketch_point_xyz(
+    adapter: Any, entity_id: str, entity: Any
+) -> tuple[float, float, float] | None:
     """A sketch entity's reference point in metres: a circle's centre, a line's midpoint.
+
+    Lines and circles record that point (in mm) when they are created, so it
+    is read from ``_sketch_entity_centers`` without a COM call. Reading it
+    back from SolidWorks returned nothing on SW 2026; that read stays only as
+    the fallback for entities that record no point.
 
     Args:
         adapter: A ``PyWin32Adapter``.
-        entity: A registered ``ISketchArc`` or ``ISketchLine`` dispatch.
+        entity_id: The entity's registered ID.
+        entity: The registered ``ISketchArc`` or ``ISketchLine`` dispatch.
 
     Returns:
         tuple[float, float, float] | None: The point, or ``None`` when it
         cannot be read.
     """
+    cached = adapter._sketch_entity_centers.get(entity_id)
+    if cached is not None:
+        return (cached[0] / 1000.0, cached[1] / 1000.0, 0.0)
     adapter._attempt(
         lambda: _sw_type_info.flag_methods(entity, "ISketchArc"), default=0
     )
@@ -1412,7 +1429,7 @@ def _sketch_point_xyz(adapter: Any, entity: Any) -> tuple[float, float, float] |
 
 
 def _two_entity_linear_dimension(
-    adapter: Any, entity1: Any, entity2: Any, direction: int
+    adapter: Any, ids: tuple[str, str], entity1: Any, entity2: Any, direction: int
 ) -> Any:
     """A linear dimension between two sketch entities, e.g. a line and a circle.
 
@@ -1425,6 +1442,7 @@ def _two_entity_linear_dimension(
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
+        ids: The two entities' registered IDs.
         entity1: The first entity, usually a line.
         entity2: The second entity, usually a circle.
         direction: ``swSmartDimensionDirection_e`` for the last attempt.
@@ -1438,7 +1456,10 @@ def _two_entity_linear_dimension(
         Exception: When the entities' positions cannot be read.
     """
     model = adapter.currentModel
-    points = [_sketch_point_xyz(adapter, e) for e in (entity1, entity2)]
+    points = [
+        _sketch_point_xyz(adapter, i, e)
+        for i, e in zip(ids, (entity1, entity2), strict=True)
+    ]
     if points[0] is None or points[1] is None:
         raise Exception("Cannot read where the two entities are to place the dimension")
     text = tuple((a + b) / 2.0 for a, b in zip(points[0], points[1], strict=True))
@@ -1448,9 +1469,10 @@ def _two_entity_linear_dimension(
 
     def _selected(second: Any) -> bool:
         adapter._attempt(lambda: model.ClearSelection2(True), default=None)
-        return adapter._select_sketch_entity(
-            entity1, append=False
-        ) and adapter._select_sketch_entity(second, append=True)
+        return bool(
+            adapter._select_sketch_entity(entity1, append=False)
+            and adapter._select_sketch_entity(second, append=True)
+        )
 
     attempts = [
         (entity2, lambda: model.AddDimension2(*text)),
