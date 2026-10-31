@@ -23,8 +23,13 @@
 - [x] 3.1 `live_demo.ps1 -Record [-Speed n]` sets `SW_DEMO_RECORD`, counts
       down 10 s before recording, shortens the holds, and builds the
       recording GIFs (`<test>-motion.gif`)
-- [ ] 3.2 `docs/demos.md` gallery page in the mkdocs nav; README Demos
-      section links to it; `mkdocs build --strict` passes
+- [x] 3.2 `docs/demos.md` gallery page in the mkdocs nav: per demo the
+      GIF, what it proves, the prompt (real for the README demo, a
+      labelled example for the tests), the tool calls (all 58 from the
+      README demo's transcript) and the source; `mkdocs build --strict`
+      passes
+- [x] 3.3 README Demos section shows the GIFs in a grid, each linked to
+      its gallery entry, then points to the gallery page
 
 ## 4. Live
 

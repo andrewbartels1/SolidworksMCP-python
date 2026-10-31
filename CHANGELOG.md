@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Demos page** in the docs: every demo GIF with what it checks, its
+  prompt, its tool calls (all 58, with arguments, for the README demo) and
+  the test that made it. The README's Demos section shows the GIFs in a
+  grid, each linking to its entry.
+
 GD&T on drawings (first step of #182):
 
 - **`add_gtol`** adds a feature control frame (position, flatness,

@@ -40,11 +40,21 @@ caption current at that moment beneath it.
 
 ### Requirement: A demo gallery
 
-The docs SHALL have a gallery page showing each demo GIF with one line on
-what it shows and a link to the test or script that made it. The README
-SHALL link to it.
+The docs SHALL have a gallery page showing each demo GIF with what it
+shows, the prompt, the tool calls it makes, and a link to the test or script
+that made it. The prompt-driven demo SHALL show its real prompt and every
+call from its transcript; a test that calls the tools directly SHALL show an
+example prompt, labelled as such, that asks for the same calls. The README's
+Demos section SHALL show the GIFs and link to the gallery page.
 
 #### Scenario: A visitor wants to see the demos
 
-- **WHEN** a visitor follows the README's gallery link
-- **THEN** every demo GIF in `docs/assets/demos/` is shown with its source
+- **WHEN** a visitor opens the README's Demos section
+- **THEN** each demo GIF is shown, linked to its entry on the gallery page
+
+#### Scenario: A visitor wants to know what a demo did
+
+- **WHEN** a visitor reads a demo's entry on the gallery page
+- **THEN** it shows the GIF, what it proves, the prompt, the tool calls and
+  the source file
+- **AND** every demo GIF in `docs/assets/demos/` has an entry
