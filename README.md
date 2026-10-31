@@ -18,7 +18,7 @@ Python MCP server for SolidWorks automation with 154 tools, plus an optional age
 
 ![A fully dimensioned plate, its drawing with GD&T, two plates mated 10 mm apart and the assembly drawing with a BOM, built in SolidWorks through the MCP tools](docs/assets/demos/readme/test_plate_stack_from_prompt_to_drawing-motion.gif)
 
-The 58 tool calls an agent makes for that prompt, run against SolidWorks 2026 through the same MCP tools a client calls, and recorded (sped up five times). Each result is checked against a hand calculation: the plate's volume and mass, the 10 mm gap and the BOM quantity. This is a replay of the calls, not a recorded model session.
+The 58 tool calls an agent made from that prompt, run against SolidWorks 2026 through the same MCP tools a client calls, and recorded (sped up five times). Each result is checked against a hand calculation: the plate's volume and mass, the 10 mm gap and the BOM quantity. This is a replay of the calls, not a recorded model session.
 
 > **Note:** the demo is not perfect, and is not the most efficient way to get this result. The run pauses after each call so it can be read, and the calls are chosen to show what the tools can do: every sketch dimension is added one at a time, and the mate distance is stepped down only so the plates are seen coming together.
 
