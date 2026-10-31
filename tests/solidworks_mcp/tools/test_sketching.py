@@ -1336,3 +1336,26 @@ async def test_add_line_reports_the_id_from_the_legacy_line_wrapper():
     )
 
     assert isinstance(result["line"]["id"], str) and result["line"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_add_sketch_constraint_accepts_plain_arguments():
+    """Called with a dict (as a script or test does), the tool must not raise."""
+    from solidworks_mcp.tools.sketching import register_sketching_tools
+
+    mcp = _make_mcp()
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await register_sketching_tools(mcp, adapter, _make_config())
+    await (await _get_tool(mcp, "create_sketch"))({"plane": "Top"})
+    add_circle = await _get_tool(mcp, "add_circle")
+    first = (await add_circle({"center_x": 0, "center_y": 0, "radius": 2}))["circle"]
+    second = (await add_circle({"center_x": 9, "center_y": 0, "radius": 2}))["circle"]
+
+    result = await (await _get_tool(mcp, "add_sketch_constraint"))(
+        {"entity1": first["id"], "entity2": second["id"], "relation_type": "equal"}
+    )
+
+    assert result["status"] == "success", result
+    assert result["constraint"]["type"] == "equal"

@@ -57,8 +57,8 @@ PROMPT = (
 
 #: The directions an agent works out from the prompt before calling anything.
 PLAN = [
-    "1. sketch on Top: 100 x 50 outline from the origin, four Ø5.5 circles,",
-    "   every size and position dimensioned; extrude 10 mm",
+    "1. sketch on Top: 100 x 50 outline from the origin, four Ø5.5 circles",
+    "   (one Ø, the rest equal), each located from two edges; extrude 10 mm",
     "2. AISI 1020, then verify_model: 49049.7 mm³, 0.3875 kg, 1 feature",
     "3. plate drawing: A3, model dimensions, centre marks, notes, title block",
     "4. assembly: the plate twice; Front and Right coincident, Top planes 20",
@@ -76,7 +76,11 @@ _PLATE_KG = _PLATE_MM3 * 1e-9 * 7900.0
 _GAP_MM = 10.0
 
 #: Added after the generator's own lines (material, units, projection, burrs).
-PLATE_NOTES = ["4 X Ø5.5 THRU, M5 CLEARANCE", "QTY 2 PER ASSEMBLY PS-02"]
+PLATE_NOTES = [
+    "4 X Ø5.5 THRU, M5 CLEARANCE",
+    "GENERAL TOLERANCES ISO 2768-m",
+    "QTY 2 PER ASSEMBLY PS-02",
+]
 ASSEMBLY_NOTES = [
     "2 X DEMO PLATE PS-01, AISI 1020",
     f"PLATES SPACED {_GAP_MM:g} MM APART",
@@ -190,7 +194,16 @@ async def _plate_sketch(call: _Session) -> tuple[str, list[str]]:
             {"center_x": x, "center_y": y, "radius": _HOLE_DIAMETER_MM / 2},
         )
         circle = hole["circle"]["id"]
-        await dimension(circle, None, "diameter", _HOLE_DIAMETER_MM, f"{circle} Ø")
+        if not dims[2:]:
+            await dimension(circle, None, "diameter", _HOLE_DIAMETER_MM, f"{circle} Ø")
+            first = circle
+        else:
+            # One diameter drives all four holes: no repeated Ø5.5.
+            await call(
+                "add_sketch_constraint",
+                {"entity1": first, "entity2": circle, "relation_type": "equal"},
+            )
+            dims.append(f"{circle} Ø equal to {first}")
         await dimension(edges[side], circle, "linear", e, f"{circle} to {side} edge")
         await dimension(edges[end], circle, "linear", e, f"{circle} to {end} edge")
     await call("exit_sketch")
@@ -219,8 +232,10 @@ async def test_plate_stack_from_prompt_to_drawing(scratch, tmp_path, monkeypatch
     definition = (await call("check_sketch_fully_defined", {"sketch_name": sketch}))[
         "sketch"
     ]
+    relations = sum("equal to" in d for d in dims)
     evidence(
-        f"step 1: the sketch, {len(dims)} dimensions",
+        f"step 1: the sketch, {len(dims) - relations} dimensions and "
+        f"{relations} equal relations",
         {
             "definition_state": definition.get("definition_state"),
             "dimensions": "; ".join(dims),

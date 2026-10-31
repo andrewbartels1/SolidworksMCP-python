@@ -965,6 +965,7 @@ async def register_sketching_tools(
                             - Essential for parametric design and maintaining intent
                             - Over-constraining can cause sketch to fail
         """
+        input_data = normalize_input(input_data, AddRelationInput)
         result = await adapter.add_sketch_constraint(
             input_data.entity1,
             input_data.entity2,

@@ -38,6 +38,14 @@
       `Extension.AddDimension`; unit-tested, `sketch.py` at 100 %
 - [x] 3.0a The README links every runnable demo script (Demos section);
       the Pack-and-Go demo is left out because it needs a local file
+- [x] 3.0b Third run: every hole dimension, the plate check and the drawing
+      build worked; the drawing failed its overlap check because the hole
+      dimensions were imported into the front view, where the holes stack.
+      Fixes: each model dimension now stays in the view that took the most
+      dimensions (the plan); one Ø5.5 plus equal relations instead of four;
+      sketch dimension text placed outside the outline; a general-tolerance
+      note (ISO 2768-m). Feature control frames wait for #182
+- [x] 3.0c `add_sketch_constraint` normalises its input (a dict raised); test
 - [ ] 3.1 Run it with `live_demo.ps1 -CaptureDir docs/assets/demos/readme`.
       Untested live until now: a line-to-circle linear dimension, the
       sketch's fully-defined state, a drawing of an assembly without an

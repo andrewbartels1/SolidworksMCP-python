@@ -1428,12 +1428,57 @@ def _sketch_point_xyz(
     return ((x1 + x2) / 2.0, (y1 + y2) / 2.0, (z1 + z2) / 2.0)
 
 
+#: How far past a line's end a dimension to it is placed, in metres.
+_DIMENSION_CLEARANCE_M = 0.008
+
+
+def _text_beside_line(
+    adapter: Any, line: Any, point: tuple[float, float, float]
+) -> tuple[float, float, float] | None:
+    """Where to put a line-to-point dimension so it sits outside the outline.
+
+    Midway between the line and the point along the measurement, then moved
+    along the line past its end nearest the point, so the dimensions to the
+    holes of a plate stand clear of the plate instead of piling up inside it.
+
+    Args:
+        adapter: A ``PyWin32Adapter``.
+        line: The ``ISketchLine`` dispatch.
+        point: The other entity's point, in metres.
+
+    Returns:
+        tuple[float, float, float] | None: The text position, or ``None``
+        when the line's ends cannot be read.
+    """
+    ends = adapter._attempt(
+        lambda: adapter._sketch_geometry.read_segment_endpoints(line), default=None
+    )
+    if ends is None:
+        return None
+    (ax, ay, _az), (bx, by, _bz) = ends
+    length = ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
+    if length <= 1e-9:
+        return None
+    ux, uy = (bx - ax) / length, (by - ay) / length
+    along = (point[0] - ax) * ux + (point[1] - ay) * uy
+    foot = (ax + along * ux, ay + along * uy)
+    mid = ((foot[0] + point[0]) / 2.0, (foot[1] + point[1]) / 2.0)
+    shift = (
+        -along - _DIMENSION_CLEARANCE_M
+        if along < length / 2.0
+        else length - along + _DIMENSION_CLEARANCE_M
+    )
+    return (mid[0] + shift * ux, mid[1] + shift * uy, point[2])
+
+
 def _two_entity_linear_dimension(
     adapter: Any, ids: tuple[str, str], entity1: Any, entity2: Any, direction: int
 ) -> Any:
     """A linear dimension between two sketch entities, e.g. a line and a circle.
 
-    The text goes midway between the two. ``Extension.AddDimension`` with the
+    The text goes beside a line, clear of the outline (see
+    :func:`_text_beside_line`), or midway between the two entities when the
+    first is not a line. ``Extension.AddDimension`` with the
     first entity's single-line placement returned nothing for a line and a
     circle on SW 2026, so the calls are tried in turn until one returns a
     display dimension: ``IModelDoc2::AddDimension2`` with both entities
@@ -1462,7 +1507,9 @@ def _two_entity_linear_dimension(
     ]
     if points[0] is None or points[1] is None:
         raise Exception("Cannot read where the two entities are to place the dimension")
-    text = tuple((a + b) / 2.0 for a, b in zip(points[0], points[1], strict=True))
+    text = _text_beside_line(adapter, entity1, points[1]) or tuple(
+        (a + b) / 2.0 for a, b in zip(points[0], points[1], strict=True)
+    )
     centre = adapter._attempt(
         lambda: adapter._get_attr_or_call(entity2, "GetCenterPoint2"), default=None
     )

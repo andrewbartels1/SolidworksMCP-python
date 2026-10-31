@@ -991,6 +991,7 @@ class SolidWorksDocumentationMixin:
             shown.update(n for _, n in self._dimension_annotations(views[name]) if n)
         removed: dict[str, int] = {}
         method = "insert_model_annotations"
+        imported: dict[str, list[tuple[Any, str | None]]] = {}
         for name in names:
             self._attempt(lambda n=name: drawing.ActivateView(n), default=None)
             self._attempt(lambda: model.ClearSelection2(True), default=None)
@@ -1007,8 +1008,14 @@ class SolidWorksDocumentationMixin:
                 default=None,
             )
             self._attempt(lambda: model.ClearSelection2(True), default=None)
+            imported[name] = self._dimension_annotations(views[name])
+        # Each dimension stays in the view that took the most dimensions: the
+        # one that shows the sketch's true shape (a sketch on the Top plane is
+        # dimensioned in the plan, not projected edge-on into the front view,
+        # where holes stack up). Ties keep the view order.
+        for name in sorted(names, key=lambda n: -len(imported[n])):
             removed[name] = 0
-            for an, dim_name in self._dimension_annotations(views[name]):
+            for an, dim_name in imported[name]:
                 if dim_name and dim_name in shown:
                     if self._delete_display_dimension(model, an):
                         removed[name] += 1

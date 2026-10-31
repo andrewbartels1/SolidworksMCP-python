@@ -2261,8 +2261,9 @@ def test_line_to_circle_dimension_uses_add_dimension2_at_the_midpoint() -> None:
     )
 
     assert result.is_success, result.error
-    # Midway between the line's midpoint (0, 25) mm and the centre (10, 10) mm.
-    assert calls == [("AddDimension2", "circle", pytest.approx((0.005, 0.0175, 0.0)))]
+    # Halfway from the edge to the hole (x = 5 mm), past the edge's nearer
+    # end by the clearance (y = 0 - 8 mm): outside the plate.
+    assert calls == [("AddDimension2", "circle", pytest.approx((0.005, -0.008, 0.0)))]
 
 
 def test_line_to_circle_dimension_falls_back_to_the_centre_point() -> None:
@@ -2352,3 +2353,25 @@ def test_line_to_circle_dimension_uses_the_points_recorded_at_creation() -> None
 
     assert result.is_success, result.error
     assert calls == [("AddDimension2", "circle", pytest.approx((0.005, 0.0175, 0.0)))]
+
+
+@pytest.mark.parametrize(
+    ("ends", "point", "expected"),
+    [
+        # Bottom-up line, hole near its start: past the start, below the plate.
+        (((0.0, 0.0, 0.0), (0.0, 0.05, 0.0)), (0.01, 0.01, 0.0), (0.005, -0.008, 0.0)),
+        # Left-to-right line, hole near its far end: past the end.
+        (((0.0, 0.0, 0.0), (0.1, 0.0, 0.0)), (0.09, 0.01, 0.0), (0.108, 0.005, 0.0)),
+        # A zero-length line has no direction: no position.
+        (((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)), (0.01, 0.01, 0.0), None),
+        # Unreadable ends: no position.
+        (None, (0.01, 0.01, 0.0), None),
+    ],
+)
+def test_text_beside_line(ends, point, expected) -> None:
+    adapter = _FakeSketchAdapter()
+    adapter._sketch_geometry = SimpleNamespace(read_segment_endpoints=lambda _l: ends)
+
+    text = sketch._text_beside_line(adapter, object(), point)
+
+    assert text == (None if expected is None else pytest.approx(expected))
