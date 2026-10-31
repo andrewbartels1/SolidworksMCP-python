@@ -22,7 +22,7 @@ The 58 tool calls an agent made from that prompt, run against SolidWorks 2026 th
 
 > **Note:** the demo is not perfect, and is not the most efficient way to get this result. The run pauses after each call so it can be read, and the calls are chosen to show what the tools can do: every sketch dimension is added one at a time, and the mate distance is stepped down only so the plates are seen coming together.
 
-Run it yourself with the [README demo](tests/live/test_live_sw_readme_demo.py); the calls and their arguments are in [`plate_stack_calls.json`](docs/assets/demos/readme/plate_stack_calls.json).
+The [walkthrough in the docs](https://andrewbartels1.github.io/SolidworksMCP-python/demos/#prompt-to-drawing) has the agent's plan and every call with its arguments. Run it yourself with the [README demo](tests/live/test_live_sw_readme_demo.py); the calls are also in [`plate_stack_calls.json`](docs/assets/demos/readme/plate_stack_calls.json).
 
 <details>
 <summary>The 58 tool calls</summary>
@@ -58,21 +58,37 @@ It includes:
 
 ## Demos
 
-Each demo below drives a real SolidWorks session through the same tools an MCP client calls. Open the file to see the exact calls; run it to watch SolidWorks build the result. They need Windows, SolidWorks open, and the project's `.venv`.
+Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the call and its result captioned beneath. Click one to see what it checks, a prompt that asks for it, and its tool calls.
 
-| Demo | What it builds | Run it |
-| --- | --- | --- |
-| [README demo](tests/live/test_live_sw_readme_demo.py) | A prompt answered end to end: a fully dimensioned AISI 1020 plate checked with `verify_model`, its drawing with GD&T, then two plates stacked 10 mm apart with an assembly drawing and BOM. `-Record` records it as the GIF above | `powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 -Test tests/live/test_live_sw_readme_demo.py -CaptureDir docs/assets/demos/readme -Record` |
-| [Sketches](scripts/demo_sketches.py) | A decorative plate using every sketch tool: splines, arcs, polygons, ellipses, patterns, mirror, offset | `.\.venv\Scripts\python.exe scripts\demo_sketches.py` |
-| [Features](scripts/demo_features.py) | A revolved ring with a cut slot, a fillet and a chamfer | `.\.venv\Scripts\python.exe scripts\demo_features.py` |
-| [Sweep and loft](scripts/demo_sweep_loft.py) | A lofted cone and a swept coil spring in one multibody part | `.\.venv\Scripts\python.exe scripts\demo_sweep_loft.py` |
-| [Analysis](scripts/demo_analysis.py) | Model info, features, configurations and mass properties read back, and a dimension read and changed | `.\.venv\Scripts\python.exe scripts\demo_analysis.py` |
-| [Export](scripts/demo_export.py) | One part exported to STEP, STL, IGES and PNG (PDF and DWG need a drawing) | `.\.venv\Scripts\python.exe scripts\demo_export.py` |
-| [Save safeguards](scripts/demo_save_validation.py) | Saving refuses a missing folder and an existing file unless overwrite is set, for parts and assemblies | `.\.venv\Scripts\python.exe scripts\demo_save_validation.py` |
-| [Heat-set insert coupon](docs/getting-started/tutorial-parts/demo_recording_heat_insert.py) | A recording-friendly build that prints the prompt and its own source first | `.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\demo_recording_heat_insert.py` |
-| [Assembly feature tree](docs/getting-started/tutorial-parts/list_features_assembly_demo.py) | `list_features` on a part and an assembly from the SolidWorks sample set | `.\.venv\Scripts\python.exe docs\getting-started\tutorial-parts\list_features_assembly_demo.py` |
+<table>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-block"><img src="docs/assets/demos/verify-model/test_verify_model_passes_a_block_and_names_what_is_wrong.gif" alt="verify_model passes a block and names what is wrong" width="100%"></a><br><sub><code>verify_model</code> passes a block and names what is wrong</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-assembly"><img src="docs/assets/demos/verify-model/test_assembly_counts_components_mates_and_interference.gif" alt="An assembly: parts, mates and interference" width="100%"></a><br><sub>An assembly: parts, mates and interference</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-cut"><img src="docs/assets/demos/verify-model/test_cut_reports_the_volume_it_removed.gif" alt="A cut reports the volume it removed" width="100%"></a><br><sub>A cut reports the volume it removed</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-revolve"><img src="docs/assets/demos/verify-model/test_revolve_reports_the_volume_it_added.gif" alt="A revolve reports the volume it added" width="100%"></a><br><sub>A revolve reports the volume it added</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-round"><img src="docs/assets/demos/verify-model/test_round_part_size_is_exact.gif" alt="A round part's size is exact" width="100%"></a><br><sub>A round part's size is exact</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-selection"><img src="docs/assets/demos/verify-model/test_reading_the_model_keeps_the_selection.gif" alt="Reading the model keeps the selection" width="100%"></a><br><sub>Reading the model keeps the selection</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#package-block"><img src="docs/assets/demos/drawing-package/test_generate_drawing_package_on_a_block.gif" alt="A full drawing package from one call" width="100%"></a><br><sub>A full drawing package from one call</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#sheet-scale"><img src="docs/assets/demos/drawing-package/test_set_sheet_scale_halves_the_views.gif" alt="Setting the sheet scale" width="100%"></a><br><sub>Setting the sheet scale</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#bom"><img src="docs/assets/demos/drawing-package/test_insert_bom_table_lists_both_parts.gif" alt="A BOM on an assembly drawing" width="100%"></a><br><sub>A BOM on an assembly drawing</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#insert-model-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_insert_model_dimensions_shows_each_dimension_once.gif" alt="Each model dimension shown once" width="100%"></a><br><sub>Each model dimension shown once</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#arrange-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_arrange_dimensions_clears_every_overlap.gif" alt="Clearing every overlap" width="100%"></a><br><sub>Clearing every overlap</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#material"><img src="docs/assets/demos/engineering-data/test_material_applies_and_changes_mass.gif" alt="Material and mass" width="100%"></a><br><sub>Material and mass</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#dimensions-and-measure"><img src="docs/assets/demos/engineering-data/test_dimensions_list_and_measure.gif" alt="Listing dimensions and measuring a face" width="100%"></a><br><sub>Listing dimensions and measuring a face</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#flat-pattern"><img src="docs/assets/demos/engineering-data/test_export_flat_pattern_writes_a_dxf.gif" alt="Flat pattern of a sheet-metal part" width="100%"></a><br><sub>Flat pattern of a sheet-metal part</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#custom-property"><img src="docs/assets/demos/engineering-data/test_custom_property_round_trip.gif" alt="Custom properties" width="100%"></a><br><sub>Custom properties</sub></td>
+</tr>
+</table>
 
-Recorded runs of the live tests, with each tool call and its result captioned under SolidWorks, are in [`docs/assets/demos/`](docs/assets/demos/): checking a model against expected values, drawing packages, drawing dimensions, and engineering data.
+**[See every demo in the docs](https://andrewbartels1.github.io/SolidworksMCP-python/demos/)**: what each one shows, its prompt, every tool call with its arguments (all 58 for the demo at the top), and how to run them yourself.
 
 ## Supported Today
 
