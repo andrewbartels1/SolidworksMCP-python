@@ -65,6 +65,7 @@ dev = [
     "pytest-xdist>=3.3.0",
     "pytest-benchmark>=4.0.0",
     "numpy>=1.26.0",
+    "pypdfium2>=4.30.0",  # live demos render each exported PDF into a frame
     
     # Code quality and linting
     "coverage[toml]>=7.3.0",
@@ -94,6 +95,7 @@ test = [
     "coverage[toml]>=7.3.0",
     "fastapi>=0.115.0",
     "numpy>=1.26.0",
+    "pypdfium2>=4.30.0",  # live demos render each exported PDF into a frame
 ]
 docs = [
     # <2: MkDocs 2 is announced to drop support for existing themes, plugins

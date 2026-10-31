@@ -211,8 +211,12 @@ def test_basic_entity_success_paths_register_entities() -> None:
         CreateArc=lambda *args: SimpleNamespace(Name="A"),
     )
 
-    assert sketch._add_line_impl(adapter, 0, 0, 10, 0).data.startswith("Line_")
-    assert sketch._add_circle_impl(adapter, 0, 0, 5).data.startswith("Circle_")
+    line = sketch._add_line_impl(adapter, 0, 0, 10, 0).data
+    circle = sketch._add_circle_impl(adapter, 3, 4, 5).data
+    assert line.startswith("Line_") and circle.startswith("Circle_")
+    # Each records the point a dimension to it is placed at, in mm.
+    assert adapter._sketch_entity_centers[line] == (5.0, 0.0)
+    assert adapter._sketch_entity_centers[circle] == (3, 4)
     assert sketch._add_rectangle_impl(adapter, 0, 0, 5, 5).data.startswith("Rectangle_")
     assert sketch._add_arc_impl(adapter, 0, 0, 5, 0, 0, 5).data.startswith("Arc_")
 
@@ -2188,3 +2192,186 @@ class TestPyWin32AdapterBranches:
         mass_error = await adapter.get_mass_properties()
         assert mass_error.is_error
         assert "Failed to get mass properties" in (mass_error.error or "")
+
+
+# ---- linear dimension between a line and a circle (hole location) -------------
+
+
+def _line_and_circle_adapter(
+    *, add_dimension2=(), extension=None, centre_selectable=True, positions=True
+):
+    """A sketch with a vertical line at x=0 (0..50 mm) and a circle at (10, 10) mm.
+
+    ``add_dimension2`` lists what successive ``AddDimension2`` calls return;
+    ``extension`` is what ``Extension.AddDimension`` returns.
+    """
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    adapter._single_line_dimension_placement = lambda _e: (0.01, 0.025, 0.0, 0)
+    selected: list[object] = []
+
+    def selectable(name):
+        return SimpleNamespace(
+            name=name, Select2=lambda append, _m: selected.append(name) or True
+        )
+
+    line = selectable("line")
+    centre = SimpleNamespace(
+        Select2=lambda _a, _m: selected.append("centre") or centre_selectable
+    )
+    circle = selectable("circle")
+    if positions:
+        circle.GetCenterPoint = lambda: (0.01, 0.01, 0.0)
+    circle.GetCenterPoint2 = centre
+    adapter._sketch_entities = {"Line_1": line, "Circle_2": circle}
+    adapter._sketch_geometry = SimpleNamespace(
+        read_segment_endpoints=lambda e: (
+            ((0.0, 0.05, 0.0), (0.0, 0.0, 0.0)) if e is line else None
+        )
+    )
+    results = iter(add_dimension2)
+    calls: list[tuple] = []
+
+    def add_dimension2_call(*xyz):
+        calls.append(("AddDimension2", selected[-1], xyz))
+        return next(results, None)
+
+    def extension_call(*args):
+        calls.append(("AddDimension", selected[-1], args))
+        return extension
+
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: selected.clear() or True,
+        AddDimension2=add_dimension2_call,
+        Extension=SimpleNamespace(AddDimension=extension_call),
+    )
+    return adapter, calls
+
+
+def _display_dimension() -> SimpleNamespace:
+    dim = SimpleNamespace(SetSystemValue3=lambda *_a: True)
+    return SimpleNamespace(GetDimension2=lambda *_a: dim)
+
+
+def test_line_to_circle_dimension_uses_add_dimension2_at_the_midpoint() -> None:
+    adapter, calls = _line_and_circle_adapter(add_dimension2=[_display_dimension()])
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert result.is_success, result.error
+    # Halfway from the edge to the hole (x = 5 mm), past the edge's nearer
+    # end by the clearance (y = 0 - 8 mm): outside the plate.
+    assert calls == [("AddDimension2", "circle", pytest.approx((0.005, -0.008, 0.0)))]
+
+
+def test_line_to_circle_dimension_falls_back_to_the_centre_point() -> None:
+    adapter, calls = _line_and_circle_adapter(
+        add_dimension2=[None, _display_dimension()]
+    )
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert result.is_success, result.error
+    assert [(c[0], c[1]) for c in calls] == [
+        ("AddDimension2", "circle"),
+        ("AddDimension2", "centre"),
+    ]
+
+
+def test_line_to_circle_dimension_falls_back_to_extension_add_dimension() -> None:
+    adapter, calls = _line_and_circle_adapter(
+        extension=_display_dimension(), centre_selectable=False
+    )
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert result.is_success, result.error
+    # The unselectable centre point is skipped, not tried.
+    assert [(c[0], c[1]) for c in calls] == [
+        ("AddDimension2", "circle"),
+        ("AddDimension", "circle"),
+    ]
+
+
+def test_line_to_circle_dimension_that_nothing_creates_is_an_error() -> None:
+    adapter, calls = _line_and_circle_adapter()
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert "SolidWorks failed to create sketch dimension" in (result.error or "")
+    assert len(calls) == 3
+
+
+def test_line_to_circle_dimension_needs_both_positions() -> None:
+    adapter, calls = _line_and_circle_adapter(positions=False)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert "Cannot read where the two entities are" in (result.error or "")
+    assert calls == []
+
+
+def test_two_entity_linear_dimension_names_an_unselectable_primary() -> None:
+    adapter = _dimension_adapter(select_ok=False)
+
+    result = sketch._add_sketch_dimension_impl(adapter, "L1", "L2", "linear", 5.0)
+
+    assert "Failed to select primary entity 'L1'" in (result.error or "")
+
+
+def test_diameter_dimension_with_an_unselectable_second_entity_is_an_error() -> None:
+    adapter = _dimension_adapter(select_ok=True)
+    adapter._sketch_entities["L2"] = SimpleNamespace(Select2=lambda _a, _m: False)
+
+    result = sketch._add_sketch_dimension_impl(adapter, "L1", "L2", "diameter", 5.0)
+
+    assert "Failed to select secondary entity 'L2'" in (result.error or "")
+
+
+def test_line_to_circle_dimension_uses_the_points_recorded_at_creation() -> None:
+    # Live on SW 2026 the circle's centre could not be read back; the line
+    # and circle record their points (mm) when they are created.
+    adapter, calls = _line_and_circle_adapter(
+        add_dimension2=[_display_dimension()], positions=False
+    )
+    adapter._sketch_geometry = SimpleNamespace(read_segment_endpoints=lambda _e: None)
+    adapter._sketch_entity_centers = {"Line_1": (0.0, 25.0), "Circle_2": (10.0, 10.0)}
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Line_1", "Circle_2", "linear", 10.0
+    )
+
+    assert result.is_success, result.error
+    assert calls == [("AddDimension2", "circle", pytest.approx((0.005, 0.0175, 0.0)))]
+
+
+@pytest.mark.parametrize(
+    ("ends", "point", "expected"),
+    [
+        # Bottom-up line, hole near its start: past the start, below the plate.
+        (((0.0, 0.0, 0.0), (0.0, 0.05, 0.0)), (0.01, 0.01, 0.0), (0.005, -0.008, 0.0)),
+        # Left-to-right line, hole near its far end: past the end.
+        (((0.0, 0.0, 0.0), (0.1, 0.0, 0.0)), (0.09, 0.01, 0.0), (0.108, 0.005, 0.0)),
+        # A zero-length line has no direction: no position.
+        (((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)), (0.01, 0.01, 0.0), None),
+        # Unreadable ends: no position.
+        (None, (0.01, 0.01, 0.0), None),
+    ],
+)
+def test_text_beside_line(ends, point, expected) -> None:
+    adapter = _FakeSketchAdapter()
+    adapter._sketch_geometry = SimpleNamespace(read_segment_endpoints=lambda _l: ends)
+
+    text = sketch._text_beside_line(adapter, object(), point)
+
+    assert text == (None if expected is None else pytest.approx(expected))

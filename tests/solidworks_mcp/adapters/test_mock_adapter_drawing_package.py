@@ -33,6 +33,7 @@ async def test_bom_on_a_known_view(drawing) -> None:
         "template": None,
         "row_count": 2,
         "table_box_mm": [0.0, 0.0, 60.0, 15.0],
+        "moved_onto_sheet": False,
     }
 
 
@@ -100,3 +101,51 @@ async def test_standard_drawing_missing_model(tmp_path) -> None:
     result = await MockSolidWorksAdapter({}).create_standard_drawing(missing)
 
     assert result.error == f"Model file not found: {missing}"
+
+
+@pytest.mark.asyncio
+async def test_gtol_and_datum_tag_on_a_drawing(drawing) -> None:
+    frame = await drawing.add_gtol(
+        "position", 0.2, 60.0, 250.0, True, "mmc", ["a", "B"], (62.0, 218.0)
+    )
+    free = await drawing.add_gtol("flatness", 0.05, 30.0, 40.0)
+    tag = await drawing.add_datum_tag(" b ", (10.0, 20.0), 15.0, 25.0)
+
+    assert frame.data == {
+        "characteristic": "position",
+        "tolerance": "0.2",
+        "diameter_zone": True,
+        "material_condition": "mmc",
+        "datums": ["A", "B"],
+        "attached": True,
+        "position_mm": [60.0, 250.0],
+        "layout": None,
+    }
+    assert free.data["attached"] is False and free.data["datums"] == []
+    assert tag.data == {"label": "B", "position_mm": [15.0, 25.0]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("args", "error"),
+    [
+        (("wobble", 0.2, 0, 0), "characteristic must be one of"),
+        (("position", 0.2, 0, 0, False, "rfs"), "material_condition must be one of"),
+        (("position", 0.0, 0, 0), "tolerance must be positive"),
+        (("position", 0.2, 0, 0, False, "none", ["A", "B", "C", "D"]), "at most three"),
+        (("position", 0.2, 0, 0, False, "none", ["AB"]), "at most three"),
+    ],
+)
+async def test_gtol_refuses_what_the_real_adapter_refuses(drawing, args, error) -> None:
+    result = await drawing.add_gtol(*args)
+    assert error in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_datum_tag_needs_one_letter_and_both_need_a_drawing(drawing) -> None:
+    assert "single letter" in (await drawing.add_datum_tag("AB", (0, 0), 0, 0)).error
+    part = MockSolidWorksAdapter({})
+    await part.connect()
+    await part.create_part()
+    assert not (await part.add_gtol("position", 0.2, 0, 0)).is_success
+    assert not (await part.add_datum_tag("A", (0, 0), 0, 0)).is_success

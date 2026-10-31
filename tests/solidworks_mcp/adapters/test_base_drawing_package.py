@@ -11,6 +11,8 @@ CALLS = {
     "insert_bom_table": ("Drawing View1",),
     "set_sheet_scale": (1.0, 2.0),
     "create_standard_drawing": ("C:/parts/block.SLDPRT",),
+    "add_gtol": ("position", 0.2, 60.0, 250.0),
+    "add_datum_tag": ("A", (10.0, 20.0), 15.0, 25.0),
 }
 
 

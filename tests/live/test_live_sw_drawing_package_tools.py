@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from tests.live.evidence import evidence
+from tests.live.evidence import evidence, starting
 from tests.live.test_live_sw_documentation_tools import _block
 
 
@@ -67,6 +67,8 @@ def _show_each_build_step(adapter: Any, monkeypatch: pytest.MonkeyPatch) -> None
     original = adapter._handle_com_operation
 
     def watched(name: str, operation: Any, *args: Any) -> Any:
+        if name in _BUILD_STEPS:
+            starting(_BUILD_STEPS[name])
         result = original(name, operation, *args)
         if name in _BUILD_STEPS:
             evidence(

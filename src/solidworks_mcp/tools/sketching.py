@@ -440,7 +440,7 @@ async def register_sketching_tools(
 
         require_success(result, context="Failed to add line")
         line_id = (
-            result.data.get("entity_id")
+            result.data.get("entity_id") or result.data.get("id")
             if isinstance(result.data, dict)
             else result.data
         )
@@ -965,6 +965,7 @@ async def register_sketching_tools(
                             - Essential for parametric design and maintaining intent
                             - Over-constraining can cause sketch to fail
         """
+        input_data = normalize_input(input_data, AddRelationInput)
         result = await adapter.add_sketch_constraint(
             input_data.entity1,
             input_data.entity2,
