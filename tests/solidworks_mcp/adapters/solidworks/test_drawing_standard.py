@@ -458,6 +458,7 @@ class TestInsertBomTable:
             "template": template,
             "row_count": 3,
             "table_box_mm": None,  # the fake table cannot be measured
+            "moved_onto_sheet": False,
         }
         bom = adapter.drawing.views["Drawing View1"].bom
         # Stationary corner 3 (bottom-left): the table grows up onto the sheet.
@@ -524,7 +525,11 @@ class _Table:
         self.RowCount = 3
         self.ColumnCount = 4
         self.AnchorType = anchor
-        self.annotation = SimpleNamespace(GetPosition=lambda: (*corner, 0.0))
+        self.corner = corner
+        self.annotation = SimpleNamespace(
+            GetPosition=lambda: (*self.corner, 0.0),
+            SetPosition=lambda x, y, _z: setattr(self, "corner", (x, y)),
+        )
 
     def GetAnnotation(self):  # noqa: N802
         return self.annotation
@@ -575,20 +580,73 @@ class TestBomTableLandsOnTheSheet:
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
         assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
+        assert result.data["moved_onto_sheet"] is False
 
     @pytest.mark.asyncio
-    async def test_a_table_off_the_sheet_is_an_error(self) -> None:
+    async def test_an_anchored_table_off_the_top_is_slid_onto_the_sheet(self) -> None:
+        # The ISO A3 format's anchor (20, 287) mm, growing up: live on SW 2026.
+        adapter = _drawing_harness()
+        table = _Table((0.020, 0.287), anchor=3)
+        adapter.drawing.views["Drawing View1"].bom_result = table
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["moved_onto_sheet"] is True
+        assert result.data["table_box_mm"] == [20.0, 282.0, 80.0, 297.0]
+
+    @pytest.mark.asyncio
+    async def test_an_anchored_table_off_the_left_and_bottom_is_slid_on(self) -> None:
+        adapter = _drawing_harness()
+        hanging = _Table((-0.01, 0.0), anchor=1)  # top-left, below the sheet
+        adapter.drawing.views["Drawing View1"].bom_result = hanging
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
+
+    @pytest.mark.asyncio
+    async def test_a_table_placed_off_the_sheet_is_an_error(self) -> None:
         adapter = _drawing_harness()
         hanging = _Table((0.0, 0.0), anchor=1)  # top-left at the origin
         adapter.drawing.views["Drawing View1"].bom_result = hanging
 
-        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+        result = await adapter.insert_bom_table(
+            "Drawing View1", "C:/t.sldbomtbt", x_mm=0.0, y_mm=0.0
+        )
 
         assert result.error == (
             "Error in insert_bom_table: The BOM table was inserted but runs off "
             "the sheet: table [0.0, -15.0, 60.0, 0.0] mm, sheet 420 x 297 mm. "
             "Give x_mm and y_mm to place it on the sheet."
         )
+        assert hanging.corner == (0.0, 0.0)  # a given position is never moved
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "table",
+        [
+            _Table((0.0, 0.0), anchor=1),
+            SimpleNamespace(
+                RowCount=3,
+                ColumnCount=4,
+                AnchorType=3,
+                GetRowHeight=lambda _i: 0.5,  # 1.5 m tall: larger than the sheet
+                GetColumnWidth=lambda _i: 0.015,
+                GetAnnotation=lambda: SimpleNamespace(GetPosition=lambda: (0, 0, 0)),
+            ),
+        ],
+        ids=["position unreadable after measuring", "larger than the sheet"],
+    )
+    async def test_a_table_that_cannot_be_slid_on_is_an_error(self, table) -> None:
+        adapter = _drawing_harness()
+        if isinstance(table, _Table):
+            positions = iter([(0.0, 0.0, 0.0)])  # measured once, then unreadable
+            table.annotation.GetPosition = lambda: next(positions, None)
+        adapter.drawing.views["Drawing View1"].bom_result = table
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert "runs off the sheet" in result.error
 
 
 class TestSetSheetScale:

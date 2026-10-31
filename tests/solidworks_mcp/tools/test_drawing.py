@@ -331,10 +331,15 @@ class TestDrawingTools:
         result = await tool_func(
             input_data=AutoCenterMarksInput(view_name="Drawing View1")
         )
+        from_dict = await tool_func(input_data={"view_name": "Drawing View1"})
 
         assert result["status"] == "success"
         assert "4 centre mark(s)" in result["message"]
         assert result["data"]["center_marks_added"] == 4
+        assert from_dict["status"] == "success"
+        mock_adapter.auto_center_marks.assert_awaited_with(
+            "Drawing View1", True, False, True
+        )
 
     @pytest.mark.asyncio
     async def test_auto_center_marks_surfaces_adapter_error(

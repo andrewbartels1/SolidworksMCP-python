@@ -331,6 +331,30 @@ async def test_insert_shows_each_dimension_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_dimension_stays_in_the_view_that_took_the_most() -> None:
+    # A plate sketched on Top: the plan view shows every sketch dimension;
+    # the front view sees the holes edge-on, where their dimensions stack up.
+    drawing = _three_views(
+        imports={
+            "Front": ["D1@Sketch1", "D3@Sketch1", "D1@Boss-Extrude1"],
+            "Top": ["D1@Sketch1", "D2@Sketch1", "D3@Sketch1", "D4@Sketch1"],
+        }
+    )
+
+    result = await _Harness(drawing).insert_model_dimensions()
+
+    assert [a.name for a in drawing.views["Top"].dims] == [
+        "D1@Sketch1",
+        "D2@Sketch1",
+        "D3@Sketch1",
+        "D4@Sketch1",
+    ]
+    assert [a.name for a in drawing.views["Front"].dims] == ["D1@Boss-Extrude1"]
+    removed = {v["view"]: v["duplicates_removed"] for v in result.data["views"]}
+    assert removed == {"Front": 2, "Top": 0}
+
+
+@pytest.mark.asyncio
 async def test_insert_one_view_skips_what_another_view_shows() -> None:
     drawing = _three_views(imports={"Top": ["D1@Sketch1", "D3@Sketch1"]})
     drawing.views["Front"].add("D1@Sketch1")
@@ -562,3 +586,18 @@ def test_collect_layout_skips_missing_views_and_outlines() -> None:
 
     assert list(outlines) == ["Front"]
     assert len(geometries) == len(annotations) == 3
+
+
+def test_apply_moves_skips_zero_and_fixed_moves() -> None:
+    harness = _Harness(_three_views())
+    still = SimpleNamespace(key="still", position=(0.1, 0.1))
+    held = SimpleNamespace(key="held", position=(0.1, 0.1))
+
+    moved = harness._apply_moves(
+        [still, held],
+        {"still": object(), "held": object()},
+        {"still": (0.0, 0.0), "held": (0.01, 0.0)},
+        movable={"still"},
+    )
+
+    assert moved == 0

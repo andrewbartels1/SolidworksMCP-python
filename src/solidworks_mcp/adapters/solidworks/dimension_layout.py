@@ -16,7 +16,8 @@ A3 drafting standard
 (``drawing_standard.py``): horizontal dimensions in rows above/below the part, rows 7 mm
 apart; vertical dimensions in columns left/right, 9 mm apart; the first row
 8 mm from the outline, on the side its extension lines start from. Others
-(diameters, radii, angles) go diagonally outward. Rows are filled shortest span first, so the extension lines of longer
+(diameters, radii, angles) keep their leader on the feature and step their
+text outward from it. Rows are filled shortest span first, so the extension lines of longer
 outer dimensions clear the inner text. Every candidate position is checked
 against everything already placed; the first free one wins.
 
@@ -26,6 +27,7 @@ All coordinates are sheet metres; boxes and segments are ``(x0, y0, x1, y1)``.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 
 Box = tuple[float, float, float, float]
@@ -43,10 +45,37 @@ COLUMN_PITCH = 0.009
 STACK_GAP = 0.0035
 #: Outward steps tried per side before giving up on that side.
 MAX_STEPS = 12
+#: A leader's text is tried every 4 mm outward from its feature.
+LEADER_STEP = 0.004
 #: Another view's outline is grown by 0.2 mm, so a line along its edge counts.
 EDGE_TOLERANCE = 0.0002
 #: More than 1 mm of a line on another view is a crossing; touching is not.
 MIN_CROSSING = 0.001
+#: A leader is planned at least 2 mm from any text. SolidWorks attaches it to
+#: its text a little differently from the model here, and a leader planned to
+#: just miss a "10" grazed it (seen live on SW 2026); the check stays exact.
+LEADER_CLEARANCE = 0.002
+#: A leader's text may sit inside its own view (a hole note on a plate) when
+#: it is this far inside the view's outline ...
+INSIDE_MARGIN = 0.008
+#: ... and this far from every point a dimension starts from (hole centres,
+#: edge points, the leader's own hole), the features the view shows there.
+FEATURE_CLEARANCE = 0.006
+
+
+def _grown(box: Box, by: float) -> Box:
+    """``box`` grown by ``by`` on every side."""
+    return (box[0] - by, box[1] - by, box[2] + by, box[3] + by)
+
+
+def shown_length(text: str) -> int:
+    """Characters a dimension's text shows: each SolidWorks code is one symbol.
+
+    ``IDisplayData::GetTextAtIndex`` returns codes such as ``<MOD-DIAM>``
+    for the Ø sign; counted as typed, they make the text look three times
+    wider than it is drawn.
+    """
+    return len(re.sub(r"<[^<>]*>", "X", text).strip())
 
 
 def text_box(x: float, y: float, width: float, height: float, angle: float) -> Box:
@@ -125,6 +154,30 @@ class DimensionGeometry:
     lines: list[Segment] = field(default_factory=list)
     orientation: str | None = None
     span: float = 0.0
+
+
+def attach_boxes(dims: list[DimensionGeometry], attached: dict[str, Box]) -> None:
+    """Grow each dimension's text box by what hangs off it, such as a GD&T frame.
+
+    A frame attached to a dimension moves with it, so its box is given
+    relative to the dimension's position and counts as part of its text.
+
+    Args:
+        dims: Dimensions as read; updated in place.
+        attached: Dimension key -> box relative to that dimension's position.
+    """
+    for dim in dims:
+        rel = attached.get(dim.key)
+        if rel is None:
+            continue
+        x, y = dim.position
+        tb = dim.text_box
+        dim.text_box = (
+            min(tb[0], x + rel[0]),
+            min(tb[1], y + rel[1]),
+            max(tb[2], x + rel[2]),
+            max(tb[3], y + rel[3]),
+        )
 
 
 def box_overlap(a: Box, b: Box, pad: float = 0.0) -> bool:
@@ -277,13 +330,108 @@ def crosses_own_view(dim: DimensionGeometry, outline: Box) -> bool:
     return False
 
 
+def leader_anchor(dim: DimensionGeometry) -> tuple[float, float] | None:
+    """Where a leader (diameter, radius) meets the part: the line end farthest from the text.
+
+    Args:
+        dim: The dimension.
+
+    Returns:
+        tuple[float, float] | None: The anchor, or ``None`` with no lines.
+    """
+    cx = (dim.text_box[0] + dim.text_box[2]) / 2.0
+    cy = (dim.text_box[1] + dim.text_box[3]) / 2.0
+    ends = [(s[0], s[1]) for s in dim.lines] + [(s[2], s[3]) for s in dim.lines]
+    if not ends:
+        return None
+    return max(ends, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+
+
+def feature_points(
+    dims: list[DimensionGeometry], view: str, outline: Box, skip: str | None = None
+) -> list[tuple[float, float]]:
+    """Points inside a view where its dimensions start: its features.
+
+    Every line end of the view's dimensions (but ``skip``'s) that lies inside
+    the outline: extension lines start on holes and edges, leaders on the
+    feature they point at.
+    """
+    inner = _grown(outline, -0.0005)
+    return [
+        p
+        for d in dims
+        if d.view == view and d.key != skip
+        for s in d.lines
+        for p in ((s[0], s[1]), (s[2], s[3]))
+        if inner[0] < p[0] < inner[2] and inner[1] < p[1] < inner[3]
+    ]
+
+
+def clear_inside(box: Box, outline: Box, points: list[tuple[float, float]]) -> bool:
+    """True when ``box`` sits well inside ``outline`` and clear of ``points``."""
+    room = _grown(outline, -INSIDE_MARGIN)
+    if not (
+        room[0] <= box[0]
+        and room[1] <= box[1]
+        and box[2] <= room[2]
+        and box[3] <= room[3]
+    ):
+        return False
+    near = _grown(box, FEATURE_CLEARANCE)
+    return not any(
+        near[0] <= x <= near[2] and near[1] <= y <= near[3] for x, y in points
+    )
+
+
+def _leader_inside(
+    dim: DimensionGeometry, dims: list[DimensionGeometry], outline: Box
+) -> bool:
+    """A leader whose text sits clear inside its own view (see :func:`clear_inside`)."""
+    anchor = leader_anchor(dim)
+    if classify(dim.lines)[0] is not None or anchor is None:
+        return False
+    points = [*feature_points(dims, dim.view, outline, skip=dim.key), anchor]
+    return clear_inside(dim.text_box, outline, points)
+
+
+def _inside_candidates(
+    dim: DimensionGeometry, outline: Box
+) -> list[tuple[str, float, float]]:
+    """Moves putting a leader's text inside its view, toward the view's centre."""
+    anchor = leader_anchor(dim)
+    tb = dim.text_box
+    w, h = tb[2] - tb[0], tb[3] - tb[1]
+    cx, cy = (tb[0] + tb[2]) / 2.0, (tb[1] + tb[3]) / 2.0
+    ox, oy = (outline[0] + outline[2]) / 2.0, (outline[1] + outline[3]) / 2.0
+    ux, uy = ox - anchor[0], oy - anchor[1]
+    length = math.hypot(ux, uy) or 1.0
+    ux, uy = ux / length, uy / length
+    out = []
+    for step in range(2 * MAX_STEPS):
+        reach = FIRST_OFFSET + step * LEADER_STEP
+        tx = anchor[0] + ux * reach + math.copysign(w / 2.0, ux)
+        ty = anchor[1] + uy * reach + math.copysign(h / 2.0, uy)
+        out.append(("inside", tx - cx, ty - cy))
+    return out
+
+
+def _leader_to(anchor: tuple[float, float], box: Box) -> Segment:
+    """The leader from ``anchor`` to the nearest point of the text ``box``."""
+    x = min(max(anchor[0], box[0]), box[2])
+    y = min(max(anchor[1], box[1]), box[3])
+    return (anchor[0], anchor[1], x, y)
+
+
 def _projected_segments(
     dim: DimensionGeometry, dx: float, dy: float, outline: Box
 ) -> list[Segment]:
     """Approximate a moved dimension's new dimension and extension lines.
 
     The extension lines still start where they did on the part and now reach
-    the moved dimension line.
+    the moved dimension line. A leader stays fixed to the feature it points
+    at and runs from there to the moved text; moving it with the text, as
+    before, hid a diameter leader drawn across the part and two neighbouring
+    dimensions (measured live on SW 2026).
     """
     orient, _span, ends = classify(dim.lines)
     box = shift_box(dim.text_box, dx, dy)
@@ -298,7 +446,8 @@ def _projected_segments(
         return [(x, ends[0], x, ends[1])] + [
             (o, s[1], x, s[1]) for s, o in zip(dim.lines, origins, strict=False)
         ]
-    return [(s[0] + dx, s[1] + dy, s[2] + dx, s[3] + dy) for s in dim.lines]
+    anchor = leader_anchor(dim)
+    return [] if anchor is None else [_leader_to(anchor, box)]
 
 
 def find_overlaps(
@@ -321,6 +470,8 @@ def find_overlaps(
     problems: list[dict[str, str]] = []
     for i, dim in enumerate(dims):
         for view, outline in outlines.items():
+            if view == dim.view and _leader_inside(dim, dims, outline):
+                continue
             if box_overlap(dim.text_box, outline, -TEXT_PADDING / 2):
                 problems.append(
                     {
@@ -388,13 +539,13 @@ def find_overlaps(
     return problems
 
 
-def _candidates(
-    dim: DimensionGeometry, outline: Box, stack_depth: dict[tuple[str, str], float]
-) -> list[tuple[str, float, float]]:
+def _candidates(dim: DimensionGeometry, outline: Box) -> list[tuple[str, float, float]]:
     """Ordered (side, dx, dy) moves to try for one dimension.
 
     A linear dimension only goes to the side its extension lines start from;
-    on the far side they would cross its own view.
+    on the far side they would cross its own view. Rows and columns are tried
+    from the innermost out, so dimensions that do not touch share a row; the
+    caller's checks push one outward when its text or lines would collide.
     """
     tb = dim.text_box
     w, h = tb[2] - tb[0], tb[3] - tb[1]
@@ -406,37 +557,34 @@ def _candidates(
         sides = list(dict.fromkeys("above" if o >= oy else "below" for o in origins))
         pitch = max(ROW_PITCH, h + STACK_GAP)
         for side in sides:
-            base = stack_depth.get((dim.view, side), 0.0)
             for step in range(MAX_STEPS):
-                off = FIRST_OFFSET + base + step * pitch
+                off = FIRST_OFFSET + step * pitch
                 target = outline[3] + off if side == "above" else outline[1] - off
                 out.append((side, 0.0, target - cy))
     elif dim.orientation == "v":
         sides = list(dict.fromkeys("right" if o >= ox else "left" for o in origins))
         pitch = max(COLUMN_PITCH, w + STACK_GAP)
         for side in sides:
-            base = stack_depth.get((dim.view, side), 0.0)
             for step in range(MAX_STEPS):
-                off = FIRST_OFFSET + base + step * pitch
+                off = FIRST_OFFSET + step * pitch
                 target = outline[2] + off if side == "right" else outline[0] - off
                 out.append((side, target - cx, 0.0))
     else:
-        corners = [(1, 1), (-1, 1), (1, -1), (-1, -1)]
-        corners.sort(key=lambda c: -((cx - ox) * c[0] + (cy - oy) * c[1]))
-        for sx, sy in corners:
-            for step in range(MAX_STEPS):
-                off = FIRST_OFFSET + step * ROW_PITCH
-                tx = (
-                    (outline[2] + off + w / 2.0)
-                    if sx > 0
-                    else (outline[0] - off - w / 2.0)
-                )
-                ty = (
-                    (outline[3] + off + h / 2.0)
-                    if sy > 0
-                    else (outline[1] - off - h / 2.0)
-                )
-                out.append((f"corner{sx}{sy}", tx - cx, ty - cy))
+        # A leader: step the text outward from the feature it points at,
+        # along each of eight directions, away from the view's centre first.
+        ax, ay = leader_anchor(dim) or (cx, cy)
+        root = 0.5**0.5
+        directions = [
+            (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0),
+            (root, root), (-root, root), (root, -root), (-root, -root),
+        ]  # fmt: skip
+        directions.sort(key=lambda d: -((ax - ox) * d[0] + (ay - oy) * d[1]))
+        for ux, uy in directions:
+            for step in range(2 * MAX_STEPS):
+                reach = FIRST_OFFSET / 2.0 + step * LEADER_STEP
+                tx = ax + ux * reach + math.copysign(w / 2.0, ux or 1.0) * abs(ux)
+                ty = ay + uy * reach + math.copysign(h / 2.0, uy or 1.0) * abs(uy)
+                out.append((f"leader{ux:+.1f}{uy:+.1f}", tx - cx, ty - cy))
     return out
 
 
@@ -445,6 +593,8 @@ def plan_layout(
     outlines: dict[str, Box],
     sheet: Box | None = None,
     obstacles: dict[str, Box] | None = None,
+    fixed: set[str] | None = None,
+    inside_first: set[str] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], list[str]]:
     """Choose a move for every dimension so the overlap rule holds.
 
@@ -453,6 +603,12 @@ def plan_layout(
         outlines: View name -> view outline.
         sheet: Working area of the frame, when known.
         obstacles: Named boxes nothing may touch.
+        fixed: Keys of dimensions that stay where they are: their real text
+            and lines are obstacles. Used to re-plan only what a first pass
+            left in conflict.
+        inside_first: Leader dimensions to try inside their own view first,
+            near the feature (a hole note with its GD&T frame), before
+            outside it; see :func:`clear_inside`.
 
     Returns:
         tuple: ``{key: (dx, dy)}`` moves, and keys that found no free spot
@@ -461,10 +617,17 @@ def plan_layout(
     blocked = list((obstacles or {}).values())
     for dim in dims:
         dim.orientation, dim.span, _ = classify(dim.lines)
-    order = sorted(dims, key=lambda d: (d.view, d.orientation or "z", d.span))
+    keep = fixed or set()
     placed_boxes: list[Box] = []
     placed_lines: list[Segment] = []
-    stack_depth: dict[tuple[str, str], float] = {}
+    for dim in dims:
+        if dim.key in keep:
+            placed_boxes.append(dim.text_box)
+            placed_lines.extend(dim.lines)
+    order = sorted(
+        (d for d in dims if d.key not in keep),
+        key=lambda d: (d.view, d.orientation or "z", d.span),
+    )
     moves: dict[str, tuple[float, float]] = {}
     unplaced: list[str] = []
     for dim in order:
@@ -473,9 +636,21 @@ def plan_layout(
             unplaced.append(dim.key)
             continue
         chosen = None
-        for side, dx, dy in _candidates(dim, outline, stack_depth):
+        candidates = _candidates(dim, outline)
+        if dim.key in (inside_first or set()) and dim.orientation is None:
+            candidates = _inside_candidates(dim, outline) + candidates
+            features = [
+                *feature_points(dims, dim.view, outline, skip=dim.key),
+                leader_anchor(dim),
+            ]
+        for side, dx, dy in candidates:
             box = shift_box(dim.text_box, dx, dy)
-            if any(box_overlap(box, o, TEXT_PADDING) for o in outlines.values()):
+            others = [
+                o for v, o in outlines.items() if side != "inside" or v != dim.view
+            ]
+            if any(box_overlap(box, o, TEXT_PADDING) for o in others):
+                continue
+            if side == "inside" and not clear_inside(box, outline, features):
                 continue
             if any(box_overlap(box, o, TEXT_PADDING) for o in blocked):
                 continue
@@ -488,8 +663,11 @@ def plan_layout(
             segs = _projected_segments(dim, dx, dy, outline)
             if crosses_other_view(segs, dim.view, outlines) is not None:
                 continue
+            clear = LEADER_CLEARANCE if dim.orientation is None else 0.0
             if any(
-                segment_hits_box(s, p) for s in segs for p in placed_boxes + blocked
+                segment_hits_box(s, _grown(p, clear))
+                for s in segs
+                for p in placed_boxes + blocked
             ):
                 continue
             chosen = (side, dx, dy, box, segs)
@@ -499,22 +677,10 @@ def plan_layout(
             placed_boxes.append(dim.text_box)
             placed_lines.extend(dim.lines)
             continue
-        side, dx, dy, box, segs = chosen
+        _side, dx, dy, box, segs = chosen
         moves[dim.key] = (dx, dy)
         placed_boxes.append(box)
         placed_lines.extend(segs)
-        cx, cy = (box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0
-        if side in {"above", "below"}:
-            used = (cy - outline[3]) if side == "above" else (outline[1] - cy)
-            pitch = max(ROW_PITCH, box[3] - box[1] + STACK_GAP)
-        elif side in {"left", "right"}:
-            used = (cx - outline[2]) if side == "right" else (outline[0] - cx)
-            pitch = max(COLUMN_PITCH, box[2] - box[0] + STACK_GAP)
-        else:
-            continue
-        stack_depth[(dim.view, side)] = max(
-            stack_depth.get((dim.view, side), 0.0), used - FIRST_OFFSET + pitch
-        )
     return moves, unplaced
 
 

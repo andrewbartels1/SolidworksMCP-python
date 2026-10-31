@@ -28,6 +28,8 @@ _TOOLS = (
     "insert_bom_table",
     "set_sheet_scale",
     "generate_drawing_package",
+    "add_gtol",
+    "add_datum_tag",
 )
 
 
@@ -80,6 +82,88 @@ class TestDrawingAutomationTools:
         assert arranged["message"] == (
             f"Arranged {3 * views} dimension(s): {3 * views} overlap(s) before, 0 after"
         )
+
+
+class TestGdtTools:
+    """Feature control frames and datum tags against the mock adapter."""
+
+    @pytest.mark.asyncio
+    async def test_frame_and_datum_tags(
+        self, mcp_server, mock_adapter, mock_config, tmp_path: Path
+    ) -> None:
+        await register_drawing_automation_tools(mcp_server, mock_adapter, mock_config)
+        await _drawing_with_views(mock_adapter, tmp_path)
+
+        frame = await (await _tool(mcp_server, "add_gtol"))(
+            {
+                "characteristic": "position",
+                "tolerance": 0.2,
+                "diameter_zone": True,
+                "material_condition": "mmc",
+                "datums": ["A", "B", "C"],
+                "x_mm": 60,
+                "y_mm": 250,
+                "attach_x_mm": 62,
+                "attach_y_mm": 218,
+            }
+        )
+        flat = await (await _tool(mcp_server, "add_gtol"))(
+            {"characteristic": "flatness", "tolerance": 0.05, "x_mm": 1, "y_mm": 2}
+        )
+        half = await (await _tool(mcp_server, "add_gtol"))(
+            {
+                "characteristic": "flatness",
+                "tolerance": 0.05,
+                "x_mm": 1,
+                "y_mm": 2,
+                "attach_x_mm": 5,
+            }
+        )
+        tag = await (await _tool(mcp_server, "add_datum_tag"))(
+            {"label": "a", "attach_x_mm": 1, "attach_y_mm": 2, "x_mm": 3, "y_mm": 4}
+        )
+        on_dimension = await (await _tool(mcp_server, "add_gtol"))(
+            {
+                "characteristic": "position",
+                "tolerance": 0.2,
+                "datums": ["A"],
+                "dimension_view": "Drawing View2",
+                "dimension_name": "D3@Sketch1",
+            }
+        )
+        view_only = await (await _tool(mcp_server, "add_gtol"))(
+            {
+                "characteristic": "position",
+                "tolerance": 0.2,
+                "dimension_view": "Drawing View2",
+            }
+        )
+
+        assert on_dimension["data"]["attached"] == "D3@Sketch1"
+        assert on_dimension["data"]["position_mm"] is None
+        assert view_only["data"]["attached"] is False  # a view alone is no dimension
+        assert frame["message"] == "Added a position frame (0.2 to A|B|C)"
+        assert frame["data"]["attached"] is True
+        assert flat["message"] == "Added a flatness frame (0.05)"
+        assert half["data"]["attached"] is False  # one coordinate is no point
+        assert tag["message"] == "Added datum A"
+
+    @pytest.mark.asyncio
+    async def test_bad_inputs_are_invalid_input(
+        self, mcp_server, mock_adapter, mock_config, tmp_path: Path
+    ) -> None:
+        await register_drawing_automation_tools(mcp_server, mock_adapter, mock_config)
+        await _drawing_with_views(mock_adapter, tmp_path)
+
+        frame = await (await _tool(mcp_server, "add_gtol"))(
+            {"characteristic": "wobble", "tolerance": 0.2, "x_mm": 0, "y_mm": 0}
+        )
+        tag = await (await _tool(mcp_server, "add_datum_tag"))(
+            {"label": "AB", "attach_x_mm": 0, "attach_y_mm": 0, "x_mm": 0, "y_mm": 0}
+        )
+
+        assert frame["error_type"] == "invalid_input"
+        assert tag["error_type"] == "invalid_input"
 
 
 class TestDrawingPackageTools:

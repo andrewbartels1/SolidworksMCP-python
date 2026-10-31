@@ -97,3 +97,8 @@ uv.lock
 
 # Live-demo artefacts produced by scripts/demo_sketches.py
 out/
+
+# Live demo recordings: the raw frames and the README demo's stills are
+# working files; the GIFs and the call transcript are what gets published.
+docs/assets/demos/*/recording/
+docs/assets/demos/readme/*.png

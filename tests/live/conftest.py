@@ -326,6 +326,44 @@ def _pace_live_tests() -> Iterator[None]:
     time.sleep(pace)
 
 
+@pytest.fixture(autouse=True)
+def _record_demo(
+    request: pytest.FixtureRequest, _pace_live_tests: None
+) -> Iterator[None]:
+    """Record the SolidWorks window through the test when ``SW_DEMO_RECORD`` is set.
+
+    Runs after the demo drain (it depends on ``_pace_live_tests``), then
+    counts down ``SW_DEMO_RECORD_COUNTDOWN`` seconds (10 by default) so
+    SolidWorks can be brought to the front: the recorder copies the screen,
+    so the window must stay in front and uncovered. See ``tests/live/recorder.py``.
+    """
+    import time
+
+    from tests.live import recorder
+
+    if not recorder.asked():
+        yield
+        return
+    try:
+        countdown = int(float(os.getenv("SW_DEMO_RECORD_COUNTDOWN", "10")))
+    except ValueError:
+        countdown = 10
+    for left in range(countdown, 0, -1):
+        print(
+            f"[live] recording starts in {left} s: bring SolidWorks to the front "
+            "and leave it uncovered",
+            flush=True,
+        )
+        time.sleep(1)
+    running = recorder.start_if_asked(request.node.name)
+    print("[live] recording", flush=True)
+    try:
+        yield
+    finally:
+        if running is not None:
+            recorder.stop(running)
+
+
 @pytest_asyncio.fixture
 async def live_adapter() -> AsyncIterator[object]:
     """A connected ``PyWin32Adapter``; disconnected on teardown."""
