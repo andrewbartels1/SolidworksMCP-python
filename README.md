@@ -12,6 +12,31 @@
 
 Python MCP server for SolidWorks automation with 154 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
+## See it work
+
+> Make a 100 x 50 x 10 mm AISI 1020 mounting plate with four M5 clearance holes, 10 mm in from each edge, and draw it fully dimensioned. Stack two of them 10 mm apart, check the result, and draw the assembly with a BOM.
+
+![A fully dimensioned plate, its drawing with GD&T, two plates mated 10 mm apart and the assembly drawing with a BOM, built in SolidWorks through the MCP tools](docs/assets/demos/readme/test_plate_stack_from_prompt_to_drawing-motion.gif)
+
+The 58 tool calls an agent makes for that prompt, run against SolidWorks 2026 through the same MCP tools a client calls, and recorded (sped up five times). Each result is checked against a hand calculation: the plate's volume and mass, the 10 mm gap and the BOM quantity. This is a replay of the calls, not a recorded model session.
+
+> **Note:** the demo is not perfect, and is not the most efficient way to get this result. The run pauses after each call so it can be read, and the calls are chosen to show what the tools can do: every sketch dimension is added one at a time, and the mate distance is stepped down only so the plates are seen coming together.
+
+Run it yourself with the [README demo](tests/live/test_live_sw_readme_demo.py); the calls and their arguments are in [`plate_stack_calls.json`](docs/assets/demos/readme/plate_stack_calls.json).
+
+<details>
+<summary>The 58 tool calls</summary>
+
+1. **Sketch** (24 calls): `create_sketch` on Top; four `add_line` for the 100 x 50 outline; `add_circle` for each Ø5.5 hole; `add_sketch_dimension` for the 100, the 50, one Ø5.5 and each hole 10 mm from two edges; `add_sketch_constraint` making the other three holes equal; `exit_sketch`
+2. **Check and extrude**: `check_sketch_fully_defined`, `create_extrusion` 10 mm (+49 049.7 mm³ read back)
+3. **Material and check**: `list_model_dimensions` (finds the Ø5.5 by value), `set_material` AISI 1020, `verify_model` (volume, mass 0.3875 kg, size, 1 feature, 1 body)
+4. **Plate drawing**: `generate_drawing_package` PS-01 (A3, four views, every model dimension laid out with no overlaps, notes, title block, PDF), `auto_center_marks`
+5. **GD&T**: `add_datum_tag` A, B and C, then `add_gtol` ⊕ Ø0.2 Ⓜ A|B|C on the Ø5.5
+6. **Assembly**: `insert_component` twice, `list_components`, `add_mate` Front and Right coincident and Top planes 60 mm apart, `set_dimension` stepping that distance down to 20 mm (10 calls), `verify_model` (2 parts, 3 mates, no interference; the stack measures 30 mm, so the gap is 10 mm)
+7. **Assembly drawing**: `set_custom_property` Material, `generate_drawing_package` PS-02 with `include_bom` (the BOM above the isometric: Demo Plate, QTY 2), then the same datums and position frame
+
+</details>
+
 ## Overview
 
 > **Tried it?** Tell us what worked and what didn't in a [feedback issue](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=feedback.yml). Reports from real setups decide what gets fixed next.
@@ -37,7 +62,7 @@ Each demo below drives a real SolidWorks session through the same tools an MCP c
 
 | Demo | What it builds | Run it |
 | --- | --- | --- |
-| [README demo](tests/live/test_live_sw_readme_demo.py) | A prompt answered end to end: a fully dimensioned AISI 1020 plate checked with `verify_model`, its drawing, then two plates stacked 10 mm apart with an assembly drawing and BOM | `powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 -Test tests/live/test_live_sw_readme_demo.py` |
+| [README demo](tests/live/test_live_sw_readme_demo.py) | A prompt answered end to end: a fully dimensioned AISI 1020 plate checked with `verify_model`, its drawing with GD&T, then two plates stacked 10 mm apart with an assembly drawing and BOM. `-Record` records it as the GIF above | `powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 -Test tests/live/test_live_sw_readme_demo.py -CaptureDir docs/assets/demos/readme -Record` |
 | [Sketches](scripts/demo_sketches.py) | A decorative plate using every sketch tool: splines, arcs, polygons, ellipses, patterns, mirror, offset | `.\.venv\Scripts\python.exe scripts\demo_sketches.py` |
 | [Features](scripts/demo_features.py) | A revolved ring with a cut slot, a fillet and a chamfer | `.\.venv\Scripts\python.exe scripts\demo_features.py` |
 | [Sweep and loft](scripts/demo_sweep_loft.py) | A lofted cone and a swept coil spring in one multibody part | `.\.venv\Scripts\python.exe scripts\demo_sweep_loft.py` |
