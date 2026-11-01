@@ -2265,15 +2265,23 @@ def test_cut_extrude_on_sw_2026_uses_the_27_input_signature() -> None:
     assert len(calls[0]) == 27
 
 
-@pytest.mark.parametrize("impl", ["_add_fillet_impl", "_add_chamfer_impl"])
+@pytest.mark.parametrize(
+    ("impl", "helper"),
+    [
+        # A fillet expands the face to its edges (FeatureFillet3 builds
+        # nothing from a bare face); a chamfer selects the face itself.
+        ("_add_fillet_impl", "_select_face_edges_by_coord"),
+        ("_add_chamfer_impl", "_select_edge_by_coord"),
+    ],
+)
 def test_fillet_and_chamfer_pick_coordinate_specs_by_nearest_entity(
-    monkeypatch, impl: str
+    monkeypatch, impl: str, helper: str
 ) -> None:
     picks: list[tuple] = []
     monkeypatch.setattr(
         features,
-        "_select_edge_by_coord",
-        lambda _adapter, x, y, z, append=False, mark=0, entity_type="EDGE": (
+        helper,
+        lambda _adapter, x, y, z, append=False, entity_type="FACE", **_kw: (
             picks.append((x, y, z, append, entity_type)) and False
         ),
     )
@@ -2590,3 +2598,456 @@ class TestMirrorAndPatternImplOutcomes:
         args = manager.FeatureCircularPattern5.call_args.args
         assert args[0] == 6
         assert args[1] == pytest.approx(math.pi)
+
+
+# ---- create_extrusion end conditions -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("end_condition", "both_directions", "expected"),
+    [
+        ("Blind", False, ("Blind", 0)),
+        ("", False, ("Blind", 0)),
+        ("MidPlane", False, ("MidPlane", 6)),
+        ("mid_plane", False, ("MidPlane", 6)),
+        ("Mid Plane", False, ("MidPlane", 6)),
+        ("Blind", True, ("MidPlane", 6)),
+        ("through-all", False, ("ThroughAll", 1)),
+        ("UpToNext", False, ("UpToNext", 2)),
+    ],
+)
+def test_extrusion_end_condition_names(
+    monkeypatch, end_condition: str, both_directions: bool, expected: tuple
+) -> None:
+    adapter = _build_adapter(monkeypatch)
+    assert (
+        features._extrusion_end_condition(adapter, end_condition, both_directions)
+        == expected
+    )
+
+
+def test_extrusion_end_condition_rejects_unknown_names(monkeypatch) -> None:
+    adapter = _build_adapter(monkeypatch)
+    with pytest.raises(ValueError, match="UpToSurface.*Blind, MidPlane"):
+        features._extrusion_end_condition(adapter, "UpToSurface", False)
+
+
+def _extrusion_adapter(**manager: Any) -> _FakeFeatureAdapter:
+    adapter = _FakeFeatureAdapter()
+    adapter.constants.update(swEndCondMidPlane=6, swEndCondUpToNext=2)
+    adapter.currentModel = SimpleNamespace(FeatureManager=SimpleNamespace(**manager))
+    return adapter
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        ExtrusionParameters(depth=12.0, both_directions=True),
+        ExtrusionParameters(depth=12.0, end_condition="MidPlane"),
+    ],
+)
+def test_solid_extrusion_honours_mid_plane(params: ExtrusionParameters) -> None:
+    """The solid branch used to pass swEndCondBlind whatever was asked."""
+    calls: list[tuple] = []
+    adapter = _extrusion_adapter(
+        FeatureExtrusion3=lambda *a: calls.append(a) or SimpleNamespace(Name="Boss1")
+    )
+
+    result = features._create_extrusion_impl(adapter, params)
+
+    assert result.is_success, result.error
+    assert calls[0][3] == 6  # T1 = swEndCondMidPlane
+    assert calls[0][5] == pytest.approx(0.012)  # total depth, split by SW
+    assert result.data.parameters["end_condition"] == "MidPlane"
+
+
+def test_legacy_solid_extrusion_also_honours_mid_plane() -> None:
+    calls: list[tuple] = []
+
+    def _modern(*_a):
+        raise AttributeError("FeatureExtrusion3")
+
+    adapter = _extrusion_adapter(
+        FeatureExtrusion3=_modern,
+        FeatureExtrusion2=lambda *a: calls.append(a) or SimpleNamespace(Name="Boss1"),
+    )
+
+    result = features._create_extrusion_impl(
+        adapter, ExtrusionParameters(depth=5.0, both_directions=True)
+    )
+
+    assert result.is_success, result.error
+    assert calls[0][3] == 6
+
+
+def test_thin_extrusion_uses_the_same_end_condition() -> None:
+    calls: list[tuple] = []
+    adapter = _extrusion_adapter(
+        FeatureExtrusionThin2=lambda *a: (
+            calls.append(a) or SimpleNamespace(Name="Thin1")
+        )
+    )
+
+    result = features._create_extrusion_impl(
+        adapter,
+        ExtrusionParameters(
+            depth=5.0, thin_feature=True, thin_thickness=1.0, end_condition="MidPlane"
+        ),
+    )
+
+    assert result.is_success, result.error
+    assert calls[0][3] == 6
+
+
+def test_extrusion_with_an_unsupported_end_condition_fails_clearly() -> None:
+    adapter = _extrusion_adapter(FeatureExtrusion3=Mock())
+
+    result = features._create_extrusion_impl(
+        adapter, ExtrusionParameters(depth=5.0, end_condition="Sideways")
+    )
+
+    assert result.is_error
+    assert "Unsupported extrusion end_condition 'Sideways'" in (result.error or "")
+    adapter.currentModel.FeatureManager.FeatureExtrusion3.assert_not_called()
+
+
+# ---- coordinate picks: nearest by closest point on the curve -------------------
+
+
+class _Segment:
+    """A straight fake ``IEdge`` from ``a`` to ``b`` (metres)."""
+
+    def __init__(self, name: str, a: tuple, b: tuple, selects: bool = True) -> None:
+        self.name, self.a, self.b, self._selects = name, a, b, selects
+        self.selected_with: list[tuple] = []
+
+    def GetClosestPointOn(self, x, y, z):
+        ab = [b - a for a, b in zip(self.a, self.b, strict=True)]
+        ap = [p - a for a, p in zip(self.a, (x, y, z), strict=True)]
+        t = sum(u * v for u, v in zip(ab, ap, strict=True)) / sum(u * u for u in ab)
+        t = min(1.0, max(0.0, t))
+        return [a + t * d for a, d in zip(self.a, ab, strict=True)] + [t]
+
+    def Select4(self, append, data):
+        self.selected_with.append((append, data))
+        return self._selects
+
+
+class _Face:
+    """A fake ``IFace2`` whose closest point is fixed, with its edges."""
+
+    def __init__(self, edges: list[_Segment], closest: tuple) -> None:
+        self.edges, self.closest = edges, closest
+        self.selected_with: list[tuple] = []
+
+    def GetClosestPointOn(self, *_point):
+        return list(self.closest)
+
+    def GetEdges(self):
+        return tuple(self.edges)
+
+    def Select4(self, append, data):
+        self.selected_with.append((append, data))
+        return True
+
+
+def _plate_edges() -> list[_Segment]:
+    """Edges of a 40 x 20 x 12 mm plate centred on z=0, front edges first.
+
+    The front (z=+6) edges are listed before the back (z=-6) ones, so a pick
+    that matched on x/y alone - which is what a view pick down -Z amounts
+    to - would always land on the front edge.
+    """
+    edges = []
+    for z in (0.006, -0.006):
+        tag = "front" if z > 0 else "back"
+        edges += [
+            _Segment(f"{tag}-bottom", (0.0, 0.0, z), (0.04, 0.0, z)),
+            _Segment(f"{tag}-right", (0.04, 0.0, z), (0.04, 0.02, z)),
+            _Segment(f"{tag}-top", (0.04, 0.02, z), (0.0, 0.02, z)),
+            _Segment(f"{tag}-left", (0.0, 0.02, z), (0.0, 0.0, z)),
+        ]
+    return edges
+
+
+def _picking_adapter(edges=(), faces=()) -> _FakeFeatureAdapter:
+    adapter = _FakeFeatureAdapter()
+    body = SimpleNamespace(
+        GetEdges=Mock(return_value=tuple(edges)),
+        GetFaces=Mock(return_value=tuple(faces)),
+    )
+    select_data = SimpleNamespace(Mark=0)
+    adapter.currentModel = SimpleNamespace(
+        GetBodies2=Mock(return_value=(body,)),
+        ForceRebuild3=Mock(return_value=True),
+        ClearSelection2=Mock(return_value=True),
+        SelectionManager=SimpleNamespace(CreateSelectData=lambda: select_data),
+        Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
+    )
+    adapter.body = body
+    adapter.select_data = select_data
+    return adapter
+
+
+def test_edge_pick_resolves_back_edges_hidden_behind_front_ones() -> None:
+    """Midpoints of the z=-6 edges select the z=-6 edges, never their z=+6 twins."""
+    edges = _plate_edges()
+    adapter = _picking_adapter(edges)
+    picker = features._BodyEntityPicker(adapter)
+
+    for midpoint, name in [
+        ((0.02, 0.0, -0.006), "back-bottom"),
+        ((0.04, 0.01, -0.006), "back-right"),
+        ((0.02, 0.02, -0.006), "back-top"),
+        ((0.0, 0.01, -0.006), "back-left"),
+        ((0.02, 0.0, 0.006), "front-bottom"),
+    ]:
+        assert features._select_edge_by_coord(
+            adapter, *midpoint, append=True, picker=picker
+        )
+        chosen = [e for e in edges if e.selected_with]
+        assert [e.name for e in chosen] == [name]
+        chosen[0].selected_with.clear()
+
+    adapter.currentModel.Extension.SelectByID2.assert_not_called()
+    adapter.body.GetEdges.assert_called_once()  # one body walk for every pick
+
+
+def test_edge_pick_measures_to_the_curve_not_its_vertices_or_midpoint() -> None:
+    """A point on a long edge, far from its ends and middle, still picks it
+    over a short neighbour whose vertex is 1.4 mm away."""
+    long_edge = _Segment("long", (-0.1, 0.0, 0.0), (0.1, 0.0, 0.0))
+    short_edge = _Segment("short", (0.041, 0.001, 0.0), (0.045, 0.001, 0.0))
+    adapter = _picking_adapter([short_edge, long_edge])
+
+    nearest = features._BodyEntityPicker(adapter).nearest("GetEdges", (0.04, 0, 0))
+
+    assert nearest is not None
+    assert nearest[0] is long_edge
+    assert nearest[1] == pytest.approx(0.0)
+
+
+def test_edge_pick_selects_with_select4_under_the_requested_mark() -> None:
+    edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
+    adapter = _picking_adapter([edge])
+
+    assert features._select_edge_by_coord(adapter, 0.005, 0.0, 0.0, False, mark=2)
+
+    assert edge.selected_with == [(False, adapter.select_data)]
+    assert adapter.select_data.Mark == 2
+    adapter.currentModel.ForceRebuild3.assert_called_once_with(True)
+
+
+def test_edge_pick_refuses_a_point_that_is_on_no_edge() -> None:
+    edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
+    adapter = _picking_adapter([edge])
+
+    with pytest.raises(LookupError, match=r"nearest is 2\.000 mm away"):
+        features._select_edge_by_coord(adapter, 0.005, 0.002, 0.0, append=False)
+    assert edge.selected_with == []
+
+
+def test_edge_pick_skips_entities_whose_closest_point_is_unreadable() -> None:
+    broken = SimpleNamespace(GetClosestPointOn=Mock(side_effect=RuntimeError("x")))
+    short = SimpleNamespace(GetClosestPointOn=lambda *_p: [0.0, 0.0])
+    edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
+    adapter = _picking_adapter([broken, short, edge])
+
+    nearest = features._BodyEntityPicker(adapter).nearest("GetEdges", (0.0, 0, 0))
+
+    assert nearest == (edge, 0.0)
+
+
+def test_edge_pick_fails_when_no_select_data_can_be_made() -> None:
+    edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
+    adapter = _picking_adapter([edge])
+    adapter.currentModel.SelectionManager = SimpleNamespace(
+        CreateSelectData=lambda: None
+    )
+
+    assert not features._select_edge_by_coord(adapter, 0.0, 0.0, 0.0, append=False)
+    assert edge.selected_with == []
+
+
+def test_vertex_pick_uses_select_by_id_never_an_edge() -> None:
+    """A corner lies on its edges at distance 0, so the edge walk would pick an
+    edge; vertices go to SelectByID2 with the VERTEX type instead."""
+    edges = _plate_edges()
+    adapter = _picking_adapter(edges)
+    adapter.currentModel.Extension.SelectByID2.return_value = True
+
+    assert features._select_edge_by_coord(
+        adapter, 0.0, 0.0, 0.006, append=True, entity_type="VERTEX"
+    )
+
+    assert [e.name for e in edges if e.selected_with] == []
+    assert adapter.currentModel.Extension.SelectByID2.call_args.args[:5] == (
+        "",
+        "VERTEX",
+        0.0,
+        0.0,
+        0.006,
+    )
+    adapter.body.GetEdges.assert_not_called()
+
+
+def test_face_pick_selects_the_face_itself() -> None:
+    face = _Face([], (0.01, 0.0, 0.0))
+    adapter = _picking_adapter(faces=[face])
+
+    assert features._select_edge_by_coord(
+        adapter, 0.01, 0.0, 0.0, append=False, entity_type="FACE"
+    )
+    assert face.selected_with == [(False, adapter.select_data)]
+
+
+# ---- fillet: face specs and proof that something was built ---------------------
+
+
+def test_face_edges_pick_selects_every_edge_of_the_face() -> None:
+    edges = _plate_edges()[:4]
+    face = _Face(edges, (0.02, 0.01, 0.006))
+    adapter = _picking_adapter(edges, [face])
+    picker = features._BodyEntityPicker(adapter)
+
+    assert features._select_face_edges_by_coord(
+        adapter, 0.02, 0.01, 0.006, append=False, picker=picker
+    )
+
+    assert [e.selected_with[0][0] for e in edges] == [False, True, True, True]
+    assert face.selected_with == []
+    adapter.currentModel.ForceRebuild3.assert_called_once_with(True)
+
+
+@pytest.mark.parametrize(
+    ("faces", "outcome"),
+    [
+        ([], False),  # no readable face
+        ([_Face([], (0.0, 0.0, 0.0))], False),  # face without edges
+        (
+            [_Face([_Segment("e", (0, 0, 0), (1, 0, 0), selects=False)], (0, 0, 0))],
+            False,
+        ),  # an edge refuses to select
+        ([_Face([], (0.0, 0.0, 0.01))], LookupError),  # 10 mm away
+    ],
+)
+def test_face_edges_pick_failures(faces, outcome) -> None:
+    adapter = _picking_adapter(faces=faces)
+    picker = features._BodyEntityPicker(adapter)
+
+    if outcome is LookupError:
+        with pytest.raises(LookupError, match="No face passes through"):
+            features._select_face_edges_by_coord(adapter, 0, 0, 0, True, picker)
+    else:
+        assert (
+            features._select_face_edges_by_coord(adapter, 0, 0, 0, True, picker)
+            is outcome
+        )
+
+
+def _sw2026_fillet_adapter(counts: list, edges=(), faces=()) -> _FilletAdapterSW2026:
+    adapter = _FilletAdapterSW2026()
+    adapter.currentModel = _picking_adapter(edges, faces).currentModel
+    adapter.swApp = SimpleNamespace(RevisionNumber="34.0.0")
+    adapter.currentModel.FeatureFillet3 = Mock(return_value=1)
+    adapter.currentModel.FeatureManager = SimpleNamespace(
+        GetFeatureCount=lambda _top: counts.pop(0) if counts else None
+    )
+    return adapter
+
+
+def test_fillet_that_adds_no_feature_is_an_error() -> None:
+    """FeatureFillet3 returning 1 is not proof: the tree must grow."""
+    edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
+    adapter = _sw2026_fillet_adapter([7, 7], edges=[edge])
+
+    result = features._add_fillet_impl(adapter, 1.0, ["0.005,0,0"])
+
+    assert result.is_error
+    assert "no fillet feature was added" in (result.error or "")
+    assert "stayed at 7" in (result.error or "")
+
+
+def test_fillet_on_a_face_spec_fillets_the_face_edges() -> None:
+    edges = _plate_edges()[:4]
+    face = _Face(edges, (0.02, 0.01, 0.006))
+    adapter = _sw2026_fillet_adapter([7, 8], edges=edges, faces=[face])
+
+    result = features._add_fillet_impl(adapter, 1.0, ["face:0.02,0.01,0.006"])
+
+    assert result.is_success, result.error
+    assert all(e.selected_with for e in edges)
+    assert face.selected_with == []
+    adapter.currentModel.FeatureFillet3.assert_called_once()
+
+
+def _volume(value: float | None) -> AdapterResult:
+    if value is None:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="no mass")
+    return AdapterResult(
+        status=AdapterResultStatus.SUCCESS, data=SimpleNamespace(volume=value)
+    )
+
+
+def _fillet_feature() -> AdapterResult:
+    return AdapterResult(
+        status=AdapterResultStatus.SUCCESS,
+        data=features.SolidWorksFeature(
+            name="Fillet", type="Fillet", id="", parameters={}, properties={}
+        ),
+    )
+
+
+class TestAddFilletVolumeCheck:
+    """The async layer compares volume before and after, like mirror_feature."""
+
+    @pytest.mark.asyncio
+    async def test_unchanged_volume_is_an_error(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.get_mass_properties = AsyncMock(return_value=_volume(4800.0))
+        monkeypatch.setattr(features, "_add_fillet_impl", lambda *_a: _fillet_feature())
+
+        result = await adapter.add_fillet(1.0, ["face:0,0,0"])
+
+        assert result.is_error
+        assert "The fillet changed nothing" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_changed_volume_is_reported(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.get_mass_properties = AsyncMock(
+            side_effect=[_volume(4800.0), _volume(4797.4)]
+        )
+        monkeypatch.setattr(features, "_add_fillet_impl", lambda *_a: _fillet_feature())
+
+        result = await adapter.add_fillet(1.0, ["0,0,0"])
+
+        assert result.is_success
+        assert result.data.properties["volume_before"] == 4800.0
+        assert result.data.properties["volume_after"] == 4797.4
+
+    @pytest.mark.parametrize("volumes", [[None], [4800.0, None]])
+    @pytest.mark.asyncio
+    async def test_unreadable_volume_trusts_the_feature_count(
+        self, monkeypatch, volumes
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.get_mass_properties = AsyncMock(
+            side_effect=[_volume(v) for v in volumes]
+        )
+        monkeypatch.setattr(features, "_add_fillet_impl", lambda *_a: _fillet_feature())
+
+        result = await adapter.add_fillet(1.0, ["0,0,0"])
+
+        assert result.is_success
+        assert "volume_before" not in result.data.properties
+
+    @pytest.mark.asyncio
+    async def test_a_failed_fillet_is_returned_unchanged(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.get_mass_properties = AsyncMock(return_value=_volume(4800.0))
+        failed = AdapterResult(status=AdapterResultStatus.ERROR, error="nope")
+        monkeypatch.setattr(features, "_add_fillet_impl", lambda *_a: failed)
+
+        assert await adapter.add_fillet(1.0, ["0,0,0"]) is failed
+        adapter.get_mass_properties.assert_awaited_once()

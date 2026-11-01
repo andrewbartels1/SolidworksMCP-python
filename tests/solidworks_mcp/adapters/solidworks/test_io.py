@@ -33,6 +33,9 @@ class _IOHarness(SolidWorksIOMixin):
 
 
 import inspect
+import struct
+import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, call
 
 import pytest
@@ -40,6 +43,7 @@ import pytest
 import solidworks_mcp.adapters.pywin32_adapter as pywin32_mod
 from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+from solidworks_mcp.adapters.solidworks import bitmap as _io_bitmap
 from solidworks_mcp.adapters.solidworks.io import (
     SolidWorksIOMixin,
     _apply_unit_system,
@@ -706,6 +710,18 @@ async def test_save_body_as_part_needs_an_existing_parent_folder(tmp_path) -> No
     )
 
     assert result.error == f"Parent directory does not exist: {missing}"
+
+
+def _write_bmp(path, width: int, height: int) -> None:
+    """Write a grey 24-bit BMP, standing in for IModelDoc2.SaveBMP."""
+    stride = (width * 3 + 3) & ~3
+    pixels = bytes([0x80] * width * 3 + [0] * (stride - width * 3)) * height
+    header = struct.pack(
+        "<2sIHHIIiiHHIIiiII",
+        *(b"BM", 54 + len(pixels), 0, 0, 54, 40, width, height, 1, 24, 0),
+        *(len(pixels), 2835, 2835, 0, 0),
+    )
+    Path(path).write_bytes(header + pixels)
 
 
 def _build_adapter(monkeypatch) -> PyWin32Adapter:
@@ -2387,130 +2403,43 @@ class TestPyWin32AdapterBranches:
         assert target_doc.ShowNamedView2.called
 
     @pytest.mark.asyncio
-    async def test_zoom_to_fit_calls_view_zoom_to_fit2_success(
+    async def test_zoom_to_fit_redraws_around_view_zoomtofit2(
         self, monkeypatch
     ) -> None:
-        """_zoom_to_fit should call ViewZoomToFit2 and succeed."""
+        """_zoom_to_fit calls the real ViewZoomtofit2, between two redraws."""
         adapter = self._build_adapter(monkeypatch)
-        active_view = SimpleNamespace(ZoomToFit=Mock())
-        target_doc = SimpleNamespace(ViewZoomToFit2=Mock(), ActiveView=active_view)
-        adapter._zoom_to_fit(target_doc)
-        target_doc.ViewZoomToFit2.assert_called_once()
-        active_view.ZoomToFit.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_zoom_to_fit_falls_back_to_active_view_zoom_to_fit(
-        self, monkeypatch
-    ) -> None:
-        """_zoom_to_fit should fall back to ActiveView.ZoomToFit on failure."""
-        adapter = self._build_adapter(monkeypatch)
-        active_view = SimpleNamespace(ZoomToFit=Mock())
+        calls: list[str] = []
         target_doc = SimpleNamespace(
-            ViewZoomToFit2=Mock(side_effect=RuntimeError("COM error")),
-            ActiveView=active_view,
+            GraphicsRedraw2=lambda: calls.append("redraw"),
+            ViewZoomtofit2=lambda: calls.append("zoom2"),
+            ViewZoomtofit=lambda: calls.append("zoom"),
         )
         adapter._zoom_to_fit(target_doc)
-        assert target_doc.ViewZoomToFit2.called
-        assert active_view.ZoomToFit.called
+        assert calls == ["redraw", "zoom2", "redraw"]
 
     @pytest.mark.asyncio
-    async def test_zoom_to_fit_both_fail_logs_warning(
-        self, monkeypatch, caplog
-    ) -> None:
-        """_zoom_to_fit should log warning if both zoom methods fail."""
+    async def test_zoom_to_fit_falls_back_to_view_zoomtofit(self, monkeypatch) -> None:
+        """_zoom_to_fit falls back to ViewZoomtofit when the 2 variant fails."""
         adapter = self._build_adapter(monkeypatch)
-        active_view = SimpleNamespace(
-            ZoomToFit=Mock(side_effect=RuntimeError("COM error"))
-        )
         target_doc = SimpleNamespace(
-            ViewZoomToFit2=Mock(side_effect=RuntimeError("COM error")),
-            ActiveView=active_view,
+            GraphicsRedraw2=Mock(),
+            ViewZoomtofit2=Mock(side_effect=RuntimeError("COM error")),
+            ViewZoomtofit=Mock(),
         )
         adapter._zoom_to_fit(target_doc)
-        assert target_doc.ViewZoomToFit2.called
-        assert active_view.ZoomToFit.called
+        target_doc.ViewZoomtofit.assert_called_once()
+        assert target_doc.GraphicsRedraw2.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_save_screenshot_with_modelview_success(
-        self, monkeypatch, tmp_path
-    ) -> None:
-        """_save_screenshot_with_modelview should return True when file created."""
-        adapter = self._build_adapter(monkeypatch)
-        test_file = tmp_path / "test.png"
-        test_file.touch()
-        model_view = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
-        result = adapter._save_screenshot_with_modelview(
-            model_view, str(test_file), 1280, 720
-        )
-        assert result is True
-        model_view.SaveBitmapWithVariableSize.assert_called_once_with(
-            str(test_file), 1280, 720
-        )
-
-    @pytest.mark.asyncio
-    async def test_save_screenshot_with_modelview_file_not_exists(
-        self, monkeypatch
-    ) -> None:
-        """_save_screenshot_with_modelview should return False if file doesn't exist."""
-        adapter = self._build_adapter(monkeypatch)
-        model_view = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
-        result = adapter._save_screenshot_with_modelview(
-            model_view, "/nonexistent/file.png", 1280, 720
-        )
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_save_screenshot_with_modelview_exception(self, monkeypatch) -> None:
-        """_save_screenshot_with_modelview should return False on exception."""
-        adapter = self._build_adapter(monkeypatch)
-        model_view = SimpleNamespace(
-            SaveBitmapWithVariableSize=Mock(side_effect=RuntimeError("COM error"))
-        )
-        result = adapter._save_screenshot_with_modelview(
-            model_view, "/path/file.png", 1280, 720
-        )
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_save_screenshot_with_targetdoc_success(
-        self, monkeypatch, tmp_path
-    ) -> None:
-        """_save_screenshot_with_targetdoc should return True when file created."""
-        adapter = self._build_adapter(monkeypatch)
-        test_file = tmp_path / "test.png"
-        test_file.touch()
-        target_doc = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
-        result = adapter._save_screenshot_with_targetdoc(
-            target_doc, str(test_file), 1280, 720
-        )
-        assert result is True
-        target_doc.SaveBitmapWithVariableSize.assert_called_once_with(
-            str(test_file), 1280, 720
-        )
-
-    @pytest.mark.asyncio
-    async def test_save_screenshot_with_targetdoc_file_not_exists(
-        self, monkeypatch
-    ) -> None:
-        """_save_screenshot_with_targetdoc should return False if file doesn't exist."""
-        adapter = self._build_adapter(monkeypatch)
-        target_doc = SimpleNamespace(SaveBitmapWithVariableSize=Mock(return_value=True))
-        result = adapter._save_screenshot_with_targetdoc(
-            target_doc, "/nonexistent/file.png", 1280, 720
-        )
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_save_screenshot_with_targetdoc_exception(self, monkeypatch) -> None:
-        """_save_screenshot_with_targetdoc should return False on exception."""
+    async def test_zoom_to_fit_both_fail_logs_warning(self, monkeypatch) -> None:
+        """_zoom_to_fit should not raise if both zoom methods fail."""
         adapter = self._build_adapter(monkeypatch)
         target_doc = SimpleNamespace(
-            SaveBitmapWithVariableSize=Mock(side_effect=RuntimeError("COM error"))
+            ViewZoomtofit2=Mock(side_effect=RuntimeError("COM error")),
+            ViewZoomtofit=Mock(side_effect=RuntimeError("COM error")),
         )
-        result = adapter._save_screenshot_with_targetdoc(
-            target_doc, "/path/file.png", 1280, 720
-        )
-        assert result is False
+        adapter._zoom_to_fit(target_doc)
+        assert target_doc.ViewZoomtofit.called
 
     @pytest.mark.asyncio
     async def test_save_screenshot_with_saveas3_success(
@@ -2690,14 +2619,14 @@ class TestPyWin32AdapterBranches:
         adapter = self._build_adapter(monkeypatch)
         output_file = tmp_path / "shot.png"
 
-        def _save_bitmap(path, *_args):
-            output_file.write_text("image", encoding="utf-8")
+        def _save_bmp(path, width, height):
+            _write_bmp(path, width, height)
             return True
 
         target_doc = SimpleNamespace(
-            SaveBitmapWithVariableSize=Mock(side_effect=_save_bitmap),
+            SaveBMP=Mock(side_effect=_save_bmp),
             ShowNamedView2=Mock(),
-            ViewZoomToFit2=Mock(),
+            ViewZoomtofit2=Mock(),
             GetTitle=Mock(return_value="shot.SLDPRT"),
             GetPathName=Mock(return_value=""),
         )
@@ -2721,9 +2650,15 @@ class TestPyWin32AdapterBranches:
         assert result.data["file_path"] == str(output_file)
         assert result.data["format"] == "PNG"
         assert result.data["dimensions"] == "640x480"
+        assert result.data["requested_dimensions"] == "640x480"
         assert result.data["view"] == "front"
+        assert output_file.read_bytes().startswith(b"\x89PNG")
+        assert not (tmp_path / "shot.sizing.bmp").exists()
+        target_doc.SaveBMP.assert_called_once_with(
+            str(tmp_path / "shot.sizing.bmp"), 640, 480
+        )
         target_doc.ShowNamedView2.assert_called_once_with("", 1)
-        target_doc.ViewZoomToFit2.assert_called_once()
+        target_doc.ViewZoomtofit2.assert_called_once()
         adapter.swApp.ActivateDoc3.assert_called_once()
         assert adapter.swApp.ActivateDoc3.call_args[0][0] == "shot.SLDPRT"
 
@@ -3106,12 +3041,7 @@ class TestPyWin32AdapterBranches:
 
         monkeypatch.setattr(
             adapter,
-            "_save_screenshot_with_modelview",
-            lambda *_args, **_kwargs: False,
-        )
-        monkeypatch.setattr(
-            adapter,
-            "_save_screenshot_with_targetdoc",
+            "_save_screenshot_sized",
             lambda *_args, **_kwargs: False,
         )
         monkeypatch.setattr(
@@ -4132,3 +4062,109 @@ async def test_save_body_as_part_writes_the_file(tmp_path, monkeypatch) -> None:
         "solid_bodies": ["Body1"],
     }
     assert target.read_bytes() == b"body"
+
+
+# ---- export_image: SaveBMP at the requested size --------------------------------
+
+
+def _bmp_doc(writes: bool | str = True) -> SimpleNamespace:
+    """A doc whose SaveBMP writes a real BMP (True), junk ("junk") or nothing."""
+
+    def _save(path, width, height):
+        if writes == "junk":
+            Path(path).write_bytes(b"not a bitmap")
+        elif writes:
+            _write_bmp(path, width, height)
+        return bool(writes)
+
+    return SimpleNamespace(SaveBMP=Mock(side_effect=_save))
+
+
+@pytest.mark.parametrize(
+    ("frame", "rendered"),
+    [
+        ((2273, 1324), (320, 186)),  # wide window: render 320x186, pad rows
+        ((1000, 1000), (200, 200)),  # square window: render 200x200, pad columns
+        ((0, 1324), (320, 200)),  # unreadable frame: render as asked
+    ],
+)
+def test_sized_screenshot_renders_at_the_window_aspect(
+    monkeypatch, tmp_path, frame, rendered
+) -> None:
+    """SaveBMP keeps the window's framing, so it renders at that aspect and
+    the picture is padded to the requested size instead of cropping."""
+    adapter = _build_adapter(monkeypatch)
+    out = tmp_path / "shot.bmp"
+    doc = _bmp_doc()
+    doc.ActiveView = SimpleNamespace(FrameWidth=frame[0], FrameHeight=frame[1])
+
+    assert adapter._save_screenshot_sized(doc, str(out), 320, 200)
+
+    doc.SaveBMP.assert_called_once_with(str(tmp_path / "shot.sizing.bmp"), *rendered)
+    assert _io_bitmap.image_size(out) == (320, 200)
+    assert [p.name for p in tmp_path.iterdir()] == ["shot.bmp"]
+
+
+@pytest.mark.parametrize(
+    ("name", "writes", "pillow"),
+    [
+        ("shot.tif", True, True),  # no sized path for this format
+        ("shot.png", False, True),  # SaveBMP refused
+        ("shot.png", "junk", True),  # SaveBMP wrote something unreadable
+        ("shot.jpg", True, False),  # JPEG needs Pillow
+    ],
+)
+def test_sized_screenshot_falls_back_cleanly(
+    monkeypatch, tmp_path, name, writes, pillow
+) -> None:
+    adapter = _build_adapter(monkeypatch)
+    if not pillow:
+        monkeypatch.setitem(sys.modules, "PIL", None)
+    doc = _bmp_doc(writes)
+
+    assert not adapter._save_screenshot_sized(doc, str(tmp_path / name), 320, 200)
+    assert list(tmp_path.iterdir()) == []  # no output, no temporary BMP left
+
+
+@pytest.mark.asyncio
+async def test_export_image_reports_the_size_actually_written(
+    monkeypatch, tmp_path
+) -> None:
+    """When SaveBMP fails, SaveAs3 writes the window's size - say so."""
+    adapter = _build_adapter(monkeypatch)
+    output_file = tmp_path / "shot.bmp"
+
+    def _save_as(path, *_args):
+        _write_bmp(path, 2273, 1324)
+        return True
+
+    target_doc = SimpleNamespace(
+        SaveBMP=Mock(return_value=False), SaveAs3=Mock(side_effect=_save_as)
+    )
+    adapter.currentModel = target_doc
+    adapter.swApp = SimpleNamespace(ActiveDoc=None, Frame=SimpleNamespace())
+
+    result = await adapter.export_image(
+        {"file_path": str(output_file), "width": 640, "height": 480}
+    )
+
+    assert result.is_success, result.error
+    assert result.data["dimensions"] == "2273x1324"
+    assert result.data["requested_dimensions"] == "640x480"
+
+
+@pytest.mark.asyncio
+async def test_export_image_with_an_unreadable_size(monkeypatch, tmp_path) -> None:
+    adapter = _build_adapter(monkeypatch)
+    output_file = tmp_path / "shot.tif"
+
+    target_doc = SimpleNamespace(
+        SaveAs3=Mock(side_effect=lambda path, *_a: Path(path).write_bytes(b"II*"))
+    )
+    adapter.currentModel = target_doc
+    adapter.swApp = SimpleNamespace(ActiveDoc=None, Frame=SimpleNamespace())
+
+    result = await adapter.export_image({"file_path": str(output_file)})
+
+    assert result.is_success, result.error
+    assert result.data["dimensions"] == "unknown"

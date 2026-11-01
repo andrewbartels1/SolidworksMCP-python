@@ -59,8 +59,9 @@ _KNOWN_SW_INTERFACES: dict[str, dict[str, list[str]]] = {
     "IModelDoc2": {
         "methods": [
             "ShowNamedView2",
-            "ViewZoomToFit2",
-            "SaveBitmapWithVariableSize",
+            "ViewZoomtofit2",
+            "GraphicsRedraw2",
+            "SaveBMP",
             "SaveAs3",
             "GetTitle",
             "GetPathName",
@@ -152,13 +153,12 @@ _KNOWN_SW_INTERFACES: dict[str, dict[str, list[str]]] = {
     },
     "IModelView": {
         "methods": [
-            "SaveBitmapWithVariableSize",
-            "ZoomToFit",
+            "ZoomByFactor",
             "ZoomToSheet",
             "OrientView",
             "SetCameraParameters",
         ],
-        "properties": ["Orientation3", "Translation3"],
+        "properties": ["Orientation3", "Translation3", "FrameWidth", "FrameHeight"],
     },
     "IExtensionManager": {
         "methods": ["SaveAs2", "SelectByID2", "MultiSelect2"],
