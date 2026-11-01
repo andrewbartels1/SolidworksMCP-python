@@ -28,7 +28,7 @@
 - [x] 5.1d Replace the fallback with a single-ended retry in the opposite direction, plus `direction_flipped` on the result and in the tool reply; unit tests.
 - [x] 5.1e Document it where agents read it: the tool description and field descriptions, the no-feature error message, a `feature_not_built` classifier rule and hint, the catalog note and error table, pitfall #35, the CHANGELOG and these artifacts.
 - [x] 5.1f Live tests assert `direction_flipped` (true for the Top Plane hole, false through the middle of the block).
-- [ ] 5.2 Ask the user to run `tests/live/test_live_sw_contributor_fixes.py`, `tests/live/test_live_sw_verify_model.py` and `tests/live/test_live_sw_cut_extrude_sketch_fix.py`. Expect the internal blind cut to remove 37.70 mm³, the Top Plane hole 142.5 mm³ (flipped), Through All one way 62.83 mm³ and both ways 125.66 mm³.
+- [x] 5.2 (24 passed on SW 2026, 2026-11-01) Ask the user to run `tests/live/test_live_sw_contributor_fixes.py`, `tests/live/test_live_sw_verify_model.py` and `tests/live/test_live_sw_cut_extrude_sketch_fix.py`. Expect the internal blind cut to remove 37.70 mm³, the Top Plane hole 142.5 mm³ (flipped), Through All one way 62.83 mm³ and both ways 125.66 mm³.
 
 ## 6. Ship
 
