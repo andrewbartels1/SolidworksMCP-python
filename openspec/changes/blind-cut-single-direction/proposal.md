@@ -1,60 +1,81 @@
 ## Why
 
 On SolidWorks 2025 and 2026, a blind `create_cut_extrude` from a sketch inside
-the body returns no feature (issue #193). The adapter tells `FeatureCut4` that
-the cut is double-ended (`Sd=False`) with a zero-depth blind Direction 2.
-SolidWorks rejects that from an internal sketch. From a sketch on a face it
-happens to work, because Direction 2 points into empty space. That is why the
-bug went unnoticed.
+the body returns no feature (issue #193).
 
-The cause is a misread argument. Commit 69d3dbd (2026-06-13) passed
-`is_through` into the `Sd` slot, but `Sd` means "single direction", not "is
-through". Through All cuts were right by coincidence. Blind cuts on SW 2025+
-became double-ended. Older versions always passed `Sd=True` and were never
-affected. Contributor PR #192 kept the value and labelled it intentional.
+Live probes on SW 2026 (2026-11-01) found two separate problems:
+
+- **A misread argument.** Commit 69d3dbd (2026-06-13) passed `is_through`
+  as `FeatureCut4`'s first argument, `Sd`. But `Sd` means "single
+  direction", so every blind cut on SW 2025+ was sent as a double-ended cut
+  with a zero-depth second side. SolidWorks builds nothing from that form,
+  from any sketch.
+- **The direction is the sketch normal.** A one-way cut goes along the
+  sketch plane's normal. From a sketch on a face, or on a plane at the edge
+  of the body (a Top Plane sketch under a block extruded up from it), that
+  normal points away from the material. A correct single-ended cut then
+  finds nothing to remove.
+
+Face-sketch cuts only seemed to work. The `FeatureCut3` fallback on main
+passed `D2 = depth`, so it built a double-ended cut whose second side
+happened to go into the block. #192 fixed that fallback's arguments, which
+exposed both problems.
+
+Agents also had no way to know any of this. The tool description didn't
+say which way a cut goes, and the error said only "returned no feature".
 
 ## What Changes
 
-- A blind cut tries a single-ended `FeatureCut4`/`FeatureCut3` (`Sd=True`)
-  first. If that builds nothing, it retries the double-ended form
-  (`Sd=False`, zero-depth blind Direction 2), after reselecting the sketch.
-  The first live run of the fix showed that each form works for only one
-  case. Single-ended works from a sketch inside the body; from a face sketch
-  its Direction 1 points out of the part. Double-ended works from a face
-  sketch, as it has since June, but is rejected from an internal one.
-- The result's `parameters.single_direction` reports which form built the
-  feature.
-- Through All keeps #192's forms. The SW-version check now picks only
-  `OptimizeGeometry`; it no longer decides `Sd`.
-- The live test `test_blind_cut_still_cuts_one_way` loses its `xfail`, and a
-  test for Through All in one direction is added.
-- `docs/agents/com-api-pitfalls.md` gets entry #35 with the table of which
-  form works where.
-
-This builds on #192's refactor of `create_cut_extrude` (one argument builder,
-plus a list of `(label, Sd, T1, T2)` forms to try). It lands after #192 merges.
+- **One direction (Blind and Through All):** the cut is single-ended
+  (`Sd=True`) in the requested direction. If that builds nothing, it is
+  retried once in the opposite direction, after the sketch is reselected.
+  This is what the SolidWorks UI does: it cuts into the material. Through
+  All both ways keeps the forms from #192.
+- **Reporting the flip:** the adapter result's `parameters.direction_flipped`
+  and the tool reply's `cut_extrude.direction_flipped` say when the flip
+  happened. The tool's success message says it too.
+- **The error when nothing is built:** it names the forms that were tried,
+  and the depth, and says what to change. The classifier gives it a new
+  `error_type`, `feature_not_built`, whose hint says to change the inputs
+  rather than retry the same call.
+- **Documentation:**
+  - the `create_cut_extrude` description and its `reverse_direction` and
+    `end_condition` field descriptions explain the direction rule;
+  - the tool catalog's modeling page has a "Which way a cut goes" note;
+  - its error table lists `feature_not_built`;
+  - COM pitfall #35 records the probe table.
+- **SW version:** the version check now picks only `OptimizeGeometry`; it
+  no longer decides `Sd`.
+- **Live tests:** `test_blind_cut_still_cuts_one_way` loses its `xfail`,
+  and a Through All one-way test is added.
 
 ## Capabilities
 
 ### New Capabilities
-- `tools/cut-extrude`: which end conditions `create_cut_extrude` accepts, which
-  way each one cuts, and that a blind cut works wherever its sketch sits
-  (inside the body or on a face).
+- `tools/cut-extrude`: which way each end condition cuts; that a one-way cut
+  falls back to the opposite direction and reports it; and what the error
+  says when nothing is built.
 
 ### Modified Capabilities
-None.
+- `tools/error-boundary`: a new `feature_not_built` category. It is added as
+  a separate requirement, so it doesn't collide with the
+  `member-not-found-hint-and-stale-script` change, which modifies the
+  existing category list.
 
 ## Impact
 
-- **COM and adapter code.** Changes `src/solidworks_mcp/adapters/solidworks/features.py`
-  (`create_cut_extrude`), which is reached through `pywin32_adapter`. COM
-  threading and late binding are unaffected: no new calls, no new dispatches.
-  Only one argument value changes.
-- The mock adapter needs no change, because it never looks at `Sd`.
-- Unit tests: `tests/solidworks_mcp/adapters/solidworks/test_features.py`. The
-  version and end-condition table expects `Sd=True` for blind cuts on 33.x
-  and 34.x.
-- Live tests: `tests/live/test_live_sw_contributor_fixes.py` (remove the
-  xfail) and `tests/live/test_live_sw_verify_model.py` (the face-sketch hole
-  must still remove 142.5 mm³).
-- Depends on PR #192. Closes #193.
+- **COM and adapter code:**
+  `src/solidworks_mcp/adapters/solidworks/features.py`
+  (`_create_cut_extrude_impl`). It adds no new COM calls, only another
+  attempt with one argument changed. All attempts run through
+  `_handle_com_operation` on the connect thread.
+- **Tools:** `tools/modeling.py` (reply field, message, descriptions) and
+  `tools/error_classifier.py` (one rule).
+- **Mock adapter:** unchanged. It has no cut implementation, and the tool
+  treats a missing `direction_flipped` as false.
+- **Tests:**
+  - unit tests in `test_features.py`, `test_modeling.py` and
+    `test_error_classifier.py`;
+  - live tests in `test_live_sw_contributor_fixes.py`,
+    `test_live_sw_verify_model.py` and `test_live_sw_cut_extrude_sketch_fix.py`.
+- **Order:** depends on PR #192. Closes #193.

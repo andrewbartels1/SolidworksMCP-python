@@ -432,5 +432,6 @@ async def test_blind_cut_still_cuts_one_way(scratch):
 
     cut = await tools["create_cut_extrude"]({"sketch_name": sketch, "depth": 3.0})
     assert cut["status"] == "success", cut
+    assert cut["cut_extrude"]["direction_flipped"] is False, cut
     removed = 4000.0 - (await _summary(adapter))["volume_mm3"]
     assert removed == pytest.approx(math.pi * 4.0 * 3.0, rel=1e-6)

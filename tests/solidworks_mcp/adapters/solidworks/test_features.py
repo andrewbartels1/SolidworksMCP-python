@@ -373,7 +373,9 @@ def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
     )
     assert result.status == AdapterResultStatus.ERROR
     assert "Sketch1" in (result.error or "")
-    assert "without raising an error, but returned no feature" in (result.error or "")
+    error = result.error or ""
+    assert "built no feature" in error
+    assert "tried: the requested direction; direction flipped" in error
 
 
 # ---------------------------------------------------------------------------
@@ -945,7 +947,7 @@ def test_cut_extrude_version_and_end_condition_paths(
     (args,) = calls
     assert (args[0], args[3], args[4]) == (expected_sd, expected_t1, expected_t2)
     assert args[6] == 0.0  # D2: Direction 2 never gets a depth of its own
-    assert result.data.parameters["single_direction"] is expected_sd
+    assert result.data.parameters["direction_flipped"] is False
     assert len(args) == 27
     assert args[26] is revision.startswith("33")  # OptimizeGeometry
 
@@ -1010,26 +1012,47 @@ def test_through_all_both_falls_back_to_the_single_ended_enum() -> None:
     ]
 
 
-def test_blind_cut_falls_back_to_the_double_ended_form() -> None:
-    """A face sketch: the single-ended cut points out of the part and builds
-    nothing, so the double-ended form (Sd=False, D2=0) is tried next (#193)."""
+def test_blind_cut_from_a_face_sketch_flips_direction() -> None:
+    """The requested direction points out of the part and builds nothing, so
+    the single-ended cut is retried the other way (#193)."""
     feature = SimpleNamespace(Name="Cut-Extrude1")
     adapter, log = _cut_adapter_recording(
-        cut4=lambda args: None if args[0] else feature,
+        cut4=lambda args: feature if args[2] else None,
         cut3=lambda _args: None,
     )
 
     result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=6.0))
 
     assert result.is_success, result.error
-    assert result.data.parameters["single_direction"] is False
+    assert result.data.parameters["direction_flipped"] is True
     cut_args = [entry[1] for entry in log if entry[0] != "select"]
-    assert [(a[0], a[3], a[4], a[6]) for a in cut_args] == [
-        (True, 1, 1, 0.0),
-        (True, 1, 1, 0.0),
-        (False, 1, 1, 0.0),
+    # (Sd, Dir, T1, T2, D2) for FeatureCut4, FeatureCut3, then flipped FeatureCut4.
+    assert [(a[0], a[2], a[3], a[4], a[6]) for a in cut_args] == [
+        (True, False, 1, 1, 0.0),
+        (True, False, 1, 1, 0.0),
+        (True, True, 1, 1, 0.0),
     ]
     assert [entry[0] for entry in log].count("select") == 3
+
+
+def test_reversed_through_all_flips_back_when_it_finds_nothing() -> None:
+    feature = SimpleNamespace(Name="Cut-Extrude2")
+    adapter, log = _cut_adapter_recording(
+        cut4=lambda args: None if args[2] else feature,
+        cut3=lambda _args: None,
+    )
+
+    result = features._create_cut_extrude_impl(
+        adapter,
+        ExtrusionParameters(
+            depth=1.0, end_condition="ThroughAll", reverse_direction=True
+        ),
+    )
+
+    assert result.is_success, result.error
+    assert result.data.parameters["direction_flipped"] is True
+    last = [entry[1] for entry in log if entry[0] == "FeatureCut4"][-1]
+    assert (last[0], last[2], last[3]) == (True, False, 2)
 
 
 def test_through_all_both_failure_names_every_form_tried() -> None:

@@ -23,9 +23,12 @@
 
 - [x] 5.1 In `tests/live/test_live_sw_contributor_fixes.py`, remove the `xfail` from `test_blind_cut_still_cuts_one_way`, and add `test_through_all_cuts_one_way` (expect 62.83 mm³).
 - [x] 5.1a First live run: internal-sketch blind cut passes; face-sketch blind cuts (`verify_model` hole, `cut_extrude_sketch_fix` hole) return no feature with `Sd=True`.
-- [x] 5.1b Add the double-ended fallback for blind cuts, `parameters.single_direction`, and a unit test for the fallback; correct pitfall #35, the CHANGELOG, the proposal and the design.
-- [ ] 5.2 Ask the user to run `tests/live/test_live_sw_contributor_fixes.py` and `tests/live/test_live_sw_verify_model.py`. The internal blind cut should remove 37.70 mm³, the face-sketch hole 142.5 mm³, and Through All both ways 125.66 mm³.
-- [ ] 5.3 Ask the user to run `tests/live/test_live_sw_cut_extrude_sketch_fix.py` as a regression check.
+- [x] 5.1b Second run: the double-ended fallback did not help, and SolidWorks crashed in the next test (`check_interference`).
+- [x] 5.1c Probe (`tests/live/probe_blind_cut_forms.py`, not committed): only single-ended with `Dir` reversed cuts the Top Plane hole; `Sd=False` with `D2=0` never builds; a failed attempt does not spoil the retry.
+- [x] 5.1d Replace the fallback with a single-ended retry in the opposite direction, plus `direction_flipped` on the result and in the tool reply; unit tests.
+- [x] 5.1e Document it where agents read it: the tool description and field descriptions, the no-feature error message, a `feature_not_built` classifier rule and hint, the catalog note and error table, pitfall #35, the CHANGELOG and these artifacts.
+- [x] 5.1f Live tests assert `direction_flipped` (true for the Top Plane hole, false through the middle of the block).
+- [ ] 5.2 Ask the user to run `tests/live/test_live_sw_contributor_fixes.py`, `tests/live/test_live_sw_verify_model.py` and `tests/live/test_live_sw_cut_extrude_sketch_fix.py`. Expect the internal blind cut to remove 37.70 mm³, the Top Plane hole 142.5 mm³ (flipped), Through All one way 62.83 mm³ and both ways 125.66 mm³.
 
 ## 6. Ship
 

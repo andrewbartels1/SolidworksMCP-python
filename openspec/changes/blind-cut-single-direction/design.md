@@ -1,71 +1,86 @@
 ## Context
 
-`FeatureCut4` and `FeatureCut3` take `Sd` as their first argument. In the
-SolidWorks API, `Sd` means "single direction": `True` cuts Direction 1 only,
-and `False` also cuts Direction 2 using `T2` and `D2`.
+`FeatureCut4`'s arguments start `Sd, Flip, Dir, T1, T2, D1, D2`.
+- `Sd` is "single direction": `True` cuts Direction 1 only, and `False`
+  also cuts Direction 2 using `T2` and `D2`.
+- Direction 1 follows the sketch plane's normal, and `Dir` reverses it.
 
-Commit 69d3dbd added separate SW 2025 (major 33) and SW 2026+ (major 34)
-branches, and both passed `is_through` as `Sd`. For a blind cut, that sends
-`Sd=False`, `T2=Blind` and `D2=0`, a double-ended cut whose second side has
-zero depth. From a sketch inside the body, SolidWorks rejects it: no
-feature, no COM error. From a face sketch it works, because Direction 2 is
-in empty space.
+PR #192 builds the arguments in one function and tries a list of
+`(label, Sd, T1, T2)` forms in order. Before each retry it reselects the
+sketch, and it tries `FeatureCut4` and then `FeatureCut3` for every form.
 
-PR #192 replaces the three copies of the call with one builder,
-`_cut_args(sd, t1, t2)`, and a list of `(label, Sd, T1, T2)` forms to try.
-Its blind-cut branch keeps the bug on purpose:
+**Live probe, SW 2026, 2026-11-01.** The setup is a Ø5.5 × 6 mm hole from a
+Top Plane sketch, under a 30 × 30 × 15 block extruded up from Top. Each case
+ran in its own fresh part:
 
-```python
-forms = [("", sw_major < 33, blind, blind)]
-```
+| Form | Result |
+|---|---|
+| `Sd=False`, `D2=0` | no feature |
+| `Sd=True`, `Dir=False` | no feature |
+| `Sd=True`, `Dir=True` | 142.55 mm³ (exact) |
+| `Sd=True`, then `Sd=False` | no feature |
+
+In the earlier live runs, from a Front Plane sketch through the middle of a
+block: `Sd=True` cut 37.70 mm³ (exact), and `Sd=False` with `D2=0` built
+nothing.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Blind cuts work from internal sketches on SW 2025 and 2026.
-- One rule for `Sd`, with no version check: `True` unless the cut is meant to
-  go both ways.
+- One-way cuts work from internal, face and edge-plane sketches.
+- A caller never has to guess `reverse_direction` or decode a silent
+  failure: the tool says what it did, and what to change when nothing works.
 
 **Non-Goals:**
-- New end conditions (Up To Surface, Offset From Surface, Mid Plane blind).
-- Changing `OptimizeGeometry`. It stays `True` on 33.x and `False`
-  otherwise, as #192 verified live.
-- Exposing `both_directions` on the `create_cut_extrude` MCP tool. The #192
-  review already raised this separately.
+- New end conditions (Up To Surface, Offset From Surface).
+- Choosing the direction from geometry before cutting, e.g. by
+  ray-casting the body. The retry costs one extra pair of calls, only when
+  the first direction misses.
+- Changing `OptimizeGeometry`.
 
 ## Decisions
 
-**Blind cuts try two forms: single-ended first, then double-ended.** The
-first live run (SW 2026, 2026-11-01) showed that neither `Sd` value works
-everywhere:
+**A one-way cut is single-ended, and is retried once with `Dir` reversed.**
+The forms become `(label, Sd, T1, T2, Dir)`:
+- `("", True, t1, Blind, reverse)`, then
+- `(" [direction flipped]", True, t1, Blind, not reverse)`,
 
-| Sketch | `Sd=True` | `Sd=False`, `T2=Blind`, `D2=0` |
-|---|---|---|
-| Inside the body | cuts (37.70 mm³) | no feature |
-| On a face | no feature | cuts the full depth (142.5 mm³) |
+where `t1` is Blind or Through All. Through All both ways keeps #192's two
+forms, with `Dir = reverse`.
 
-With `Sd=True`, Direction 1 follows the sketch normal, which points out of
-the part from a face sketch. The blind forms are therefore
-`[("", True, blind, blind), (" [Sd=False, D2=0]", False, blind, blind)]`,
-and #192's loop reselects the sketch between attempts. Single-ended goes
-first because it is the documented meaning of a one-way cut. The
-double-ended form has worked from face sketches on SW 2025+ since 69d3dbd.
-`parameters.single_direction` records which one built the feature.
+The probe shows that a failed attempt does not spoil the retry. Case D fails
+only because `Sd=False` never works there; case A fails the same way on its
+own.
 
-*Rejected alternative:* flip `Dir` on a single-ended retry. It would
-probably work from face sketches too, but it hasn't been seen live. It
-would also change what `reverse_direction=True` means when a caller sets it
-on purpose. The double-ended fallback has been proven live, many times.
+*Rejected: fall back to `Sd=False`.* That form builds nothing in every case
+probed. It only looked right on main because of the `FeatureCut3` bug.
 
-**Order: after #192.** Changing the pre-#192 code on main would rewrite the
-same lines #192 replaces and cause another conflict for the contributor.
+*Rejected: honour `reverse_direction` strictly and fail.* When the requested
+direction finds no material, the only cut that removes anything is the
+opposite one. The SolidWorks UI picks that one too. Failing would push
+agents back to guessing. The flip is reported, not hidden.
+
+**Say what happened, where agents read it.**
+- `parameters.direction_flipped` on the adapter result, and
+  `cut_extrude.direction_flipped` on the tool reply, plus a sentence in the
+  tool's message.
+- The no-feature error lists the forms tried and the depth.
+- `error_classifier` gets a `feature_not_built` rule, matching
+  "built no feature", whose hint says to change the inputs rather than
+  retry. It sits before `not_found` because the first matching rule wins.
+- The tool and field descriptions state the direction rule, so an agent
+  knows it before calling.
+
+**Order: after #192.** This builds on #192's forms loop and argument
+builder.
 
 ## Risks / Trade-offs
 
-- [A face-sketch blind cut now costs one extra COM call] → Two calls
-  (FeatureCut4, FeatureCut3) that build nothing, plus a reselect, at the
-  0.25 s settle pause each. Acceptable for correctness; an internal sketch
-  costs nothing extra.
-- [SW 2025 is not on hand to test] → The 2025 branch differs only in
-  `OptimizeGeometry`. Both forms were already used on 2025: double-ended
-  since 69d3dbd, single-ended before it.
+- [A caller asked for `reverse_direction` and the cut went the other way] →
+  Only when the requested way removed nothing, and the reply says
+  `direction_flipped: true`.
+- [A cut that misses both ways costs twice the calls] → Four calls and
+  three reselects, each with the 0.25 s settle pause, then a
+  `feature_not_built` error that tells the caller to change the inputs.
+- [SW 2025 not on hand] → The 2025 branch differs only in
+  `OptimizeGeometry`.

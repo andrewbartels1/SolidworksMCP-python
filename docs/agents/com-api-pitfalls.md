@@ -987,23 +987,38 @@ and `_save_screenshot_sized` in `pywin32_adapter.py`. Live-verified on SW 2026,
 
 ---
 
-## 35. A blind `FeatureCut4` needs a different `Sd` for a face sketch and an internal one
+## 35. One-way `FeatureCut4`: `Sd` means "single direction", and the normal may point away
 
-**Symptom:** a blind `create_cut_extrude` returns no feature and no COM error. Which
-sketches fail depends on the first argument, `Sd` ("single direction"):
+**Symptom:** a blind or Through All `create_cut_extrude` returns no feature and no COM
+error.
 
-| Sketch | `Sd=True` (one direction) | `Sd=False`, `T2=Blind`, `D2=0` |
-|---|---|---|
-| Inside the body (Front Plane of a mid-plane block) | cuts (37.70 mm³) | no feature |
-| On a face (top face of a block) | no feature | cuts the full depth (142.5 mm³) |
+**What the arguments do** (probed live on SW 2026, 2026-11-01, one fresh part per case):
 
-Seen live on SW 2026, 2026-11-01. With `Sd=True`, Direction 1 follows the sketch normal;
-on a face that points out of the part, so the cut finds no material. The double-ended
-form cuts into the part from a face sketch but is rejected from an internal one.
+- `Sd` (1st argument) is "single direction". `True` cuts Direction 1 only. `False`
+  also cuts Direction 2 with `T2`/`D2`; with `D2=0` that second side has zero depth.
+- Direction 1 follows the sketch plane's normal; `Dir` (3rd argument) reverses it.
 
-**Fix:** try the single-ended form first, then the double-ended form, reselecting the
-sketch before the retry. The result's `parameters.single_direction` says which form built
-the feature. The SW version picks only `OptimizeGeometry`, never `Sd`.
+| Ø5.5 × 6 mm hole, Top Plane sketch under a block extruded up from Top | Result |
+|---|---|
+| `Sd=False`, `D2=0` (what the adapter sent on SW 2025+ since 69d3dbd) | no feature |
+| `Sd=True`, `Dir=False` | no feature: the normal points away from the block |
+| `Sd=True`, `Dir=True` | cuts exactly 142.55 mm³ |
+| `Sd=True`, then `Sd=False` on the same sketch | no feature (a failed call does not spoil the retry; `Sd=False` just never works here) |
+
+From a sketch on a plane through the middle of a body (Front Plane of a mid-plane
+block), `Sd=True` cuts in either direction and `Sd=False` with `D2=0` returns nothing.
+
+**Why it looked fine before:** on main the `FeatureCut4` call failed and the
+`FeatureCut3` fallback passed `D2 = depth` with `Sd=False`, a double-ended cut whose
+second side happened to go into the block. Fixing that fallback's arguments (#192)
+removed the accident and exposed the real problem.
+
+**Fix:** a one-way cut is single-ended (`Sd=True`) with the requested `Dir`; if that
+builds nothing, retry once with `Dir` reversed, reselecting the sketch first. The
+result's `parameters.direction_flipped` (and the tool reply's
+`cut_extrude.direction_flipped`) says when that happened. When neither direction
+builds anything, the error says what was tried and is classified `feature_not_built`.
+The SW version picks only `OptimizeGeometry`, never `Sd`.
 
 `_create_cut_extrude_impl` in `adapters/solidworks/features.py`; issue #193.
 

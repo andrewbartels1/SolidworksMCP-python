@@ -427,10 +427,21 @@ class CreateCutExtrudeInput(CompatInput):
 
     depth: float = Field(description="Cut depth in millimeters")
     draft_angle: float = Field(default=0.0, description="Draft angle in degrees")
-    reverse_direction: bool = Field(default=False, description="Reverse cut direction")
+    reverse_direction: bool = Field(
+        default=False,
+        description=(
+            "Cut against the sketch normal instead of along it. Usually not "
+            "needed: if the requested direction finds no material, the cut is "
+            "retried the other way and the reply sets direction_flipped"
+        ),
+    )
     end_condition: str = Field(
         default="Blind",
-        description="End condition: 'Blind', 'ThroughAll' or 'ThroughAllBoth'",
+        description=(
+            "'Blind' (cut 'depth' mm), 'ThroughAll' (through the body, one "
+            "way) or 'ThroughAllBoth' (through the body both ways, for a "
+            "sketch inside the body)"
+        ),
     )
     both_directions: bool = Field(
         default=False,
@@ -1467,15 +1478,29 @@ async def register_modeling_tools(
         mismatch is reported back as an error naming the sketch(es) actually
         found in the model, rather than cutting the wrong profile.
 
+        Direction: a one-way cut (Blind or ThroughAll) goes along the sketch
+        plane's normal. From a sketch on a face, or on a plane that touches
+        the body only on one side (e.g. a Top Plane sketch under a block
+        extruded up from it), that can point away from the material. The
+        tool then cuts the other way and returns
+        ``cut_extrude.direction_flipped: true``, so you don't need to guess
+        ``reverse_direction``. For a sketch on a plane through the middle of
+        the body, use ``ThroughAllBoth`` (or ``ThroughAll`` with
+        ``both_directions``) to cut both sides.
+
         Args:
             input_data (CreateCutExtrudeInput): Depth, direction, draft, and
                 optional sketch_name parameters.
 
         Returns:
-            dict[str, Any]: Status and feature details. On error, ``message``
-                identifies exactly which stage failed (sketch not found,
-                sketch selection rejected by SolidWorks, or the specific
-                FeatureCut COM error) rather than a generic failure string.
+            dict[str, Any]: Status and ``cut_extrude`` (name, depth,
+                sketch_name, direction_flipped), plus ``measured_change``
+                (volume and bounding box before and after) when the model
+                can be read. On error, ``message`` identifies exactly which
+                stage failed (sketch not found, sketch selection rejected by
+                SolidWorks, the FeatureCut COM error, or ``error_type:
+                feature_not_built`` when SolidWorks built nothing in either
+                direction) rather than a generic failure string.
 
         Example:
             ```python
@@ -1511,15 +1536,23 @@ async def register_modeling_tools(
             if isinstance(feature_params, dict)
             else None
         ) or input_data.sketch_name
+        flipped = bool(
+            isinstance(feature_params, dict) and feature_params.get("direction_flipped")
+        )
+        name = _result_value(feature, "feature_name", "name", default="Cut-Extrude")
+        message = f"Created cut-extrude: {name}"
+        if flipped:
+            message += (
+                " (the requested direction found no material, so it cut the other way)"
+            )
         reply = {
             "status": "success",
-            "message": f"Created cut-extrude: {_result_value(feature, 'feature_name', 'name', default='Cut-Extrude')}",
+            "message": message,
             "cut_extrude": {
-                "name": _result_value(
-                    feature, "feature_name", "name", default="Cut-Extrude"
-                ),
+                "name": name,
                 "depth": input_data.depth,
                 "sketch_name": sketch_used,
+                "direction_flipped": flipped,
             },
             "execution_time": result.execution_time,
         }

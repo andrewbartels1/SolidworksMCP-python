@@ -1233,7 +1233,10 @@ def _create_cut_extrude_impl(
         params: Extrusion parameter bag reused for cut parameters:
             - ``depth`` (float): Cut depth in mm.
             - ``draft_angle`` (float): Draft angle in degrees.
-            - ``reverse_direction`` (bool): Flip the cut direction.
+            - ``reverse_direction`` (bool): Flip the cut direction. A
+              one-direction cut whose requested direction finds no material
+              is retried the other way; ``parameters.direction_flipped``
+              says so.
             - ``end_condition`` (str): ``"Blind"`` (default),
               ``"ThroughAll"`` / ``"through_all"``, or ``"ThroughAllBoth"`` /
               ``"through_all_both"`` (through all in both directions, cut as a
@@ -1402,8 +1405,10 @@ def _create_cut_extrude_impl(
             except (ValueError, IndexError):
                 sw_major = 0
 
-        # (label, Sd, T1, T2) forms to try, in order. Sd is True for a
-        # single-ended cut, False to also cut Direction 2 with T2.
+        # (label, Sd, T1, T2, Dir) forms to try, in order. Sd is True for a
+        # single-ended cut, False to also cut Direction 2 with T2. Dir
+        # reverses Direction 1.
+        reverse = normalized.reverse_direction
         if through_both:
             # Through All in both directions is a double-ended cut with
             # Through All on each side. A single-ended cut with
@@ -1411,30 +1416,36 @@ def _create_cut_extrude_impl(
             # SolidWorks 2026 returns no feature for it (seen live on a closed
             # Front Plane sketch), so that form is only a fallback.
             forms = [
-                (" [Sd=False, T1=T2=ThroughAll]", False, through_all, through_all),
+                (
+                    " [Sd=False, T1=T2=ThroughAll]",
+                    False,
+                    through_all,
+                    through_all,
+                    reverse,
+                ),
                 (
                     " [Sd=True, T1=ThroughAllBoth]",
                     True,
                     adapter.constants["swEndCondThroughAllBoth"],
                     blind,
+                    reverse,
                 ),
             ]
-        elif through_one:
-            forms = [("", True, through_all, blind)]
         else:
-            # Blind: single-ended first (Sd means "single direction"). From a
-            # sketch inside the body that is the only form that works; the
-            # double-ended form with a zero-depth Direction 2 returns no
-            # feature there (#193). From a sketch on a face, Direction 1
-            # points out of the part and the single-ended cut finds nothing,
-            # while the double-ended form cuts the full depth into it (seen
-            # live on SW 2026), so it stays as the fallback.
+            # One direction (Blind or Through All) is single-ended: Sd means
+            # "single direction" (#193). Direction 1 follows the sketch
+            # normal, so from a sketch on a face, or on the plane of one, the
+            # requested direction can point out of the part and the cut finds
+            # no material. Only then is the opposite direction tried, which is
+            # what the SolidWorks UI does (seen live on SW 2026: a Top Plane
+            # sketch under a block cut nothing until Dir was flipped).
+            t1 = through_all if through_one else blind
             forms = [
-                ("", True, blind, blind),
-                (" [Sd=False, D2=0]", False, blind, blind),
+                ("", True, t1, blind, reverse),
+                (" [direction flipped]", True, t1, blind, not reverse),
             ]
 
-        def _cut_args(sd: bool, t1: int, t2: int) -> list[Any]:
+        def _cut_args(sd: bool, t1: int, t2: int, dir_: bool) -> list[Any]:
             """Build the 26 arguments ``FeatureCut3`` and ``FeatureCut4`` share.
 
             Signature: Sd, Flip, Dir, T1, T2, D1, D2, Dchk1, Dchk2, Ddir1, Ddir2,
@@ -1448,6 +1459,7 @@ def _create_cut_extrude_impl(
                 sd: ``True`` for a single-ended cut.
                 t1: Direction 1 end condition.
                 t2: Direction 2 end condition (used only when ``sd`` is False).
+                dir_: Reverse Direction 1.
 
             Returns:
                 list[Any]: Positional arguments in COM order.
@@ -1455,7 +1467,7 @@ def _create_cut_extrude_impl(
             return [
                 sd,  # Sd
                 False,  # Flip (True would cut outside the profile)
-                normalized.reverse_direction,  # Dir
+                dir_,  # Dir
                 t1,  # T1
                 t2,  # T2
                 depth_m,  # D1
@@ -1487,10 +1499,10 @@ def _create_cut_extrude_impl(
         # 2. FeatureCut3 (SW 2010+, and any install lacking FeatureCut4).
         optimize_geometry = sw_major == 33
         first_call = True
-        single_direction = True
-        for label, sd, t1, t2 in forms:
-            single_direction = sd
-            args = _cut_args(sd, t1, t2)
+        direction_flipped = False
+        for label, sd, t1, t2, dir_ in forms:
+            direction_flipped = dir_ != reverse
+            args = _cut_args(sd, t1, t2, dir_)
             calls = (
                 (
                     "FeatureCut4",
@@ -1533,15 +1545,20 @@ def _create_cut_extrude_impl(
                     f"'{target_sketch}' (SolidWorks major version {sw_major}). "
                     + " | ".join(fallback_errors)
                 )
+            # Name what was tried so the caller doesn't retry the same thing:
+            # a one-direction cut has already been tried both ways.
+            tried = "; ".join(
+                label.strip(" []") or "the requested direction"
+                for label, *_rest in forms
+            )
             raise Exception(
-                f"SolidWorks accepted the FeatureCut call(s) for sketch "
-                f"'{target_sketch}' (SolidWorks major version {sw_major}) "
-                "without raising an error, but returned no feature. This "
-                "means the COM call itself succeeded but the modeling "
-                "engine couldn't perform the cut — check that the sketch is "
-                "a fully closed profile, that it actually intersects solid "
-                "geometry within the given depth, and that it hasn't "
-                "already been consumed by another feature."
+                f"SolidWorks built no feature from sketch '{target_sketch}' "
+                f"(tried: {tried}; SolidWorks major version {sw_major}). The "
+                "profile removed no material in any of them. Check that the "
+                "sketch is a closed profile, that it overlaps the solid body "
+                f"within the {normalized.depth:g} mm depth (or use "
+                "end_condition 'ThroughAll'), and that no other feature has "
+                "already used the sketch."
             )
 
         return SolidWorksFeature(
@@ -1553,8 +1570,9 @@ def _create_cut_extrude_impl(
                 "draft_angle": normalized.draft_angle,
                 "reverse_direction": normalized.reverse_direction,
                 "sketch_name": target_sketch,
-                # Which FeatureCut form built it (Sd): a diagnostic for #193.
-                "single_direction": single_direction,
+                # True when the requested direction found no material and the
+                # cut went the other way (#193).
+                "direction_flipped": direction_flipped,
             },
             properties={"created": datetime.now().isoformat()},
         )

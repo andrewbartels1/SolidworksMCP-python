@@ -149,6 +149,17 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(r"no active (model|document)",),
     ),
     ErrorRule(
+        error_type="feature_not_built",
+        hint=(
+            "SolidWorks accepted the call but the geometry gave it nothing to "
+            "build. For a cut: the profile must be a closed loop that overlaps "
+            "the solid within the depth; one-direction cuts already try both "
+            "directions, so change the sketch, its plane, the depth or use "
+            "end_condition 'ThroughAll' rather than retrying as is."
+        ),
+        patterns=(r"built no feature",),
+    ),
+    ErrorRule(
         error_type="not_found",
         hint=(
             "Check the name or path - list what exists first (list_features, "
