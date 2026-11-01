@@ -155,6 +155,10 @@ class TestModelingTools:
         assert result["part"]["name"] == "new_part"
         assert result["part"]["units"] == "mm"
         assert result["part"]["material"] == "Steel"
+        # The template must reach the adapter, not just be echoed back.
+        mock_adapter.create_part.assert_awaited_once_with(
+            "new_part", "mm", "standard_part"
+        )
 
     @pytest.mark.asyncio
     async def test_create_assembly_with_components(
@@ -185,6 +189,9 @@ class TestModelingTools:
         assert result["status"] == "success"
         assert result["assembly"]["name"] == "test_assembly"
         assert len(result["assembly"]["components"]) == 2
+        mock_adapter.create_assembly.assert_awaited_once_with(
+            "test_assembly", "standard_assembly"
+        )
 
     @pytest.mark.asyncio
     async def test_create_drawing_from_model(
@@ -219,6 +226,9 @@ class TestModelingTools:
         assert result["drawing"]["name"] == "test_drawing"
         assert result["drawing"]["model_path"] == "test_part.sldprt"
         assert result["drawing"]["sheet_format"] == "A3"
+        mock_adapter.create_drawing.assert_awaited_once_with(
+            "test_drawing", "standard_drawing"
+        )
 
     @pytest.mark.asyncio
     async def test_create_extrusion_blind(self, mcp_server, mock_adapter, mock_config):

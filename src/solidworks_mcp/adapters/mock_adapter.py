@@ -977,13 +977,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def create_part(
-        self, name: str | None = None, units: str | None = None
+        self,
+        name: str | None = None,
+        units: str | None = None,
+        template: str | None = None,
     ) -> AdapterResult[SolidWorksModel]:
         """Mock creating a new part.
 
         Args:
             name (str | None): The name value. Defaults to None.
             units (str | None): The units value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -1019,6 +1023,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "created": datetime.now().isoformat(),
                 "mock": True,
                 "units": token,
+                "template": template,
             },
         )
 
@@ -1032,12 +1037,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def create_assembly(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Mock creating a new assembly.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -1057,7 +1063,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             type="Assembly",
             is_active=True,
             configuration="Default",
-            properties={"created": datetime.now().isoformat(), "mock": True},
+            properties={
+                "created": datetime.now().isoformat(),
+                "mock": True,
+                "template": template,
+            },
         )
 
         self._current_model = model
@@ -1070,12 +1080,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def create_drawing(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Mock creating a new drawing.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -1095,7 +1106,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             type="Drawing",
             is_active=True,
             configuration="Default",
-            properties={"created": datetime.now().isoformat(), "mock": True},
+            properties={
+                "created": datetime.now().isoformat(),
+                "mock": True,
+                "template": template,
+            },
         )
 
         self._current_model = model

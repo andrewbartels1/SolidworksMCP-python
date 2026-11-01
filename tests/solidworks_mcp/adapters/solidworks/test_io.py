@@ -33,7 +33,7 @@ class _IOHarness(SolidWorksIOMixin):
 
 
 import inspect
-from unittest.mock import AsyncMock, MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock, call
 
 import pytest
 
@@ -2258,12 +2258,89 @@ class TestPyWin32AdapterBranches:
             NewDocument=Mock(return_value=None),
         )
 
-        part_result = await adapter.create_part()
+        # A blank template counts as none given.
+        part_result = await adapter.create_part(template="  ")
         asm_result = await adapter.create_assembly()
         assert part_result.is_error
         assert "No part template configured" in (part_result.error or "")
+        assert "pass template" in (part_result.error or "")
         assert asm_result.is_error
         assert "No assembly template configured" in (asm_result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_create_documents_use_an_explicit_template(
+        self, monkeypatch, tmp_path
+    ):
+        """An explicit template goes straight to NewDocument.
+
+        Regression: create_part ignored ``template`` and failed with "No part
+        template configured" on installs with no default template set, even
+        when the caller named a usable .prtdot.
+        """
+        adapter = self._build_adapter(monkeypatch)
+        part_t = tmp_path / "Part.PRTDOT"  # the extension check ignores case
+        asm_t = tmp_path / "Asm.asmdot"
+        drw_t = tmp_path / "Drw.drwdot"
+        for template in (part_t, asm_t, drw_t):
+            template.write_text("")
+        new_document = Mock(return_value=SimpleNamespace(GetTitle=lambda: "Doc1"))
+        adapter.swApp = SimpleNamespace(
+            NewPart=Mock(),
+            NewAssembly=Mock(),
+            GetUserPreferenceStringValue=Mock(),
+            NewDocument=new_document,
+        )
+
+        assert (await adapter.create_part(template=f" {part_t} ")).is_success
+        assert (await adapter.create_assembly(template=str(asm_t))).is_success
+        assert (await adapter.create_drawing(template=str(drw_t))).is_success
+
+        assert new_document.call_args_list == [
+            call(str(part_t), 0, 0, 0),
+            call(str(asm_t), 0, 0, 0),
+            call(str(drw_t), _io_module._SW_DWG_PAPERS_USER_DEFINED, 0.2794, 0.2159),
+        ]
+        adapter.swApp.NewPart.assert_not_called()
+        adapter.swApp.NewAssembly.assert_not_called()
+        adapter.swApp.GetUserPreferenceStringValue.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_documents_report_a_bad_explicit_template(
+        self, monkeypatch, tmp_path
+    ):
+        """A bad explicit template is an error, never a silent default."""
+        adapter = self._build_adapter(monkeypatch)
+        adapter.swApp = SimpleNamespace(
+            NewPart=Mock(return_value=SimpleNamespace(GetTitle=lambda: "Part1")),
+            NewAssembly=Mock(),
+            NewDrawing2=Mock(return_value=SimpleNamespace(GetTitle=lambda: "D1")),
+            GetUserPreferenceStringValue=Mock(return_value=""),
+            NewDocument=Mock(return_value=None),
+        )
+        asm_t = tmp_path / "Asm.asmdot"
+        part_t = tmp_path / "Part.prtdot"
+        drw_t = tmp_path / "Drw.drwdot"
+        for template in (asm_t, part_t, drw_t):
+            template.write_text("")
+
+        missing = await adapter.create_part(template=str(tmp_path / "Gone.prtdot"))
+        assert missing.is_error
+        assert "Template not found" in (missing.error or "")
+        wrong_kind = await adapter.create_part(template=str(asm_t))
+        assert wrong_kind.is_error
+        assert "is not a .prtdot file" in (wrong_kind.error or "")
+        adapter.swApp.NewDocument.assert_not_called()
+
+        # SolidWorks refusing a valid template falls back to nothing.
+        part = await adapter.create_part(template=str(part_t))
+        asm = await adapter.create_assembly(template=str(asm_t))
+        drw = await adapter.create_drawing(template=str(drw_t))
+        assert "Failed to create new part from" in (part.error or "")
+        assert "Failed to create new assembly from" in (asm.error or "")
+        assert "Failed to create a drawing from" in (drw.error or "")
+        adapter.swApp.NewPart.assert_not_called()
+        adapter.swApp.NewAssembly.assert_not_called()
+        adapter.swApp.NewDrawing2.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_save_guard_non_numeric_success_and_rebuild_failure(

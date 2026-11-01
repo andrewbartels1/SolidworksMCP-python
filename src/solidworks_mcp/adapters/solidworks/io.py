@@ -1161,6 +1161,36 @@ class SolidWorksIOMixin:
 
         return existing_match or first_non_empty
 
+    def _explicit_template_path(
+        self, template: str | None, extension: str
+    ) -> str | None:
+        """Validate a template path the caller passed explicitly.
+
+        A bad explicit template is an error rather than a silent fall back to
+        the configured default, so the caller learns their template was not
+        used.
+
+        Args:
+            template: Caller-supplied template path, or ``None``/blank.
+            extension: Required template extension such as ``.prtdot``.
+
+        Returns:
+            str | None: The stripped path, or ``None`` when no template was
+            given.
+
+        Raises:
+            Exception: When the path has the wrong extension or is not an
+                existing file.
+        """
+        if template is None or not str(template).strip():
+            return None
+        path = str(template).strip()
+        if not path.lower().endswith(extension):
+            raise Exception(f"Template {path!r} is not a {extension} file")
+        if not os.path.isfile(path):
+            raise Exception(f"Template not found: {path}")
+        return path
+
     def _read_model_title(self, model: Any) -> str:
         """Read a model title regardless of COM exposing method or property.
 
@@ -1354,7 +1384,10 @@ class SolidWorksIOMixin:
         )
 
     async def create_part(
-        self, name: str | None = None, units: str | None = None
+        self,
+        name: str | None = None,
+        units: str | None = None,
+        template: str | None = None,
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new part document and set it as active.
 
@@ -1365,6 +1398,9 @@ class SolidWorksIOMixin:
                 accepted). Applied after creation; the outcome is recorded
                 under ``properties["units"]`` (or ``properties["units_error"]``
                 if it could not be applied). An unrecognised token is an error.
+            template: Optional ``.prtdot`` path. When given the part is made
+                from it with ``NewDocument``; otherwise ``NewPart`` and then
+                the user-preference default templates are tried.
 
         Returns:
             AdapterResult[SolidWorksModel]: Metadata for the new part document.
@@ -1395,17 +1431,28 @@ class SolidWorksIOMixin:
             if app is None:
                 raise Exception("SolidWorks application is not connected")
 
-            new_part = getattr(app, "NewPart", None)
-            if callable(new_part):
-                model = adapter._attempt(new_part)
+            explicit = self._explicit_template_path(template, ".prtdot")
+            if explicit:
+                model = app.NewDocument(explicit, 0, 0, 0)
+            else:
+                new_part = getattr(app, "NewPart", None)
+                if callable(new_part):
+                    model = adapter._attempt(new_part)
+
+                if not model:
+                    part_template = self._resolve_template_path(
+                        [8, 0, 1, 2, 3], ".prtdot"
+                    )
+                    if not part_template:
+                        raise Exception(
+                            "No part template configured in SolidWorks; "
+                            "pass template with the path of a .prtdot file"
+                        )
+                    model = app.NewDocument(part_template, 0, 0, 0)
 
             if not model:
-                part_template = self._resolve_template_path([8, 0, 1, 2, 3], ".prtdot")
-                if not part_template:
-                    raise Exception("No part template configured in SolidWorks")
-                model = app.NewDocument(part_template, 0, 0, 0)
-
-            if not model:
+                if explicit:
+                    raise Exception(f"Failed to create new part from {explicit!r}")
                 raise Exception("Failed to create new part")
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 1), default=0)
@@ -1434,12 +1481,15 @@ class SolidWorksIOMixin:
         )
 
     async def create_assembly(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new assembly document and set it as active.
 
         Args:
             name: Reserved for future naming policy.
+            template: Optional ``.asmdot`` path. When given the assembly is
+                made from it with ``NewDocument``; otherwise ``NewAssembly``
+                and then the user-preference default templates are tried.
 
         Returns:
             AdapterResult[SolidWorksModel]: Metadata for the new assembly document.
@@ -1458,17 +1508,28 @@ class SolidWorksIOMixin:
             if app is None:
                 raise Exception("SolidWorks application is not connected")
 
-            new_assembly = getattr(app, "NewAssembly", None)
-            if callable(new_assembly):
-                model = adapter._attempt(new_assembly)
+            explicit = self._explicit_template_path(template, ".asmdot")
+            if explicit:
+                model = app.NewDocument(explicit, 0, 0, 0)
+            else:
+                new_assembly = getattr(app, "NewAssembly", None)
+                if callable(new_assembly):
+                    model = adapter._attempt(new_assembly)
+
+                if not model:
+                    asm_template = self._resolve_template_path(
+                        [9, 2, 3, 1, 0], ".asmdot"
+                    )
+                    if not asm_template:
+                        raise Exception(
+                            "No assembly template configured in SolidWorks; "
+                            "pass template with the path of a .asmdot file"
+                        )
+                    model = app.NewDocument(asm_template, 0, 0, 0)
 
             if not model:
-                asm_template = self._resolve_template_path([9, 2, 3, 1, 0], ".asmdot")
-                if not asm_template:
-                    raise Exception("No assembly template configured in SolidWorks")
-                model = app.NewDocument(asm_template, 0, 0, 0)
-
-            if not model:
+                if explicit:
+                    raise Exception(f"Failed to create new assembly from {explicit!r}")
                 raise Exception("Failed to create new assembly")
 
             adapter._attempt(lambda: _sw_type_info.flag_doc(model, 2), default=0)
@@ -1489,12 +1550,15 @@ class SolidWorksIOMixin:
         )
 
     async def create_drawing(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new drawing document and set it as active.
 
         Args:
             name: Reserved for future naming policy.
+            template: Optional ``.drwdot`` path, used in place of the
+                user-preference default. An explicit template that fails is
+                an error; it does not fall back to a blank drawing.
 
         Returns:
             AdapterResult[SolidWorksModel]: Metadata for the new drawing document.
@@ -1519,12 +1583,17 @@ class SolidWorksIOMixin:
             # every drawing operation was unreachable. Measured live on
             # SW 2025: 8=Part.prtdot, 9=Assembly.asmdot, 10=Drawing.drwdot,
             # 0-3 all empty.
-            drw_template = self._resolve_template_path([10, 1, 0, 2, 3], ".drwdot")
+            explicit = self._explicit_template_path(template, ".drwdot")
+            drw_template = explicit or self._resolve_template_path(
+                [10, 1, 0, 2, 3], ".drwdot"
+            )
             model = None
             if drw_template:
                 model = app.NewDocument(
                     drw_template, _SW_DWG_PAPERS_USER_DEFINED, 0.2794, 0.2159
                 )
+            if not model and explicit:
+                raise Exception(f"Failed to create a drawing from {explicit!r}")
             if not model:
                 # No usable template (a settings reset blanks the slot, or it
                 # names a deleted file). Like create_part's NewPart fallback,

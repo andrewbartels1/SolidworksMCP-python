@@ -484,13 +484,17 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def create_part(
-        self, name: str | None = None, units: str | None = None
+        self,
+        name: str | None = None,
+        units: str | None = None,
+        template: str | None = None,
     ) -> AdapterResult[SolidWorksModel]:
         """Create part through circuit breaker.
 
         Args:
             name (str | None): The name value. Defaults to None.
             units (str | None): The units value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -502,6 +506,10 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             Returns:
                 AdapterResult[SolidWorksModel]: The result produced by the operation.
             """
+            if template is not None:
+                # No zero-arg retry: dropping the template would silently
+                # build the document from a different one.
+                return await self.adapter.create_part(name, units, template)
             if name is None and units is None:
                 return await self.adapter.create_part()
             return await self._invoke_with_optional_args(
@@ -511,7 +519,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             )
 
         return await self._execute_with_circuit_breaker(
-            "create_part", _op, input_dict={"name": name, "units": units}
+            "create_part",
+            _op,
+            input_dict={"name": name, "units": units, "template": template},
         )
 
     async def call(self, operation: Callable[[], object | Awaitable[object]]) -> object:
@@ -541,12 +551,13 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             raise RuntimeError(str(exc)) from exc
 
     async def create_assembly(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create assembly through circuit breaker.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -558,6 +569,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             Returns:
                 AdapterResult[SolidWorksModel]: The result produced by the operation.
             """
+            if template is not None:
+                return await self.adapter.create_assembly(name, template)
             if name is None:
                 return await self.adapter.create_assembly()
             return await self._invoke_with_optional_args(
@@ -566,24 +579,25 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             )
 
         return await self._execute_with_circuit_breaker(
-            "create_assembly", _op, input_dict={"name": name}
+            "create_assembly", _op, input_dict={"name": name, "template": template}
         )
 
     async def create_drawing(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create drawing through circuit breaker.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
             "create_drawing",
-            lambda: self.adapter.create_drawing(name),
-            input_dict={"name": name},
+            lambda: self.adapter.create_drawing(name, template),
+            input_dict={"name": name, "template": template},
         )
 
     # Feature operations
