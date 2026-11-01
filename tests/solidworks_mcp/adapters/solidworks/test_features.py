@@ -909,7 +909,9 @@ def test_loft_reports_an_unselectable_guide_curve() -> None:
         ("not-a-version", "ThroughAllBoth", False, 2, 2),
         ("34.1.0", "through_all_both", False, 2, 2),
         ("34.1.0", "ThroughAll", True, 2, 1),
-        ("33.1.0", "Blind", False, 1, 1),
+        # Blind is single-ended on every version (#193).
+        ("33.1.0", "Blind", True, 1, 1),
+        ("34.1.0", "Blind", True, 1, 1),
         ("not-a-version", "Blind", True, 1, 1),
     ],
 )
@@ -942,6 +944,7 @@ def test_cut_extrude_version_and_end_condition_paths(
     assert result.is_success, result.error
     (args,) = calls
     assert (args[0], args[3], args[4]) == (expected_sd, expected_t1, expected_t2)
+    assert args[6] == 0.0  # D2: Direction 2 never gets a depth of its own
     assert len(args) == 27
     assert args[26] is revision.startswith("33")  # OptimizeGeometry
 

@@ -963,7 +963,10 @@ specs are now resolved by walking `IPartDoc::GetBodies2` → `IBody2::GetEdges` 
 `GetFaces` and taking the entity with the smallest distance from the point to
 `IEdge::GetClosestPointOn` / `IFace2::GetClosestPointOn` (first three values), then
 `IEntity::Select4(append, SelectData)` with `SelectData.Mark` set. A point more than
-0.5 mm from every edge is refused instead of picking a neighbour.
+0.5 mm from every edge is refused instead of picking a neighbour. Vertices are not walked:
+a corner lies on its edges at distance 0, so the walk would pick an edge (opposite corners
+of a 40×20×12 block measured 44.72 mm, edge to edge, instead of 46.19 mm). A `VERTEX`
+spec keeps the `SelectByID2` pick.
 
 **`IModelDoc2::FeatureFillet3` (SW 2025+) returns non-zero for a selected face but builds
 nothing**: no feature, no volume change. Select the face's edges (`IFace2::GetEdges`)
@@ -981,6 +984,26 @@ map, so late binding treats it as a property read).
 `SolidWorksFeaturesMixin.add_fillet`, `_BodyEntityPicker` in `adapters/solidworks/features.py`
 and `_save_screenshot_sized` in `pywin32_adapter.py`. Live-verified on SW 2026,
 2026-10-31.
+
+---
+
+## 35. `Sd` on `FeatureCut3` / `FeatureCut4` means "single direction", not "through"
+
+**Symptom:** a blind `create_cut_extrude` from a sketch inside the body (for example a
+circle on the Front Plane of a mid-plane block) returns no feature and no COM error. The
+same cut from a sketch on a face works.
+
+**Root cause:** the first argument, `Sd`, is `True` for a one-direction cut. With
+`Sd=False`, SolidWorks also cuts Direction 2 using `T2` and `D2`. The adapter once passed
+"is this a Through All cut?" in that slot, so a blind cut became double-ended with a
+zero-depth blind Direction 2. SolidWorks rejects that from an internal sketch; from a
+face sketch Direction 2 points into empty space, which hid the bug.
+
+**Fix:** `Sd=True` for every one-direction cut (Blind and Through All). `Sd=False` only
+for a cut that goes both ways (`T1=T2=swEndCondThroughAll`, see #10). The SW version
+picks `OptimizeGeometry`, never `Sd`.
+
+`_create_cut_extrude_impl` in `adapters/solidworks/features.py`; issue #193.
 
 ---
 

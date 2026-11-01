@@ -1390,8 +1390,7 @@ def _create_cut_extrude_impl(
         feature = None
         fallback_errors: list[str] = []
 
-        # Detect the SW major version: it picks OptimizeGeometry and the
-        # blind-cut Sd flag below.
+        # Detect the SW major version: it picks OptimizeGeometry below.
         sw_major = 0
         if getattr(adapter, "swApp", None):
             rev = adapter._attempt(
@@ -1423,10 +1422,12 @@ def _create_cut_extrude_impl(
         elif through_one:
             forms = [("", True, through_all, blind)]
         else:
-            # Blind cuts keep the per-version Sd this adapter has always
-            # passed: False on SW 2025+ (zero-depth Direction 2), True on
-            # older or undetected versions.
-            forms = [("", sw_major < 33, blind, blind)]
+            # A blind cut is single-ended (Sd=True) on every version. Sd means
+            # "single direction", not "through": Sd=False with a zero-depth
+            # blind Direction 2 returns no feature when the sketch lies inside
+            # the body (#193), and only worked from a face sketch because
+            # Direction 2 then points into empty space.
+            forms = [("", True, blind, blind)]
 
         def _cut_args(sd: bool, t1: int, t2: int) -> list[Any]:
             """Build the 26 arguments ``FeatureCut3`` and ``FeatureCut4`` share.
