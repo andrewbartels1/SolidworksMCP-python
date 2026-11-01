@@ -1233,9 +1233,16 @@ def _create_cut_extrude_impl(
         params: Extrusion parameter bag reused for cut parameters:
             - ``depth`` (float): Cut depth in mm.
             - ``draft_angle`` (float): Draft angle in degrees.
-            - ``reverse_direction`` (bool): Flip the cut direction.
-            - ``end_condition`` (str): ``"Blind"`` (default) or
-              ``"ThroughAll"`` / ``"through_all"``.
+            - ``reverse_direction`` (bool): Flip the cut direction. A
+              one-direction cut whose requested direction finds no material
+              is retried the other way; ``parameters.direction_flipped``
+              says so.
+            - ``end_condition`` (str): ``"Blind"`` (default),
+              ``"ThroughAll"`` / ``"through_all"``, or ``"ThroughAllBoth"`` /
+              ``"through_all_both"`` (through all in both directions, cut as a
+              double-ended Through All feature).
+            - ``both_directions`` (bool): With ``"ThroughAll"``, cut through
+              all in both directions (same as ``"ThroughAllBoth"``).
             - ``feature_scope`` (bool): Limit cut to selected bodies.
             - ``auto_select`` (bool): Auto-select bodies in scope.
             - ``sketch_name`` (str | None): Sketch to cut from. See sketch
@@ -1272,8 +1279,8 @@ def _create_cut_extrude_impl(
     def _cut_operation() -> SolidWorksFeature:
         """Inner COM closure that locates the active sketch and performs the cut.
 
-        Normalises ``params``, resolves the end-condition constant, selects the
-        sketch profile, then cascades through three ``FeatureCut`` overloads.
+        Normalises ``params``, selects the sketch profile, then tries each
+        end-condition form against ``FeatureCut4`` and then ``FeatureCut3``.
 
         Returns:
             SolidWorksFeature: Populated feature descriptor on success.
@@ -1286,6 +1293,7 @@ def _create_cut_extrude_impl(
             draft_angle=float(getattr(params, "draft_angle", 0.0)),
             reverse_direction=bool(getattr(params, "reverse_direction", False)),
             end_condition=str(getattr(params, "end_condition", "Blind")),
+            both_directions=bool(getattr(params, "both_directions", False)),
             feature_scope=bool(getattr(params, "feature_scope", False)),
             auto_select=bool(getattr(params, "auto_select", True)),
             sketch_name=getattr(params, "sketch_name", None) or None,
@@ -1371,31 +1379,21 @@ def _create_cut_extrude_impl(
         adapter._last_sketch_name = target_sketch
 
         end_condition = (normalized.end_condition or "Blind").strip().lower()
-        t1 = adapter.constants["swEndCondBlind"]
+        blind = adapter.constants["swEndCondBlind"]
+        through_all = adapter.constants["swEndCondThroughAll"]
         depth_m = normalized.depth / 1000.0
-        if end_condition in {"throughall", "through all", "through_all"}:
-            t1 = adapter.constants["swEndCondThroughAll"]
-        elif end_condition in {
+        through_one = end_condition in {"throughall", "through all", "through_all"}
+        through_both = end_condition in {
             "throughallboth",
             "through all both",
             "through_all_both",
-        }:
-            t1 = adapter.constants["swEndCondThroughAllBoth"]
+        } or (through_one and normalized.both_directions)
 
         t0 = adapter.constants.get("swStartSketchPlane", 0)
         feature = None
         fallback_errors: list[str] = []
-        is_through = end_condition in {
-            "throughall",
-            "through all",
-            "through_all",
-            "throughallboth",
-            "through all both",
-            "through_all_both",
-        }
 
-        # Detect SW major version for FeatureCut4 parameter count
-        # SW 2025 (major=33) verified with 27 params; other versions use 28.
+        # Detect the SW major version: it picks OptimizeGeometry below.
         sw_major = 0
         if getattr(adapter, "swApp", None):
             rev = adapter._attempt(
@@ -1407,171 +1405,138 @@ def _create_cut_extrude_impl(
             except (ValueError, IndexError):
                 sw_major = 0
 
-        # 1. FeatureCut4 (SW 2015+)
-        # SW 2025 (major=33): 27 params, the 27th being OptimizeGeometry.
-        # It was omitted here, so the call passed 26 and SolidWorks answered
-        # "Parameter not optional" for every cut.
-        # SW 2026+ (major>=34): 28 params — adds OptimizeGeometry + PFeat.
-        if sw_major == 33:
-            feature, cut4_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut4(
-                    is_through,  # Sd
-                    False,  # Flip
-                    normalized.reverse_direction,  # Dir
-                    t1,  # T1
-                    adapter.constants["swEndCondBlind"],  # T2
-                    depth_m,  # D1
-                    0.0,  # D2
+        # (label, Sd, T1, T2, Dir) forms to try, in order. Sd is True for a
+        # single-ended cut, False to also cut Direction 2 with T2. Dir
+        # reverses Direction 1.
+        reverse = normalized.reverse_direction
+        if through_both:
+            # Through All in both directions is a double-ended cut with
+            # Through All on each side. A single-ended cut with
+            # T1=swEndCondThroughAllBoth (9) is accepted by the COM call but
+            # SolidWorks 2026 returns no feature for it (seen live on a closed
+            # Front Plane sketch), so that form is only a fallback.
+            forms = [
+                (
+                    " [Sd=False, T1=T2=ThroughAll]",
                     False,
-                    False,
-                    False,
-                    False,  # Dchk1/2, Ddir1/2
-                    normalized.draft_angle * 3.14159 / 180.0,  # Dang1
-                    0.0,  # Dang2
-                    False,
-                    False,
-                    False,
-                    False,  # OffsetRev1/2, TranslateSurf1/2
-                    False,  # NormalCut
-                    normalized.feature_scope,  # UseFeatScope
-                    normalized.auto_select,  # UseAutoSelect
-                    False,  # AssemblyFeatureScope
-                    False,  # AutoSelectComponents
-                    False,  # PropagateFeatureToParts
-                    t0,  # T0
-                    0.0,  # StartOffset
-                    False,  # FlipStartOffset
-                    True,  # OptimizeGeometry
-                )
-            )
-        elif sw_major >= 34:
-            # SW 2026+ adds OptimizeGeometry as a 27th INPUT param.
-            # PFeat is an OUT param (PARAMFLAG_FOUT|FRETVAL) — not passed by caller.
-            feature, cut4_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut4(
-                    is_through,  # Sd
-                    False,  # Flip
-                    normalized.reverse_direction,  # Dir
-                    t1,  # T1
-                    adapter.constants["swEndCondBlind"],  # T2
-                    depth_m,  # D1
-                    0.0,  # D2
-                    False,
-                    False,
-                    False,
-                    False,  # Dchk1/2, Ddir1/2
-                    normalized.draft_angle * 3.14159 / 180.0,  # Dang1
-                    0.0,  # Dang2
-                    False,
-                    False,
-                    False,
-                    False,  # OffsetRev1/2, TranslateSurf1/2
-                    False,  # NormalCut
-                    normalized.feature_scope,  # UseFeatScope
-                    normalized.auto_select,  # UseAutoSelect
-                    False,  # AssemblyFeatureScope
-                    False,  # AutoSelectComponents
-                    False,  # PropagateFeatureToParts
-                    t0,  # T0
-                    0.0,  # StartOffset
-                    False,  # FlipStartOffset
-                    False,  # OptimizeGeometry (added in SW 2026)
-                )
-            )
-        else:
-            feature, cut4_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut4(
-                    True,
-                    False,
-                    normalized.reverse_direction,
-                    t1,
-                    adapter.constants["swEndCondBlind"],
-                    depth_m,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.draft_angle * 3.14159 / 180.0,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.feature_scope,
-                    normalized.auto_select,
-                    False,
-                    False,
-                    False,
-                    t0,
-                    0.0,
-                    False,
-                    False,
-                )
-            )
-        if cut4_error is not None:
-            fallback_errors.append(f"FeatureCut4: {cut4_error}")
-
-        if not feature:
-            # The sketch is already explicitly selected (above) — no
-            # reselection loop here. If FeatureCut4 didn't take, retry the
-            # exact same selection against the older FeatureCut3 signature
-            # rather than guessing at a different sketch.
-            adapter._attempt(
-                lambda: adapter.currentModel.Extension.SelectByID2(
-                    target_sketch,
-                    "SKETCH",
-                    0.0,
-                    0.0,
-                    0.0,
-                    False,
-                    0,
-                    _null_callout(),
-                    0,
+                    through_all,
+                    through_all,
+                    reverse,
                 ),
-                default=False,
-            )
+                (
+                    " [Sd=True, T1=ThroughAllBoth]",
+                    True,
+                    adapter.constants["swEndCondThroughAllBoth"],
+                    blind,
+                    reverse,
+                ),
+            ]
+        else:
+            # One direction (Blind or Through All) is single-ended: Sd means
+            # "single direction" (#193). Direction 1 follows the sketch
+            # normal, so from a sketch on a face, or on the plane of one, the
+            # requested direction can point out of the part and the cut finds
+            # no material. Only then is the opposite direction tried, which is
+            # what the SolidWorks UI does (seen live on SW 2026: a Top Plane
+            # sketch under a block cut nothing until Dir was flipped).
+            t1 = through_all if through_one else blind
+            forms = [
+                ("", True, t1, blind, reverse),
+                (" [direction flipped]", True, t1, blind, not reverse),
+            ]
 
-        if not feature:
-            # 2. FeatureCut3 (SW 2010+, and any install lacking FeatureCut4)
-            # Signature: Sd, Flip, Dir, T1, T2, D1, D2, Dchk1, Dchk2, Ddir1, Ddir2,
-            #   Dang1, Dang2, OffsetReverse1, OffsetReverse2, TranslateSurface1,
-            #   TranslateSurface2, NormalCut, UseFeatScope, UseAutoSelect,
-            #   AssemblyFeatureScope, AutoSelectComponents, PropagateFeatureToParts,
-            #   T0, StartOffset, FlipStartOffset
-            feature, cut3_error = adapter._attempt_with_error(
-                lambda: feature_manager.FeatureCut3(
-                    is_through,
-                    normalized.reverse_direction,
-                    False,
-                    t1,
-                    0,
-                    normalized.depth / 1000.0,
-                    normalized.depth / 1000.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.draft_angle * 3.14159 / 180.0,
-                    0.0,
-                    False,
-                    False,
-                    False,
-                    False,
-                    False,
-                    normalized.feature_scope,
-                    normalized.auto_select,
-                    False,
-                    False,
-                    False,
-                    t0,
-                    0.0,
-                    False,
-                )
+        def _cut_args(sd: bool, t1: int, t2: int, dir_: bool) -> list[Any]:
+            """Build the 26 arguments ``FeatureCut3`` and ``FeatureCut4`` share.
+
+            Signature: Sd, Flip, Dir, T1, T2, D1, D2, Dchk1, Dchk2, Ddir1, Ddir2,
+            Dang1, Dang2, OffsetReverse1, OffsetReverse2, TranslateSurface1,
+            TranslateSurface2, NormalCut, UseFeatScope, UseAutoSelect,
+            AssemblyFeatureScope, AutoSelectComponents, PropagateFeatureToParts,
+            T0, StartOffset, FlipStartOffset. ``FeatureCut4`` appends
+            OptimizeGeometry.
+
+            Args:
+                sd: ``True`` for a single-ended cut.
+                t1: Direction 1 end condition.
+                t2: Direction 2 end condition (used only when ``sd`` is False).
+                dir_: Reverse Direction 1.
+
+            Returns:
+                list[Any]: Positional arguments in COM order.
+            """
+            return [
+                sd,  # Sd
+                False,  # Flip (True would cut outside the profile)
+                dir_,  # Dir
+                t1,  # T1
+                t2,  # T2
+                depth_m,  # D1
+                0.0,  # D2
+                False,
+                False,
+                False,
+                False,  # Dchk1/2, Ddir1/2
+                normalized.draft_angle * 3.14159 / 180.0,  # Dang1
+                0.0,  # Dang2
+                False,
+                False,
+                False,
+                False,  # OffsetRev1/2, TranslateSurf1/2
+                False,  # NormalCut
+                normalized.feature_scope,  # UseFeatScope
+                normalized.auto_select,  # UseAutoSelect
+                False,  # AssemblyFeatureScope
+                False,  # AutoSelectComponents
+                False,  # PropagateFeatureToParts
+                t0,  # T0
+                0.0,  # StartOffset
+                False,  # FlipStartOffset
+            ]
+
+        # 1. FeatureCut4 (SW 2015+): 27 params, the 27th being
+        # OptimizeGeometry (verified True on SW 2025, False on SW 2026). PFeat
+        # is an OUT param (PARAMFLAG_FOUT|FRETVAL), never passed by the caller.
+        # 2. FeatureCut3 (SW 2010+, and any install lacking FeatureCut4).
+        optimize_geometry = sw_major == 33
+        first_call = True
+        direction_flipped = False
+        for label, sd, t1, t2, dir_ in forms:
+            direction_flipped = dir_ != reverse
+            args = _cut_args(sd, t1, t2, dir_)
+            calls = (
+                (
+                    "FeatureCut4",
+                    lambda a=args: feature_manager.FeatureCut4(*a, optimize_geometry),
+                ),
+                ("FeatureCut3", lambda a=args: feature_manager.FeatureCut3(*a)),
             )
-            if cut3_error is not None:
-                fallback_errors.append(f"FeatureCut3: {cut3_error}")
+            for api_name, call in calls:
+                if not first_call:
+                    # The sketch is already explicitly selected (above) — no
+                    # guessing here. A failed FeatureCut can drop it, so
+                    # reselect the same sketch before the next variant.
+                    adapter._attempt(
+                        lambda: adapter.currentModel.Extension.SelectByID2(
+                            target_sketch,
+                            "SKETCH",
+                            0.0,
+                            0.0,
+                            0.0,
+                            False,
+                            0,
+                            _null_callout(),
+                            0,
+                        ),
+                        default=False,
+                    )
+                first_call = False
+                feature, cut_error = adapter._attempt_with_error(call)
+                if cut_error is not None:
+                    fallback_errors.append(f"{api_name}{label}: {cut_error}")
+                if feature:
+                    break
+            if feature:
+                break
 
         if not feature:
             if fallback_errors:
@@ -1580,15 +1545,20 @@ def _create_cut_extrude_impl(
                     f"'{target_sketch}' (SolidWorks major version {sw_major}). "
                     + " | ".join(fallback_errors)
                 )
+            # Name what was tried so the caller doesn't retry the same thing:
+            # a one-direction cut has already been tried both ways.
+            tried = "; ".join(
+                label.strip(" []") or "the requested direction"
+                for label, *_rest in forms
+            )
             raise Exception(
-                f"SolidWorks accepted the FeatureCut call(s) for sketch "
-                f"'{target_sketch}' (SolidWorks major version {sw_major}) "
-                "without raising an error, but returned no feature. This "
-                "means the COM call itself succeeded but the modeling "
-                "engine couldn't perform the cut — check that the sketch is "
-                "a fully closed profile, that it actually intersects solid "
-                "geometry within the given depth, and that it hasn't "
-                "already been consumed by another feature."
+                f"SolidWorks built no feature from sketch '{target_sketch}' "
+                f"(tried: {tried}; SolidWorks major version {sw_major}). The "
+                "profile removed no material in any of them. Check that the "
+                "sketch is a closed profile, that it overlaps the solid body "
+                f"within the {normalized.depth:g} mm depth (or use "
+                "end_condition 'ThroughAll'), and that no other feature has "
+                "already used the sketch."
             )
 
         return SolidWorksFeature(
@@ -1600,6 +1570,9 @@ def _create_cut_extrude_impl(
                 "draft_angle": normalized.draft_angle,
                 "reverse_direction": normalized.reverse_direction,
                 "sketch_name": target_sketch,
+                # True when the requested direction found no material and the
+                # cut went the other way (#193).
+                "direction_flipped": direction_flipped,
             },
             properties={"created": datetime.now().isoformat()},
         )

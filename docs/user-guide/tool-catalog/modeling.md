@@ -17,6 +17,16 @@ SolidWorks shows a feature it accepted without doing anything. Measuring never f
 the feature; any value that can't be read is `null` with a `note`. Finish a build with
 `verify_model` (see [Analysis tools](analysis.md)).
 
+**Which way a cut goes.** A one-way `create_cut_extrude` (`Blind` or `ThroughAll`)
+goes along the sketch plane's normal. From a sketch on a face, or on a plane that
+touches the body on one side only (a Top Plane sketch under a block extruded up from
+it), that direction can point away from the material. The tool then cuts the other way
+and its reply has `cut_extrude.direction_flipped: true`, so there's no need to guess
+`reverse_direction`. For a sketch on a plane through the middle of a body, use
+`ThroughAllBoth` (or `ThroughAll` with `both_directions: true`) to cut both sides. If
+neither direction removes material, the error is `feature_not_built`: change the
+sketch, its plane or the depth rather than retrying the same call.
+
 ---
 
 ### `open_model`

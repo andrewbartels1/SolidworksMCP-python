@@ -1695,6 +1695,49 @@ class TestModelingToolSuccessPaths:
         )
         result = await tool_fn(input_data={"depth": 5.0})
         assert result["status"] == "success"
+        assert (
+            mock_adapter.create_cut_extrude.await_args.args[0].both_directions is False
+        )
+
+        await tool_fn(
+            input_data={
+                "depth": 1.0,
+                "end_condition": "ThroughAll",
+                "both_directions": True,
+            }
+        )
+        params = mock_adapter.create_cut_extrude.await_args.args[0]
+        assert (params.end_condition, params.both_directions) == ("ThroughAll", True)
+
+    @pytest.mark.asyncio
+    async def test_create_cut_extrude_reports_a_flipped_direction(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        from solidworks_mcp.adapters.base import SolidWorksFeature
+        from solidworks_mcp.tools.modeling import register_modeling_tools
+
+        mock_adapter.create_cut_extrude = AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data=SolidWorksFeature(
+                    name="Cut-Extrude1",
+                    type="Cut-Extrude",
+                    parameters={"sketch_name": "Sketch2", "direction_flipped": True},
+                ),
+            )
+        )
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        tool_fn = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_cut_extrude"
+        )
+
+        result = await tool_fn(input_data={"depth": 6.0})
+
+        assert result["cut_extrude"]["direction_flipped"] is True
+        assert result["cut_extrude"]["sketch_name"] == "Sketch2"
+        assert "cut the other way" in result["message"]
 
     @pytest.mark.asyncio
     async def test_add_fillet_success(

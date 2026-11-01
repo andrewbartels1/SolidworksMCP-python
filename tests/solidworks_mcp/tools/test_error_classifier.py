@@ -53,6 +53,11 @@ def classifier() -> ErrorClassifier:
         ),
         ("Error in get_model_info: Member not found", "com_member_not_found"),
         (
+            "SolidWorks built no feature from sketch 'Sketch2' (tried: the "
+            "requested direction; direction flipped)",
+            "feature_not_built",
+        ),
+        (
             f"COM error in x: ({DISP_E_TYPEMISMATCH}, 'Type mismatch.', None, None)",
             "com_type_mismatch",
         ),

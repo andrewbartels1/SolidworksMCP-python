@@ -1022,13 +1022,17 @@ def test_cli_main_routes_setup_to_the_setup_app():
     from solidworks_mcp.server import cli_main
 
     with (
-        patch("solidworks_mcp.server.sys.argv", ["solidworks-mcp", "setup", "--dry-run"]),
+        patch(
+            "solidworks_mcp.server.sys.argv", ["solidworks-mcp", "setup", "--dry-run"]
+        ),
         patch("solidworks_mcp.setup.cli.app") as setup_app,
         patch("solidworks_mcp.server.typer.run") as mock_run,
     ):
         cli_main()
 
-    setup_app.assert_called_once_with(args=["--dry-run"], prog_name="solidworks-mcp setup")
+    setup_app.assert_called_once_with(
+        args=["--dry-run"], prog_name="solidworks-mcp setup"
+    )
     mock_run.assert_not_called()
 
 

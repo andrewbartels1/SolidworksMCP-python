@@ -155,6 +155,15 @@ Drawing-package tools, the last part of @SaiqKamran's #117:
 
 ### Fixed
 
+- **`create_cut_extrude`**: a blind cut from a sketch inside the body (for
+  example a circle on the Front Plane of a mid-plane block) returned no
+  feature on SolidWorks 2025 and 2026. One-way cuts are now single-ended; when
+  the requested direction finds no material (a sketch on a face, or on a plane
+  at the edge of the body) the cut is retried the other way and the reply says
+  so with `direction_flipped`. A cut that builds nothing either way fails with
+  the new `feature_not_built` error type, which names what was tried (#193,
+  COM pitfall #35).
+
 Found in the live sign-off of the drawing-package tools on SolidWorks 2026:
 
 - **`generate_drawing_package`** builds the sheet in separate COM steps

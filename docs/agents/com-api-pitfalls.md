@@ -235,13 +235,19 @@ in one direction, leaving half the material untouched.
 plane. When the sketch is at Y=0 and the body extends from Y=-10 to Y=+10, Direction 1 goes
 to Y=+10 but Direction 2 is not cut.
 
-**Fix:** Use `swEndCondThroughAllBoth` (value `9`) or pass `both_directions=True`:
+**Fix:** Pass `end_condition="ThroughAllBoth"`, or `"ThroughAll"` with
+`both_directions=True`:
 
 ```python
 await adapter.create_cut_extrude(
     ExtrusionParameters(end_condition="ThroughAllBoth")
 )
 ```
+
+The adapter builds this as a double-ended cut (`Sd=False`, `T1=T2=swEndCondThroughAll`).
+A single-ended `FeatureCut4` with `T1=swEndCondThroughAllBoth` (value `9`) returns no
+feature on SolidWorks 2026 for a valid closed sketch, so the adapter only tries it as a
+fallback.
 
 ---
 
@@ -957,7 +963,10 @@ specs are now resolved by walking `IPartDoc::GetBodies2` → `IBody2::GetEdges` 
 `GetFaces` and taking the entity with the smallest distance from the point to
 `IEdge::GetClosestPointOn` / `IFace2::GetClosestPointOn` (first three values), then
 `IEntity::Select4(append, SelectData)` with `SelectData.Mark` set. A point more than
-0.5 mm from every edge is refused instead of picking a neighbour.
+0.5 mm from every edge is refused instead of picking a neighbour. Vertices are not walked:
+a corner lies on its edges at distance 0, so the walk would pick an edge (opposite corners
+of a 40×20×12 block measured 44.72 mm, edge to edge, instead of 46.19 mm). A `VERTEX`
+spec keeps the `SelectByID2` pick.
 
 **`IModelDoc2::FeatureFillet3` (SW 2025+) returns non-zero for a selected face but builds
 nothing**: no feature, no volume change. Select the face's edges (`IFace2::GetEdges`)
@@ -975,6 +984,43 @@ map, so late binding treats it as a property read).
 `SolidWorksFeaturesMixin.add_fillet`, `_BodyEntityPicker` in `adapters/solidworks/features.py`
 and `_save_screenshot_sized` in `pywin32_adapter.py`. Live-verified on SW 2026,
 2026-10-31.
+
+---
+
+## 35. One-way `FeatureCut4`: `Sd` means "single direction", and the normal may point away
+
+**Symptom:** a blind or Through All `create_cut_extrude` returns no feature and no COM
+error.
+
+**What the arguments do** (probed live on SW 2026, 2026-11-01, one fresh part per case):
+
+- `Sd` (1st argument) is "single direction". `True` cuts Direction 1 only. `False`
+  also cuts Direction 2 with `T2`/`D2`; with `D2=0` that second side has zero depth.
+- Direction 1 follows the sketch plane's normal; `Dir` (3rd argument) reverses it.
+
+| Ø5.5 × 6 mm hole, Top Plane sketch under a block extruded up from Top | Result |
+|---|---|
+| `Sd=False`, `D2=0` (what the adapter sent on SW 2025+ since 69d3dbd) | no feature |
+| `Sd=True`, `Dir=False` | no feature: the normal points away from the block |
+| `Sd=True`, `Dir=True` | cuts exactly 142.55 mm³ |
+| `Sd=True`, then `Sd=False` on the same sketch | no feature (a failed call does not spoil the retry; `Sd=False` just never works here) |
+
+From a sketch on a plane through the middle of a body (Front Plane of a mid-plane
+block), `Sd=True` cuts in either direction and `Sd=False` with `D2=0` returns nothing.
+
+**Why it looked fine before:** on main the `FeatureCut4` call failed and the
+`FeatureCut3` fallback passed `D2 = depth` with `Sd=False`, a double-ended cut whose
+second side happened to go into the block. Fixing that fallback's arguments (#192)
+removed the accident and exposed the real problem.
+
+**Fix:** a one-way cut is single-ended (`Sd=True`) with the requested `Dir`; if that
+builds nothing, retry once with `Dir` reversed, reselecting the sketch first. The
+result's `parameters.direction_flipped` (and the tool reply's
+`cut_extrude.direction_flipped`) says when that happened. When neither direction
+builds anything, the error says what was tried and is classified `feature_not_built`.
+The SW version picks only `OptimizeGeometry`, never `Sd`.
+
+`_create_cut_extrude_impl` in `adapters/solidworks/features.py`; issue #193.
 
 ---
 

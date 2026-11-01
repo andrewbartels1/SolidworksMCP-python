@@ -67,6 +67,7 @@ says what kind of failure it was; `hint` is the next step to take:
 | `com_wrong_thread` | A SolidWorks call ran off the thread that connected (a server bug; restart the server) |
 | `com_member_not_found` | SolidWorks could not resolve an API member (usually a stale `gen_py` cache) |
 | `com_type_mismatch` | SolidWorks rejected an argument's COM type (a server bug; report it) |
+| `feature_not_built` | SolidWorks accepted the call but the geometry gave it nothing to build (e.g. a cut whose profile misses the body in both directions); change the inputs, don't retry as is |
 | `operation_failed` | SolidWorks refused or failed the operation; read `message` |
 | `internal` | An unexpected server error (a bug; report the tool and arguments) |
 
