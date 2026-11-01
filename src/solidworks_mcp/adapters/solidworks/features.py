@@ -1798,7 +1798,10 @@ def _select_edge_by_coord(
     at all does it fall back to the view-dependent ``SelectByID2`` pick.
 
     ``entity_type`` is normally ``"EDGE"``, but pass ``"FACE"`` to select a
-    whole face instead.
+    whole face instead. Any other type (``"VERTEX"`` from
+    ``measure_entities``) goes straight to the ``SelectByID2`` pick: a vertex
+    lies on its edges at distance 0, so the edge walk would select an edge
+    in its place.
 
     Args:
         adapter: A connected adapter with a valid ``currentModel``.
@@ -1807,7 +1810,8 @@ def _select_edge_by_coord(
         z: Z in metres.
         append: Add to the current selection instead of replacing it.
         mark: Selection mark.
-        entity_type: ``"EDGE"`` or ``"FACE"``.
+        entity_type: ``"EDGE"``, ``"FACE"``, or another ``SelectByID2``
+            type such as ``"VERTEX"``.
         picker: Reuse a picker (and its body walk) across several picks.
 
     Returns:
@@ -1824,6 +1828,11 @@ def _select_edge_by_coord(
     # entity in the selection set (when append=False this is the first one).
     if not append:
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
+
+    # Only edges and faces are walked on the body; anything else (a vertex)
+    # keeps the SelectByID2 pick, which honours the requested type.
+    if entity_type not in ("EDGE", "FACE"):
+        return _select_by_view_pick(adapter, x, y, z, append, mark, entity_type)
 
     picker = picker or _BodyEntityPicker(adapter)
     getter = "GetFaces" if entity_type == "FACE" else "GetEdges"
