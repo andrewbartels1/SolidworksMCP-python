@@ -308,18 +308,21 @@ def test_discovery_connect_fails_on_non_windows(
     assert discovery.connect_to_solidworks() is False
 
 
-def test_discovery_connect_uses_dispatch_when_getobject_none(
+def test_discovery_connect_never_launches_solidworks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Connect_to_solidworks should fall back to gencache.EnsureDispatch when GetActiveObject raises com_error."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
+    """With no running SolidWorks, connect fails instead of starting one.
 
-    fake_sw = object()
+    Starting SldWorks.Application from a process outside the desktop session
+    (an SSH shell, a test run) leaves a hidden SLDWORKS.exe behind.
+    """
+    import solidworks_mcp.tools.docs_discovery as docs_mod
 
     class _FakeComError(Exception):
         """Test fake com error."""
 
-        pass
+    def _launch(_progid):
+        raise AssertionError("docs discovery must not launch SolidWorks")
 
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
@@ -332,17 +335,19 @@ def test_discovery_connect_uses_dispatch_when_getobject_none(
                 GetActiveObject=lambda _: (_ for _ in ()).throw(
                     _FakeComError("not running")
                 ),
-                gencache=SimpleNamespace(EnsureDispatch=lambda _: fake_sw),
+                Dispatch=_launch,
+                DispatchEx=_launch,
+                gencache=SimpleNamespace(EnsureDispatch=_launch),
             )
         ),
         raising=False,
     )
 
     discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-connect-dispatch")
+        output_dir=Path("tests/.generated/docs-connect-not-running")
     )
-    assert discovery.connect_to_solidworks() is True
-    assert discovery.sw_app is fake_sw
+    assert discovery.connect_to_solidworks() is False
+    assert discovery.sw_app is None
 
 
 def test_discover_com_objects_empty_without_connection() -> None:
@@ -537,6 +542,8 @@ async def test_discover_solidworks_docs_tool_success_path(
     class _FakeDiscovery:
         """Test suite for FakeDiscovery."""
 
+        sw_app = object()  # attached to a running SolidWorks
+
         def __init__(self, output_dir=None):
             """Test helper for init."""
             self.output_dir = output_dir
@@ -579,38 +586,27 @@ async def test_discover_solidworks_docs_tool_success_path(
     assert result["summary"]["total_com_objects"] == 1
 
 
-def test_discovery_connect_handles_com_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Connect_to_solidworks should return False when both GetActiveObject and EnsureDispatch raise com_error."""
+def test_discovery_connect_attaches_to_a_running_solidworks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Connect_to_solidworks binds the instance GetActiveObject returns."""
     import solidworks_mcp.tools.docs_discovery as docs_mod
 
-    class _FakeComError(Exception):
-        """Test suite for FakeComError."""
-
-        pass
-
+    fake_sw = object()
     monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
     monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "com_error", _FakeComError, raising=False)
     monkeypatch.setattr(
         docs_mod,
         "win32com",
-        SimpleNamespace(
-            client=SimpleNamespace(
-                GetActiveObject=lambda _: (_ for _ in ()).throw(_FakeComError("boom")),
-                gencache=SimpleNamespace(
-                    EnsureDispatch=lambda _: (_ for _ in ()).throw(
-                        _FakeComError("boom")
-                    )
-                ),
-            )
-        ),
+        SimpleNamespace(client=SimpleNamespace(GetActiveObject=lambda _: fake_sw)),
         raising=False,
     )
 
     discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-connect-com-error")
+        output_dir=Path("tests/.generated/docs-connect-attach")
     )
-    assert discovery.connect_to_solidworks() is False
+    assert discovery.connect_to_solidworks() is True
+    assert discovery.sw_app is fake_sw
 
 
 def test_discover_com_objects_handles_attribute_and_catalog_errors() -> None:
@@ -858,6 +854,8 @@ async def test_search_api_help_auto_discovers_when_index_missing(
 
     class _AutoDiscovery:
         """Test suite for AutoDiscovery."""
+
+        sw_app = object()  # attached to a running SolidWorks
 
         def __init__(self, output_dir=None):
             """Test helper for init."""
@@ -1131,6 +1129,8 @@ async def test_discover_tool_sets_rag_indexed_true_when_rag_rebuild_succeeds(
     assert discover_tool is not None
 
     class _FakeDiscovery:
+        sw_app = object()  # attached to a running SolidWorks
+
         def __init__(self, output_dir=None):
             self.output_dir = output_dir
 
@@ -1193,6 +1193,8 @@ async def test_discover_tool_handles_rag_import_error(
     assert discover_tool is not None
 
     class _FakeDiscovery:
+        sw_app = object()  # attached to a running SolidWorks
+
         def __init__(self, output_dir=None):
             self.output_dir = output_dir
 
@@ -1484,6 +1486,8 @@ def _refresh_env(monkeypatch, *, saved_to=None, error=None):
     calls: list[str] = []
 
     class _Discovery:
+        sw_app = object()  # attached to a running SolidWorks
+
         def discover_all(self):
             if error is not None:
                 raise error
@@ -1593,6 +1597,8 @@ async def test_discover_docs_tool_rag_index_rebuild_success(
     class _FakeDiscovery:
         """Mock discovery that succeeds."""
 
+        sw_app = object()  # attached to a running SolidWorks
+
         def __init__(self, output_dir=None):
             """Init."""
             self.output_dir = output_dir or temp_dir
@@ -1653,6 +1659,8 @@ async def test_discover_docs_tool_rag_index_rebuild_faiss_import_error(
 
     class _FakeDiscovery:
         """Mock discovery that succeeds."""
+
+        sw_app = object()  # attached to a running SolidWorks
 
         def __init__(self, output_dir=None):
             """Init."""
@@ -1719,6 +1727,8 @@ async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
 
     class _FakeDiscovery:
         """Mock discovery that succeeds."""
+
+        sw_app = object()  # attached to a running SolidWorks
 
         def __init__(self, output_dir=None):
             """Init."""
@@ -2473,3 +2483,111 @@ def test_detect_installed_solidworks_year_oserror_on_iterdir(tmp_path) -> None:
             result = real_func()
 
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# SolidWorks not running: discovery attaches only, and never saves an empty
+# index over a good one.
+# ---------------------------------------------------------------------------
+
+
+def _not_running_discovery(saved: list[str]):
+    """A discovery whose connect found no running SolidWorks."""
+
+    class _NotRunning:
+        sw_app = None
+
+        def __init__(self, output_dir=None):
+            self.output_dir = output_dir
+
+        def discover_all(self):
+            return {"com_objects": {}, "vba_references": {}}
+
+        def save_index(self, filename="solidworks_docs_index.json"):
+            saved.append(filename)
+            return Path(filename)
+
+    return _NotRunning
+
+
+@pytest.mark.asyncio
+async def test_discover_tool_reports_solidworks_not_running(
+    mcp_server,
+    mock_config: SolidWorksMCPConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tool errors, and writes no index, when SolidWorks is not running."""
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+    discover_tool = next(
+        tool.fn
+        for tool in await mcp_server.list_tools()
+        if tool.name == "discover_solidworks_docs"
+    )
+
+    saved: list[str] = []
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        docs_mod, "SolidWorksDocsDiscovery", _not_running_discovery(saved)
+    )
+
+    result = await discover_tool({})
+
+    assert result["status"] == "error"
+    assert result["error_type"] == "solidworks_unavailable"
+    assert "not running" in result["message"]
+    assert "never launches" in result["message"]
+    assert saved == []
+
+
+@pytest.mark.asyncio
+async def test_search_api_help_skips_auto_discover_when_solidworks_not_running(
+    mcp_server,
+    mock_config: SolidWorksMCPConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auto-discover falls back to workflow guidance instead of saving nothing."""
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+    search_tool = next(
+        tool.fn
+        for tool in await mcp_server.list_tools()
+        if tool.name == "search_solidworks_api_help"
+    )
+
+    saved: list[str] = []
+    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
+    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        docs_mod, "SolidWorksDocsDiscovery", _not_running_discovery(saved)
+    )
+    monkeypatch.setattr(docs_mod, "_find_index_file", lambda *_args, **_kwargs: None)
+
+    result = await search_tool(
+        {"query": "OpenDoc6", "year": 2026, "auto_discover_if_missing": True}
+    )
+
+    assert result["status"] == "success"
+    assert result["source_index_file"] is None
+    assert saved == []
+
+
+def test_maybe_refresh_index_keeps_the_stale_index_when_solidworks_not_running(
+    stale_index, monkeypatch
+):
+    from solidworks_mcp.tools import docs_discovery as dd
+
+    index, index_file = stale_index
+    saved: list[str] = []
+    monkeypatch.setattr(dd, "HAS_WIN32COM", True)
+    monkeypatch.setattr(dd.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(dd, "SolidWorksDocsDiscovery", _not_running_discovery(saved))
+
+    assert dd._maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
+        index,
+        index_file,
+    )
+    assert saved == []
