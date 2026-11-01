@@ -421,13 +421,24 @@ class CreateCutExtrudeInput(CompatInput):
         draft_angle (float): Draft angle in degrees.
         end_condition (str): End condition type.
         reverse_direction (bool): Reverse cut direction.
+        both_directions (bool): With ``"ThroughAll"``, cut both ways.
         sketch_name (str | None): Sketch to cut from.
     """
 
     depth: float = Field(description="Cut depth in millimeters")
     draft_angle: float = Field(default=0.0, description="Draft angle in degrees")
     reverse_direction: bool = Field(default=False, description="Reverse cut direction")
-    end_condition: str = Field(default="Blind", description="End condition type")
+    end_condition: str = Field(
+        default="Blind",
+        description="End condition: 'Blind', 'ThroughAll' or 'ThroughAllBoth'",
+    )
+    both_directions: bool = Field(
+        default=False,
+        description=(
+            "With end_condition 'ThroughAll', cut through the body both ways "
+            "(same as 'ThroughAllBoth')"
+        ),
+    )
     sketch_name: str | None = Field(
         default=None,
         description=(
@@ -1480,7 +1491,7 @@ async def register_modeling_tools(
             depth=input_data.depth,
             draft_angle=input_data.draft_angle,
             reverse_direction=input_data.reverse_direction,
-            both_directions=False,
+            both_directions=input_data.both_directions,
             thin_feature=False,
             thin_thickness=None,
             end_condition=input_data.end_condition,

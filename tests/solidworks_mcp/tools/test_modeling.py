@@ -1695,6 +1695,19 @@ class TestModelingToolSuccessPaths:
         )
         result = await tool_fn(input_data={"depth": 5.0})
         assert result["status"] == "success"
+        assert (
+            mock_adapter.create_cut_extrude.await_args.args[0].both_directions is False
+        )
+
+        await tool_fn(
+            input_data={
+                "depth": 1.0,
+                "end_condition": "ThroughAll",
+                "both_directions": True,
+            }
+        )
+        params = mock_adapter.create_cut_extrude.await_args.args[0]
+        assert (params.end_condition, params.both_directions) == ("ThroughAll", True)
 
     @pytest.mark.asyncio
     async def test_add_fillet_success(
