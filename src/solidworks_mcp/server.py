@@ -750,9 +750,17 @@ async def main() -> None:
 def cli_main() -> None:
     """Console script entry point using Typer CLI.
 
+    ``solidworks-mcp setup ...`` runs the guided client setup; anything else
+    starts the server.
+
     Returns:
         None: None.
     """
+    if sys.argv[1:2] == ["setup"]:
+        from .setup.cli import app
+
+        app(args=sys.argv[2:], prog_name="solidworks-mcp setup")
+        return
     typer.run(cli)
 
 

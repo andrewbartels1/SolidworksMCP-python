@@ -56,25 +56,26 @@ claude --version
 
 Use this when Claude Code, the MCP server, and SolidWorks all run on the same Windows machine.
 
-!!! danger "Always pass `--real` — omitting it silently runs in mock mode"
-    Without `--real`, every tool response is simulated: blank images, nonsense
-    mass properties, no SolidWorks activity.  Open SolidWorks **before**
-    restarting the server after any config change.
-
-Run this from the project root:
+Run `.\install.ps1` from the project root and pick **Claude Code** when setup lists your clients. If the project is already installed:
 
 ```powershell
-claude mcp add --transport stdio --scope project solidworks-mcp -- powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp-claude.ps1 --real --year 2026
+.\.venv\Scripts\solidworks-mcp.exe setup --client claude-code
 ```
 
-Change `2026` to match your installed SolidWorks year if different.
+Setup runs `claude mcp add --scope user solidworks`, pointing at the project's `.venv\Scripts\solidworks-mcp.exe` by its full path. If `claude` isn't on your PATH, it prints that command for you to run. By hand, it is:
+
+```powershell
+claude mcp add --scope user solidworks -- C:\path\to\SolidworksMCP-python\.venv\Scripts\solidworks-mcp.exe
+```
+
+Open SolidWorks before starting a Claude Code session, then run `/mcp` to check that `solidworks` is connected.
 
 ### Option B: Linux / WSL only
 
 Use this for mock-mode development, docs, and tests.
 
 ```bash
-claude mcp add --transport stdio --scope project solidworks-mcp -- make run
+claude mcp add --transport stdio --scope project solidworks -- make run
 ```
 
 This path does not control the real SolidWorks desktop app.
@@ -90,7 +91,7 @@ This path does not control the real SolidWorks desktop app.
 1. On the Linux / WSL side, add the remote server:
 
 ```bash
-claude mcp add --transport http --scope project solidworks-mcp http://YOUR-WINDOWS-IP:8000
+claude mcp add --transport http --scope project solidworks http://YOUR-WINDOWS-IP:8000
 ```
 
 Replace `YOUR-WINDOWS-IP` with the actual IP address of the Windows machine.
@@ -99,7 +100,7 @@ Replace `YOUR-WINDOWS-IP` with the actual IP address of the Windows machine.
     Capture the terminal right after `claude mcp add ...` succeeds.
     Include:
     - The exact add command that was used
-    - The server name `solidworks-mcp`
+    - The server name `solidworks`
     - The success message from Claude Code
 
 ## Step 3: Verify the Server Was Added
@@ -110,12 +111,12 @@ Run:
 claude mcp list
 ```
 
-You should see `solidworks-mcp` in the list.
+You should see `solidworks` in the list.
 
 You can also inspect the server details:
 
 ```bash
-claude mcp get solidworks-mcp
+claude mcp get solidworks
 ```
 
 If you used `--scope project`, Claude Code may also create or update a `.mcp.json` file in the project root.
@@ -143,12 +144,12 @@ Then type:
 
 This opens the MCP server list inside Claude Code.
 
-Look for `solidworks-mcp` and confirm it is available.
+Look for `solidworks` and confirm it is available.
 
 !!! info "Screenshot to add"
     Capture the `/mcp` screen in Claude Code.
     Include:
-    - The `solidworks-mcp` server name
+    - The `solidworks` server name
     - Its status
     - Any available actions such as authenticate, refresh, or remove
 
@@ -212,46 +213,37 @@ Check these items:
 Use:
 
 ```bash
-claude mcp remove solidworks-mcp
+claude mcp remove solidworks
 ```
 
-Then re-run the correct `claude mcp add ...` command.
+Or let setup do it: `.\.venv\Scripts\solidworks-mcp.exe setup --client claude-code --remove`. Then re-run the correct `claude mcp add ...` command, or setup.
 
 ## Optional: What the Project `.mcp.json` File Looks Like
 
 If you use `--scope project`, Claude Code creates a `.mcp.json` file in the
-repository root.  A correct `stdio` example for real SolidWorks automation:
+repository root. Setup uses user scope instead, so the server is available
+in every folder. Don't keep both: the tools would load twice. A `stdio`
+example for real SolidWorks automation:
 
 ```json
 {
   "mcpServers": {
-    "solidworks-mcp": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        ".\\deployment\\run-mcp-claude.ps1",
-        "--real",
-        "--year",
-        "2026"
-      ]
+    "solidworks": {
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\solidworks-mcp.exe",
+      "args": []
     }
   }
 }
 ```
 
-`--real` switches from mock mode to live COM automation.
-`--year 2026` tells the adapter which SolidWorks TLB to prefer — change it to
-match your installed version.
+Add `"--mock"` to `args` for simulated data without SolidWorks.
 
 A typical remote HTTP example looks like this:
 
 ```json
 {
   "mcpServers": {
-    "solidworks-mcp": {
+    "solidworks": {
       "type": "http",
       "url": "http://YOUR-WINDOWS-IP:8000"
     }
