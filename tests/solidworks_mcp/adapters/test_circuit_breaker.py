@@ -1061,3 +1061,19 @@ def test_wrappers_do_not_silently_fall_through_to_base_drawing(capability: str) 
             "calls to it return 'not implemented' instead of reaching the real "
             "adapter"
         )
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_forwards_explicit_templates() -> None:
+    """An explicit template reaches the wrapped adapter for every doc type."""
+    inner = MockSolidWorksAdapter({})
+    await inner.connect()
+    cb = CircuitBreakerAdapter(adapter=inner)
+
+    part = await cb.create_part("P", None, "C:/t/Part.prtdot")
+    assembly = await cb.create_assembly("A", "C:/t/Asm.asmdot")
+    drawing = await cb.create_drawing("D", "C:/t/Drw.drwdot")
+
+    assert part.data.properties["template"] == "C:/t/Part.prtdot"
+    assert assembly.data.properties["template"] == "C:/t/Asm.asmdot"
+    assert drawing.data.properties["template"] == "C:/t/Drw.drwdot"

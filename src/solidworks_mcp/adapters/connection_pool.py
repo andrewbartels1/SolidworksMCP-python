@@ -511,13 +511,17 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     async def create_part(
-        self, name: str | None = None, units: str | None = None
+        self,
+        name: str | None = None,
+        units: str | None = None,
+        template: str | None = None,
     ) -> AdapterResult[SolidWorksModel]:
         """Create part using pool.
 
         Args:
             name (str | None): The name value. Defaults to None.
             units (str | None): The units value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -532,6 +536,10 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             Returns:
                 AdapterResult[SolidWorksModel]: The result produced by the operation.
             """
+            if template is not None:
+                # No zero-arg retry: dropping the template would silently
+                # build the document from a different one.
+                return await adapter.create_part(name, units, template)
             if name is None and units is None:
                 return await adapter.create_part()
             result = await self._invoke_with_optional_args(
@@ -542,12 +550,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         return await self._execute_with_pool("create_part", _op)
 
     async def create_assembly(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create assembly using pool.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -562,6 +571,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             Returns:
                 AdapterResult[SolidWorksModel]: The result produced by the operation.
             """
+            if template is not None:
+                return await adapter.create_assembly(name, template)
             if name is None:
                 return await adapter.create_assembly()
             result = await self._invoke_with_optional_args(
@@ -572,18 +583,19 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         return await self._execute_with_pool("create_assembly", _op)
 
     async def create_drawing(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create drawing using pool.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
         """
         return await self._execute_with_pool(
-            "create_drawing", lambda adapter: adapter.create_drawing(name)
+            "create_drawing", lambda adapter: adapter.create_drawing(name, template)
         )
 
     # Feature operations

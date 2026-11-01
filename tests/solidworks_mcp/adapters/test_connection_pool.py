@@ -1738,3 +1738,20 @@ class TestConnectionPoolLegacyCoverageCoverage:
         await pool.cleanup()
 
         assert sync_close_called is True
+
+
+@pytest.mark.asyncio
+async def test_connection_pool_forwards_explicit_templates() -> None:
+    """An explicit template reaches the pooled adapter for every doc type."""
+    pool = ConnectionPoolAdapter(
+        adapter_factory=lambda: MockSolidWorksAdapter({}), pool_size=1
+    )
+    await pool.connect()
+
+    part = await pool.create_part("P", None, "C:/t/Part.prtdot")
+    assembly = await pool.create_assembly("A", "C:/t/Asm.asmdot")
+    drawing = await pool.create_drawing("D", "C:/t/Drw.drwdot")
+
+    assert part.data.properties["template"] == "C:/t/Part.prtdot"
+    assert assembly.data.properties["template"] == "C:/t/Asm.asmdot"
+    assert drawing.data.properties["template"] == "C:/t/Drw.drwdot"

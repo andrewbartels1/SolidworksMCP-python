@@ -214,7 +214,9 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
 
     When the sketch is successfully opened, ``adapter.currentSketchManager``,
     ``adapter.currentSketch``, ``adapter._sketch_count``, and
-    ``adapter._last_sketch_name`` are updated.
+    ``adapter._last_sketch_name`` are updated, and ``ISketchManager.AddToDB``
+    is set so entities land at exactly the requested coordinates
+    (``exit_sketch`` clears it again).
 
     Args:
         adapter: A fully connected ``PyWin32Adapter`` with a non-``None``
@@ -350,6 +352,13 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
             adapter.currentSketch = adapter.currentSketchManager.InsertSketch(True)
         except Exception:
             adapter.currentSketch = adapter.currentSketchManager.InsertSketch()
+        # Without AddToDB every Create* point snaps to nearby inferred
+        # alignments: an end at x=5.2915 landed on x=5 (vertical with an
+        # earlier point at x=5) and a 22 mm ring came out 23 mm. Writing
+        # straight to the sketch database keeps the requested coordinates.
+        # DisplayWhenAdded stays on: it only defers drawing, which would hide
+        # entities from a user watching SolidWorks until the next redraw.
+        adapter.currentSketchManager.AddToDB = True
 
         if not (adapter.currentSketch and hasattr(adapter.currentSketch, "Name")):
             # ISketchManager.ActiveSketch is the documented property for
@@ -2225,6 +2234,9 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
             lambda: _sw_type_info.flag_methods(sketch_manager, "ISketchManager"),
             default=0,
         )
+        # Hand the document back with SolidWorks' default (inference on) for
+        # interactive sketching; create_sketch turned AddToDB on.
+        adapter._attempt(lambda: setattr(sketch_manager, "AddToDB", False))
         sketch_manager.InsertSketch(True)
         adapter.currentSketch = None
         adapter.currentSketchManager = None

@@ -156,7 +156,10 @@ class CreatePartInput(CompatInput):
 
     name: str = Field(description="Name for the new part")
     template: str | None = Field(
-        default=None, description="Template file path for the new part"
+        default=None,
+        description=(
+            "Part template (.prtdot) path; omit to use the SolidWorks default"
+        ),
     )
     units: str | None = Field(default=None, description="Document units")
     material: str | None = Field(default=None, description="Material name")
@@ -521,7 +524,10 @@ class CreateAssemblyInput(CompatInput):
 
     name: str = Field(description="Name for the new assembly")
     template: str | None = Field(
-        default=None, description="Assembly template file path"
+        default=None,
+        description=(
+            "Assembly template (.asmdot) path; omit to use the SolidWorks default"
+        ),
     )
     components: list[str] = Field(default_factory=list, description="Component list")
 
@@ -908,7 +914,12 @@ class CreateDrawingInput(CompatInput):
     """
 
     name: str = Field(description="Name for the new drawing")
-    template: str | None = Field(default=None, description="Drawing template file path")
+    template: str | None = Field(
+        default=None,
+        description=(
+            "Drawing template (.drwdot) path; omit to use the SolidWorks default"
+        ),
+    )
     model_path: str | None = Field(default=None, description="Source model path")
     sheet_format: str | None = Field(default=None, description="Sheet format template")
 
@@ -996,9 +1007,9 @@ async def register_modeling_tools(
     async def create_part(input_data: CreatePartInput) -> dict[str, Any]:
         """Create a new SolidWorks part document.
 
-        Creates a new SolidWorks part document using the default part template. The new part
-        becomes the active document and is ready for modeling operations such as sketch creation
-        and feature addition.
+        Creates a new SolidWorks part document from ``template`` (a .prtdot path) or,
+        without one, the default part template. The new part becomes the active document
+        and is ready for modeling operations such as sketch creation and feature addition.
 
         Args:
             input_data (CreatePartInput): The input data value.
@@ -1017,13 +1028,15 @@ async def register_modeling_tools(
                             ```
 
                         Note:
-                            - Uses default SolidWorks part template
+                            - Uses ``template`` when given, else the default part template
                             - Part document is created in memory (not saved)
                             - Use save operations to persist to disk
                             - Subsequent modeling operations will apply to this part
         """
         input_data = normalize_input(input_data, CreatePartInput)
-        result = await adapter.create_part(input_data.name, input_data.units)
+        result = await adapter.create_part(
+            input_data.name, input_data.units, input_data.template
+        )
 
         require_success(result, context="Failed to create part")
         model = result.data
@@ -1045,9 +1058,9 @@ async def register_modeling_tools(
     async def create_assembly(input_data: CreateAssemblyInput) -> dict[str, Any]:
         """Create a new SolidWorks assembly document.
 
-        Creates a new SolidWorks assembly document using the default assembly template. The new
-        assembly becomes the active document and is ready for component insertion, mating, and
-        assembly-level operations.
+        Creates a new SolidWorks assembly document from ``template`` (a .asmdot path) or,
+        without one, the default assembly template. The new assembly becomes the active
+        document and is ready for component insertion, mating, and assembly-level operations.
 
         Args:
             input_data (CreateAssemblyInput): The input data value.
@@ -1066,17 +1079,16 @@ async def register_modeling_tools(
                             ```
 
                         Note:
-                            - Uses default SolidWorks assembly template
+                            - Uses ``template`` when given, else the default assembly template
                             - Assembly document is created in memory (not saved)
                             - Use save operations to persist to disk
                             - Ready for component insertion and mate creation
                             - Assembly tree will initially be empty
 
-                        This tool creates a new assembly document using the default assembly template.
                         The new assembly will become the active document.
         """
         input_data = normalize_input(input_data, CreateAssemblyInput)
-        result = await adapter.create_assembly(input_data.name)
+        result = await adapter.create_assembly(input_data.name, input_data.template)
 
         require_success(result, context="Failed to create assembly")
         model = result.data
@@ -1096,8 +1108,9 @@ async def register_modeling_tools(
     async def create_drawing(input_data: CreateDrawingInput) -> dict[str, Any]:
         """Create a new SolidWorks drawing document.
 
-        This tool creates a new drawing document using the default drawing template. The new
-        drawing will become the active document.
+        This tool creates a new drawing document from ``template`` (a .drwdot path) or,
+        without one, the default drawing template. The new drawing will become the active
+        document.
 
         Args:
             input_data (CreateDrawingInput): The input data value.
@@ -1106,7 +1119,7 @@ async def register_modeling_tools(
             dict[str, Any]: A dictionary containing the resulting values.
         """
         input_data = normalize_input(input_data, CreateDrawingInput)
-        result = await adapter.create_drawing(input_data.name)
+        result = await adapter.create_drawing(input_data.name, input_data.template)
 
         require_success(result, context="Failed to create drawing")
         model = result.data

@@ -479,13 +479,17 @@ class SolidWorksAdapter(ABC):
 
     @abstractmethod
     async def create_part(
-        self, name: str | None = None, units: str | None = None
+        self,
+        name: str | None = None,
+        units: str | None = None,
+        template: str | None = None,
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new part document.
 
         Args:
             name (str | None): The name value. Defaults to None.
             units (str | None): The units value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -494,12 +498,13 @@ class SolidWorksAdapter(ABC):
 
     @abstractmethod
     async def create_assembly(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new assembly document.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.
@@ -508,12 +513,13 @@ class SolidWorksAdapter(ABC):
 
     @abstractmethod
     async def create_drawing(
-        self, name: str | None = None
+        self, name: str | None = None, template: str | None = None
     ) -> AdapterResult[SolidWorksModel]:
         """Create a new drawing document.
 
         Args:
             name (str | None): The name value. Defaults to None.
+            template (str | None): Template file path. Defaults to None.
 
         Returns:
             AdapterResult[SolidWorksModel]: The result produced by the operation.

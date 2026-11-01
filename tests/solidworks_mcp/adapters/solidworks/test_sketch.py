@@ -172,6 +172,55 @@ def test_create_sketch_uses_active_sketch_property_when_insert_returns_falsy() -
     assert adapter._last_sketch_name == "Sketch4"
 
 
+class _RecordingSketchManager:
+    """ISketchManager stand-in that logs property writes and calls in order."""
+
+    def __init__(self) -> None:
+        self.__dict__["events"] = []
+        self.__dict__["AddToDB"] = False
+
+    def __setattr__(self, name: str, value: object) -> None:
+        self.events.append(f"{name}={value}")
+        self.__dict__[name] = value
+
+    def InsertSketch(self, *_args: object) -> object:
+        self.events.append("InsertSketch")
+        return SimpleNamespace(Name="Sketch1")
+
+    def CreateLine(self, *args: float) -> object:
+        self.events.append(("CreateLine", args))
+        return SimpleNamespace()
+
+
+def test_sketch_entities_bypass_inference_until_exit() -> None:
+    """Regression: SolidWorks inference moved requested sketch points.
+
+    Without ``AddToDB`` a line end at x=5.2915 snapped to x=5 (vertical
+    inference with an earlier point at x=5). The sketch must turn AddToDB on
+    before any entity is created and off again before it closes.
+    """
+    adapter = _FakeSketchAdapter()
+    manager = _RecordingSketchManager()
+    adapter.currentModel = SimpleNamespace(
+        FeatureByName=lambda _name: SimpleNamespace(Select2=lambda *_a: True),
+        Extension=SimpleNamespace(SelectByID2=lambda *args, **kwargs: False),
+        SketchManager=manager,
+        GetActiveSketch2=lambda: None,
+    )
+
+    assert sketch._create_sketch_impl(adapter, "Front").is_success
+    assert sketch._add_line_impl(adapter, 5, 28, 5.2915, 34).is_success
+    assert sketch._exit_sketch_impl(adapter).is_success
+
+    assert manager.events == [
+        "InsertSketch",
+        "AddToDB=True",
+        ("CreateLine", (0.005, 0.028, 0, 0.0052915, 0.034, 0)),
+        "AddToDB=False",
+        "InsertSketch",
+    ]
+
+
 def test_create_sketch_reports_plane_selection_failure() -> None:
     adapter = _FakeSketchAdapter()
     adapter.currentModel = SimpleNamespace(
