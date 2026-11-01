@@ -316,14 +316,18 @@ def test_add_fillet_and_chamfer_selection_and_feature_failures() -> None:
 
 
 def test_create_cut_extrude_through_all_both_directions() -> None:
-    """Through-all + both directions should use the combined end condition."""
-    # Exercise the branch that uses swEndCondThroughAllBoth.
-    adapter = _FakeFeatureAdapter()
+    """``both_directions=True`` with ThroughAll cuts through all both ways.
 
-    feature = SimpleNamespace(Name="Cut-Extrude1")
+    It used to be dropped silently, leaving a one-directional cut.
+    """
+    adapter = _versioned_adapter("34.1.0")
+
+    calls: list[tuple] = []
     feature_manager = SimpleNamespace(
-        FeatureCut4=lambda *args: feature,
-        FeatureCut3=lambda *args: None,
+        FeatureCut4=lambda *args: (
+            calls.append(args) or SimpleNamespace(Name="Cut-Extrude1")
+        ),
+        FeatureCut3=Mock(side_effect=AssertionError("should not be called")),
     )
     adapter.currentModel = SimpleNamespace(
         FeatureManager=feature_manager,
@@ -339,8 +343,11 @@ def test_create_cut_extrude_through_all_both_directions() -> None:
             depth=5.0, end_condition="ThroughAll", both_directions=True
         ),
     )
-    assert result.is_success
+    assert result.is_success, result.error
     assert result.data.type == "Cut-Extrude"
+    (args,) = calls
+    assert args[0] is False  # Sd: double-ended
+    assert args[3] == args[4] == 2  # T1 = T2 = swEndCondThroughAll
 
 
 def test_create_cut_extrude_raises_when_no_feature_and_no_errors() -> None:
@@ -896,14 +903,22 @@ def test_loft_reports_an_unselectable_guide_curve() -> None:
 
 
 @pytest.mark.parametrize(
-    ("revision", "end_condition", "expected_t1"),
+    ("revision", "end_condition", "expected_sd", "expected_t1", "expected_t2"),
     [
-        ("not-a-version", "ThroughAllBoth", 9),
-        ("33.1.0", "Blind", 1),
+        # Through All both ways: double-ended, Through All on each side.
+        ("not-a-version", "ThroughAllBoth", False, 2, 2),
+        ("34.1.0", "through_all_both", False, 2, 2),
+        ("34.1.0", "ThroughAll", True, 2, 1),
+        ("33.1.0", "Blind", False, 1, 1),
+        ("not-a-version", "Blind", True, 1, 1),
     ],
 )
 def test_cut_extrude_version_and_end_condition_paths(
-    revision: str, end_condition: str, expected_t1: int
+    revision: str,
+    end_condition: str,
+    expected_sd: bool,
+    expected_t1: int,
+    expected_t2: int,
 ) -> None:
     calls: list[tuple] = []
     adapter = _versioned_adapter(revision)
@@ -925,9 +940,119 @@ def test_cut_extrude_version_and_end_condition_paths(
     )
 
     assert result.is_success, result.error
-    assert calls[0][3] == expected_t1  # T1
-    if revision.startswith("33"):
-        assert len(calls[0]) == 27  # SW 2025 signature
+    (args,) = calls
+    assert (args[0], args[3], args[4]) == (expected_sd, expected_t1, expected_t2)
+    assert len(args) == 27
+    assert args[26] is revision.startswith("33")  # OptimizeGeometry
+
+
+def _cut_adapter_recording(cut4, cut3):
+    """A SW 2026 adapter whose FeatureCut4/3 record every call they get.
+
+    Returns the adapter and the shared, ordered call log of
+    ``(api_name, args)`` and ``("select", sketch_name)`` entries.
+    """
+    log: list[tuple] = []
+    adapter = _versioned_adapter("34.1.0")
+
+    def _select(name, *_rest):
+        log.append(("select", name))
+        return True
+
+    adapter.currentModel = SimpleNamespace(
+        FeatureManager=SimpleNamespace(
+            FeatureCut4=lambda *args: log.append(("FeatureCut4", args)) or cut4(args),
+            FeatureCut3=lambda *args: log.append(("FeatureCut3", args)) or cut3(args),
+        ),
+        ClearSelection2=lambda *_a: True,
+        FirstFeature=_fake_sketch_feature("Sketch1"),
+        Extension=SimpleNamespace(SelectByID2=_select),
+    )
+    adapter._last_sketch_name = "Sketch1"
+    return adapter, log
+
+
+def test_through_all_both_falls_back_to_the_single_ended_enum() -> None:
+    """If the double-ended cut builds nothing, try T1=swEndCondThroughAllBoth.
+
+    The same sketch is reselected before every retry.
+    """
+    feature = SimpleNamespace(Name="Cut-Extrude3")
+    adapter, log = _cut_adapter_recording(
+        cut4=lambda args: feature if args[3] == 9 else None,
+        cut3=lambda _args: None,
+    )
+
+    result = features._create_cut_extrude_impl(
+        adapter, ExtrusionParameters(depth=0.0, end_condition="ThroughAllBoth")
+    )
+
+    assert result.is_success, result.error
+    assert result.data.name == "Cut-Extrude3"
+    assert [entry[0] for entry in log] == [
+        "select",
+        "FeatureCut4",
+        "select",
+        "FeatureCut3",
+        "select",
+        "FeatureCut4",
+    ]
+    assert {entry[1] for entry in log if entry[0] == "select"} == {"Sketch1"}
+    cut_args = [entry[1] for entry in log if entry[0] != "select"]
+    assert [(a[0], a[3], a[4]) for a in cut_args] == [
+        (False, 2, 2),
+        (False, 2, 2),
+        (True, 9, 1),
+    ]
+
+
+def test_through_all_both_failure_names_every_form_tried() -> None:
+    def _raise(_args):
+        raise RuntimeError("rejected")
+
+    adapter, _log = _cut_adapter_recording(cut4=_raise, cut3=_raise)
+
+    result = features._create_cut_extrude_impl(
+        adapter, ExtrusionParameters(depth=0.0, end_condition="ThroughAllBoth")
+    )
+
+    assert result.is_error
+    error = result.error or ""
+    assert "Sketch1" in error
+    for expected in (
+        "FeatureCut4 [Sd=False, T1=T2=ThroughAll]: rejected",
+        "FeatureCut3 [Sd=False, T1=T2=ThroughAll]: rejected",
+        "FeatureCut4 [Sd=True, T1=ThroughAllBoth]: rejected",
+        "FeatureCut3 [Sd=True, T1=ThroughAllBoth]: rejected",
+    ):
+        assert expected in error
+
+
+def test_feature_cut3_fallback_reverses_direction_not_the_cut_side() -> None:
+    """FeatureCut3 shares FeatureCut4's order: Flip (arg 2) is the cut side.
+
+    ``reverse_direction`` used to land in Flip, so a reversed FeatureCut3 cut
+    removed the material outside the profile instead.
+    """
+    feature = SimpleNamespace(Name="Cut-Extrude2")
+    adapter, log = _cut_adapter_recording(
+        cut4=lambda _args: None, cut3=lambda _args: feature
+    )
+
+    result = features._create_cut_extrude_impl(
+        adapter,
+        ExtrusionParameters(
+            depth=5.0, end_condition="ThroughAll", reverse_direction=True
+        ),
+    )
+
+    assert result.is_success, result.error
+    (cut3_args,) = [entry[1] for entry in log if entry[0] == "FeatureCut3"]
+    (cut4_args,) = [entry[1] for entry in log if entry[0] == "FeatureCut4"]
+    assert len(cut3_args) == 26
+    assert cut3_args[1] is False  # Flip
+    assert cut3_args[2] is True  # Dir
+    assert cut3_args == cut4_args[:26]
 
 
 def test_fillet_with_unparseable_version_and_unreadable_feature_name() -> None:

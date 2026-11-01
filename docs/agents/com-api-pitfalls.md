@@ -235,13 +235,19 @@ in one direction, leaving half the material untouched.
 plane. When the sketch is at Y=0 and the body extends from Y=-10 to Y=+10, Direction 1 goes
 to Y=+10 but Direction 2 is not cut.
 
-**Fix:** Use `swEndCondThroughAllBoth` (value `9`) or pass `both_directions=True`:
+**Fix:** Pass `end_condition="ThroughAllBoth"`, or `"ThroughAll"` with
+`both_directions=True`:
 
 ```python
 await adapter.create_cut_extrude(
     ExtrusionParameters(end_condition="ThroughAllBoth")
 )
 ```
+
+The adapter builds this as a double-ended cut (`Sd=False`, `T1=T2=swEndCondThroughAll`).
+A single-ended `FeatureCut4` with `T1=swEndCondThroughAllBoth` (value `9`) returns no
+feature on SolidWorks 2026 for a valid closed sketch, so the adapter only tries it as a
+fallback.
 
 ---
 
