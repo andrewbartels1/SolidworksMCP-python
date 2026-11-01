@@ -2994,6 +2994,28 @@ def test_edge_pick_fails_when_no_select_data_can_be_made() -> None:
     assert edge.selected_with == []
 
 
+def test_vertex_pick_uses_select_by_id_never_an_edge() -> None:
+    """A corner lies on its edges at distance 0, so the edge walk would pick an
+    edge; vertices go to SelectByID2 with the VERTEX type instead."""
+    edges = _plate_edges()
+    adapter = _picking_adapter(edges)
+    adapter.currentModel.Extension.SelectByID2.return_value = True
+
+    assert features._select_edge_by_coord(
+        adapter, 0.0, 0.0, 0.006, append=True, entity_type="VERTEX"
+    )
+
+    assert [e.name for e in edges if e.selected_with] == []
+    assert adapter.currentModel.Extension.SelectByID2.call_args.args[:5] == (
+        "",
+        "VERTEX",
+        0.0,
+        0.0,
+        0.006,
+    )
+    adapter.body.GetEdges.assert_not_called()
+
+
 def test_face_pick_selects_the_face_itself() -> None:
     face = _Face([], (0.01, 0.0, 0.0))
     adapter = _picking_adapter(faces=[face])

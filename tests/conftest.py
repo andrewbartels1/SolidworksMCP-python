@@ -25,17 +25,68 @@ from solidworks_mcp.server import SolidWorksMCPServer
 # Test configuration
 os.environ["USE_MOCK_SOLIDWORKS"] = "true"
 
+_REAL_INTEGRATION = os.getenv(
+    "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION", ""
+).strip().lower() in {"1", "true", "yes", "on"}
+
 # The real adapter pauses after every COM operation so live SolidWorks can
 # finish its idle-time UI work (COM pitfall #26). Fake-COM unit tests have
 # nothing to wait for; live runs keep the defaults unless overridden.
-if os.getenv("SOLIDWORKS_MCP_RUN_REAL_INTEGRATION", "").strip().lower() not in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}:
+if not _REAL_INTEGRATION:
     os.environ.setdefault("SOLIDWORKS_MCP_COM_SETTLE_SECONDS", "0")
     os.environ.setdefault("SOLIDWORKS_MCP_DOC_SETTLE_SECONDS", "0")
+
+# A non-live run must never start SolidWorks. Creating SldWorks.Application
+# from a process outside the desktop session (an SSH shell, CI) starts a hidden
+# SLDWORKS.exe nobody can see or close. Every Dispatch / EnsureDispatch /
+# DispatchEx ends in pythoncom.CoCreateInstance[Ex], so wrap those: a
+# SolidWorks class fails like an unregistered one, and the test that tried
+# fails (see _no_solidworks_launch). Attaching (GetActiveObject) is untouched.
+_SOLIDWORKS_LAUNCH_ATTEMPTS: list[str] = []
+
+
+def _install_solidworks_launch_guard() -> None:
+    """Make SolidWorks COM object creation raise instead of launching it."""
+    try:
+        import pythoncom
+        import pywintypes
+    except ImportError:
+        return
+
+    try:
+        sw_clsids = {str(pywintypes.IID("SldWorks.Application")).upper()}
+    except pywintypes.com_error:
+        sw_clsids = set()
+
+    def _is_solidworks(clsid: Any) -> bool:
+        text = str(clsid)
+        if text.lower().startswith("sldworks."):
+            return True
+        if not text.startswith("{"):
+            try:
+                text = str(pywintypes.IID(text))
+            except pywintypes.com_error:
+                return False
+        return text.upper() in sw_clsids
+
+    def _guard(create: Any) -> Any:
+        def guarded(clsid: Any, *args: Any, **kwargs: Any) -> Any:
+            if _is_solidworks(clsid):
+                _SOLIDWORKS_LAUNCH_ATTEMPTS.append(f"{create.__name__}({clsid!r})")
+                raise pythoncom.com_error(
+                    -2147221005, "Invalid class string", None, None
+                )
+            return create(clsid, *args, **kwargs)
+
+        guarded.solidworks_launch_guard = True  # type: ignore[attr-defined]
+        return guarded
+
+    pythoncom.CoCreateInstance = _guard(pythoncom.CoCreateInstance)
+    pythoncom.CoCreateInstanceEx = _guard(pythoncom.CoCreateInstanceEx)
+
+
+if not _REAL_INTEGRATION:
+    _install_solidworks_launch_guard()
 
 # Keep the embedding model (sentence-transformers / all-MiniLM-L6-v2) fully
 # local during tests. Without this every SentenceTransformer(...) construction
@@ -71,6 +122,27 @@ def pytest_configure(config: pytest.Config) -> None:
         "urllib3",
     ):
         logging.getLogger(name).setLevel(logging.WARNING)
+
+
+@pytest.fixture
+def solidworks_launch_attempts() -> list[str]:
+    """SolidWorks creations the launch guard refused (cleared by the caller)."""
+    return _SOLIDWORKS_LAUNCH_ATTEMPTS
+
+
+@pytest.fixture(autouse=True)
+def _no_solidworks_launch() -> Generator[None]:
+    """Fail any test whose code tried to start SolidWorks."""
+    start = len(_SOLIDWORKS_LAUNCH_ATTEMPTS)
+    yield
+    attempts = _SOLIDWORKS_LAUNCH_ATTEMPTS[start:]
+    del _SOLIDWORKS_LAUNCH_ATTEMPTS[start:]
+    if attempts:
+        pytest.fail(
+            "Code under test tried to launch SolidWorks outside a live run: "
+            + ", ".join(attempts)
+            + ". Attach with GetActiveObject or go through the adapter."
+        )
 
 
 @pytest.fixture(scope="session")

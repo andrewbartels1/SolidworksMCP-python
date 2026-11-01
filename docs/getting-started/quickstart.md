@@ -9,106 +9,44 @@ Get running quickly with the verified Windows setup.
 - Windows 10/11.
 - SolidWorks installed (for real automation).
 
-## 1. Install
+## 1. Install and connect your client
 
 ```powershell
 git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
 cd SolidworksMCP-python
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
-.\.venv\Scripts\python.exe -m pip install -e .
+.\install.ps1
 ```
 
-## 2. Configure VS Code MCP
+`install.ps1` creates `.venv`, installs the server, then runs `solidworks-mcp setup`. Setup:
 
-!!! warning "Mock mode vs real mode"
-    Without `--real`, the server runs in **mock mode** — all tool responses are
-    simulated.  Always include `--real --year <year>` for live SolidWorks work.
-    Open SolidWorks **before** restarting the server.
+1. finds your SolidWorks and your MCP clients (Claude Desktop, Claude Code, VS Code, Cursor, LM Studio);
+2. lets you pick which to connect;
+3. checks that the server starts;
+4. adds a `solidworks` entry to each client you picked.
 
-Set `%APPDATA%\Code\User\mcp.json`:
+Run `.\.venv\Scripts\solidworks-mcp.exe setup` again any time to add a client. The [Installation guide](installation.md) covers each step and the options.
 
-```json
-{
-  "servers": {
-    "solidworks-mcp-server": {
-      "type": "stdio",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
-        "--real",
-        "--year",
-        "2026"
-      ]
-    }
-  }
-}
-```
+## 2. Check it works
 
-Replace the script path with your local repository location.
-Change `2026` to match your installed SolidWorks year if different.
+Open SolidWorks, restart your client as setup told you, and ask *"What model is open in SolidWorks?"*. The server's log includes:
 
-## 2b. Configure LM Studio MCP (Optional)
-
-If you want LM Studio to call SolidWorks tools directly, use an MCP config with `mcpServers`:
-
-```json
-{
-  "mcpServers": {
-    "solidworks-mcp-server": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
-        "--real",
-        "--year",
-        "2026"
-      ]
-    }
-  }
-}
-```
-
-Or run the module directly:
-
-```json
-{
-  "mcpServers": {
-    "solidworks-mcp-server": {
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "solidworks_mcp.server"]
-    }
-  }
-}
-```
-
-Restart LM Studio after updating the file.
-
-## 3. Start Server
-
-Open SolidWorks first, then:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
-```
-
-Expected log markers:
-
-- `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Adapter Mode: Real SolidWorks`
-- `Registered 109 SolidWorks tools`
+- `Registered 154 SolidWorks tools` (the count grows as tools are added)
 - `Connected to SolidWorks`
 
-If you see `Adapter Mode: Mock` in the logs, `--real` was not picked up — check
-that your `mcp.json` args list includes it after the script path.
+If it says `Could not connect to SolidWorks`, SolidWorks wasn't open when the server started. Open it and restart the server from your client.
+
+To set a client up by hand instead, every client runs the same program, `.venv\Scripts\solidworks-mcp.exe`, by its full path. The README's [Connect your client](https://github.com/andrewbartels1/SolidworksMCP-python#connect-your-client) section has the config for each.
+
+## 3. Optional: start the server by hand
+
+Clients start the server themselves. To watch its log in a terminal instead, open SolidWorks and run:
+
+```powershell
+.\.venv\Scripts\solidworks-mcp.exe
+```
+
+It waits for an MCP client on stdin; stop it with `Ctrl+C`.
 
 ## 4. First Connection Check
 

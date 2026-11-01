@@ -44,6 +44,7 @@ def classifier() -> ErrorClassifier:
         ),
         ("Not connected to SolidWorks", "solidworks_unavailable"),
         ("SolidWorks application is not connected", "solidworks_unavailable"),
+        ("SolidWorks is not running in this session", "solidworks_unavailable"),
         ("Circuit breaker is open for select_feature", "circuit_open"),
         ("Circuit breaker is half_open for add_line", "circuit_open"),
         (
