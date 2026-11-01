@@ -1,83 +1,48 @@
 # VS Code MCP Setup
 
-This page reflects the verified Windows setup that works with Python from python.org.
+## Connect with setup
 
-## Before You Start
+```powershell
+git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
+cd SolidworksMCP-python
+.\install.ps1
+```
 
-- Python installed from python.org.
-- PATH enabled for `python`.
-- Project installed in `.venv` with `pip install -e .`.
-- SolidWorks installed if you want real COM automation.
+When setup lists your clients, pick **VS Code**. If the project is already installed, run just the setup:
 
-## Open MCP Config
+```powershell
+.\.venv\Scripts\solidworks-mcp.exe setup --client vscode
+```
 
-1. In VS Code, open Command Palette (`Ctrl+Shift+P`).
-2. Run `MCP: Open User Configuration`.
-3. Edit `%APPDATA%\Code\User\mcp.json`.
+Setup adds a `solidworks` server to your user `%APPDATA%\Code\User\mcp.json`, leaving your other servers alone. It also offers to remove older entries for this server, such as one that runs `run-mcp.ps1` through PowerShell.
 
-## Recommended Configuration (Windows, verified)
+## Or add it by hand
 
-!!! danger "Always pass `--real` — omitting it silently runs in mock mode"
-    Without `--real`, the server starts in **mock mode**: every tool call returns
-    simulated data and nothing touches SolidWorks at all.  Images are blank,
-    mass properties are nonsense, and no part is created.
-
-    **Open SolidWorks before restarting the MCP server.**  The adapter connects
-    to an already-running `SLDWORKS.exe` at startup; it will not launch
-    SolidWorks for you.
+Run **MCP: Open User Configuration** from the Command Palette (`Ctrl+Shift+P`) and add:
 
 ```json
 {
   "servers": {
-    "solidworks-mcp-server": {
+    "solidworks": {
       "type": "stdio",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
-        "--real",
-        "--year",
-        "2026"
-      ]
+      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\solidworks-mcp.exe",
+      "args": []
     }
   }
 }
 ```
 
-Replace `C:\\path\\to\\SolidworksMCP-python` with your local repository path.
-Change `2026` to match your installed SolidWorks year if different.
-
-This avoids environment activation issues by using the project script that launches `.venv\Scripts\python.exe` directly.
+Use the full path to the `.venv` in your copy of the project. For mock mode, which needs no SolidWorks, use `"args": ["--mock"]`.
 
 <details>
-<summary><b>Alternative: direct venv python command</b></summary>
+<summary><b>Linux/WSL: mock mode only</b></summary>
+
+Use this for docs, tests or mock-mode development; it can't drive SolidWorks.
 
 ```json
 {
   "servers": {
-    "solidworks-mcp-server": {
-      "type": "stdio",
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "solidworks_mcp.server"]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Alternative: Linux/WSL mock mode only</b></summary>
-
-Use this for docs/tests or mock-mode development only (not real SolidWorks COM control).
-
-```json
-{
-  "servers": {
-    "solidworks-mcp-server": {
+    "solidworks": {
       "type": "stdio",
       "command": "C:\\Windows\\System32\\wsl.exe",
       "args": [
@@ -90,7 +55,8 @@ Use this for docs/tests or mock-mode development only (not real SolidWorks COM c
         "solidworks_mcp",
         "python",
         "-m",
-        "solidworks_mcp.server"
+        "solidworks_mcp.server",
+        "--mock"
       ]
     }
   }
@@ -99,45 +65,21 @@ Use this for docs/tests or mock-mode development only (not real SolidWorks COM c
 
 </details>
 
-## Validate Startup
+## Check it works
 
-After saving `mcp.json`, **open SolidWorks first**, then restart the MCP server in VS Code and check logs.
+Open SolidWorks, then run **MCP: List Servers** and start (or restart) `solidworks`. Its output should include:
 
-Healthy logs should include:
-
-- `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Registered 109 SolidWorks tools`
 - `Connected to SolidWorks`
-- `Adapter Mode: Real SolidWorks` (confirms `--real` was picked up)
+- `Discovered 154 tools` (the count grows as tools are added)
+
+VS Code labels every line the server writes to stderr as `[warning]`. That is the server's normal log, so those labels aren't problems.
 
 ## Troubleshooting
 
-### `ModuleNotFoundError: solidworks_mcp`
+- **`Could not connect to SolidWorks`**: SolidWorks wasn't open when the server started. Open it, then restart `solidworks` from **MCP: List Servers**.
+- **Tools return simulated data**: the entry has `"args": ["--mock"]`. Run setup again without `--mock`.
+- **The same tools appear twice**: an older entry for this server is still in `mcp.json`. Run setup again and accept removing it.
+- **`ModuleNotFoundError`**: run `.\install.ps1` again.
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
-### `ModuleNotFoundError: fastmcp`
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
-### `python` points to Microsoft Store alias
-
-- Disable App execution alias for Python in Windows settings.
-- Reinstall Python from python.org and enable PATH.
-
-### Tools return blank images or nonsense mass properties
-
-The server is running in **mock mode**.  Add `--real --year 2026` to the
-`args` list in your `mcp.json` (after the script path) and restart the server.
-
-### Server starts but tool actions fail
-
-- Open SolidWorks **before** restarting the MCP server.
-- Confirm `--real` is present in the `mcp.json` args — without it the server
-  silently serves mock data.
-- Ensure server is running on Windows, not WSL, for COM actions.
+More fixes are in the [Installation guide's Troubleshooting](installation.md#troubleshooting).
