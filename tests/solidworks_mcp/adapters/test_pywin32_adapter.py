@@ -175,7 +175,7 @@ async def test_screenshot_replaces_an_existing_file_without_prompting(
     monkeypatch.setattr(adapter, "_resolve_export_target_doc", lambda: object())
     monkeypatch.setattr(adapter, "_document_identity", lambda _doc: (None, None))
     monkeypatch.setattr(adapter, "_zoom_to_fit", lambda _doc: None)
-    monkeypatch.setattr(adapter, "_save_screenshot_with_modelview", _save)
+    monkeypatch.setattr(adapter, "_save_screenshot_sized", _save)
 
     result = await adapter.export_image({"file_path": str(target)})
 

@@ -686,7 +686,7 @@ before capturing, using its title (not path):
 title = target_doc.GetTitle()
 swApp.ActivateDoc3(title, False, 0, byref_long_out_param)
 swApp.Frame.SetFocus()
-# ... then SaveBitmapWithVariableSize as before
+# ... then capture (SaveBMP; SaveBitmapWithVariableSize does not exist, see #34)
 ```
 
 `export_image` in `pywin32_adapter.py` now does this unconditionally before every capture.
@@ -944,6 +944,37 @@ treat null without an exception as zero bodies.
 written under late binding, giving exact sizes on a Ø20 cylinder where `GetPartBox`
 agreed. Both live-verified 2026-10-30 (`get_model_geometry_summary` in
 `adapters/solidworks/io.py`, `tests/live/test_live_sw_verify_model.py`).
+
+---
+
+## 34. Coordinate picks, face fillets, and image size: three silent no-ops
+
+**`SelectByID2("", "EDGE", x, y, z, ...)` picks along the view direction.** It is a
+screen pick through the point, not "the edge nearest the point": on a 12 mm plate seen
+from the front, the midpoint of an edge at z=-6 selected the matching edge at z=+6 in
+front of it. A 28-edge fillet missed 4 back edges this way, reporting success. Coordinate
+specs are now resolved by walking `IPartDoc::GetBodies2` → `IBody2::GetEdges` /
+`GetFaces` and taking the entity with the smallest distance from the point to
+`IEdge::GetClosestPointOn` / `IFace2::GetClosestPointOn` (first three values), then
+`IEntity::Select4(append, SelectData)` with `SelectData.Mark` set. A point more than
+0.5 mm from every edge is refused instead of picking a neighbour.
+
+**`IModelDoc2::FeatureFillet3` (SW 2025+) returns non-zero for a selected face but builds
+nothing**: no feature, no volume change. Select the face's edges (`IFace2::GetEdges`)
+instead. Its return code proves nothing either way, so `add_fillet` checks that
+`GetFeatureCount` grew and that the volume changed.
+
+**`SaveBitmapWithVariableSize` does not exist** in the SW 2026 type library, and neither
+does `IModelView::ZoomToFit`; `export_image` silently fell through to `SaveAs3`, which
+always writes the window's size. `IModelDoc2::SaveBMP(path, width, height)` renders at a
+given size but keeps the window's framing, so render at the window's aspect
+(`IModelView.FrameWidth` / `FrameHeight`) and pad out to the requested size. Zoom is
+`IModelDoc2::ViewZoomtofit2` (lower-case "tofit"; `ViewZoomToFit2` is not in the method
+map, so late binding treats it as a property read).
+
+`SolidWorksFeaturesMixin.add_fillet`, `_BodyEntityPicker` in `adapters/solidworks/features.py`
+and `_save_screenshot_sized` in `pywin32_adapter.py`. Live-verified on SW 2026,
+2026-10-31.
 
 ---
 

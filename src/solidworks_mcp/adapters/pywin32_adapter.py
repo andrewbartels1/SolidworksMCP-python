@@ -30,6 +30,7 @@ from .solidworks import (
     SolidWorksIOMixin,
     SolidWorksSelectionMixin,
     SolidWorksSketchMixin,
+    bitmap,
 )
 from .solidworks.features import _null_callout, _select_feature_by_name
 from .solidworks.io import _byref_int
@@ -2263,10 +2264,17 @@ class PyWin32Adapter(
             )
 
     def _zoom_to_fit(self, target_doc: Any) -> None:
-        """Zoom model to fit viewport with fallback.
+        """Redraw, zoom the model to fit its viewport, and redraw again.
 
-        Tries IModelDoc2.ViewZoomToFit2() first; falls back to
-        IModelView.ZoomToFit() on the active view. Logs warning if both fail.
+        The member is ``ViewZoomtofit2`` (lower-case "tofit"). The old
+        ``ViewZoomToFit2`` spelling is not in the type library's method map,
+        so late binding resolved it as a property read and then raised on the
+        call, and the ``IModelView.ZoomToFit`` fallback does not exist at
+        all. Exports of a reopened part used to come out a few pixels tall;
+        redrawing before the zoom fits it to the current view, and with this
+        sequence a closed-and-reopened part exported framed as before
+        (checked live on SW 2026). ``ViewZoomtofit`` is tried when the ``2``
+        variant fails.
 
         Args:
             target_doc: SolidWorks model document
@@ -2274,51 +2282,38 @@ class PyWin32Adapter(
         Returns:
             None (operation always succeeds or fails silently)
         """
+        self._attempt(
+            lambda: sw_type_info.flag_members(
+                target_doc, "GraphicsRedraw2", "ViewZoomtofit2", "ViewZoomtofit"
+            )
+        )
+        self._attempt(lambda: target_doc.GraphicsRedraw2())
         try:
-            target_doc.ViewZoomToFit2()
+            target_doc.ViewZoomtofit2()
         except Exception:
             try:
-                active_view = target_doc.ActiveView
-                if active_view is not None:
-                    active_view.ZoomToFit()
+                target_doc.ViewZoomtofit()
             except Exception as exc:
                 logger.warning(
-                    "[pywin32.export_image] ZoomToFit failed ({}), "
+                    "[pywin32.export_image] ViewZoomtofit failed ({}), "
                     "screenshot may be zoomed out",
                     exc,
                 )
+        self._attempt(lambda: target_doc.GraphicsRedraw2())
 
-    def _save_screenshot_with_modelview(
-        self, model_view: Any, resolved_path: str, width: int, height: int
-    ) -> bool:
-        """Try IModelView2.SaveBitmapWithVariableSize for screenshot.
-
-        Args:
-            model_view: Active model view object
-            resolved_path: Full path where to save image
-            width: Image width in pixels
-            height: Image height in pixels
-
-        Returns:
-            True if file was created, False otherwise.
-        """
-        try:
-            success = model_view.SaveBitmapWithVariableSize(
-                resolved_path, width, height
-            )
-            return bool(success) and os.path.exists(resolved_path)
-        except Exception as exc:
-            logger.debug(
-                "[pywin32.export_image] IModelView.SaveBitmapWithVariableSize failed ({}), "
-                "trying IModelDoc2 path",
-                exc,
-            )
-            return False
-
-    def _save_screenshot_with_targetdoc(
+    def _save_screenshot_sized(
         self, target_doc: Any, resolved_path: str, width: int, height: int
     ) -> bool:
-        """Try IModelDoc2.SaveBitmapWithVariableSize for screenshot.
+        """Write a ``width`` x ``height`` image of the view via ``IModelDoc2.SaveBMP``.
+
+        ``SaveBMP`` is the only call that takes a pixel size (an earlier
+        ``SaveBitmapWithVariableSize`` is not a SolidWorks API, so every export
+        fell through to ``SaveAs3`` at the window's size). It keeps the
+        window's framing, so it renders at the window's aspect (see
+        :meth:`_window_aspect`) inside the requested size, and the picture is
+        padded out to that size; rendering straight at a narrower aspect
+        cropped the zoomed-to-fit model. It writes BMP only, so the output is
+        converted from a temporary BMP next to it.
 
         Args:
             target_doc: SolidWorks model document
@@ -2327,20 +2322,48 @@ class PyWin32Adapter(
             height: Image height in pixels
 
         Returns:
-            True if file was created, False otherwise.
+            True when the image was written at the requested size; False to
+            fall back (unsupported extension, ``SaveBMP`` failed, or JPEG
+            without Pillow).
         """
-        try:
-            success = target_doc.SaveBitmapWithVariableSize(
-                resolved_path, width, height
-            )
-            return bool(success) and os.path.exists(resolved_path)
-        except Exception as exc:
-            logger.debug(
-                "[pywin32.export_image] IModelDoc2.SaveBitmapWithVariableSize failed ({}), "
-                "trying SaveAs3 image export",
-                exc,
-            )
+        stem, suffix = os.path.splitext(resolved_path)
+        if suffix.lower() not in (".bmp", ".png", ".jpg", ".jpeg"):
             return False
+        aspect = self._window_aspect(target_doc)
+        render_w, render_h = (
+            bitmap.fit_aspect(width, height, aspect) if aspect else (width, height)
+        )
+        bmp_path = stem + ".sizing.bmp"
+        self._attempt(lambda: sw_type_info.flag_members(target_doc, "SaveBMP"))
+        written = self._attempt(
+            lambda: target_doc.SaveBMP(bmp_path, render_w, render_h), default=False
+        )
+        if not written or not os.path.exists(bmp_path):
+            logger.debug("[pywin32.export_image] SaveBMP wrote nothing")
+            return False
+        try:
+            bitmap.convert_bmp(bmp_path, resolved_path, size=(width, height))
+        except (ImportError, ValueError) as exc:
+            logger.debug("[pywin32.export_image] BMP conversion failed: {}", exc)
+            return False
+        finally:
+            os.remove(bmp_path)
+        return True
+
+    def _window_aspect(self, target_doc: Any) -> float | None:
+        """Width / height of the document's graphics window, or ``None``.
+
+        Read from ``IModelView.FrameWidth`` / ``FrameHeight`` on
+        ``ActiveView``; ``None`` when either is unreadable or not positive.
+        """
+        view = self._attempt(lambda: target_doc.ActiveView)
+        size = [
+            self._attempt(lambda name=name: int(getattr(view, name)))
+            for name in ("FrameWidth", "FrameHeight")
+        ]
+        if not all(isinstance(v, int) and v > 0 for v in size):
+            return None
+        return size[0] / size[1]
 
     def _save_screenshot_with_saveas3(
         self, target_doc: Any, resolved_path: str
@@ -2483,14 +2506,8 @@ class PyWin32Adapter(
             if _os.path.exists(resolved):
                 _os.remove(resolved)
 
-            # Try screenshot methods in order: ModelView → TargetDoc → SaveAs3
-            saved = self._save_screenshot_with_modelview(
-                target_doc, resolved, width, height
-            )
-            if not saved:
-                saved = self._save_screenshot_with_targetdoc(
-                    target_doc, resolved, width, height
-                )
+            # SaveBMP at the requested size; SaveAs3 (window size) otherwise.
+            saved = self._save_screenshot_sized(target_doc, resolved, width, height)
             if not saved:
                 self._save_screenshot_with_saveas3(target_doc, resolved)
                 saved = _os.path.exists(resolved)
@@ -2500,10 +2517,14 @@ class PyWin32Adapter(
                     f"All screenshot methods produced no output for {resolved}"
                 )
 
+            # Report the size actually written, not the one asked for: the
+            # SaveAs3 fallback ignores width/height.
+            size = bitmap.image_size(resolved)
             return {
                 "file_path": resolved,
                 "format": _os.path.splitext(resolved)[1].lstrip(".").upper() or "PNG",
-                "dimensions": f"{width}x{height}",
+                "dimensions": f"{size[0]}x{size[1]}" if size else "unknown",
+                "requested_dimensions": f"{width}x{height}",
                 "view": orientation,
             }
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, cast
@@ -16,6 +17,9 @@ from ..base import (
     SolidWorksFeature,
     SweepParameters,
 )
+from .com_utils import as_list
+from .com_utils import attempt as _attempt
+from .com_utils import flag as _flag
 
 
 class SolidWorksFeaturesMixin:
@@ -49,7 +53,50 @@ class SolidWorksFeaturesMixin:
     async def add_fillet(
         self, radius: float, edge_names: list[str]
     ) -> AdapterResult[SolidWorksFeature]:
-        return _add_fillet_impl(self, radius, edge_names)
+        """Fillet edges, then confirm the model's volume actually changed.
+
+        ``IModelDoc2.FeatureFillet3`` can report success without building
+        anything, so besides the feature-count check inside
+        :func:`_add_fillet_impl` the volume is compared before and after,
+        here in the async layer for the same reason as ``mirror_feature``.
+        An unreadable volume is not treated as failure.
+
+        Args:
+            radius: Fillet radius in millimetres.
+            edge_names: Edge names, ``"x,y,z"`` points or ``"face:x,y,z"``
+                specs; see :func:`_add_fillet_impl`.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: The fillet, with
+            ``volume_before`` / ``volume_after`` in its properties when they
+            could be read. ``ERROR`` when the volume did not change.
+        """
+        before = await self.get_mass_properties()
+        volume_before = (
+            before.data.volume if before.is_success and before.data else None
+        )
+
+        result = _add_fillet_impl(self, radius, edge_names)
+        if not result.is_success or result.data is None or volume_before is None:
+            return result
+
+        after = await self.get_mass_properties()
+        volume_after = after.data.volume if after.is_success and after.data else None
+        if volume_after is None:
+            return result
+        if abs(volume_after - volume_before) <= 1e-7 * max(volume_before, 1.0):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"The fillet changed nothing (volume stayed at "
+                    f"{volume_before:.3f} mm3). SolidWorks accepted the call "
+                    "but filleted no edge; check that the specs name edges or "
+                    "faces of the body."
+                ),
+            )
+        result.data.properties["volume_before"] = volume_before
+        result.data.properties["volume_after"] = volume_after
+        return result
 
     async def add_chamfer(
         self, distance: float, edge_names: list[str]
@@ -294,6 +341,51 @@ class SolidWorksFeaturesMixin:
         )
 
 
+#: ``end_condition`` spellings accepted by ``create_extrusion``, keyed by the
+#: name with case, spaces, ``_`` and ``-`` removed.
+_EXTRUSION_END_CONDITIONS = {
+    "blind": ("Blind", "swEndCondBlind"),
+    "midplane": ("MidPlane", "swEndCondMidPlane"),
+    "throughall": ("ThroughAll", "swEndCondThroughAll"),
+    "uptonext": ("UpToNext", "swEndCondUpToNext"),
+}
+
+
+def _extrusion_end_condition(
+    adapter: Any, end_condition: str, both_directions: bool
+) -> tuple[str, int]:
+    """Resolve a boss extrusion's first-direction end condition.
+
+    ``both_directions=True`` means mid-plane whatever ``end_condition`` says,
+    which is what the thin-wall branch always did. Before this was shared,
+    the solid branch passed ``swEndCondBlind`` unconditionally, so a
+    "both directions" extrusion silently came out one-sided.
+
+    Args:
+        adapter: Adapter whose ``constants`` hold the ``swEndCond*`` values.
+        end_condition: Requested condition, e.g. ``"Blind"`` or ``"Mid Plane"``.
+        both_directions: Extrude symmetrically about the sketch plane.
+
+    Returns:
+        tuple[str, int]: The canonical name and its ``swEndCondition_e`` value.
+
+    Raises:
+        ValueError: When ``end_condition`` is not one this call supports.
+    """
+    if both_directions:
+        key = "midplane"
+    else:
+        key = "".join(c for c in end_condition.lower() if c not in " _-") or "blind"
+    if key not in _EXTRUSION_END_CONDITIONS:
+        supported = ", ".join(name for name, _ in _EXTRUSION_END_CONDITIONS.values())
+        raise ValueError(
+            f"Unsupported extrusion end_condition {end_condition!r}; "
+            f"use one of: {supported}"
+        )
+    name, constant = _EXTRUSION_END_CONDITIONS[key]
+    return name, adapter.constants[constant]
+
+
 def _create_extrusion_impl(
     adapter: Any, params: ExtrusionParameters
 ) -> AdapterResult[SolidWorksFeature]:
@@ -320,7 +412,11 @@ def _create_extrusion_impl(
             - ``merge_result`` (bool): Merge with existing bodies.  Default
               ``True``.
             - ``both_directions`` (bool): Extrude symmetrically in both
-              directions from the sketch plane.
+              directions from the sketch plane (mid-plane): ``depth`` is the
+              total thickness, half on each side.
+            - ``end_condition`` (str): ``"Blind"`` (default), ``"MidPlane"``,
+              ``"ThroughAll"`` or ``"UpToNext"`` - see
+              :func:`_extrusion_end_condition`.
             - ``auto_fillet_corners`` (bool): Round sharp thin-wall corners.
             - ``fillet_corners_radius`` (float): Corner fillet radius in mm.
 
@@ -371,14 +467,14 @@ def _create_extrusion_impl(
             fillet_corners_radius=float(getattr(params, "fillet_corners_radius", 0.0)),
         )
         feature_manager = adapter.currentModel.FeatureManager
+        t0 = adapter.constants.get("swStartSketchPlane", 0)
+        end_name, t1 = _extrusion_end_condition(
+            adapter,
+            str(getattr(params, "end_condition", "Blind") or "Blind"),
+            normalized.both_directions,
+        )
 
         if normalized.thin_feature and normalized.thin_thickness:
-            t0 = adapter.constants.get("swStartSketchPlane", 0)
-            t1 = (
-                adapter.constants["swEndCondMidPlane"]
-                if normalized.both_directions
-                else adapter.constants["swEndCondBlind"]
-            )
             try:
                 feature = feature_manager.FeatureExtrusionThin2(
                     True,
@@ -433,13 +529,12 @@ def _create_extrusion_impl(
                     adapter.constants["swEndCondBlind"],
                 )
         else:
-            t0 = adapter.constants.get("swStartSketchPlane", 0)
             try:
                 feature = feature_manager.FeatureExtrusion3(
                     True,
                     False,
                     normalized.reverse_direction,
-                    adapter.constants["swEndCondBlind"],
+                    t1,
                     adapter.constants["swEndCondBlind"],
                     normalized.depth / 1000.0,
                     0.0,
@@ -465,7 +560,7 @@ def _create_extrusion_impl(
                     True,
                     False,
                     normalized.reverse_direction,
-                    adapter.constants["swEndCondBlind"],
+                    t1,
                     adapter.constants["swEndCondBlind"],
                     normalized.depth / 1000.0,
                     0.0,
@@ -500,6 +595,7 @@ def _create_extrusion_impl(
                 "reverse_direction": normalized.reverse_direction,
                 "thin_feature": normalized.thin_feature,
                 "thin_thickness": normalized.thin_thickness,
+                "end_condition": end_name,
             },
             properties={"created": datetime.now().isoformat()},
         )
@@ -1559,44 +1655,104 @@ def _parse_edge_spec(
     return edge_name, 0.0, 0.0, 0.0, "EDGE"
 
 
-def _select_edge_by_coord(
+#: A coordinate pick must lie this close to the edge/face it resolves to.
+#: Generous enough for a rounded midpoint, far below any real feature size,
+#: so a point that is not on any edge fails instead of grabbing a neighbour.
+_PICK_TOLERANCE_M = 5e-4
+
+
+class _BodyEntityPicker:
+    """Find the body edge or face nearest a point, by true closest distance.
+
+    ``SelectByID2("", "EDGE", x, y, z, ...)`` picks along the view direction
+    through the point, so on a 12 mm plate seen from the front an edge at
+    z=-6 is hidden behind the matching edge at z=+6 and the front one is
+    selected instead - silently. This walks every solid body's edges (or
+    faces) and measures the distance from the point to the closest point
+    *on* each (``IEdge`` / ``IFace2.GetClosestPointOn``), which does not
+    depend on the view, vertices or midpoints.
+
+    The entity lists are read once per picker, so one fillet over many edges
+    costs one body walk, not one per edge.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+    """
+
+    def __init__(self, adapter: Any) -> None:
+        self._adapter = adapter
+        self._cache: dict[str, list[Any]] = {}
+
+    def entities(self, getter: str) -> list[Any]:
+        """Return every solid body's ``GetEdges()`` or ``GetFaces()``."""
+        if getter not in self._cache:
+            model = self._adapter.currentModel
+            _flag(self._adapter, model, "GetBodies2")
+            bodies = as_list(
+                _attempt(self._adapter, lambda: model.GetBodies2(0, False))
+            )
+            found: list[Any] = []
+            for body in bodies:
+                _flag(self._adapter, body, getter)
+                found.extend(
+                    as_list(
+                        _attempt(self._adapter, lambda b=body: getattr(b, getter)())
+                    )
+                )
+            self._cache[getter] = found
+        return self._cache[getter]
+
+    def nearest(
+        self, getter: str, point: tuple[float, float, float]
+    ) -> tuple[Any, float] | None:
+        """Return ``(entity, distance_m)`` for the closest entity, or ``None``."""
+        best: tuple[Any, float] | None = None
+        for entity in self.entities(getter):
+            _flag(self._adapter, entity, "GetClosestPointOn")
+            closest = _attempt(
+                self._adapter, lambda e=entity: list(e.GetClosestPointOn(*point))
+            )
+            if not closest or len(closest) < 3:
+                continue
+            distance = math.dist([float(c) for c in closest[:3]], point)
+            if best is None or distance < best[1]:
+                best = (entity, distance)
+        return best
+
+    def select(self, entity: Any, append: bool, mark: int = 0) -> bool:
+        """Select ``entity`` with ``IEntity.Select4`` under ``mark``."""
+        model = self._adapter.currentModel
+        sel_mgr = _attempt(self._adapter, lambda: model.SelectionManager)
+        _flag(self._adapter, sel_mgr, "CreateSelectData")
+        select_data = _attempt(self._adapter, lambda: sel_mgr.CreateSelectData())
+        if select_data is None:
+            return False
+        if mark:
+            _attempt(self._adapter, lambda: setattr(select_data, "Mark", mark))
+        _flag(self._adapter, entity, "Select4")
+        return bool(
+            _attempt(self._adapter, lambda: entity.Select4(append, select_data), False)
+        )
+
+
+def _select_by_view_pick(
     adapter: Any,
     x: float,
     y: float,
     z: float,
     append: bool,
-    mark: int = 0,
-    entity_type: str = "EDGE",
+    mark: int,
+    entity_type: str,
 ) -> bool:
-    """Select the edge (or face) nearest to (x, y, z) in metres via ``SelectByID2``.
+    """Fallback pick through ``SelectByID2`` when no body geometry is readable.
 
-    Calls ``ForceRebuild3`` on the first entity in the selection set so that
-    recent features are fully tessellated and selectable. Tries the primary
-    coordinate and several small radial/Y offsets to improve hit probability
-    on curved edges.
-
-    ``entity_type`` is normally ``"EDGE"``, but pass ``"FACE"`` to select a
-    whole face instead — ``InsertFeatureChamfer``/``FeatureFillet3`` then
-    chamfer/fillet every edge bounding that face. Face selection has no
-    equivalent to the edge case's boundary ambiguity (see ``_parse_edge_spec``).
-
-    The ``Callout`` parameter of ``SelectByID2`` requires a VT_DISPATCH null
-    VARIANT — passing plain Python ``None`` triggers DISP_E_TYPEMISMATCH.
-
-    Returns True if an entity was successfully selected; False otherwise.
+    Tries the point plus small radial/Y offsets. View-dependent (see
+    :class:`_BodyEntityPicker`), so only used when the body walk found
+    nothing to measure.
     """
-    import math
-
     model = adapter.currentModel
-
-    # Rebuild to tessellate geometry from recent features before the first
-    # entity in the selection set (when append=False this is the first one).
-    if not append:
-        adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
-
     r = math.sqrt(x**2 + z**2)
     if r > 0:
-        # Candidates: exact point plus small radial scale-in/out and Y offsets.
         candidates = [
             (x, y, z),
             (x * 0.999, y, z * 0.999),
@@ -1607,11 +1763,7 @@ def _select_edge_by_coord(
             (x, y * 1.001, z),
         ]
     else:
-        candidates = [
-            (x, y, z),
-            (x, y * 0.999, z),
-            (x, y * 1.001, z),
-        ]
+        candidates = [(x, y, z), (x, y * 0.999, z), (x, y * 1.001, z)]
 
     for cx, cy, cz in candidates:
         try:
@@ -1624,8 +1776,112 @@ def _select_edge_by_coord(
             selected = False
         if selected:
             return True
-
     return False
+
+
+def _select_edge_by_coord(
+    adapter: Any,
+    x: float,
+    y: float,
+    z: float,
+    append: bool,
+    mark: int = 0,
+    entity_type: str = "EDGE",
+    picker: _BodyEntityPicker | None = None,
+) -> bool:
+    """Select the edge (or face) nearest to (x, y, z) in metres.
+
+    Calls ``ForceRebuild3`` on the first entity in the selection set so that
+    recent features are fully tessellated and selectable, then resolves the
+    point with :class:`_BodyEntityPicker` - the entity whose closest point is
+    nearest, independent of the view. Only when no body edge/face can be read
+    at all does it fall back to the view-dependent ``SelectByID2`` pick.
+
+    ``entity_type`` is normally ``"EDGE"``, but pass ``"FACE"`` to select a
+    whole face instead.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        x: X in metres.
+        y: Y in metres.
+        z: Z in metres.
+        append: Add to the current selection instead of replacing it.
+        mark: Selection mark.
+        entity_type: ``"EDGE"`` or ``"FACE"``.
+        picker: Reuse a picker (and its body walk) across several picks.
+
+    Returns:
+        bool: True if an entity was selected; False otherwise.
+
+    Raises:
+        LookupError: When the nearest entity is further than
+            ``_PICK_TOLERANCE_M`` from the point - picking it anyway would
+            silently act on the wrong edge.
+    """
+    model = adapter.currentModel
+
+    # Rebuild to tessellate geometry from recent features before the first
+    # entity in the selection set (when append=False this is the first one).
+    if not append:
+        adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
+
+    picker = picker or _BodyEntityPicker(adapter)
+    getter = "GetFaces" if entity_type == "FACE" else "GetEdges"
+    nearest = picker.nearest(getter, (x, y, z))
+    if nearest is None:
+        return _select_by_view_pick(adapter, x, y, z, append, mark, entity_type)
+
+    entity, distance = nearest
+    if distance > _PICK_TOLERANCE_M:
+        kind = entity_type.lower()
+        raise LookupError(
+            f"No {kind} passes through ({x * 1000:g}, {y * 1000:g}, "
+            f"{z * 1000:g}) mm; the nearest is {distance * 1000:.3f} mm away. "
+            f"Give a point on the {kind} itself."
+        )
+    return picker.select(entity, append, mark)
+
+
+def _select_face_edges_by_coord(
+    adapter: Any,
+    x: float,
+    y: float,
+    z: float,
+    append: bool,
+    picker: _BodyEntityPicker,
+) -> bool:
+    """Select every edge bounding the face through (x, y, z) in metres.
+
+    ``IModelDoc2.FeatureFillet3`` (SW 2025+) given a selected *face* returns
+    success but builds nothing - no feature, no volume change (seen live on
+    SW 2026). Expanding the face to its edges first gives it what it can
+    fillet.
+
+    Returns:
+        bool: True when the face was found and all of its edges selected.
+
+    Raises:
+        LookupError: When no face lies within ``_PICK_TOLERANCE_M``.
+    """
+    if not append:
+        adapter._attempt(lambda: adapter.currentModel.ForceRebuild3(True), default=None)
+    nearest = picker.nearest("GetFaces", (x, y, z))
+    if nearest is None:
+        return False
+    face, distance = nearest
+    if distance > _PICK_TOLERANCE_M:
+        raise LookupError(
+            f"No face passes through ({x * 1000:g}, {y * 1000:g}, {z * 1000:g}) "
+            f"mm; the nearest is {distance * 1000:.3f} mm away."
+        )
+    _flag(adapter, face, "GetEdges")
+    edges = as_list(_attempt(adapter, lambda: face.GetEdges()))
+    if not edges:
+        return False
+    for index, edge in enumerate(edges):
+        if not picker.select(edge, append or index > 0):
+            return False
+    return True
 
 
 def _add_fillet_impl(
@@ -1697,18 +1953,33 @@ def _add_fillet_impl(
         # to "no selection" (SW's own fillet-all-edges fallback) or an
         # earlier partial/stale selection instead of what was actually
         # picked. See com-api-pitfalls.md #22.
+        features_before = _feature_count(adapter)
+
         if edge_names:
             adapter._attempt(
                 lambda: adapter.currentModel.ClearSelection2(True), default=None
             )
 
+            picker = _BodyEntityPicker(adapter)
             for idx, edge_name in enumerate(edge_names):
                 sel_name, ex, ey, ez, entity_type = _parse_edge_spec(edge_name)
                 append = idx > 0  # first edge starts fresh, subsequent ones append
-                if sel_name == "":
-                    # Coordinate-based: traverse body edges/faces and pick the closest one.
+                if sel_name == "" and entity_type == "FACE":
+                    # A selected face makes FeatureFillet3 build nothing, so
+                    # select the edges bounding it instead.
+                    selected = _select_face_edges_by_coord(
+                        adapter, ex, ey, ez, append=append, picker=picker
+                    )
+                elif sel_name == "":
+                    # Coordinate-based: traverse body edges and pick the closest one.
                     selected = _select_edge_by_coord(
-                        adapter, ex, ey, ez, append=append, entity_type=entity_type
+                        adapter,
+                        ex,
+                        ey,
+                        ez,
+                        append=append,
+                        entity_type=entity_type,
+                        picker=picker,
                     )
                 else:
                     selected = adapter._attempt(
@@ -1764,6 +2035,23 @@ def _add_fillet_impl(
             )
             if not feature:
                 raise Exception("Failed to create fillet")
+
+        # IModelDoc2.FeatureFillet3 returns non-zero for a selection it then
+        # builds nothing from (e.g. a bare face, seen live on SW 2026), so a
+        # success code alone proves nothing: the tree must have grown. An
+        # unreadable count is not evidence either way; the caller also
+        # compares volume.
+        features_after = _feature_count(adapter)
+        if (
+            features_before is not None
+            and features_after is not None
+            and features_after <= features_before
+        ):
+            raise Exception(
+                "FeatureFillet3 reported success but no fillet feature was added "
+                f"(feature count stayed at {features_before}); the selected "
+                "edges could not be filleted at this radius."
+            )
 
         # Resolve the feature name — FeatureFillet3 on SW 2025+ returns an int,
         # not an IFeature, so we can only report a default name here.

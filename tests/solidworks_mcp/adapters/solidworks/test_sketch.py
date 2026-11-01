@@ -2005,7 +2005,16 @@ class TestPyWin32AdapterBranches:
         cut = await adapter.create_cut_extrude(
             SimpleNamespace(depth=4.0, draft_angle=1.0, reverse_direction=False)
         )
+
+        # add_fillet checks that the volume changed, so the fake fillet
+        # removes material; the volume is put back for the mass check below.
+        def _fillet(*_args):
+            mass_props.Volume = 1.9e-9
+            return feature_obj
+
+        feature_manager.FeatureFillet3 = Mock(side_effect=_fillet)
         fillet = await adapter.add_fillet(2.0, ["Edge1", "Edge2"])
+        mass_props.Volume = 2.0e-9
         chamfer = await adapter.add_chamfer(1.5, ["Edge1"])
         mass = await adapter.get_mass_properties()
 
