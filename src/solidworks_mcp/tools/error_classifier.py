@@ -98,8 +98,10 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
     ErrorRule(
         error_type="com_member_not_found",
         hint=(
-            "SolidWorks could not resolve this API member - usually a stale "
-            "type cache. Delete %TEMP%\\gen_py and restart the MCP server."
+            "SolidWorks could not resolve this API member. Usually a server "
+            "bug: a method called without being flagged as one (report the "
+            "tool name). After a SolidWorks upgrade it can be a stale type "
+            "cache: delete %TEMP%\\gen_py and restart the MCP server."
         ),
         hresults=frozenset({DISP_E_MEMBERNOTFOUND}),
         patterns=(r"member not found",),

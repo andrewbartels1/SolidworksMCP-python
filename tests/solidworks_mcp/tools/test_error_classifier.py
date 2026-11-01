@@ -136,6 +136,18 @@ def test_unrecognised_exception_uses_the_internal_fallback(
     assert "bug" in result.hint
 
 
+def test_member_not_found_hint_names_unflagged_method_before_gen_py(
+    classifier: ErrorClassifier,
+) -> None:
+    result = classifier.classify("Error in get_model_info: Member not found")
+
+    # The common cause (an unflagged method) comes first; the stale gen_py
+    # cache is only the fallback after a SolidWorks upgrade (#155).
+    assert result.error_type == "com_member_not_found"
+    assert result.hint.index("flagged") < result.hint.index("gen_py")
+    assert "upgrade" in result.hint
+
+
 def test_first_matching_rule_wins() -> None:
     rules = (
         ErrorRule("first", "h1", patterns=(r"boom",)),

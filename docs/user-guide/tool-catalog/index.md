@@ -65,7 +65,7 @@ says what kind of failure it was; `hint` is the next step to take:
 | `solidworks_unavailable` | SolidWorks was closed or crashed (RPC disconnect) |
 | `circuit_open` | Calls are paused after repeated failures; retry after the breaker timeout |
 | `com_wrong_thread` | A SolidWorks call ran off the thread that connected (a server bug; restart the server) |
-| `com_member_not_found` | SolidWorks could not resolve an API member (usually a stale `gen_py` cache) |
+| `com_member_not_found` | SolidWorks could not resolve an API member: usually a method the server forgot to flag (a server bug; report the tool), or a stale `gen_py` cache after a SolidWorks upgrade |
 | `com_type_mismatch` | SolidWorks rejected an argument's COM type (a server bug; report it) |
 | `feature_not_built` | SolidWorks accepted the call but the geometry gave it nothing to build (e.g. a cut whose profile misses the body in both directions); change the inputs, don't retry as is |
 | `operation_failed` | SolidWorks refused or failed the operation; read `message` |

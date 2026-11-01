@@ -32,4 +32,4 @@
 
 ## 6. Ship
 
-- [ ] 6.1 Commit the fix together with `tests/live/test_live_sw_contributor_fixes.py`, then open a PR that closes #193 (no Claude attribution).
+- [x] 6.1 Commit the fix together with `tests/live/test_live_sw_contributor_fixes.py`, then open a PR that closes #193 (no Claude attribution).
