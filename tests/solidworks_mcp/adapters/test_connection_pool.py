@@ -1755,3 +1755,50 @@ async def test_connection_pool_forwards_explicit_templates() -> None:
     assert part.data.properties["template"] == "C:/t/Part.prtdot"
     assert assembly.data.properties["template"] == "C:/t/Asm.asmdot"
     assert drawing.data.properties["template"] == "C:/t/Drw.drwdot"
+
+
+_SKETCH_PASSTHROUGHS = [
+    ("add_spline", ([{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 2.0}],)),
+    ("add_polygon", (0.0, 0.0, 5.0, 6)),
+    ("add_ellipse", (0.0, 0.0, 10.0, 5.0)),
+    ("sketch_linear_pattern", (["Arc1"], 1.0, 0.0, 20.0, 3)),
+    ("sketch_circular_pattern", (["Arc1"], 360.0, 4)),
+    ("sketch_mirror", (["Arc1"], "Line1")),
+    ("sketch_offset", (["Arc1"], 2.0, False)),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "args"), _SKETCH_PASSTHROUGHS)
+async def test_connection_pool_forwards_sketch_operations(
+    method: str, args: tuple
+) -> None:
+    """Sketch operations reach the pooled adapter instead of the base stubs."""
+    pooled = _PoolAdapterStub()
+    forwarded = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="ok")
+    )
+    setattr(pooled, method, forwarded)
+    pool = ConnectionPoolAdapter(adapter_factory=lambda: pooled, pool_size=1)
+    await pool.connect()
+
+    result = await getattr(pool, method)(*args)
+
+    assert result.is_success
+    assert result.data == "ok"
+    forwarded.assert_awaited_once_with(*args)
+
+
+def test_connection_pool_forwards_every_circuit_breaker_passthrough() -> None:
+    """Each base method the circuit breaker forwards is forwarded by the pool too."""
+    from solidworks_mcp.adapters.base import SolidWorksAdapter
+
+    base_methods = {
+        name
+        for name, value in vars(SolidWorksAdapter).items()
+        if callable(value) and not name.startswith("_")
+    }
+    circuit_forwards = base_methods & set(vars(CircuitBreakerAdapter))
+    missing = sorted(circuit_forwards - set(vars(ConnectionPoolAdapter)))
+
+    assert missing == []

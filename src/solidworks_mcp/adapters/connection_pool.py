@@ -913,6 +913,151 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
+        """Add spline using pool.
+
+        Args:
+            points (list[dict[str, float]]): The points value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_spline", lambda adapter: adapter.add_spline(points)
+        )
+
+    async def add_polygon(
+        self, center_x: float, center_y: float, radius: float, sides: int
+    ) -> AdapterResult[str]:
+        """Add polygon using pool.
+
+        Args:
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            radius (float): The radius value.
+            sides (int): The sides value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_polygon",
+            lambda adapter: adapter.add_polygon(center_x, center_y, radius, sides),
+        )
+
+    async def add_ellipse(
+        self,
+        center_x: float,
+        center_y: float,
+        major_axis: float,
+        minor_axis: float,
+    ) -> AdapterResult[str]:
+        """Add ellipse using pool.
+
+        Args:
+            center_x (float): The center x value.
+            center_y (float): The center y value.
+            major_axis (float): The major axis value.
+            minor_axis (float): The minor axis value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_ellipse",
+            lambda adapter: adapter.add_ellipse(
+                center_x, center_y, major_axis, minor_axis
+            ),
+        )
+
+    async def sketch_linear_pattern(
+        self,
+        entities: list[str],
+        direction_x: float,
+        direction_y: float,
+        spacing: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Sketch linear pattern using pool.
+
+        Args:
+            entities (list[str]): The entities value.
+            direction_x (float): The direction x value.
+            direction_y (float): The direction y value.
+            spacing (float): The spacing value.
+            count (int): The count value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "sketch_linear_pattern",
+            lambda adapter: adapter.sketch_linear_pattern(
+                entities, direction_x, direction_y, spacing, count
+            ),
+        )
+
+    async def sketch_circular_pattern(
+        self,
+        entities: list[str],
+        angle: float,
+        count: int,
+    ) -> AdapterResult[str]:
+        """Sketch circular pattern using pool.
+
+        Args:
+            entities (list[str]): The entities value.
+            angle (float): The angle value.
+            count (int): The count value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "sketch_circular_pattern",
+            lambda adapter: adapter.sketch_circular_pattern(entities, angle, count),
+        )
+
+    async def sketch_mirror(
+        self, entities: list[str], mirror_line: str
+    ) -> AdapterResult[str]:
+        """Sketch mirror using pool.
+
+        Args:
+            entities (list[str]): The entities value.
+            mirror_line (str): The mirror line value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "sketch_mirror",
+            lambda adapter: adapter.sketch_mirror(entities, mirror_line),
+        )
+
+    async def sketch_offset(
+        self,
+        entities: list[str],
+        offset_distance: float,
+        reverse_direction: bool,
+    ) -> AdapterResult[str]:
+        """Sketch offset using pool.
+
+        Args:
+            entities (list[str]): The entities value.
+            offset_distance (float): The offset distance value.
+            reverse_direction (bool): The reverse direction value.
+
+        Returns:
+            AdapterResult[str]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "sketch_offset",
+            lambda adapter: adapter.sketch_offset(
+                entities, offset_distance, reverse_direction
+            ),
+        )
+
     async def add_sketch_constraint(
         self,
         entity1: str,
