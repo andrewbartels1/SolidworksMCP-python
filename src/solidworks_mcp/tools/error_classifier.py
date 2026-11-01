@@ -76,6 +76,7 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
             r"object invoked has disconnected",
             r"not connected to solidworks",
             r"solidworks (application )?(is )?not connected",
+            r"solidworks is not running",
         ),
     ),
     ErrorRule(

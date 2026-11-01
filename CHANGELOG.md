@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Guided install: `install.ps1` and `solidworks-mcp setup`.** One script
+  creates the `.venv`, installs the server and runs the setup command.
+  Setup finds the installed SolidWorks versions and your MCP clients
+  (Claude Desktop in all three of its config locations, Claude Code,
+  VS Code, Cursor, LM Studio), checks that the server starts, and adds a
+  `solidworks` entry that runs the installed `solidworks-mcp.exe` by full
+  path, with no paths to type. It changes only that entry: other servers'
+  entries are never shown or changed, the file is backed up first, written
+  in one step and read back to check it. Older entries for this server
+  (`run-mcp.ps1` and the like) are offered for removal. `--dry-run`,
+  `--yes`, `--client`, `--remove`, `--replace-old` and `--mock` are
+  supported. The README's install and client sections now lead with it,
+  and the docs Installation page has a Troubleshooting section.
 - **Demos page** in the docs: every demo GIF with what it checks, its
   prompt, its tool calls (all 58, with arguments, for the README demo) and
   the test that made it. The README's Demos section shows the GIFs in a

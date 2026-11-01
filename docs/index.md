@@ -103,26 +103,15 @@ This is the verified setup path.
 ```powershell
 git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
 cd SolidworksMCP-python
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
-.\.venv\Scripts\python.exe -m pip install -e .
+.\install.ps1
 ```
 
-Open SolidWorks, then start the server:
+`install.ps1` creates `.venv`, installs the server, then runs `solidworks-mcp setup`, which finds your SolidWorks and MCP clients and connects the ones you pick. See the [Installation guide](getting-started/installation.md).
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
-```
+Open SolidWorks, restart your client, and ask *"What model is open in SolidWorks?"*. Healthy server logs include:
 
-> **`--real` is required.** Without it the server runs in mock mode — all tool
-> responses are simulated and nothing touches SolidWorks.
-
-Healthy startup logs include:
-
-- `Platform: Windows`
 - `SolidWorks COM interface is available`
-- `Adapter Mode: Real SolidWorks`
-- `Registered 109 SolidWorks tools`
+- `Registered 154 SolidWorks tools` (the count grows as tools are added)
 - `Connected to SolidWorks`
 
 ### Linux / WSL only
