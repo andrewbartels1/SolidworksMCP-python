@@ -19,6 +19,7 @@ from pydantic import Field
 
 from .input_compat import CompatInput
 from .tool_boundary import (
+    ToolOperationError,
     UnsupportedOperationError,
     normalize_input,
     with_tool_boundary,
@@ -408,10 +409,15 @@ class SolidWorksDocsDiscovery:
         }
 
     def connect_to_solidworks(self) -> bool:
-        """Connect to running SolidWorks instance.
+        """Attach to an already-running SolidWorks instance.
+
+        Discovery only ever attaches; it never starts SolidWorks. Launching
+        from a process outside the desktop session (an SSH shell, a test run,
+        a service) starts a hidden SLDWORKS.exe nobody can see or close, so
+        when no instance is running this returns False instead.
 
         Returns:
-            bool: True if connect to solidworks, otherwise False.
+            bool: True if attached to a running SolidWorks, otherwise False.
         """
         if not HAS_WIN32COM:
             logger.error("win32com not available; cannot index COM")
@@ -422,21 +428,13 @@ class SolidWorksDocsDiscovery:
             return False
 
         try:
-            # Prefer GetActiveObject so we attach to a running SolidWorks session.
-            # EnsureDispatch is used (instead of Dispatch) so that the type library
-            # is loaded and pythoncom ITypeInfo enumeration works correctly.
-            try:
-                self.sw_app = win32com.client.GetActiveObject("SldWorks.Application")
-            except com_error:
-                logger.warning(
-                    "SolidWorks not running; attempting to create new instance"
-                )
-                self.sw_app = win32com.client.gencache.EnsureDispatch(
-                    "SldWorks.Application"
-                )
+            self.sw_app = win32com.client.GetActiveObject("SldWorks.Application")
             return True
         except com_error as e:
-            logger.error(f"Failed to connect to SolidWorks: {e}")
+            logger.error(
+                "SolidWorks is not running in this session; start it and retry "
+                f"(docs discovery never launches SolidWorks): {e}"
+            )
             return False
 
     def discover_com_objects(self) -> dict[str, Any]:
@@ -883,6 +881,8 @@ def _maybe_refresh_index(
         )
         discovery = SolidWorksDocsDiscovery()
         fresh = discovery.discover_all()
+        if discovery.sw_app is None:
+            return index, index_file
         filename = (
             f"solidworks_docs_index_{year}.json"
             if year
@@ -1246,6 +1246,12 @@ async def register_docs_discovery_tools(
 
         logger.info("Starting SolidWorks documentation discovery...")
         index = discovery.discover_all()
+        if discovery.sw_app is None:
+            raise ToolOperationError(
+                "SolidWorks is not running in this session; start SolidWorks "
+                "and retry. Docs discovery attaches to a running instance and "
+                "never launches one."
+            )
 
         filename = (
             f"solidworks_docs_index_{year}.json"
@@ -1321,13 +1327,15 @@ async def register_docs_discovery_tools(
         if index is None and normalized.auto_discover_if_missing:
             if HAS_WIN32COM and platform.system() == "Windows":
                 discovery = SolidWorksDocsDiscovery()
-                index = discovery.discover_all()
-                filename = (
-                    f"solidworks_docs_index_{year}.json"
-                    if year
-                    else "solidworks_docs_index.json"
-                )
-                index_file = discovery.save_index(filename=filename)
+                discovered = discovery.discover_all()
+                if discovery.sw_app is not None:
+                    index = discovered
+                    filename = (
+                        f"solidworks_docs_index_{year}.json"
+                        if year
+                        else "solidworks_docs_index.json"
+                    )
+                    index_file = discovery.save_index(filename=filename)
 
         matches = _search_index(index or {}, normalized.query, normalized.max_results)
         fallback = _fallback_help_for_query(normalized.query)

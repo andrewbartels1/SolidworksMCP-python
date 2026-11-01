@@ -66,12 +66,12 @@ async def _validate_solidworks_installation(config: SolidWorksMCPConfig) -> None
                 f"SolidWorks executable not found at: {config.solidworks_path}"
             )
 
-    # Try to check COM registration (basic check)
+    # Check COM registration only. Resolving the ProgID reads the registry;
+    # creating the object (Dispatch) would start SolidWorks.
     try:
-        import win32com.client
+        import pywintypes
 
-        # Try to create SolidWorks object (without starting it)
-        win32com.client.Dispatch("SldWorks.Application", None)
+        pywintypes.IID("SldWorks.Application")
         logger.info("SolidWorks COM interface is available")
     except Exception as e:
         logger.warning(f"SolidWorks COM interface issue: {e}")

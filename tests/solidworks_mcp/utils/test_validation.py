@@ -96,12 +96,9 @@ async def test_validate_solidworks_installation_paths(monkeypatch):
     monkeypatch.setattr(validation_mod.logger, "info", info)
     monkeypatch.setattr(validation_mod.shutil, "which", lambda _p: None)
 
-    # COM available path.
-    fake_win32com = SimpleNamespace(
-        client=SimpleNamespace(Dispatch=Mock(return_value=object()))
-    )
-    monkeypatch.setitem(sys.modules, "win32com", fake_win32com)
-    monkeypatch.setitem(sys.modules, "win32com.client", fake_win32com.client)
+    # COM registered path.
+    fake_pywintypes = SimpleNamespace(IID=Mock(return_value="{SW-CLSID}"))
+    monkeypatch.setitem(sys.modules, "pywintypes", fake_pywintypes)
 
     cfg = SimpleNamespace(solidworks_path="C:/Program Files/SolidWorks/sldworks.exe")
     await validation_mod._validate_solidworks_installation(cfg)
@@ -110,10 +107,38 @@ async def test_validate_solidworks_installation_paths(monkeypatch):
     assert info.called
     assert "COM interface is available" in info.call_args[0][0]
 
-    # COM dispatch failure path.
-    fake_win32com.client.Dispatch = Mock(side_effect=RuntimeError("dispatch error"))
+    # COM not registered path.
+    fake_pywintypes.IID = Mock(side_effect=RuntimeError("class string"))
     await validation_mod._validate_solidworks_installation(cfg)
     assert "COM interface issue" in warning.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_validate_solidworks_installation_never_launches_solidworks(
+    monkeypatch,
+):
+    """The COM check resolves the ProgID only; creating the object starts SW."""
+
+    def _launch(*_args, **_kwargs):
+        raise AssertionError("validation must not create SldWorks.Application")
+
+    fake_pywintypes = SimpleNamespace(IID=Mock(return_value="{SW-CLSID}"))
+    fake_pythoncom = SimpleNamespace(
+        CoCreateInstance=_launch, CoCreateInstanceEx=_launch
+    )
+    fake_win32com = SimpleNamespace(
+        client=SimpleNamespace(Dispatch=_launch, DispatchEx=_launch)
+    )
+    monkeypatch.setitem(sys.modules, "pywintypes", fake_pywintypes)
+    monkeypatch.setitem(sys.modules, "pythoncom", fake_pythoncom)
+    monkeypatch.setitem(sys.modules, "win32com", fake_win32com)
+    monkeypatch.setitem(sys.modules, "win32com.client", fake_win32com.client)
+
+    await validation_mod._validate_solidworks_installation(
+        SimpleNamespace(solidworks_path=None)
+    )
+
+    fake_pywintypes.IID.assert_called_once_with("SldWorks.Application")
 
 
 @pytest.mark.asyncio
@@ -126,8 +151,8 @@ async def test_validate_solidworks_installation_import_error(monkeypatch):
 
     def _import(name, globals=None, locals=None, fromlist=(), level=0):
         """Test helper for import."""
-        if name == "win32com.client":
-            raise ImportError("missing win32com")
+        if name == "pywintypes":
+            raise ImportError("missing pywin32")
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", _import)
