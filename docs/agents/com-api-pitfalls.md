@@ -987,21 +987,23 @@ and `_save_screenshot_sized` in `pywin32_adapter.py`. Live-verified on SW 2026,
 
 ---
 
-## 35. `Sd` on `FeatureCut3` / `FeatureCut4` means "single direction", not "through"
+## 35. A blind `FeatureCut4` needs a different `Sd` for a face sketch and an internal one
 
-**Symptom:** a blind `create_cut_extrude` from a sketch inside the body (for example a
-circle on the Front Plane of a mid-plane block) returns no feature and no COM error. The
-same cut from a sketch on a face works.
+**Symptom:** a blind `create_cut_extrude` returns no feature and no COM error. Which
+sketches fail depends on the first argument, `Sd` ("single direction"):
 
-**Root cause:** the first argument, `Sd`, is `True` for a one-direction cut. With
-`Sd=False`, SolidWorks also cuts Direction 2 using `T2` and `D2`. The adapter once passed
-"is this a Through All cut?" in that slot, so a blind cut became double-ended with a
-zero-depth blind Direction 2. SolidWorks rejects that from an internal sketch; from a
-face sketch Direction 2 points into empty space, which hid the bug.
+| Sketch | `Sd=True` (one direction) | `Sd=False`, `T2=Blind`, `D2=0` |
+|---|---|---|
+| Inside the body (Front Plane of a mid-plane block) | cuts (37.70 mm³) | no feature |
+| On a face (top face of a block) | no feature | cuts the full depth (142.5 mm³) |
 
-**Fix:** `Sd=True` for every one-direction cut (Blind and Through All). `Sd=False` only
-for a cut that goes both ways (`T1=T2=swEndCondThroughAll`, see #10). The SW version
-picks `OptimizeGeometry`, never `Sd`.
+Seen live on SW 2026, 2026-11-01. With `Sd=True`, Direction 1 follows the sketch normal;
+on a face that points out of the part, so the cut finds no material. The double-ended
+form cuts into the part from a face sketch but is rejected from an internal one.
+
+**Fix:** try the single-ended form first, then the double-ended form, reselecting the
+sketch before the retry. The result's `parameters.single_direction` says which form built
+the feature. The SW version picks only `OptimizeGeometry`, never `Sd`.
 
 `_create_cut_extrude_impl` in `adapters/solidworks/features.py`; issue #193.
 

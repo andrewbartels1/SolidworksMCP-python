@@ -35,27 +35,37 @@ forms = [("", sw_major < 33, blind, blind)]
 
 ## Decisions
 
-**`Sd` comes from the end-condition form, never from the SW version.** The
-blind form becomes `("", True, blind, blind)`. The Through All forms keep
-#192's values: `True` for one way, and `False` with `T1=T2=ThroughAll`
-first for both ways. `sw_major` is then read only to choose
-`OptimizeGeometry`, and the comment above it says so.
+**Blind cuts try two forms: single-ended first, then double-ended.** The
+first live run (SW 2026, 2026-11-01) showed that neither `Sd` value works
+everywhere:
 
-*Rejected alternative:* keep `Sd=False` and fall back to `Sd=True` when the
-first call returns nothing. It adds a second COM call to every internal
-blind cut, keeps a meaning of `Sd` we know is wrong, and on a face sketch
-the double-ended form could someday cut something on the far side.
+| Sketch | `Sd=True` | `Sd=False`, `T2=Blind`, `D2=0` |
+|---|---|---|
+| Inside the body | cuts (37.70 mm³) | no feature |
+| On a face | no feature | cuts the full depth (142.5 mm³) |
+
+With `Sd=True`, Direction 1 follows the sketch normal, which points out of
+the part from a face sketch. The blind forms are therefore
+`[("", True, blind, blind), (" [Sd=False, D2=0]", False, blind, blind)]`,
+and #192's loop reselects the sketch between attempts. Single-ended goes
+first because it is the documented meaning of a one-way cut. The
+double-ended form has worked from face sketches on SW 2025+ since 69d3dbd.
+`parameters.single_direction` records which one built the feature.
+
+*Rejected alternative:* flip `Dir` on a single-ended retry. It would
+probably work from face sketches too, but it hasn't been seen live. It
+would also change what `reverse_direction=True` means when a caller sets it
+on purpose. The double-ended fallback has been proven live, many times.
 
 **Order: after #192.** Changing the pre-#192 code on main would rewrite the
 same lines #192 replaces and cause another conflict for the contributor.
-Once #192 is merged, the implementation is a one-line change plus tests.
 
 ## Risks / Trade-offs
 
-- [A face-sketch blind cut behaves differently with `Sd=True`] → No.
-  Before 69d3dbd, every version used `Sd=True`, and the pre-2025 branch
-  still does. The live `verify_model` hole test (142.5 mm³) checks this on
-  SW 2026.
-- [SW 2025 is not on hand to test] → The `Sd` meaning is the same in every
-  API version since 2010. The live run is on SW 2026. The 2025 branch
-  differs only in `OptimizeGeometry`, which this change does not touch.
+- [A face-sketch blind cut now costs one extra COM call] → Two calls
+  (FeatureCut4, FeatureCut3) that build nothing, plus a reselect, at the
+  0.25 s settle pause each. Acceptable for correctness; an internal sketch
+  costs nothing extra.
+- [SW 2025 is not on hand to test] → The 2025 branch differs only in
+  `OptimizeGeometry`. Both forms were already used on 2025: double-ended
+  since 69d3dbd, single-ended before it.

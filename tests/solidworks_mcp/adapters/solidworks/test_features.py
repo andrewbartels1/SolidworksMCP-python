@@ -945,6 +945,7 @@ def test_cut_extrude_version_and_end_condition_paths(
     (args,) = calls
     assert (args[0], args[3], args[4]) == (expected_sd, expected_t1, expected_t2)
     assert args[6] == 0.0  # D2: Direction 2 never gets a depth of its own
+    assert result.data.parameters["single_direction"] is expected_sd
     assert len(args) == 27
     assert args[26] is revision.startswith("33")  # OptimizeGeometry
 
@@ -1007,6 +1008,28 @@ def test_through_all_both_falls_back_to_the_single_ended_enum() -> None:
         (False, 2, 2),
         (True, 9, 1),
     ]
+
+
+def test_blind_cut_falls_back_to_the_double_ended_form() -> None:
+    """A face sketch: the single-ended cut points out of the part and builds
+    nothing, so the double-ended form (Sd=False, D2=0) is tried next (#193)."""
+    feature = SimpleNamespace(Name="Cut-Extrude1")
+    adapter, log = _cut_adapter_recording(
+        cut4=lambda args: None if args[0] else feature,
+        cut3=lambda _args: None,
+    )
+
+    result = features._create_cut_extrude_impl(adapter, ExtrusionParameters(depth=6.0))
+
+    assert result.is_success, result.error
+    assert result.data.parameters["single_direction"] is False
+    cut_args = [entry[1] for entry in log if entry[0] != "select"]
+    assert [(a[0], a[3], a[4], a[6]) for a in cut_args] == [
+        (True, 1, 1, 0.0),
+        (True, 1, 1, 0.0),
+        (False, 1, 1, 0.0),
+    ]
+    assert [entry[0] for entry in log].count("select") == 3
 
 
 def test_through_all_both_failure_names_every_form_tried() -> None:

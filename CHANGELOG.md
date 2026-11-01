@@ -157,9 +157,10 @@ Drawing-package tools, the last part of @SaiqKamran's #117:
 
 - **`create_cut_extrude`**: a blind cut from a sketch inside the body (for
   example a circle on the Front Plane of a mid-plane block) returned no
-  feature on SolidWorks 2025 and 2026. The cut was sent as double-ended with
-  a zero-depth second direction; it is now single-ended on every version
-  (#193, COM pitfall #35).
+  feature on SolidWorks 2025 and 2026. A blind cut now tries a single-ended
+  cut first and falls back to the double-ended form that face sketches need;
+  the result's `single_direction` says which one built it (#193, COM
+  pitfall #35).
 
 Found in the live sign-off of the drawing-package tools on SolidWorks 2026:
 

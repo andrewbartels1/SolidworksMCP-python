@@ -15,15 +15,21 @@ affected. Contributor PR #192 kept the value and labelled it intentional.
 
 ## What Changes
 
-- Every one-direction cut passes `Sd=True` to `FeatureCut4` and `FeatureCut3`,
-  on every SolidWorks version. That covers Blind and Through All.
-- `Sd=False` is used only for a cut that really goes both ways. Today that is
-  Through All both ways, the double-ended form #192 introduces.
-- The SW-version check stays only for `OptimizeGeometry`. It no longer
-  decides `Sd`.
-- The live test `test_blind_cut_still_cuts_one_way` loses its `xfail` and
-  becomes a normal regression test.
-- `docs/agents/com-api-pitfalls.md` gets an entry explaining `Sd`.
+- A blind cut tries a single-ended `FeatureCut4`/`FeatureCut3` (`Sd=True`)
+  first. If that builds nothing, it retries the double-ended form
+  (`Sd=False`, zero-depth blind Direction 2), after reselecting the sketch.
+  The first live run of the fix showed that each form works for only one
+  case. Single-ended works from a sketch inside the body; from a face sketch
+  its Direction 1 points out of the part. Double-ended works from a face
+  sketch, as it has since June, but is rejected from an internal one.
+- The result's `parameters.single_direction` reports which form built the
+  feature.
+- Through All keeps #192's forms. The SW-version check now picks only
+  `OptimizeGeometry`; it no longer decides `Sd`.
+- The live test `test_blind_cut_still_cuts_one_way` loses its `xfail`, and a
+  test for Through All in one direction is added.
+- `docs/agents/com-api-pitfalls.md` gets entry #35 with the table of which
+  form works where.
 
 This builds on #192's refactor of `create_cut_extrude` (one argument builder,
 plus a list of `(label, Sd, T1, T2)` forms to try). It lands after #192 merges.

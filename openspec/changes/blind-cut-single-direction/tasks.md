@@ -22,6 +22,8 @@
 ## 5. Live tests (ask the user first; they run them with `SW_TEST_PACE_SECONDS=4`)
 
 - [x] 5.1 In `tests/live/test_live_sw_contributor_fixes.py`, remove the `xfail` from `test_blind_cut_still_cuts_one_way`, and add `test_through_all_cuts_one_way` (expect 62.83 mm³).
+- [x] 5.1a First live run: internal-sketch blind cut passes; face-sketch blind cuts (`verify_model` hole, `cut_extrude_sketch_fix` hole) return no feature with `Sd=True`.
+- [x] 5.1b Add the double-ended fallback for blind cuts, `parameters.single_direction`, and a unit test for the fallback; correct pitfall #35, the CHANGELOG, the proposal and the design.
 - [ ] 5.2 Ask the user to run `tests/live/test_live_sw_contributor_fixes.py` and `tests/live/test_live_sw_verify_model.py`. The internal blind cut should remove 37.70 mm³, the face-sketch hole 142.5 mm³, and Through All both ways 125.66 mm³.
 - [ ] 5.3 Ask the user to run `tests/live/test_live_sw_cut_extrude_sketch_fix.py` as a regression check.
 

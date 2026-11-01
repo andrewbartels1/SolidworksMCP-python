@@ -1422,12 +1422,17 @@ def _create_cut_extrude_impl(
         elif through_one:
             forms = [("", True, through_all, blind)]
         else:
-            # A blind cut is single-ended (Sd=True) on every version. Sd means
-            # "single direction", not "through": Sd=False with a zero-depth
-            # blind Direction 2 returns no feature when the sketch lies inside
-            # the body (#193), and only worked from a face sketch because
-            # Direction 2 then points into empty space.
-            forms = [("", True, blind, blind)]
+            # Blind: single-ended first (Sd means "single direction"). From a
+            # sketch inside the body that is the only form that works; the
+            # double-ended form with a zero-depth Direction 2 returns no
+            # feature there (#193). From a sketch on a face, Direction 1
+            # points out of the part and the single-ended cut finds nothing,
+            # while the double-ended form cuts the full depth into it (seen
+            # live on SW 2026), so it stays as the fallback.
+            forms = [
+                ("", True, blind, blind),
+                (" [Sd=False, D2=0]", False, blind, blind),
+            ]
 
         def _cut_args(sd: bool, t1: int, t2: int) -> list[Any]:
             """Build the 26 arguments ``FeatureCut3`` and ``FeatureCut4`` share.
@@ -1482,7 +1487,9 @@ def _create_cut_extrude_impl(
         # 2. FeatureCut3 (SW 2010+, and any install lacking FeatureCut4).
         optimize_geometry = sw_major == 33
         first_call = True
+        single_direction = True
         for label, sd, t1, t2 in forms:
+            single_direction = sd
             args = _cut_args(sd, t1, t2)
             calls = (
                 (
@@ -1546,6 +1553,8 @@ def _create_cut_extrude_impl(
                 "draft_angle": normalized.draft_angle,
                 "reverse_direction": normalized.reverse_direction,
                 "sketch_name": target_sketch,
+                # Which FeatureCut form built it (Sd): a diagnostic for #193.
+                "single_direction": single_direction,
             },
             properties={"created": datetime.now().isoformat()},
         )
