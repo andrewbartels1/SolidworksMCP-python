@@ -7,7 +7,7 @@
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
-[![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
+[![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
 Python MCP server for SolidWorks automation with 154 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
@@ -93,6 +93,7 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 ## Supported Today
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
+- Tested on SolidWorks 2026. Earlier versions may work but are untested; if you try one, please [open an issue](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new/choose) with what worked.
 - Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
 
 ## Not Yet / Simulated
@@ -105,33 +106,32 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 
 ## Install
 
-You need Windows 10 or 11, SolidWorks (opened at least once), [Python 3.13+](https://www.python.org/downloads/) and Git. Then, in PowerShell:
+You need Windows 10 or 11 and SolidWorks (opened at least once). In PowerShell, install [uv](https://docs.astral.sh/uv/), then open a new PowerShell window and run setup:
 
 ```powershell
-git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
-cd SolidworksMCP-python
-.\install.ps1
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uvx solidworks-mcp-python setup
 ```
 
-`install.ps1` creates a `.venv` in the folder, installs the server into it, then runs the guided setup:
+uv fetches Python 3.13 and the server from PyPI by itself; nothing to clone. The guided setup then:
 
-1. It finds your SolidWorks version and the MCP clients on your PC: Claude Desktop, Claude Code, VS Code, Cursor and LM Studio.
-2. You pick which clients to connect.
-3. It starts the server once to check that it lists its tools (in mock mode, so SolidWorks isn't touched).
-4. It adds a `solidworks` entry to each client you picked, then tells you what to restart.
+1. finds your SolidWorks version and the MCP clients on your PC: Claude Desktop, Claude Code, VS Code, Cursor and LM Studio;
+2. lets you pick which clients to connect;
+3. starts the server once to check that it lists its tools (in mock mode, so SolidWorks isn't touched);
+4. adds a `solidworks` entry to each client you picked, then tells you what to restart.
 
 Nothing needs a login or an API key, and the server runs only on your PC. Setup changes only the `solidworks` entry in each client's config. It backs the file up first and never shows or changes your other servers. Other entries that start this server the old way (`run-mcp.ps1` and the like) are offered for removal, so tools don't load twice.
 
 **To check it worked:** open SolidWorks, restart your client, and ask *"What model is open in SolidWorks?"*
 
-If scripts are blocked, run `powershell -ExecutionPolicy Bypass -File .\install.ps1`. If Python isn't found, reinstall it from python.org with **Add python.exe to PATH** ticked. More fixes are in [Troubleshooting](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#troubleshooting).
+The package is `solidworks-mcp-python`. `uvx solidworks-mcp` installs a different project. To work on the server itself, [install from a clone](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#install-from-source). More fixes are in [Troubleshooting](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#troubleshooting).
 
 ## Connect your client
 
-`install.ps1` runs this for you. Run it again whenever you want to add a client, or move the entry to another copy of the project:
+Run setup again whenever you want to add a client:
 
 ```powershell
-.\.venv\Scripts\solidworks-mcp.exe setup
+uvx solidworks-mcp-python setup
 ```
 
 | Option | What it does |
@@ -143,7 +143,7 @@ If scripts are blocked, run `powershell -ExecutionPolicy Bypass -File .\install.
 | `--replace-old` | Remove older entries for this server without asking. |
 | `--mock` | Configure mock mode, which answers without SolidWorks (for trying the tools). |
 
-To set up a client by hand instead, each one runs the same program. Use the full path to the `.venv` in your copy of the project, shown below as `C:\path\to\SolidworksMCP-python`.
+To set up a client by hand instead, each one runs `uvx solidworks-mcp-python`. If a client can't find `uvx`, use its full path, from `(Get-Command uvx).Source`.
 
 <details>
 <summary><b>Claude Desktop</b></summary>
@@ -158,8 +158,8 @@ Add this to `claude_desktop_config.json`, alongside anything already in it. Depe
 {
   "mcpServers": {
     "solidworks": {
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\solidworks-mcp.exe",
-      "args": []
+      "command": "uvx",
+      "args": ["solidworks-mcp-python"]
     }
   }
 }
@@ -173,7 +173,7 @@ Quit Claude Desktop from the system tray (closing the window isn't enough) and r
 <summary><b>Claude Code</b></summary>
 
 ```powershell
-claude mcp add --scope user solidworks -- C:\path\to\SolidworksMCP-python\.venv\Scripts\solidworks-mcp.exe
+claude mcp add --scope user solidworks -- uvx solidworks-mcp-python
 ```
 
 Run `/mcp` in a new session to check that `solidworks` is connected.
@@ -190,8 +190,8 @@ Add this to `%APPDATA%\Code\User\mcp.json`:
   "servers": {
     "solidworks": {
       "type": "stdio",
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\solidworks-mcp.exe",
-      "args": []
+      "command": "uvx",
+      "args": ["solidworks-mcp-python"]
     }
   }
 }
@@ -210,8 +210,8 @@ Add this to `%USERPROFILE%\.lmstudio\mcp.json`:
 {
   "mcpServers": {
     "solidworks": {
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\solidworks-mcp.exe",
-      "args": []
+      "command": "uvx",
+      "args": ["solidworks-mcp-python"]
     }
   }
 }
@@ -221,7 +221,7 @@ Restart LM Studio and enable `solidworks` in the Program tab.
 
 </details>
 
-For mock mode, which needs no SolidWorks, use `"args": ["--mock"]`. Linux and WSL work for the docs, the tests and mock mode, but not for driving SolidWorks.
+For mock mode, which needs no SolidWorks, use `"args": ["solidworks-mcp-python", "--mock"]`. Linux and WSL work for the docs, the tests and mock mode, but not for driving SolidWorks.
 
 <details>
 <summary><b>Optional features (environment variables)</b></summary>

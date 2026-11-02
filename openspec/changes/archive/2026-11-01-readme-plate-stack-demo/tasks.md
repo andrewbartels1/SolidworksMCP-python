@@ -123,10 +123,10 @@
 - [x] 4.1 Add the demo section near the top: the GIF, the prompt, one line on
       what it shows and that the calls are replayed, and the call list in a
       folded `<details>` block taken from the transcript
-- [ ] 4.2 Build the docs (`mkdocs build --strict`) if any docs page links to
+- [x] 4.2 Build the docs (`mkdocs build --strict`) if any docs page links to
       the new section
 
 ## 5. Ship
 
-- [ ] 5.1 Live sign-off with the maintainer, then the PR
-- [ ] 5.2 Archive this change after merge
+- [x] 5.1 Live sign-off with the maintainer, then the PR
+- [x] 5.2 Archive this change after merge

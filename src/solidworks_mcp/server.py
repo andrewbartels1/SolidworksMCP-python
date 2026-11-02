@@ -661,26 +661,20 @@ def cli(
         help="Use mock SolidWorks for testing",
     ),
 ) -> None:
-    """Start the SolidWorks MCP Server.
+    """Start the SolidWorks MCP server on stdio.
+
+    Run "solidworks-mcp-python setup" to connect your MCP clients to it.
+
+    \f
+    Everything after the form feed above is left out of ``--help``.
 
     Args:
-        config (str | None): Configuration values for the operation. Defaults to
-                             typer.Option(         None,         "--config",
-                             help="Configuration file path",     ).
-        mode (str | None): The mode value. Defaults to typer.Option(         None,         "
-                           --mode",         help="Deployment mode (local/remote/hybrid)",
-                           ).
-        host (str): The host value. Defaults to typer.Option(         "localhost",         "
-                    --host",         help="Server host for remote mode",     ).
-        port (int): The port value. Defaults to typer.Option(         8000,         "--
-                    port",         help="Server port for remote mode",     ).
-        debug (bool): The debug value. Defaults to typer.Option(         False,         "--
-                      debug",         help="Enable debug mode",     ).
-        mock (bool): The mock value. Defaults to typer.Option(         False,         "--
-                     mock",         help="Use mock SolidWorks for testing",     ).
-
-    Returns:
-        None: None.
+        config: Path to a configuration file.
+        mode: Deployment mode: local, remote or hybrid.
+        host: Server host for remote mode.
+        port: Server port for remote mode.
+        debug: Log at DEBUG level.
+        mock: Answer from the mock adapter, without SolidWorks.
     """
     loaded_config = load_config(config)
 

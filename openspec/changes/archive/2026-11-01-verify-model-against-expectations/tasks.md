@@ -139,6 +139,6 @@
       - two-part assembly with two mates → component and mate counts and the
         interference check;
       - extrude and cut → `measured_change` deltas match hand calculations
-- [ ] 7.3 Live demo of `verify_model` and `measured_change` to the maintainer
+- [x] 7.3 Live demo of `verify_model` and `measured_change` to the maintainer
       (live-demo-signoff) before the PR is merged
-- [ ] 7.4 Open the PR closing #173; link it from the bracket demo issue (#147)
+- [x] 7.4 Open the PR closing #173; link it from the bracket demo issue (#147)
