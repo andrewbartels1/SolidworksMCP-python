@@ -42,8 +42,11 @@ Failures with a recognisable cause SHALL be reported with a specific
   (RPC disconnected / RPC server unavailable). Hint: restart SolidWorks, then retry.
 - **`circuit_open`:** the operation is temporarily blocked after repeated
   failures. Hint: wait for the breaker timeout, or fix the cause, then retry.
-- **`com_member_not_found`:** the SolidWorks API member could not be resolved
-  (stale type cache or wrong interface). Hint: refresh the type cache.
+- **`com_member_not_found`:** the SolidWorks API member could not be resolved.
+  Hint: name the common cause first, a method the server called without
+  flagging it (a server bug to report with the tool name); then the
+  fallback, a stale type cache after a SolidWorks upgrade (delete
+  `%TEMP%\gen_py` and restart the MCP server).
 - **`com_type_mismatch`:** an argument had the wrong COM type. Hint: report as a bug.
 - **`not_found`:** a named document, feature, sketch, view or entity does not exist.
 - **`not_supported`:** the active adapter has no capability for the operation
@@ -61,6 +64,10 @@ Failures with a recognisable cause SHALL be reported with a specific
 #### Scenario: Circuit breaker is open
 - **WHEN** the adapter rejects the call because its circuit breaker is open
 - **THEN** the payload has `error_type: "circuit_open"` and a hint explaining that calls resume after the timeout
+
+#### Scenario: API member not found
+- **WHEN** an adapter error reads "Member not found" or carries `DISP_E_MEMBERNOTFOUND`
+- **THEN** the payload has `error_type: "com_member_not_found"`, and its hint names an unflagged method as the first cause and a stale `gen_py` cache after an upgrade as the second
 
 #### Scenario: Operation not supported by the adapter
 - **WHEN** a tool needs an adapter capability the active adapter does not have
@@ -82,4 +89,15 @@ NOT alter success payloads.
 #### Scenario: Successful call
 - **WHEN** a tool's adapter call succeeds
 - **THEN** the payload is identical to the one the tool returned before this change
+
+### Requirement: A feature SolidWorks accepted but did not build is named
+When an adapter reports that SolidWorks accepted a feature call but built no
+feature, the tool SHALL return `error_type: "feature_not_built"`. Its hint
+SHALL say that the geometry gave SolidWorks nothing to build, and that the
+caller should change the sketch, its plane, the depth or the end condition
+rather than retry the same call.
+
+#### Scenario: A cut builds nothing
+- **WHEN** the adapter error reads "SolidWorks built no feature from sketch 'Sketch2' (tried: the requested direction; direction flipped ...)"
+- **THEN** the payload has `error_type: "feature_not_built"` and a hint telling the caller to change the inputs rather than retry
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-**Last updated:** 2026-10-30
+**Last updated:** 2026-10-31
 
 This page tracks the order the open backlog gets worked in. It replaces the
 old `docs/planning/ROADMAP_2026_2027.md`, which described a GUI-dashboard-first,
@@ -57,9 +57,8 @@ clean-up (PR #177), and the release pipeline (PR #178, which superseded #75).
 | 9 | [#175](https://github.com/andrewbartels1/SolidworksMCP-python/issues/175) | Agent skill and server guidance for using the tools well | M | Builds on #82 and the COM pitfall catalogue |
 | 10 | [#82](https://github.com/andrewbartels1/SolidworksMCP-python/issues/82) | Audit tool docstrings and error messages for LLM usefulness | L | Runtime-error half done in PR #118; feeds #175 and #176 |
 | 11 | [#156](https://github.com/andrewbartels1/SolidworksMCP-python/issues/156) | Tool catalog pages drift from the generator | S | Add a check |
-| 12 | [#155](https://github.com/andrewbartels1/SolidworksMCP-python/issues/155) | `docs_discovery` can launch a hidden SolidWorks; misleading hint | S | Bug |
+| 12 | [#155](https://github.com/andrewbartels1/SolidworksMCP-python/issues/155) | Misleading `com_member_not_found` hint | S | Hidden-SolidWorks half fixed in #189; hint in change `member-not-found-hint-and-stale-script` |
 | 13 | [#101](https://github.com/andrewbartels1/SolidworksMCP-python/issues/101) | `save_body_as_part` leaves a linked assembly open | S | Bug |
-| 14 | [#23](https://github.com/andrewbartels1/SolidworksMCP-python/issues/23) | Reply to the contributor's tool-expansion proposal | S | An active outside contributor; see [scoping notes](#open-scoping-questions-before-scheduling) |
 
 ## P2 — capability gaps
 
@@ -67,7 +66,7 @@ clean-up (PR #177), and the release pipeline (PR #178, which superseded #75).
 |---|---|---|---|---|
 | 15 | [#176](https://github.com/andrewbartels1/SolidworksMCP-python/issues/176) | Optional tool-discovery mode to cut schema context | M | Measure the tool-list size first |
 | 16 | [#83](https://github.com/andrewbartels1/SolidworksMCP-python/issues/83) | Real startup banner and better logging | S | First-run impression |
-| 17 | [#157](https://github.com/andrewbartels1/SolidworksMCP-python/issues/157) | Remove stale `validate_coverage.py`; decide on mypy in CI | S |  |
+| 17 | [#157](https://github.com/andrewbartels1/SolidworksMCP-python/issues/157) | Decide on mypy in CI | S | Stale `validate_coverage.py` removed (change `member-not-found-hint-and-stale-script`) |
 | 18 | [#115](https://github.com/andrewbartels1/SolidworksMCP-python/issues/115) | `reset_circuit_breaker` tool | S | Follow-up from PR #118 |
 | 19 | [#97](https://github.com/andrewbartels1/SolidworksMCP-python/issues/97) | `execute_macro` hangs on a modal macro | M | Issue text predates the COM threading change; refresh it |
 | 20 | [#158](https://github.com/andrewbartels1/SolidworksMCP-python/issues/158) | Drawing-tool follow-ups from the live sign-off | M |  |
@@ -81,15 +80,13 @@ clean-up (PR #177), and the release pipeline (PR #178, which superseded #75).
 | Order | Issue | What | Size | Note |
 |---|---|---|---|---|
 | 25 | [#95](https://github.com/andrewbartels1/SolidworksMCP-python/issues/95) | `lookup_api_enum` enum value lookup | S | Needs the swconst enums indexed |
-| 26 | #29 · #30 · #31 | SolidWorks-as-Code: rewind, pickup, tutorial | M each | #31 is gated on #29 and #30 (below) |
 | 27 | [#96](https://github.com/andrewbartels1/SolidworksMCP-python/issues/96) | Generate a runnable binary `.swp` from VBA source | L |  |
 | 28 | [#80](https://github.com/andrewbartels1/SolidworksMCP-python/issues/80) | Prompt-to-SolidWorks tutorials | L | Rescope: SimulationXpress has no COM API (see #76 notes) |
-| 29 | [#13](https://github.com/andrewbartels1/SolidworksMCP-python/issues/13) | End-to-end agent test | L | Gated on #22 |
-| 30 | [#22](https://github.com/andrewbartels1/SolidworksMCP-python/issues/22) | Context and glossary injection engine | L | Partly overlaps #175 |
-| 31 | #78 · #76 | Simulation COM wrapper; topology-optimisation loop | XL | See scoping notes below |
-| 32 | #42 · #43 · #44 | Generation-intent router, text-to-CAD branch, live render panel | XL | Long horizon |
+| — | [#196](https://github.com/andrewbartels1/SolidworksMCP-python/issues/196) | Parked ideas: tool-surface expansion (#23), SolidWorks-as-Code rewind, pickup and tutorial (#29–#31), agent context and testing (#13, #22), CAD-intent routing and text-to-CAD (#42, #43), live render panel (#44), Simulation wrapper and topology loop (#76, #78) | — | Closed 2026-10-31 to keep the issue list for active work; each is reopened when picked up |
 
 ## Backlog: gated, in dependency order
+
+These issues are parked on the roadmap issue [#196](https://github.com/andrewbartels1/SolidworksMCP-python/issues/196); the order still applies when they are picked up.
 
 Each arrow means "must land first." Citations are to the dependent issue's
 own text, not inferred.
