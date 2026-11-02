@@ -1036,6 +1036,25 @@ def test_cli_main_routes_setup_to_the_setup_app():
     mock_run.assert_not_called()
 
 
+def test_cli_help_lists_each_option_without_internal_text():
+    """`--help` shows the summary and one line per option, not the Args section."""
+    import typer
+    from typer.testing import CliRunner
+
+    from solidworks_mcp.server import cli
+
+    app = typer.Typer()
+    app.command()(cli)
+    result = CliRunner().invoke(app, ["--help"], env={"COLUMNS": "120"})
+
+    assert result.exit_code == 0
+    for option in ("--config", "--mode", "--host", "--port", "--debug", "--mock"):
+        assert option in result.output
+    assert "Start the SolidWorks MCP server on stdio." in result.output
+    assert "typer.Option" not in result.output
+    assert "Args:" not in result.output
+
+
 class TestServerCoverage:
     """Test server coverage."""
 

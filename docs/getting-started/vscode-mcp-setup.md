@@ -2,16 +2,10 @@
 
 ## Connect with setup
 
-```powershell
-git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
-cd SolidworksMCP-python
-.\install.ps1
-```
-
-When setup lists your clients, pick **VS Code**. If the project is already installed, run just the setup:
+With [uv](https://docs.astral.sh/uv/) installed:
 
 ```powershell
-.\.venv\Scripts\solidworks-mcp.exe setup --client vscode
+uvx solidworks-mcp-python setup --client vscode
 ```
 
 Setup adds a `solidworks` server to your user `%APPDATA%\Code\User\mcp.json`, leaving your other servers alone. It also offers to remove older entries for this server, such as one that runs `run-mcp.ps1` through PowerShell.
@@ -25,14 +19,14 @@ Run **MCP: Open User Configuration** from the Command Palette (`Ctrl+Shift+P`) a
   "servers": {
     "solidworks": {
       "type": "stdio",
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\solidworks-mcp.exe",
-      "args": []
+      "command": "uvx",
+      "args": ["solidworks-mcp-python"]
     }
   }
 }
 ```
 
-Use the full path to the `.venv` in your copy of the project. For mock mode, which needs no SolidWorks, use `"args": ["--mock"]`.
+If VS Code can't find `uvx`, use its full path, from `(Get-Command uvx).Source`. For mock mode, which needs no SolidWorks, use `"args": ["solidworks-mcp-python", "--mock"]`.
 
 <details>
 <summary><b>Linux/WSL: mock mode only</b></summary>

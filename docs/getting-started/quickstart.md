@@ -4,27 +4,26 @@ Get running quickly with the verified Windows setup.
 
 ## Prerequisites
 
-- Python 3.13+ installed from python.org.
-- PATH enabled during Python install.
 - Windows 10/11.
 - SolidWorks installed (for real automation).
 
 ## 1. Install and connect your client
 
+Install [uv](https://docs.astral.sh/uv/), open a new PowerShell window, and run setup:
+
 ```powershell
-git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
-cd SolidworksMCP-python
-.\install.ps1
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uvx solidworks-mcp-python setup
 ```
 
-`install.ps1` creates `.venv`, installs the server, then runs `solidworks-mcp setup`. Setup:
+uv fetches Python and the server from PyPI. Setup:
 
 1. finds your SolidWorks and your MCP clients (Claude Desktop, Claude Code, VS Code, Cursor, LM Studio);
 2. lets you pick which to connect;
 3. checks that the server starts;
 4. adds a `solidworks` entry to each client you picked.
 
-Run `.\.venv\Scripts\solidworks-mcp.exe setup` again any time to add a client. The [Installation guide](installation.md) covers each step and the options.
+Run `uvx solidworks-mcp-python setup` again any time to add a client. To work on the server itself, [install from source](installation.md#install-from-source). The [Installation guide](installation.md) covers each step and the options.
 
 ## 2. Check it works
 
@@ -36,14 +35,14 @@ Open SolidWorks, restart your client as setup told you, and ask *"What model is 
 
 If it says `Could not connect to SolidWorks`, SolidWorks wasn't open when the server started. Open it and restart the server from your client.
 
-To set a client up by hand instead, every client runs the same program, `.venv\Scripts\solidworks-mcp.exe`, by its full path. The README's [Connect your client](https://github.com/andrewbartels1/SolidworksMCP-python#connect-your-client) section has the config for each.
+To set a client up by hand instead, every client runs the same command, `uvx solidworks-mcp-python`. The README's [Connect your client](https://github.com/andrewbartels1/SolidworksMCP-python#connect-your-client) section has the config for each.
 
 ## 3. Optional: start the server by hand
 
 Clients start the server themselves. To watch its log in a terminal instead, open SolidWorks and run:
 
 ```powershell
-.\.venv\Scripts\solidworks-mcp.exe
+uvx solidworks-mcp-python
 ```
 
 It waits for an MCP client on stdin; stop it with `Ctrl+C`.

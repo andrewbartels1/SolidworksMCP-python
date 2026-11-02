@@ -8,6 +8,7 @@ their own modules.
 
 from __future__ import annotations
 
+import sys
 from enum import Enum
 from typing import Any
 
@@ -20,7 +21,7 @@ from rich.table import Table
 from .clients import SERVER_NAME, Client, find_clients
 from .config_file import ConfigFileError, EntryChange, current_entry
 from .handshake import HandshakeResult, check_server
-from .launcher import server_command
+from .launcher import PACKAGE, in_uv_cache, server_command
 from .registration import OldEntryCleaner, registrar_for
 from .solidworks import installed_versions
 
@@ -106,6 +107,12 @@ def setup(
     if not remove:
         mock = _choose_mode(mock, yes)
     command, args = server_command(mock=mock)
+    if in_uv_cache(sys.executable) and args[:1] != [PACKAGE]:
+        console.print(
+            "[yellow]Running from uv's cache, and uvx was not found: the entry "
+            "will stop working when uv cleans its cache. Install uv so uvx is on "
+            "the PATH, then run setup again.[/yellow]"
+        )
 
     chosen = _choose_clients(find_clients(), client, yes, command)
     if not chosen:
@@ -117,7 +124,8 @@ def setup(
         console.print(
             "\nChecking that the server starts (mock mode, SolidWorks is not touched)..."
         )
-        result = _run_check(command, args)
+        # The launcher running now: a `uvx` entry would fetch from PyPI instead.
+        result = _run_check(*server_command(mock=mock, lasting=False))
         if not result.ok:
             console.print(f"[red]{result.message}[/red] No config was changed.")
             raise typer.Exit(1)
