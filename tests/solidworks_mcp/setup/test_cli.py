@@ -32,19 +32,28 @@ def machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
                stdio_type=True, restart_hint="List servers."),
     ]  # fmt: skip
     checks: list[list[str]] = []
+    commands: list[str] = []
 
     def check(command: str, args: list[str]) -> HandshakeResult:
-        """Record the check's arguments and pass."""
+        """Record the check's command and arguments, and pass."""
+        commands.append(command)
         checks.append(args)
         return HandshakeResult(True, 154, "The server started and listed 154 tools.")
 
     monkeypatch.setattr(cli, "find_clients", lambda: clients)
     monkeypatch.setattr(cli, "installed_versions", lambda: [2026])
     monkeypatch.setattr(
-        cli, "server_command", lambda mock: (LAUNCHER, ["--mock"] if mock else [])
+        cli,
+        "server_command",
+        lambda mock, lasting=True: (LAUNCHER, ["--mock"] if mock else []),
     )
     monkeypatch.setattr(cli, "check_server", check)
-    return {"desktop": desktop, "vscode": clients[2].config_path, "checks": checks}
+    return {
+        "desktop": desktop,
+        "vscode": clients[2].config_path,
+        "checks": checks,
+        "commands": commands,
+    }
 
 
 def _run(*args: str, answers: str = "") -> Result:
@@ -77,6 +86,43 @@ def test_yes_configures_every_client_found(machine: dict[str, Any]) -> None:
     assert "Found SOLIDWORKS 2026" in result.output
     assert "Restart Claude." in result.output and "List servers." in result.output
     assert SECRET not in result.output
+
+
+def test_run_through_uvx_writes_uvx_but_checks_the_cached_launcher(
+    machine: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    uvx = r"C:\Users\me\.local\bin\uvx.exe"
+    cached = (
+        r"C:\Users\me\AppData\Local\uv\cache\archive-v0\abc\Scripts\solidworks-mcp.exe"
+    )
+
+    def command(mock: bool, lasting: bool = True) -> tuple[str, list[str]]:
+        """``uvx`` for the entry, the cached launcher for the check."""
+        return (uvx, ["solidworks-mcp-python"]) if lasting else (cached, [])
+
+    monkeypatch.setattr(cli, "server_command", command)
+    monkeypatch.setattr(cli, "in_uv_cache", lambda python: True)
+
+    result = _run("--client", "claude-desktop")
+
+    assert result.exit_code == 0, result.output
+    assert _servers(machine["desktop"])["solidworks"] == {
+        "command": uvx,
+        "args": ["solidworks-mcp-python"],
+    }
+    assert machine["commands"] == [cached]
+    assert "uvx was not found" not in result.output
+
+
+def test_run_from_uvs_cache_without_uvx_warns(
+    machine: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "in_uv_cache", lambda python: True)
+
+    result = _run("--client", "claude-desktop")
+
+    assert result.exit_code == 0, result.output
+    assert "uvx was not found" in _text(result)
 
 
 def test_choosing_by_number(machine: dict[str, Any]) -> None:

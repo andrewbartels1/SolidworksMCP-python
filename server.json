@@ -8,12 +8,12 @@
     "source": "github"
   },
   "websiteUrl": "https://andrewbartels1.com/SolidworksMCP-python/",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "solidworks-mcp-python",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

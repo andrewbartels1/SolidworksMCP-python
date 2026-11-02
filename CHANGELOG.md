@@ -12,7 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-01
+
+The first release on PyPI. Install with `uvx solidworks-mcp-python setup`;
+nothing to clone.
+
 ### Added
+
+- **On PyPI, GitHub Releases and the MCP Registry** as
+  `solidworks-mcp-python` (`io.github.andrewbartels1/solidworks-mcp-python`
+  in the registry). `uvx solidworks-mcp-python` starts the server and
+  `uvx solidworks-mcp-python setup` connects your MCP clients. The PyPI page
+  shows the README with its GIFs and links intact (#172).
 
 - **Guided install: `install.ps1` and `solidworks-mcp setup`.** One script
   creates the `.venv`, installs the server and runs the setup command.
@@ -153,8 +164,26 @@ Drawing-package tools, the last part of @SaiqKamran's #117:
   NOTES block, checked for overlaps on the read-back geometry, saved as
   `<drawing number>.SLDDRW` plus a PDF.
 
+### Changed
+
+- **The README installs with `uvx`.** Install uv, then run
+  `uvx solidworks-mcp-python setup`. Every client config in the README runs
+  `uvx solidworks-mcp-python`, with no local paths. Installing from a clone
+  with `install.ps1` is on the docs Installation page. Use
+  `solidworks-mcp-python`, not `solidworks-mcp`: `uvx solidworks-mcp`
+  installs a different project.
+- **The SolidWorks badge says "tested on 2026".** Other versions may work
+  but haven't been tested, and the README now says so.
+
 ### Fixed
 
+- **`solidworks-mcp setup` run through `uvx`** writes an entry that runs
+  `uvx solidworks-mcp-python`, by uvx's full path, instead of a launcher in
+  uv's cache folder, which stops working when uv cleans its cache. The
+  start-up check still runs the launcher that is running setup.
+- **`--help`** lists one line per option, instead of a garbled docstring.
+- **Docs deploys are no longer skipped.** Pull-request docs builds have their
+  own concurrency group, so they can't cancel a queued `main` deploy (#194).
 - **`create_cut_extrude`**: a blind cut from a sketch inside the body (for
   example a circle on the Front Plane of a mid-plane block) returned no
   feature on SolidWorks 2025 and 2026. One-way cuts are now single-ended; when

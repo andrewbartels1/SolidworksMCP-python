@@ -56,16 +56,16 @@ claude --version
 
 Use this when Claude Code, the MCP server, and SolidWorks all run on the same Windows machine.
 
-Run `.\install.ps1` from the project root and pick **Claude Code** when setup lists your clients. If the project is already installed:
+With [uv](https://docs.astral.sh/uv/) installed:
 
 ```powershell
-.\.venv\Scripts\solidworks-mcp.exe setup --client claude-code
+uvx solidworks-mcp-python setup --client claude-code
 ```
 
-Setup runs `claude mcp add --scope user solidworks`, pointing at the project's `.venv\Scripts\solidworks-mcp.exe` by its full path. If `claude` isn't on your PATH, it prints that command for you to run. By hand, it is:
+Setup runs `claude mcp add --scope user solidworks`, with `uvx` by its full path. If `claude` isn't on your PATH, it prints that command for you to run. By hand, it is:
 
 ```powershell
-claude mcp add --scope user solidworks -- C:\path\to\SolidworksMCP-python\.venv\Scripts\solidworks-mcp.exe
+claude mcp add --scope user solidworks -- uvx solidworks-mcp-python
 ```
 
 Open SolidWorks before starting a Claude Code session, then run `/mcp` to check that `solidworks` is connected.
@@ -216,7 +216,7 @@ Use:
 claude mcp remove solidworks
 ```
 
-Or let setup do it: `.\.venv\Scripts\solidworks-mcp.exe setup --client claude-code --remove`. Then re-run the correct `claude mcp add ...` command, or setup.
+Or let setup do it: `uvx solidworks-mcp-python setup --client claude-code --remove`. Then re-run the correct `claude mcp add ...` command, or setup.
 
 ## Optional: What the Project `.mcp.json` File Looks Like
 

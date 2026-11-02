@@ -7,7 +7,7 @@
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
-[![SolidWorks](https://img.shields.io/badge/SolidWorks-2019--2026-red)](https://www.solidworks.com/)
+[![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
 Servidor MCP de Python para la automatización de SolidWorks con 151 herramientas, más una capa opcional de agente/pruebas de prompts para flujos de trabajo asistidos por IA.
@@ -34,6 +34,7 @@ Incluye:
 ## Soporte Actual
 
 - Automatización COM de Windows + SolidWorks para el ciclo principal de CAD.
+- Probado en SolidWorks 2026. Las versiones anteriores pueden funcionar, pero no se han probado.
 - Herramientas de modelado, bocetos, planos, análisis, exportación, automatización, plantillas y macros.
 - Sincronización de la vista previa de la interfaz Prefab desde la ventana de visualización activa como PNG.
 
@@ -43,61 +44,70 @@ Incluye:
 - Transmisión en vivo de la ventana de visualización 3D en la interfaz.
 - Validación de interferencias a nivel de punto de control en el ejecutor de la interfaz.
 
-## Funcionamiento Verificado (Configuración en Windows)
+## Instalación
 
-Esta es la ruta de configuración validada de extremo a extremo:
-
-1. Instalar Python desde python.org (instalador de Windows).
-2. Habilitar **Agregar python.exe a PATH** durante la instalación.
-3. Instalar este proyecto en un `.venv` local.
-4. Iniciar MCP desde `.venv\Scripts\python.exe` (no desde WSL).
-
-Cuando esto es correcto, los registros de inicio muestran:
-
-- `Platform: Windows`
-- `SolidWorks COM interface is available`
-- `Registered ... SolidWorks tools` (la cantidad varía a medida que las herramientas evolucionan)
-- `Connected to SolidWorks`
-
-## Requisitos
-
-- Windows 10/11 para automatización COM real de SolidWorks.
-- Python 3.13+ desde python.org.
-- Git.
-- SolidWorks instalado e iniciado al menos una vez.
-
-Linux/WSL es útil para documentación/pruebas/modo simulado, pero no para automatización COM directa.
-
-## Inicio Rápido (Windows, python.org)
+Necesitas Windows 10 u 11 y SolidWorks (abierto al menos una vez). En PowerShell, instala [uv](https://docs.astral.sh/uv/), abre una ventana nueva de PowerShell y ejecuta la configuración guiada:
 
 ```powershell
-git clone https://github.com/andrewbartels1/SolidworksMCP-python.git
-cd SolidworksMCP-python
-
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
-.\.venv\Scripts\python.exe -m pip install -e .
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uvx solidworks-mcp-python setup
 ```
 
-Iniciar servidor manualmente:
+uv descarga Python 3.13 y el servidor desde PyPI por sí solo; no hace falta clonar nada. La configuración guiada:
+
+1. encuentra tu versión de SolidWorks y los clientes MCP de tu PC: Claude Desktop, Claude Code, VS Code, Cursor y LM Studio;
+2. te deja elegir qué clientes conectar;
+3. inicia el servidor una vez para comprobar que lista sus herramientas (en modo simulado, sin tocar SolidWorks);
+4. añade una entrada `solidworks` a cada cliente elegido y te dice qué reiniciar.
+
+Solo cambia la entrada `solidworks` de cada configuración, hace antes una copia de seguridad y nunca muestra ni cambia tus otros servidores.
+
+**Para comprobarlo:** abre SolidWorks, reinicia tu cliente y pregunta *"¿Qué modelo está abierto en SolidWorks?"*
+
+El paquete se llama `solidworks-mcp-python`. `uvx solidworks-mcp` instala otro proyecto distinto. Para trabajar en el propio servidor, [instala desde un clon](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#install-from-source).
+
+## Conectar un cliente a mano
+
+Cada cliente ejecuta `uvx solidworks-mcp-python`. Si un cliente no encuentra `uvx`, usa su ruta completa, de `(Get-Command uvx).Source`.
+
+Claude Desktop (`claude_desktop_config.json`) y LM Studio (`%USERPROFILE%\.lmstudio\mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "solidworks": {
+      "command": "uvx",
+      "args": ["solidworks-mcp-python"]
+    }
+  }
+}
+```
+
+VS Code (`%APPDATA%\Code\User\mcp.json`):
+
+```json
+{
+  "servers": {
+    "solidworks": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["solidworks-mcp-python"]
+    }
+  }
+}
+```
+
+Claude Code:
 
 ```powershell
-.\.venv\Scripts\python.exe -m solidworks_mcp.server
+claude mcp add --scope user solidworks -- uvx solidworks-mcp-python
 ```
 
-O usar el script de ayuda (abre SolidWorks primero):
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deployment\run-mcp.ps1 --real --year 2026
-```
-
-> **Advertencia de modo simulado** — ejecutar `run-mcp.ps1` sin `--real` inicia el
-> servidor en modo simulado. Todas las respuestas de las herramientas son ficticias; nada interactúa
-> con SolidWorks. Pasa siempre `--real --year <año>` para automatización en vivo.
+Para el modo simulado, que no necesita SolidWorks, usa `"args": ["solidworks-mcp-python", "--mock"]`. Linux/WSL sirve para documentación, pruebas y modo simulado, pero no para automatización COM.
 
 ## Comandos de Desarrollo
 
-Usa el script de ayuda para flujos de trabajo comunes:
+Desde un clon del repositorio, usa el script de ayuda para flujos de trabajo comunes:
 
 ```powershell
 .\dev-commands.ps1
@@ -128,90 +138,9 @@ La primera ejecución compila la imagen. Vuelve a ejecutar sin recompilar cuando
 .\scripts\run-ci-local.ps1 -NoBuild
 ```
 
-## Configuración de MCP para VS Code (Windows)
-
-Establece tu configuración de MCP de usuario (`%APPDATA%\Code\User\mcp.json`) en:
-
-```json
-{
-  "servers": {
-    "solidworks-mcp-server": {
-      "type": "stdio",
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1",
-        "--real",
-        "--year",
-        "2026"
-      ]
-  },
-  "inputs": []
-}
-```
-
-Reemplaza la ruta del script con la ruta de tu repositorio local. Las banderas `--real --year 2026` inician el servidor en modo de automatización COM en vivo (requiere SolidWorks abierto). Omítelas para el modo simulado.
-
-## Configuración de MCP para LM Studio (Windows)
-
-Configura tu archivo de configuración de MCP de LM Studio para incluir este servidor (LM Studio espera `mcpServers`):
-
-```json
-{
-  "mcpServers": {
-    "solidworks-mcp-server": {
-      "command": "powershell",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "C:\\path\\to\\SolidworksMCP-python\\deployment\\run-mcp.ps1"
-      ]
-    }
-  }
-}
-```
-
-Entrada alternativa directa con Python:
-
-```json
-{
-  "mcpServers": {
-    "solidworks-mcp-server": {
-      "command": "C:\\path\\to\\SolidworksMCP-python\\.venv\\Scripts\\python.exe",
-      "args": ["-m", "solidworks_mcp.server"]
-    }
-  }
-}
-```
-
-Después de guardar, reinicia LM Studio para que recargue los servidores MCP.
-
 ## Soluciones Comunes en Windows
 
-Si no se encuentra `python`:
-
-```powershell
-python --version
-```
-
-Si esto abre la Microsoft Store o falla, reinstala Python desde python.org y habilita PATH.
-
-Si el inicio falla con `ModuleNotFoundError: solidworks_mcp`:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-```
-
-Si el inicio falla con `ModuleNotFoundError: fastmcp`:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -e .
-```
+Si `uvx` no se encuentra después de instalar uv, abre una ventana nueva de PowerShell. Más soluciones en [Troubleshooting](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#troubleshooting).
 
 ## Documentación
 

@@ -1,12 +1,13 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-fancy-pypi-readme>=24"]
 build-backend = "hatchling.build"
 
 [project]
 name = "solidworks-mcp-python"
-version = "1.4.0"
+version = "1.5.0"
 description = "Python MCP server for SolidWorks: lets Claude and other AI agents build parts, assemblies and drawings through the SolidWorks COM API."
-readme = "README.md"
+# The README with relative links made absolute for PyPI: see the fancy-pypi-readme hook.
+dynamic = ["readme"]
 requires-python = ">=3.13"
 license = "MIT"
 authors = [
@@ -58,6 +59,7 @@ dependencies = [
 dev = [
     # Testing framework
     "pytest>=7.4.0",
+    "hatch-fancy-pypi-readme>=24",  # renders the PyPI description in tests
     "pytest-asyncio>=0.21.0", 
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.11.0",
@@ -87,6 +89,7 @@ dev = [
 ]
 test = [
     "pytest>=7.4.0",
+    "hatch-fancy-pypi-readme>=24",  # renders the PyPI description in tests
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.11.0",
@@ -179,6 +182,35 @@ include = [
     "/LICENSE",
     "/pyproject.toml",
 ]
+# The demo GIFs are 28 MB; the PyPI page loads them from GitHub instead.
+exclude = ["/docs/assets"]
+
+# PyPI shows the README without the repo around it, so relative paths would
+# be broken images and dead links there. The README itself stays relative.
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+# Images: <img src="docs/..."> and ![alt](docs/...) load the raw file.
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'src="(?!https?://|#)([^"]+)"'
+replacement = 'src="https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/\g<1>"'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '(!\[[^\]]*\])\((?!https?://|#)([^)\s]+)\)'
+replacement = '\g<1>(https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/\g<2>)'
+
+# Every other relative link opens the file on GitHub. Runs after the image
+# rules, so images are already absolute and are skipped.
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\]\((?!https?://|#|mailto:)([^)\s]+)\)'
+replacement = '](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/\g<1>)'
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'href="(?!https?://|#|mailto:)([^"]+)"'
+replacement = 'href="https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/\g<1>"'
 
 [tool.pytest.ini_options]
 minversion = "7.0"
