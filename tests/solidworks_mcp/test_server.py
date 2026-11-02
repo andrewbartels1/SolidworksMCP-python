@@ -1038,21 +1038,24 @@ def test_cli_main_routes_setup_to_the_setup_app():
 
 def test_cli_help_lists_each_option_without_internal_text():
     """`--help` shows the summary and one line per option, not the Args section."""
+    import click
     import typer
     from typer.testing import CliRunner
 
     from solidworks_mcp.server import cli
 
-    app = typer.Typer()
+    app = typer.Typer(add_completion=False)
     app.command()(cli)
     result = CliRunner().invoke(app, ["--help"], env={"COLUMNS": "120"})
+    # CI forces colour, and rich styles "-" and "-config" separately.
+    output = click.unstyle(result.output)
 
     assert result.exit_code == 0
     for option in ("--config", "--mode", "--host", "--port", "--debug", "--mock"):
-        assert option in result.output
-    assert "Start the SolidWorks MCP server on stdio." in result.output
-    assert "typer.Option" not in result.output
-    assert "Args:" not in result.output
+        assert option in output
+    assert "Start the SolidWorks MCP server on stdio." in output
+    assert "typer.Option" not in output
+    assert "Args:" not in output
 
 
 class TestServerCoverage:
