@@ -84,6 +84,14 @@ def setup(
         help="Remove older hand-made entries that start this server "
         "(run-mcp.ps1 and the like) without asking.",
     ),
+    year: int | None = typer.Option(
+        None,
+        "--year",
+        min=1995,
+        max=2100,
+        help="SolidWorks year the server works with, e.g. 2026. "
+        "Default: the newest installed.",
+    ),
 ) -> None:
     """Find your SolidWorks and MCP clients, and add this server to them.
 
@@ -98,6 +106,8 @@ def setup(
         mock: Write a mock-mode entry.
         skip_check: Skip the start-up check.
         replace_old: Remove older entries for this server without asking.
+        year: The SolidWorks year to start the server with; the newest
+            installed when ``None``.
 
     Raises:
         typer.Exit: With code 1 if the check failed or a client couldn't be
@@ -106,7 +116,8 @@ def setup(
     console.print("[bold]SolidWorks MCP setup[/bold]\n")
     if not remove:
         mock = _choose_mode(mock, yes)
-    command, args = server_command(mock=mock)
+        year = None if mock else _choose_year(year)
+    command, args = server_command(mock=mock, year=year)
     if in_uv_cache(sys.executable) and args[:1] != [PACKAGE]:
         console.print(
             "[yellow]Running from uv's cache, and uvx was not found: the entry "
@@ -125,7 +136,7 @@ def setup(
             "\nChecking that the server starts (mock mode, SolidWorks is not touched)..."
         )
         # The launcher running now: a `uvx` entry would fetch from PyPI instead.
-        result = _run_check(*server_command(mock=mock, lasting=False))
+        result = _run_check(*server_command(mock=mock, year=year, lasting=False))
         if not result.ok:
             console.print(f"[red]{result.message}[/red] No config was changed.")
             raise typer.Exit(1)
@@ -173,6 +184,39 @@ def _choose_mode(mock: bool, yes: bool) -> bool:
     return Confirm.ask(
         "Set up mock mode instead (for trying the tools without SolidWorks)?"
     )
+
+
+def _choose_year(requested: int | None) -> int | None:
+    """Decide the SolidWorks year a real entry starts the server with.
+
+    Args:
+        requested: ``--year``, if given.
+
+    Returns:
+        The requested year, else the newest installed one; ``None`` when no
+        install is found and none was requested (the server then warns and
+        uses the newest it finds).
+
+    Raises:
+        typer.Exit: With code 1, before anything is written, when the
+            requested year isn't installed.
+    """
+    years = installed_versions()
+    if requested is None:
+        if years:
+            console.print(
+                f"The server will work with SOLIDWORKS {years[0]} (--year {years[0]})."
+            )
+            return years[0]
+        return None
+    if years and requested not in years:
+        installed = ", ".join(str(found) for found in years)
+        console.print(
+            f"[red]SOLIDWORKS {requested} isn't installed here; installed: "
+            f"{installed}.[/red] No config was changed."
+        )
+        raise typer.Exit(1)
+    return requested
 
 
 def _choose_clients(

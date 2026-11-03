@@ -12,6 +12,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The server takes `--year`**, the installed SolidWorks release it works
+  with (`uvx solidworks-mcp-python --year 2026`). It is required for real
+  SolidWorks and `setup` writes it into every client entry, from the newest
+  installed release or `setup --year`. Started without it, the server logs a
+  warning and uses the newest installed release, so existing entries keep
+  working; rerun `solidworks-mcp-python setup` to add it.
+
+### Fixed
+
+- **The API lookup tools answer from SolidWorks' own type library** (#195).
+  `lookup_api_method`, `lookup_api_interface`, `find_related_api_members`
+  and `search_solidworks_api_help` used to answer from a hand-typed list of
+  about 100 names, many of them wrong: `IModelDoc2.SaveBMP` was "not a
+  member", and the made-up `SaveBitmapWithVariableSize` was found. They now
+  cover every SolidWorks interface (497 on SolidWorks 2026), and
+  `lookup_api_method` returns each member's parameters, which ones are
+  outputs, its return type and a description. A name in the wrong case is
+  found under its real spelling, with a note.
+- **API lookups no longer rebuild the index on every call.** On a machine
+  without a `Public\Documents\SOLIDWORKS <year>` folder, or with one left by
+  an older release, each lookup rebuilt and rewrote the 3 MB index. Lookups
+  now find the index by the type library they read, and report that
+  library's year.
+- **`discover_solidworks_docs` honours `include_vba: false`**, which it
+  ignored.
+
+### Changed
+
+- **Building the API index needs SolidWorks installed, not running**, and
+  never starts or calls SolidWorks. The lookups build the index themselves,
+  and an index written by an older version is rebuilt automatically. Without
+  a SolidWorks type library on the machine they answer "no match" and say
+  why, instead of guessing.
+- **`discover_solidworks_docs` no longer returns the whole index**, which is
+  now megabytes. It returns a summary, the type library it read and the
+  saved file. `auto_discover_if_missing` is no longer needed but is still
+  accepted.
+- **The docs tools' descriptions tell an agent how to use them**: what they
+  need, that nothing has to be run first, what `index_status` means, and an
+  example input.
+
 ## [1.5.0] - 2026-11-01
 
 The first release on PyPI. Install with `uvx solidworks-mcp-python setup`;

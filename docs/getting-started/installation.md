@@ -22,10 +22,10 @@ The package is `solidworks-mcp-python`. `uvx solidworks-mcp` installs a differen
 
 Setup walks through:
 
-1. **SolidWorks.** It reads the installed versions from the registry. With none found, it offers mock mode.
+1. **SolidWorks.** It reads the installed versions from the registry and starts the server with the newest one (`--year 2026`); `--year` picks another. With none found, it offers mock mode.
 2. **Clients.** It lists Claude Desktop, Claude Code, VS Code, Cursor and LM Studio, with what it found for each, and you pick by number.
 3. **A start-up check.** It starts the server once in mock mode and confirms that it lists its tools. SolidWorks isn't touched, and nothing is written if this fails.
-4. **The entry.** It adds a `solidworks` entry that runs `uvx solidworks-mcp-python`, with `uvx` by its full path, so it works whatever PATH the client starts it with. Run from a clone's `.venv`, it runs that `.venv`'s `solidworks-mcp.exe` instead. Claude Code is configured with `claude mcp add --scope user`.
+4. **The entry.** It adds a `solidworks` entry that runs `uvx solidworks-mcp-python --year <year>`, with `uvx` by its full path, so it works whatever PATH the client starts it with. Run from a clone's `.venv`, it runs that `.venv`'s `solidworks-mcp.exe` instead. Claude Code is configured with `claude mcp add --scope user`.
 5. **Older entries.** If a client has other entries that start this server the old way (`run-mcp.ps1`, `start_local_server_claude.py` and the like), it names them and offers to remove them, so tools don't load twice.
 6. **Next steps.** It says what to restart in each client and how to confirm the connection.
 
@@ -37,6 +37,7 @@ Setup walks through:
 | `--remove` | Take the `solidworks` entry out again. |
 | `--replace-old` | Remove older entries for this server without asking. |
 | `--mock` | Configure mock mode, which answers without SolidWorks. |
+| `--year <year>` | The SolidWorks release to start the server with, e.g. `2026`. Default: the newest installed. Setup stops, changing nothing, if that year isn't installed. |
 | `--skip-check` | Don't run the start-up check. |
 
 ### How setup treats your config files

@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
+from pydantic import BaseModel
 
 from solidworks_mcp.config import (
     AdapterType,
@@ -25,9 +26,7 @@ from solidworks_mcp.config import (
 from solidworks_mcp.server import SolidWorksMCPServer
 from solidworks_mcp.tools.docs_discovery import (
     SolidWorksDocsDiscovery,
-    _detect_installed_solidworks_year,
     _discover_vba_references_via_registry,
-    _enumerate_typeinfo_members,
     _extract_year,
     _fallback_help_for_query,
     _find_index_file,
@@ -39,8 +38,129 @@ from solidworks_mcp.tools.docs_discovery import (
     _search_index,
     register_docs_discovery_tools,
 )
+from solidworks_mcp.tools.tool_boundary import ToolOperationError
+from solidworks_mcp.tools.type_library import (
+    SOLIDWORKS_TYPELIB_GUID,
+    ApiInterface,
+    TypeLibraryInfo,
+)
 
 REAL_SW_ENV_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
+
+
+def _dump(model: BaseModel) -> dict:
+    """A lookup result as the tools return it."""
+    return model.model_dump(exclude_unset=True)
+
+
+def _method(*params: tuple[str, str, str], returns: str | None = None) -> dict:
+    """A method record as the type library reader writes it."""
+    return {
+        "kind": "method",
+        "description": "",
+        "parameters": [
+            {"name": name, "type": kind, "direction": direction}
+            for name, kind, direction in params
+        ],
+        "return_type": returns,
+    }
+
+
+def _property(kind: str, access: str = "read") -> dict:
+    """A property record as the type library reader writes it."""
+    return {"kind": "property", "description": "", "type": kind, "access": access}
+
+
+def _iface(**members: dict) -> dict:
+    """An interface record: name lists and counts derived from its members."""
+    methods = sorted(n for n, m in members.items() if m["kind"] == "method")
+    properties = sorted(n for n, m in members.items() if m["kind"] == "property")
+    return {
+        "methods": methods,
+        "properties": properties,
+        "method_count": len(methods),
+        "property_count": len(properties),
+        "members": members,
+    }
+
+
+_COM_OBJECTS = {
+    "ISldWorks": _iface(
+        OpenDoc6={
+            **_method(
+                ("FileName", "String", "in"),
+                ("Type", "Long", "in"),
+                ("Options", "Long", "in"),
+                ("Configuration", "String", "in"),
+                ("Errors", "Long", "in_out"),
+                ("Warnings", "Long", "in_out"),
+                returns="IModelDoc2",
+            ),
+            "description": "Opens an existing document",
+        },
+        CloseDoc=_method(("Name", "String", "in")),
+        ActivateDoc3=_method(returns="Object"),
+        Visible=_property("Boolean", "read_write"),
+        ActiveDoc=_property("Object"),
+    ),
+    "IModelDoc2": _iface(
+        GetTitle=_method(returns="String"),
+        CloseDoc=_method(),
+        ViewZoomtofit2=_method(),
+        Visible=_property("Boolean", "read_write"),
+    ),
+}
+
+_LIBRARY = TypeLibraryInfo(
+    guid=SOLIDWORKS_TYPELIB_GUID,
+    version="34.0",
+    year=2026,
+    path=r"C:\SOLIDWORKS\sldworks.tlb",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_index(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Run each test in an empty folder, so no index on disk is found or written.
+
+    The root conftest already reports no type library; a test that wants one
+    uses ``fake_type_library``.
+    """
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture
+def fake_type_library(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
+    """A registered type library 34.0 holding ``_COM_OBJECTS``.
+
+    Returns:
+        The ``(year, strict)`` of every load, i.e. every index build.
+    """
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    calls: list[tuple] = []
+
+    def _load(year: int | None = None, strict: bool = False) -> tuple:
+        calls.append((year, strict))
+        return "the library", _LIBRARY
+
+    monkeypatch.setattr(docs_mod, "load_type_library", _load)
+    monkeypatch.setattr(docs_mod, "target_version", lambda *_a, **_k: (34, 0))
+    monkeypatch.setattr(
+        docs_mod,
+        "index_type_library",
+        lambda _lib: {
+            name: ApiInterface.model_validate(record)
+            for name, record in _COM_OBJECTS.items()
+        },
+    )
+    monkeypatch.setattr(docs_mod, "_discover_vba_references_via_registry", dict)
+    # No RAG builder: discovery skips the rebuild instead of loading the
+    # embedding model. A test that wants one sets its own.
+    monkeypatch.setitem(
+        sys.modules, "solidworks_mcp.agents.vector_rag", SimpleNamespace()
+    )
+    return calls
 
 
 def _real_solidworks_enabled() -> bool:
@@ -136,7 +256,7 @@ async def test_discover_solidworks_docs_execution(
     if result["status"] == "success":
         # Validate successful discovery structure
         assert "summary" in result, "Success result should have 'summary' field"
-        assert "index" in result, "Success result should have 'index' field"
+        assert "type_library" in result, "Success result should name the type library"
 
         summary = result["summary"]
         assert "total_com_objects" in summary
@@ -248,6 +368,7 @@ async def test_search_solidworks_api_help_with_index(
     index_path.write_text(
         json.dumps(
             {
+                "version": "2.0",
                 "com_objects": {
                     "ISldWorks": {
                         "methods": ["OpenDoc6", "CloseDoc"],
@@ -279,114 +400,6 @@ async def test_search_solidworks_api_help_with_index(
     assert result["source_index_file"] == str(index_path)
     assert isinstance(result["matches"], list)
     assert result["guidance"]
-
-
-def test_discovery_connect_fails_without_win32(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Connect_to_solidworks should fail fast when win32com is unavailable."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
-    discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-connect")
-    )
-
-    assert discovery.connect_to_solidworks() is False
-
-
-def test_discovery_connect_fails_on_non_windows(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Connect_to_solidworks should reject non-Windows platforms."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Linux")
-    discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-connect-os")
-    )
-
-    assert discovery.connect_to_solidworks() is False
-
-
-def test_discovery_connect_never_launches_solidworks(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """With no running SolidWorks, connect fails instead of starting one.
-
-    Starting SldWorks.Application from a process outside the desktop session
-    (an SSH shell, a test run) leaves a hidden SLDWORKS.exe behind.
-    """
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    class _FakeComError(Exception):
-        """Test fake com error."""
-
-    def _launch(_progid):
-        raise AssertionError("docs discovery must not launch SolidWorks")
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "com_error", _FakeComError, raising=False)
-    monkeypatch.setattr(
-        docs_mod,
-        "win32com",
-        SimpleNamespace(
-            client=SimpleNamespace(
-                GetActiveObject=lambda _: (_ for _ in ()).throw(
-                    _FakeComError("not running")
-                ),
-                Dispatch=_launch,
-                DispatchEx=_launch,
-                gencache=SimpleNamespace(EnsureDispatch=_launch),
-            )
-        ),
-        raising=False,
-    )
-
-    discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-connect-not-running")
-    )
-    assert discovery.connect_to_solidworks() is False
-    assert discovery.sw_app is None
-
-
-def test_discover_com_objects_empty_without_connection() -> None:
-    """Discover_com_objects should return empty dict when disconnected."""
-    discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-empty"))
-    assert discovery.discover_com_objects() == {}
-
-
-def test_discover_com_objects_and_summary_with_fake_app() -> None:
-    """Discover_com_objects should index methods/properties and create summary."""
-
-    class _FakeApp:
-        """Test suite for FakeApp."""
-
-        revision = "33.2"
-
-        def RevisionNumber(self):
-            """Test helper for RevisionNumber."""
-            return self.revision
-
-        def OpenDoc6(self):
-            """Test helper for OpenDoc6."""
-            return None
-
-        @property
-        def Visible(self):
-            """Test helper for Visible."""
-            return True
-
-    discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-com"))
-    discovery.sw_app = _FakeApp()
-
-    index = discovery.discover_com_objects()
-    assert "ISldWorks" in index
-    assert discovery.index["solidworks_version"] == "33.2"
-    discovery.index["com_objects"] = index
-
-    summary = discovery.create_search_summary()
-    assert summary["total_com_objects"] >= 1
 
 
 def test_discover_vba_references_handles_available_and_error(
@@ -425,22 +438,10 @@ def test_discover_vba_references_handles_available_and_error(
     assert any("SldWorks" in v["description"] for v in refs.values())
 
 
-def test_discover_all_returns_index_when_connect_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Discover_all should return base index when connection fails."""
-    discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-all"))
-    monkeypatch.setattr(discovery, "connect_to_solidworks", lambda: False)
-
-    index = discovery.discover_all()
-    assert isinstance(index, dict)
-    assert index["com_objects"] == {}
-
-
 def test_save_index_success_and_failure(
     monkeypatch: pytest.MonkeyPatch, temp_dir: Path
 ) -> None:
-    """Save_index should write JSON and return None on write errors."""
+    """Save_index writes JSON, and a write error names the file."""
     discovery = SolidWorksDocsDiscovery(output_dir=temp_dir)
     saved = discovery.save_index("docs_index.json")
     assert saved is not None and saved.exists()
@@ -450,15 +451,15 @@ def test_save_index_success_and_failure(
     monkeypatch.setattr(
         docs_mod.json,
         "dump",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("write failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
     )
-    failed = discovery.save_index("bad.json")
-    assert failed is None
+    with pytest.raises(ToolOperationError, match="Couldn't save the API index to"):
+        discovery.save_index("bad.json")
 
 
 def test_index_load_and_search_helpers(temp_dir: Path) -> None:
     """Low-level index find/load/search helpers should return coherent structures."""
-    index_dir = temp_dir / "docs-index"
+    index_dir = Path(".generated/docs-index")
     index_dir.mkdir(parents=True, exist_ok=True)
     index_path = index_dir / "solidworks_docs_index_2026.json"
     payload = {
@@ -474,13 +475,12 @@ def test_index_load_and_search_helpers(temp_dir: Path) -> None:
     }
     index_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    found = _find_index_file(2026, str(index_path))
-    assert found == index_path
+    assert _find_index_file(2026) == index_path
 
     loaded = _load_index_file(index_path)
     assert isinstance(loaded, dict)
 
-    results = _search_index(loaded or {}, "open", 5)
+    results = [_dump(m) for m in _search_index(loaded or {}, "open", 5)]
     assert results
     assert results[0]["member_type"] in {"method", "property", "reference"}
 
@@ -493,199 +493,7 @@ def test_fallback_help_profiles() -> None:
 
     assert "create_revolve" in revolve_help["suggested_tools"]
     assert "create_extrusion" in extrude_help["suggested_tools"]
-    assert "discover_solidworks_docs" in generic_help["suggested_tools"]
-
-
-@pytest.mark.asyncio
-async def test_discover_solidworks_docs_tool_error_paths(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Tool should return structured error on unsupported environments."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
-    result = await discover_tool({})
-    assert result["status"] == "error"
-    assert "win32com" in result["message"]
-
-
-@pytest.mark.asyncio
-async def test_discover_solidworks_docs_tool_success_path(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """Tool should return successful payload when discovery and save succeed."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    class _FakeDiscovery:
-        """Test suite for FakeDiscovery."""
-
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            """Test helper for init."""
-            self.output_dir = output_dir
-
-        def discover_all(self):
-            """Test helper for discover all."""
-            return {
-                "com_objects": {
-                    "ISldWorks": {"methods": ["OpenDoc6"], "properties": ["Visible"]}
-                },
-                "vba_references": {"SldWorks": {"status": "available"}},
-                "total_methods": 1,
-                "total_properties": 1,
-                "solidworks_version": "33.2",
-            }
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            """Test helper for save index."""
-            path = temp_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-        def create_search_summary(self):
-            """Test helper for create search summary."""
-            return {
-                "total_com_objects": 1,
-                "total_methods": 1,
-                "total_properties": 1,
-                "solidworks_version": "33.2",
-                "available_vba_libs": ["SldWorks"],
-            }
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
-
-    result = await discover_tool({"output_dir": str(temp_dir), "year": 2026})
-    assert result["status"] == "success"
-    assert result["year"] == 2026
-    assert result["summary"]["total_com_objects"] == 1
-
-
-def test_discovery_connect_attaches_to_a_running_solidworks(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Connect_to_solidworks binds the instance GetActiveObject returns."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    fake_sw = object()
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(
-        docs_mod,
-        "win32com",
-        SimpleNamespace(client=SimpleNamespace(GetActiveObject=lambda _: fake_sw)),
-        raising=False,
-    )
-
-    discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-connect-attach")
-    )
-    assert discovery.connect_to_solidworks() is True
-    assert discovery.sw_app is fake_sw
-
-
-def test_discover_com_objects_handles_attribute_and_catalog_errors() -> None:
-    """Discover_com_objects should tolerate both extraction and catalog-level failures."""
-
-    class _BrokenApp:
-        """Test suite for BrokenApp."""
-
-        def RevisionNumber(self):
-            """Test helper for RevisionNumber."""
-            raise RuntimeError("no revision")
-
-    discovery = SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-com-broken")
-    )
-    discovery.sw_app = _BrokenApp()
-
-    # Force outer catalog exception via incompatible accumulator type.
-    discovery.index["total_methods"] = "not-an-int"
-    indexed = discovery.discover_com_objects()
-    assert isinstance(indexed, dict)
-    assert "ISldWorks" in indexed
-    # Catalog-level accumulator failure should be tolerated without crashing discovery.
-    assert discovery.index["total_methods"] == "not-an-int"
-
-
-def test_discover_all_success_path_with_stubbed_steps(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Discover_all should stitch connect/com/vba steps into final index."""
-    discovery = SolidWorksDocsDiscovery(output_dir=Path("tests/.generated/docs-all-ok"))
-
-    monkeypatch.setattr(discovery, "connect_to_solidworks", lambda: True)
-    monkeypatch.setattr(
-        discovery,
-        "discover_com_objects",
-        lambda: {"ISldWorks": {"methods": ["OpenDoc6"], "properties": ["Visible"]}},
-    )
-    monkeypatch.setattr(
-        discovery,
-        "discover_vba_references",
-        lambda: {"SldWorks": {"status": "available"}},
-    )
-
-    result = discovery.discover_all()
-    assert "ISldWorks" in result["com_objects"]
-    assert result["vba_references"]["SldWorks"]["status"] == "available"
-
-
-def test_extract_year_handles_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_extract_year should return None when int conversion fails."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    class _BadMatch:
-        """Test suite for BadMatch."""
-
-        def group(self, _idx: int) -> str:
-            """Test helper for group."""
-            return "20xx"
-
-    monkeypatch.setattr(docs_mod.re, "search", lambda *_args, **_kwargs: _BadMatch())
-    assert docs_mod._extract_year("any") is None
-
-
-def test_detect_installed_year_no_root_and_no_year_dirs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """_detect_installed_solidworks_year should handle missing/empty install roots."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    class _MissingRoot:
-        """Test suite for MissingRoot."""
-
-        def exists(self):
-            """Test helper for exists."""
-            return False
-
-    monkeypatch.setattr(docs_mod, "Path", lambda *_args, **_kwargs: _MissingRoot())
-    assert docs_mod._detect_installed_solidworks_year() is None
+    assert "lookup_api_interface" in generic_help["suggested_tools"]
 
 
 def test_load_index_file_non_dict_and_exception_paths(
@@ -701,7 +509,7 @@ def test_load_index_file_non_dict_and_exception_paths(
     monkeypatch.setattr(
         Path,
         "open",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("read failed")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("read failed")),
     )
     assert _load_index_file(arr_file) is None
 
@@ -710,25 +518,12 @@ def test_find_index_file_search_dir_and_search_index_edge_cases(temp_dir: Path) 
     """Cover search-dir discovery and empty-token/exact-match scoring in _search_index."""
     import solidworks_mcp.tools.docs_discovery as docs_mod
 
-    original_path = docs_mod.Path
-    base = temp_dir / "docs-index"
+    base = Path("tests/.generated/docs-index")
     base.mkdir(parents=True, exist_ok=True)
     idx = base / "solidworks_docs_index_2027.json"
     idx.write_text("{}", encoding="utf-8")
 
-    def _path_redirect(value):
-        """Test helper for path redirect."""
-        if str(value) == ".generated/docs-index":
-            return base
-        return original_path(value)
-
-    docs_mod.Path = _path_redirect
-    try:
-        found = docs_mod._find_index_file(2027, None)
-    finally:
-        docs_mod.Path = original_path
-
-    assert found == idx
+    assert docs_mod._find_index_file(2027) == idx
 
     # Empty/whitespace-only tokens branch.
     assert docs_mod._search_index({}, "   ", 10) == []
@@ -742,49 +537,20 @@ def test_find_index_file_search_dir_and_search_index_edge_cases(temp_dir: Path) 
             "SldWorks": {"description": "SolidWorks API", "status": "available"}
         },
     }
-    exact = docs_mod._search_index(index, "OpenDoc6", 10)
+    exact = [_dump(m) for m in docs_mod._search_index(index, "OpenDoc6", 10)]
     assert exact and exact[0]["member"] == "OpenDoc6"
-    refs = docs_mod._search_index(index, "SolidWorks API", 10)
+    refs = [_dump(m) for m in docs_mod._search_index(index, "SolidWorks API", 10)]
     assert any(item["member_type"] == "reference" for item in refs)
 
 
-def test_detect_year_iteration_and_config_path_resolution(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Cover non-dir iteration continue, no-year return, and config-path year resolution."""
+def test_year_comes_from_the_install_path_and_is_never_guessed() -> None:
+    """Without --year, a year in the configured install path is used; else None."""
     import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    class _Child:
-        """Test suite for Child."""
-
-        def __init__(self, name: str, is_dir: bool):
-            """Test helper for init."""
-            self.name = name
-            self._is_dir = is_dir
-
-        def is_dir(self):
-            """Test helper for is dir."""
-            return self._is_dir
-
-    class _Root:
-        """Test suite for Root."""
-
-        def exists(self):
-            """Test helper for exists."""
-            return True
-
-        def iterdir(self):
-            """Test helper for iterdir."""
-            return [
-                _Child("readme.txt", False),
-                _Child("RandomFolder", True),
-            ]
-
-    monkeypatch.setattr(docs_mod, "Path", lambda *_args, **_kwargs: _Root())
-    assert docs_mod._detect_installed_solidworks_year() is None
 
     cfg = SimpleNamespace(solidworks_year=None, solidworks_path="C:/SW/SOLIDWORKS 2028")
     assert docs_mod._resolve_solidworks_year(None, cfg) == 2028
+    # None means "the newest installed type library".
+    assert docs_mod._resolve_solidworks_year(None, SimpleNamespace()) is None
 
 
 def test_load_index_file_missing_and_search_property_match(temp_dir: Path) -> None:
@@ -803,98 +569,8 @@ def test_load_index_file_missing_and_search_property_match(temp_dir: Path) -> No
         },
         "vba_references": {},
     }
-    results = docs_mod._search_index(index, "RevisionNumber", 5)
+    results = [_dump(m) for m in docs_mod._search_index(index, "RevisionNumber", 5)]
     assert any(item["member_type"] == "property" for item in results)
-
-
-@pytest.mark.asyncio
-async def test_discover_solidworks_docs_tool_non_windows_error(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Discover_solidworks_docs should reject non-Windows platforms."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Linux")
-
-    result = await discover_tool({})
-    assert result["status"] == "error"
-    assert "Windows" in result["message"]
-
-
-@pytest.mark.asyncio
-async def test_search_api_help_auto_discovers_when_index_missing(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """Search_solidworks_api_help should auto-discover index when requested."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    search_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "search_solidworks_api_help":
-            search_tool = tool.fn
-            break
-    assert search_tool is not None
-
-    class _AutoDiscovery:
-        """Test suite for AutoDiscovery."""
-
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            """Test helper for init."""
-            self.output_dir = output_dir
-
-        def discover_all(self):
-            """Test helper for discover all."""
-            return {
-                "com_objects": {
-                    "ISldWorks": {
-                        "methods": ["OpenDoc6"],
-                        "properties": ["Visible"],
-                    }
-                },
-                "vba_references": {},
-            }
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            """Test helper for save index."""
-            path = temp_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _AutoDiscovery)
-    monkeypatch.setattr(docs_mod, "_find_index_file", lambda *_args, **_kwargs: None)
-
-    result = await search_tool(
-        {
-            "query": "OpenDoc6",
-            "year": 2026,
-            "auto_discover_if_missing": True,
-            "max_results": 5,
-        }
-    )
-
-    assert result["status"] == "success"
-    assert result["source_index_file"] is not None
 
 
 @pytest.mark.asyncio
@@ -926,104 +602,6 @@ async def test_search_api_help_exception_path(
     result = await search_tool({"query": "OpenDoc6"})
     assert result["status"] == "error"
     assert result["error_type"] == "internal"
-
-
-def test_enumerate_typeinfo_members_happy_path_and_error_item() -> None:
-    """Covers method/property extraction, dedupe, and per-item exception continue."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    class _TypeAttr:
-        cFuncs = 4
-
-    class _FuncDesc:
-        def __init__(self, memid: int, invkind: int):
-            self.memid = memid
-            self.invkind = invkind
-
-    class _TypeInfo:
-        def GetTypeAttr(self):
-            return _TypeAttr()
-
-        def GetFuncDesc(self, i: int):
-            if i == 3:
-                raise RuntimeError("bad func")
-            return [_FuncDesc(1, 1), _FuncDesc(2, 2), _FuncDesc(1, 1)][i]
-
-        def GetNames(self, memid: int):
-            return {1: ["OpenDoc6"], 2: ["Visible"]}[memid]
-
-    methods, properties = docs_mod._enumerate_typeinfo_members(_TypeInfo())
-    assert methods == ["OpenDoc6"]
-    assert properties == ["Visible"]
-
-
-def test_discover_com_via_typeinfo_no_win32(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Covers early-return branch when win32com is unavailable."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", False)
-    assert docs_mod._discover_com_via_typeinfo(object()) == ({}, 0, 0)
-
-
-def test_discover_com_via_typeinfo_with_impl_interfaces(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Covers implemented-interface merge path and counters."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-
-    class _TypeAttr:
-        cImplTypes = 1
-
-    class _TypeInfo:
-        def GetTypeAttr(self):
-            return _TypeAttr()
-
-        def GetRefTypeOfImplType(self, _idx: int):
-            return "ref"
-
-        def GetRefTypeInfo(self, _ref):
-            return object()
-
-    class _Ole:
-        def GetTypeInfo(self):
-            return _TypeInfo()
-
-    sw_app = SimpleNamespace(_oleobj_=_Ole())
-
-    def _enum_members(typeinfo):
-        if isinstance(typeinfo, _TypeInfo):
-            return ["OpenDoc6"], ["Visible"]
-        return ["CloseDoc"], ["FrameState"]
-
-    monkeypatch.setattr(docs_mod, "_enumerate_typeinfo_members", _enum_members)
-
-    index, total_m, total_p = docs_mod._discover_com_via_typeinfo(sw_app)
-    assert "ISldWorks" in index
-    assert set(index["ISldWorks"]["methods"]) == {"OpenDoc6", "CloseDoc"}
-    assert set(index["ISldWorks"]["properties"]) == {"Visible", "FrameState"}
-    assert total_m == 2
-    assert total_p == 2
-
-
-def test_discover_com_via_typeinfo_outer_exception(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Covers exception path when GetTypeInfo fails."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    sw_app = SimpleNamespace(
-        _oleobj_=SimpleNamespace(
-            GetTypeInfo=lambda: (_ for _ in ()).throw(RuntimeError("boom"))
-        )
-    )
-
-    index, total_m, total_p = docs_mod._discover_com_via_typeinfo(sw_app)
-    assert index == {}
-    assert total_m == 0
-    assert total_p == 0
 
 
 def test_discover_vba_references_via_registry_windows(
@@ -1069,164 +647,11 @@ def test_discover_vba_references_via_registry_windows(
     assert only["status"] == "available"
 
 
-def test_discover_com_objects_with_typeinfo_and_active_doc(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Covers typeinfo logging path and active document supplement path."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    discovery = docs_mod.SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-typeinfo-active")
-    )
-    discovery.sw_app = SimpleNamespace(
-        ActiveDoc=SimpleNamespace(
-            _oleobj_=SimpleNamespace(GetTypeInfo=lambda: object())
-        ),
-        RevisionNumber=lambda: "33.4",
-    )
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(
-        docs_mod,
-        "_discover_com_via_typeinfo",
-        lambda _sw: ({"ISldWorks": {"methods": ["OpenDoc6"], "properties": []}}, 1, 0),
-    )
-    monkeypatch.setattr(
-        docs_mod,
-        "_enumerate_typeinfo_members",
-        lambda _ti: (["GetTitle"], ["ActiveView"]),
-    )
-
-    result = discovery.discover_com_objects()
-    assert "ISldWorks" in result
-    assert "IModelDoc2_active" in result
-
-
 def test_find_index_file_none_when_missing() -> None:
     """Covers _find_index_file final return None branch."""
     from solidworks_mcp.tools.docs_discovery import _find_index_file
 
-    assert _find_index_file(2099, "tests/.generated/does-not-exist.json") is None
-
-
-@pytest.mark.asyncio
-async def test_discover_tool_sets_rag_indexed_true_when_rag_rebuild_succeeds(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """Covers RAG rebuild success branch in discover_solidworks_docs."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    class _FakeDiscovery:
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            self.output_dir = output_dir
-
-        def discover_all(self):
-            return {"com_objects": {}, "vba_references": {}}
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            path = temp_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-        def create_search_summary(self):
-            return {
-                "total_com_objects": 0,
-                "total_methods": 0,
-                "total_properties": 0,
-                "solidworks_version": None,
-                "available_vba_libs": [],
-            }
-
-    class _FakeRagIndex:
-        chunk_count = 7
-
-        def save(self):
-            return None
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
-
-    fake_vector_rag = SimpleNamespace(
-        build_solidworks_api_docs_index=lambda _output: _FakeRagIndex()
-    )
-    monkeypatch.setitem(
-        sys.modules, "solidworks_mcp.agents.vector_rag", fake_vector_rag
-    )
-
-    result = await discover_tool({"output_dir": str(temp_dir), "year": 2026})
-    assert result["status"] == "success"
-    assert result["rag_indexed"] is True
-
-
-@pytest.mark.asyncio
-async def test_discover_tool_handles_rag_import_error(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """Covers ImportError branch when vector_rag rebuild is unavailable."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    class _FakeDiscovery:
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            self.output_dir = output_dir
-
-        def discover_all(self):
-            return {"com_objects": {}, "vba_references": {}}
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            path = temp_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-        def create_search_summary(self):
-            return {
-                "total_com_objects": 0,
-                "total_methods": 0,
-                "total_properties": 0,
-                "solidworks_version": None,
-                "available_vba_libs": [],
-            }
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
-
-    # Module exists but missing the imported symbol -> ImportError in "from ... import ...".
-    monkeypatch.setitem(
-        sys.modules, "solidworks_mcp.agents.vector_rag", SimpleNamespace()
-    )
-
-    result = await discover_tool({"output_dir": str(temp_dir), "year": 2026})
-    assert result["status"] == "success"
-    assert result["rag_indexed"] is False
+    assert _find_index_file(2099) is None
 
 
 @pytest.mark.asyncio
@@ -1247,8 +672,6 @@ async def test_discover_tool_top_level_exception_path(
             break
     assert discover_tool is not None
 
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
     monkeypatch.setattr(
         docs_mod,
         "SolidWorksDocsDiscovery",
@@ -1266,22 +689,11 @@ async def test_discover_tool_top_level_exception_path(
 # #64 — granular API lookups (helpers are pure, no COM / no server)
 # ---------------------------------------------------------------------------
 
-_LOOKUP_INDEX = {
-    "com_objects": {
-        "ISldWorks": {
-            "methods": ["OpenDoc6", "CloseDoc", "ActivateDoc3"],
-            "properties": ["Visible", "ActiveDoc"],
-        },
-        "IModelDoc2": {
-            "methods": ["GetTitle", "CloseDoc"],
-            "properties": ["Visible"],
-        },
-    }
-}
+_LOOKUP_INDEX = {"version": "2.0", "com_objects": _COM_OBJECTS}
 
 
 def test_lookup_interface_known_returns_all_members():
-    result = _lookup_interface(_LOOKUP_INDEX, "isldworks")  # case-insensitive
+    result = _dump(_lookup_interface(_LOOKUP_INDEX, "isldworks"))  # any case
     assert result["found"] is True
     assert result["interface"] == "ISldWorks"
     assert result["method_count"] == 3
@@ -1290,44 +702,35 @@ def test_lookup_interface_known_returns_all_members():
 
 
 def test_lookup_interface_unknown_reports_not_found():
-    result = _lookup_interface(_LOOKUP_INDEX, "INotIndexed")
+    result = _dump(_lookup_interface(_LOOKUP_INDEX, "INotIndexed"))
     assert result["found"] is False
 
 
-def test_lookup_method_known_confirms_member_no_signature():
-    result = _lookup_method(_LOOKUP_INDEX, "ISldWorks", "opendoc6")
-    assert result["found"] is True
-    assert result["member"] == "OpenDoc6"
-    assert result["member_type"] == "method"
-    assert result["signature_indexed"] is False
-    assert result["parameters"] is None
-
-
 def test_lookup_method_resolves_a_property_too():
-    result = _lookup_method(_LOOKUP_INDEX, "ISldWorks", "visible")
+    result = _dump(_lookup_method(_LOOKUP_INDEX, "ISldWorks", "visible"))
     assert result["found"] is True
     assert result["member_type"] == "property"
 
 
 def test_lookup_method_unknown_member_reports_not_found():
-    result = _lookup_method(_LOOKUP_INDEX, "ISldWorks", "NoSuchMethod")
+    result = _dump(_lookup_method(_LOOKUP_INDEX, "ISldWorks", "NoSuchMethod"))
     assert result["found"] is False
 
 
 def test_lookup_method_unknown_interface_reports_not_found():
-    result = _lookup_method(_LOOKUP_INDEX, "INope", "OpenDoc6")
+    result = _dump(_lookup_method(_LOOKUP_INDEX, "INope", "OpenDoc6"))
     assert result["found"] is False
 
 
 def test_find_related_from_interface_returns_its_members():
-    result = _find_related_api_members(_LOOKUP_INDEX, "IModelDoc2", 25)
+    result = _dump(_find_related_api_members(_LOOKUP_INDEX, "IModelDoc2", 25))
     assert result["resolved_as"] == "interface"
     members = {(r["object"], r["member"]) for r in result["related"]}
     assert ("IModelDoc2", "GetTitle") in members
 
 
 def test_find_related_from_member_returns_siblings_across_interfaces():
-    result = _find_related_api_members(_LOOKUP_INDEX, "CloseDoc", 25)
+    result = _dump(_find_related_api_members(_LOOKUP_INDEX, "CloseDoc", 25))
     assert result["resolved_as"] == "member"
     objs = {r["object"] for r in result["related"]}
     # CloseDoc lives on both interfaces -> siblings from both come back
@@ -1336,13 +739,13 @@ def test_find_related_from_member_returns_siblings_across_interfaces():
 
 
 def test_find_related_name_substring_match():
-    result = _find_related_api_members(_LOOKUP_INDEX, "Doc", 25)
+    result = _dump(_find_related_api_members(_LOOKUP_INDEX, "Doc", 25))
     assert result["resolved_as"] == "name-match"
     assert any("Doc" in r["member"] for r in result["related"])
 
 
 def test_find_related_respects_max_results():
-    result = _find_related_api_members(_LOOKUP_INDEX, "ISldWorks", 2)
+    result = _dump(_find_related_api_members(_LOOKUP_INDEX, "ISldWorks", 2))
     assert len(result["related"]) == 2
 
 
@@ -1448,17 +851,6 @@ def test_maybe_refresh_index_leaves_fresh_index_untouched(tmp_path):
     assert _maybe_refresh_index(idx, f, 2026, cfg) == (idx, f)
 
 
-def test_docs_discovery_imports_without_pywin32(import_without) -> None:
-    attrs = import_without(
-        "solidworks_mcp.tools.docs_discovery",
-        # Only win32com.client: fastmcp -> mcp needs pywintypes on Windows.
-        ["win32com.client"],
-        ["HAS_WIN32COM"],
-    )
-
-    assert attrs == {"HAS_WIN32COM": False}
-
-
 def test_index_is_stale_treats_an_unreadable_file_as_fresh() -> None:
     from solidworks_mcp.tools.docs_discovery import _index_is_stale
 
@@ -1476,509 +868,10 @@ def stale_index(tmp_path):
     index_file.write_text("{}")
     old = time.time() - 30 * 86400
     os.utime(index_file, (old, old))
-    return {"com_objects": {}}, index_file
-
-
-def _refresh_env(monkeypatch, *, saved_to=None, error=None):
-    """Pretend to be on Windows with pywin32; record what discovery was asked."""
-    from solidworks_mcp.tools import docs_discovery as dd
-
-    calls: list[str] = []
-
-    class _Discovery:
-        sw_app = object()  # attached to a running SolidWorks
-
-        def discover_all(self):
-            if error is not None:
-                raise error
-            return {"com_objects": {"ISldWorks": {}}}
-
-        def save_index(self, filename):
-            calls.append(filename)
-            return saved_to
-
-    monkeypatch.setattr(dd, "HAS_WIN32COM", True)
-    monkeypatch.setattr(dd.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(dd, "SolidWorksDocsDiscovery", _Discovery)
-    return calls
+    return {"version": "2.0", "com_objects": {}}, index_file
 
 
 _REFRESH_ON = SimpleNamespace(docs_index_auto_refresh=True, docs_index_max_age_days=21)
-
-
-def test_maybe_refresh_index_rebuilds_a_stale_index(stale_index, monkeypatch, tmp_path):
-    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
-
-    index, index_file = stale_index
-    fresh_file = tmp_path / "fresh.json"
-    calls = _refresh_env(monkeypatch, saved_to=fresh_file)
-
-    refreshed, refreshed_file = _maybe_refresh_index(
-        index, index_file, 2026, _REFRESH_ON
-    )
-
-    assert refreshed == {"com_objects": {"ISldWorks": {}}}
-    assert refreshed_file == fresh_file
-    assert calls == ["solidworks_docs_index_2026.json"]
-
-
-def test_maybe_refresh_index_keeps_the_old_path_when_save_reports_none(
-    stale_index, monkeypatch
-):
-    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
-
-    index, index_file = stale_index
-    calls = _refresh_env(monkeypatch, saved_to=None)
-
-    _refreshed, refreshed_file = _maybe_refresh_index(
-        index, index_file, None, _REFRESH_ON
-    )
-
-    assert refreshed_file == index_file
-    assert calls == ["solidworks_docs_index.json"]
-
-
-def test_maybe_refresh_index_serves_the_stale_index_when_discovery_fails(
-    stale_index, monkeypatch
-):
-    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
-
-    index, index_file = stale_index
-    _refresh_env(monkeypatch, error=RuntimeError("SolidWorks not running"))
-
-    assert _maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
-        index,
-        index_file,
-    )
-
-
-def test_maybe_refresh_index_needs_windows_and_pywin32(stale_index, monkeypatch):
-    from solidworks_mcp.tools import docs_discovery as dd
-
-    index, index_file = stale_index
-    monkeypatch.setattr(dd, "HAS_WIN32COM", False)
-
-    assert dd._maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
-        index,
-        index_file,
-    )
-
-
-@pytest.mark.asyncio
-async def test_discover_docs_tool_rag_index_rebuild_success(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """RAG index rebuild should succeed when faiss-cpu is available."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    # Mock successful RAG index build
-    fake_rag_idx = MagicMock()
-    fake_rag_idx.chunk_count = 1234
-    fake_rag_idx.save = MagicMock()
-
-    def fake_build_rag(output_file):
-        """Fake RAG index builder."""
-        return fake_rag_idx
-
-    # Mock SolidWorksDocsDiscovery to succeed
-    class _FakeDiscovery:
-        """Mock discovery that succeeds."""
-
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            """Init."""
-            self.output_dir = output_dir or temp_dir
-
-        def discover_all(self):
-            """Return mock index."""
-            return {
-                "com_objects": {"ISldWorks": {"methods": ["OpenDoc6"]}},
-                "vba_references": {},
-                "total_methods": 1,
-                "total_properties": 0,
-                "solidworks_version": "33.2",
-            }
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            """Save mock index."""
-            path = self.output_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-        def create_search_summary(self):
-            """Return mock summary."""
-            return {
-                "total_com_objects": 1,
-                "total_methods": 1,
-                "total_properties": 0,
-                "solidworks_version": "33.2",
-                "available_vba_libs": [],
-            }
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
-
-    result = await discover_tool({"output_dir": str(temp_dir)})
-    assert result["status"] == "success"
-
-
-@pytest.mark.asyncio
-async def test_discover_docs_tool_rag_index_rebuild_faiss_import_error(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """RAG rebuild should skip gracefully when faiss-cpu ImportError occurs."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    class _FakeDiscovery:
-        """Mock discovery that succeeds."""
-
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            """Init."""
-            self.output_dir = output_dir or temp_dir
-
-        def discover_all(self):
-            """Return mock index."""
-            return {
-                "com_objects": {"ISldWorks": {"methods": ["OpenDoc6"]}},
-                "vba_references": {},
-                "total_methods": 1,
-                "total_properties": 0,
-                "solidworks_version": "33.2",
-            }
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            """Save mock index."""
-            path = self.output_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-        def create_search_summary(self):
-            """Return mock summary."""
-            return {
-                "total_com_objects": 1,
-                "total_methods": 1,
-                "total_properties": 0,
-                "solidworks_version": "33.2",
-                "available_vba_libs": [],
-            }
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
-
-    result = await discover_tool({"output_dir": str(temp_dir)})
-    assert result["status"] == "success"
-
-
-@pytest.mark.asyncio
-async def test_discover_docs_tool_rag_index_rebuild_generic_exception(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
-    temp_dir: Path,
-) -> None:
-    """RAG rebuild should warn and continue on generic Exception (lines 1052-1053).
-
-    This exercises the ``except Exception as _rag_exc`` branch that fires when
-    ``build_solidworks_api_docs_index`` raises something other than ImportError.
-    """
-    import solidworks_mcp.agents.vector_rag as _rag_mod
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-    from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
-
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-
-    discover_tool = None
-    for tool in await mcp_server.list_tools():
-        if tool.name == "discover_solidworks_docs":
-            discover_tool = tool.fn
-            break
-    assert discover_tool is not None
-
-    class _FakeDiscovery:
-        """Mock discovery that succeeds."""
-
-        sw_app = object()  # attached to a running SolidWorks
-
-        def __init__(self, output_dir=None):
-            """Init."""
-            self.output_dir = output_dir or temp_dir
-
-        def discover_all(self):
-            """Return mock index."""
-            return {
-                "com_objects": {"ISldWorks": {"methods": ["OpenDoc6"]}},
-                "vba_references": {},
-                "total_methods": 1,
-                "total_properties": 0,
-                "solidworks_version": "33.2",
-            }
-
-        def save_index(self, filename="solidworks_docs_index.json"):
-            """Save mock index."""
-            path = self.output_dir / filename
-            path.write_text("{}", encoding="utf-8")
-            return path
-
-        def create_search_summary(self):
-            """Return mock summary."""
-            return {
-                "total_com_objects": 1,
-                "total_methods": 1,
-                "total_properties": 0,
-                "solidworks_version": "33.2",
-                "available_vba_libs": [],
-            }
-
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(docs_mod, "SolidWorksDocsDiscovery", _FakeDiscovery)
-    # Patch build_solidworks_api_docs_index to raise a RuntimeError so the
-    # generic except block (lines 1052-1053) is reached instead of ImportError.
-    monkeypatch.setattr(
-        _rag_mod,
-        "build_solidworks_api_docs_index",
-        MagicMock(side_effect=RuntimeError("disk full")),
-    )
-
-    result = await discover_tool({"output_dir": str(temp_dir)})
-    # Despite the RAG failure the discovery itself should still succeed.
-    assert result["status"] == "success"
-
-
-def test_discover_com_objects_with_active_doc_typeinfo(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Discover_com_objects should extract IModelDoc2_active interface from open document."""
-    from solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
-
-    if not HAS_WIN32COM:
-        pytest.skip("win32com not available")
-
-    class _FakeTypeInfo:
-        """Mock ITypeInfo for active document."""
-
-        def GetTypeAttr(self):
-            """Return mock type attributes."""
-            return SimpleNamespace(
-                cFuncs=1,
-                cImplTypes=0,
-            )
-
-        def GetFuncDesc(self, i):
-            """Return mock function descriptor."""
-            return SimpleNamespace(
-                memid=1,
-                invkind=1,  # FUNC
-            )
-
-        def GetNames(self, memid):
-            """Return mock function names."""
-            return ["ShowNamedView2"]
-
-    class _FakeOleObj:
-        """Mock ole object for active document."""
-
-        def GetTypeInfo(self):
-            """Return mock typeinfo."""
-            return _FakeTypeInfo()
-
-    class _FakeDoc:
-        """Mock active document."""
-
-        def __init__(self):
-            """Init."""
-            self._oleobj_ = _FakeOleObj()
-
-    class _FakeApp:
-        """Mock SolidWorks app with active document."""
-
-        def __init__(self):
-            """Init."""
-            self.ActiveDoc = _FakeDoc()
-
-        def RevisionNumber(self):
-            """Return revision."""
-            return "33.2"
-
-    discovery = SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-activeDoc")
-    )
-    discovery.sw_app = _FakeApp()
-
-    index = discovery.discover_com_objects()
-    # Should have both ISldWorks and IModelDoc2_active (Line 457-467)
-    assert "IModelDoc2_active" in index or "ISldWorks" in index
-
-
-def test_discover_com_objects_with_active_doc_exception(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Discover_com_objects should handle exceptions during active document enumeration."""
-
-    class _FailingApp:
-        """Mock app that fails on ActiveDoc access."""
-
-        def __getattr__(self, name):
-            """Raise exception for any attribute."""
-            if name == "ActiveDoc":
-                raise RuntimeError("Cannot access ActiveDoc")
-            raise AttributeError(f"No attribute {name}")
-
-        def RevisionNumber(self):
-            """Return revision."""
-            return "33.2"
-
-    discovery = SolidWorksDocsDiscovery(
-        output_dir=Path("tests/.generated/docs-activeDoc-error")
-    )
-    discovery.sw_app = _FailingApp()
-
-    # Should not crash despite the error (Line 458-467)
-    index = discovery.discover_com_objects()
-    assert isinstance(index, dict)
-
-
-def test_enumerate_typeinfo_members_with_inherited_interfaces(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """_enumerate_typeinfo_members should walk inherited interfaces."""
-
-    class _InheritedTypeInfo:
-        """Mock typeinfo for inherited interface."""
-
-        def GetTypeAttr(self):
-            """Return attributes."""
-            return SimpleNamespace(
-                cFuncs=1,
-                cImplTypes=0,
-            )
-
-        def GetFuncDesc(self, i):
-            """Return function descriptor."""
-            return SimpleNamespace(
-                memid=101,
-                invkind=1,  # FUNC
-            )
-
-        def GetNames(self, memid):
-            """Return names."""
-            return ["InheritedMethod"]
-
-    class _MainTypeInfo:
-        """Mock typeinfo for main interface."""
-
-        def __init__(self):
-            """Init."""
-            self.inherited = _InheritedTypeInfo()
-
-        def GetTypeAttr(self):
-            """Return attributes."""
-            return SimpleNamespace(
-                cFuncs=2,
-                cImplTypes=1,
-            )
-
-        def GetFuncDesc(self, i):
-            """Return function descriptor."""
-            if i == 0:
-                return SimpleNamespace(
-                    memid=1,
-                    invkind=1,  # FUNC
-                )
-            else:
-                return SimpleNamespace(
-                    memid=2,
-                    invkind=2,  # PROPERTYGET
-                )
-
-        def GetNames(self, memid):
-            """Return names."""
-            if memid == 1:
-                return ["MainMethod"]
-            elif memid == 2:
-                return ["MainProperty"]
-            return []
-
-        def GetRefTypeOfImplType(self, idx):
-            """Return reference to inherited type."""
-            return 1
-
-        def GetRefTypeInfo(self, ref):
-            """Return inherited typeinfo."""
-            return self.inherited
-
-    typeinfo = _MainTypeInfo()
-    from solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
-
-    if not HAS_WIN32COM:
-        pytest.skip("win32com not available")
-
-    methods, properties = _enumerate_typeinfo_members(typeinfo)
-    # Should include both main and inherited members (Line 243-275)
-    assert "MainMethod" in methods
-    assert "MainProperty" in properties
-
-
-def test_enumerate_typeinfo_members_handles_bad_names(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """_enumerate_typeinfo_members should handle GetNames failures."""
-
-    class _BadTypeInfo:
-        """Mock typeinfo with bad GetNames."""
-
-        def GetTypeAttr(self):
-            """Return attributes."""
-            return SimpleNamespace(cFuncs=1, cImplTypes=0)
-
-        def GetFuncDesc(self, i):
-            """Return function descriptor."""
-            return SimpleNamespace(memid=1, invkind=1)
-
-        def GetNames(self, memid):
-            """Raise exception."""
-            raise RuntimeError("GetNames failed")
-
-    from solidworks_mcp.tools.docs_discovery import HAS_WIN32COM
-
-    if not HAS_WIN32COM:
-        pytest.skip("win32com not available")
-
-    methods, properties = _enumerate_typeinfo_members(_BadTypeInfo())
-    # Should return empty lists on exception
-    assert methods == []
-    assert properties == []
 
 
 def test_discover_vba_references_registry_scan_failure(
@@ -2024,7 +917,7 @@ async def test_search_api_help_tool_no_index_file(
     result = await search_tool(
         {
             "query": "how to open a document",
-            "year": 2999,
+            "year": 2030,
             "max_results": 5,
         }
     )
@@ -2075,8 +968,8 @@ async def test_search_api_help_tool_empty_index_file(
         ("lathe operation", "create_revolve"),
         ("extrude feature", "create_extrusion"),
         ("boss cut operation", "create_extrusion"),
-        ("unknown intent", "discover_solidworks_docs"),
-        ("generic query", "discover_solidworks_docs"),
+        ("unknown intent", "lookup_api_interface"),
+        ("generic query", "lookup_api_interface"),
     ],
 )
 def test_fallback_help_for_query_variants(query: str, expected_tool: str) -> None:
@@ -2108,40 +1001,6 @@ def test_resolve_solidworks_year_priority(
     assert resolved == expected
 
 
-def test_detect_installed_solidworks_year_finds_latest(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """_detect_installed_solidworks_year should find latest installed year."""
-
-    def fake_path_exists(self):
-        """Check if path exists."""
-        if "2026" in str(self):
-            return True
-        if "2025" in str(self):
-            return True
-        if "SOLIDWORKS" in str(self):
-            return True
-        return False
-
-    def fake_path_iterdir(self):
-        """Iterate directory."""
-        # Return mock years
-        base_path = Path(str(self))
-        if "SOLIDWORKS Corp" in str(base_path):
-            yield Path(str(self) + "/SOLIDWORKS 2026")
-            yield Path(str(self) + "/SOLIDWORKS 2025")
-        return
-        # This return is unreachable but satisfies type checker
-        yield  # pragma: no cover
-
-    monkeypatch.setattr(Path, "exists", fake_path_exists)
-
-    # Note: This test is complex because _detect_installed_solidworks_year
-    # depends on actual file system. We're just testing the error path.
-    result = _detect_installed_solidworks_year()
-    assert result is None or isinstance(result, int)
-
-
 @pytest.mark.parametrize(
     "query,expected_matches_min",
     [
@@ -2169,14 +1028,14 @@ def test_search_index_query_scoring(query: str, expected_matches_min: int) -> No
         },
     }
 
-    matches = _search_index(test_index, query, max_results=10)
+    matches = [_dump(m) for m in _search_index(test_index, query, max_results=10)]
     assert len(matches) >= expected_matches_min
 
 
 def test_search_index_with_empty_index() -> None:
     """_search_index should handle empty index gracefully."""
     empty_index = {"com_objects": {}, "vba_references": {}}
-    matches = _search_index(empty_index, "anything", max_results=5)
+    matches = [_dump(m) for m in _search_index(empty_index, "anything", max_results=5)]
     assert matches == []
 
 
@@ -2191,7 +1050,7 @@ def test_search_index_respects_max_results() -> None:
         }
     }
 
-    matches = _search_index(test_index, "method", max_results=5)
+    matches = [_dump(m) for m in _search_index(test_index, "method", max_results=5)]
     assert len(matches) <= 5
 
 
@@ -2211,123 +1070,6 @@ def test_extract_year_regex_coverage(input_str: str, expected_year: int | None) 
     """_extract_year should extract years from various formats with word boundaries."""
     result = _extract_year(input_str)
     assert result == expected_year
-
-
-def test_enumerate_typeinfo_members_skips_none_and_underscore_names() -> None:
-    """_enumerate_typeinfo_members skips entries where name is None or starts with _
-    (docs_discovery.py line 215: continue branch)."""
-    from types import SimpleNamespace
-
-    class _TypeInfoWithNullName:
-        """Mock that returns None for the first entry, then a valid name."""
-
-        def GetTypeAttr(self):
-            return SimpleNamespace(cFuncs=2, cImplTypes=0)
-
-        def GetFuncDesc(self, i):
-            return SimpleNamespace(memid=i, invkind=1)
-
-        def GetNames(self, memid):
-            # First entry returns no names; second returns a name with leading underscore.
-            if memid == 0:
-                return []
-            return ["_InternalMethod"]
-
-    methods, props = _enumerate_typeinfo_members(_TypeInfoWithNullName())
-    # Both entries should be skipped — methods and props stay empty.
-    assert methods == []
-    assert props == []
-
-
-def test_enumerate_typeinfo_members_outer_exception() -> None:
-    """_enumerate_typeinfo_members returns empty lists when GetTypeAttr() raises
-    (docs_discovery.py lines 226-227: outer except block)."""
-
-    class _BrokenTypeInfo:
-        """Raises on GetTypeAttr."""
-
-        def GetTypeAttr(self):
-            raise RuntimeError("no type info")
-
-    methods, props = _enumerate_typeinfo_members(_BrokenTypeInfo())
-    assert methods == []
-    assert props == []
-
-
-def test_discover_com_via_typeinfo_impl_type_exception() -> None:
-    """_discover_com_via_typeinfo continues gracefully when GetRefTypeOfImplType raises
-    (docs_discovery.py lines 270-271) and when the outer GetTypeAttr raises (lines 272-273)."""
-    from types import SimpleNamespace
-
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    # First GetTypeAttr (inside _enumerate_typeinfo_members) must succeed.
-    # Second GetTypeAttr (inside _discover_com_via_typeinfo) raises.
-    call_count = {"n": 0}
-
-    class _TypeInfo:
-        def GetTypeAttr(self):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                return SimpleNamespace(cFuncs=1, cImplTypes=1)
-            # Second call raises — triggers outer except (lines 272-273).
-            raise RuntimeError("type attr unavailable")
-
-        def GetFuncDesc(self, i):
-            return SimpleNamespace(memid=i, invkind=1)
-
-        def GetNames(self, memid):
-            return ["CreatePart"]
-
-    class _FakeSWApp:
-        class _OleObj:
-            def GetTypeInfo(self_inner):  # noqa: N805
-                return _TypeInfo()
-
-        _oleobj_ = _OleObj()
-
-    with patch.object(docs_mod, "HAS_WIN32COM", True):
-        result = docs_mod._discover_com_via_typeinfo(_FakeSWApp())
-
-    com_dict, m_count, p_count = result
-    # CreatePart should appear as a method despite the outer exception.
-    assert "ISldWorks" in com_dict
-    assert "CreatePart" in com_dict["ISldWorks"]["methods"]
-
-
-def test_discover_com_via_typeinfo_impl_type_ref_exception() -> None:
-    """_discover_com_via_typeinfo skips impl interfaces when GetRefTypeOfImplType raises
-    (docs_discovery.py lines 270-271: inner continue branch)."""
-    from types import SimpleNamespace
-
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    class _TypeInfo:
-        def GetTypeAttr(self):
-            return SimpleNamespace(cFuncs=1, cImplTypes=1)
-
-        def GetFuncDesc(self, i):
-            return SimpleNamespace(memid=i, invkind=1)
-
-        def GetNames(self, memid):
-            return ["SaveFile"]
-
-        def GetRefTypeOfImplType(self, impl_idx):
-            raise RuntimeError("COM interface unavailable")
-
-    class _FakeSWApp:
-        class _OleObj:
-            def GetTypeInfo(self_inner):  # noqa: N805
-                return _TypeInfo()
-
-        _oleobj_ = _OleObj()
-
-    with patch.object(docs_mod, "HAS_WIN32COM", True):
-        result = docs_mod._discover_com_via_typeinfo(_FakeSWApp())
-
-    com_dict, m_count, p_count = result
-    # The impl type is skipped but the primary method is still registered.
-    assert "SaveFile" in com_dict["ISldWorks"]["methods"]
 
 
 def test_discover_vba_references_typelib_key_open_fails() -> None:
@@ -2428,28 +1170,6 @@ def test_discover_vba_references_version_key_open_fails() -> None:
     assert isinstance(refs, dict)
 
 
-def test_discover_com_objects_typeinfo_exception_is_logged() -> None:
-    """discover_com_objects logs and continues when _discover_com_via_typeinfo raises
-    (docs_discovery.py lines 472-473)."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    discovery = SolidWorksDocsDiscovery()
-    discovery.sw_app = MagicMock()  # fake connected app
-
-    with (
-        patch.object(docs_mod, "HAS_WIN32COM", True),
-        patch.object(
-            docs_mod,
-            "_discover_com_via_typeinfo",
-            side_effect=RuntimeError("COM explosion"),
-        ),
-    ):
-        result = discovery.discover_com_objects()
-
-    # Despite the exception, discover_com_objects should return a dict (not raise).
-    assert isinstance(result, dict)
-
-
 def test_discover_vba_references_empty_result_logs_debug() -> None:
     """discover_vba_references logs at DEBUG level when no refs are found
     (docs_discovery.py line 543)."""
@@ -2465,129 +1185,446 @@ def test_discover_vba_references_empty_result_logs_debug() -> None:
     assert refs == {}
 
 
-def test_detect_installed_solidworks_year_oserror_on_iterdir(tmp_path) -> None:
-    """_detect_installed_solidworks_year returns None when iterdir raises OSError
-    (docs_discovery.py lines 725-727)."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
-
-    # We test the real implementation directly — no mock needed here.
-    pass
-
-    # Patch the root path to exist but iterdir() raises OSError.
-    from pathlib import Path
-
-    real_func = docs_mod._detect_installed_solidworks_year
-
-    with patch.object(Path, "exists", return_value=True):
-        with patch.object(Path, "iterdir", side_effect=OSError("permission denied")):
-            result = real_func()
-
-    assert result is None
-
-
 # ---------------------------------------------------------------------------
-# SolidWorks not running: discovery attaches only, and never saves an empty
-# index over a good one.
+# The index comes from the SolidWorks type library (#195)
 # ---------------------------------------------------------------------------
 
 
-def _not_running_discovery(saved: list[str]):
-    """A discovery whose connect found no running SolidWorks."""
+async def _docs_tools(mcp_server, mock_config) -> dict:
+    """Register the docs tools and return them by name."""
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+    return {tool.name: tool.fn for tool in await mcp_server.list_tools()}
 
-    class _NotRunning:
-        sw_app = None
 
-        def __init__(self, output_dir=None):
-            self.output_dir = output_dir
+def test_discovery_reads_the_type_library(fake_type_library, tmp_path) -> None:
+    discovery = SolidWorksDocsDiscovery(
+        output_dir=tmp_path, year=2025, strict_year=True
+    )
 
-        def discover_all(self):
-            return {"com_objects": {}, "vba_references": {}}
+    index = discovery.discover_all()
 
-        def save_index(self, filename="solidworks_docs_index.json"):
-            saved.append(filename)
-            return Path(filename)
+    assert fake_type_library == [(2025, True)]
+    assert index["version"] == "2.0"
+    assert index["type_library"] == _LIBRARY.model_dump()
+    assert index["solidworks_version"] == "34.0"
+    assert index["com_objects"] == _COM_OBJECTS
+    assert index["vba_references"] == {}
+    assert index["total_methods"] == 6
+    assert index["total_properties"] == 3
 
-    return _NotRunning
+
+def test_save_index_writes_compact_json(fake_type_library, tmp_path) -> None:
+    discovery = SolidWorksDocsDiscovery(output_dir=tmp_path)
+    discovery.discover_all()
+
+    saved = discovery.save_index("index.json")
+
+    text = saved.read_text(encoding="utf-8")
+    assert "\n" not in text and ", " not in text
+    assert json.loads(text)["com_objects"] == _COM_OBJECTS
 
 
 @pytest.mark.asyncio
-async def test_discover_tool_reports_solidworks_not_running(
+@pytest.mark.parametrize(
+    ("vector_rag", "rag_indexed"),
+    [
+        (
+            SimpleNamespace(
+                build_solidworks_api_docs_index=lambda _path: SimpleNamespace(
+                    chunk_count=2, save=lambda: None
+                )
+            ),
+            True,
+        ),
+        # No builder in the module -> ImportError on "from ... import ...".
+        (SimpleNamespace(), False),
+        (
+            SimpleNamespace(
+                build_solidworks_api_docs_index=MagicMock(
+                    side_effect=RuntimeError("disk full")
+                )
+            ),
+            False,
+        ),
+    ],
+)
+async def test_discover_tool_saves_the_index_under_the_library_year(
     mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
+    mock_config,
+    fake_type_library,
+    monkeypatch,
+    tmp_path,
+    vector_rag,
+    rag_indexed,
 ) -> None:
-    """The tool errors, and writes no index, when SolidWorks is not running."""
-    import solidworks_mcp.tools.docs_discovery as docs_mod
+    monkeypatch.setitem(sys.modules, "solidworks_mcp.agents.vector_rag", vector_rag)
+    tools = await _docs_tools(mcp_server, mock_config)
 
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-    discover_tool = next(
-        tool.fn
-        for tool in await mcp_server.list_tools()
-        if tool.name == "discover_solidworks_docs"
-    )
+    result = await tools["discover_solidworks_docs"]({"output_dir": str(tmp_path)})
 
-    saved: list[str] = []
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(
-        docs_mod, "SolidWorksDocsDiscovery", _not_running_discovery(saved)
-    )
+    assert result["status"] == "success"
+    assert result["year"] == 2026
+    assert result["output_file"] == str(tmp_path / "solidworks_docs_index_2026.json")
+    assert result["summary"]["total_com_objects"] == 2
+    assert result["rag_indexed"] is rag_indexed
+    # The megabytes of index stay on disk, out of the response.
+    assert "index" not in result
+    assert result["type_library"] == _LIBRARY.model_dump()
+    assert fake_type_library[-1][1] is False  # no year asked for: not strict
 
-    result = await discover_tool({})
+
+@pytest.mark.asyncio
+async def test_discover_tool_holds_an_asked_for_year_to_that_year(
+    mcp_server, mock_config, fake_type_library, tmp_path
+) -> None:
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    await tools["discover_solidworks_docs"]({"output_dir": str(tmp_path), "year": 2025})
+
+    assert fake_type_library == [(2025, True)]
+
+
+@pytest.mark.asyncio
+async def test_discover_tool_needs_no_running_solidworks_but_an_installed_one(
+    mcp_server, mock_config
+) -> None:
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["discover_solidworks_docs"]({})
 
     assert result["status"] == "error"
-    assert result["error_type"] == "solidworks_unavailable"
-    assert "not running" in result["message"]
-    assert "never launches" in result["message"]
-    assert saved == []
+    assert result["message"] == "No SolidWorks type library in this test."
 
 
 @pytest.mark.asyncio
-async def test_search_api_help_skips_auto_discover_when_solidworks_not_running(
-    mcp_server,
-    mock_config: SolidWorksMCPConfig,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_a_lookup_builds_a_missing_index(
+    mcp_server, mock_config, fake_type_library
 ) -> None:
-    """Auto-discover falls back to workflow guidance instead of saving nothing."""
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["lookup_api_method"](
+        {"interface": "ISldWorks", "method": "OpenDoc6"}
+    )
+
+    assert result["index_status"] == "rebuilt"
+    assert result["type_library_version"] == "34.0"
+    saved = Path(result["source_index_file"])
+    assert saved.name == "solidworks_docs_index_2026.json"
+    assert json.loads(saved.read_text(encoding="utf-8"))["version"] == "2.0"
+    assert result["result"]["found"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_old_format_index_is_rebuilt_not_answered_from(
+    mcp_server, mock_config, fake_type_library, tmp_path
+) -> None:
+    old = tmp_path / "old_index.json"
+    old.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "com_objects": {
+                    "IModelDoc2": {"methods": ["SaveBitmapWithVariableSize"]}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["lookup_api_method"](
+        {
+            "interface": "IModelDoc2",
+            "method": "SaveBitmapWithVariableSize",
+            "index_file": str(old),
+        }
+    )
+
+    assert result["index_status"] == "rebuilt"
+    assert result["result"]["found"] is False
+    assert fake_type_library  # the type library was read
+
+
+@pytest.mark.asyncio
+async def test_a_current_index_is_answered_from_without_reading_the_library(
+    mcp_server, mock_config, fake_type_library, tmp_path
+) -> None:
+    current = tmp_path / "current.json"
+    current.write_text(json.dumps(_LOOKUP_INDEX), encoding="utf-8")
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["lookup_api_interface"](
+        {"interface": "ISldWorks", "index_file": str(current)}
+    )
+
+    assert result["index_status"] == "ready"
+    assert result["source_index_file"] == str(current)
+    assert result["result"]["method_count"] == 3
+    assert fake_type_library == []
+
+
+@pytest.mark.asyncio
+async def test_a_lookup_for_a_year_asks_for_that_year(
+    mcp_server, mock_config, fake_type_library, monkeypatch
+) -> None:
     import solidworks_mcp.tools.docs_discovery as docs_mod
 
-    await register_docs_discovery_tools(mcp_server, object(), mock_config)
-    search_tool = next(
-        tool.fn
-        for tool in await mcp_server.list_tools()
-        if tool.name == "search_solidworks_api_help"
-    )
+    asked: list[tuple] = []
 
-    saved: list[str] = []
-    monkeypatch.setattr(docs_mod, "HAS_WIN32COM", True)
-    monkeypatch.setattr(docs_mod.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(
-        docs_mod, "SolidWorksDocsDiscovery", _not_running_discovery(saved)
-    )
-    monkeypatch.setattr(docs_mod, "_find_index_file", lambda *_args, **_kwargs: None)
+    def _target(year: int | None, strict: bool) -> tuple[int, int]:
+        asked.append((year, strict))
+        return 33, 0
 
-    result = await search_tool(
-        {"query": "OpenDoc6", "year": 2026, "auto_discover_if_missing": True}
+    monkeypatch.setattr(docs_mod, "target_version", _target)
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    await tools["lookup_api_interface"]({"interface": "ISldWorks", "year": 2025})
+
+    assert asked == [(2025, True)]
+    assert fake_type_library == [(2025, True)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("lookup_api_method", {"interface": "IModelDoc2", "method": "SaveBMP"}),
+        ("lookup_api_interface", {"interface": "IModelDoc2"}),
+        ("find_related_api_members", {"name": "SaveBMP"}),
+    ],
+)
+async def test_without_a_type_library_lookups_say_why(
+    mcp_server, mock_config, tool, arguments
+) -> None:
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools[tool](arguments)
+
+    assert result["status"] == "success"
+    assert result["index_status"] == "unavailable"
+    assert result["source_index_file"] is None
+    assert result["type_library_version"] is None
+    assert result["result"]["found"] is False
+    assert result["result"]["note"] == "No SolidWorks type library in this test."
+
+
+@pytest.mark.asyncio
+async def test_without_a_type_library_search_says_why_in_its_guidance(
+    mcp_server, mock_config
+) -> None:
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    # The old opt-in is still accepted, and changes nothing.
+    result = await tools["search_solidworks_api_help"](
+        {"query": "save bitmap", "auto_discover_if_missing": True}
     )
 
     assert result["status"] == "success"
-    assert result["source_index_file"] is None
-    assert saved == []
+    assert result["index_status"] == "unavailable"
+    assert result["matches"] == []
+    assert "No SolidWorks type library in this test." in result["guidance"]
 
 
-def test_maybe_refresh_index_keeps_the_stale_index_when_solidworks_not_running(
-    stale_index, monkeypatch
-):
-    from solidworks_mcp.tools import docs_discovery as dd
+@pytest.mark.asyncio
+async def test_search_points_at_lookup_api_method_for_signatures(
+    mcp_server, mock_config, fake_type_library
+) -> None:
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["search_solidworks_api_help"]({"query": "OpenDoc6"})
+
+    assert result["index_status"] == "rebuilt"
+    assert result["matches"][0]["member"] == "OpenDoc6"
+    assert "lookup_api_method" in result["guidance"]
+
+
+def test_lookup_method_returns_the_signature() -> None:
+    result = _dump(_lookup_method(_LOOKUP_INDEX, "ISldWorks", "OpenDoc6"))
+
+    assert result == {
+        "found": True,
+        "interface": "ISldWorks",
+        "member": "OpenDoc6",
+        "member_type": "method",
+        "signature_indexed": True,
+        "description": "Opens an existing document",
+        "parameters": _COM_OBJECTS["ISldWorks"]["members"]["OpenDoc6"]["parameters"],
+        "return_type": "IModelDoc2",
+    }
+    directions = [p["direction"] for p in result["parameters"]]
+    assert directions == ["in", "in", "in", "in", "in_out", "in_out"]
+
+
+def test_lookup_method_reports_the_real_spelling_and_says_casing_differs() -> None:
+    result = _dump(_lookup_method(_LOOKUP_INDEX, "IModelDoc2", "ViewZoomToFit2"))
+
+    assert result["found"] is True
+    assert result["member"] == "ViewZoomtofit2"
+    assert result["note"] == (
+        "SolidWorks spells it 'ViewZoomtofit2'. COM matches names regardless "
+        "of case, so 'ViewZoomToFit2' also works."
+    )
+
+
+def test_lookup_method_gives_a_property_its_value_type() -> None:
+    result = _dump(_lookup_method(_LOOKUP_INDEX, "ISldWorks", "Visible"))
+
+    assert result["member_type"] == "property"
+    assert result["parameters"] == []
+    assert result["return_type"] == "Boolean"
+    assert result["access"] == "read_write"
+    assert "note" not in result
+
+
+def test_maybe_refresh_index_rebuilds_an_old_current_format_index(
+    stale_index, fake_type_library
+) -> None:
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
 
     index, index_file = stale_index
-    saved: list[str] = []
-    monkeypatch.setattr(dd, "HAS_WIN32COM", True)
-    monkeypatch.setattr(dd.platform, "system", lambda: "Windows")
-    monkeypatch.setattr(dd, "SolidWorksDocsDiscovery", _not_running_discovery(saved))
 
-    assert dd._maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
+    refreshed, refreshed_file = _maybe_refresh_index(
+        index, index_file, 2026, _REFRESH_ON
+    )
+
+    assert refreshed["com_objects"] == _COM_OBJECTS
+    assert refreshed_file.name == "solidworks_docs_index_2026.json"
+    assert refreshed_file != index_file
+    assert fake_type_library == [(2026, False)]
+
+
+def test_maybe_refresh_index_keeps_the_old_index_without_a_type_library(
+    stale_index,
+) -> None:
+    from solidworks_mcp.tools.docs_discovery import _maybe_refresh_index
+
+    index, index_file = stale_index
+
+    assert _maybe_refresh_index(index, index_file, 2026, _REFRESH_ON) == (
         index,
         index_file,
     )
-    assert saved == []
+
+
+# ---------------------------------------------------------------------------
+# The index is reused, the year comes from the server, descriptions guide
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_repeated_lookups_build_the_index_once(
+    mcp_server, mock_config, fake_type_library
+) -> None:
+    tools = await _docs_tools(mcp_server, mock_config)
+    arguments = {"interface": "ISldWorks", "method": "OpenDoc6"}
+
+    statuses = [
+        (await tools["lookup_api_method"](arguments))["index_status"] for _ in range(3)
+    ]
+
+    assert statuses == ["rebuilt", "ready", "ready"]
+    assert len(fake_type_library) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_index_from_another_type_library_version_is_rebuilt(
+    mcp_server, mock_config, fake_type_library
+) -> None:
+    older = {**_LOOKUP_INDEX, "type_library": {"version": "33.0", "year": 2026}}
+    folder = Path(".generated/docs-index")
+    folder.mkdir(parents=True)
+    (folder / "solidworks_docs_index_2026.json").write_text(
+        json.dumps(older), encoding="utf-8"
+    )
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["lookup_api_interface"]({"interface": "ISldWorks"})
+
+    assert result["index_status"] == "rebuilt"
+    assert result["type_library_version"] == "34.0"
+
+
+@pytest.mark.asyncio
+async def test_a_server_year_that_isnt_installed_falls_back_to_the_newest(
+    mcp_server, fake_type_library, monkeypatch
+) -> None:
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+    import solidworks_mcp.tools.type_library as type_library
+
+    # The real version choice, over a registry holding only SolidWorks 2026.
+    monkeypatch.setattr(docs_mod, "target_version", type_library.target_version)
+    monkeypatch.setattr(type_library, "winreg", object())
+    monkeypatch.setattr(type_library, "registered_versions", lambda _r: [(34, 0)])
+    tools = await _docs_tools(mcp_server, SolidWorksMCPConfig(solidworks_year=2025))
+
+    first = await tools["lookup_api_interface"]({"interface": "ISldWorks"})
+    second = await tools["lookup_api_interface"]({"interface": "ISldWorks"})
+
+    assert (first["year"], first["index_status"]) == (2026, "rebuilt")
+    assert (second["year"], second["index_status"]) == (2026, "ready")
+
+
+@pytest.mark.asyncio
+async def test_discover_without_vba_skips_the_registry_scan(
+    mcp_server, mock_config, fake_type_library, monkeypatch, tmp_path
+) -> None:
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+
+    scan = MagicMock(return_value={"lib": {"status": "available"}})
+    monkeypatch.setattr(docs_mod, "_discover_vba_references_via_registry", scan)
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["discover_solidworks_docs"](
+        {"output_dir": str(tmp_path), "include_vba": False}
+    )
+
+    scan.assert_not_called()
+    assert result["summary"]["available_vba_libs"] == []
+
+
+@pytest.mark.asyncio
+async def test_each_docs_tool_tells_the_agent_its_setup(
+    mcp_server, mock_config
+) -> None:
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+    tools = {tool.name: tool for tool in await mcp_server.list_tools()}
+    lookups = (
+        "search_solidworks_api_help",
+        "lookup_api_method",
+        "lookup_api_interface",
+        "find_related_api_members",
+    )
+
+    for name in (*lookups, "discover_solidworks_docs"):
+        description = " ".join(tools[name].description.split())
+        assert "installed, not running" in description, name
+        assert "Example input:" in description, name
+        # Every input field explains itself (the model is inlined, then null).
+        model = tools[name].parameters["properties"]["input_data"]["anyOf"][0]
+        for field, schema in model["properties"].items():
+            assert schema.get("description"), f"{name}.{field}"
+    for name in lookups:
+        assert "builds the index" in " ".join(tools[name].description.split()), name
+        assert "index_status" in tools[name].description, name
+
+
+@pytest.mark.asyncio
+async def test_a_registered_library_that_wont_load_is_explained(
+    mcp_server, mock_config, fake_type_library, monkeypatch
+) -> None:
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.type_library import TypeLibraryUnavailable
+
+    def _broken(*_args: object) -> None:
+        raise TypeLibraryUnavailable("registered but couldn't be loaded")
+
+    monkeypatch.setattr(docs_mod, "load_type_library", _broken)
+    tools = await _docs_tools(mcp_server, SolidWorksMCPConfig(solidworks_year=2026))
+
+    result = await tools["lookup_api_method"](
+        {"interface": "ISldWorks", "method": "OpenDoc6"}
+    )
+
+    assert result["index_status"] == "unavailable"
+    assert result["year"] == 2026
+    assert result["result"]["note"] == "registered but couldn't be loaded"

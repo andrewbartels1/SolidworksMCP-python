@@ -67,6 +67,7 @@ def find_uvx(
 
 def server_command(
     mock: bool = False,
+    year: int | None = None,
     python: str | None = None,
     lasting: bool = True,
     uvx_finder: Callable[[], str | None] = find_uvx,
@@ -75,6 +76,8 @@ def server_command(
 
     Args:
         mock: Add ``--mock``, so the server answers without SolidWorks.
+        year: Add ``--year <year>``, the SolidWorks release the server works
+            with; ignored with ``mock``.
         python: The interpreter to look beside; defaults to ``sys.executable``.
         lasting: Return a command that outlives a temporary uv environment.
             ``False`` gives the launcher that runs right now, which is what
@@ -88,7 +91,10 @@ def server_command(
         this Python running the server module.
     """
     python = python or sys.executable
-    flags = ["--mock"] if mock else []
+    if mock:
+        flags = ["--mock"]
+    else:
+        flags = ["--year", str(year)] if year else []
     if lasting and in_uv_cache(python):
         uvx = uvx_finder()
         if uvx:

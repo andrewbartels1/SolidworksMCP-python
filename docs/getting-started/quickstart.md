@@ -35,14 +35,14 @@ Open SolidWorks, restart your client as setup told you, and ask *"What model is 
 
 If it says `Could not connect to SolidWorks`, SolidWorks wasn't open when the server started. Open it and restart the server from your client.
 
-To set a client up by hand instead, every client runs the same command, `uvx solidworks-mcp-python`. The README's [Connect your client](https://github.com/andrewbartels1/SolidworksMCP-python#connect-your-client) section has the config for each.
+To set a client up by hand instead, every client runs the same command, `uvx solidworks-mcp-python --year 2026`, with your SolidWorks year. `--year` names your installed SolidWorks release and is required for real SolidWorks; setup fills it in for you. It picks which SolidWorks API the lookup tools answer for. Without it, the server logs a warning and uses the newest installed release. The README's [Connect your client](https://github.com/andrewbartels1/SolidworksMCP-python#connect-your-client) section has the config for each.
 
 ## 3. Optional: start the server by hand
 
 Clients start the server themselves. To watch its log in a terminal instead, open SolidWorks and run:
 
 ```powershell
-uvx solidworks-mcp-python
+uvx solidworks-mcp-python --year 2026
 ```
 
 It waits for an MCP client on stdin; stop it with `Ctrl+C`.

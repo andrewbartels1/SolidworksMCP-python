@@ -117,3 +117,16 @@ def test_find_uvx_without_uv(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UV", raising=False)
 
     assert find_uvx(which=lambda _: None) is None
+
+
+def test_a_real_entry_carries_its_year_and_a_mock_one_does_not(tmp_path: Path) -> None:
+    python = str(tmp_path / "python.exe")
+
+    assert server_command(year=2026, python=python) == (
+        python,
+        ["-m", "solidworks_mcp.server", "--year", "2026"],
+    )
+    assert server_command(mock=True, year=2026, python=python) == (
+        python,
+        ["-m", "solidworks_mcp.server", "--mock"],
+    )
