@@ -163,12 +163,15 @@ CATEGORY_META: dict[str, dict[str, str]] = {
         "title": "Docs Discovery Tools",
         "icon": ":material-book-search:",
         "description": (
-            "Introspect the live SolidWorks COM object library to discover available "
-            "interfaces, methods, and properties for the installed version. Produces a "
-            "JSON index that the integration harness uses to detect API-change drift "
-            "between SolidWorks versions and suggest correct alternative tool calls."
+            "Look up SolidWorks API interfaces, methods and properties, with each "
+            "member's parameters, return type and description, read from the "
+            "installed SolidWorks type library. The lookup tools build the JSON index "
+            "themselves the first time they run, and reuse it after that."
         ),
-        "prerequisite": "SolidWorks running. win32com.client must be available (Windows only).",
+        "prerequisite": (
+            "SolidWorks installed (it need not be running), Windows with pywin32. "
+            "The server's --year picks which installed release answers."
+        ),
     },
 }
 
@@ -212,6 +215,11 @@ def _parse_pydantic_model(tree: ast.Module, class_name: str) -> list[dict[str, A
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef) or node.name != class_name:
             continue
+        # Fields of a base class defined in the same module come first, as
+        # pydantic orders them (e.g. the lookups' shared ApiIndexInput).
+        for base in node.bases:
+            if isinstance(base, ast.Name):
+                fields.extend(_parse_pydantic_model(tree, base.id))
         for stmt in node.body:
             if not isinstance(stmt, ast.AnnAssign):
                 continue
@@ -299,9 +307,12 @@ def _find_tool_input_class(tree: ast.Module, func_name: str) -> str | None:
         ):
             args = node.args.args
             if len(args) >= 1:
-                arg = args[0]
-                if arg.annotation and isinstance(arg.annotation, ast.Name):
-                    return arg.annotation.id
+                annotation = args[0].annotation
+                # ``Model | None`` (an optional input) names the model first.
+                if isinstance(annotation, ast.BinOp):
+                    annotation = annotation.left
+                if isinstance(annotation, ast.Name):
+                    return annotation.id
     return None
 
 
@@ -508,7 +519,7 @@ PREREQUISITES: dict[str, str] = {
     "load_assembly": "SolidWorks running, valid .sldasm path",
     "save_part": "Active Part document",
     "save_assembly": "Active Assembly document",
-    "discover_solidworks_docs": "SolidWorks running, win32com available (Windows only)",
+    "discover_solidworks_docs": "SolidWorks installed (it need not be running), Windows only",
 }
 
 

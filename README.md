@@ -142,8 +142,9 @@ uvx solidworks-mcp-python setup
 | `--remove` | Take the `solidworks` entry out again. |
 | `--replace-old` | Remove older entries for this server without asking. |
 | `--mock` | Configure mock mode, which answers without SolidWorks (for trying the tools). |
+| `--year 2026` | The SolidWorks release to start the server with. Default: the newest installed. |
 
-To set up a client by hand instead, each one runs `uvx solidworks-mcp-python`. If a client can't find `uvx`, use its full path, from `(Get-Command uvx).Source`.
+To set up a client by hand instead, each one runs `uvx solidworks-mcp-python --year 2026`, with your SolidWorks year. `--year` names your installed SolidWorks release and is required for real SolidWorks; setup fills it in for you. It picks which SolidWorks API the lookup tools answer for. Without it, the server logs a warning and uses the newest installed release. If a client can't find `uvx`, use its full path, from `(Get-Command uvx).Source`.
 
 <details>
 <summary><b>Claude Desktop</b></summary>
@@ -159,7 +160,7 @@ Add this to `claude_desktop_config.json`, alongside anything already in it. Depe
   "mcpServers": {
     "solidworks": {
       "command": "uvx",
-      "args": ["solidworks-mcp-python"]
+      "args": ["solidworks-mcp-python", "--year", "2026"]
     }
   }
 }
@@ -173,7 +174,7 @@ Quit Claude Desktop from the system tray (closing the window isn't enough) and r
 <summary><b>Claude Code</b></summary>
 
 ```powershell
-claude mcp add --scope user solidworks -- uvx solidworks-mcp-python
+claude mcp add --scope user solidworks -- uvx solidworks-mcp-python --year 2026
 ```
 
 Run `/mcp` in a new session to check that `solidworks` is connected.
@@ -191,7 +192,7 @@ Add this to `%APPDATA%\Code\User\mcp.json`:
     "solidworks": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["solidworks-mcp-python"]
+      "args": ["solidworks-mcp-python", "--year", "2026"]
     }
   }
 }
@@ -211,7 +212,7 @@ Add this to `%USERPROFILE%\.lmstudio\mcp.json`:
   "mcpServers": {
     "solidworks": {
       "command": "uvx",
-      "args": ["solidworks-mcp-python"]
+      "args": ["solidworks-mcp-python", "--year", "2026"]
     }
   }
 }

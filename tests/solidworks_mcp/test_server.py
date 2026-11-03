@@ -741,6 +741,7 @@ class TestServerMainEntrypoint:
             port=9001,
             debug=True,
             mock=True,
+            year=2026,
         )
 
         with patch("argparse.ArgumentParser.parse_args", return_value=args):
@@ -758,6 +759,7 @@ class TestServerMainEntrypoint:
         assert cfg.debug is True
         assert cfg.log_level == "DEBUG"
         assert cfg.mock_solidworks is True
+        assert cfg.solidworks_year == 2026
         server_inst.start.assert_called_once()
         server_inst.stop.assert_called_once()
 
@@ -776,6 +778,7 @@ class TestServerMainEntrypoint:
             port=8000,
             debug=False,
             mock=False,
+            year=None,
         )
 
         with patch("argparse.ArgumentParser.parse_args", return_value=args):
@@ -804,6 +807,7 @@ class TestServerMainEntrypoint:
             port=8000,
             debug=False,
             mock=False,
+            year=None,
         )
 
         with patch("argparse.ArgumentParser.parse_args", return_value=args):
@@ -993,9 +997,11 @@ def test_cli_applies_overrides_and_runs_with_loaded_config():
                 port=9123,
                 debug=True,
                 mock=True,
+                year=2025,
             )
 
     assert captured["cfg"] is cfg
+    assert cfg.solidworks_year == 2025
     assert cfg.deployment_mode == DeploymentMode.REMOTE
     assert cfg.host == "0.0.0.0"
     assert cfg.port == 9123
@@ -1051,7 +1057,15 @@ def test_cli_help_lists_each_option_without_internal_text():
     output = click.unstyle(result.output)
 
     assert result.exit_code == 0
-    for option in ("--config", "--mode", "--host", "--port", "--debug", "--mock"):
+    for option in (
+        "--config",
+        "--mode",
+        "--host",
+        "--port",
+        "--debug",
+        "--mock",
+        "--year",
+    ):
         assert option in output
     assert "Start the SolidWorks MCP server on stdio." in output
     assert "typer.Option" not in output
@@ -1167,3 +1181,34 @@ class TestServerCoverage:
             await server.start()
 
         assert not server.state.is_connected
+
+
+@pytest.mark.parametrize(
+    ("settings", "warned"),
+    [
+        ({}, True),
+        ({"solidworks_year": 2026}, False),
+        ({"mock_solidworks": True}, False),
+    ],
+)
+def test_the_server_warns_once_when_started_without_a_year(
+    settings: dict, warned: bool
+) -> None:
+    """Real SolidWorks without --year warns and carries on; mock never warns."""
+    from solidworks_mcp.server import _warn_if_no_year
+
+    config = SolidWorksMCPConfig(**settings)
+    with (
+        patch.object(
+            type(config),
+            "can_use_solidworks",
+            property(lambda c: not c.mock_solidworks),
+        ),
+        patch("solidworks_mcp.server.logger.warning") as warning,
+    ):
+        assert _warn_if_no_year(config) is warned
+
+    assert warning.call_count == int(warned)
+    if warned:
+        assert "--year" in warning.call_args.args[0]
+        assert "setup" in warning.call_args.args[0]

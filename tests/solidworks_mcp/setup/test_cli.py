@@ -42,11 +42,7 @@ def machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setattr(cli, "find_clients", lambda: clients)
     monkeypatch.setattr(cli, "installed_versions", lambda: [2026])
-    monkeypatch.setattr(
-        cli,
-        "server_command",
-        lambda mock, lasting=True: (LAUNCHER, ["--mock"] if mock else []),
-    )
+    monkeypatch.setattr(cli, "server_command", _fake_server_command)
     monkeypatch.setattr(cli, "check_server", check)
     return {
         "desktop": desktop,
@@ -54,6 +50,15 @@ def machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "checks": checks,
         "commands": commands,
     }
+
+
+def _fake_server_command(
+    mock: bool, year: int | None = None, lasting: bool = True
+) -> tuple[str, list[str]]:
+    """The launcher with the flags the real ``server_command`` adds."""
+    if mock:
+        return LAUNCHER, ["--mock"]
+    return LAUNCHER, ["--year", str(year)] if year else []
 
 
 def _run(*args: str, answers: str = "") -> Result:
@@ -78,11 +83,12 @@ def test_yes_configures_every_client_found(machine: dict[str, Any]) -> None:
     assert result.exit_code == 0, result.output
     assert _servers(machine["desktop"])["solidworks"] == {
         "command": LAUNCHER,
-        "args": [],
+        "args": ["--year", "2026"],
     }
     assert _servers(machine["desktop"])["todo"] == {"env": {"KEY": SECRET}}
     assert _servers(machine["vscode"], "servers")["solidworks"]["type"] == "stdio"
-    assert machine["checks"] == [["--mock"]]  # checked in mock mode
+    # Checked in mock mode, with the arguments the entry will run.
+    assert machine["checks"] == [["--year", "2026", "--mock"]]
     assert "Found SOLIDWORKS 2026" in result.output
     assert "Restart Claude." in result.output and "List servers." in result.output
     assert SECRET not in result.output
@@ -96,7 +102,9 @@ def test_run_through_uvx_writes_uvx_but_checks_the_cached_launcher(
         r"C:\Users\me\AppData\Local\uv\cache\archive-v0\abc\Scripts\solidworks-mcp.exe"
     )
 
-    def command(mock: bool, lasting: bool = True) -> tuple[str, list[str]]:
+    def command(
+        mock: bool, year: int | None = None, lasting: bool = True
+    ) -> tuple[str, list[str]]:
         """``uvx`` for the entry, the cached launcher for the check."""
         return (uvx, ["solidworks-mcp-python"]) if lasting else (cached, [])
 
@@ -207,7 +215,7 @@ def test_remove_then_unchanged(machine: dict[str, Any]) -> None:
     assert "solidworks" not in _servers(machine["desktop"])
     assert "todo" in _servers(machine["desktop"])
     assert "entry removed" in removed.output and "entry unchanged" in again.output
-    assert machine["checks"] == [["--mock"]]  # remove never starts the server
+    assert machine["checks"] == [["--year", "2026", "--mock"]]  # remove never checks
     assert "Next" not in removed.output
 
 
@@ -442,3 +450,54 @@ def test_a_malformed_entry_is_just_reported_as_present(machine: dict[str, Any]) 
 
     assert "has a solidworks entry" in _text(result)
     assert "another copy" not in _text(result)
+
+
+def test_the_newest_installed_year_is_written(
+    machine: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "installed_versions", lambda: [2026, 2024])
+
+    result = _run("--client", "claude-desktop", "--yes")
+
+    assert result.exit_code == 0, result.output
+    assert _servers(machine["desktop"])["solidworks"]["args"] == ["--year", "2026"]
+    assert "--year 2026" in _text(result)
+
+
+def test_a_chosen_installed_year_is_written(
+    machine: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "installed_versions", lambda: [2026, 2024])
+
+    result = _run("--client", "claude-desktop", "--yes", "--year", "2024")
+
+    assert result.exit_code == 0, result.output
+    assert _servers(machine["desktop"])["solidworks"]["args"] == ["--year", "2024"]
+
+
+def test_a_year_that_isnt_installed_changes_nothing(machine: dict[str, Any]) -> None:
+    result = _run("--client", "claude-desktop", "--yes", "--year", "2025")
+
+    assert result.exit_code == 1
+    assert "SOLIDWORKS 2025 isn't installed here; installed: 2026." in _text(result)
+    assert "No config was changed." in _text(result)
+    assert "solidworks" not in _servers(machine["desktop"])
+    assert machine["checks"] == []
+
+
+def test_a_year_is_taken_on_trust_when_no_install_is_found(
+    machine: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "installed_versions", lambda: [])
+
+    result = _run("--client", "claude-desktop", "--yes", "--year", "2025")
+
+    assert result.exit_code == 0, result.output
+    assert _servers(machine["desktop"])["solidworks"]["args"] == ["--year", "2025"]
+
+
+def test_a_mock_entry_has_no_year(machine: dict[str, Any]) -> None:
+    result = _run("--client", "claude-desktop", "--mock", "--year", "2026")
+
+    assert result.exit_code == 0, result.output
+    assert _servers(machine["desktop"])["solidworks"]["args"] == ["--mock"]

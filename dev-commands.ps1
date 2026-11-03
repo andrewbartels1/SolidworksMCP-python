@@ -425,11 +425,7 @@ function dev-docs-discovery {
         Write-Host "ERROR: Windows only." -ForegroundColor Red
         return
     }
-    $swProcess = Get-Process | Where-Object { $_.ProcessName -like "*sldworks*" }
-    if (-not $swProcess) {
-        Write-Host "WARNING: SolidWorks not running. Start it and retry." -ForegroundColor Yellow
-        return
-    }
+    # Reads the installed SolidWorks type library; SolidWorks need not be running.
     $env:PY_KEY_VALUE_DISABLE_BEARTYPE = "true"
     $repoRoot = $PSScriptRoot.Replace("'", "''")
     $pythonCode = @"

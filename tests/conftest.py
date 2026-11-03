@@ -145,6 +145,30 @@ def _no_solidworks_launch() -> Generator[None]:
         )
 
 
+@pytest.fixture(autouse=True)
+def _no_real_type_library(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep the API lookup tools off this machine's SolidWorks type library.
+
+    The lookups build their index from the installed type library when none
+    is found, and discovery then rebuilds the RAG index (seconds of
+    embedding). Outside a live run that would make results depend on what
+    is installed and write an index into the repo, so the loader reports no
+    type library. Tests that want one patch in a fake.
+    """
+    if request.node.get_closest_marker("solidworks_only"):
+        return
+    from solidworks_mcp.tools import docs_discovery
+    from solidworks_mcp.tools.type_library import TypeLibraryUnavailable
+
+    def _no_library(*_args: object, **_kwargs: object) -> None:
+        raise TypeLibraryUnavailable("No SolidWorks type library in this test.")
+
+    monkeypatch.setattr(docs_discovery, "load_type_library", _no_library)
+    monkeypatch.setattr(docs_discovery, "target_version", _no_library)
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Generator[asyncio.AbstractEventLoop]:
     """Create event loop for async tests."""

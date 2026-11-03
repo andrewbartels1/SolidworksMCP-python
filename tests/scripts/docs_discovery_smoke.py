@@ -1,4 +1,6 @@
-"""Manual smoke run for `SolidWorksDocsDiscovery` against a live SolidWorks session.
+"""Manual smoke run for `SolidWorksDocsDiscovery` against the installed SolidWorks.
+
+Reads the registered SolidWorks type library; SolidWorks need not be running.
 
 Relocated from repo root (`test_docs_discovery_run.py`) per issue #81 — it is
 not a pytest suite (no assertions, prints a summary), so it doesn't belong in
@@ -23,17 +25,12 @@ OUTPUT_DIR = Path(".generated") / "docs-index"
 
 
 def main() -> int:
-    """Run docs discovery against a live SolidWorks session and print a summary."""
+    """Run docs discovery against the installed SolidWorks and print a summary."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     discovery = SolidWorksDocsDiscovery(output_dir=OUTPUT_DIR)
 
-    try:
-        discovery.connect_to_solidworks()
-        print("Connected to SolidWorks OK")
-    except Exception as exc:
-        print("Connect failed:", exc)
-
     index = discovery.discover_all()
+    print("Type library:", index["type_library"])
 
     print("COM objects:")
     for iface, data in index.get("com_objects", {}).items():

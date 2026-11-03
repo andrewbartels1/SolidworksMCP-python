@@ -1,9 +1,14 @@
 """Docs discovery tool for SolidWorks COM and VBA command indexing.
 
-This module provides functionality to discover and catalog all available COM objects,
-methods, and properties for the installed SolidWorks version, as well as VBA library
-references. Useful for building context for MCP server operations and enabling
-intelligent tool selection.
+Builds an index of every SolidWorks COM interface, with each member's
+signature and description, from the registered SolidWorks type library, plus
+the VBA library references in the registry. The API lookup tools answer from
+that index and build it themselves the first time, so an agent never has to
+prepare anything: SolidWorks only has to be installed.
+
+Index records (:mod:`.type_library`) and lookup results (below) are Pydantic
+models; the tools return them as plain dicts with ``model_dump()``, like
+every other tool in the package.
 """
 
 from __future__ import annotations
@@ -11,303 +16,64 @@ from __future__ import annotations
 import json
 import platform
 import re
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
+from fastmcp import FastMCP
 from loguru import logger
-from pydantic import Field
+from pydantic import BaseModel, Field, TypeAdapter
 
+from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
-from .tool_boundary import (
-    ToolOperationError,
-    UnsupportedOperationError,
-    normalize_input,
-    with_tool_boundary,
+from .tool_boundary import ToolOperationError, normalize_input, with_tool_boundary
+from .type_library import (
+    Access,
+    ApiMember,
+    ApiMethod,
+    ApiParameter,
+    ApiProperty,
+    TypeLibraryUnavailable,
+    index_type_library,
+    load_type_library,
+    target_version,
+    year_of,
 )
 
-try:
-    import win32com.client
-    from pywintypes import com_error
+# Index files written before the index came from the type library are "1.0";
+# their member lists were largely hand-typed and are never answered from.
+INDEX_FORMAT = "2.0"
 
-    HAS_WIN32COM = True
-except ImportError:
-    HAS_WIN32COM = False
+#: Where lookups look for a saved index, in order.
+_INDEX_DIRS = (
+    Path(".generated/docs-index"),
+    Path("tests/.generated/solidworks_integration/docs-index"),
+    Path("tests/.generated/docs-index"),
+)
 
+IndexStatus = Literal["ready", "rebuilt", "unavailable"]
+MemberType = Literal["method", "property"]
 
-# ---------------------------------------------------------------------------
-# Known SolidWorks COM interface catalogue (fallback when typelib unavailable)
-# ---------------------------------------------------------------------------
-_KNOWN_SW_INTERFACES: dict[str, dict[str, list[str]]] = {
-    "ISldWorks": {
-        "methods": [
-            "OpenDoc6",
-            "CloseDoc",
-            "ActivateDoc3",
-            "GetActiveObject",
-            "GetFirstDocument",
-            "GetDocumentCount",
-            "NewDocument",
-            "SendMsgToUser2",
-            "GetProcessID",
-            "ExitApp",
-            "RevisionNumber",
-            "GetUserTypeLibraryFile",
-            "CreateNewDocument",
-        ],
-        "properties": ["Visible", "ActiveDoc", "FrameState"],
-    },
-    "IModelDoc2": {
-        "methods": [
-            "ShowNamedView2",
-            "ViewZoomtofit2",
-            "GraphicsRedraw2",
-            "SaveBMP",
-            "SaveAs3",
-            "GetTitle",
-            "GetPathName",
-            "GetType",
-            "GetFeatureCount",
-            "GetActiveConfiguration",
-            "Extension",
-            "SketchManager",
-            "FeatureManager",
-            "SelectionManager",
-            "GetMassProperties",
-            "Close",
-            "SetSaveAsFileName",
-            "ResolveAllLightweightComponents",
-            "InsertSketch2",
-            "SketchAddConstraints",
-            "ClearSelection2",
-        ],
-        "properties": ["ActiveView", "ActiveLayer"],
-    },
-    "IPartDoc": {
-        "methods": [
-            "CreateFeatureFromSketch2",
-            "AddMateReference",
-            "GetBodies2",
-            "GetEntityByName",
-            "InsertSmartComponents",
-            "Material",
-        ],
-        "properties": [],
-    },
-    "IAssemblyDoc": {
-        "methods": [
-            "AddComponent4",
-            "AddComponent5",
-            "InsertNewPart3",
-            "LayoutToAssembly",
-            "ResolveAllLightweightComponents",
-            "AddMate5",
-            "GetComponents",
-            "GetComponentCount",
-        ],
-        "properties": [],
-    },
-    "IDrawingDoc": {
-        "methods": [
-            "CreateDrawViewFromModelView3",
-            "InsertModelAnnotations3",
-            "GenerateViewPalette",
-            "Get3DDrawingView",
-        ],
-        "properties": [],
-    },
-    "IFeatureManager": {
-        "methods": [
-            "FeatureExtrusion3",
-            "FeatureCut3",
-            "FeatureRevolve2",
-            "InsertProtrusionBlend4",
-            "InsertShell",
-            "InsertFillet3",
-            "InsertChamfer",
-            "InsertDraftXpert3",
-            "FeatureMirror3",
-            "FeatureCircularPattern2",
-            "FeatureLinearPattern3",
-            "InsertBoss",
-            "FeatureSweep5",
-            "FeatureLoft3",
-        ],
-        "properties": [],
-    },
-    "ISketchManager": {
-        "methods": [
-            "InsertSketch",
-            "CreateLine",
-            "CreateArc",
-            "CreateCircle",
-            "CreateRectangle",
-            "CreateEllipse",
-            "CreateSpline",
-            "CreateCenterLine",
-            "SketchMirror",
-            "SketchOffset",
-            "AddToDB",
-            "InsertSketch2",
-        ],
-        "properties": ["ActiveSketch"],
-    },
-    "IModelView": {
-        "methods": [
-            "ZoomByFactor",
-            "ZoomToSheet",
-            "OrientView",
-            "SetCameraParameters",
-        ],
-        "properties": ["Orientation3", "Translation3", "FrameWidth", "FrameHeight"],
-    },
-    "IExtensionManager": {
-        "methods": ["SaveAs2", "SelectByID2", "MultiSelect2"],
-        "properties": [],
-    },
-    "IFeature": {
-        "methods": [
-            "GetNextFeature",
-            "GetName",
-            "GetTypeName2",
-            "SetSuppression2",
-            "IsSuppressed2",
-            "GetDefinition",
-        ],
-        "properties": ["Name"],
-    },
-    "IBody2": {
-        "methods": [
-            "GetFaceCount",
-            "GetEdgeCount",
-            "GetVertexCount",
-            "GetMassProperties",
-            "GetType",
-        ],
-        "properties": [],
-    },
-    "ISketchSegment": {
-        "methods": ["GetStartPoint2", "GetEndPoint2", "GetType", "SetEndPoint"],
-        "properties": [],
-    },
-}
+#: Validates one saved member record into its model.
+_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(ApiMember)
 
-
-def _enumerate_typeinfo_members(typeinfo: Any) -> tuple[list[str], list[str]]:
-    """Enumerate methods and properties from a COM ITypeInfo object.
-
-    Uses raw ITypeInfo via pythoncom to walk the function table, which works reliably for
-    both early-bound and late-bound COM objects.
-
-    Returns (methods, properties) as sorted de-duped lists.
-
-    Args:
-        typeinfo (Any): The typeinfo value.
-
-    Returns:
-        tuple[list[str], list[str]]: A tuple containing the resulting values.
-    """
-    methods: list[str] = []
-    properties: list[str] = []
-    seen: set[str] = set()
-
-    try:
-        typeattr = typeinfo.GetTypeAttr()
-        for i in range(typeattr.cFuncs):
-            try:
-                funcdesc = typeinfo.GetFuncDesc(i)
-                names = typeinfo.GetNames(funcdesc.memid)
-                name = names[0] if names else None
-                if not name or name.startswith("_"):
-                    continue
-                if name in seen:
-                    continue
-                seen.add(name)
-                # invkind: 1=FUNC, 2=PROPERTYGET, 4=PROPERTYPUT, 8=PROPERTYPUTREF
-                if funcdesc.invkind == 1:
-                    methods.append(name)
-                else:
-                    properties.append(name)
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    return sorted(methods), sorted(properties)
-
-
-def _discover_com_via_typeinfo(sw_app: Any) -> tuple[dict[str, Any], int, int]:
-    """Enumerate ISldWorks methods/properties via ITypeInfo.
-
-    Returns a COM index dict keyed by interface name, with the same shape as the rest of the
-    index (``methods``, ``properties``, ``method_count``, ``property_count``).
-
-    Args:
-        sw_app (Any): The sw app value.
-
-    Returns:
-        tuple[dict[str, Any], int, int]: com_index, total_methods, total_properties.
-    """
-    if not HAS_WIN32COM:
-        return {}, 0, 0
-
-    com_index: dict[str, Any] = {}
-    total_methods = 0
-    total_properties = 0
-
-    try:
-        # GetTypeInfo returns ITypeInfo for the IDispatch interface of the object.
-        typeinfo = sw_app._oleobj_.GetTypeInfo()
-        methods, properties = _enumerate_typeinfo_members(typeinfo)
-
-        # Walk implemented interfaces to catch inherited members.
-        try:
-            typeattr = typeinfo.GetTypeAttr()
-            for impl_idx in range(typeattr.cImplTypes):
-                try:
-                    ref_type = typeinfo.GetRefTypeOfImplType(impl_idx)
-                    ref_typeinfo = typeinfo.GetRefTypeInfo(ref_type)
-                    extra_m, extra_p = _enumerate_typeinfo_members(ref_typeinfo)
-                    for m in extra_m:
-                        if m not in methods:
-                            methods.append(m)
-                    for p in extra_p:
-                        if p not in properties:
-                            properties.append(p)
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        methods = sorted(set(methods))
-        properties = sorted(set(properties))
-
-        if methods or properties:
-            com_index["ISldWorks"] = {
-                "methods": methods,
-                "properties": properties,
-                "method_count": len(methods),
-                "property_count": len(properties),
-            }
-            total_methods += len(methods)
-            total_properties += len(properties)
-
-    except Exception as exc:
-        logger.debug(
-            "[docs_discovery] ITypeInfo enumeration unavailable; using built-in interface catalog fallback: {}",
-            exc,
-        )
-
-    return com_index, total_methods, total_properties
+#: Each interface record's name lists, by member type.
+_MEMBER_LISTS: tuple[tuple[MemberType, str], ...] = (
+    ("method", "methods"),
+    ("property", "properties"),
+)
 
 
 def _discover_vba_references_via_registry() -> dict[str, Any]:
     """Enumerate VBA/TypeLib references via the Windows Registry.
 
-    Scans HKEY_CLASSES_ROOT\\TypeLib for entries whose name or GUID matches SolidWorks or
-    common Office/VBA libraries.
+    Scans HKEY_CLASSES_ROOT\\TypeLib for entries whose name matches
+    SolidWorks or common Office/VBA libraries.
 
     Returns:
-        dict[str, Any]: A dictionary containing the resulting values.
+        dict[str, Any]: ``"<name> (<guid> v<version>)"`` -> its description,
+        GUID, version and status; empty off Windows.
     """
     vba_refs: dict[str, Any] = {}
 
@@ -382,25 +148,42 @@ def _discover_vba_references_via_registry() -> dict[str, Any]:
 class SolidWorksDocsDiscovery:
     """Discover and index SolidWorks COM and VBA documentation.
 
+    The COM part is read from the registered SolidWorks type library, so it
+    needs SolidWorks installed but never starts, attaches to or calls it.
+
     Args:
-        output_dir (Path | None): The output dir value. Defaults to None.
+        output_dir (Path | None): Where the index is saved. Defaults to
+            ``.generated/docs-index``.
+        year (int | None): The SolidWorks year whose type library to read;
+            None for the newest installed.
+        strict_year (bool): True when the caller asked for ``year``, so a
+            missing year is an error instead of falling back to the newest.
 
     Attributes:
-        output_dir (Any): The output dir value.
-        sw_app (Any): The sw app value.
+        output_dir (Path): Where the index is saved.
+        index (dict[str, Any]): The index built so far, as saved.
     """
 
-    def __init__(self, output_dir: Path | None = None):
+    def __init__(
+        self,
+        output_dir: Path | None = None,
+        year: int | None = None,
+        strict_year: bool = False,
+    ):
         """Initialize docs discovery.
 
         Args:
-            output_dir (Path | None): The output dir value. Defaults to None.
+            output_dir (Path | None): Where the index is saved.
+            year (int | None): The SolidWorks year to read, if any.
+            strict_year (bool): True to fail when that year isn't installed.
         """
-        self.output_dir = output_dir or Path(".generated/docs-index")
+        self.output_dir = output_dir or _INDEX_DIRS[0]
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.sw_app: Any = None
+        self.year = year
+        self.strict_year = strict_year
         self.index: dict[str, Any] = {
-            "version": "1.0",
+            "version": INDEX_FORMAT,
+            "type_library": None,
             "solidworks_version": None,
             "com_objects": {},
             "vba_references": {},
@@ -408,134 +191,40 @@ class SolidWorksDocsDiscovery:
             "total_properties": 0,
         }
 
-    def connect_to_solidworks(self) -> bool:
-        """Attach to an already-running SolidWorks instance.
-
-        Discovery only ever attaches; it never starts SolidWorks. Launching
-        from a process outside the desktop session (an SSH shell, a test run,
-        a service) starts a hidden SLDWORKS.exe nobody can see or close, so
-        when no instance is running this returns False instead.
-
-        Returns:
-            bool: True if attached to a running SolidWorks, otherwise False.
-        """
-        if not HAS_WIN32COM:
-            logger.error("win32com not available; cannot index COM")
-            return False
-
-        if platform.system() != "Windows":
-            logger.error("COM discovery only available on Windows")
-            return False
-
-        try:
-            self.sw_app = win32com.client.GetActiveObject("SldWorks.Application")
-            return True
-        except com_error as e:
-            logger.error(
-                "SolidWorks is not running in this session; start it and retry "
-                f"(docs discovery never launches SolidWorks): {e}"
-            )
-            return False
-
     def discover_com_objects(self) -> dict[str, Any]:
-        """Discover all COM objects and their methods/properties.
+        """Index every COM interface in the SolidWorks type library.
 
-        Uses ITypeInfo enumeration via pythoncom for ISldWorks, then supplements with the active
-        document's interface if a model is open. Falls back to the known-interface catalogue
-        when typelib introspection is unavailable.
+        Also records which type library was read and the member totals.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: Interface name -> its methods, properties and
+            member signatures, as saved.
+
+        Raises:
+            TypeLibraryUnavailable: No matching type library is registered.
         """
-        if not self.sw_app:
-            logger.error("Not connected to SolidWorks")
-            return {}
-
-        com_index: dict[str, Any] = {}
-        total_m = 0
-        total_p = 0
-
-        # ------------------------------------------------------------------ #
-        # Primary: ITypeInfo enumeration for ISldWorks
-        # ------------------------------------------------------------------ #
-        if HAS_WIN32COM:
-            try:
-                result = _discover_com_via_typeinfo(self.sw_app)
-                # _discover_com_via_typeinfo returns (dict, total_m, total_p)
-                partial_index, t_m, t_p = result
-                com_index.update(partial_index)
-                total_m += t_m
-                total_p += t_p
-                if partial_index:
-                    logger.info(
-                        "[docs_discovery] ITypeInfo: {} ISldWorks methods, {} properties",
-                        t_m,
-                        t_p,
-                    )
-            except Exception as exc:
-                logger.debug("[docs_discovery] ITypeInfo path failed: {}", exc)
-
-        # ------------------------------------------------------------------ #
-        # Supplement: active document (IModelDoc2) if a model is open
-        # ------------------------------------------------------------------ #
-        try:
-            active_doc = self.sw_app.ActiveDoc
-            if active_doc is not None and HAS_WIN32COM:
-                doc_typeinfo = active_doc._oleobj_.GetTypeInfo()
-                doc_methods, doc_props = _enumerate_typeinfo_members(doc_typeinfo)
-                if doc_methods or doc_props:
-                    com_index["IModelDoc2_active"] = {
-                        "methods": doc_methods,
-                        "properties": doc_props,
-                        "method_count": len(doc_methods),
-                        "property_count": len(doc_props),
-                    }
-                    total_m += len(doc_methods)
-                    total_p += len(doc_props)
-                    logger.info(
-                        "[docs_discovery] Active doc typeinfo: {} methods, {} properties",
-                        len(doc_methods),
-                        len(doc_props),
-                    )
-        except Exception:
-            pass
-
-        # ------------------------------------------------------------------ #
-        # Fallback: merge known-interface catalogue for any gaps
-        # ------------------------------------------------------------------ #
-        for iface_name, members in _KNOWN_SW_INTERFACES.items():
-            if iface_name in com_index:
-                continue  # already populated via typeinfo
-            com_index[iface_name] = {
-                "methods": members["methods"],
-                "properties": members["properties"],
-                "method_count": len(members["methods"]),
-                "property_count": len(members["properties"]),
-            }
-            total_m += len(members["methods"])
-            total_p += len(members["properties"])
-
-        try:
-            self.index["total_methods"] += total_m
-            self.index["total_properties"] += total_p
-        except TypeError:
-            pass  # accumulator corrupted (e.g. set to a string by tests); tolerate
-
-        # Get SolidWorks version
-        try:
-            self.index["solidworks_version"] = self.sw_app.RevisionNumber()
-        except Exception:
-            pass
-
-        return com_index
+        lib, info = load_type_library(self.year, self.strict_year)
+        interfaces = index_type_library(lib)
+        self.index["type_library"] = info.model_dump()
+        self.index["solidworks_version"] = info.version
+        self.index["total_methods"] = sum(i.method_count for i in interfaces.values())
+        self.index["total_properties"] = sum(
+            i.property_count for i in interfaces.values()
+        )
+        logger.info(
+            "[docs_discovery] Type library {} ({}): {} interfaces",
+            info.version,
+            info.path,
+            len(interfaces),
+        )
+        return {name: record.model_dump() for name, record in interfaces.items()}
 
     def discover_vba_references(self) -> dict[str, Any]:
         """Discover VBA/TypeLib references via the Windows Registry.
 
-        Scans HKEY_CLASSES_ROOT\\TypeLib for SolidWorks and common Office/VBA type libraries.
-
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The SolidWorks and Office/VBA type libraries
+            found; empty off Windows.
         """
         refs = _discover_vba_references_via_registry()
         if refs:
@@ -548,50 +237,60 @@ class SolidWorksDocsDiscovery:
             )
         return refs
 
-    def discover_all(self) -> dict[str, Any]:
-        """Run full discovery of COM and VBA documentation.
+    def discover_all(self, include_vba: bool = True) -> dict[str, Any]:
+        """Run full discovery of COM and, optionally, VBA documentation.
+
+        Args:
+            include_vba (bool): Also scan the registry for VBA references.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-        """
-        if not self.connect_to_solidworks():
-            logger.error("Cannot proceed with discovery without SolidWorks connection")
-            return self.index
+            dict[str, Any]: The complete index.
 
+        Raises:
+            TypeLibraryUnavailable: No matching type library is registered.
+        """
         logger.info("Discovering COM objects...")
         self.index["com_objects"] = self.discover_com_objects()
 
-        logger.info("Discovering VBA references...")
-        self.index["vba_references"] = self.discover_vba_references()
+        if include_vba:
+            logger.info("Discovering VBA references...")
+            self.index["vba_references"] = self.discover_vba_references()
 
         return self.index
 
-    def save_index(self, filename: str = "solidworks_docs_index.json") -> Path | None:
-        """Save discovered documentation to JSON file.
+    def save_index(self, filename: str = "solidworks_docs_index.json") -> Path:
+        """Save the index as compact JSON.
 
         Args:
-            filename (str): The filename value. Defaults to "solidworks_docs_index.json".
+            filename (str): The file name inside ``output_dir``.
 
         Returns:
-            Path | None: The result produced by the operation.
+            Path: The saved file.
+
+        Raises:
+            ToolOperationError: The file could not be written. Lookups would
+                otherwise rebuild the index on every call.
         """
+        output_path = self.output_dir / filename
         try:
-            output_path = self.output_dir / filename
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(self.index, f, indent=2)
-            logger.info(f"Docs index saved to {output_path}")
-            return output_path
-        except Exception as e:
-            logger.error(f"Failed to save docs index: {e}")
-            return None
+                # Compact: every lookup reads this file, and nobody edits it.
+                json.dump(self.index, f, separators=(",", ":"))
+        except OSError as exc:
+            raise ToolOperationError(
+                f"Couldn't save the API index to {output_path}: {exc}"
+            ) from exc
+        logger.info("Docs index saved to {}", output_path)
+        return output_path
 
     def create_search_summary(self) -> dict[str, Any]:
-        """Create a summary of indexed documentation for search/reference.
+        """Summarize the index for a response.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: Interface, method and property totals, the type
+            library version and the VBA libraries found.
         """
-        summary = {
+        return {
             "total_com_objects": len(self.index["com_objects"]),
             "total_methods": self.index["total_methods"],
             "total_properties": self.index["total_properties"],
@@ -602,326 +301,564 @@ class SolidWorksDocsDiscovery:
                 if info.get("status") == "available"
             ],
         }
-        return summary
 
 
 class DiscoverDocsInput(CompatInput):
-    """Input schema for docs discovery.
+    """Input schema for ``discover_solidworks_docs``.
 
     Attributes:
-        include_vba (bool): The include vba value.
-        output_dir (str | None): The output dir value.
-        year (int | None): The year value.
+        output_dir (str | None): Folder to save the index in.
+        include_vba (bool): Whether to scan for VBA library references.
+        year (int | None): The SolidWorks year whose type library to read.
     """
 
     output_dir: str | None = Field(
         default=None,
-        description="Optional output directory for indexed documentation",
+        description=(
+            "Folder to save the index in; default .generated/docs-index. The "
+            "lookups only read the default folder, so another folder is for "
+            "keeping a copy (pass it back as index_file)."
+        ),
     )
     include_vba: bool = Field(
         default=True,
-        description="Include VBA library reference indexing",
+        description="Also list the VBA type libraries registered on this machine",
     )
     year: int | None = Field(
         default=None,
-        description="SolidWorks year override for saved index naming (e.g., 2026)",
+        ge=1995,
+        le=2100,
+        description=(
+            "SolidWorks year whose type library to read, e.g. 2026; an error "
+            "if that year isn't installed. Unset: the year the server was "
+            "started with (--year), else the newest installed."
+        ),
     )
 
 
-class SearchApiHelpInput(CompatInput):
-    """Input schema for SolidWorks API help search.
+class ApiIndexInput(CompatInput):
+    """Fields every API lookup takes to choose the index it answers from.
 
     Attributes:
-        auto_discover_if_missing (bool): The auto discover if missing value.
-        index_file (str | None): The index file value.
-        max_results (int): The max results value.
-        query (str): The query value.
-        year (int | None): The year value.
+        year (int | None): The SolidWorks year whose API to answer for.
+        index_file (str | None): A saved index to answer from instead.
+    """
+
+    year: int | None = Field(
+        default=None,
+        ge=1995,
+        le=2100,
+        description=(
+            "SolidWorks year whose API to answer for, e.g. 2026. Usually "
+            "leave unset: the server's --year, else the newest installed. A "
+            "year that isn't installed is explained in the result's note."
+        ),
+    )
+    index_file: str | None = Field(
+        default=None,
+        description=(
+            "Path to a saved index JSON to answer from instead of the "
+            "installed type library, e.g. one copied from another machine. "
+            "Rarely needed."
+        ),
+    )
+
+
+class SearchApiHelpInput(ApiIndexInput):
+    """Input schema for ``search_solidworks_api_help``.
+
+    Attributes:
+        query (str): Words to search member and interface names for.
+        max_results (int): How many matches to return at most.
+        auto_discover_if_missing (bool): Accepted for old callers; unused.
     """
 
     query: str = Field(
-        description="Search phrase for SolidWorks API help (methods, properties, objects)",
+        description=(
+            "Words to find in interface and member names, e.g. 'chamfer' or "
+            "'SelectByID2'"
+        ),
         min_length=2,
-    )
-    year: int | None = Field(
-        default=None,
-        description="SolidWorks year override (e.g., 2025, 2026)",
     )
     max_results: int = Field(
         default=10,
         ge=1,
         le=50,
-        description="Maximum number of search results",
-    )
-    index_file: str | None = Field(
-        default=None,
-        description="Optional explicit index file path (JSON) to search",
+        description="Maximum number of matches to return",
     )
     auto_discover_if_missing: bool = Field(
         default=False,
-        description="Generate docs index first when no index file is found",
+        description=(
+            "No longer needed: the index is built automatically when missing. "
+            "Still accepted so existing callers keep working."
+        ),
     )
 
 
-class LookupApiMethodInput(CompatInput):
-    """Input schema for a single method/property lookup."""
+class LookupApiMethodInput(ApiIndexInput):
+    """Input schema for ``lookup_api_method``.
+
+    Attributes:
+        interface (str): The COM interface the member is on.
+        method (str): The method or property name.
+    """
 
     interface: str = Field(
-        description="COM interface name, e.g. 'IFeatureManager'", min_length=2
-    )
-    method: str = Field(
-        description="Method or property name, e.g. 'InsertFeatureChamfer'",
-        min_length=1,
-    )
-    year: int | None = Field(default=None, description="SolidWorks year override")
-    index_file: str | None = Field(
-        default=None, description="Optional explicit index file path (JSON)"
-    )
-
-
-class LookupApiInterfaceInput(CompatInput):
-    """Input schema for an interface member-list lookup."""
-
-    interface: str = Field(
-        description="COM interface name, e.g. 'ISldWorks'", min_length=2
-    )
-    year: int | None = Field(default=None, description="SolidWorks year override")
-    index_file: str | None = Field(
-        default=None, description="Optional explicit index file path (JSON)"
-    )
-
-
-class FindRelatedApiInput(CompatInput):
-    """Input schema for a related-members lookup."""
-
-    name: str = Field(
-        description="An indexed interface or member name to find relatives of",
+        description="COM interface name, e.g. 'IFeatureManager' or 'IModelDoc2'",
         min_length=2,
     )
-    year: int | None = Field(default=None, description="SolidWorks year override")
+    method: str = Field(
+        description=(
+            "Method or property name, e.g. 'InsertFeatureChamfer'; case does not matter"
+        ),
+        min_length=1,
+    )
+
+
+class LookupApiInterfaceInput(ApiIndexInput):
+    """Input schema for ``lookup_api_interface``.
+
+    Attributes:
+        interface (str): The COM interface whose members to list.
+    """
+
+    interface: str = Field(
+        description="COM interface name, e.g. 'ISldWorks'; case does not matter",
+        min_length=2,
+    )
+
+
+class FindRelatedApiInput(ApiIndexInput):
+    """Input schema for ``find_related_api_members``.
+
+    Attributes:
+        name (str): An interface or member name to find relatives of.
+        max_results (int): How many related members to return at most.
+    """
+
+    name: str = Field(
+        description=(
+            "An interface name (lists its members) or a member name (lists "
+            "the members beside it), e.g. 'InsertSketch'"
+        ),
+        min_length=2,
+    )
     max_results: int = Field(
         default=25, ge=1, le=200, description="Maximum related members to return"
     )
-    index_file: str | None = Field(
-        default=None, description="Optional explicit index file path (JSON)"
+
+
+class MemberLookup(BaseModel):
+    """``lookup_api_method``'s result: one member's signature, or no match.
+
+    Attributes:
+        found (bool): Whether the member is on the interface.
+        interface (str): The interface, as SolidWorks spells it when found.
+        method (str | None): The name asked for, on a no-match.
+        member (str | None): The member's real name.
+        member_type (MemberType | None): ``method`` or ``property``.
+        signature_indexed (bool | None): Always true on a match.
+        description (str | None): The help string.
+        parameters (list[ApiParameter] | None): The parameters.
+        return_type (str | None): The return type (a property's value type).
+        access (Access | None): A property's access.
+        note (str | None): Why there's no match, or a casing difference.
+    """
+
+    found: bool = Field(description="True when the member is on the interface")
+    interface: str = Field(description="Interface name")
+    method: str | None = Field(default=None, description="Name asked for (no match)")
+    member: str | None = Field(
+        default=None, description="The member's name as SolidWorks spells it"
+    )
+    member_type: MemberType | None = Field(
+        default=None, description="method or property"
+    )
+    signature_indexed: bool | None = Field(
+        default=None, description="Always true on a match"
+    )
+    description: str | None = Field(default=None, description="One-line help string")
+    parameters: list[ApiParameter] | None = Field(
+        default=None, description="Parameters in call order; empty for a property"
+    )
+    return_type: str | None = Field(
+        default=None,
+        description="Returned type (a property's value type); null for nothing",
+    )
+    access: Access | None = Field(default=None, description="A property's access")
+    note: str | None = Field(
+        default=None, description="Why there is no match, or a casing difference"
     )
 
 
-CompatInputT = TypeVar("CompatInputT", bound=CompatInput)
+class InterfaceLookup(BaseModel):
+    """``lookup_api_interface``'s result.
+
+    Attributes:
+        found (bool): Whether the interface is indexed.
+        interface (str): Its name, as SolidWorks spells it when found.
+        methods (list[str] | None): Its method names.
+        properties (list[str] | None): Its property names.
+        method_count (int | None): How many methods.
+        property_count (int | None): How many properties.
+        note (str | None): Why no index could be built.
+    """
+
+    found: bool = Field(description="True when the interface is indexed")
+    interface: str = Field(description="Interface name")
+    methods: list[str] | None = Field(default=None, description="Method names")
+    properties: list[str] | None = Field(default=None, description="Property names")
+    method_count: int | None = Field(default=None, description="Number of methods")
+    property_count: int | None = Field(default=None, description="Number of properties")
+    note: str | None = Field(default=None, description="Why no index could be built")
+
+
+class SearchMatch(BaseModel):
+    """One ``search_solidworks_api_help`` match.
+
+    Attributes:
+        object (str): The interface, or ``VBA Library``.
+        member (str): The member or library name.
+        member_type (str): ``method``, ``property`` or ``reference``.
+        score (int): Relevance; higher is better.
+        status (str | None): A VBA library's status.
+    """
+
+    object: str = Field(description="Interface name, or 'VBA Library'")
+    member: str = Field(description="Member or library name")
+    member_type: Literal["method", "property", "reference"] = Field(
+        description="method, property or reference (a VBA library)"
+    )
+    score: int = Field(description="Relevance; higher is better")
+    status: str | None = Field(default=None, description="A VBA library's status")
+
+
+class RelatedMember(BaseModel):
+    """One member ``find_related_api_members`` returns.
+
+    Attributes:
+        object (str): The interface it is on.
+        member (str): Its name.
+        member_type (MemberType): ``method`` or ``property``.
+        reason (str): Why it is related.
+    """
+
+    object: str = Field(description="Interface the member is on")
+    member: str = Field(description="Member name")
+    member_type: MemberType = Field(description="method or property")
+    reason: str = Field(
+        description="'same interface', 'sibling on <interface>' or 'name match'"
+    )
+
+
+class RelatedLookup(BaseModel):
+    """``find_related_api_members``'s result.
+
+    Attributes:
+        found (bool): Whether anything related was found.
+        query (str): The name asked for.
+        resolved_as (str): How the name was read.
+        related (list[RelatedMember]): The related members.
+        note (str | None): Why no index could be built.
+    """
+
+    found: bool = Field(description="True when anything related was found")
+    query: str = Field(description="The name asked for")
+    resolved_as: Literal["interface", "member", "name-match"] = Field(
+        description="interface, member, or name-match (a substring of names)"
+    )
+    related: list[RelatedMember] = Field(description="Related members")
+    note: str | None = Field(default=None, description="Why no index could be built")
 
 
 def _extract_year(value: str | None) -> int | None:
-    """Extract a 4-digit year from any string.
+    """Extract a 4-digit year (20xx) from a string such as an install path.
 
     Args:
-        value (str | None): The value value.
+        value (str | None): The text to search.
 
     Returns:
-        int | None: The result produced by the operation.
+        int | None: The year, or None when there isn't one.
     """
     if not value:
         return None
     match = re.search(r"\b(20\d{2})\b", value)
-    if not match:
-        return None
-    try:
-        return int(match.group(1))
-    except ValueError:
-        return None
-
-
-def _detect_installed_solidworks_year() -> int | None:
-    """Detect the latest installed SolidWorks year from the public samples path.
-
-    Returns:
-        int | None: The result produced by the operation.
-    """
-    root = Path(r"C:\Users\Public\Documents\SOLIDWORKS")
-    if not root.exists():
-        return None
-
-    years: list[int] = []
-    try:
-        for child in root.iterdir():
-            if not child.is_dir():
-                continue
-            year = _extract_year(child.name)
-            if year is not None:
-                years.append(year)
-    except OSError:
-        # Path can be inaccessible or missing on CI runners and non-Windows hosts.
-        return None
-
-    if not years:
-        return None
-    return max(years)
+    return int(match.group(1)) if match else None
 
 
 def _resolve_solidworks_year(requested_year: int | None, config: Any) -> int | None:
-    """Resolve SolidWorks year from explicit request, config, then local installation.
+    """The year a call asked for, else the year the server was started with.
+
+    Never guessed from folder names: those can be missing, or left behind by
+    an uninstalled version. None means "the newest installed".
 
     Args:
-        requested_year (int | None): The requested year value.
-        config (Any): Configuration values for the operation.
+        requested_year (int | None): The year the call asked for.
+        config (Any): Server configuration (``solidworks_year`` is set by
+            ``--year``; ``solidworks_path`` may name a year).
 
     Returns:
-        int | None: The result produced by the operation.
+        int | None: The year, or None.
     """
     if requested_year:
         return requested_year
-
     config_year = getattr(config, "solidworks_year", None)
     if isinstance(config_year, int):
         return config_year
-
-    config_path_year = _extract_year(getattr(config, "solidworks_path", None))
-    if config_path_year:
-        return config_path_year
-
-    return _detect_installed_solidworks_year()
+    return _extract_year(getattr(config, "solidworks_path", None))
 
 
 def _load_index_file(index_file: Path) -> dict[str, Any] | None:
-    """Load docs index JSON from disk.
+    """Read a saved index.
 
     Args:
-        index_file (Path): The index file value.
+        index_file (Path): The JSON file.
 
     Returns:
-        dict[str, Any] | None: A dictionary containing the resulting values.
+        dict[str, Any] | None: The index, or None when the file is missing
+        or isn't a JSON object.
     """
     try:
-        if not index_file.exists() or not index_file.is_file():
-            return None
         with index_file.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
-        if isinstance(data, dict):
-            return data
+    except (OSError, ValueError):
         return None
-    except Exception:
-        return None
+    return data if isinstance(data, dict) else None
 
 
-def _find_index_file(year: int | None, explicit_index_file: str | None) -> Path | None:
-    """Find the most appropriate index file for a requested year.
+def _find_index_file(year: int) -> Path | None:
+    """Find the saved index for a SolidWorks year.
 
     Args:
-        year (int | None): The year value.
-        explicit_index_file (str | None): The explicit index file value.
+        year (int): The type library's year.
 
     Returns:
-        Path | None: The result produced by the operation.
+        Path | None: The first ``solidworks_docs_index_<year>.json`` in the
+        index folders, or None.
     """
-    if explicit_index_file:
-        explicit = Path(explicit_index_file)
-        if explicit.exists():
-            return explicit
-
-    names = ["solidworks_docs_index.json"]
-    if year:
-        names.insert(0, f"solidworks_docs_index_{year}.json")
-
-    search_dirs = [
-        Path(".generated/docs-index"),
-        Path("tests/.generated/solidworks_integration/docs-index"),
-        Path("tests/.generated/docs-index"),
-    ]
-
-    for directory in search_dirs:
-        for name in names:
-            candidate = directory / name
-            if candidate.exists():
-                return candidate
-
+    for directory in _INDEX_DIRS:
+        candidate = directory / f"solidworks_docs_index_{year}.json"
+        if candidate.is_file():
+            return candidate
     return None
 
 
 def _index_is_stale(index_file: Path | None, max_age_days: int) -> bool:
-    """True when an existing index file is older than ``max_age_days``."""
+    """Whether an index file is older than ``max_age_days``.
+
+    Args:
+        index_file (Path | None): The file, if any.
+        max_age_days (int): The age limit in days.
+
+    Returns:
+        bool: True when the file exists and is older than the limit.
+    """
     if index_file is None:
         return False
     try:
-        if not index_file.exists():
-            return False
-        import time
-
         age_days = (time.time() - index_file.stat().st_mtime) / 86400.0
-        return age_days > max_age_days
     except OSError:
         return False
+    return age_days > max_age_days
+
+
+def _build_index(
+    year: int | None,
+    strict: bool,
+    output_dir: Path | None = None,
+    include_vba: bool = True,
+) -> tuple[SolidWorksDocsDiscovery, Path]:
+    """Build the docs index from the type library and save it under its year.
+
+    Args:
+        year (int | None): The SolidWorks year to read; None for the newest.
+        strict (bool): True when the caller asked for ``year``.
+        output_dir (Path | None): Where to save; the default index folder if None.
+        include_vba (bool): Also scan for VBA references.
+
+    Returns:
+        tuple[SolidWorksDocsDiscovery, Path]: The discovery holding the
+        index, and the saved file.
+
+    Raises:
+        TypeLibraryUnavailable: No matching type library is registered.
+        ToolOperationError: The index could not be saved.
+    """
+    discovery = SolidWorksDocsDiscovery(
+        output_dir=output_dir, year=year, strict_year=strict
+    )
+    index = discovery.discover_all(include_vba=include_vba)
+    filename = f"solidworks_docs_index_{index['type_library']['year']}.json"
+    return discovery, discovery.save_index(filename=filename)
 
 
 def _maybe_refresh_index(
-    index: dict[str, Any] | None,
-    index_file: Path | None,
-    year: int | None,
-    config: Any,
-) -> tuple[dict[str, Any] | None, Path | None]:
-    """Rebuild the docs index if an existing one is stale and the config allows.
+    index: dict[str, Any], index_file: Path, year: int, config: Any
+) -> tuple[dict[str, Any], Path]:
+    """Rebuild a current index that is old, when the config allows.
 
-    Only acts on an index file that exists but is older than
-    ``docs_index_max_age_days`` — a *missing* index is left to the caller's
-    ``auto_discover_if_missing`` opt-in. Returns the (possibly refreshed)
-    ``(index, index_file)``. A no-op without win32com / SolidWorks, or when
-    ``config.docs_index_auto_refresh`` is off; any failure leaves the original
-    index untouched.
+    A SolidWorks service pack can replace the type library in place, so an
+    index older than ``docs_index_max_age_days`` is rebuilt when
+    ``config.docs_index_auto_refresh`` is on. Any failure keeps the existing
+    index.
+
+    Args:
+        index (dict[str, Any]): The saved index.
+        index_file (Path): Its file.
+        year (int): The type library's year.
+        config (Any): Server configuration.
+
+    Returns:
+        tuple[dict[str, Any], Path]: The (possibly rebuilt) index and file.
     """
     if not getattr(config, "docs_index_auto_refresh", False):
         return index, index_file
     max_age = int(getattr(config, "docs_index_max_age_days", 21) or 21)
     if not _index_is_stale(index_file, max_age):
         return index, index_file
-    if not (HAS_WIN32COM and platform.system() == "Windows"):
-        return index, index_file
+    logger.info("Docs index older than {} days; rebuilding it", max_age)
     try:
-        logger.info(
-            "Docs index missing or older than {} days; rebuilding via "
-            "discover_solidworks_docs",
-            max_age,
-        )
-        discovery = SolidWorksDocsDiscovery()
-        fresh = discovery.discover_all()
-        if discovery.sw_app is None:
-            return index, index_file
-        filename = (
-            f"solidworks_docs_index_{year}.json"
-            if year
-            else "solidworks_docs_index.json"
-        )
-        fresh_file = discovery.save_index(filename=filename)
-        return fresh, fresh_file or index_file
-    except Exception as exc:  # noqa: BLE001 - keep serving the stale index
-        logger.warning("Docs index auto-refresh failed, using existing index: {}", exc)
+        discovery, fresh_file = _build_index(year, strict=False)
+    except TypeLibraryUnavailable as exc:
+        logger.warning("Docs index refresh failed, using existing index: {}", exc)
         return index, index_file
+    return discovery.index, fresh_file
+
+
+_LookupResultT = TypeVar("_LookupResultT", MemberLookup, InterfaceLookup, RelatedLookup)
+
+
+@dataclass(frozen=True)
+class _IndexForLookup:
+    """The index a lookup answers from, and how it was obtained.
+
+    Attributes:
+        index (dict[str, Any]): The index; empty when ``status`` is
+            ``unavailable``.
+        index_file (Path | None): The file it was read from or saved to.
+        status (IndexStatus): ``ready`` (read from disk), ``rebuilt`` (built
+            for this call) or ``unavailable``.
+        note (str | None): Why the index is unavailable.
+        year (int | None): The year asked for, reported when the index
+            doesn't name its type library (none could be built, or a
+            caller's file lacks it).
+    """
+
+    index: dict[str, Any]
+    index_file: Path | None
+    status: IndexStatus
+    note: str | None = None
+    year: int | None = None
+
+    def annotate(self, result: _LookupResultT) -> _LookupResultT:
+        """Add why no index could be built to a lookup result, when it couldn't.
+
+        Args:
+            result (_LookupResultT): A lookup result.
+
+        Returns:
+            _LookupResultT: The same result.
+        """
+        if self.note:
+            result.note = self.note
+        return result
+
+    def payload(self) -> dict[str, Any]:
+        """The fields every lookup response carries about its index.
+
+        Returns:
+            dict[str, Any]: ``year`` and ``type_library_version`` of the
+            library that answered, ``index_status`` and ``source_index_file``.
+        """
+        library = self.index.get("type_library") or {}
+        return {
+            "year": library.get("year", self.year),
+            "type_library_version": library.get("version"),
+            "index_status": self.status,
+            "source_index_file": str(self.index_file) if self.index_file else None,
+        }
+
+
+def _index_for_lookup(
+    requested_year: int | None, explicit_index_file: str | None, config: Any
+) -> _IndexForLookup:
+    """Find the saved index for the type library a lookup reads, or build it.
+
+    The index is found by the type library version the registry says would
+    be read, so it is built once and reused, whatever year was guessed. An
+    index in an older format, or from another type library version, is
+    rebuilt, never answered from. A usable ``explicit_index_file`` is
+    answered from directly, with no registry read.
+
+    Args:
+        requested_year (int | None): The year the caller asked for, if any.
+        explicit_index_file (str | None): An index file the caller named.
+        config (Any): Server configuration.
+
+    Returns:
+        _IndexForLookup: The index and how it was obtained.
+
+    Raises:
+        ToolOperationError: A built index could not be saved.
+    """
+    year = _resolve_solidworks_year(requested_year, config)
+    if explicit_index_file:
+        explicit = Path(explicit_index_file)
+        index = _load_index_file(explicit)
+        if index is not None and index.get("version") == INDEX_FORMAT:
+            return _IndexForLookup(index, explicit, "ready", year=year)
+    strict = requested_year is not None
+    try:
+        major, minor = target_version(year, strict)
+    except TypeLibraryUnavailable as exc:
+        return _IndexForLookup({}, None, "unavailable", str(exc), year)
+    library_year = year_of(major)
+    index_file = _find_index_file(library_year)
+    index = _load_index_file(index_file) if index_file else None
+    if (
+        index_file is not None
+        and index is not None
+        and index.get("version") == INDEX_FORMAT
+        and (index.get("type_library") or {}).get("version") == f"{major}.{minor}"
+    ):
+        index, index_file = _maybe_refresh_index(
+            index, index_file, library_year, config
+        )
+        return _IndexForLookup(index, index_file, "ready")
+    try:
+        discovery, fresh_file = _build_index(library_year, strict=True)
+    except TypeLibraryUnavailable as exc:
+        return _IndexForLookup({}, None, "unavailable", str(exc), year)
+    return _IndexForLookup(discovery.index, fresh_file, "rebuilt")
 
 
 def _search_index(
     index: dict[str, Any], query: str, max_results: int
-) -> list[dict[str, Any]]:
-    """Search indexed COM objects/members for a query.
+) -> list[SearchMatch]:
+    """Search the index's interface, member and VBA library names.
 
     Args:
-        index (dict[str, Any]): The index value.
-        query (str): Query text used for the operation.
-        max_results (int): The max results value.
+        index (dict[str, Any]): The index.
+        query (str): Words to look for; each word scores separately.
+        max_results (int): How many matches to keep.
 
     Returns:
-        list[dict[str, Any]]: A list containing the resulting items.
+        list[SearchMatch]: The best matches, highest score first.
     """
     tokens = [t for t in re.split(r"\s+", query.lower().strip()) if t]
     if not tokens:
         return []
 
-    results: list[dict[str, Any]] = []
+    results: list[SearchMatch] = []
 
     def _score(text: str) -> int:
-        """Build internal score.
+        """Score a name: 10 per word equal to it, 3 per word inside it.
 
         Args:
-            text (str): Input text processed by the operation.
+            text (str): The name.
 
         Returns:
-            int: The computed numeric result.
+            int: The score.
         """
         lower = text.lower()
         score = 0
@@ -934,53 +871,48 @@ def _search_index(
 
     for obj_name, obj_data in index.get("com_objects", {}).items():
         obj_score = _score(obj_name)
-
-        for method in obj_data.get("methods", []):
-            score = obj_score + _score(str(method))
-            if score > 0:
-                results.append(
-                    {
-                        "object": obj_name,
-                        "member": method,
-                        "member_type": "method",
-                        "score": score,
-                    }
-                )
-
-        for prop in obj_data.get("properties", []):
-            score = obj_score + _score(str(prop))
-            if score > 0:
-                results.append(
-                    {
-                        "object": obj_name,
-                        "member": prop,
-                        "member_type": "property",
-                        "score": score,
-                    }
-                )
+        for member_type, key in _MEMBER_LISTS:
+            for member in obj_data.get(key, []):
+                score = obj_score + _score(str(member))
+                if score > 0:
+                    results.append(
+                        SearchMatch(
+                            object=obj_name,
+                            member=str(member),
+                            member_type=member_type,
+                            score=score,
+                        )
+                    )
 
     for lib_name, lib_data in index.get("vba_references", {}).items():
-        lib_text = f"{lib_name} {lib_data.get('description', '')}"
-        score = _score(lib_text)
+        score = _score(f"{lib_name} {lib_data.get('description', '')}")
         if score > 0:
             results.append(
-                {
-                    "object": "VBA Library",
-                    "member": lib_name,
-                    "member_type": "reference",
-                    "status": lib_data.get("status", "unknown"),
-                    "score": score,
-                }
+                SearchMatch(
+                    object="VBA Library",
+                    member=lib_name,
+                    member_type="reference",
+                    status=lib_data.get("status", "unknown"),
+                    score=score,
+                )
             )
 
-    results.sort(key=lambda item: item.get("score", 0), reverse=True)
+    results.sort(key=lambda item: item.score, reverse=True)
     return results[:max_results]
 
 
 def _resolve_interface(
     index: dict[str, Any], name: str
 ) -> tuple[str, dict[str, Any]] | None:
-    """Case-insensitively resolve an interface name to its (canonical_name, data)."""
+    """Find an interface by name, ignoring case.
+
+    Args:
+        index (dict[str, Any]): The index.
+        name (str): The interface name asked for.
+
+    Returns:
+        tuple[str, dict[str, Any]] | None: Its real name and record, or None.
+    """
     com_objects = index.get("com_objects", {})
     if name in com_objects:
         return name, com_objects[name]
@@ -991,93 +923,127 @@ def _resolve_interface(
     return None
 
 
-def _lookup_interface(index: dict[str, Any], interface: str) -> dict[str, Any]:
-    """Return every indexed member of an interface, or a no-match marker.
+def _lookup_interface(index: dict[str, Any], interface: str) -> InterfaceLookup:
+    """List an interface's methods and properties, or say it isn't indexed.
 
-    The index stores member *names* only (no signatures), so this returns the
-    full method/property lists for the interface and nothing more.
+    Args:
+        index (dict[str, Any]): The index.
+        interface (str): The interface name asked for.
+
+    Returns:
+        InterfaceLookup: Its member names and counts, or a no-match.
     """
     resolved = _resolve_interface(index, interface)
     if resolved is None:
-        return {"found": False, "interface": interface}
+        return InterfaceLookup(found=False, interface=interface)
     obj_name, obj_data = resolved
     methods = [str(m) for m in obj_data.get("methods", [])]
     properties = [str(p) for p in obj_data.get("properties", [])]
-    return {
-        "found": True,
-        "interface": obj_name,
-        "methods": methods,
-        "properties": properties,
-        "method_count": len(methods),
-        "property_count": len(properties),
-    }
+    return InterfaceLookup(
+        found=True,
+        interface=obj_name,
+        methods=methods,
+        properties=properties,
+        method_count=len(methods),
+        property_count=len(properties),
+    )
 
 
-def _lookup_method(
-    index: dict[str, Any], interface: str, method: str
-) -> dict[str, Any]:
-    """Confirm a method/property is indexed on an interface.
+def _lookup_method(index: dict[str, Any], interface: str, method: str) -> MemberLookup:
+    """Look up a method or property's signature on an interface.
 
-    The index has no signatures, so ``parameters`` / ``return_type`` are always
-    reported as not indexed; the useful output is confirmation the member
-    exists on that interface plus its sibling members for context.
+    Matching ignores case, as COM late binding does; ``member`` is the name
+    as the type library spells it. Only the matched record is validated.
+
+    Args:
+        index (dict[str, Any]): The index.
+        interface (str): The interface name asked for.
+        method (str): The member name asked for.
+
+    Returns:
+        MemberLookup: The signature, or a no-match with a note.
     """
     resolved = _resolve_interface(index, interface)
     if resolved is None:
-        return {"found": False, "interface": interface, "method": method}
+        return MemberLookup(found=False, interface=interface, method=method)
     obj_name, obj_data = resolved
     lowered = method.lower()
-    for member_type, key in (("method", "methods"), ("property", "properties")):
-        for member in obj_data.get(key, []):
-            if str(member).lower() == lowered:
-                return {
-                    "found": True,
-                    "interface": obj_name,
-                    "member": str(member),
-                    "member_type": member_type,
-                    "parameters": None,
-                    "return_type": None,
-                    "signature_indexed": False,
-                    "note": (
-                        "The local docs index stores member names only. Run "
-                        "search_solidworks_api_help or consult help.solidworks.com "
-                        "for the full signature."
-                    ),
-                }
-    return {
-        "found": False,
-        "interface": obj_name,
-        "method": method,
-        "note": f"{method!r} is not an indexed member of {obj_name}.",
-    }
+    for name, raw in obj_data.get("members", {}).items():
+        if name.lower() != lowered:
+            continue
+        record = _MEMBER.validate_python(raw)
+        result = MemberLookup(
+            found=True,
+            interface=obj_name,
+            member=name,
+            member_type=record.kind,
+            signature_indexed=True,
+            description=record.description,
+        )
+        if isinstance(record, ApiProperty):
+            # A property's "return type" is the value type it reads back.
+            result.parameters = []
+            result.return_type = record.type
+            result.access = record.access
+        else:
+            result.parameters = record.parameters
+            result.return_type = record.return_type
+        if name != method:
+            result.note = (
+                f"SolidWorks spells it {name!r}. COM matches names "
+                f"regardless of case, so {method!r} also works."
+            )
+        return result
+    return MemberLookup(
+        found=False,
+        interface=obj_name,
+        method=method,
+        note=f"{method!r} is not an indexed member of {obj_name}.",
+    )
 
 
 def _find_related_api_members(
     index: dict[str, Any], name: str, max_results: int
-) -> dict[str, Any]:
+) -> RelatedLookup:
     """Given an indexed interface or member name, return related members.
 
     - An interface name -> its own members.
     - A member name -> the other members of every interface that also exposes
       it (siblings commonly used together), plus name-substring matches
       elsewhere in the index.
+
+    Args:
+        index (dict[str, Any]): The index.
+        name (str): The interface or member name.
+        max_results (int): How many related members to keep.
+
+    Returns:
+        RelatedLookup: The related members and how ``name`` was read.
     """
     com_objects = index.get("com_objects", {})
-    related: list[dict[str, Any]] = []
+    related: list[RelatedMember] = []
     seen: set[tuple[str, str]] = set()
 
-    def _add(obj_name: str, member: str, member_type: str, reason: str) -> None:
+    def _add(obj_name: str, member: str, member_type: MemberType, reason: str) -> None:
+        """Record one related member, once, never the name asked about.
+
+        Args:
+            obj_name (str): Its interface.
+            member (str): Its name.
+            member_type (MemberType): ``method`` or ``property``.
+            reason (str): Why it is related.
+        """
         key = (obj_name, str(member))
         if key in seen or str(member).lower() == name.lower():
             return
         seen.add(key)
         related.append(
-            {
-                "object": obj_name,
-                "member": str(member),
-                "member_type": member_type,
-                "reason": reason,
-            }
+            RelatedMember(
+                object=obj_name,
+                member=str(member),
+                member_type=member_type,
+                reason=reason,
+            )
         )
 
     resolved = _resolve_interface(index, name)
@@ -1087,18 +1053,20 @@ def _find_related_api_members(
             _add(obj_name, m, "method", "same interface")
         for p in obj_data.get("properties", []):
             _add(obj_name, p, "property", "same interface")
-        return {
-            "found": True,
-            "query": name,
-            "resolved_as": "interface",
-            "related": related[:max_results],
-        }
+        return RelatedLookup(
+            found=True,
+            query=name,
+            resolved_as="interface",
+            related=related[:max_results],
+        )
 
     lowered = name.lower()
     matched_member = False
     for obj_name, obj_data in com_objects.items():
-        members = [(m, "method") for m in obj_data.get("methods", [])] + [
-            (p, "property") for p in obj_data.get("properties", [])
+        members: list[tuple[str, MemberType]] = [
+            (str(member), member_type)
+            for member_type, key in _MEMBER_LISTS
+            for member in obj_data.get(key, [])
         ]
         names_lower = {str(m).lower() for m, _ in members}
         if lowered in names_lower:
@@ -1110,22 +1078,22 @@ def _find_related_api_members(
                 if lowered in str(member).lower():
                     _add(obj_name, member, member_type, "name match")
 
-    return {
-        "found": matched_member or bool(related),
-        "query": name,
-        "resolved_as": "member" if matched_member else "name-match",
-        "related": related[:max_results],
-    }
+    return RelatedLookup(
+        found=matched_member or bool(related),
+        query=name,
+        resolved_as="member" if matched_member else "name-match",
+        related=related[:max_results],
+    )
 
 
 def _fallback_help_for_query(query: str) -> dict[str, Any]:
-    """Provide coherent fallback help when no docs index is available.
+    """Suggest MCP tools for a query, alongside or instead of API matches.
 
     Args:
-        query (str): Query text used for the operation.
+        query (str): The search words.
 
     Returns:
-        dict[str, Any]: A dictionary containing the resulting values.
+        dict[str, Any]: ``suggested_tools`` and ``next_steps``.
     """
     q = query.lower()
 
@@ -1165,121 +1133,113 @@ def _fallback_help_for_query(query: str) -> dict[str, Any]:
 
     return {
         "suggested_tools": [
-            "discover_solidworks_docs",
-            "open_model",
-            "get_file_properties",
-            "save_as",
+            "lookup_api_interface",
+            "lookup_api_method",
+            "find_related_api_members",
         ],
         "next_steps": [
-            "Run discover_solidworks_docs to index the local COM API surface.",
-            "Search again with a narrower API term like a method or interface name.",
+            "Search again with a narrower term, such as part of a method name.",
+            "Use lookup_api_interface on an interface (e.g. IModelDoc2) to see "
+            "every member it has.",
         ],
     }
 
 
-async def register_docs_discovery_tools(
-    mcp: Any, adapter: Any, config: dict[str, Any]
-) -> int:
-    """Register docs discovery tool with FastMCP.
+def _rebuild_rag_index(index_file: Path) -> bool:
+    """Rebuild the FAISS ``solidworks-api-docs`` namespace from a saved index.
+
+    Optional: it needs the ``faiss-cpu`` extra, and a failure here never
+    fails the discovery that triggered it.
 
     Args:
-        mcp (Any): The mcp value.
-        adapter (Any): Adapter instance used for the operation.
-        config (dict[str, Any]): Configuration values for the operation.
+        index_file (Path): The saved docs index.
 
     Returns:
-        int: The computed numeric result.
+        bool: True when the RAG index was rebuilt and saved.
+    """
+    try:
+        from solidworks_mcp.agents.vector_rag import build_solidworks_api_docs_index
+
+        rag_idx = build_solidworks_api_docs_index(index_file)
+        rag_idx.save()
+    except ImportError:
+        logger.debug("faiss-cpu not installed; skipping RAG index rebuild")
+        return False
+    except Exception as exc:
+        logger.warning("RAG rebuild failed: {}", exc)
+        return False
+    logger.info(
+        "FAISS 'solidworks-api-docs' namespace rebuilt: {} chunks",
+        rag_idx.chunk_count,
+    )
+    return True
+
+
+async def register_docs_discovery_tools(
+    mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
+) -> int:
+    """Register the docs discovery and API lookup tools with FastMCP.
+
+    None of them use the adapter or SolidWorks itself: they read the
+    installed type library.
+
+    Args:
+        mcp (FastMCP): The server to register on.
+        adapter (SolidWorksAdapter): Unused; kept for the registrar's
+            uniform signature.
+        config (dict[str, Any]): Server configuration (``solidworks_year``,
+            the index refresh settings).
+
+    Returns:
+        int: The number of tools registered.
     """
     mcp = with_tool_boundary(mcp)
 
-    @mcp.tool()  # type: ignore[untyped-decorator]
+    @mcp.tool()
     async def discover_solidworks_docs(
         input_data: DiscoverDocsInput | None = None,
     ) -> dict[str, Any]:
-        """Discover and index SolidWorks COM and VBA documentation.
+        """Rebuild the SolidWorks API index on purpose. The lookups don't need it.
 
-        Creates a searchable index of all available COM objects, methods, properties, and VBA
-        libraries for the installed SolidWorks version. Useful for building context for
-        intelligent MCP tool selection and documentation queries.
+        The lookup tools (lookup_api_method, lookup_api_interface,
+        find_related_api_members, search_solidworks_api_help) build the index
+        themselves on first use, so call this only to rebuild it, to read a
+        specific SolidWorks year, or to save a copy elsewhere. It reads every
+        interface in the installed SolidWorks type library (each member's
+        parameters, return type and description), plus the VBA library
+        references. SolidWorks must be installed, not running; it is never
+        started or called.
+
+        Returns ``summary`` (interface, method and property counts),
+        ``type_library`` (version, year and .tlb path), ``year`` and
+        ``output_file``, the saved index (megabytes, so it is not returned).
+        Fails with a message naming the installed years when ``year`` isn't
+        installed, or saying SolidWorks isn't installed here.
+
+        Example input: ``{"year": 2026}``
 
         Args:
-            input_data (DiscoverDocsInput | None): The input data value. Defaults to None.
+            input_data (DiscoverDocsInput | None): Year, output folder and
+                whether to include VBA references. Defaults to None.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await discover_solidworks_docs({
-                                "output_dir": "docs-index",
-                                "include_vba": True
-                            })
-
-                            if result["status"] == "success":
-                                print(f"Discovered {result['summary']['total_methods']} COM methods")
-                                print(f"Output saved to {result['output_file']}")
-                            ```
-
-                        Note:
-                            - Requires Windows + SolidWorks installed and running
-                            - Creates .generated/docs-index directory if not present
-                            - Generates solidworks_docs_index.json with full catalog
-                            - Index can be used to build context for RAG or tool discovery
+            dict[str, Any]: ``summary``, ``type_library``, ``year``,
+            ``output_file`` and ``rag_indexed``, plus
+            ``status``/``message``/``execution_time``.
         """
-        import time
-
         start_time = time.time()
-
-        if not HAS_WIN32COM:
-            raise UnsupportedOperationError(
-                "win32com not available; cannot discover COM documentation"
-            )
-
-        if platform.system() != "Windows":
-            raise UnsupportedOperationError("COM discovery only available on Windows")
-
         normalized = normalize_input(input_data, DiscoverDocsInput)
         output_dir = Path(normalized.output_dir) if normalized.output_dir else None
         year = _resolve_solidworks_year(normalized.year, config)
 
-        discovery = SolidWorksDocsDiscovery(output_dir=output_dir)
-
         logger.info("Starting SolidWorks documentation discovery...")
-        index = discovery.discover_all()
-        if discovery.sw_app is None:
-            raise ToolOperationError(
-                "SolidWorks is not running in this session; start SolidWorks "
-                "and retry. Docs discovery attaches to a running instance and "
-                "never launches one."
-            )
-
-        filename = (
-            f"solidworks_docs_index_{year}.json"
-            if year
-            else "solidworks_docs_index.json"
+        discovery, output_file = _build_index(
+            year,
+            strict=normalized.year is not None,
+            output_dir=output_dir,
+            include_vba=normalized.include_vba,
         )
-        output_file = discovery.save_index(filename=filename)
-
-        # Rebuild the FAISS RAG namespace so Gemma can query the API surface.
-        rag_indexed = False
-        if output_file is not None:
-            try:
-                from solidworks_mcp.agents.vector_rag import (
-                    build_solidworks_api_docs_index,
-                )
-
-                rag_idx = build_solidworks_api_docs_index(output_file)
-                rag_idx.save()
-                rag_indexed = True
-                logger.info(
-                    "FAISS 'solidworks-api-docs' namespace rebuilt: %d chunks",
-                    rag_idx.chunk_count,
-                )
-            except ImportError:
-                logger.debug("faiss-cpu not installed; skipping RAG index rebuild")
-            except Exception as _rag_exc:
-                logger.warning("RAG rebuild failed: {}", _rag_exc)
-
+        index = discovery.index
         summary = discovery.create_search_summary()
 
         return {
@@ -1287,187 +1247,232 @@ async def register_docs_discovery_tools(
             "message": f"Discovered {summary['total_com_objects']} COM objects, "
             f"{summary['total_methods']} methods, "
             f"{summary['total_properties']} properties",
-            "index": index,
+            "type_library": index["type_library"],
             "summary": summary,
-            "year": year,
-            "output_file": str(output_file) if output_file else None,
-            "rag_indexed": rag_indexed,
+            "year": index["type_library"]["year"],
+            "output_file": str(output_file),
+            "rag_indexed": _rebuild_rag_index(output_file),
             "execution_time": time.time() - start_time,
         }
 
-    @mcp.tool()  # type: ignore[untyped-decorator]
+    @mcp.tool()
     async def search_solidworks_api_help(
         input_data: SearchApiHelpInput | None = None,
     ) -> dict[str, Any]:
-        """Search SolidWorks API help index and return coherent guidance.
+        """Search SolidWorks API interface and member names by keyword.
 
-        This tool helps when the LLM gets stuck by mapping user intent to discovered COM members
-        and practical MCP workflow guidance.
+        Use this when you don't know the exact name: "chamfer" finds
+        IFeatureManager.InsertFeatureChamfer. Then call lookup_api_method on
+        a match for its parameters and return type. Matches come from the
+        SolidWorks type library installed on this machine.
+
+        Setup: none. SolidWorks must be installed, not running; it is never
+        contacted. Nothing has to be called first: the first call builds the
+        index (about a second) and later calls reuse it. ``index_status`` is
+        ``ready`` (saved index), ``rebuilt`` (built for this call) or
+        ``unavailable`` (no index could be built; ``guidance`` says why).
+
+        Returns ``matches`` (interface, member, member_type, score),
+        ``guidance``, and ``fallback_help`` suggesting MCP tools for the
+        task, with ``year`` and ``type_library_version`` of the library that
+        answered.
+
+        Example input: ``{"query": "chamfer", "max_results": 5}``
 
         Args:
-            input_data (SearchApiHelpInput | None): The input data value. Defaults to None.
+            input_data (SearchApiHelpInput | None): The search words and
+                options. Defaults to None.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: ``matches``, ``guidance``, ``fallback_help``,
+            ``year``, ``type_library_version``, ``index_status`` and
+            ``source_index_file``, plus ``status``/``message``/``execution_time``.
         """
-
-        import time
-
         start_time = time.time()
-
         normalized = normalize_input(input_data, SearchApiHelpInput)
-        year = _resolve_solidworks_year(normalized.year, config)
+        source = _index_for_lookup(normalized.year, normalized.index_file, config)
 
-        index_file = _find_index_file(year, normalized.index_file)
-        index = _load_index_file(index_file) if index_file else None
-
-        # Rebuild when stale (config-gated), or when missing and the caller
-        # opted in.
-        index, index_file = _maybe_refresh_index(index, index_file, year, config)
-        if index is None and normalized.auto_discover_if_missing:
-            if HAS_WIN32COM and platform.system() == "Windows":
-                discovery = SolidWorksDocsDiscovery()
-                discovered = discovery.discover_all()
-                if discovery.sw_app is not None:
-                    index = discovered
-                    filename = (
-                        f"solidworks_docs_index_{year}.json"
-                        if year
-                        else "solidworks_docs_index.json"
-                    )
-                    index_file = discovery.save_index(filename=filename)
-
-        matches = _search_index(index or {}, normalized.query, normalized.max_results)
-        fallback = _fallback_help_for_query(normalized.query)
-
+        matches = _search_index(source.index, normalized.query, normalized.max_results)
         guidance_lines = []
         if matches:
             guidance_lines.append(
                 f"Found {len(matches)} API matches for '{normalized.query}'."
             )
             guidance_lines.append(
-                "Start with the highest-score members and verify with the real adapter path."
+                "Use lookup_api_method on a match for its parameters and return type."
             )
         else:
             guidance_lines.append(
                 "No indexed API hits found; using workflow fallback guidance."
             )
-            guidance_lines.append(
-                "Consider running discover_solidworks_docs first for this machine/version."
-            )
+        if source.note:
+            guidance_lines.append(source.note)
 
         return {
             "status": "success",
             "message": "SolidWorks API help search completed",
             "query": normalized.query,
-            "year": year,
-            "source_index_file": str(index_file) if index_file else None,
-            "matches": matches,
-            "fallback_help": fallback,
+            **source.payload(),
+            "matches": [match.model_dump(exclude_unset=True) for match in matches],
+            "fallback_help": _fallback_help_for_query(normalized.query),
             "guidance": " ".join(guidance_lines),
             "execution_time": time.time() - start_time,
         }
 
-    def _load_index_for_lookup(
-        requested_year: int | None, explicit_index_file: str | None
-    ) -> tuple[dict[str, Any] | None, Path | None, int | None]:
-        """Shared index resolution for the granular lookup tools."""
-        resolved_year = _resolve_solidworks_year(requested_year, config)
-        index_file = _find_index_file(resolved_year, explicit_index_file)
-        index = _load_index_file(index_file) if index_file else None
-        index, index_file = _maybe_refresh_index(
-            index, index_file, resolved_year, config
-        )
-        return index, index_file, resolved_year
-
-    @mcp.tool()  # type: ignore[untyped-decorator]
+    @mcp.tool()
     async def lookup_api_method(
         input_data: LookupApiMethodInput | None = None,
     ) -> dict[str, Any]:
-        """Look up one SolidWorks API method or property by interface + name.
+        """Look up one SolidWorks API method or property: parameters, return type, description.
 
-        Confirms the member is indexed on that interface and returns its
-        sibling members for context. The local index stores names only, so
-        full signatures (parameters, return type) are not available here - use
-        search_solidworks_api_help or help.solidworks.com for those.
+        Use this before writing or debugging a SolidWorks API call (VBA, a
+        macro or COM) to check that the member exists on that interface and
+        how to call it. Answers come from the SolidWorks type library
+        installed on this machine, so they match the installed version.
+
+        Setup: none. SolidWorks must be installed, not running; it is never
+        contacted. Nothing has to be called first: the first lookup builds
+        the index (about a second) and later lookups reuse it.
+        ``index_status`` is ``ready`` (saved index), ``rebuilt`` (built for
+        this call) or ``unavailable`` (no index could be built).
+
+        Names match regardless of case, as COM does. ``result.member`` is
+        SolidWorks' own spelling, with a ``note`` when yours differs. Each
+        parameter has a ``type`` and a ``direction``: ``in``, ``out``
+        (SolidWorks fills it) or ``in_out`` (pass a variable by reference).
+        ``return_type`` is null when the method returns nothing; a property
+        has its value type there and an ``access``. ``result.found`` false
+        means there is no such member, and ``result.note`` says why,
+        including when no index could be built (SolidWorks isn't installed
+        here, or the requested year isn't).
+
+        Example input: ``{"interface": "ISldWorks", "method": "OpenDoc6"}``
+
+        Args:
+            input_data (LookupApiMethodInput | None): The interface and member
+                name. Defaults to None.
+
+        Returns:
+            dict[str, Any]: ``result``, ``year``, ``type_library_version``,
+            ``index_status`` and ``source_index_file``, plus
+            ``status``/``message``/``execution_time``.
         """
-        import time
-
-        start = time.time()
+        start_time = time.time()
         normalized = normalize_input(input_data, LookupApiMethodInput)
-        index, index_file, year = _load_index_for_lookup(
-            normalized.year, normalized.index_file
+        source = _index_for_lookup(normalized.year, normalized.index_file, config)
+        result = source.annotate(
+            _lookup_method(source.index, normalized.interface, normalized.method)
         )
-        result = _lookup_method(index or {}, normalized.interface, normalized.method)
         return {
             "status": "success",
             "message": (
                 "Method found"
-                if result.get("found")
+                if result.found
                 else "No indexed match for that interface/method"
             ),
-            "year": year,
-            "source_index_file": str(index_file) if index_file else None,
-            "result": result,
-            "execution_time": time.time() - start,
+            **source.payload(),
+            "result": result.model_dump(exclude_unset=True),
+            "execution_time": time.time() - start_time,
         }
 
-    @mcp.tool()  # type: ignore[untyped-decorator]
+    @mcp.tool()
     async def lookup_api_interface(
         input_data: LookupApiInterfaceInput | None = None,
     ) -> dict[str, Any]:
-        """List every indexed member (methods + properties) of a COM interface."""
-        import time
+        """List every method and property of a SolidWorks COM interface.
 
-        start = time.time()
+        Use this to see what an interface offers, such as IFeatureManager,
+        or to check which interface a member is really on before calling it.
+        For one member's parameters, use lookup_api_method. Names match
+        regardless of case.
+
+        Setup: none. SolidWorks must be installed, not running; it is never
+        contacted. Nothing has to be called first: the first call builds the
+        index (about a second) and later calls reuse it. ``index_status`` is
+        ``ready`` (saved index), ``rebuilt`` (built for this call) or
+        ``unavailable`` (no index could be built).
+
+        Returns ``result`` with ``methods``, ``properties`` and their counts.
+        ``result.found`` false means the interface isn't in the type library,
+        or no index could be built, in which case ``result.note`` says why.
+
+        Example input: ``{"interface": "IFeatureManager"}``
+
+        Args:
+            input_data (LookupApiInterfaceInput | None): The interface name.
+                Defaults to None.
+
+        Returns:
+            dict[str, Any]: ``result``, ``year``, ``type_library_version``,
+            ``index_status`` and ``source_index_file``, plus
+            ``status``/``message``/``execution_time``.
+        """
+        start_time = time.time()
         normalized = normalize_input(input_data, LookupApiInterfaceInput)
-        index, index_file, year = _load_index_for_lookup(
-            normalized.year, normalized.index_file
-        )
-        result = _lookup_interface(index or {}, normalized.interface)
+        source = _index_for_lookup(normalized.year, normalized.index_file, config)
+        result = _lookup_interface(source.index, normalized.interface)
+        source.annotate(result)
         return {
             "status": "success",
             "message": (
-                f"{result['method_count']} methods, {result['property_count']} properties"
-                if result.get("found")
+                f"{result.method_count} methods, {result.property_count} properties"
+                if result.found
                 else "Interface not found in the indexed documentation"
             ),
-            "year": year,
-            "source_index_file": str(index_file) if index_file else None,
-            "result": result,
-            "execution_time": time.time() - start,
+            **source.payload(),
+            "result": result.model_dump(exclude_unset=True),
+            "execution_time": time.time() - start_time,
         }
 
-    @mcp.tool()  # type: ignore[untyped-decorator]
+    @mcp.tool()
     async def find_related_api_members(
         input_data: FindRelatedApiInput | None = None,
     ) -> dict[str, Any]:
-        """Find API members related to a known interface or member name.
+        """Find SolidWorks API members related to an interface or member name.
 
-        For an interface: its own members. For a member: the other members of
-        every interface that also exposes it, plus name-substring matches.
+        For an interface: its own members. For a member: the other members
+        of every interface that also has it (often used together), plus
+        members whose names contain it. Use it to explore around a call you
+        know, such as what sits beside InsertSketch.
+
+        Setup: none. SolidWorks must be installed, not running; it is never
+        contacted. Nothing has to be called first: the first call builds the
+        index (about a second) and later calls reuse it. ``index_status`` is
+        ``ready`` (saved index), ``rebuilt`` (built for this call) or
+        ``unavailable`` (no index could be built).
+
+        Returns ``result.related``: each member's interface, name, type and
+        why it is related. ``result.found`` false means nothing matched, or
+        no index could be built, in which case ``result.note`` says why.
+
+        Example input: ``{"name": "InsertSketch", "max_results": 10}``
+
+        Args:
+            input_data (FindRelatedApiInput | None): The name and how many
+                results to return. Defaults to None.
+
+        Returns:
+            dict[str, Any]: ``result``, ``year``, ``type_library_version``,
+            ``index_status`` and ``source_index_file``, plus
+            ``status``/``message``/``execution_time``.
         """
-        import time
-
-        start = time.time()
+        start_time = time.time()
         normalized = normalize_input(input_data, FindRelatedApiInput)
-        index, index_file, year = _load_index_for_lookup(
-            normalized.year, normalized.index_file
-        )
+        source = _index_for_lookup(normalized.year, normalized.index_file, config)
         result = _find_related_api_members(
-            index or {}, normalized.name, normalized.max_results
+            source.index, normalized.name, normalized.max_results
         )
+        source.annotate(result)
         return {
             "status": "success",
             "message": (
-                f"{len(result['related'])} related member(s)"
-                if result.get("found")
+                f"{len(result.related)} related member(s)"
+                if result.found
                 else "No related members found"
             ),
-            "year": year,
-            "source_index_file": str(index_file) if index_file else None,
-            "result": result,
-            "execution_time": time.time() - start,
+            **source.payload(),
+            "result": result.model_dump(exclude_unset=True),
+            "execution_time": time.time() - start_time,
         }
 
     # discover_solidworks_docs, search_solidworks_api_help, lookup_api_method,

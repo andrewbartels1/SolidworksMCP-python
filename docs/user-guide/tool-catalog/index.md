@@ -22,7 +22,7 @@ Each section covers one functional category with parameter tables and copy-paste
 | [VBA Generation Tools](vba-generation.md) | 10 | Generate and execute VBA macro code for operations that exceed direct COM call complexity or require procedural automation. |
 | [Template Management Tools](template-management.md) | 6 | Create, extract, apply, compare, and manage SolidWorks document templates in a reusable library workflow. |
 | [Macro Recording Tools](macro-recording.md) | 7 | Record, replay, analyze, and optimize SolidWorks VBA macros, including macro libraries and batch execution workflows. |
-| [Docs Discovery Tools](docs-discovery.md) | 2 | Introspect the live SolidWorks COM object library to discover available interfaces, methods, and practical API usage guidance. |
+| [Docs Discovery Tools](docs-discovery.md) | 5 | Look up SolidWorks API interfaces and member signatures, read from the installed SolidWorks type library. |
 
 ## Standard Response Envelope
 
