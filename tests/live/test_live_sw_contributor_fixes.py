@@ -172,8 +172,14 @@ async def test_create_part_uses_an_explicit_template_and_refuses_a_bad_one(
 
 
 @pytest.mark.asyncio
-async def test_docs_discovery_and_com_check_attach_without_launching(live_adapter):
-    """With SolidWorks open, attaching works and no second instance starts (#189)."""
+async def test_docs_discovery_and_com_check_attach_without_launching(
+    live_adapter, tmp_path
+):
+    """With SolidWorks open, no second instance starts (#189).
+
+    Docs discovery reads the type library and never touches SolidWorks (#195);
+    the installation check attaches to the running one.
+    """
     from solidworks_mcp.config import SolidWorksMCPConfig
     from solidworks_mcp.tools.docs_discovery import SolidWorksDocsDiscovery
     from solidworks_mcp.utils.validation import _validate_solidworks_installation
@@ -181,9 +187,8 @@ async def test_docs_discovery_and_com_check_attach_without_launching(live_adapte
     before = _solidworks_process_count()
     assert before >= 1
 
-    discovery = SolidWorksDocsDiscovery()
-    assert discovery.connect_to_solidworks()
-    assert discovery.sw_app is not None
+    index = SolidWorksDocsDiscovery(output_dir=tmp_path).discover_all()
+    assert "IModelDoc2" in index["com_objects"]
     await _validate_solidworks_installation(SolidWorksMCPConfig())
 
     assert _solidworks_process_count() == before

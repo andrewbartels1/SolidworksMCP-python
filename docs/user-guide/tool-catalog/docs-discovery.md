@@ -1,8 +1,12 @@
 # Docs Discovery Tools
 
-Introspect the live SolidWorks COM object library to discover available interfaces, methods, and properties for the installed version. Produces a JSON index that the integration harness uses to detect API-change drift between SolidWorks versions and suggest correct alternative tool calls.
+Look up SolidWorks API interfaces, methods and properties, with each member's parameters, return type and description. Everything is read from the SolidWorks type library installed on this machine, so the answers match your SolidWorks version and nothing is hand-typed.
 
-> **Prerequisite:** SolidWorks running. win32com.client must be available (Windows only).
+> **Prerequisite:** SolidWorks installed (it need not be running), on Windows with pywin32.
+>
+> Nothing has to be run first. The lookup tools build the index the first time they run (about a second) and reuse it after that, rebuilding it only when SolidWorks is upgraded or the index was written by an older version. Without a SolidWorks type library on the machine they answer "no match" and say why in `note`.
+>
+> The year comes from the server's `--year` start-up argument (setup writes it), else the newest installed SolidWorks. Every response reports the `year` and `type_library_version` that answered, and `index_status`: `ready` (saved index), `rebuilt` (built for this call) or `unavailable`.
 
 **Total tools in this category: 5**
 
@@ -10,9 +14,17 @@ Introspect the live SolidWorks COM object library to discover available interfac
 
 ### `discover_solidworks_docs`
 
-Discover and index SolidWorks COM and VBA documentation.
+Rebuild the index on purpose; the lookups don't need it. It reads every interface in the installed SolidWorks type library, plus the VBA library references, and never starts or calls SolidWorks. The response carries a summary, the type library it read and the saved file, not the index itself.
 
-**Prerequisite:** SolidWorks running, win32com available (Windows only)
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `year` | `int?` | — | `null` | SolidWorks year whose type library to read; an error if it isn't installed. Unset: the server's `--year`, else the newest installed |
+| `include_vba` | `bool` | — | `true` | Also list the VBA type libraries registered on this machine |
+| `output_dir` | `str?` | — | `null` | Folder to save the index in; the lookups only read the default folder |
+
+**Prerequisite:** SolidWorks installed (it need not be running), Windows only
 
 **Sample call:**
 
@@ -24,27 +36,24 @@ Discover and index SolidWorks COM and VBA documentation.
 
 ### `search_solidworks_api_help`
 
-Search the SolidWorks API help index and return coherent guidance. Maps user intent to discovered COM members and practical MCP workflow guidance. Useful when a tool call fails or you need to find the correct API member name.
-
-**Prerequisite:** A docs index exists (run `discover_solidworks_docs` first, or set `auto_discover_if_missing: true`)
+Search interface and member names by keyword when you don't know the exact name: `chamfer` finds `IFeatureManager.InsertFeatureChamfer`. Then call `lookup_api_method` on a match for its parameters. The response also suggests MCP tools for the task (`fallback_help`).
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `query` | `str` | ✅ | | Search phrase for SolidWorks API help (methods, properties, objects) |
-| `year` | `int?` | — | `null` | SolidWorks year override (e.g. 2026) |
+| `query` | `str` | ✅ | | Words to find in interface and member names |
+| `year` | `int?` | — | `null` | SolidWorks year to answer for; usually unset (the server's `--year`) |
 | `max_results` | `int` | — | `10` | Maximum number of results (1–50) |
-| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
-| `auto_discover_if_missing` | `bool` | — | `false` | Auto-generate the docs index if none is found |
+| `index_file` | `str?` | — | `null` | A saved index to answer from instead, e.g. copied from another machine |
+| `auto_discover_if_missing` | `bool` | — | `false` | No longer needed; still accepted |
 
 **Sample call:**
 
 ```json
 {
-  "query": "SelectByID2",
-  "max_results": 5,
-  "auto_discover_if_missing": true
+  "query": "chamfer",
+  "max_results": 5
 }
 ```
 
@@ -59,8 +68,8 @@ List every indexed member (methods and properties) of a COM interface. Purpose-b
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `interface` | `str` | ✅ | | COM interface name, e.g. `ISldWorks` |
-| `year` | `int?` | — | `null` | SolidWorks year override |
-| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
+| `year` | `int?` | — | `null` | SolidWorks year to answer for; usually unset (the server's `--year`) |
+| `index_file` | `str?` | — | `null` | A saved index to answer from instead, e.g. copied from another machine |
 
 **Sample call:**
 
@@ -72,7 +81,7 @@ List every indexed member (methods and properties) of a COM interface. Purpose-b
 
 ### `lookup_api_method`
 
-Confirm a method or property is indexed on an interface and return its sibling members for context. The local index stores member *names* only — full signatures (parameters, return type) are not available here; use `search_solidworks_api_help` or help.solidworks.com for those.
+Look up one method or property before calling it. Returns its name as SolidWorks spells it, its parameters (name, type, and direction: `in`, `out` meaning SolidWorks fills it, or `in_out` meaning pass a variable by reference), its return type and a one-line description. Names match regardless of case, as COM does; when your casing differs, `note` says so. A member that doesn't exist returns `found: false` with a `note`.
 
 **Parameters:**
 
@@ -80,13 +89,13 @@ Confirm a method or property is indexed on an interface and return its sibling m
 |-----------|------|----------|---------|-------------|
 | `interface` | `str` | ✅ | | COM interface name |
 | `method` | `str` | ✅ | | Method or property name |
-| `year` | `int?` | — | `null` | SolidWorks year override |
-| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
+| `year` | `int?` | — | `null` | SolidWorks year to answer for; usually unset (the server's `--year`) |
+| `index_file` | `str?` | — | `null` | A saved index to answer from instead, e.g. copied from another machine |
 
 **Sample call:**
 
 ```json
-{ "interface": "IFeatureManager", "method": "InsertFeatureChamfer" }
+{ "interface": "ISldWorks", "method": "OpenDoc6" }
 ```
 
 ---
@@ -100,9 +109,9 @@ Given an indexed interface or member name, return related members: for an interf
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `name` | `str` | ✅ | | An indexed interface or member name |
-| `year` | `int?` | — | `null` | SolidWorks year override |
+| `year` | `int?` | — | `null` | SolidWorks year to answer for; usually unset (the server's `--year`) |
 | `max_results` | `int` | — | `25` | Maximum related members to return (1–200) |
-| `index_file` | `str?` | — | `null` | Explicit path to a JSON index file |
+| `index_file` | `str?` | — | `null` | A saved index to answer from instead, e.g. copied from another machine |
 
 **Sample call:**
 

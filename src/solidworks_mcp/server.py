@@ -608,6 +608,30 @@ async def _run_server(server: SolidWorksMCPServer) -> None:
         await server.stop()
 
 
+def _warn_if_no_year(config: SolidWorksMCPConfig) -> bool:
+    """Warn when the server drives real SolidWorks without being told its year.
+
+    The year picks the type library the API lookups read. Without it they
+    use the newest installed SolidWorks, which is right on most machines, so
+    this is a warning, not an error: client entries written before
+    ``--year`` existed keep working.
+
+    Args:
+        config (SolidWorksMCPConfig): The server configuration.
+
+    Returns:
+        bool: True when the warning was logged.
+    """
+    if not config.can_use_solidworks or config.solidworks_year:
+        return False
+    logger.warning(
+        "No SolidWorks year given: start the server with --year (for example "
+        "--year 2026), or rerun `solidworks-mcp-python setup` to add it. "
+        "Using the newest installed SolidWorks meanwhile."
+    )
+    return True
+
+
 async def _run_with_config(config: SolidWorksMCPConfig) -> None:
     """Run the server from a fully prepared config object.
 
@@ -624,6 +648,7 @@ async def _run_with_config(config: SolidWorksMCPConfig) -> None:
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Deployment mode: {config.deployment_mode}")
     logger.info(f"Security level: {config.security_level}")
+    _warn_if_no_year(config)
 
     server = SolidWorksMCPServer(config)
     await _run_server(server)
@@ -660,6 +685,14 @@ def cli(
         "--mock",
         help="Use mock SolidWorks for testing",
     ),
+    year: int | None = typer.Option(
+        None,
+        "--year",
+        min=1995,
+        max=2100,
+        help="The installed SolidWorks release to work with, e.g. 2026. "
+        "Required for real SolidWorks; setup writes it.",
+    ),
 ) -> None:
     """Start the SolidWorks MCP server on stdio.
 
@@ -675,6 +708,7 @@ def cli(
         port: Server port for remote mode.
         debug: Log at DEBUG level.
         mock: Answer from the mock adapter, without SolidWorks.
+        year: The SolidWorks release year, e.g. 2026.
     """
     loaded_config = load_config(config)
 
@@ -689,6 +723,8 @@ def cli(
         loaded_config.log_level = "DEBUG"
     if mock:
         loaded_config.mock_solidworks = True
+    if year:
+        loaded_config.solidworks_year = year
 
     asyncio.run(_run_with_config(loaded_config))
 
@@ -721,6 +757,9 @@ async def main() -> None:
     parser.add_argument(
         "--mock", help="Use mock SolidWorks for testing", action="store_true"
     )
+    parser.add_argument(
+        "--year", help="SolidWorks release year, e.g. 2026", type=int, default=None
+    )
 
     args = parser.parse_args()
 
@@ -737,6 +776,8 @@ async def main() -> None:
         config.log_level = "DEBUG"
     if args.mock:
         config.mock_solidworks = True
+    if args.year:
+        config.solidworks_year = args.year
 
     await _run_with_config(config)
 
