@@ -26,6 +26,6 @@
 
 ## 5. Release (maintainer)
 
-- [ ] 5.1 PR closing #194 and part of #172; merge
-- [ ] 5.2 One-time: PyPI pending trusted publisher (project `solidworks-mcp-python`, repo `andrewbartels1/SolidworksMCP-python`, workflow `release.yml`, environment `pypi`); GitHub environment `pypi`
-- [ ] 5.3 Tag `v1.5.0` on main and push; check PyPI, the GitHub Release and the registry entry; then close #172
+- [x] 5.1 PR closing #194 and part of #172; merge
+- [x] 5.2 One-time: PyPI pending trusted publisher (project `solidworks-mcp-python`, repo `andrewbartels1/SolidworksMCP-python`, workflow `release.yml`, environment `pypi`); GitHub environment `pypi`
+- [x] 5.3 Tag `v1.5.0` on main and push; check PyPI, the GitHub Release and the registry entry; then close #172
