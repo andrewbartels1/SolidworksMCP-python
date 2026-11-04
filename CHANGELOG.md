@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The live chamfer and fillet tests treat the faces they name** (#199).
+  They assumed the test block's height ran along Z; it runs along Y, so they
+  chamfered a side face where they meant the face with the hole, and their
+  loose checks didn't notice. Points now come from the measured bounding
+  box, and each test checks the removed volume against the exact value
+  within 0.001 mm³ (all match to 0.0001 live). The calls that must be
+  refused have their own test file.
+- **An `add_chamfer` or `add_fillet` entry that selects nothing is logged
+  as one warning line**, not a traceback. The error returned is unchanged.
 - **The API lookup tools answer from SolidWorks' own type library** (#195).
   `lookup_api_method`, `lookup_api_interface`, `find_related_api_members`
   and `search_solidworks_api_help` used to answer from a hand-typed list of

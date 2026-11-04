@@ -1596,16 +1596,15 @@ def _parse_edge_spec(
     - ``"face:x,y,z"`` (case-insensitive prefix) — coordinate-based FACE
       selection. Selecting a whole face and handing it to
       ``InsertFeatureChamfer``/``FeatureFillet3`` chamfers/fillets every
-      edge bounding that face in one call. This is more robust than
-      targeting a single edge by coordinate: a point exactly on a shared
-      boundary between two faces (e.g. a hole rim flush with the top
-      surface) can have its nearest-edge resolution silently shift to an
-      unrelated edge after another feature is added earlier in the tree,
-      picking a face interior point has no such ambiguity. Confirmed live
-      2026-09-18: an edge-coordinate hole-rim chamfer silently landed on
-      the block's 30mm outer edge instead (volume delta matched the
-      straight-edge formula, not the circular-rim one); selecting the face
-      instead reliably chamfers the real rim.
+      edge bounding that face in one call. It is the robust way to reach a
+      hole's rim: the rim is one edge of the face the hole opens onto, and
+      a point well inside that face is clear of every boundary, whereas an
+      edge point has to land on the rim itself.
+
+    Every coordinate pick must lie within ``_PICK_TOLERANCE_M`` of the edge
+    or face it resolves to. (A 2026-09-18 note here said an edge pick aimed
+    at a hole rim landed on a 30 mm outer edge; the test's point was on that
+    outer edge, because it assumed the wrong height axis. See #199.)
     """
     prefix, _, rest = edge_name.partition(":")
     if prefix.strip().lower() == "face":
@@ -1912,7 +1911,8 @@ def _add_fillet_impl(
             SolidWorksFeature: Populated feature descriptor.
 
         Raises:
-            Exception: If any edge selection fails or the feature is ``None``.
+            LookupError: If an edge or face entry selects nothing.
+            Exception: If the feature is ``None``.
         """
         # Detect SW major version for FeatureFillet3 parameter count
         fillet_sw_major = 0
@@ -1973,7 +1973,7 @@ def _add_fillet_impl(
                         default=False,
                     )
                 if not selected:
-                    raise Exception(f"Failed to select edge: {edge_name}")
+                    raise LookupError(f"Failed to select edge: {edge_name}")
 
         # SW 2025+ (major >= 33): IModelDoc2.FeatureFillet3 (9 params).
         # Returns a non-zero int on success — NOT an IFeature — so we look up
@@ -2115,7 +2115,8 @@ def _add_chamfer_impl(
             SolidWorksFeature: Populated feature descriptor.
 
         Raises:
-            Exception: If any edge selection fails or the feature is not created.
+            LookupError: If an edge or face entry selects nothing.
+            Exception: If the feature is not created.
         """
         import math
 
@@ -2150,7 +2151,7 @@ def _add_chamfer_impl(
                         default=False,
                     )
                 if not selected:
-                    raise Exception(f"Failed to select edge: {edge_name}")
+                    raise LookupError(f"Failed to select edge: {edge_name}")
 
         fm = adapter.currentModel.FeatureManager
         _flag_feature_methods(fm, "IFeatureManager")
