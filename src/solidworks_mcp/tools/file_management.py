@@ -783,8 +783,8 @@ async def register_file_management_tools(
         selection instead of guessing from a screenshot. To select edges yourself, use
         `select_face_edges`. Needs: an open document. Read-only. Returns: `entities`
         (each with `index` and `type`; a face adds `bounding_box_mm`, `center_mm`,
-        `area_mm2` and `normal` when flat, an edge `start_mm`, `end_mm` and straight-
-        line `length_mm`, a vertex `point_mm`) and `count`.
+        `area_mm2` and `normal` when flat, an edge `start_mm`, `end_mm` and
+        straight-line `length_mm`, a vertex `point_mm`) and `count`.
         """
         require_capability(
             adapter,

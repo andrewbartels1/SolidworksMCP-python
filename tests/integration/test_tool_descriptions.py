@@ -3,11 +3,6 @@
 The standard is in ``docs/agents/tool-description-standard.md``. The checks
 here are the mechanical part of it; usage guidance ("use it to ...", which
 sibling to use instead) is reviewed in the PR.
-
-Description checks are switched on module by module, as each module's tools
-are rewritten: a module not yet in ``_REWRITTEN`` is expected to fail, and
-strictly so, so finishing a module without switching it on fails too. The
-input-field check is on for every module.
 """
 
 from __future__ import annotations
@@ -20,22 +15,6 @@ from fastmcp import FastMCP
 
 from solidworks_mcp.tools import register_tools
 from solidworks_mcp.tools.tool_boundary import tool_family
-
-#: The modules whose descriptions have been rewritten to the standard.
-_REWRITTEN: set[str] = {
-    "analysis",
-    "automation",
-    "docs_discovery",
-    "drawing",
-    "drawing_analysis",
-    "drawing_automation",
-    "engineering_data",
-    "export",
-    "file_management",
-    "macro_recording",
-    "template_management",
-    "vba_generation",
-}
 
 _MODULES = [
     "analysis",
@@ -135,18 +114,7 @@ def _report(faults: dict[str, list[str]]) -> str:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "module",
-    [
-        module
-        if module in _REWRITTEN
-        else pytest.param(
-            module,
-            marks=pytest.mark.xfail(strict=True, reason="not yet rewritten"),
-        )
-        for module in _MODULES
-    ],
-)
+@pytest.mark.parametrize("module", _MODULES)
 async def test_descriptions_follow_the_standard(module: str, mock_adapter) -> None:
     tools = [t for t in await _tools(mock_adapter) if tool_family(t.fn) == module]
     assert tools, f"no tools registered from {module}"
