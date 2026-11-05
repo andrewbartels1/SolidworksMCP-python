@@ -23,9 +23,11 @@ from solidworks_mcp.tools.tool_boundary import tool_family
 
 #: The modules whose descriptions have been rewritten to the standard.
 _REWRITTEN: set[str] = {
+    "docs_discovery",
     "automation",
     "drawing_analysis",
     "macro_recording",
+    "template_management",
     "vba_generation",
 }
 
@@ -40,6 +42,7 @@ _MODULES = [
     "export",
     "file_management",
     "macro_recording",
+    "template_management",
     "modeling",
     "sketching",
     "template_management",
