@@ -28,16 +28,16 @@
 - [x] 3.3 `automation.py` (8) and `macro_recording.py` (7)
 - [x] 3.4 `template_management.py` (6) and `docs_discovery.py` (5)
 - [x] 3.5 `drawing.py` (14) and `drawing_automation.py` (7)
-- [ ] 3.6 `file_management.py` (19) and `export.py` (7)
-- [ ] 3.7 `analysis.py` (6) and `engineering_data.py` (8)
-- [ ] 3.8 `modeling.py` (30)
-- [ ] 3.9 `sketching.py` (19)
+- [x] 3.6 `file_management.py` (19) and `export.py` (7)
+- [x] 3.7 `analysis.py` (6) and `engineering_data.py` (8)
+- [x] 3.8 `modeling.py` (30)
+- [x] 3.9 `sketching.py` (19)
 
 ## 4. Ship
 
-- [ ] 4.1 The check passes for every module; full mock suite and lint pass;
+- [x] 4.1 The check passes for every module; full mock suite and lint pass;
       100 % coverage kept
-- [ ] 4.2 Regenerate the tool catalog docs if they quote descriptions;
+- [x] 4.2 Regenerate the tool catalog docs if they quote descriptions;
       `mkdocs build --strict`
 - [ ] 4.3 After the release: ask Glama for a rescan and record the new
       score in the internal assessment

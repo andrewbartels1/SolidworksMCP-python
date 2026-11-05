@@ -10,7 +10,7 @@ Quality-gate your drawings. Analyse dimensions, annotations, view coverage, and 
 
 ### `analyze_drawing_comprehensive`
 
-Perform comprehensive analysis of SolidWorks drawing.
+Run every drawing check (dimensions, views, annotations, standards) on a drawing file in one call.
 
 **Prerequisite:** SolidWorks running
 
@@ -36,7 +36,7 @@ Perform comprehensive analysis of SolidWorks drawing.
 
 ### `analyze_drawing_dimensions`
 
-Analyze dimensions in a SolidWorks drawing for consistency and completeness.
+Check a drawing's dimensions for consistent precision, tolerance formatting and completeness.
 
 **Prerequisite:** SolidWorks running
 
@@ -61,7 +61,7 @@ Analyze dimensions in a SolidWorks drawing for consistency and completeness.
 
 ### `analyze_drawing_annotations`
 
-Analyze drawing annotations and notes quality.
+Check a drawing's notes, symbols and text styles for consistency.
 
 **Prerequisite:** SolidWorks running
 
@@ -87,7 +87,7 @@ Analyze drawing annotations and notes quality.
 
 ### `check_drawing_compliance`
 
-Check drawing compliance with company standards.
+Check a drawing's title block and sheet format against a drafting standard (ISO, ANSI or DIN).
 
 **Prerequisite:** SolidWorks running
 
@@ -114,7 +114,7 @@ Check drawing compliance with company standards.
 
 ### `analyze_drawing_views`
 
-Analyze drawing views arrangement and quality.
+Check how a drawing's views are chosen and laid out.
 
 **Prerequisite:** SolidWorks running
 
@@ -128,7 +128,7 @@ Analyze drawing views arrangement and quality.
 
 ### `generate_drawing_report`
 
-Generate comprehensive drawing analysis report.
+Write a quality report that combines every drawing check.
 
 **Prerequisite:** SolidWorks running
 
@@ -142,7 +142,7 @@ Generate comprehensive drawing analysis report.
 
 ### `compare_drawing_versions`
 
-Compare different versions of drawing files.
+Compare two drawing files on disk: whether they are byte-identical, and how their sizes differ.
 
 **Prerequisite:** SolidWorks running
 
@@ -156,7 +156,7 @@ Compare different versions of drawing files.
 
 ### `validate_drawing_completeness`
 
-Validate drawing completeness for production readiness.
+Check that a drawing carries everything needed to manufacture the part.
 
 **Prerequisite:** SolidWorks running
 

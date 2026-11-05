@@ -10,7 +10,7 @@ Create, extract, apply, compare, and library-manage SolidWorks document template
 
 ### `extract_template`
 
-Extract template from existing SolidWorks model.
+Capture a model's settings (custom properties, dimensions, units) as a reusable template file.
 
 **Prerequisite:** SolidWorks running
 
@@ -40,7 +40,7 @@ Extract template from existing SolidWorks model.
 
 ### `apply_template`
 
-Apply a template to an existing SolidWorks model.
+Apply a saved template's properties, dimensions and materials to a model.
 
 **Prerequisite:** SolidWorks running
 
@@ -67,7 +67,7 @@ Apply a template to an existing SolidWorks model.
 
 ### `batch_apply_template`
 
-Apply template to multiple models in batch.
+Apply one template to every matching model in a folder.
 
 **Prerequisite:** SolidWorks running
 
@@ -94,7 +94,7 @@ Apply template to multiple models in batch.
 
 ### `compare_templates`
 
-Compare two templates and generate difference report.
+Compare two template files on disk: whether they are byte-identical, and how their sizes differ.
 
 **Prerequisite:** SolidWorks running
 
@@ -124,7 +124,7 @@ Compare two templates and generate difference report.
 
 ### `save_to_template_library`
 
-Save template to the organization's template library.
+Add a template to a shared, categorised template library.
 
 **Prerequisite:** SolidWorks running
 
@@ -138,7 +138,7 @@ Save template to the organization's template library.
 
 ### `list_template_library`
 
-List available templates from the template library.
+List the templates in the shared template library.
 
 **Prerequisite:** SolidWorks running
 

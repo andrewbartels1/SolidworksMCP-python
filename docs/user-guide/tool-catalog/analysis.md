@@ -29,7 +29,7 @@ interference checking, then geometry analysis, then material properties.
 
 ### `calculate_mass_properties`
 
-Get mass properties of the current SolidWorks model.
+Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
 
 **Prerequisite:** Active model with solid geometry
 
@@ -52,7 +52,7 @@ Get mass properties of the current SolidWorks model.
 
 ### `get_mass_properties`
 
-Backward-compatible alias for calculate_mass_properties.
+Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
 
 **Prerequisite:** Active model with solid geometry
 
@@ -66,7 +66,7 @@ Backward-compatible alias for calculate_mass_properties.
 
 ### `check_interference`
 
-Check for interference between components in an assembly.
+Find where the components of the active assembly overlap (Tools > Interference Detection).
 
 **Prerequisite:** Active assembly
 
@@ -92,7 +92,7 @@ Check for interference between components in an assembly.
 
 ### `analyze_geometry`
 
-Perform geometry analysis on the current model.
+Run a geometry analysis on the active model, such as curvature, draft or wall thickness.
 
 **Prerequisite:** Active model with geometry
 
@@ -115,7 +115,7 @@ Perform geometry analysis on the current model.
 
 ### `get_material_properties`
 
-Get material properties of the current model.
+Report the physical properties of the active part's material: density, modulus, Poisson's ratio, strength.
 
 **Prerequisite:** Active part with assigned material
 
@@ -129,7 +129,7 @@ Get material properties of the current model.
 
 ### `verify_model`
 
-Check the active part or assembly against what you meant to build. A modelling tool
+Check the active part or assembly against what you meant to build, one pass/fail check per expected value.
 that returns success does not prove the geometry is right; this reads the model back
 and compares it with your expectations. Give only the expectations you know: each one
 becomes a check. With none, it just reports what it measured.

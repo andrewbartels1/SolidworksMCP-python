@@ -10,7 +10,7 @@ Last updated 2026-11-04.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
-| 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` | Plan approved 2026-11-04; three PRs: (1) standard, check and hints (merged, #202), (2) the eight worst-scoring modules (built, in review), (3) the other six |
+| 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` | Plan approved 2026-11-04; three PRs: (1) standard, check and hints (merged, #202), (2) the eight worst-scoring modules (merged, #203), (3) the other six (built, in review) |
 | 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | not yet written | Next |
 | 3 | `--selftest` command and a compatibility-report issue template | #179 | not yet written | |
 | 4 | README: COM API coverage audit and licence-tier tags | #79 | not yet written | |
@@ -25,8 +25,7 @@ Last updated 2026-11-04.
 
 Each one's description says "Not available yet ... planned for a future
 release" (the wording is in `docs/agents/tool-description-standard.md`).
-Found while rewriting the descriptions; part 3 of item 1 adds any in the
-remaining modules.
+Found while rewriting the descriptions (39 in all).
 
 - **Drawing analysis (7):** `analyze_drawing_comprehensive`,
   `analyze_drawing_dimensions`, `analyze_drawing_annotations`,
@@ -45,6 +44,10 @@ remaining modules.
 - **Templates (5):** `extract_template`, `apply_template`,
   `batch_apply_template`, `save_to_template_library`,
   `list_template_library`.
+- **File management (3):** `manage_file_properties`, `convert_file_format`,
+  `batch_file_operations`.
+- **Export (1):** `batch_export`.
+- **Analysis (2):** `analyze_geometry`, `get_material_properties`.
 
 ## Small faults (item 10)
 
@@ -54,6 +57,31 @@ remaining modules.
   `output_path`; it only places three views on the active drawing.
 - `add_drawing_view` takes an `operation` (add, update, remove) but only
   ever adds a view; it is the same code as `create_drawing_view`.
+- `create_extrusion` ignores `sketch_name` and `direction`, and
+  `create_revolve` ignores `sketch_name` and `axis_entity`: both use the
+  sketch `exit_sketch` closed (the revolve its centreline). `create_cut_extrude`
+  does honour `sketch_name`.
+- `create_part` ignores `material`, `create_assembly` ignores `components`,
+  `create_drawing` ignores `model_path` and `sheet_format`, and
+  `create_sketch` echoes `sketch_name` back as the sketch's name without
+  applying it, so the reply can name a sketch that doesn't exist.
+- `pattern_circular` and `mirror_feature` fail unless the volume grows, so
+  patterning or mirroring a cut (a ring of holes) is reported as an error.
+- `calculate_mass_properties` labels the moments of inertia kg·mm², but they
+  are SolidWorks' kg·m² (a factor of a million); its input fields are unused.
+- `delete_feature` reads `removed_features`, but the real adapter returns
+  `features_removed` (a count), so on SolidWorks its message never mentions
+  the dependent features that went too.
+- `tutorial_simple_hole` calls the adapter's `create_cut`, which only the
+  mock implements: on SolidWorks it draws the sketch, then fails.
+  `sketch_tutorial_simple_hole` suggests a negative-depth extrusion for the
+  hole instead of `create_cut_extrude`.
+- `save_as` ignores `overwrite` (an existing file is replaced) and
+  `save_file` ignores `force_save`; the `export_*` tools require a
+  `format_type` they ignore (the extension decides) and ignore `options`;
+  `ExportSTEPInput`, `ExportIGESInput` and `ExportSTLInput` are unused.
+- `check_interference` passes `include_hidden` where the adapter reads
+  `ignore_hidden`, so it has no effect.
 
 ## Notes
 

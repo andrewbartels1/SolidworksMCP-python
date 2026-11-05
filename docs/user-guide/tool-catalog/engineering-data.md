@@ -10,7 +10,7 @@ Read and edit the data drawings, BOMs and analyses are built from: every model d
 
 ### `list_model_dimensions`
 
-List every dimension in the active part or assembly with its full name.
+List every dimension in the active part or assembly with its full name and value.
 
 **Prerequisite:** SolidWorks running
 
@@ -24,7 +24,7 @@ List every dimension in the active part or assembly with its full name.
 
 ### `measure_entities`
 
-Measure faces, edges or vertices with SolidWorks' Measure tool.
+Measure faces, edges or vertices of the active model with SolidWorks' Measure tool.
 
 **Prerequisite:** SolidWorks running
 
@@ -46,7 +46,7 @@ Measure faces, edges or vertices with SolidWorks' Measure tool.
 
 ### `get_material`
 
-Read the material assigned to the active part.
+Report the material assigned to the active part.
 
 **Prerequisite:** SolidWorks running
 
@@ -60,7 +60,7 @@ Read the material assigned to the active part.
 
 ### `set_material`
 
-Assign a library material to the active part.
+Assign a library material to the active part, e.g. "AISI 1020" or "6061-T6 (SS)".
 
 **Prerequisite:** SolidWorks running
 
@@ -84,7 +84,7 @@ Assign a library material to the active part.
 
 ### `list_available_materials`
 
-List materials in the installed SolidWorks material libraries.
+List the materials in the installed SolidWorks material libraries.
 
 **Prerequisite:** SolidWorks running
 
@@ -98,7 +98,7 @@ List materials in the installed SolidWorks material libraries.
 
 ### `get_custom_properties`
 
-Read the active document's custom properties.
+Read the active document's custom properties, such as PartNo, Description or Revision.
 
 **Prerequisite:** SolidWorks running
 
@@ -112,7 +112,7 @@ Read the active document's custom properties.
 
 ### `set_custom_property`
 
-Create or overwrite one text custom property on the active document.
+Create or overwrite one text custom property on the active document, e.g. PartNo or DrawnBy.
 
 **Prerequisite:** SolidWorks running
 
@@ -137,7 +137,7 @@ Create or overwrite one text custom property on the active document.
 
 ### `export_flat_pattern`
 
-Export the active sheet-metal part's flat pattern to DXF or DWG.
+Export the active sheet-metal part's flat pattern to DXF or DWG, for laser or waterjet cutting.
 
 **Prerequisite:** SolidWorks running
 

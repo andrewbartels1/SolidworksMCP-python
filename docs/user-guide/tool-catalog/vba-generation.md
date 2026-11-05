@@ -10,7 +10,7 @@ Generate and execute VBA macro code for operations that exceed the COM direct-ca
 
 ### `generate_vba_extrusion`
 
-Generate VBA code for complex extrusion operations.
+Write a VBA macro that makes an extrusion with the full FeatureExtrusion options: both directions, draft, thin wall, end conditions.
 
 **Prerequisite:** SolidWorks running
 
@@ -55,7 +55,7 @@ Generate VBA code for complex extrusion operations.
 
 ### `generate_vba_revolve`
 
-Generate VBA code for complex revolve operations.
+Write a VBA macro that revolves the selected sketch, with both-direction and thin-wall options.
 
 **Prerequisite:** SolidWorks running
 
@@ -83,7 +83,7 @@ Generate VBA code for complex revolve operations.
 
 ### `generate_vba_assembly_insert`
 
-Generate VBA code for assembly component insertion.
+Write a VBA macro that inserts a component into the active assembly at a point.
 
 **Prerequisite:** SolidWorks running
 
@@ -108,7 +108,7 @@ Generate VBA code for assembly component insertion.
 
 ### `generate_vba_drawing_views`
 
-Generate VBA code for drawing view creation.
+Write a VBA macro that places a model's standard views (front, top, right) on the active drawing.
 
 **Prerequisite:** SolidWorks running
 
@@ -135,7 +135,7 @@ Generate VBA code for drawing view creation.
 
 ### `generate_vba_batch_export`
 
-Generate VBA code for batch file export operations.
+Write a VBA macro that opens every matching file in a folder and saves a STEP copy of each to another folder.
 
 **Prerequisite:** SolidWorks running
 
@@ -162,7 +162,7 @@ Generate VBA code for batch file export operations.
 
 ### `generate_vba_part_modeling`
 
-Generate VBA code for complex part modeling operations.
+Write a VBA macro for a shell or a fillet on the active part.
 
 **Prerequisite:** SolidWorks running
 
@@ -176,7 +176,7 @@ Generate VBA code for complex part modeling operations.
 
 ### `generate_vba_assembly_mates`
 
-Generate VBA code for assembly mate creation.
+Write a VBA macro that adds a concentric, distance, parallel, perpendicular or coincident mate between two selected faces or edges.
 
 **Prerequisite:** SolidWorks running
 
@@ -190,7 +190,7 @@ Generate VBA code for assembly mate creation.
 
 ### `generate_vba_drawing_dimensions`
 
-Generate VBA code for creating drawing dimensions.
+Write a VBA macro that adds a dimension to the selected drawing entities and sets its precision.
 
 **Prerequisite:** SolidWorks running
 
@@ -204,7 +204,7 @@ Generate VBA code for creating drawing dimensions.
 
 ### `generate_vba_file_operations`
 
-Generate VBA code for file management operations.
+Write a VBA macro that sets a custom property in every configuration, or runs Pack and Go on the active document.
 
 **Prerequisite:** SolidWorks running
 
@@ -218,7 +218,7 @@ Generate VBA code for file management operations.
 
 ### `generate_vba_macro_recorder`
 
-Generate VBA code using macro recording patterns.
+Write a VBA starting point: a macro skeleton to fill in, or a note on starting and stopping SolidWorks' macro recorder.
 
 **Prerequisite:** SolidWorks running
 

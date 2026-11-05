@@ -286,10 +286,10 @@ async def test_list_available_materials_without_metadata(
 async def test_docstrings_follow_the_tool_standard(
     mcp_server, mock_adapter, mock_config, tool
 ) -> None:
-    """Every tool documents Args, Returns and an Example, as the others do."""
+    """Every tool documents Args and Returns (see tool-description-standard.md)."""
     await register_engineering_data_tools(mcp_server, mock_adapter, mock_config)
     doc = (await _tool(mcp_server, tool)).__doc__ or ""
-    for section in ("Args:", "Returns:", "Example:"):
+    for section in ("Args:", "Returns:"):
         assert section in doc, (tool, section)
 
 
