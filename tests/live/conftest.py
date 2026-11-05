@@ -277,6 +277,8 @@ def _close_all_documents() -> None:
         async def _drain() -> None:
             if not _solidworks_running():
                 return  # never relaunch a crashed SolidWorks just to drain it
+            if os.getenv("SW_DEMO_TRACE", "").strip().lower() in _TRUTHY:
+                print("[live] closing every open document", flush=True)
             adapter = PyWin32Adapter({})
             await adapter.connect()
             try:
@@ -364,6 +366,32 @@ def _record_demo(
             recorder.stop(running)
 
 
+def _trace_steps(adapter) -> None:  # noqa: ANN001
+    """Print each SolidWorks call as it starts and ends when ``SW_DEMO_TRACE`` is set.
+
+    Timestamped ``[live]`` lines, so a sound or a flash in SolidWorks (such
+    as its error "bonk") can be matched to the call that caused it.
+    ``tests/scripts/live_demo.ps1 -Trace`` sets it.
+    """
+    if os.getenv("SW_DEMO_TRACE", "").strip().lower() not in _TRUTHY:
+        return
+    import time
+
+    run = adapter._handle_com_operation
+
+    def traced(operation_name, operation_func, *args, **kwargs):  # noqa: ANN001, ANN202
+        print(f"[live] {time.strftime('%H:%M:%S')} {operation_name} ...", flush=True)
+        result = run(operation_name, operation_func, *args, **kwargs)
+        status = getattr(result.status, "value", result.status)
+        print(
+            f"[live] {time.strftime('%H:%M:%S')} {operation_name}: {status}",
+            flush=True,
+        )
+        return result
+
+    adapter._handle_com_operation = traced
+
+
 @pytest_asyncio.fixture
 async def live_adapter() -> AsyncIterator[object]:
     """A connected ``PyWin32Adapter``; disconnected on teardown."""
@@ -372,6 +400,7 @@ async def live_adapter() -> AsyncIterator[object]:
     _require_running_solidworks()
     adapter = PyWin32Adapter({})
     await adapter.connect()
+    _trace_steps(adapter)
     try:
         yield adapter
     finally:

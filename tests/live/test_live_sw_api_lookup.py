@@ -25,6 +25,7 @@ from fastmcp import Client, FastMCP
 
 from solidworks_mcp.config import SolidWorksMCPConfig
 from solidworks_mcp.tools.docs_discovery import register_docs_discovery_tools
+from tests.live import coupon
 from tests.live.evidence import evidence
 
 
@@ -211,40 +212,11 @@ async def test_a_made_up_name_and_a_wrong_casing_are_caught(agent: _Agent) -> No
     assert "spells it 'ViewZoomtofit2'" in casing["result"]["note"]
 
 
-def _hole_face(box: dict[str, Any]) -> str:
-    """A ``face:x,y,z`` point on the coupon face the hole is cut from.
-
-    The coupon is sketched on the Top Plane and extruded 15 mm, so the
-    15 mm axis is its height and the face at 0 on it is the sketch face,
-    which the hole opens onto. The point is 5 mm in from a corner, clear of
-    the hole at the face's centre. Read from the measured box, not assumed.
-
-    Args:
-        box: The part's bounding box in mm (``min``, ``max``, ``size``).
-
-    Returns:
-        str: The face spec, in metres, for ``add_chamfer``'s ``edge_names``.
-    """
-    height_axis = min(range(3), key=lambda axis: abs(box["size"][axis] - 15.0))
-    point = [box["min"][axis] + 5.0 for axis in range(3)]
-    low, high = box["min"][height_axis], box["max"][height_axis]
-    point[height_axis] = low if abs(low) <= abs(high) else high
-    return "face:" + ",".join(f"{value / 1000.0:g}" for value in point)
-
-
 @pytest.mark.asyncio
 async def test_a_lookup_settles_where_a_call_lives_then_the_tool_runs(
     scratch, tmp_path, monkeypatch
 ) -> None:
     """Demo 4: InsertFeatureChamfer is on IFeatureManager (runbook #12), then a real chamfer."""
-    from tests.live.test_live_sw_add_chamfer_tool import (
-        _BLOCK_EDGE_LENGTH_MM,
-        _HOLE_RADIUS_MM,
-        _expected_circular_chamfer_volume,
-        _expected_straight_chamfer_volume,
-        _heat_insert_coupon,
-    )
-
     monkeypatch.chdir(tmp_path)
     adapter = scratch.adapter
     async with Client(await _server(adapter)) as client:
@@ -262,40 +234,37 @@ async def test_a_lookup_settles_where_a_call_lives_then_the_tool_runs(
             method="InsertFeatureChamfer",
         )
 
-        await _heat_insert_coupon(adapter)
-        summary = await adapter.get_model_geometry_summary()
-        assert summary.is_success, summary.error
-        box = summary.data["bounding_box_mm"]
-        face = _hole_face(box)
+        part = await coupon.build(adapter)
         evidence(
             "The block as built: the 15 mm axis is its height",
-            {"bounding_box_mm": box, "face_with_the_hole": face},
+            {"bounding_box_mm": part.box, "face_with_the_hole": part.hole_face},
         )
-        before = await adapter.get_mass_properties()
+        before = await coupon.volume(adapter)
         chamfer = await agent.call(
             "add_chamfer, which calls IFeatureManager.InsertFeatureChamfer",
             "add_chamfer",
             distance=0.5,
-            edge_names=[face],
+            edge_names=[part.hole_face],
         )
-        after = await adapter.get_mass_properties()
-        removed = before.data.volume - after.data.volume
-        # The hole rim plus the face's four 30 mm edges; corners overlap a
-        # little, so the true value sits just under this sum.
-        expected = _expected_circular_chamfer_volume(
-            _HOLE_RADIUS_MM, 0.5
-        ) + 4 * _expected_straight_chamfer_volume(_BLOCK_EDGE_LENGTH_MM, 0.5)
+        removed = before - await coupon.volume(adapter)
+        # The hole rim plus the face's four 30 mm edges, whose four mitred
+        # corners are removed once each: 17.1241 mm^3.
+        expected = (
+            coupon.circular_chamfer_volume(coupon.HOLE_RADIUS_MM, 0.5)
+            + 4 * coupon.straight_chamfer_volume(coupon.EDGE_MM, 0.5)
+            - 4 * coupon.chamfer_corner_overlap(0.5)
+        )
         evidence(
             "Material the chamfer removed (mm^3)",
-            {"removed": round(removed, 2), "hole_rim_plus_4_edges": round(expected, 2)},
+            {"removed": round(removed, 4), "exact": round(expected, 4)},
         )
 
     assert wrong["result"]["found"] is False
     assert right["result"]["found"] is True
     assert len(right["result"]["parameters"]) == 8
     assert chamfer["status"] == "success", chamfer
-    # A side face (two 30 mm and two 15 mm edges) gives about 11.1 mm^3.
-    assert expected * 0.9 < removed <= expected, (removed, expected)
+    # A side face (two 30 mm and two 15 mm edges) gives 11.0833 mm^3.
+    assert removed == pytest.approx(expected, abs=coupon.VOLUME_TOLERANCE_MM3)
 
 
 @pytest.mark.asyncio

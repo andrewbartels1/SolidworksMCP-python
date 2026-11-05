@@ -57,4 +57,4 @@
 
 - [x] 10.1 ruff, the non-live suite at 100% coverage, strict docs build, `openspec validate --strict`
 - [x] 10.2 Live demo `tests/live/test_live_sw_api_lookup.py` through `fastmcp.Client` with `evidence(...)`: the description an agent sees; cold start then reuse; `OpenDoc6` and `SaveBMP` signatures; made-up member and casing note; `InsertFeatureChamfer` on `IFeatureManager` not `IModelDocExtension`, then `add_chamfer` on a scratch part; the not-installed year. Run one at a time with `live_demo.ps1`, with the user's permission
-- [ ] 10.3 PR closing #195
+- [x] 10.3 PR closing #195 (#200)

@@ -20,10 +20,14 @@
 # 10 s countdown comes first: bring SolidWorks to the front and leave it
 # uncovered, as the recorder copies the screen. Holds are shorter, since the
 # recording shows every step anyway.
+#
+# -Trace prints every SolidWorks call with a timestamp as it starts and ends,
+# so a sound or flash in SolidWorks can be matched to the call behind it.
 param(
     [Parameter(Mandatory = $true)][string]$Test,
     [string]$CaptureDir = "",
     [switch]$Record,
+    [switch]$Trace,
     [double]$Speed = 5.0
 )
 
@@ -36,6 +40,7 @@ $env:SW_DEMO_HOLD_SECONDS = "6"
 # Close every open document before the test and leave its part open after.
 $env:SW_DEMO_KEEP_OPEN = "true"
 $env:SW_DEMO_CAPTURE_DIR = $CaptureDir
+$env:SW_DEMO_TRACE = if ($Trace) { "true" } else { "" }
 if ($Record) {
     $env:SW_DEMO_RECORD = "true"
     $env:SW_DEMO_RECORD_COUNTDOWN = "10"
