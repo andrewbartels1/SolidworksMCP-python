@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An agent skill for using the server** (#175). `solidworks-mcp skill
+  install` puts the `solidworks-mcp` skill in Claude Code's skills folder
+  (`--project` or `--dir` for others); it covers the build order, units
+  (and the inputs that take metres), choosing faces and edges, checking
+  results with `verify_model`, recovering from errors, the tools that don't
+  work yet and the known faults. The server also serves it as
+  `skill://solidworks-mcp/SKILL.md` and sends short usage instructions when
+  a client connects. A test fails if the skill names a tool that is gone or
+  recommends one that can't run.
 - **The server takes `--year`**, the installed SolidWorks release it works
   with (`uvx solidworks-mcp-python --year 2026`). It is required for real
   SolidWorks and `setup` writes it into every client entry, from the newest

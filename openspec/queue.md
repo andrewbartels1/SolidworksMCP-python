@@ -6,12 +6,12 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-04.
+Last updated 2026-11-05.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
-| 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` | Plan approved 2026-11-04; three PRs: (1) standard, check and hints (merged, #202), (2) the eight worst-scoring modules (merged, #203), (3) the other six (built, in review) |
-| 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | not yet written | Next |
+| 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` (archived) | Done 2026-11-05 (#202, #203, #204). Left: after the next release, ask Glama for a rescan and record the score in the internal assessment |
+| 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` | Plan written 2026-11-05, in review |
 | 3 | `--selftest` command and a compatibility-report issue template | #179 | not yet written | |
 | 4 | README: COM API coverage audit and licence-tier tags | #79 | not yet written | |
 | 5 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
@@ -50,6 +50,10 @@ Found while rewriting the descriptions (39 in all).
 - **Analysis (2):** `analyze_geometry`, `get_material_properties`.
 
 ## Small faults (item 10)
+
+When one is fixed, remove it from the agent skill's
+`src/solidworks_mcp/skills/solidworks-mcp/references/errors-and-limits.md`
+in the same change.
 
 - `execute_macro` ignores `repeat_count`: it runs the macro once, but its
   message says "executed N times".

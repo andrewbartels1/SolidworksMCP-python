@@ -600,7 +600,7 @@ End Sub'''
     async def generate_vba_batch_export(input_data: VBABatchInput) -> dict[str, Any]:
         """Write a VBA macro that opens every matching file in a folder and saves a STEP copy of each to another folder.
 
-        To export files directly, use `batch_export`. The macro comes back as text for
+        To export one file directly, use `export_step`. The macro comes back as text for
         the SolidWorks VBA editor (Alt+F11); `execute_macro` runs only binary .swp
         files, so it can't run this directly. Read-only. Nothing runs in SolidWorks.
         Returns: `vba_code`, the `parameters` used and `usage_instructions`.
