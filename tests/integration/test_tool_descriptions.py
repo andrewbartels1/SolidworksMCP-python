@@ -28,6 +28,8 @@ _REWRITTEN: set[str] = {
     "drawing",
     "drawing_analysis",
     "drawing_automation",
+    "export",
+    "file_management",
     "macro_recording",
     "template_management",
     "vba_generation",

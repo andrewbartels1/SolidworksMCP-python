@@ -573,35 +573,21 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def save_file(input_data: SaveFileInput) -> dict[str, Any]:
-        """Save the current SolidWorks model.
+        """Save the active document, to its own path or to a new path in its own format.
 
-        Saves the currently active SolidWorks document to its existing file location. Essential
-        for preserving work and maintaining document version control. Handles both modified and
-        unmodified documents based on force_save setting.
+        Use it after changes you want to keep. For a part or an assembly with checks on
+        the target path (folder exists, no accidental overwrite), use `save_part` or
+        `save_assembly`; to write another format, use `save_as` or an `export_*` tool.
+        Needs: an open, active document, already saved once unless you give a path.
+        Changes: writes the file; a different file at `file_path` is replaced. Returns:
+        `data` from the save (usually empty).
 
         Args:
-            input_data (SaveFileInput): The input data value.
+            input_data: The save. Nothing is required: give `file_path` to save to a
+                new path, or omit it to save in place; `force_save` is not used.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Force save current model
-                            result = await save_file({"force_save": True})
-
-                            # Save only if modified
-                            result = await save_file({"force_save": False})
-
-                            if result["status"] == "success":
-                                print(f"File saved at {result['timestamp']}")
-                            ```
-
-                        Note:
-                            - Requires an open SolidWorks document
-                            - Preserves original file location and format
-                            - Updates document timestamp and metadata
-                            - No effect if document is read-only
+            dict[str, Any]: The save result.
         """
         input_data = _coerce_input(SaveFileInput, input_data)
         require_capability(
@@ -620,40 +606,21 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def save_as(input_data: SaveAsInput) -> dict[str, Any]:
-        """Save the current model to a new location or format.
+        """Save the active document under a new path, as a SolidWorks file or in an exchange format such as STEP or IGES.
 
-        Saves the currently active SolidWorks document with a new filename, location, or file
-        format. Supports multiple export formats for interoperability with other CAD systems and
-        manufacturing workflows.
+        For a SolidWorks format (solidworks, sldprt, sldasm, slddrw) it saves a copy
+        like File > Save As; any other `format_type` is passed to the exporter. For one
+        known format with its options, prefer `export_step`, `export_stl` and the other
+        `export_*` tools. Needs: an open, active document. Changes: writes the file,
+        replacing one already at `file_path` (`overwrite` is not checked). Returns:
+        `file_path` and `format`.
 
         Args:
-            input_data (SaveAsInput): The input data value.
+            input_data: The target. `file_path` is required; `format_type` defaults
+                to "solidworks", and `overwrite` is not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Save as new SolidWorks file
-                            result = await save_as({
-                                "file_path": "C:/Projects/bracket_v2.sldprt",
-                                "format_type": "solidworks",
-                                "overwrite": False
-                            })
-
-                            # Export to STEP format
-                            result = await save_as({
-                                "file_path": "C:/Exports/bracket.step",
-                                "format_type": "step",
-                                "overwrite": True
-                            })
-
-                            # Export for 3D printing
-                            result = await save_as({
-                                "file_path": "C:/3DPrint/bracket.stl",
-                                "format_type": "stl"
-                            })
-                            ```
+            dict[str, Any]: The path written.
         """
         input_data = _coerce_input(SaveAsInput, input_data)
         if hasattr(adapter, "save_file") and input_data.format_type.lower() in {
@@ -693,44 +660,15 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def get_file_properties() -> dict[str, Any]:
-        """Get properties of the current SolidWorks file.
+        """Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes.
 
-        Retrieves comprehensive metadata and properties of the currently active SolidWorks
-        document. Provides essential file information for document management, version control,
-        and project organization.
-
-        Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await get_file_properties()
-
-                            if result["status"] == "success":
-                                props = result["properties"]
-
-                                # Basic file info
-                                file_info = props["file_info"]
-                                print(f"File: {file_info['file_name']}")
-                                print(f"Size: {file_info['file_size']}")
-                                print(f"Type: {file_info['file_type']}")
-
-                                # Technical properties
-                                tech = props["technical_properties"]
-                                print(f"Material: {tech['material']}")
-                                print(f"Units: {tech['units']}")
-
-                                # Document info
-                                doc = props["document_info"]
-                                print(f"Author: {doc['author']}")
-                                print(f"Description: {doc['description']}")
-                            ```
-
-                        Note:
-                            - Requires an active SolidWorks document
-                            - Properties may vary based on document type
-                            - Some properties may be empty if not set
-                            - Technical properties depend on document configuration
+        Use it to check what is open and whether it has unsaved changes before saving or
+        closing. For the model itself (rebuild status included), use `get_model_info`;
+        for custom properties, use `get_custom_properties`. Needs: an open, active
+        document. Read-only. Returns: `properties` with `file_name`, `file_path`,
+        `file_size_bytes`, `created_date` and `modified_date` (Unix timestamps; empty
+        for a document never saved), `document_type`, `configuration`, `is_dirty` and
+        `feature_count`.
         """
         require_capability(
             adapter, "get_model_info", "Active adapter does not support model metadata"
@@ -777,13 +715,14 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def get_model_info() -> dict[str, Any]:
-        """Get metadata for the active SolidWorks document.
+        """Report the active document's title, path, type, active configuration, unsaved changes, feature count and rebuild status.
 
-        Returns a compact summary of the current model context that is useful for read-before-
-        write LLM flows (document type, active configuration, and feature count).
-
-        Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+        Use it first in a session, to see which document is active (it follows a switch
+        made in the SolidWorks window). For file size and dates, use
+        `get_file_properties`; for every open document, use `list_open_documents`.
+        Needs: an open document. Read-only. Returns: `model_info` with `title`, `path`,
+        `type`, `configuration`, `is_dirty`, `feature_count` and `rebuild_status` (0
+        rebuilt, 1 needs a rebuild).
         """
         require_capability(
             adapter, "get_model_info", "Active adapter does not support get_model_info"
@@ -798,16 +737,21 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def list_features(input_data: ListFeaturesInput) -> dict[str, Any]:
-        """List feature-tree entries for the active SolidWorks document.
+        """List the feature tree of the active part or assembly, in order.
 
-        Useful for read-before-write workflows where the agent must inspect existing model
-        structure before adding or editing downstream features.
+        Use it before editing a model, to find a feature's exact name for
+        `delete_feature`, `suppress_feature` or `rename_feature`. For an assembly it
+        also lists each component's features, down to `max_assembly_depth` levels.
+        Needs: an open part or assembly. Read-only. Returns: `features` (each with
+        `name`, `type`, `suppressed` and, in an assembly, `component`), `count`, and
+        `assembly_tree`, the same list grouped by component.
 
         Args:
-            input_data (ListFeaturesInput): The input data value.
+            input_data: What to list. Nothing is required: `include_suppressed`
+                (off) and `max_assembly_depth` (2) have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The feature list.
         """
         input_data = _coerce_input(ListFeaturesInput, input_data)
         require_capability(
@@ -833,19 +777,14 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def get_selected_entities() -> dict[str, Any]:
-        """Report the faces/edges/vertices currently selected in the live SolidWorks UI.
+        """Describe the faces, edges and vertices selected in the SolidWorks window right now.
 
-        Use this to find out exactly what the user has clicked on in SolidWorks
-        before applying a feature (e.g. "chamfer the face I selected") instead
-        of guessing from coordinates or a screenshot. Each entry includes
-        enough geometry (bounding box, center, area/length, normal where
-        applicable) to identify which face/edge is which, and the center
-        coordinates can be fed straight into add_chamfer/add_fillet's
-        "face:x,y,z" or coordinate edge_names syntax.
-
-        Returns:
-            dict[str, Any]: ``entities`` (list of selection descriptors) and
-            ``count`` on success.
+        Use it when the user has clicked something and says "this face": it reads the
+        selection instead of guessing from a screenshot. To select edges yourself, use
+        `select_face_edges`. Needs: an open document. Read-only. Returns: `entities`
+        (each with `index` and `type`; a face adds `bounding_box_mm`, `center_mm`,
+        `area_mm2` and `normal` when flat, an edge `start_mm`, `end_mm` and straight-
+        line `length_mm`, a vertex `point_mm`) and `count`.
         """
         require_capability(
             adapter,
@@ -865,17 +804,22 @@ async def register_file_management_tools(
     async def classify_feature_tree(
         input_data: ClassifyFeatureTreeInput,
     ) -> dict[str, Any]:
-        """Classify the active model into a feature family from model-info and tree data.
+        """Classify the active model's kind (part, sheet metal, assembly, drawing and so on) from its feature tree, and suggest how to work on it.
 
-        This is a read-before-write helper for delegation. It summarizes whether the current
-        document looks like a direct-MCP solid, sheet metal workflow, advanced VBA-backed part,
-        assembly, drawing, or an insufficient-evidence case.
+        Use it before rebuilding or editing an unfamiliar model, to pick a workflow. It
+        reads the model unless you pass `model_info` and `features` you already have
+        (from `get_model_info` and `list_features`). Needs: an open document, unless
+        both are passed. Read-only. Returns: `classification` with `family`,
+        `recommended_workflow`, `confidence`, `needs_vba`, `evidence`, `warnings`,
+        `next_actions` and `feature_count`, plus the `model_info` and `features` used.
 
         Args:
-            input_data (ClassifyFeatureTreeInput): The input data value.
+            input_data: What to classify. Nothing is required: pass `model_info`
+                and `features` to classify them without reading the model;
+                `include_suppressed` is off by default.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The classification.
         """
         input_data = _coerce_input(ClassifyFeatureTreeInput, input_data)
         model_info = input_data.model_info
@@ -919,13 +863,11 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def list_configurations() -> dict[str, Any]:
-        """List configuration names for the active SolidWorks document.
+        """List the names of the active model's configurations.
 
-        Returns all available configuration names so callers can select a stable target before
-        invoking feature or export operations.
-
-        Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+        Use it to see which configurations a part or assembly has. Needs: an open part
+        or assembly. Read-only. Returns: `configurations` (names) and `count`.
+        `get_model_info` says which one is active.
         """
         require_capability(
             adapter,
@@ -943,16 +885,20 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def manage_file_properties(input_data: FileOperationInput) -> dict[str, Any]:
-        """Read, update, copy, move, rename, or delete file-related properties.
+        """Read or change the file-level properties of a SolidWorks file on disk.
 
-        Uses the requested operation and file paths to manage SolidWorks file metadata or
-        related file lifecycle tasks through the active adapter.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To read or
+        set custom properties on the active model today, use `get_custom_properties` and
+        `set_custom_property`. Changes: once available, the file's properties. Returns:
+        once available, the properties under `data`.
 
         Args:
-            input_data (FileOperationInput): The input data value.
+            input_data: The operation. `operation` is required; `file_path` or
+                `source_path`, `properties` and `include_system` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The properties, or a `not_supported` error.
         """
         input_data = _coerce_input(FileOperationInput, input_data)
         require_capability(
@@ -972,16 +918,20 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def convert_file_format(input_data: FormatConversionInput) -> dict[str, Any]:
-        """Convert a SolidWorks file from one format to another.
+        """Convert a SolidWorks file on disk to another format without opening it first.
 
-        Supports exporting source files to target formats such as STEP, IGES, STL, PDF, or other
-        adapter-supported conversion outputs.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Today, open
+        the file with `open_model` and use `save_as` or an `export_*` tool such as
+        `export_step`. Changes: once available, writes the converted file. Returns: once
+        available, the converted file under `data`.
 
         Args:
-            input_data (FormatConversionInput): The input data value.
+            input_data: The conversion. `source_file` and `target_format` are
+                required; `target_file`, `quality` and `units` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The conversion, or a `not_supported` error.
         """
         input_data = _coerce_input(FormatConversionInput, input_data)
         require_capability(
@@ -1001,16 +951,21 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def batch_file_operations(input_data: FileOperationInput) -> dict[str, Any]:
-        """Run a file operation across multiple files as a batch workflow.
+        """Copy, move, rename or delete SolidWorks files on disk in one call.
 
-        Intended for repetitive file management tasks such as copying, moving, renaming, or
-        deleting groups of SolidWorks documents.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To copy an
+        assembly with every part it uses, use `pack_and_go_assembly`. Changes: once
+        available, copies, moves, renames or deletes files. Returns: once available, a
+        per-file result under `data`.
 
         Args:
-            input_data (FileOperationInput): The input data value.
+            input_data: The operation. `operation` (copy, move, delete or rename) is
+                required; `source_path`, `target_path` and `parameters` have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The results, or a `not_supported` error.
         """
         input_data = _coerce_input(FileOperationInput, input_data)
         require_capability(
@@ -1030,30 +985,19 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def load_part(input_data: LoadPartInput) -> dict[str, Any]:
-        """Load (open) a SolidWorks part file.
+        """Open a part (.sldprt) from disk and make it the active document.
 
-        Convenience wrapper that opens a .sldprt file and makes it the active document. Provides
-        a simpler alternative to open_model for parts.
+        Use it to start work on an existing part; for any document type, use
+        `open_model`, and to switch to a document that is already open, use
+        `activate_document`. A path that isn't a .sldprt is refused. Needs: the file on
+        disk. Changes: opens the part (no file is written). Returns: `model` with
+        `name`, `type`, `path` and `configuration`.
 
         Args:
-            input_data (LoadPartInput): The input data value.
+            input_data: The part. `file_path` (a .sldprt) is required.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await load_part({
-                                "file_path": "C:/Projects/bracket.sldprt"
-                            })
-
-                            if result["status"] == "success":
-                                print(f"Loaded: {result['model']['name']}")
-                            ```
-
-                        Note:
-                            - File must be a valid .sldprt (part) file
-                            - Path must be absolute and accessible
+            dict[str, Any]: The opened part.
         """
         input_data = _coerce_input(LoadPartInput, input_data)
         # Ensure file path ends with .sldprt
@@ -1081,30 +1025,19 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def load_assembly(input_data: LoadAssemblyInput) -> dict[str, Any]:
-        """Load (open) a SolidWorks assembly file.
+        """Open an assembly (.sldasm) from disk and make it the active document.
 
-        Convenience wrapper that opens a .sldasm file and makes it the active document. Provides
-        a simpler alternative to open_model for assemblies.
+        Use it to start work on an existing assembly; for any document type, use
+        `open_model`, and to switch to a document that is already open, use
+        `activate_document`. A path that isn't a .sldasm is refused. Needs: the file on
+        disk. Changes: opens the assembly (no file is written). Returns: `model` with
+        `name`, `type`, `path` and `configuration`.
 
         Args:
-            input_data (LoadAssemblyInput): The input data value.
+            input_data: The assembly. `file_path` (a .sldasm) is required.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await load_assembly({
-                                "file_path": "C:/Projects/machine_assembly.sldasm"
-                            })
-
-                            if result["status"] == "success":
-                                print(f"Loaded: {result['model']['name']}")
-                            ```
-
-                        Note:
-                            - File must be a valid .sldasm (assembly) file
-                            - Path must be absolute and accessible
+            dict[str, Any]: The opened assembly.
         """
         input_data = _coerce_input(LoadAssemblyInput, input_data)
         # Ensure file path ends with .sldasm
@@ -1134,35 +1067,20 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def save_part(input_data: SavePartInput | None = None) -> dict[str, Any]:
-        """Save the active SolidWorks part document.
+        """Save the active part in place, or as a new .sldprt with the target path checked first.
 
-        Convenience wrapper that saves the currently active part. If no file_path is provided,
-        saves to the existing location. Otherwise, saves as a new file.
+        Before writing to a new path it checks the folder exists and is writable,
+        changes the extension to .sldprt, and refuses an existing file unless
+        `overwrite` is on. For an assembly, use `save_assembly`; for other formats, use
+        `save_as` or an `export_*` tool. Needs: an open, active part. Changes: writes
+        the part file. Returns: `file_path` when saved to a new path.
 
         Args:
-            input_data (SavePartInput | None): The input data value. Defaults to None.
+            input_data: The save. Nothing is required: give `file_path` for a new
+                path or omit it to save in place; `overwrite` is off.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Save to current location
-                            result = await save_part()
-
-                            # Save as new file
-                            result = await save_part({
-                                "file_path": "C:/Projects/bracket_v2.sldprt",
-                                "overwrite": False
-                            })
-
-                            if result["status"] == "success":
-                                print(f"Part saved to {result['file_path']}")
-                            ```
-
-                        Note:
-                            - Active document must be a part file
-                            - When saving to new location, ensure path ends with .sldprt
+            dict[str, Any]: The save result.
         """
         if input_data is None:
             input_data = SavePartInput()
@@ -1199,35 +1117,25 @@ async def register_file_management_tools(
     async def save_assembly(
         input_data: SaveAssemblyInput | None = None,
     ) -> dict[str, Any]:
-        """Save the active SolidWorks assembly document.
+        """Save the active assembly in place, or as a new .sldasm, optionally copying the parts it uses alongside.
 
-        Convenience wrapper that saves the currently active assembly. If no file_path is
-        provided, saves to the existing location. Otherwise, saves as a new file.
+        Before writing to a new path it checks the folder exists and is writable,
+        changes the extension to .sldasm, and refuses an existing file unless
+        `overwrite` is on. With `include_references`, it instead copies the assembly
+        file as last saved, and the files it references, into the new folder; unsaved
+        changes are left out and references are not updated. For a self-contained copy,
+        use `pack_and_go_assembly`. Needs: an open, active assembly, saved once for
+        `include_references`. Changes: writes the assembly file (and copies). Returns:
+        `file_path`, plus `copied_files` and `missing_source_files` when copying
+        references.
 
         Args:
-            input_data (SaveAssemblyInput | None): The input data value. Defaults to None.
+            input_data: The save. Nothing is required: give `file_path` for a new
+                path or omit it to save in place; `overwrite` and
+                `include_references` are off.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Save to current location
-                            result = await save_assembly()
-
-                            # Save as new file
-                            result = await save_assembly({
-                                "file_path": "C:/Projects/machine_v2.sldasm",
-                                "overwrite": False
-                            })
-
-                            if result["status"] == "success":
-                                print(f"Assembly saved to {result['file_path']}")
-                            ```
-
-                        Note:
-                            - Active document must be an assembly file
-                            - When saving to new location, ensure path ends with .sldasm
+            dict[str, Any]: The save result.
         """
         if input_data is None:
             input_data = SaveAssemblyInput()
@@ -1267,37 +1175,21 @@ async def register_file_management_tools(
     async def pack_and_go_assembly(
         input_data: PackAndGoInput | None = None,
     ) -> dict[str, Any]:
-        """Copy a SolidWorks assembly and all its referenced parts to a self-contained folder.
+        """Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go).
 
-        Enumerates every component referenced by the active assembly, copies the
-        assembly and each part into ``target_dir``, then rewrites the stored
-        component paths inside the copied assembly so it opens without any
-        dependency on the original file locations — equivalent to the SolidWorks
-        GUI Pack-and-Go operation.
+        Use it to hand over or archive an assembly as a self-contained folder. It
+        refuses a folder that already has files unless `overwrite` is on, and can add an
+        isometric PNG preview. Needs: the .sldasm on disk. Changes: writes the copies
+        into `target_dir`, creating it if needed. Returns: `source_assembly`,
+        `target_dir`, `copied_files`, `source_files`, `all_files_saved` and, with a
+        preview, `preview_image`.
 
         Args:
-            input_data (PackAndGoInput | None): The input data value. Defaults to None.
+            input_data: The copy. `source_path` (a .sldasm) and `target_dir` are
+                required; `export_preview` and `overwrite` are off.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await pack_and_go_assembly({
-                                "source_path": "C:/Projects/robot_arm.sldasm",
-                                "target_dir": "C:/Exports/robot_arm_pkg",
-                                "export_preview": True
-                            })
-
-                            if result["status"] == "success":
-                                print(result["copied_files"])
-                                print(result["all_files_saved"])
-                            ```
-
-                        Note:
-                            - SolidWorks must be open with the assembly loaded or openable
-                            - target_dir is created if it does not exist
-                            - Use overwrite=True to replace files in an existing target_dir
+            dict[str, Any]: The files copied.
         """
         if input_data is None:
             input_data = PackAndGoInput(source_path="", target_dir="")
@@ -1356,20 +1248,11 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def list_open_documents() -> dict[str, Any]:
-        """List every SolidWorks document that is currently open.
+        """List every document open in SolidWorks and say which one is active.
 
-        Read-only — does not change which document is active. Use it to
-        discover what is open (an assembly plus its parts, a drawing plus its
-        model) before switching with ``activate_document``.
-
-        Returns:
-            dict[str, Any]: ``status`` and ``documents`` — a list of
-            ``{title, path, type, is_active}`` entries, plus ``count``.
-
-        Example:
-            ```python
-            await list_open_documents()
-            ```
+        Use it before `activate_document`, or when tool calls seem to act on the wrong
+        document. Needs: SolidWorks running. Read-only. Returns: `documents` (each with
+        `title`, `path`, `type` and `is_active`) and `count`.
         """
         result = await adapter.list_open_documents()
         require_success(result, context="Failed to list open documents")
@@ -1390,22 +1273,20 @@ async def register_file_management_tools(
     async def activate_document(
         input_data: ActivateDocumentInput,
     ) -> dict[str, Any]:
-        """Switch which open document is the active one.
+        """Make an already-open document the active one, so the next tools act on it.
 
-        Matches the argument against open documents by title, full path, or
-        file name (case-insensitive), calls ``ActivateDoc3``, and reads the
-        active document back to confirm the switch took.
+        Match it by window title, full path or file name (not case-sensitive); see
+        `list_open_documents`. To open a file that isn't open yet, use `open_model`.
+        Needs: the document open in SolidWorks. Changes: the active document. Returns:
+        `data` with `activated` (the title) and `verified` (read back from SolidWorks;
+        null when it couldn't be read). No match is an error that lists the open
+        documents.
 
         Args:
-            input_data (ActivateDocumentInput): Which document to activate.
+            input_data: The document. `title_or_path` is required.
 
         Returns:
-            dict[str, Any]: Status and the title switched to.
-
-        Example:
-            ```python
-            await activate_document({"title_or_path": "bracket.SLDPRT"})
-            ```
+            dict[str, Any]: The activated document.
         """
         input_data = _coerce_input(ActivateDocumentInput, input_data)
         result = await adapter.activate_document(input_data.title_or_path)
@@ -1426,27 +1307,20 @@ async def register_file_management_tools(
     async def save_body_as_part(
         input_data: SaveBodyAsPartInput,
     ) -> dict[str, Any]:
-        """Extract one solid body from the active multibody part to a new file.
+        """Save one solid body of the active multibody part as a new part file (Insert > Features > Save Bodies).
 
-        Runs SolidWorks' Save Bodies on a single named body, writing a
-        standalone part to ``file_path``. The body is matched by name against
-        the active part's solid bodies; the response lists every solid body
-        found, so an unknown name reports the real options. Success is
-        confirmed by the file existing on disk afterwards.
+        Use it to split a multibody part into parts, e.g. after `create_extrusion`
+        without merging. Needs: an open, active part with the named body and an existing
+        target folder. Changes: adds a Save Bodies feature to the part and writes the
+        new .sldprt. Returns: `data` with `body`, `file_path`, `feature` and
+        `solid_bodies` (every body name, to correct a wrong one).
 
         Args:
-            input_data (SaveBodyAsPartInput): The body name and target path.
+            input_data: The body. `body_name` and `file_path` (a .sldprt) are
+                required.
 
         Returns:
-            dict[str, Any]: Status, the written path, and the solid-body list.
-
-        Example:
-            ```python
-            await save_body_as_part({
-                "body_name": "Boss-Extrude1",
-                "file_path": "C:/parts/bracket_body.sldprt"
-            })
-            ```
+            dict[str, Any]: The file written.
         """
         require_capability(
             adapter,
