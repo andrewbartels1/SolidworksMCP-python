@@ -31,7 +31,7 @@ sketch, its plane or the depth rather than retrying the same call.
 
 ### `open_model`
 
-Open a SolidWorks model (part, assembly, or drawing).
+Open a part, assembly or drawing from disk and make it the active document.
 
 **Prerequisite:** SolidWorks running
 
@@ -53,7 +53,7 @@ Open a SolidWorks model (part, assembly, or drawing).
 
 ### `create_part`
 
-Create a new SolidWorks part document.
+Create a new, empty part document and make it active, ready for `create_sketch`.
 
 **Prerequisite:** SolidWorks running
 
@@ -78,7 +78,7 @@ Create a new SolidWorks part document.
 
 ### `create_assembly`
 
-Create a new SolidWorks assembly document.
+Create a new, empty assembly document and make it active, ready for `insert_component`.
 
 **Prerequisite:** SolidWorks running
 
@@ -103,7 +103,7 @@ Create a new SolidWorks assembly document.
 
 ### `create_drawing`
 
-Create a new SolidWorks drawing document.
+Create a new, empty drawing document and make it active.
 
 **Prerequisite:** SolidWorks running
 
@@ -128,7 +128,7 @@ Create a new SolidWorks drawing document.
 
 ### `close_model`
 
-Close the current SolidWorks model.
+Close the active document, saving it first only if asked.
 
 **Prerequisite:** An active open document
 
@@ -148,7 +148,7 @@ Close the current SolidWorks model.
 
 ### `create_extrusion`
 
-Create an extrusion feature from the active sketch.
+Extrude the sketch you just closed into a solid boss, added to the active part.
 
 **Prerequisite:** Active part with an active sketch (exit sketch first with exit_sketch)
 
@@ -181,7 +181,7 @@ Create an extrusion feature from the active sketch.
 
 ### `create_revolve`
 
-Create a revolve feature from the active sketch.
+Revolve the sketch you just closed around the centreline drawn in it, adding a solid to the active part.
 
 **Prerequisite:** Active part with an active sketch containing the profile and axis
 
@@ -213,7 +213,7 @@ Create a revolve feature from the active sketch.
 
 ### `get_dimension`
 
-Get the value of a dimension from the current model.
+Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
 **Prerequisite:** Active document with named dimensions
 
@@ -234,7 +234,7 @@ Get the value of a dimension from the current model.
 
 ### `set_dimension`
 
-Set the value of a dimension in the current model.
+Change one length dimension of the active model, in mm, and rebuild.
 
 **Prerequisite:** Active document with named dimensions
 
@@ -259,7 +259,7 @@ Set the value of a dimension in the current model.
 
 ### `set_units`
 
-Set the active document's linear unit system (`mm`, `cm`, `m`, `in`, `ft`; aliases such as `inch` / `millimeters` accepted). The setting is applied and read back — a mismatch is reported as an error rather than a false success.
+Set the active document's length units: mm, cm, m, in or ft.
 
 **Prerequisite:** Active document
 
@@ -281,7 +281,7 @@ Set the active document's linear unit system (`mm`, `cm`, `m`, `in`, `ft`; alias
 
 ### `rename_feature`
 
-Rename a feature on the feature tree. SolidWorks silently refuses a rename onto a name another feature already uses, so the new name is read back and a mismatch is reported as an error. Renaming a feature to its current name is a no-op success.
+Rename a feature in the active model's feature tree.
 
 **Prerequisite:** Active document containing the named feature
 
@@ -305,7 +305,7 @@ Rename a feature on the feature tree. SolidWorks silently refuses a rename onto 
 
 ### `select_feature`
 
-Select a named feature, sketch, reference plane or assembly component. Replaces the current selection by default; `append: true` adds to it. A name that cannot be selected is an **error** naming it — never a success with `selected: false`. The response reports the name actually matched and how many entities are now selected.
+Select a feature, sketch, plane or component by name in the active document.
 
 **Prerequisite:** Active document containing the named entity
 
@@ -328,7 +328,7 @@ Select a named feature, sketch, reference plane or assembly component. Replaces 
 
 ### `select_face_edges`
 
-Multi-select every edge bounding one face of the active part. Identify the face with **exactly one** of `point` (a point on the face, mm), `side` (the furthest flat face facing `top`/`bottom`/`front`/`back`/`right`/`left` or `+X`…`-Z`; top=+Y, front=+Z, right=+X as in SolidWorks' default views) or `plane` (a reference plane name — the body face lying on it). `edge_type` narrows to `linear` or `circular` edges (e.g. hole rims).
+Select every edge of one face of the active part, ready for `add_fillet` or `add_chamfer` with no edge names.
 
 The edges become the live selection, so a following `add_chamfer` / `add_fillet` with an empty `edge_names` acts on exactly them. Anything that changes the selection in between — including a click in SolidWorks — changes what is used. The response reports the face chosen (`data.face`: centre, normal, area) and each edge (`data.edges`: curve type, endpoints/length or centre/radius), so you can switch to `point` if `side` picked a different face than intended.
 
@@ -357,7 +357,7 @@ The edges become the live selection, so a following `add_chamfer` / `add_fillet`
 
 ### `rebuild_model`
 
-Force a rebuild of the active model and report exactly what is wrong. When features fail, the response is an **error** whose `data.errors` lists each failing feature with its `type`, SolidWorks error `code` and `code_name` (`swFeatureError_e`), `severity`, a `description`, the `parents` it depends on (sketches report their segment count, so an emptied sketch is called out), and a concrete `hint` for fixing it. Warnings alone still succeed and are listed. Use after `set_dimension` or other programmatic edits.
+Rebuild the active model and report each feature that fails, with the reason and a fix.
 
 **Prerequisite:** Active document
 
@@ -400,7 +400,7 @@ Force a rebuild of the active model and report exactly what is wrong. When featu
 
 ### `create_reference_point`
 
-Create a reference point on the active part. Two modes: `along_curve` places a point on the edge under `(x, y, z)` mm — either `distance` mm from the edge start or at `percent` (0–100) of its length; `face_center` places a point at the centroid of the face under `(x, y, z)` mm. The coordinate must lie on the target edge/face. `InsertReferencePoint` always returns a feature, so success is confirmed by the feature tree growing.
+Add a reference point on an edge (at a distance or percentage along it) or at the centre of a face.
 
 **Prerequisite:** Active part with the target edge/face
 

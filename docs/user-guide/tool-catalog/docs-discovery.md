@@ -14,7 +14,7 @@ Look up SolidWorks API interfaces, methods and properties, with each member's pa
 
 ### `discover_solidworks_docs`
 
-Rebuild the index on purpose; the lookups don't need it. It reads every interface in the installed SolidWorks type library, plus the VBA library references, and never starts or calls SolidWorks. The response carries a summary, the type library it read and the saved file, not the index itself.
+Rebuild the SolidWorks API index on purpose. The lookups don't need it.
 
 **Parameters:**
 
@@ -36,7 +36,7 @@ Rebuild the index on purpose; the lookups don't need it. It reads every interfac
 
 ### `search_solidworks_api_help`
 
-Search interface and member names by keyword when you don't know the exact name: `chamfer` finds `IFeatureManager.InsertFeatureChamfer`. Then call `lookup_api_method` on a match for its parameters. The response also suggests MCP tools for the task (`fallback_help`).
+Search SolidWorks API interface and member names by keyword.
 
 **Parameters:**
 
@@ -61,7 +61,7 @@ Search interface and member names by keyword when you don't know the exact name:
 
 ### `lookup_api_interface`
 
-List every indexed member (methods and properties) of a COM interface. Purpose-built for "give me the full surface of `IFeatureManager`" — more reliable than parsing full-text search results when you already know the interface name.
+List every method and property of a SolidWorks COM interface.
 
 **Parameters:**
 
@@ -81,7 +81,7 @@ List every indexed member (methods and properties) of a COM interface. Purpose-b
 
 ### `lookup_api_method`
 
-Look up one method or property before calling it. Returns its name as SolidWorks spells it, its parameters (name, type, and direction: `in`, `out` meaning SolidWorks fills it, or `in_out` meaning pass a variable by reference), its return type and a one-line description. Names match regardless of case, as COM does; when your casing differs, `note` says so. A member that doesn't exist returns `found: false` with a `note`.
+Look up one SolidWorks API method or property: parameters, return type, description.
 
 **Parameters:**
 
@@ -102,7 +102,7 @@ Look up one method or property before calling it. Returns its name as SolidWorks
 
 ### `find_related_api_members`
 
-Given an indexed interface or member name, return related members: for an interface, its own members; for a member, the other members of every interface that also exposes it, plus name-substring matches elsewhere in the index.
+Find SolidWorks API members related to an interface or member name.
 
 **Parameters:**
 

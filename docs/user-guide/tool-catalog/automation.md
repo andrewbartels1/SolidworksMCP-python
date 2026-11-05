@@ -28,7 +28,7 @@ and performance tuning as needed.
 
 ### `generate_vba_code`
 
-Generate VBA code for SolidWorks automation.
+Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, the active document and optional error handling, with the operation itself left as a TODO.
 
 **Prerequisite:** SolidWorks running
 
@@ -55,7 +55,7 @@ Generate VBA code for SolidWorks automation.
 
 ### `automation_start_macro_recording`
 
-Start recording a macro in SolidWorks.
+Start SolidWorks' macro recorder (the automation family's copy of `start_macro_recording`).
 
 **Prerequisite:** SolidWorks running
 
@@ -82,7 +82,7 @@ Start recording a macro in SolidWorks.
 
 ### `automation_stop_macro_recording`
 
-Stop recording the current macro.
+Stop a macro recording and save it (the automation family's copy of `stop_macro_recording`).
 
 **Prerequisite:** SolidWorks running
 
@@ -96,7 +96,7 @@ Stop recording the current macro.
 
 ### `batch_process_files`
 
-Perform batch operations on multiple SolidWorks files.
+Run one operation (rebuild, save as, export or property update) on every matching file in a folder.
 
 **Prerequisite:** SolidWorks running
 
@@ -126,7 +126,7 @@ Perform batch operations on multiple SolidWorks files.
 
 ### `manage_design_table`
 
-Create or manage design tables for parametric modeling.
+Create, read or update a design table (an Excel sheet that drives a model's configurations).
 
 **Prerequisite:** SolidWorks running
 
@@ -155,7 +155,7 @@ Create or manage design tables for parametric modeling.
 
 ### `execute_workflow`
 
-Execute a predefined automation workflow.
+Run a named sequence of tool steps, in order or in parallel, with an error policy.
 
 **Prerequisite:** SolidWorks running
 
@@ -181,7 +181,7 @@ Execute a predefined automation workflow.
 
 ### `create_template`
 
-Create a SolidWorks template file.
+Create a part, assembly or drawing template file (.prtdot, .asmdot, .drwdot) with standard settings.
 
 **Prerequisite:** SolidWorks running
 
@@ -213,7 +213,7 @@ Create a SolidWorks template file.
 
 ### `optimize_performance`
 
-Optimize SolidWorks performance settings.
+Review SolidWorks' performance settings and apply faster ones.
 
 **Prerequisite:** SolidWorks running
 
