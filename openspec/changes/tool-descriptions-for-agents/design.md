@@ -56,12 +56,32 @@ on every tool; a check that keeps them.
 
   Rejected: per-tool decorator arguments. That edits all 154 registrations,
   and the result is hard to review as a whole.
+- **Which FastMCP description options we use.** FastMCP 3.4.9's
+  `tool()` takes `title`, `description`, `tags`, `annotations` and `meta`,
+  and reads parameter text from `Annotated[..., Field(description=...)]`.
+  Checked against our tools on 2026-11-04:
+  - *Docstring*: kept as the one source of each description (above).
+  - *Field descriptions*: every one of the 493 fields inside our input
+    models already has a `Field(description=...)`. Nothing to rewrite;
+    the check now requires it, so a new field can't arrive undescribed.
+  - *`title` and `annotations`*: passed by the registrar from the table.
+  - *`tags`*: the registrar tags each tool with its family, the tool
+    module's name (`modeling`, `vba_generation`, ...). It costs nothing now,
+    and gives the toolsets of #176 something to filter on.
+  - Rejected: `description=` overrides and descriptions built at run time.
+    Both make a second source of truth, and nothing in a description depends
+    on run-time state. `meta` has no consumer.
+  - Not here: the server's `instructions` and a skill served over MCP.
+    They are #175's, the next change. FastMCP 3.4.9 already serves a skill
+    folder as `skill://` resources (`SkillProvider`), so that needs no
+    upgrade to FastMCP 4.
 - **What the check enforces.** For every registered tool:
   - no description starting "Handle ";
   - no generic parameter text;
+  - a description on every field of its input model;
   - a length between 120 and 1200 characters;
   - a "Read-only." or "Changes:" sentence;
-  - a hints entry.
+  - a hints entry, and a family tag.
 
   Usage guidance can't be checked mechanically, so it is reviewed per module
   in the PR.
