@@ -34,33 +34,37 @@ characters.
 
 A tool that takes one `input_data` object SHALL describe that object
 specifically: what it holds, and which fields are required. It SHALL NOT use
-a generic description such as "The input data value."
+a generic description such as "The input data value." Every field inside
+the input object SHALL have its own description.
 
 #### Scenario: Reading a tool's schema
 
 - **WHEN** a client lists the tools
 - **THEN** no tool's `input_data` description is generic
+- **AND** every field of every input object has a description
 
 ### Requirement: Behaviour hints on every tool
 
 Every registered tool SHALL carry the MCP annotations `title`,
 `readOnlyHint`, `destructiveHint` and `idempotentHint`. A tool that changes
 nothing SHALL be read-only. A tool that deletes, overwrites or closes without
-saving SHALL be destructive.
+saving SHALL be destructive. Every tool SHALL also carry one family tag,
+the name of the module that defines it.
 
 #### Scenario: Listing the tools
 
 - **WHEN** a client lists the tools
 - **THEN** each tool has a title and the three hints
 - **AND** `list_features` is read-only, and `delete_feature` is destructive
+- **AND** `create_extrusion` is tagged `modeling`
 
 ### Requirement: The standard is checked
 
 The test suite SHALL fail when a registered tool:
 
 - has a description that breaks the standard;
-- has a generic `input_data` description;
-- has no hints.
+- has a generic `input_data` description, or an input field without one;
+- has no hints or no family tag.
 
 #### Scenario: A new tool with a placeholder docstring
 
