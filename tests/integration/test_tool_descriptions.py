@@ -22,7 +22,12 @@ from solidworks_mcp.tools import register_tools
 from solidworks_mcp.tools.tool_boundary import tool_family
 
 #: The modules whose descriptions have been rewritten to the standard.
-_REWRITTEN: set[str] = {"drawing_analysis", "vba_generation"}
+_REWRITTEN: set[str] = {
+    "automation",
+    "drawing_analysis",
+    "macro_recording",
+    "vba_generation",
+}
 
 _MODULES = [
     "analysis",

@@ -146,8 +146,8 @@ async def register_drawing_analysis_tools(
 
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. To see what a
-        drawing holds today, use `list_drawing_views`. Read-only. Returns, once
-        available: the combined findings under `data`.
+        drawing holds today, use `list_drawing_views`. Read-only. Returns: once
+        available, the combined findings under `data`.
 
         Args:
             input_data: The drawing to check. `drawing_path` (.slddrw) is required;
@@ -182,7 +182,7 @@ async def register_drawing_analysis_tools(
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. To bring the
         model's dimensions into a drawing, use `insert_model_dimensions`. Read-only.
-        Returns, once available: the dimension findings under `data`.
+        Returns: once available, the dimension findings under `data`.
 
         Args:
             input_data: The drawing to check. `drawing_path` is required; the
@@ -215,7 +215,7 @@ async def register_drawing_analysis_tools(
 
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. Read-only.
-        Returns, once available: the annotation findings under `data`.
+        Returns: once available, the annotation findings under `data`.
 
         Args:
             input_data: The drawing to check. `drawing_path` is required; the
@@ -249,7 +249,7 @@ async def register_drawing_analysis_tools(
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. For the same
         check on the active drawing, `check_drawing_standards` is also not available
-        yet. Read-only. Returns, once available: the compliance findings under `data`.
+        yet. Read-only. Returns: once available, the compliance findings under `data`.
 
         Args:
             input_data: The drawing and standard. `drawing_path` is required;
@@ -280,8 +280,8 @@ async def register_drawing_analysis_tools(
 
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. To list the
-        views on the active drawing today, use `list_drawing_views`. Read-only. Returns,
-        once available: the view findings under `data`.
+        views on the active drawing today, use `list_drawing_views`. Read-only. Returns:
+        once available, the view findings under `data`.
 
         Args:
             input_data: A mapping with the `drawing_path` of the drawing to check.
@@ -312,7 +312,7 @@ async def register_drawing_analysis_tools(
 
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. Read-only.
-        Returns, once available: the report under `data`.
+        Returns: once available, the report under `data`.
 
         Args:
             input_data: A mapping with the `drawing_path` of the drawing to report
@@ -411,7 +411,7 @@ async def register_drawing_analysis_tools(
 
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. Read-only.
-        Returns, once available: the missing items under `data`.
+        Returns: once available, the missing items under `data`.
 
         Args:
             input_data: A mapping with the `drawing_path` of the drawing to check.
