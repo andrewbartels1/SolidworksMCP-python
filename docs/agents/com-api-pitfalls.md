@@ -10,6 +10,11 @@ Every entry below caused a real runtime failure that required hours to diagnose.
     They are the delta between "what the documentation says" and "what actually works"
     under pywin32 late-binding on SW 2025/2026.
 
+!!! note "Using the server, not changing it?"
+    This page is for changing the COM code. For how an agent should *use* the
+    tools (build order, units, selection, known limits), see the
+    [Agent Skill](agent-skill.md).
+
 ---
 
 ## 1. `SelectByID2` — `Callout` must be `VT_DISPATCH` null, not `None`

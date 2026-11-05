@@ -51,6 +51,10 @@ Found while rewriting the descriptions (39 in all).
 
 ## Small faults (item 10)
 
+When one is fixed, remove it from the agent skill's
+`src/solidworks_mcp/skills/solidworks-mcp/references/errors-and-limits.md`
+in the same change.
+
 - `execute_macro` ignores `repeat_count`: it runs the macro once, but its
   message says "executed N times".
 - `create_technical_drawing` ignores `template`, `sheet_size`, `title` and

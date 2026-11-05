@@ -256,6 +256,18 @@ It works only with the circuit-breaker adapter wrapper (the default for real Sol
 
 </details>
 
+## Teach your agent the workflow
+
+Each tool's description says what that tool does. The `solidworks-mcp` skill covers what spans tools: the order to build in (sketch, close it, then the feature), which inputs take millimetres and which take metres, how to pick faces and edges, checking the result with `verify_model`, recovering from errors, and the tools that don't work yet. Install it into Claude Code with:
+
+```powershell
+uvx solidworks-mcp-python skill install
+```
+
+That writes `~/.claude/skills/solidworks-mcp/`. Add `--project` for the current project's `.claude/skills`, or `--dir <folder>` for another agent's skills folder. It writes only that folder and needs no login. Re-run it after an upgrade.
+
+Clients that read MCP resources don't need the install: the server serves the same skill at `skill://solidworks-mcp/SKILL.md`, and points to it in the instructions it sends when a client connects. More: [Agent skill](docs/agents/agent-skill.md).
+
 ## Contributing
 
 `install.ps1` gives you an editable install, so code changes take effect the next time a client starts the server. For the development tools, install the extras:

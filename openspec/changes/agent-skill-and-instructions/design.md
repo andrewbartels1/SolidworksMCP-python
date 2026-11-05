@@ -79,8 +79,8 @@ the spec) and points to the skill. Alternative, generating it from
 ### `solidworks-mcp skill install` as its own small Typer app
 
 `cli_main` routes `skill` the way it routes `setup`. The command takes
-`--project`, `--dir PATH` and `--dry-run`, and copies the packaged files with
-`importlib.resources`, overwriting only files it ships. It never deletes,
+`--project`, `--dir PATH` and `--dry-run`, and copies the packaged files from
+the package folder, overwriting only files it ships. It never deletes,
 never follows the folder outside the target, and reads nothing but the
 packaged skill, so it can't touch other users' or tools' files. It needs no
 network or token.

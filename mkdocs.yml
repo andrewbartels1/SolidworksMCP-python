@@ -68,6 +68,7 @@ nav:
       - Worked Examples: agents/worked-examples.md
       - Prompt-Driven Design: agents/prompt-driven-design.md
       - Tool Description Standard: agents/tool-description-standard.md
+      - Agent Skill: agents/agent-skill.md
       - Prompting Tutorials: agents/prompting-tutorials.md
       - COM API Pitfalls (LLM Agent Guide): agents/com-api-pitfalls.md
   - Planning:

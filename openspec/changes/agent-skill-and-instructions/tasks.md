@@ -1,7 +1,7 @@
 ## 1. The skill package
 
 - [x] 1.1 `src/solidworks_mcp/skills/__init__.py`: `SKILL_DIR` (the packaged
-      skill folder, via `importlib.resources`) and `SERVER_INSTRUCTIONS`;
+      skill folder, beside the module) and `SERVER_INSTRUCTIONS`;
       tests in `tests/solidworks_mcp/skills/test_init.py`
 - [x] 1.2 Write `SKILL.md` (frontmatter `name: solidworks-mcp` and a
       description; build order, units, read-back, map to the references),
@@ -37,17 +37,17 @@
 
 ## 4. Docs
 
-- [ ] 4.1 README: a short "Agent skill" section with the install command and
+- [x] 4.1 README: a short "Agent skill" section with the install command and
       how other agents use `--dir`
-- [ ] 4.2 `docs/agents/`: a page on the skill and the instructions, linked
+- [x] 4.2 `docs/agents/`: a page on the skill and the instructions, linked
       from mkdocs nav; link the skill from `com-api-pitfalls.md` as the
       user-facing counterpart
-- [ ] 4.3 `openspec/queue.md`: item 10 notes that fixing a fault also edits
+- [x] 4.3 `openspec/queue.md`: item 10 notes that fixing a fault also edits
       `references/errors-and-limits.md`; CHANGELOG entry
 
 ## 5. Ship
 
-- [ ] 5.1 Full mock suite, ruff, 100 % coverage, `mkdocs build --strict`
+- [x] 5.1 Full mock suite, ruff, 100 % coverage, `mkdocs build --strict`
 - [ ] 5.2 Ask the user, then run the measurement on real SolidWorks: the
       chosen demo prompt in a fresh agent session without the skill, then
       with it installed; record tool calls, errors and whether
