@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import functools
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, cast
 
 from loguru import logger
@@ -33,6 +33,7 @@ from .error_classifier import (
     Classification,
     ErrorClassifier,
 )
+from .tool_hints import TOOL_HINTS, ToolHints
 
 _INVALID_INPUT_HINT = (
     "Fix the named field(s) and call the tool again; see the tool's input "
@@ -237,15 +238,66 @@ def has_tool_boundary(fn: Any) -> bool:
     return bool(getattr(fn, "__tool_boundary__", False))
 
 
+def tool_family(fn: Callable[..., Any]) -> str:
+    """The family tag of a tool: the name of the module that defines it.
+
+    Args:
+        fn: The tool function.
+
+    Returns:
+        str: The module's last dotted part, e.g. ``"modeling"``.
+    """
+    return fn.__module__.rsplit(".", 1)[-1]
+
+
 class ToolRegistrar:
     """A FastMCP stand-in whose ``tool()`` applies :func:`tool_boundary` first.
 
-    Everything else is forwarded to the wrapped server unchanged.
+    It also gives each tool its title and behaviour hints from the hints
+    table, and its family tag (see :func:`tool_family`). Everything else is
+    forwarded to the wrapped server unchanged.
     """
 
-    def __init__(self, mcp: Any, classifier: ErrorClassifier = _CLASSIFIER) -> None:
+    def __init__(
+        self,
+        mcp: Any,
+        classifier: ErrorClassifier = _CLASSIFIER,
+        hints: Mapping[str, ToolHints] = TOOL_HINTS,
+    ) -> None:
         self._mcp = mcp
         self._classifier = classifier
+        self._hints = hints
+
+    def _metadata(
+        self, fn: Callable[..., Any], kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """The registration kwargs with the tool's title, hints and tag added.
+
+        Explicit ``title``/``annotations`` kwargs win over the table; tags
+        are merged.
+
+        Args:
+            fn: The tool function being registered.
+            kwargs: The keyword arguments given to ``tool()``.
+
+        Returns:
+            dict[str, Any]: The keyword arguments to pass on to FastMCP.
+
+        Raises:
+            KeyError: If the tool has no entry in the hints table.
+        """
+        name = kwargs.get("name") or fn.__name__
+        hints = self._hints.get(name)
+        if hints is None:
+            raise KeyError(
+                f"Tool {name!r} has no entry in tools/tool_hints.py; add its "
+                "title and read-only / destructive / idempotent hints there."
+            )
+        merged = dict(kwargs)
+        merged.setdefault("title", hints.title)
+        merged.setdefault("annotations", hints.annotations())
+        merged["tags"] = {tool_family(fn), *(kwargs.get("tags") or ())}
+        return merged
 
     @classmethod
     def of(cls, mcp: Any) -> ToolRegistrar:
@@ -257,12 +309,19 @@ class ToolRegistrar:
         return mcp if isinstance(mcp, cls) else cls(mcp)
 
     def tool(self, *args: Any, **kwargs: Any) -> Any:
-        """Same contract as ``FastMCP.tool``, with the boundary applied."""
+        """Same contract as ``FastMCP.tool``, with the boundary and hints applied."""
         if args and callable(args[0]) and len(args) == 1 and not kwargs:
-            return self._mcp.tool()(tool_boundary(args[0], self._classifier))
-        register = self._mcp.tool(*args, **kwargs)
+            fn = args[0]
+            return self._mcp.tool(**self._metadata(fn, {}))(
+                tool_boundary(fn, self._classifier)
+            )
+
+        if args and isinstance(args[0], str):
+            kwargs = {"name": args[0], **kwargs}
+            args = args[1:]
 
         def decorator(fn: Callable[..., Awaitable[dict[str, Any]]]) -> Any:
+            register = self._mcp.tool(*args, **self._metadata(fn, kwargs))
             return register(tool_boundary(fn, self._classifier))
 
         return decorator

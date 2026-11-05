@@ -76,6 +76,13 @@ When needed (credentials/SolidWorks environment available):
 - Keep new behavior covered in the appropriate test module under `tests/`.
 - Prefer deterministic tests for CI; keep live/smoke behavior clearly marked.
 
+## Adding or Changing a Tool
+
+- Write its docstring to the [tool description standard](docs/agents/tool-description-standard.md): what it does, when to use it, what it needs, what it changes (or "Read-only."), and what it returns.
+- Describe `input_data` specifically in `Args:`, and give every input field a `Field(description=...)`.
+- Add its title and behaviour hints to `src/solidworks_mcp/tools/tool_hints.py`; registration fails without them.
+- `tests/integration/test_tool_descriptions.py` checks the parts that can be checked.
+
 ## Documentation Expectations
 
 - Update docs for user-visible behavior changes.

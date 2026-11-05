@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed release or `setup --year`. Started without it, the server logs a
   warning and uses the newest installed release, so existing entries keep
   working; rerun `solidworks-mcp-python setup` to add it.
+- **Every tool carries MCP behaviour hints and a family tag.** Clients now
+  see a title for each tool and whether it is read-only, destructive or
+  idempotent, so they can ask before a call that deletes or overwrites.
+  Each tool is also tagged with its family (`modeling`, `drawing`, ...).
+  The hints live in one table, `tools/tool_hints.py`; a tool without an
+  entry fails to register. A written standard for tool descriptions
+  (`docs/agents/tool-description-standard.md`) and a test that checks it
+  come with them; the descriptions themselves are rewritten in the next
+  changes (#82).
 
 ### Fixed
 

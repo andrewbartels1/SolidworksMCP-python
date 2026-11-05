@@ -1,9 +1,9 @@
 ## 1. Standard and check
 
-- [ ] 1.1 `docs/agents/tool-description-standard.md`: the description shape,
+- [x] 1.1 `docs/agents/tool-description-standard.md`: the description shape,
       the `input_data` line, the hints, two worked examples; linked from
       CONTRIBUTING.md and the mkdocs nav
-- [ ] 1.2 `tests/integration/test_tool_descriptions.py`: the check across
+- [x] 1.2 `tests/integration/test_tool_descriptions.py`: the check across
       every registered tool, reporting all offenders at once; the field
       check is on from the start (all 493 fields pass today); the
       description checks start as expected-to-fail per module and are
@@ -11,13 +11,13 @@
 
 ## 2. Behaviour hints
 
-- [ ] 2.1 `tools/tool_hints.py`: title and read-only / destructive /
+- [x] 2.1 `tools/tool_hints.py`: title and read-only / destructive /
       idempotent for all 154 tools, from each tool's adapter calls
-- [ ] 2.2 `ToolRegistrar.tool()` passes the hints as MCP `title` and
+- [x] 2.2 `ToolRegistrar.tool()` passes the hints as MCP `title` and
       `annotations`, and the module's family as `tags`; unit tests in
       `test_tool_boundary.py` (hints and tag applied, an unknown tool is an
       error at registration)
-- [ ] 2.3 `test_tool_hints.py`: the table matches the registered tools
+- [x] 2.3 `test_tool_hints.py`: the table matches the registered tools
       exactly; spot checks (`list_features` read-only, `delete_feature`
       destructive)
 

@@ -10,7 +10,7 @@ Last updated 2026-11-04.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
-| 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` | Plan approved 2026-11-04; three PRs: (1) standard, check and hints, (2) the eight worst-scoring modules, (3) the other six |
+| 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` | Plan approved 2026-11-04; three PRs: (1) standard, check and hints (built, in review), (2) the eight worst-scoring modules, (3) the other six |
 | 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | not yet written | Next |
 | 3 | `--selftest` command and a compatibility-report issue template | #179 | not yet written | |
 | 4 | README: COM API coverage audit and licence-tier tags | #79 | not yet written | |
