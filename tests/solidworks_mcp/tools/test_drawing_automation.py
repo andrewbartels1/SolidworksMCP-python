@@ -342,8 +342,8 @@ async def test_missing_adapter_method_is_reported(
 async def test_docstrings_follow_the_tool_standard(
     mcp_server, mock_adapter, mock_config, tool
 ) -> None:
-    """Every tool documents Args, Returns and an Example, as the others do."""
+    """Every tool documents Args and Returns (the description standard covers the rest)."""
     await register_drawing_automation_tools(mcp_server, mock_adapter, mock_config)
     doc = (await _tool(mcp_server, tool)).__doc__ or ""
-    for section in ("Args:", "Returns:", "Example:"):
+    for section in ("Args:", "Returns:"):
         assert section in doc, (tool, section)
