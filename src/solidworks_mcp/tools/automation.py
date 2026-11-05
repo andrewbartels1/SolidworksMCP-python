@@ -430,8 +430,8 @@ End Sub
 
         Not available yet: no adapter implements it, so every call returns an error with
         `error_type: "not_supported"`. It is planned for a future release. To export
-        several files today, use `batch_export`. Changes: once available, opens, changes
-        and saves each file. Returns: once available, a per-file result under `data`.
+        several files today, open each with `open_model` and use `export_step`.
+        Changes: once available, opens, changes and saves each file. Returns: once available, a per-file result under `data`.
 
         Args:
             input_data: The batch. `source_directory` is required; `operation_type`,

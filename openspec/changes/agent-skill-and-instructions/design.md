@@ -62,7 +62,8 @@ to work.
 
 ### Serve it with `SkillProvider`, supporting files as a template
 
-`mcp.add_provider(SkillProvider(path))` in `server.setup()`, with the
+`mcp.add_provider(SkillProvider(path))` where the server builds its
+`FastMCP` instance, not in `setup()` (which connects to SolidWorks first), with the
 default `supporting_files="template"`: `list_resources` shows `SKILL.md` and
 the manifest, and the reference files are read through the manifest. This
 keeps the resource list short. Alternative, `"resources"` (every file

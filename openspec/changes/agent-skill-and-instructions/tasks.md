@@ -1,36 +1,36 @@
 ## 1. The skill package
 
-- [ ] 1.1 `src/solidworks_mcp/skills/__init__.py`: `SKILL_DIR` (the packaged
+- [x] 1.1 `src/solidworks_mcp/skills/__init__.py`: `SKILL_DIR` (the packaged
       skill folder, via `importlib.resources`) and `SERVER_INSTRUCTIONS`;
       tests in `tests/solidworks_mcp/skills/test_init.py`
-- [ ] 1.2 Write `SKILL.md` (frontmatter `name: solidworks-mcp` and a
+- [x] 1.2 Write `SKILL.md` (frontmatter `name: solidworks-mcp` and a
       description; build order, units, read-back, map to the references),
       under 500 lines
-- [ ] 1.3 Write `references/workflows.md`, `references/selection-and-units.md`,
+- [x] 1.3 Write `references/workflows.md`, `references/selection-and-units.md`,
       `references/errors-and-limits.md` and `references/vba-fallback.md`,
       each fact checked against the tool code and descriptions
-- [ ] 1.4 `tests/integration/test_skill_content.py`: every backticked tool
+- [x] 1.4 `tests/integration/test_skill_content.py`: every backticked tool
       name in the skill and the instructions is registered; no recommended
       step names a "Not available yet" tool; `SKILL.md` frontmatter and
       length; instructions at most 1500 characters
 
 ## 2. Served by the server
 
-- [ ] 2.1 `server.py`: pass `instructions=SERVER_INSTRUCTIONS` to `FastMCP`
-      and add `SkillProvider(SKILL_DIR)` in `setup()`
-- [ ] 2.2 Tests: the initialize result carries the instructions;
+- [x] 2.1 `server.py`: pass `instructions=SERVER_INSTRUCTIONS` to `FastMCP`
+      and add `SkillProvider(SKILL_DIR)` when the `FastMCP` instance is built
+- [x] 2.2 Tests: the initialize result carries the instructions;
       `skill://solidworks-mcp/SKILL.md` and the manifest are listed and read
       back the packaged text, in mock mode
 
 ## 3. `solidworks-mcp skill install`
 
-- [ ] 3.1 `src/solidworks_mcp/skills/install.py`: a Typer app with
+- [x] 3.1 `src/solidworks_mcp/skills/install.py`: a Typer app with
       `install` (`--project`, `--dir`, `--dry-run`); copies only the
       packaged files into `<folder>/solidworks-mcp/`, replaces them on
       upgrade, leaves other files, reads nothing else, reports the path
-- [ ] 3.2 `cli_main` routes `skill ...` to it, as it does `setup`; `setup`
+- [x] 3.2 `cli_main` routes `skill ...` to it, as it does `setup`; `setup`
       ends with a one-line hint about `skill install`
-- [ ] 3.3 Tests in `tests/solidworks_mcp/skills/test_install.py`: default,
+- [x] 3.3 Tests in `tests/solidworks_mcp/skills/test_install.py`: default,
       `--project` and `--dir` targets (home and cwd redirected to a temp
       folder), upgrade keeps a user file, `--dry-run` writes nothing, an
       unwritable target errors naming the path; and the `cli_main` routing
