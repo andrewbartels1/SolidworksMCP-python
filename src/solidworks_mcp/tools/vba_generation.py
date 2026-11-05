@@ -244,16 +244,21 @@ async def register_vba_generation_tools(
 
     @mcp.tool()
     async def generate_vba_extrusion(input_data: VBAExtrusionInput) -> dict[str, Any]:
-        """Generate VBA code for complex extrusion operations.
+        """Write a VBA macro that makes an extrusion with the full FeatureExtrusion options: both directions, draft, thin wall, end conditions.
+
+        Use it when `create_extrusion` doesn't cover an option you need, or to hand the
+        step to someone as a macro. The macro comes back as text for the SolidWorks VBA
+        editor (Alt+F11); `execute_macro` runs only binary .swp files, so it can't run
+        this directly. Read-only. Nothing runs in SolidWorks. Returns: `vba_code`, the
+        `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (VBAExtrusionInput): The input data value.
+            input_data: The extrusion. `depth` (mm) is required; everything else
+                (`sketch_name`, draft, thin-wall and end-condition options) has a
+                default.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_extrusion(extrusion_input)
+            dict[str, Any]: The macro text.
         """
         if hasattr(adapter, "generate_vba_extrusion"):
             result = await adapter.generate_vba_extrusion(input_data.model_dump())
@@ -332,21 +337,20 @@ End Sub"""
 
     @mcp.tool()
     async def generate_vba_revolve(input_data: VBARevolveInput) -> dict[str, Any]:
-        """Generate VBA code for complex revolve operations.
+        """Write a VBA macro that revolves the selected sketch, with both-direction and thin-wall options.
+
+        Use it when `create_revolve` doesn't cover an option you need. The macro comes
+        back as text for the SolidWorks VBA editor (Alt+F11); `execute_macro` runs only
+        binary .swp files, so it can't run this directly. Read-only. Nothing runs in
+        SolidWorks. Returns: `vba_code`, the `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (VBARevolveInput): The input data value.
+            input_data: The revolve. Give `angle` in degrees (it defaults to 0, a
+                revolve of nothing); `sketch_name`, `axis_reference`, both-direction
+                and thin-wall options have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_revolve(revolve_input)
-        """
-        """
-        Generate VBA code for complex revolve operations.
-
-        Creates VBA macro for revolve features with advanced thin-wall options.
+            dict[str, Any]: The macro text.
         """
         if hasattr(adapter, "generate_vba_revolve"):
             result = await adapter.generate_vba_revolve(input_data.model_dump())
@@ -420,20 +424,19 @@ End Sub"""
     async def generate_vba_assembly_insert(
         input_data: VBAAssemblyInput,
     ) -> dict[str, Any]:
-        """Generate VBA code for assembly component insertion.
+        """Write a VBA macro that inserts a component into the active assembly at a point.
+
+        To insert a component directly, use `insert_component`. The macro comes back as
+        text for the SolidWorks VBA editor (Alt+F11); `execute_macro` runs only binary
+        .swp files, so it can't run this directly. Read-only. Nothing runs in
+        SolidWorks. Returns: `vba_code`, the `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (VBAAssemblyInput): The input data value.
+            input_data: The component. Give `component_path` (the .sldprt or
+                .sldasm); `insertion_point` and `rotation` default to the origin.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_assembly_insert(assembly_input)
-
-                        Generate VBA code for inserting components into assemblies.
-
-                        Creates macro for component insertion with precise positioning.
+            dict[str, Any]: The macro text.
         """
         if hasattr(adapter, "generate_vba_assembly_insert"):
             result = await adapter.generate_vba_assembly_insert(input_data.model_dump())
@@ -494,21 +497,21 @@ End Sub'''
 
     @mcp.tool()
     async def generate_vba_drawing_views(input_data: VBADrawingInput) -> dict[str, Any]:
-        """Generate VBA code for drawing view creation.
+        """Write a VBA macro that places a model's standard views (front, top, right) on the active drawing.
+
+        To make a drawing directly, use `generate_drawing_package` or
+        `create_drawing_view`. The macro comes back as text for the SolidWorks VBA
+        editor (Alt+F11); `execute_macro` runs only binary .swp files, so it can't run
+        this directly. Read-only. Nothing runs in SolidWorks. Returns: `vba_code`, the
+        `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (VBADrawingInput): The input data value.
+            input_data: The views. Give `model_path` (the model to draw);
+                `scale`, `sheet_format` and the view layout have defaults. The
+                drawing must be open and active when the macro runs.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_drawing_views(drawing_input)
-        """
-        """
-        Generate VBA code for creating drawing views.
-
-        Creates macro for standard drawing view setup.
+            dict[str, Any]: The macro text.
         """
         if hasattr(adapter, "generate_vba_drawing_views"):
             result = await adapter.generate_vba_drawing_views(input_data.model_dump())
@@ -595,21 +598,20 @@ End Sub'''
 
     @mcp.tool()
     async def generate_vba_batch_export(input_data: VBABatchInput) -> dict[str, Any]:
-        """Generate VBA code for batch file export operations.
+        """Write a VBA macro that opens every matching file in a folder and saves a STEP copy of each to another folder.
+
+        To export files directly, use `batch_export`. The macro comes back as text for
+        the SolidWorks VBA editor (Alt+F11); `execute_macro` runs only binary .swp
+        files, so it can't run this directly. Read-only. Nothing runs in SolidWorks.
+        Returns: `vba_code`, the `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (VBABatchInput): The input data value.
+            input_data: The batch. Give `operation_type` (e.g. "export"),
+                `file_pattern` (e.g. "*.sldprt"), `source_folder` and
+                `target_folder`; `recursive` defaults to on.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_batch_export(batch_input)
-        """
-        """
-        Generate VBA code for batch file operations.
-
-        Creates macro for processing multiple files automatically.
+            dict[str, Any]: The macro text.
         """
         if hasattr(adapter, "generate_vba_batch_export"):
             result = await adapter.generate_vba_batch_export(input_data.model_dump())
@@ -686,21 +688,21 @@ End Sub'''
 
     @mcp.tool()
     async def generate_vba_part_modeling(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Generate VBA code for complex part modeling operations.
+        """Write a VBA macro for a shell or a fillet on the active part.
+
+        Use it for a shell, which no direct tool makes yet; for a fillet, `add_fillet`
+        works directly. The macro comes back as text for the SolidWorks VBA editor
+        (Alt+F11); `execute_macro` runs only binary .swp files, so it can't run this
+        directly. Read-only. Nothing runs in SolidWorks. Returns: `vba_code`, the
+        `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with `operation`, "shell" (the default, with
+                `thickness` in mm, default 2) or "fillet" (with `radius` in mm,
+                default 5). Any other operation is refused.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_part_modeling(part_input)
-        """
-        """
-        Generate VBA code for advanced part modeling operations.
-
-        Creates macro for complex part features like sweeps, lofts, shells.
+            dict[str, Any]: The macro text.
         """
         operation = input_data.get("operation", "shell")
         thickness = input_data.get("thickness", 2.0)
@@ -783,21 +785,21 @@ End Sub"""
 
     @mcp.tool()
     async def generate_vba_assembly_mates(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Generate VBA code for assembly mate creation.
+        """Write a VBA macro that adds a concentric, distance, parallel, perpendicular or coincident mate between two selected faces or edges.
+
+        To add a mate directly, use `add_mate`. The macro comes back as text for the
+        SolidWorks VBA editor (Alt+F11); `execute_macro` runs only binary .swp files, so
+        it can't run this directly. The faces must be selected in SolidWorks before the
+        macro runs. Read-only. Nothing runs in SolidWorks. Returns: `vba_code`, the
+        `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with `mate_type` (default "concentric"),
+                `component1` and `component2` (names, for the comments), and
+                `distance` in mm for a distance mate.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_assembly_mates(mate_input)
-        """
-        """
-        Generate VBA code for creating assembly mates.
-
-        Creates macro for various mate types (concentric, distance, parallel, etc).
+            dict[str, Any]: The macro text.
         """
         mate_type = input_data.get("mate_type", "concentric")
         component1 = input_data.get("component1", "Part1")
@@ -877,15 +879,22 @@ End Sub"""
     async def generate_vba_drawing_dimensions(
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """Generate VBA code for creating drawing dimensions.
+        """Write a VBA macro that adds a dimension to the selected drawing entities and sets its precision.
 
-        Creates macro for various dimension types in drawings.
+        To bring the model's dimensions into a drawing directly, use
+        `insert_model_dimensions`. The macro comes back as text for the SolidWorks VBA
+        editor (Alt+F11); `execute_macro` runs only binary .swp files, so it can't run
+        this directly. The entities must be selected before the macro runs. Read-only.
+        Nothing runs in SolidWorks. Returns: `vba_code`, the `parameters` used and
+        `usage_instructions`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with `dimension_type` ("linear", the default,
+                "radial", "angular" or "diameter") and `precision` (decimal places,
+                default 2).
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The macro text.
         """
         dimension_type = input_data.get("dimension_type", "linear")
         precision = input_data.get("precision", 2)
@@ -960,18 +969,22 @@ End Sub'''
     async def generate_vba_file_operations(
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """Generate VBA code for file management operations.
+        """Write a VBA macro that sets a custom property in every configuration, or runs Pack and Go on the active document.
+
+        To set a property directly, use `set_custom_property`; for Pack and Go, use
+        `pack_and_go_assembly`. The macro comes back as text for the SolidWorks VBA
+        editor (Alt+F11); `execute_macro` runs only binary .swp files, so it can't run
+        this directly. Read-only. Nothing runs in SolidWorks. Returns: `vba_code`, the
+        `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with `operation`: "custom_properties" (the
+                default, with `property_name` and `property_value`) or
+                "pack_and_go" (with `target_folder`). Any other operation is
+                refused.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_file_operations(file_input)
-
-                        Creates macro for custom properties, PDM operations, etc.
+            dict[str, Any]: The macro text.
         """
         operation = input_data.get("operation", "custom_properties")
 
@@ -1060,16 +1073,21 @@ End Sub'''
 
     @mcp.tool()
     async def generate_vba_macro_recorder(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Generate VBA code using macro recording patterns.
+        """Write a VBA starting point: a macro skeleton to fill in, or a note on starting and stopping SolidWorks' macro recorder.
+
+        Use "create_template" for an empty macro with the usual SolidWorks setup.
+        Recording itself is done in SolidWorks (Tools > Macro > Record). The macro comes
+        back as text for the SolidWorks VBA editor (Alt+F11); `execute_macro` runs only
+        binary .swp files, so it can't run this directly. Read-only. Nothing runs in
+        SolidWorks. Returns: `vba_code`, the `parameters` used and `usage_instructions`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with `operation`: "start_recording" (the
+                default), "stop_recording" or "create_template" (with
+                `macro_name`). Any other operation is refused.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_vba_macro_recorder(recorder_input)
+            dict[str, Any]: The macro text.
         """
         operation = input_data.get("operation", "start_recording")
 
