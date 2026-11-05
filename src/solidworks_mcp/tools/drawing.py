@@ -389,40 +389,22 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def create_drawing_view(input_data: CreateDrawingViewInput) -> dict[str, Any]:
-        """Create a drawing view of a SolidWorks model.
+        """Place one named view of a part or assembly on the active drawing sheet.
 
-        Creates technical drawing views including orthographic projections, isometric views,
-        section views, and detail views from 3D models. Essential for generating production
-        drawings and technical documentation.
+        Use it to add views one at a time; for the three standard views in one call, use
+        `create_technical_drawing`, and for a whole drawing from a model, use
+        `generate_drawing_package`. `add_drawing_view` does the same as this tool.
+        Needs: an open, active drawing and the model file on disk. Changes: adds a view
+        to the sheet. Returns: `data` with the view's `name`, `orientation`, `position`,
+        `scale` and the view counts before and after.
 
         Args:
-            input_data (CreateDrawingViewInput): The input data value.
+            input_data: The view. `model_path` and `view_type` (front, back, left, right, top, bottom, isometric (iso), trimetric, dimetric or current) are
+                required; `position_x`/`position_y` (mm on the sheet) and `scale`
+                have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Create front orthographic view of a part
-                            result = await create_drawing_view({
-                                "model_path": "C:/Models/bracket.sldprt",
-                                "view_type": "orthographic",
-                                "position_x": 150.0, "position_y": 250.0,
-                                "scale": 1.0,
-                                "orientation": "front"
-                            })
-
-                            if result["status"] == "success":
-                                view = result["drawing_view"]
-                                print(f"Created {view['view_type']} view at {view['scale']}:1 scale")
-                                # Ready for dimensioning and annotation
-                            ```
-
-                        Note:
-                            - Model file must exist and be accessible
-                            - Drawing sheet must be active before creating views
-                            - View positioning follows drawing sheet coordinate system
-                            - Multiple views can reference the same model file
+            dict[str, Any]: The placed view.
         """
         require_capability(
             adapter,
@@ -441,40 +423,21 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
-        """Add a dimension to the current drawing.
+        """Add one dimension between drawing entities at a position on the sheet.
 
-        Creates dimensional annotations on drawing views including linear, radial, angular, and
-        diameter dimensions. Essential for manufacturing specifications and quality control
-        documentation.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To bring the
+        model's own dimensions into a drawing today, use `insert_model_dimensions`.
+        Changes: once available, adds a dimension to the drawing. Returns: once
+        available, the dimension under `data`.
 
         Args:
-            input_data (AddDimensionInput): The input data value.
+            input_data: The dimension. `dimension_type`, `entity1`, `position_x`
+                and `position_y` are required; `entity2` and `precision` have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Add diameter dimension to a hole
-                            result = await add_dimension({
-                                "dimension_type": "diameter",
-                                "entity1": "Circle1",
-                                "entity2": None,
-                                "position_x": 100.0, "position_y": 150.0,
-                                "precision": 2
-                            })
-
-                            if result["status"] == "success":
-                                dim = result["dimension"]
-                                print(f"Added {dim['type']} dimension with {dim['precision']} decimals")
-                                # Dimension now drives manufacturing specification
-                            ```
-
-                        Note:
-                            - Entities must be visible in current drawing view
-                            - Dimension placement affects drawing readability
-                            - Precision should match manufacturing tolerances
-                            - Some dimension types require specific entity combinations
+            dict[str, Any]: The dimension, or a `not_supported` error.
         """
         if hasattr(input_data, "model_dump"):
             payload = input_data.model_dump()
@@ -527,40 +490,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_note(input_data: AddNoteInput) -> dict[str, Any]:
-        """Add a note or annotation to the current drawing.
+        """Place a text note on the active drawing sheet at a position in millimetres.
 
-        Creates text annotations, callouts, and notes on drawings for specifications,
-        instructions, and additional manufacturing information. Essential for comprehensive
-        technical documentation.
+        Use it for general notes such as material or finish. For a title block, use
+        `generate_drawing_package`, which fills one. Needs: an open, active drawing.
+        Changes: adds a note to the sheet. Returns: `data` with `text`, `position`,
+        `positioned` (whether the position was applied) and `font_size_points`.
 
         Args:
-            input_data (AddNoteInput): The input data value.
+            input_data: The note. `text`, `position_x` and `position_y` (mm from
+                the sheet's lower-left corner) are required; `font_size` (points)
+                has a default.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                                    ```python
-                                    # Add material specification note with leader
-                                    result = await add_note({
-                                        "text": "Material: AISI 1018 Steel
-                        Hardness: 150-200 HB",
-                                        "position_x": 200.0, "position_y": 50.0,
-                                        "font_size": 10.0,
-                                        "leader_attachment": "Face1"
-                                    })
-
-                                    if result["status"] == "success":
-                                        note = result["note"]
-                                        print(f"Added note at {note['font_size']}pt font size")
-                                        # Note provides critical manufacturing information
-                                    ```
-
-                                Note:
-                                    - Text supports standard annotation symbols and formatting
-                                    - Leader attachment improves clarity for specific features
-                                    - Font size should comply with drawing standards
-                                    - Position carefully to avoid dimension conflicts
+            dict[str, Any]: The note placed.
         """
         require_capability(
             adapter,
@@ -578,40 +521,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def create_section_view(input_data: CreateSectionViewInput) -> dict[str, Any]:
-        """Create a section view of the current drawing.
+        """Cut a section view along a line across a drawing view.
 
-        Generates section views that show internal features by cutting through the part along a
-        specified section line. Essential for revealing hidden geometry, internal structures,
-        and complex assemblies.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Use
+        SolidWorks directly (Insert > Drawing View > Section). Changes: once available,
+        adds a section view. Returns: once available, the view under `data`.
 
         Args:
-            input_data (CreateSectionViewInput): The input data value.
+            input_data: The section. `section_line_start`, `section_line_end`,
+                `view_position_x` and `view_position_y` are required; `scale` and
+                `label` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Create vertical section through center of part
-                            result = await create_section_view({
-                                "section_line_start": (50.0, 0.0),
-                                "section_line_end": (50.0, 100.0),
-                                "view_position_x": 300.0, "view_position_y": 150.0,
-                                "scale": 1.5,
-                                "label": "A"
-                            })
-
-                            if result["status"] == "success":
-                                section = result["section_view"]
-                                print(f"Created section {section['label']}-A at {section['scale']}:1")
-                                # Section reveals internal features clearly
-                            ```
-
-                        Note:
-                            - Section line direction determines view orientation
-                            - Section views automatically show cut surfaces with hatching
-                            - Label follows ANSI/ISO drafting standards (A-A, B-B, etc.)
-                            - Essential for showing internal features and assemblies
+            dict[str, Any]: The view, or a `not_supported` error.
         """
         raise UnsupportedOperationError(
             "No adapter capability exists for cutting a section view "
@@ -622,40 +545,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def create_detail_view(input_data: CreateDetailViewInput) -> dict[str, Any]:
-        """Create a detail view of a specific area.
+        """Magnify a circular area of a drawing view as a detail view.
 
-        Generates magnified detail views of specific regions to show fine features, tight
-        tolerances, and intricate geometry that requires enhanced visibility for manufacturing
-        and inspection.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Use
+        SolidWorks directly (Insert > Drawing View > Detail). Changes: once available,
+        adds a detail view. Returns: once available, the view under `data`.
 
         Args:
-            input_data (CreateDetailViewInput): The input data value.
+            input_data: The detail. `center_x`, `center_y`, `radius`,
+                `view_position_x` and `view_position_y` are required; `scale` and
+                `label` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Create 4x detail view of small threaded hole
-                            result = await create_detail_view({
-                                "center_x": 25.0, "center_y": 15.0,
-                                "radius": 8.0,  # 16mm diameter detail area
-                                "view_position_x": 250.0, "view_position_y": 300.0,
-                                "scale": 4.0,   # 4:1 magnification
-                                "label": "A"
-                            })
-
-                            if result["status"] == "success":
-                                detail = result["detail_view"]
-                                print(f"Created detail {detail['label']} at {detail['scale']}:1")
-                                # Detail shows thread profile clearly for machining
-                            ```
-
-                        Note:
-                            - Detail circle size determines what geometry is magnified
-                            - Higher scale factors reveal fine features for precision work
-                            - Label follows standard drafting conventions (Detail A, etc.)
-                            - Essential for communicating tight tolerance requirements
+            dict[str, Any]: The view, or a `not_supported` error.
         """
         raise UnsupportedOperationError(
             "No adapter capability exists for magnifying the "
@@ -667,42 +570,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def update_sheet_format(input_data: UpdateSheetFormatInput) -> dict[str, Any]:
-        """Update the sheet format and title block information.
+        """Change the active drawing's sheet format file and title-block fields.
 
-        Applies drawing templates and updates title block fields with project information,
-        revision data, and drawing metadata. Essential for standardized documentation and
-        drawing control.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release.
+        `generate_drawing_package` sets the sheet format and fills the title block when
+        it creates a drawing. Changes: once available, replaces the sheet format.
+        Returns: once available, the new format under `data`.
 
         Args:
-            input_data (UpdateSheetFormatInput): The input data value.
+            input_data: The format. `format_file` is required; `sheet_size` and
+                the title-block fields have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Apply company standard format with project info
-                            result = await update_sheet_format({
-                                "format_file": "C:/Templates/company_format.slddrt",
-                                "sheet_size": "A3",
-                                "title": "Mounting Bracket Assembly",
-                                "drawn_by": "J. Smith",
-                                "checked_by": "M. Johnson",
-                                "approved_by": "R. Wilson",
-                                "drawing_number": "DWG-001-Rev-A"
-                            })
-
-                            if result["status"] == "success":
-                                format_info = result["sheet_format"]
-                                print(f"Applied {format_info['sheet_size']} format")
-                                # Drawing now has proper title block and company branding
-                            ```
-
-                        Note:
-                            - Format file must exist and be compatible with SolidWorks version
-                            - Title block fields support company-specific customization
-                            - Sheet size affects drawing layout and scaling decisions
-                            - Essential for drawing control and document management systems
+            dict[str, Any]: The format, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -721,40 +602,19 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def auto_dimension_view(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Automatically dimension a drawing view.
+        """Dimension a drawing view automatically with SolidWorks' auto-dimension scheme.
 
-        Analyzes drawing view geometry and automatically adds common dimensions including
-        overall sizes, hole diameters, radii, and critical features. Accelerates drawing
-        completion and ensures comprehensive dimensioning coverage.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Use
+        `insert_model_dimensions` and then `arrange_dimensions` today. Changes: once
+        available, adds dimensions to the view. Returns: once available, the dimensions
+        added under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `view_name` to dimension.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Auto-dimension main view with baseline dimensions
-                            result = await auto_dimension_view({
-                                "view_name": "Front View",
-                                "dimension_types": ["linear", "diameter"],
-                                "include_baseline": True,
-                                "include_centerlines": True
-                            })
-
-                            if result["status"] == "success":
-                                auto_dims = result["auto_dimensions"]
-                                print(f"Added {auto_dims['dimensions_added']} dimensions")
-                                print(f"Coverage: {auto_dims['coverage']}")
-                                # Drawing now has comprehensive dimensioning
-                            ```
-
-                        Note:
-                            - Analyzes feature geometry to determine appropriate dimensions
-                            - Follows drafting standards for dimension placement
-                            - May require manual adjustment for optimal readability
-                            - Significantly reduces manual dimensioning time
+            dict[str, Any]: The dimensions, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -773,40 +633,18 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def check_drawing_standards(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Check the current drawing against drafting standards.
+        """Check the active drawing against a drafting standard and score it.
 
-        Validates drawing compliance with industry drafting standards including ANSI Y14.5, ISO
-        128, and DIN standards. Identifies non-compliance issues and provides recommendations
-        for improvement.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. SolidWorks
+        Design Checker does this today. Read-only. Returns: once available, the findings
+        under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `standard` to check against.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Comprehensive ANSI standards check
-                            result = await check_drawing_standards({
-                                "standard": "ANSI",
-                                "check_categories": ["dimensions", "tolerances", "symbols"],
-                                "severity_filter": "warning"
-                            })
-
-                            if result["status"] == "success":
-                                check = result["standards_check"]
-                                print(f"Compliance Score: {check['compliance_score']}%")
-                                print(f"Warnings: {len(check['warnings'])}")
-                                print(f"Errors: {len(check['errors'])}")
-                                # Address issues to improve drawing quality
-                            ```
-
-                        Note:
-                            - Standards compliance ensures drawing acceptance in industry
-                            - Regular checking prevents costly revision cycles
-                            - Automated validation reduces human error in review process
-                            - Essential for quality management and ISO certification
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         raise UnsupportedOperationError(
             "No adapter capability exists for checking drafting "
@@ -819,16 +657,22 @@ async def register_drawing_tools(
     async def create_technical_drawing(
         input_data: DrawingCreationInput,
     ) -> dict[str, Any]:
-        """Create a technical drawing from a SolidWorks part or assembly.
+        """Place a model's three standard views (front, top and side) on the active drawing sheet in one call.
 
-        Supports selecting a template, output path, sheet format, scale, and optional auto-
-        population of standard views for documentation.
+        Use it to start a drawing's views quickly; for one view, use
+        `create_drawing_view`, and to create and save a complete drawing from a model
+        file, use `generate_drawing_package`. Views are laid out in third-angle
+        projection. The template, sheet size, title and output path fields are not used
+        yet. Needs: an open, active drawing and the model file on disk. Changes: adds
+        three views to the sheet. Returns: `data` with `views` (the names added),
+        `model_path`, `projection` and the view counts.
 
         Args:
-            input_data (DrawingCreationInput): The input data value.
+            input_data: The model to draw. Give `model_file`; the other fields have
+                defaults and are not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The views added.
         """
         require_capability(
             adapter,
@@ -847,16 +691,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_drawing_view(input_data: DrawingViewInput) -> dict[str, Any]:
-        """Add, update, or remove a drawing view in an existing drawing.
+        """Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`.
 
-        Supports configuring the target drawing, view type, parent view, scale, and placement
-        coordinates for common drawing view workflows.
+        Prefer `create_drawing_view`; this tool reaches the same code and is kept for
+        existing callers. It only adds views: `operation` values to update or remove a
+        view are not acted on. Needs: an open, active drawing and the model file on
+        disk. Changes: adds a view to the sheet. Returns: `data` with the view's `name`,
+        `orientation`, `position`, `scale` and the view counts.
 
         Args:
-            input_data (DrawingViewInput): The input data value.
+            input_data: The view. Give `model_file` and `view_type` (front, back, left, right, top, bottom, isometric (iso), trimetric, dimetric or current);
+                `position` ([x, y] mm on the sheet) and `scale` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The placed view.
         """
         require_capability(
             adapter,
@@ -874,16 +722,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_annotation(input_data: AnnotationInput) -> dict[str, Any]:
-        """Add an annotation such as a note, balloon, or surface symbol.
+        """Add an annotation (a note, balloon or surface-finish symbol) to the active drawing.
 
-        Places annotation text in a drawing with optional font size, leader attachment, and
-        title-block style metadata fields.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. For a text
+        note today, use `add_note`; for GD&T, use `add_gtol` and `add_datum_tag`.
+        Changes: once available, adds the annotation. Returns: once available, the
+        annotation under `data`.
 
         Args:
-            input_data (AnnotationInput): The input data value.
+            input_data: The annotation. `annotation_type` and `text` are required;
+                the position and font fields have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The annotation, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -901,16 +753,20 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def update_title_block(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Update title block fields for the active drawing.
+        """Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on).
 
-        Applies drawing metadata such as title, drawing number, and approval fields to keep
-        documentation aligned with standards.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release.
+        `generate_drawing_package` fills the title block when it creates a drawing, and
+        `set_custom_property` sets the properties a title block reads. Changes: once
+        available, rewrites the title-block fields. Returns: once available, the fields
+        set under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping of title-block field names to values.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The fields, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -929,20 +785,11 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def list_drawing_views() -> dict[str, Any]:
-        """List the views on the active drawing.
+        """List the views on the active drawing, by name.
 
-        Read-only. Use it to find an existing view's name before targeting it
-        (e.g. with ``auto_center_marks``). Errors when the active document is
-        not a drawing.
-
-        Returns:
-            dict[str, Any]: ``status``, ``views`` (view names, sheet formats
-            excluded) and ``count``.
-
-        Example:
-            ```python
-            await list_drawing_views()
-            ```
+        Use it before `auto_center_marks`, `insert_model_dimensions` or any tool that
+        takes a view name. Needs: an open, active drawing. Read-only. Returns: `views`
+        (names, sheet formats left out) and `count`.
         """
         result = await adapter.list_drawing_views()
         require_success(result, context="Failed to list drawing views")
@@ -963,26 +810,20 @@ async def register_drawing_tools(
     async def auto_center_marks(
         input_data: AutoCenterMarksInput,
     ) -> dict[str, Any]:
-        """Auto-insert centre marks on circular features in a drawing view.
+        """Insert centre marks on the holes, slots and (optionally) fillets of one drawing view.
 
-        Runs SolidWorks' automatic centre-mark insertion for the named view.
-        The API does not report how many marks it added, so the response
-        gives the view's centre-mark count before and after and the delta.
-        A run that added nothing is still a success — the view may have no
-        un-marked holes.
+        Use it after placing views, before dimensioning holes. Adding none is still a
+        success: the view may have no unmarked circular edges. Needs: an open drawing
+        with the named view (see `list_drawing_views`). Changes: adds centre-mark
+        annotations to the view. Returns: `data` with `center_marks_added` and the
+        counts before and after.
 
         Args:
-            input_data (AutoCenterMarksInput): The view and which feature
-                types to mark.
+            input_data: The view. `view_name` is required; `mark_holes` and
+                `mark_slots` default to on, `mark_fillets` to off.
 
         Returns:
-            dict[str, Any]: Status plus ``center_marks_before`` /
-            ``center_marks_after`` / ``center_marks_added``.
-
-        Example:
-            ```python
-            await auto_center_marks({"view_name": "Drawing View1"})
-            ```
+            dict[str, Any]: The marks added.
         """
         require_capability(
             adapter,

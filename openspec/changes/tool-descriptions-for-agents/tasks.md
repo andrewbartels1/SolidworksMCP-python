@@ -23,11 +23,11 @@
 
 ## 3. Descriptions, worst first
 
-- [ ] 3.1 `drawing_analysis.py` (8 tools)
-- [ ] 3.2 `vba_generation.py` (10)
-- [ ] 3.3 `automation.py` (8) and `macro_recording.py` (7)
-- [ ] 3.4 `template_management.py` (6) and `docs_discovery.py` (5)
-- [ ] 3.5 `drawing.py` (14) and `drawing_automation.py` (7)
+- [x] 3.1 `drawing_analysis.py` (8 tools)
+- [x] 3.2 `vba_generation.py` (10)
+- [x] 3.3 `automation.py` (8) and `macro_recording.py` (7)
+- [x] 3.4 `template_management.py` (6) and `docs_discovery.py` (5)
+- [x] 3.5 `drawing.py` (14) and `drawing_automation.py` (7)
 - [ ] 3.6 `file_management.py` (19) and `export.py` (7)
 - [ ] 3.7 `analysis.py` (6) and `engineering_data.py` (8)
 - [ ] 3.8 `modeling.py` (30)

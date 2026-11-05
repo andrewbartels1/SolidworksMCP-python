@@ -278,31 +278,24 @@ async def register_drawing_automation_tools(
     async def insert_model_dimensions(
         input_data: InsertModelDimensionsInput | None = None,
     ) -> dict[str, Any]:
-        """Bring the model's dimensions into the active drawing's views.
+        """Bring the model's dimensions into the active drawing's views, each dimension shown once.
 
-        Imports the model's "marked for drawing" dimensions view by view, each
-        dimension shown once on the sheet (a repeat in a later view is
-        deleted). Pictorial views (isometric, dimetric, trimetric) are skipped
-        unless named. Falls back to SolidWorks AutoDimension only when nothing
-        could be imported. SolidWorks places imported dimensions inside the
-        views, so run ``arrange_dimensions`` afterwards.
+        Imports the model's "marked for drawing" dimensions view by view; a repeat in a
+        later view is deleted. Pictorial views (isometric, dimetric, trimetric) are
+        skipped unless named. Falls back to SolidWorks AutoDimension only when nothing
+        could be imported. SolidWorks places them inside the views, so run
+        `arrange_dimensions` next. Needs: an open, active drawing with views. Changes:
+        adds dimensions to the views. Returns: `data` with per-view `views`
+        (before/after counts, `duplicates_removed`), `dimensions_added`,
+        `unique_dimensions`, `skipped_pictorial_views` and the `method` used. An unknown
+        view is `not_found`.
 
         Args:
-            input_data (InsertModelDimensionsInput | None): ``view_name`` for one
-                view and ``include_hole_wizard``; omit for every view.
+            input_data: Which views. Nothing is required: give `view_name` for one
+                view, or omit it for every view; `include_hole_wizard` has a default.
 
         Returns:
-            dict[str, Any]: ``data`` has per-view ``views`` (before/after counts
-            and ``duplicates_removed``), ``dimensions_added``,
-            ``unique_dimensions``, ``skipped_pictorial_views`` and the ``method``
-            used. ``not_found`` for an unknown view; ``wrong_document_type``
-            unless a drawing is active.
-
-        Example:
-            ```python
-            await insert_model_dimensions()
-            await insert_model_dimensions({"view_name": "Drawing View1"})
-            ```
+            dict[str, Any]: The dimensions added.
         """
         input_data = normalize_input(input_data, InsertModelDimensionsInput)
         _supports("insert_model_dimensions")
@@ -325,32 +318,23 @@ async def register_drawing_automation_tools(
     async def arrange_dimensions(
         input_data: ArrangeDimensionsInput | None = None,
     ) -> dict[str, Any]:
-        """Move drawing dimensions so nothing overlaps, then check the real result.
+        """Move drawing dimensions out of their views into tidy rows so nothing overlaps, then check the sheet.
 
-        Dimensions go outside their views in rows (first 8 mm from the
-        outline, rows 7 mm apart, columns 9 mm apart), shortest span nearest
-        the view, each on the side its extension lines start from. One with no
-        room on that side stays put and is listed in ``unplaced``. After moving
-        them it re-reads every dimension's real text box and lines and checks
-        the whole sheet: no text on text, no line through text, no line across
-        another view or across its own view, nothing on a view or outside the
-        sheet.
+        Rows start 8 mm outside each view, 7 mm apart, shortest span nearest the view. A
+        dimension with no room stays put and is listed in `unplaced`. The check reads
+        back every text box and line: no text on text, no line through text or across a
+        view, nothing off the sheet. Use it after `insert_model_dimensions`. Needs: an
+        open, active drawing. Changes: moves dimensions on the sheet. Returns: `data`
+        with `dimensions`, `moved`, `overlaps_before`, `overlaps_after` and `unplaced`.
+        If any overlap remains the call is an error whose `data` lists
+        `remaining_overlaps`; try a smaller sheet scale (`set_sheet_scale`).
 
         Args:
-            input_data (ArrangeDimensionsInput | None): ``view_name`` to move
-                only one view's dimensions; omit for every view.
+            input_data: Which views. Nothing is required: give `view_name` for one
+                view's dimensions, or omit it for every view.
 
         Returns:
-            dict[str, Any]: ``data`` has ``dimensions``, ``moved``,
-            ``overlaps_before``, ``overlaps_after`` and ``unplaced``. When any
-            overlap remains the call is an error whose ``data`` lists each one
-            in ``remaining_overlaps``; try a smaller sheet scale.
-
-        Example:
-            ```python
-            await insert_model_dimensions()
-            await arrange_dimensions()
-            ```
+            dict[str, Any]: The arrangement and its check.
         """
         input_data = normalize_input(input_data, ArrangeDimensionsInput)
         _supports("arrange_dimensions")
@@ -374,21 +358,20 @@ async def register_drawing_automation_tools(
     ) -> dict[str, Any]:
         """Insert a bill-of-materials table for an assembly view on the active drawing.
 
+        Use it on an assembly drawing after placing a view of the assembly (see
+        `list_drawing_views` for view names). Needs: an open, active drawing with a view
+        of an assembly. Changes: adds a BOM table to the sheet. Returns: `data` with
+        `view`, `bom_type`, `template` and `row_count`. An unknown view is `not_found`
+        and the message lists the views.
+
         Args:
-            input_data (InsertBomTableInput | None): ``view_name`` (a view of an
-                assembly), optional ``template_path``, ``bom_type`` and table
-                position ``x_mm``/``y_mm`` (the sheet's BOM anchor when omitted).
+            input_data: The table. `view_name` (a view of an assembly) is
+                required; `bom_type` ("top_level_only", "parts_only" or "indented"),
+                `template_path` and the position `x_mm`/`y_mm` (the sheet's BOM
+                anchor when omitted) have defaults.
 
         Returns:
-            dict[str, Any]: ``data`` has ``view``, ``bom_type``, ``template`` and
-            ``row_count``. ``not_found`` for an unknown view (the message lists
-            the views); ``wrong_document_type`` unless a drawing is active.
-
-        Example:
-            ```python
-            await insert_bom_table({"view_name": "Drawing View1"})
-            await insert_bom_table({"view_name": "Drawing View1", "bom_type": "indented"})
-            ```
+            dict[str, Any]: The table inserted.
         """
         _supports("insert_bom_table")
         input_data = normalize_input(input_data, InsertBomTableInput)
@@ -409,37 +392,24 @@ async def register_drawing_automation_tools(
 
     @mcp.tool()
     async def add_gtol(input_data: AddGtolInput | None = None) -> dict[str, Any]:
-        """Add a GD&T feature control frame, e.g. position Ø0.2 (M) to A|B|C.
+        """Add a GD&T feature control frame to the active drawing, e.g. position Ø0.2 (M) to A|B|C.
+
+        Attach it to a drawing dimension (`dimension_view` + `dimension_name`; the frame
+        sits under the dimension's text, the usual place for a hole's position
+        tolerance), or place it at `x_mm`/`y_mm` with an optional leader to the edge at
+        `attach_x_mm`/`attach_y_mm`. Add the datums it refers to with `add_datum_tag`.
+        Needs: an open, active drawing. Changes: adds the frame. Returns: `data`, the
+        frame as read back from SolidWorks. No edge at the attach point is `not_found`.
 
         Args:
-            input_data (AddGtolInput | None): ``characteristic`` (position,
-                flatness, perpendicularity, ...), ``tolerance``,
-                ``diameter_zone``, ``material_condition``, up to three
-                ``datums``, and what it is on: a drawing dimension
-                (``dimension_view`` + ``dimension_name``; the frame sits under
-                its text - the usual place for a hole's position tolerance),
-                or ``x_mm``/``y_mm`` on the sheet with an optional leader to
-                the edge at ``attach_x_mm``/``attach_y_mm``.
+            input_data: The frame. `characteristic` (position, flatness,
+                perpendicularity, parallelism, profile_surface or concentricity) and
+                `tolerance` are required, plus either the dimension or the sheet
+                position; `diameter_zone`, `material_condition` (none, mmc, lmc) and
+                up to three `datums` (primary first) have defaults.
 
         Returns:
-            dict[str, Any]: ``data`` is the frame as read back from SolidWorks.
-            Bad inputs are ``invalid_input``; no edge at the attach point is
-            ``not_found``; anything other than a drawing is
-            ``wrong_document_type``.
-
-        Example:
-            ```python
-            await add_gtol({
-                "characteristic": "position", "tolerance": 0.2,
-                "diameter_zone": True, "material_condition": "mmc",
-                "datums": ["A", "B", "C"],
-                "dimension_view": "Drawing View2", "dimension_name": "D3@Sketch1",
-            })
-            await add_gtol({
-                "characteristic": "flatness", "tolerance": 0.05,
-                "x_mm": 60, "y_mm": 90, "attach_x_mm": 80, "attach_y_mm": 107,
-            })
-            ```
+            dict[str, Any]: The frame added.
         """
         _supports("add_gtol")
         input_data = normalize_input(input_data, AddGtolInput)
@@ -472,26 +442,20 @@ async def register_drawing_automation_tools(
     async def add_datum_tag(
         input_data: AddDatumTagInput | None = None,
     ) -> dict[str, Any]:
-        """Add a datum feature symbol (A, B, C, ...) on a drawing edge.
+        """Add a datum feature symbol (A, B, C, ...) on an edge of the active drawing.
+
+        Use it to mark the datums a feature control frame from `add_gtol` refers to.
+        Needs: an open, active drawing with an edge at the attach point. Changes: adds
+        the datum tag. Returns: `data` with the `label` as read back. No edge at the
+        point is `not_found`.
 
         Args:
-            input_data (AddDatumTagInput | None): ``label``, a point on the
-                edge it marks (``attach_x_mm``/``attach_y_mm``) and where the
-                tag goes (``x_mm``/``y_mm``), all on the sheet in mm.
+            input_data: The tag. `label` (one letter), `attach_x_mm`/`attach_y_mm`
+                (a point on the edge it marks) and `x_mm`/`y_mm` (where the tag
+                goes) are all required, in mm on the sheet.
 
         Returns:
-            dict[str, Any]: ``data`` has the ``label`` as read back. A label
-            that is not one letter is ``invalid_input``; no edge at the point
-            is ``not_found``; anything other than a drawing is
-            ``wrong_document_type``.
-
-        Example:
-            ```python
-            await add_datum_tag({
-                "label": "A", "attach_x_mm": 120, "attach_y_mm": 95,
-                "x_mm": 120, "y_mm": 85,
-            })
-            ```
+            dict[str, Any]: The tag added.
         """
         _supports("add_datum_tag")
         input_data = normalize_input(input_data, AddDatumTagInput)
@@ -513,21 +477,18 @@ async def register_drawing_automation_tools(
     async def set_sheet_scale(
         input_data: SetSheetScaleInput | None = None,
     ) -> dict[str, Any]:
-        """Set the active drawing sheet's scale; views using the sheet scale follow.
+        """Set the active drawing sheet's scale, e.g. 1:2; views that use the sheet scale follow it.
+
+        Use it when views are too large for the sheet, or when `arrange_dimensions`
+        reports overlaps it can't clear. Needs: an open, active drawing. Changes: the
+        sheet scale. Returns: `data` with the `sheet` name and the new `scale`.
 
         Args:
-            input_data (SetSheetScaleInput | None): ``numerator`` and
-                ``denominator``, e.g. 1 and 2 for 1:2.
+            input_data: The scale. `numerator` and `denominator` are required and
+                must be above zero, e.g. 1 and 2 for 1:2.
 
         Returns:
-            dict[str, Any]: ``data`` has the ``sheet`` name and new ``scale``.
-            Zero or negative values are ``invalid_input``; anything other than a
-            drawing is ``wrong_document_type``.
-
-        Example:
-            ```python
-            await set_sheet_scale({"numerator": 1, "denominator": 2})
-            ```
+            dict[str, Any]: The new scale.
         """
         _supports("set_sheet_scale")
         input_data = normalize_input(input_data, SetSheetScaleInput)
@@ -546,46 +507,30 @@ async def register_drawing_automation_tools(
     async def generate_drawing_package(
         input_data: GenerateDrawingPackageInput | None = None,
     ) -> dict[str, Any]:
-        """Create a complete A3 drawing of a part or assembly in one call.
+        """Create a complete A3 drawing of a part or assembly in one call, and save it with a PDF.
 
-        A3 ISO frame with a filled title block (title, drawing number, material,
-        weight, drawn by/date, revision); front, plan, side and isometric views
-        in cells sized to fill the sheet at one standard scale (never stepped
-        down); model dimensions shown once and laid out in rows; bold view-name
-        captions; a NOTES block; nothing overlapping, checked on the read-back
-        geometry. Saves ``<drawing_number>.SLDDRW`` and a PDF.
-
-        The DWG NO. and TITLE are shrunk to fit their title-block boxes. For
-        smaller title-block text, pass ``title_block_text_height_mm`` (e.g.
-        ``3``); a field that cannot fit even at 2 mm is reported as an
-        overlap, with that hint.
+        It opens a new drawing with an A3 ISO frame and fills the title block (title,
+        number, material, weight, drawn by, date, revision). It places front, plan, side
+        and isometric views at one standard scale, shows the model dimensions once in
+        tidy rows, and adds view captions and a NOTES block. Then it checks nothing
+        overlaps. Use it instead of the step-by-step drawing tools when you want the
+        whole drawing. Needs: the model file on disk. Changes: saves
+        `<drawing_number>.SLDDRW` and a PDF, replacing files of those names, and by
+        default writes Description, Material and Weight into the model and saves it
+        (turn off with `write_model_properties`). Returns: `data` with `scale`, `views`,
+        `dimensions`, `overlap_check`, `title_block`, `drawing_path`, `pdf_path` and
+        `steps`. A remaining overlap makes the call an error carrying that data; for
+        long title-block text pass `title_block_text_height_mm` (e.g. 3).
 
         Args:
-            input_data (GenerateDrawingPackageInput | None): ``model_path`` plus
-                optional title-block fields, ``notes`` and output folder.
+            input_data: The drawing. `model_path` (.sldprt or .sldasm) is
+                required; `output_dir`, the title-block fields (`title`,
+                `drawing_number`, `author`, `revision`, `company`), `notes`,
+                `include_isometric`, `include_bom` and `write_model_properties` have
+                defaults.
 
         Returns:
-            dict[str, Any]: ``data`` has ``scale``, ``views``, ``dimensions``,
-            ``overlap_check``, ``title_block`` (whether the DWG NO. and TITLE
-            fit their boxes), ``drawing_path``, ``pdf_path`` and ``steps``. The
-            call is an error, with that data, when any overlap remains. A
-            missing model is ``not_found``; a file that is not a part or
-            assembly is ``invalid_input``.
-
-        Example:
-            ```python
-            await generate_drawing_package({
-                "model_path": "C:/parts/Mounting Plate.SLDPRT",
-                "title": "Mounting Plate",
-                "drawing_number": "MP-01",
-                "author": "J. Smith",
-            })
-            # Smaller DWG NO. and TITLE text in the title block:
-            await generate_drawing_package({
-                "model_path": "C:/parts/Mounting Plate.SLDPRT",
-                "title_block_text_height_mm": 3,
-            })
-            ```
+            dict[str, Any]: The drawing and its check.
         """
         require_capability(
             adapter,

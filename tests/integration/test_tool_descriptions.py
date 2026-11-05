@@ -22,7 +22,16 @@ from solidworks_mcp.tools import register_tools
 from solidworks_mcp.tools.tool_boundary import tool_family
 
 #: The modules whose descriptions have been rewritten to the standard.
-_REWRITTEN: set[str] = set()
+_REWRITTEN: set[str] = {
+    "automation",
+    "docs_discovery",
+    "drawing",
+    "drawing_analysis",
+    "drawing_automation",
+    "macro_recording",
+    "template_management",
+    "vba_generation",
+}
 
 _MODULES = [
     "analysis",
@@ -43,7 +52,9 @@ _MODULES = [
 
 _MIN_CHARS, _MAX_CHARS = 120, 1200
 _GENERIC_INPUT = re.compile(r"^\s*$|input data value", re.IGNORECASE)
-_LEAKED_SECTION = re.compile(r"^\s*(Args|Returns|Raises|Example)s?:", re.MULTILINE)
+# A Google-style section header alone on its line ("Returns:"), as a leftover
+# docstring section shows; a "Returns: ..." sentence is part of the standard.
+_LEAKED_SECTION = re.compile(r"^\s*(Args|Returns|Raises|Examples?):\s*$", re.MULTILINE)
 
 
 async def _tools(adapter: Any) -> list[Any]:

@@ -134,16 +134,20 @@ async def register_template_management_tools(
 
     @mcp.tool()
     async def extract_template(input_data: TemplateExtractionInput) -> dict[str, Any]:
-        """Extract template from existing SolidWorks model.
+        """Capture a model's settings (custom properties, dimensions, units) as a reusable template file.
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Changes: once
+        available, writes the template to `save_path`, replacing any file there.
+        Returns: once available, the captured settings under `data`.
 
         Args:
-            input_data (TemplateExtractionInput): The input data value.
+            input_data: The extraction. `source_model`, `template_name`,
+                `template_type` and `save_path` are required;
+                `include_custom_properties` and `include_dimensions` default to on.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await extract_template(extraction_input)
+            dict[str, Any]: The template, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -162,19 +166,21 @@ async def register_template_management_tools(
 
     @mcp.tool()
     async def apply_template(input_data: TemplateApplicationInput) -> dict[str, Any]:
-        """Apply a template to an existing SolidWorks model.
+        """Apply a saved template's properties, dimensions and materials to a model.
 
-        This tool applies saved template settings including properties, dimensions, and
-        formatting to the target model.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To set a
+        material or a property today, use `set_material` or `set_custom_property`.
+        Changes: once available, overwrites the target model's matching settings.
+        Returns: once available, what changed under `data`.
 
         Args:
-            input_data (TemplateApplicationInput): The input data value.
+            input_data: The application. `template_path` and `target_model` are
+                required; `overwrite_existing`, `apply_dimensions` and
+                `apply_materials` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await apply_template(application_input)
+            dict[str, Any]: The changes, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -193,19 +199,20 @@ async def register_template_management_tools(
 
     @mcp.tool()
     async def batch_apply_template(input_data: TemplateBatchInput) -> dict[str, Any]:
-        """Apply template to multiple models in batch.
+        """Apply one template to every matching model in a folder.
 
-        This tool processes multiple SolidWorks files and applies the same template
-        configuration to all matching files.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Changes: once
+        available, overwrites settings in each matching file, optionally keeping
+        backups. Returns: once available, a per-file result under `data`.
 
         Args:
-            input_data (TemplateBatchInput): The input data value.
+            input_data: The batch. `template_path` and `source_folder` are
+                required; `file_pattern`, `recursive` and `backup_originals` have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await batch_apply_template(batch_input)
+            dict[str, Any]: The results, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -224,25 +231,20 @@ async def register_template_management_tools(
 
     @mcp.tool()
     async def compare_templates(input_data: TemplateComparisonInput) -> dict[str, Any]:
-        """Compare two templates and generate difference report.
+        """Compare two template files on disk: whether they are byte-identical, and how their sizes differ.
 
-        This tool analyzes differences between templates to help understand variations in
-        formatting and properties.
+        Use it to tell whether two templates are the same file. It does not read the
+        templates' settings, so it can't say which properties or dimensions differ.
+        Needs: both files on disk. Read-only. Returns: `comparison` with `file_1` and
+        `file_2` (size, modified time, SHA-256), `identical` and `size_delta_bytes`.
 
         Args:
-            input_data (TemplateComparisonInput): The input data value.
+            input_data: The two templates. `template1_path` and `template2_path`
+                are required; the comparison switches have defaults and are not used
+                yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await compare_templates(comparison_input)
-
-        Note:
-            When no adapter can parse template internals, this falls back to
-            a filesystem-level comparison only (existence, size, modified
-            time, byte-identical check) — it does not report property,
-            dimension, or formatting differences it cannot actually read.
+            dict[str, Any]: The comparison.
         """
         if hasattr(adapter, "compare_templates"):
             result = await adapter.compare_templates(input_data.model_dump())
@@ -298,21 +300,19 @@ async def register_template_management_tools(
 
     @mcp.tool()
     async def save_to_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Save template to the organization's template library.
+        """Add a template to a shared, categorised template library.
 
-        This tool manages a centralized template library with categorization and version
-        control.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Changes: once
+        available, copies the template into the library, replacing an entry with the
+        same name. Returns: once available, the library entry under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `template_name` and the template's path.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await save_to_template_library(library_input)
+            dict[str, Any]: The entry, or a `not_supported` error.
         """
-
         if hasattr(adapter, "save_to_template_library"):
             result = await adapter.save_to_template_library(input_data)
             require_success(result, "Failed to save to library")
@@ -334,19 +334,17 @@ async def register_template_management_tools(
 
     @mcp.tool()
     async def list_template_library(input_data: dict[str, Any]) -> dict[str, Any]:
-        """List available templates from the template library.
+        """List the templates in the shared template library.
 
-        This tool provides browsing and searching capabilities for the organization's template
-        library.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Read-only.
+        Returns: once available, the library's templates under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping of optional filters; none is required.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await list_template_library(list_input)
+            dict[str, Any]: The templates, or a `not_supported` error.
         """
         require_capability(
             adapter,

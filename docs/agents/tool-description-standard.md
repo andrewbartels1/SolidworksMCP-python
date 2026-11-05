@@ -58,6 +58,20 @@ input_data: The extrusion to make. `sketch_name` and `depth` (mm) are
 Every field of the input model has its own `Field(description=...)`,
 with units where there are any.
 
+A tool with no parameters has no `Args:` or `Returns:` section: FastMCP
+strips those sections only when there are parameters, so they would show up
+in the description. Its "Returns: ..." sentence says what comes back.
+
+## Tools that can't run yet
+
+Some tools have no adapter implementation, so every call returns
+`error_type: "not_supported"`. Say so plainly, right after the first
+sentence: "Not available yet: no adapter implements it, so every call
+returns an error with `error_type: "not_supported"`. It is planned for a
+future release." Then point to the tool to use instead, if there is one, and
+phrase what it would change or return as "once available". The list of these
+tools is in `openspec/queue.md`.
+
 ## Behaviour hints
 
 Add one line to `TOOL_HINTS` in `tools/tool_hints.py` for every new tool;

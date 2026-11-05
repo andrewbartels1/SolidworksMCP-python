@@ -216,19 +216,21 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def start_macro_recording(input_data: MacroRecordingInput) -> dict[str, Any]:
-        """Start recording a SolidWorks macro.
+        """Start SolidWorks' macro recorder, to capture what the user does as a macro.
 
-        This tool initiates macro recording to capture user actions for later playback and
-        automation.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Recording is
+        done in SolidWorks today (Tools > Macro > Record). Changes: once available,
+        starts a recording session. Returns: once available, the session details under
+        `data`.
 
         Args:
-            input_data (MacroRecordingInput): The input data value.
+            input_data: The recording. `output_file` (where the macro is saved) is
+                required; `macro_name`, `recording_mode`, the capture switches and
+                `timeout_seconds` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await start_macro_recording(recording_input)
+            dict[str, Any]: The session, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -247,19 +249,19 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def stop_macro_recording(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Stop macro recording and save the recorded macro.
+        """Stop the macro recorder and save the recorded macro.
 
-        This tool stops the active recording session and saves the generated macro code to a
-        file.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Recording is
+        done in SolidWorks today (Tools > Macro > Stop). Changes: once available, ends
+        the session and writes the macro file. Returns: once available, the saved
+        macro's details under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping; nothing in it is used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await stop_macro_recording(stop_input)
+            dict[str, Any]: The saved macro, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -279,23 +281,24 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def execute_macro(input_data: MacroPlaybackInput) -> dict[str, Any]:
-        """Run a binary SolidWorks macro (.swp, or legacy .swb).
+        """Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once.
 
-        Calls ``ISldWorks::RunMacro2`` on ``macro_path`` (or ``macro_file``).
-        Only binary macros run: VBA source (.vb, .bas, plain text) is
-        rejected as ``invalid_input`` before anything reaches SolidWorks.
-        The macro must not be interactive (no MsgBox or user forms).
+        Use it to run an existing macro file. VBA source (.bas, .vb, plain text, or what
+        the `generate_vba_*` tools return) is refused as invalid input before SolidWorks
+        sees it. The macro must not wait for the user (no MsgBox or forms), or the call
+        hangs. `repeat_count` is not used yet: the macro runs once, although the message
+        counts the repeats. Needs: SolidWorks running and the macro file on disk.
+        Changes: whatever the macro does; it can't be undone from here. Returns: `data`
+        with `macro_path`, `module_name`, `proc_name` and `errors`.
 
         Args:
-            input_data (MacroPlaybackInput): The input data value.
+            input_data: The macro to run. Give `macro_path` (or `macro_file`);
+                `target_file`, `execution_mode` and the logging switches have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await execute_macro(playback_input)
+            dict[str, Any]: The run's result.
         """
-
         input_data = normalize_input(input_data, MacroPlaybackInput)
         require_capability(
             adapter,
@@ -315,19 +318,19 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def analyze_macro(input_data: MacroAnalysisInput) -> dict[str, Any]:
-        """Analyze a macro for complexity, dependencies, and optimization opportunities.
+        """Analyse a macro's structure, dependencies and complexity, and suggest optimisations.
 
-        This tool provides insights into macro structure and performance to help with
-        optimization and maintenance.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Read-only.
+        Returns: once available, the findings under `data`.
 
         Args:
-            input_data (MacroAnalysisInput): The input data value.
+            input_data: The macro. Give `macro_path` (or `macro_file`);
+                `analysis_type`, `analysis_depth` and `suggest_optimizations` have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await analyze_macro(analysis_input)
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -346,19 +349,20 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def batch_execute_macros(input_data: MacroBatchInput) -> dict[str, Any]:
-        """Handle batch execute macros.
+        """Run several macros in sequence against the files in a folder.
 
-        This tool allows running multiple macros in sequence or parallel for complex automated
-        workflows.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To run one
+        macro, use `execute_macro`. Changes: once available, whatever the macros do.
+        Returns: once available, each run's result under `data`.
 
         Args:
-            input_data (MacroBatchInput): The input data value.
+            input_data: The batch. `macro_list` (macro file paths) is required;
+                `target_directory`, `file_pattern`, `execution_order` and
+                `stop_on_error` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await batch_execute_macros(batch_input)
+            dict[str, Any]: The results, or a `not_supported` error.
         """
         payload = (
             input_data.model_dump()
@@ -385,18 +389,18 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def optimize_macro(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Optimize an existing macro for better performance and reliability.
+        """Suggest improvements to a macro's code for speed and reliability.
 
-        This tool analyzes and suggests improvements to existing macro code.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Read-only. It
+        would suggest changes, not make them. Returns: once available, the suggestions
+        under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the macro's `macro_path` (or `macro_file`).
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await optimize_macro(optimization_input)
+            dict[str, Any]: The suggestions, or a `not_supported` error.
         """
         payload = (
             input_data.model_dump()
@@ -423,19 +427,18 @@ async def register_macro_recording_tools(
 
     @mcp.tool()
     async def create_macro_library(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Create a library of organized macros for team sharing and reuse.
+        """Set up a shared folder of categorised, documented macros.
 
-        This tool sets up a structured macro library with categorization, documentation, and
-        version control.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Changes: once
+        available, creates the library folder and its index. Returns: once available,
+        the library's contents under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `library_path` to create.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await create_macro_library(library_input)
+            dict[str, Any]: The library, or a `not_supported` error.
         """
         payload = (
             input_data.model_dump()

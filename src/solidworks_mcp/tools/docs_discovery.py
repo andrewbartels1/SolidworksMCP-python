@@ -1208,7 +1208,8 @@ async def register_docs_discovery_tools(
         interface in the installed SolidWorks type library (each member's
         parameters, return type and description), plus the VBA library
         references. SolidWorks must be installed, not running; it is never
-        started or called.
+        started or called. Changes: writes the index file, replacing the
+        saved one.
 
         Returns ``summary`` (interface, method and property counts),
         ``type_library`` (version, year and .tlb path), ``year`` and
@@ -1219,8 +1220,9 @@ async def register_docs_discovery_tools(
         Example input: ``{"year": 2026}``
 
         Args:
-            input_data (DiscoverDocsInput | None): Year, output folder and
-                whether to include VBA references. Defaults to None.
+            input_data (DiscoverDocsInput | None): The rebuild. Nothing is
+                required: `year` defaults to the installed release,
+                `output_dir` to the index folder, and `include_vba` to on.
 
         Returns:
             dict[str, Any]: ``summary``, ``type_library``, ``year``,
@@ -1267,10 +1269,10 @@ async def register_docs_discovery_tools(
         SolidWorks type library installed on this machine.
 
         Setup: none. SolidWorks must be installed, not running; it is never
-        contacted. Nothing has to be called first: the first call builds the
-        index (about a second) and later calls reuse it. ``index_status`` is
-        ``ready`` (saved index), ``rebuilt`` (built for this call) or
-        ``unavailable`` (no index could be built; ``guidance`` says why).
+        contacted. Read-only. The first call builds the index (about a
+        second) and later calls reuse it. ``index_status`` is ``ready``
+        (saved index), ``rebuilt`` (built for this call) or ``unavailable``
+        (no index could be built; ``guidance`` says why).
 
         Returns ``matches`` (interface, member, member_type, score),
         ``guidance``, and ``fallback_help`` suggesting MCP tools for the
@@ -1280,8 +1282,9 @@ async def register_docs_discovery_tools(
         Example input: ``{"query": "chamfer", "max_results": 5}``
 
         Args:
-            input_data (SearchApiHelpInput | None): The search words and
-                options. Defaults to None.
+            input_data (SearchApiHelpInput | None): The search. `query`
+                (one or more words) is required; `max_results` and `year`
+                have defaults.
 
         Returns:
             dict[str, Any]: ``matches``, ``guidance``, ``fallback_help``,
@@ -1331,10 +1334,9 @@ async def register_docs_discovery_tools(
         installed on this machine, so they match the installed version.
 
         Setup: none. SolidWorks must be installed, not running; it is never
-        contacted. Nothing has to be called first: the first lookup builds
-        the index (about a second) and later lookups reuse it.
-        ``index_status`` is ``ready`` (saved index), ``rebuilt`` (built for
-        this call) or ``unavailable`` (no index could be built).
+        contacted. Read-only. The first lookup builds the index (about a
+        second). ``index_status`` is ``ready``, ``rebuilt`` or
+        ``unavailable``.
 
         Names match regardless of case, as COM does. ``result.member`` is
         SolidWorks' own spelling, with a ``note`` when yours differs. Each
@@ -1349,8 +1351,9 @@ async def register_docs_discovery_tools(
         Example input: ``{"interface": "ISldWorks", "method": "OpenDoc6"}``
 
         Args:
-            input_data (LookupApiMethodInput | None): The interface and member
-                name. Defaults to None.
+            input_data (LookupApiMethodInput | None): The member to look up.
+                `interface` (e.g. "ISldWorks") and `method` (a method or
+                property name) are required; `year` has a default.
 
         Returns:
             dict[str, Any]: ``result``, ``year``, ``type_library_version``,
@@ -1387,10 +1390,10 @@ async def register_docs_discovery_tools(
         regardless of case.
 
         Setup: none. SolidWorks must be installed, not running; it is never
-        contacted. Nothing has to be called first: the first call builds the
-        index (about a second) and later calls reuse it. ``index_status`` is
-        ``ready`` (saved index), ``rebuilt`` (built for this call) or
-        ``unavailable`` (no index could be built).
+        contacted. Read-only. The first call builds the index (about a
+        second) and later calls reuse it. ``index_status`` is ``ready``
+        (saved index), ``rebuilt`` (built for this call) or ``unavailable``
+        (no index could be built).
 
         Returns ``result`` with ``methods``, ``properties`` and their counts.
         ``result.found`` false means the interface isn't in the type library,
@@ -1399,8 +1402,9 @@ async def register_docs_discovery_tools(
         Example input: ``{"interface": "IFeatureManager"}``
 
         Args:
-            input_data (LookupApiInterfaceInput | None): The interface name.
-                Defaults to None.
+            input_data (LookupApiInterfaceInput | None): The interface.
+                `interface` (e.g. "IFeatureManager") is required; `year` has
+                a default.
 
         Returns:
             dict[str, Any]: ``result``, ``year``, ``type_library_version``,
@@ -1436,10 +1440,10 @@ async def register_docs_discovery_tools(
         know, such as what sits beside InsertSketch.
 
         Setup: none. SolidWorks must be installed, not running; it is never
-        contacted. Nothing has to be called first: the first call builds the
-        index (about a second) and later calls reuse it. ``index_status`` is
-        ``ready`` (saved index), ``rebuilt`` (built for this call) or
-        ``unavailable`` (no index could be built).
+        contacted. Read-only. The first call builds the index (about a
+        second) and later calls reuse it. ``index_status`` is ``ready``
+        (saved index), ``rebuilt`` (built for this call) or ``unavailable``
+        (no index could be built).
 
         Returns ``result.related``: each member's interface, name, type and
         why it is related. ``result.found`` false means nothing matched, or
@@ -1448,8 +1452,9 @@ async def register_docs_discovery_tools(
         Example input: ``{"name": "InsertSketch", "max_results": 10}``
 
         Args:
-            input_data (FindRelatedApiInput | None): The name and how many
-                results to return. Defaults to None.
+            input_data (FindRelatedApiInput | None): What to explore.
+                `name` (an interface or member) is required; `max_results`
+                and `year` have defaults.
 
         Returns:
             dict[str, Any]: ``result``, ``year``, ``type_library_version``,

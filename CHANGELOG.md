@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docs/agents/tool-description-standard.md`) and a test that checks it
   come with them; the descriptions themselves are rewritten in the next
   changes (#82).
+- **Clearer descriptions for 65 tools** in the drawing, drawing-analysis,
+  drawing-automation, VBA, automation, macro, template and API-lookup
+  families. Each now says what the tool does, when to use it and which tool
+  to use instead, what it needs, what it changes (or that it is read-only)
+  and what it returns, and names its required inputs. The 33 tools that no
+  adapter implements yet say so up front ("Not available yet ... planned
+  for a future release"). `add_drawing_view` and `create_technical_drawing`
+  are no longer marked destructive: neither overwrites anything (#82).
 
 ### Fixed
 
