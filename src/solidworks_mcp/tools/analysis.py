@@ -333,39 +333,21 @@ async def register_analysis_tools(
     async def calculate_mass_properties(
         input_data: MassPropertiesInput,
     ) -> dict[str, Any]:
-        """Get mass properties of the current SolidWorks model.
+        """Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
 
-        Calculates and returns comprehensive mass properties for the active model including
-        volume, surface area, mass, center of mass, and moments of inertia. Essential for
-        engineering analysis, weight calculations, and structural design.
+        Use it to check weight or balance. To compare a model with the values you
+        expect, use `verify_model`; `get_mass_properties` does the same as this tool.
+        Mass depends on the assigned material (`set_material`). Needs: an open part or
+        assembly. Read-only. It rebuilds first. Returns: `mass_properties` with `volume`
+        (mm³), `surface_area` (mm²), `mass` (kg), `center_of_mass` (mm),
+        `moments_of_inertia` (in kg·m², whatever its `units` label says) and
+        `principal_axes`.
 
         Args:
-            input_data (MassPropertiesInput): The input data value.
+            input_data: Nothing is required; the fields (`model_path`, `units`, `include_hidden`, `reference_coordinate_system`) are not used yet: it always measures the active model.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await get_mass_properties()
-
-                            if result["status"] == "success":
-                                props = result["mass_properties"]
-                                print(f"Volume: {props['volume']['value']} {props['volume']['units']}")
-                                print(f"Mass: {props['mass']['value']} {props['mass']['units']}")
-
-                                com = props['center_of_mass']
-                                print(f"Center of Mass: ({com['x']}, {com['y']}, {com['z']}) mm")
-
-                                moi = props['moments_of_inertia']
-                                print(f"Moment of Inertia Ixx: {moi['Ixx']} kg·mm²")
-                            ```
-
-                        Note:
-                            - Requires active SolidWorks model with geometry
-                            - Material assignment affects mass calculations
-                            - Uses model units and coordinate system
-                            - Includes both geometric and inertial properties
+            dict[str, Any]: The mass properties.
         """
         if hasattr(adapter, "calculate_mass_properties"):
             result = await adapter.calculate_mass_properties(input_data.model_dump())
@@ -413,14 +395,20 @@ async def register_analysis_tools(
     async def get_mass_properties(
         input_data: MassPropertiesInput | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Backward-compatible alias for calculate_mass_properties.
+        """Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
+
+        The same as `calculate_mass_properties`, which it calls. To compare a model with
+        the values you expect, use `verify_model`. Mass depends on the assigned material
+        (`set_material`). Needs: an open part or assembly. Read-only. It rebuilds first.
+        Returns: `mass_properties` with `volume` (mm³), `surface_area` (mm²), `mass`
+        (kg), `center_of_mass` (mm), `moments_of_inertia` (in kg·m², whatever its
+        `units` label says) and `principal_axes`.
 
         Args:
-            input_data (MassPropertiesInput | dict[str, Any] | None): The input data value.
-                                                                      Defaults to None.
+            input_data: Optional, and not used yet: it always measures the active model.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The mass properties.
         """
         if input_data is None:
             normalized_input = MassPropertiesInput()
@@ -432,40 +420,21 @@ async def register_analysis_tools(
 
     @mcp.tool()
     async def check_interference(input_data: InterferenceCheckInput) -> dict[str, Any]:
-        """Check for interference between components in an assembly.
+        """Find where the components of the active assembly overlap (Tools > Interference Detection).
 
-        Analyzes specified components for geometric interference (overlapping volumes) and
-        provides detailed interference detection results. Critical for assembly validation and
-        identifying design conflicts before manufacturing.
+        Use it after inserting and mating components. A count of 0 is a real
+        measurement. To fail a build on interference, use `verify_model` with
+        `no_interference`. Needs: an open, active assembly. Read-only. Returns: `data`
+        with `interference_found`, `interference_count`, `interferences` (component
+        pairs and overlap volume in mm³) and `scope`.
 
         Args:
-            input_data (InterferenceCheckInput): The input data value.
+            input_data: Nothing is required. `components` limits the report to
+                interferences involving those components; `tolerance`,
+                `include_hidden` and `check_all_components` are not used.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Check specific components
-                            result = await check_interference({
-                                "components": ["Bracket-1", "Shaft-1", "Bearing-1"],
-                                "tolerance": 0.01
-                            })
-
-                            # Check all components with default tolerance
-                            result = await check_interference({
-                                "components": [],
-                                "tolerance": 0.001
-                            })
-
-                            if result["status"] == "success":
-                                results = result["interference_results"]
-                                print(f"Found {results['total_interferences']} interferences")
-
-                                for interference in results["interference_details"]:
-                                    print(f"Interference between {interference['component_1']} and {interference['component_2']}")
-                                    print(f"Volume: {interference['volume']} mm³")
-                            ```
+            dict[str, Any]: The interferences found.
         """
         require_capability(
             adapter,
@@ -486,16 +455,20 @@ async def register_analysis_tools(
 
     @mcp.tool()
     async def analyze_geometry(input_data: GeometryAnalysisInput) -> dict[str, Any]:
-        """Handle analyze geometry.
+        """Run a geometry analysis on the active model, such as curvature, draft or wall thickness.
 
-        This tool provides various geometry analysis capabilities like curvature analysis, draft
-        analysis, thickness analysis, etc.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. For distances
+        and angles today, use `measure_entities`; for size and volume, use
+        `verify_model` or `calculate_mass_properties`. Read-only. Returns: once
+        available, the analysis under `data`.
 
         Args:
-            input_data (GeometryAnalysisInput): The input data value.
+            input_data: The analysis. `analysis_type` (e.g. curvature, draft,
+                thickness) is required; `parameters` has a default.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The analysis, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -514,13 +487,13 @@ async def register_analysis_tools(
 
     @mcp.tool()
     async def get_material_properties() -> dict[str, Any]:
-        """Get material properties of the current model.
+        """Report the physical properties of the active part's material: density, modulus, Poisson's ratio, strength.
 
-        This tool retrieves the material properties assigned to the model including density,
-        elastic modulus, yield strength, etc.
-
-        Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. For the
+        material's name today, use `get_material`; for the materials you can assign, use
+        `list_available_materials`. Read-only. Returns: once available, the properties
+        under `data`.
         """
         require_capability(
             adapter,
@@ -540,46 +513,25 @@ async def register_analysis_tools(
     async def verify_model(
         input_data: VerifyModelInput | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Check the active part or assembly against what you meant to build.
+        """Check the active part or assembly against what you meant to build, one pass/fail check per expected value.
 
-        Call this as the last step of a build (and whenever a step looks
-        suspicious). A modelling tool returning success does not prove the
-        geometry is right; this reads the model back and compares it with
-        your expectations. Give only the expectations you know; each becomes
-        one check. With no expectations it just reports what it measured.
-
-        Units: mm, mm³ and kg. ``bounding_box_mm`` is the overall size
-        ``[x, y, z]`` in model axes (a sketch on the Front Plane extrudes
-        along z). Widen ``relative_tolerance`` when your hand calculation
-        ignores fillets or chamfers, and ``length_tolerance_mm`` when
-        ``measured.bounding_box_method`` is ``assembly_box`` (SolidWorks'
-        assembly box can be slightly larger than the parts). Mass depends on
-        the assigned material; without one SolidWorks uses a default density.
-
-        Each check reports ``expected``, ``actual``, ``tolerance`` and
-        ``passed``: ``true``, ``false``, or ``null`` when the value could not
-        be measured (never counted as a pass). ``verdict`` is ``pass``,
-        ``fail``, ``inconclusive`` (nothing failed, something unmeasured) or
-        ``report_only``. ``status`` stays ``success`` when the model does not
-        match: the tool worked, the model is what failed.
+        Use it as the last step of a build: a modelling tool's success doesn't prove the
+        geometry is right. Give only the values you know. Units: mm, mm³, kg;
+        `bounding_box_mm` is [x, y, z] in model axes. Widen `relative_tolerance` when
+        your sums ignore fillets. Needs: an open part or assembly. Read-only. Returns:
+        `verdict` (pass, fail, inconclusive or report_only), `checks` (each `expected`,
+        `actual`, `tolerance`, `passed`; null when unmeasured) and `measured`. A
+        mismatch is still `status: success`.
 
         Args:
-            input_data (VerifyModelInput | dict[str, Any] | None): Expectations
-                and tolerances. Defaults to None (report only).
+            input_data: The expectations, all optional: `mass_kg`, `volume_mm3`,
+                `bounding_box_mm`, `feature_count`, `solid_body_count`, and for an
+                assembly `component_count`, `mate_count` and `no_interference`;
+                `relative_tolerance` (0.01) and `length_tolerance_mm` (0.1) have
+                defaults. With none it only reports what it measured.
 
         Returns:
-            dict[str, Any]: ``verdict``, ``checks``, ``measured`` and the usual
-            ``status``/``message``/``execution_time``.
-
-        Example:
-            ```python
-            await verify_model({
-                "volume_mm3": 50000,
-                "bounding_box_mm": [100, 50, 10],
-                "feature_count": 1,
-                "solid_body_count": 1,
-            })
-            ```
+            dict[str, Any]: The verdict and checks.
         """
         expectations = normalize_input(input_data, VerifyModelInput)
         require_capability(

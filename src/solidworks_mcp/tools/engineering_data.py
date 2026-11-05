@@ -212,28 +212,20 @@ async def register_engineering_data_tools(
     async def list_model_dimensions(
         input_data: ListModelDimensionsInput | None = None,
     ) -> dict[str, Any]:
-        """List every dimension in the active part or assembly with its full name.
+        """List every dimension in the active part or assembly with its full name and value.
 
-        Read-only. Each entry's ``full_name`` (e.g. ``"D1@Sketch1"``) is the
-        name ``set_dimension`` / ``get_dimension`` accept, so this is how to
-        find and edit any driving dimension in an existing model. Pass
-        ``feature_name`` to list one feature's dimensions only.
+        Use it to find a dimension in an existing model before changing it: each
+        `full_name` (e.g. "D1@Sketch1") is the name `get_dimension` and `set_dimension`
+        take. Needs: an open part or assembly. Read-only. Returns: `data`, one entry per
+        dimension with `full_name`, `feature`, `value` (document units), `system_value`
+        (metres or radians) and `read_only`.
 
         Args:
-            input_data (ListModelDimensionsInput | None): ``feature_name`` to
-                list one feature only; omit for every dimension.
+            input_data: Nothing is required: give `feature_name` to list one
+                feature's dimensions, or omit it for every dimension.
 
         Returns:
-            dict[str, Any]: ``data`` is a list of ``{full_name, feature, value
-            (document units), system_value (metres or radians), read_only}``.
-            ``not_found`` when ``feature_name`` has no dimensions;
-            ``wrong_document_type`` on a drawing.
-
-        Example:
-            ```python
-            await list_model_dimensions()
-            await list_model_dimensions({"feature_name": "Boss-Extrude1"})
-            ```
+            dict[str, Any]: The dimensions.
         """
         input_data = normalize_input(input_data, ListModelDimensionsInput)
         _supports("list_model_dimensions")
@@ -243,33 +235,23 @@ async def register_engineering_data_tools(
 
     @mcp.tool()
     async def measure_entities(input_data: MeasureEntitiesInput) -> dict[str, Any]:
-        """Measure faces, edges or vertices with SolidWorks' Measure tool.
+        """Measure faces, edges or vertices of the active model with SolidWorks' Measure tool.
 
-        One face gives its area and perimeter; one edge its length (and radius
-        and diameter for an arc); two entities give the distance and angle
-        between them. Entity coordinates are in metres. Clears the selection
-        afterwards.
+        One face gives area and perimeter; one edge its length, and radius and diameter
+        for an arc; two entities give the distance and angle between them. Use it to
+        check a feature's size or position; for the whole model, use `verify_model`.
+        Needs: an open part or assembly. Read-only. It clears the selection afterwards.
+        Returns: `data` with `selected` and the values in metres, square metres and
+        radians (`distance_m`, `angle_rad`, `length_m`, `radius_m`, `diameter_m`,
+        `area_m2`, `perimeter_m`; for two entities `is_parallel`).
 
         Args:
-            input_data (MeasureEntitiesInput): One or two entity specs.
+            input_data: What to measure. `entities` (one or two) is required, each
+                "face:x,y,z", "edge:x,y,z", "vertex:x,y,z" (a point on it, in metres)
+                or a name like "Edge<1>".
 
         Returns:
-            dict[str, Any]: ``data`` holds ``selected`` plus whichever of
-            ``distance_m``, ``center_distance_m``, ``angle_rad``, ``radius_m``,
-            ``diameter_m``, ``length_m``, ``arc_length_m``, ``area_m2``,
-            ``perimeter_m``, ``delta_x_m``/``_y_m``/``_z_m`` and (for two
-            entities) ``is_parallel`` apply to the selection. ``not_found``
-            when an entity cannot be selected.
-
-        Example:
-            ```python
-            # Area of the face through (15, 15, 0) mm.
-            await measure_entities({"entities": ["face:0.015,0.015,0.0"]})
-            # Distance and angle between two faces.
-            await measure_entities(
-                {"entities": ["face:0.015,0.015,0.0", "face:0.015,0.015,-0.015"]}
-            )
-            ```
+            dict[str, Any]: The measurements.
         """
         input_data = normalize_input(input_data, MeasureEntitiesInput)
         _supports("measure_entities")
@@ -281,22 +263,19 @@ async def register_engineering_data_tools(
     async def get_material(
         input_data: GetMaterialInput | None = None,
     ) -> dict[str, Any]:
-        """Read the material assigned to the active part.
+        """Report the material assigned to the active part.
 
-        Read-only. Parts only (``wrong_document_type`` otherwise).
+        Use it before `calculate_mass_properties` or `verify_model` with a mass: without
+        a material SolidWorks uses a default density. Needs: an open, active part (any
+        other document is `wrong_document_type`). Read-only. Returns: `data` with
+        `material` (null when none is assigned) and `database`.
 
         Args:
-            input_data (GetMaterialInput | None): ``configuration``; the active
-                one when omitted.
+            input_data: Nothing is required: `configuration` defaults to the active
+                one.
 
         Returns:
-            dict[str, Any]: ``data`` is ``{material, database, configuration}``;
-            ``material`` is ``None`` when none is assigned.
-
-        Example:
-            ```python
-            await get_material()
-            ```
+            dict[str, Any]: The material.
         """
         input_data = normalize_input(input_data, GetMaterialInput)
         _supports("get_material")
@@ -309,26 +288,20 @@ async def register_engineering_data_tools(
 
     @mcp.tool()
     async def set_material(input_data: SetMaterialInput) -> dict[str, Any]:
-        """Assign a library material to the active part.
+        """Assign a library material to the active part, e.g. "AISI 1020" or "6061-T6 (SS)".
 
-        The material drives mass properties (``get_mass_properties``) and what
-        a title block's Material field shows. The name must match the library
-        exactly; find it with ``list_available_materials``. The material is
-        read back after assignment, so success means it really applied.
+        The material sets the mass and what a title block's Material field shows. The
+        name must match the library exactly; find it with `list_available_materials`.
+        The material is read back, so success means it applied. Needs: an open, active
+        part. Changes: the part's material. Returns: `data` with `material`, `database`
+        and `configuration`.
 
         Args:
-            input_data (SetMaterialInput): ``material_name``, plus optional
-                ``database`` and ``configuration``.
+            input_data: The material. `material_name` is required; `database`
+                ("SOLIDWORKS Materials") and `configuration` (all) have defaults.
 
         Returns:
-            dict[str, Any]: ``data`` is ``{material, database, configuration}``
-            as read back from the part. ``not_found`` when the library does
-            not hold that name (the part is left unchanged).
-
-        Example:
-            ```python
-            await set_material({"material_name": "AISI 1020"})
-            ```
+            dict[str, Any]: The material assigned.
         """
         input_data = normalize_input(input_data, SetMaterialInput)
         _supports("set_material")
@@ -342,26 +315,20 @@ async def register_engineering_data_tools(
     async def list_available_materials(
         input_data: ListMaterialsInput | None = None,
     ) -> dict[str, Any]:
-        """List materials in the installed SolidWorks material libraries.
+        """List the materials in the installed SolidWorks material libraries.
 
-        Read-only; parses every ``.sldmat`` library SolidWorks is configured
-        to use. Filter with ``search`` (name or classification substring, e.g.
-        ``"steel"`` or ``"6061"``) and pass the exact ``name`` to
-        ``set_material``.
+        Use it to find the exact name `set_material` needs; filter with `search` (e.g.
+        "steel" or "6061"). It reads every .sldmat library SolidWorks is set to use.
+        Needs: SolidWorks installed. Read-only. Returns: `data`, each material's `name`,
+        `classification` and `database`; the message gives the total and the folders
+        read, so an empty search can be told from a missing library.
 
         Args:
-            input_data (ListMaterialsInput | None): ``search`` to filter;
-                omit for every material.
+            input_data: Nothing is required: `search` filters by name or
+                classification, not case-sensitive.
 
         Returns:
-            dict[str, Any]: ``data`` is a list of ``{name, classification,
-            database}``; ``message`` says how many of the libraries' materials
-            matched and which folders were read.
-
-        Example:
-            ```python
-            await list_available_materials({"search": "1020"})
-            ```
+            dict[str, Any]: The materials.
         """
         input_data = normalize_input(input_data, ListMaterialsInput)
         _supports("list_available_materials")
@@ -380,25 +347,19 @@ async def register_engineering_data_tools(
     async def get_custom_properties(
         input_data: CustomPropertiesInput | None = None,
     ) -> dict[str, Any]:
-        """Read the active document's custom properties.
+        """Read the active document's custom properties, such as PartNo, Description or Revision.
 
-        Read-only. File-level properties (the default) are what drawing title
-        blocks and BOMs usually link to; pass ``configuration`` for
-        configuration-specific ones.
+        File-level properties (the default) are what drawing title blocks and BOMs
+        usually read; give `configuration` for that configuration's own. Needs: an open,
+        active document. Read-only. Returns: `data` with `properties`, each name mapped
+        to its `value` and `resolved` value (a $PRP link evaluated).
 
         Args:
-            input_data (CustomPropertiesInput | None): ``configuration``;
-                file-level properties when omitted.
+            input_data: Nothing is required: `configuration` reads that
+                configuration's properties instead of the file's.
 
         Returns:
-            dict[str, Any]: ``data`` is ``{configuration, properties}``, where
-            ``properties`` maps each name to ``{value, resolved}`` (``value``
-            may be a ``$PRP:`` link; ``resolved`` is what it evaluates to).
-
-        Example:
-            ```python
-            await get_custom_properties()
-            ```
+            dict[str, Any]: The properties.
         """
         input_data = normalize_input(input_data, CustomPropertiesInput)
         _supports("get_custom_properties")
@@ -409,23 +370,19 @@ async def register_engineering_data_tools(
 
     @mcp.tool()
     async def set_custom_property(input_data: SetCustomPropertyInput) -> dict[str, Any]:
-        """Create or overwrite one text custom property on the active document.
+        """Create or overwrite one text custom property on the active document, e.g. PartNo or DrawnBy.
 
-        Typical names: ``PartNo``, ``Description``, ``DrawnBy``, ``Revision``.
-        The value is read back after writing, so success means it was stored.
+        Use it to fill what a title block or BOM reads. The value is read back, so
+        success means it was stored. Needs: an open, active document. Changes: writes
+        the property, replacing one of the same name (save the file to keep it).
+        Returns: `data` with `name`, `value`, `resolved` and `configuration`.
 
         Args:
-            input_data (SetCustomPropertyInput): ``name`` and ``value``, plus
-                an optional ``configuration``.
+            input_data: The property. `name` and `value` (text, or a link such as
+                $PRP:"SW-Mass") are required; `configuration` defaults to file-level.
 
         Returns:
-            dict[str, Any]: ``data`` is ``{name, value, resolved,
-            configuration}`` as read back.
-
-        Example:
-            ```python
-            await set_custom_property({"name": "PartNo", "value": "LIVE-001"})
-            ```
+            dict[str, Any]: The property stored.
         """
         input_data = normalize_input(input_data, SetCustomPropertyInput)
         _supports("set_custom_property")
@@ -437,24 +394,19 @@ async def register_engineering_data_tools(
 
     @mcp.tool()
     async def export_flat_pattern(input_data: ExportFlatPatternInput) -> dict[str, Any]:
-        """Export the active sheet-metal part's flat pattern to DXF or DWG.
+        """Export the active sheet-metal part's flat pattern to DXF or DWG, for laser or waterjet cutting.
 
-        Exports the flat-pattern geometry only (no bend lines or sketches),
-        for laser or waterjet cutting. A part without a sheet-metal body is
-        refused (``not_found``) and nothing is written.
+        It writes the flat outline only, without bend lines or sketches. A part with no
+        sheet-metal body is `not_found` and nothing is written. Needs: an open, active
+        sheet-metal part. Changes: writes the file, replacing one already there.
+        Returns: `data` with `file_path` and `size_bytes`.
 
         Args:
-            input_data (ExportFlatPatternInput): ``file_path`` ending in
-                ``.dxf`` or ``.dwg``.
+            input_data: The export. `file_path` (ending in .dxf or .dwg) is
+                required.
 
         Returns:
-            dict[str, Any]: ``data`` is ``{file_path, size_bytes}`` of the
-            written file.
-
-        Example:
-            ```python
-            await export_flat_pattern({"file_path": "C:/cut/bracket.dxf"})
-            ```
+            dict[str, Any]: The file written.
         """
         input_data = normalize_input(input_data, ExportFlatPatternInput)
         _supports("export_flat_pattern")
