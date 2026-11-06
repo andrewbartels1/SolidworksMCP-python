@@ -1,0 +1,3067 @@
+[
+ {
+  "tool": "get_model_info",
+  "args": {},
+  "status": "error"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "bracket",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Right"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 0,
+    "x2": 0,
+    "y2": 82.55
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 82.55,
+    "x2": -57.15,
+    "y2": 82.55
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -57.15,
+    "y1": 82.55,
+    "x2": -57.15,
+    "y2": 88.9
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -57.15,
+    "y1": 88.9,
+    "x2": 6.35,
+    "y2": 88.9
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 6.35,
+    "y1": 88.9,
+    "x2": 6.35,
+    "y2": -6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 6.35,
+    "y1": -6.35,
+    "x2": -46.7612,
+    "y2": -6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -46.7612,
+    "y1": -6.35,
+    "x2": -81.2954,
+    "y2": 22.6276
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -81.2954,
+    "y1": 22.6276,
+    "x2": -77.2137,
+    "y2": 27.492
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -77.2137,
+    "y1": 27.492,
+    "x2": -44.45,
+    "y2": 0
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -44.45,
+    "y1": 0,
+    "x2": 0,
+    "y2": 0
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "depth": 38.1,
+    "end_condition": "MidPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "point": [
+     0,
+     88.9,
+     30
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": -38.1,
+    "radius": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch2",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 82.55
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "plane": "Plane1"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 57.15
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "plane": "Plane2"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Plane2"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 38.1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 89.9
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "face:0,0.013746,0.060831",
+    "offset": 1
+   }
+  },
+  "status": "error"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane1",
+    "new_name": "ArmUnderside"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane3",
+    "new_name": "HoleAxisPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane4",
+    "new_name": "CrankBottomPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     38.1,
+     95.25,
+     87.6454
+    ],
+    "volume_mm3": 56922.83,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.001
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/bracket.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "Yoke_male",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 19.05
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "depth": 47.625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Right"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -25,
+    "y1": -1,
+    "x2": 25,
+    "y2": -1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 25,
+    "y1": -1,
+    "x2": 25,
+    "y2": 29.21
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 25,
+    "y1": 29.21,
+    "x2": 19.05,
+    "y2": 29.21
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_arc",
+  "args": {
+   "input_data": {
+    "center_x": 19.05,
+    "center_y": 19.685,
+    "start_x": 19.05,
+    "start_y": 29.21,
+    "end_x": 9.525,
+    "end_y": 19.685
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 9.525,
+    "y1": 19.685,
+    "x2": 9.525,
+    "y2": 9.525
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_arc",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 9.525,
+    "start_x": -9.525,
+    "start_y": 9.525,
+    "end_x": 9.525,
+    "end_y": 9.525
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -9.525,
+    "y1": 9.525,
+    "x2": -9.525,
+    "y2": 19.685
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_arc",
+  "args": {
+   "input_data": {
+    "center_x": -19.05,
+    "center_y": 19.685,
+    "start_x": -9.525,
+    "start_y": 19.685,
+    "end_x": -19.05,
+    "end_y": 29.21
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -19.05,
+    "y1": 29.21,
+    "x2": -25,
+    "y2": 29.21
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": -25,
+    "y1": 29.21,
+    "x2": -25,
+    "y2": -1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch2",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -10.16,
+    "y1": -1,
+    "x2": 10.16,
+    "y2": 29.21
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch3",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Right"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 9.525,
+    "radius": 4.7625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch4",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_axis",
+  "args": {
+   "input_data": {
+    "reference": "y"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 9.525
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 47.625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_features",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane1",
+    "new_name": "PivotPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane2",
+    "new_name": "TopFacePlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 4.7625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch5",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     38.1,
+     47.625,
+     38.1
+    ],
+    "volume_mm3": 27213.9,
+    "solid_body_count": 1,
+    "feature_count": 5,
+    "relative_tolerance": 0.002
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/Yoke_female.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Cut-Extrude4"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Sketch5"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 47.625,
+    "x2": 6.35,
+    "y2": 47.625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 6.35,
+    "y1": 47.625,
+    "x2": 6.35,
+    "y2": 64.4753
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 6.35,
+    "y1": 64.4753,
+    "x2": 5.08,
+    "y2": 66.675
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 5.08,
+    "y1": 66.675,
+    "x2": 0,
+    "y2": 66.675
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 66.675,
+    "x2": 0,
+    "y2": 47.625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_centerline",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 40,
+    "x2": 0,
+    "y2": 70
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_revolve",
+  "args": {
+   "input_data": {
+    "sketch_name": "stub",
+    "axis_entity": "centerline",
+    "angle": 360
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 4.7625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Plane1"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -10,
+    "y1": 53.975,
+    "x2": 10,
+    "y2": 70
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch7",
+    "depth": 10,
+    "end_condition": "ThroughAll"
+   }
+  },
+  "status": "error"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Sketch7"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Plane3"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -10,
+    "y1": 53.975,
+    "x2": 10,
+    "y2": 70
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch8",
+    "depth": 10,
+    "end_condition": "ThroughAll"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Cut-Extrude9"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_features",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch8",
+    "depth": 10,
+    "end_condition": "ThroughAll",
+    "reverse_direction": true
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     38.1,
+     66.675,
+     38.1
+    ],
+    "volume_mm3": 30782,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.002
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/Yoke_male.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "spider",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -9.525,
+    "y1": -9.525,
+    "x2": 9.525,
+    "y2": 9.525
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "depth": 19.05,
+    "end_condition": "MidPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 4.7625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch2",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Right"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 4.7625
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch3",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_axis",
+  "args": {
+   "input_data": {
+    "reference": "x"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_axis",
+  "args": {
+   "input_data": {
+    "reference": "z"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_features",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Axis1",
+    "new_name": "AxisX"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Axis2",
+    "new_name": "AxisZ"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     19.05,
+     19.05,
+     19.05
+    ],
+    "volume_mm3": 4774.56,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.001
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/spider.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "pin",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Right"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 4.699
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "depth": 38.1,
+    "end_condition": "MidPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_axis",
+  "args": {
+   "input_data": {
+    "reference": "x"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Axis1",
+    "new_name": "AxisX"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     38.1,
+     9.398,
+     9.398
+    ],
+    "volume_mm3": 2642.93,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.001
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/pin.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "crank-shaft",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 9.4615
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "depth": 15.875
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 6.2865
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch2",
+    "depth": 40
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_fillet",
+  "args": {
+   "input_data": {
+    "radius": 4.763,
+    "edge_names": [
+     "0.0062865,0.015875,0"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_fillet",
+  "args": {
+   "input_data": {
+    "radius": 4.763,
+    "edge_names": [
+     "0.0094615,0.016148,0"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_features",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "export_image",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/shaft_fillets.png",
+    "view_orientation": "front",
+    "width": 800,
+    "height": 800
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 6.477
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch3",
+    "depth": 12.7
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 4.889
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Plane1"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -5,
+    "y1": 0,
+    "x2": 5,
+    "y2": 12.7
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch4",
+    "depth": 2
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 6.35,
+    "radius": 1.1905
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch5",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Plane1"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -10,
+    "y1": 33.65,
+    "x2": 10,
+    "y2": 45
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch6",
+    "depth": 10,
+    "end_condition": "ThroughAll",
+    "reverse_direction": true
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "side": "top",
+    "edge_type": "circular"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_chamfer",
+  "args": {
+   "input_data": {
+    "distance": 0.794,
+    "edge_names": []
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 33.65
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane2",
+    "new_name": "ShoulderPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_axis",
+  "args": {
+   "input_data": {
+    "reference": "y"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     18.923,
+     40,
+     18.923
+    ],
+    "volume_mm3": 5933.2,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.002
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-shaft.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "crank-arm",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -9.525,
+    "y1": -9.525,
+    "x2": 9.525,
+    "y2": 65.475
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "depth": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Top"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 0,
+    "radius": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_circle",
+  "args": {
+   "input_data": {
+    "center_x": 0,
+    "center_y": 55.95,
+    "radius": 2.3815
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_cut_extrude",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch2",
+    "depth": 10,
+    "end_condition": "ThroughAllBoth"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 4.889
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Plane1"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_rectangle",
+  "args": {
+   "input_data": {
+    "x1": -5,
+    "y1": 0,
+    "x2": 5,
+    "y2": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_extrusion",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch3",
+    "depth": 2
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "side": "front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 65.475,
+    "flip": true
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "plane": "Plane2"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Plane2"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Front Plane",
+    "offset": 55.95,
+    "flip": true
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_features",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane3",
+    "new_name": "SmallHolePlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane4",
+    "new_name": "TopFacePlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "select_face_edges",
+  "args": {
+   "input_data": {
+    "plane": "TopFacePlane",
+    "edge_type": "circular"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     19.05,
+     6.35,
+     75
+    ],
+    "volume_mm3": 8206.43,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.001
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-arm.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_part",
+  "args": {
+   "input_data": {
+    "name": "crank-knob",
+    "units": "mm"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_sketch",
+  "args": {
+   "input_data": {
+    "plane": "Front"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 0,
+    "x2": 2.286,
+    "y2": 0
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 2.286,
+    "y1": 0,
+    "x2": 2.286,
+    "y2": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 2.286,
+    "y1": 6.35,
+    "x2": 4.7625,
+    "y2": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_arc",
+  "args": {
+   "input_data": {
+    "center_x": 11.1125,
+    "center_y": 6.35,
+    "start_x": 11.1125,
+    "start_y": 12.7,
+    "end_x": 4.7625,
+    "end_y": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_arc",
+  "args": {
+   "input_data": {
+    "center_x": 11.1125,
+    "center_y": 17.4625,
+    "start_x": 11.1125,
+    "start_y": 12.7,
+    "end_x": 11.1125,
+    "end_y": 22.225
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 11.1125,
+    "y1": 22.225,
+    "x2": 0,
+    "y2": 22.225
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_line",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": 22.225,
+    "x2": 0,
+    "y2": 0
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_centerline",
+  "args": {
+   "input_data": {
+    "x1": 0,
+    "y1": -5,
+    "x2": 0,
+    "y2": 30
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "exit_sketch",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "create_revolve",
+  "args": {
+   "input_data": {
+    "sketch_name": "Sketch1",
+    "axis_entity": "centerline",
+    "angle": 360
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_axis",
+  "args": {
+   "input_data": {
+    "reference": "y"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_reference_plane",
+  "args": {
+   "input_data": {
+    "reference": "Top Plane",
+    "offset": 6.35
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rename_feature",
+  "args": {
+   "input_data": {
+    "old_name": "Plane1",
+    "new_name": "StepPlane"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "bounding_box_mm": [
+     31.75,
+     22.225,
+     31.75
+    ],
+    "volume_mm3": 7528.07,
+    "solid_body_count": 1,
+    "relative_tolerance": 0.001
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_part",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-knob.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_assembly",
+  "args": {
+   "input_data": {
+    "name": "crank sub"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-shaft.SLDPRT"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-arm.SLDPRT",
+    "x": 0,
+    "y": 33.65,
+    "z": 0
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-knob.SLDPRT",
+    "x": 0,
+    "y": 33.65,
+    "z": -55.95
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_components",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "list_features",
+  "args": {
+   "input_data": {
+    "max_assembly_depth": 1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-arm-1",
+    "entity_a": "Top Plane",
+    "component_b": "crank-shaft-1",
+    "entity_b": "ShoulderPlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-arm-1",
+    "entity_a": "Right Plane",
+    "component_b": "crank-shaft-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-arm-1",
+    "entity_a": "Front Plane",
+    "component_b": "crank-shaft-1",
+    "entity_b": "Front Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-knob-1",
+    "entity_a": "Axis1",
+    "component_b": "crank-arm-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-knob-1",
+    "entity_a": "Axis1",
+    "component_b": "crank-arm-1",
+    "entity_b": "SmallHolePlane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-knob-1",
+    "entity_a": "StepPlane",
+    "component_b": "crank-arm-1",
+    "entity_b": "TopFacePlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "component_count": 3,
+    "mate_count": 6,
+    "no_interference": true,
+    "bounding_box_mm": [
+     31.75,
+     55.875,
+     81.35
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_assembly",
+  "args": {
+   "input_data": {
+    "name": "crank sub"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-shaft.SLDPRT",
+    "x": 0,
+    "y": 20,
+    "z": 0
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-arm.SLDPRT",
+    "x": 0,
+    "y": 36.825,
+    "z": -27.975
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank-knob.SLDPRT",
+    "x": 0,
+    "y": 44.76,
+    "z": -55.95
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-arm-1",
+    "entity_a": "Top Plane",
+    "component_b": "crank-shaft-1",
+    "entity_b": "ShoulderPlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-arm-1",
+    "entity_a": "Right Plane",
+    "component_b": "crank-shaft-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-arm-1",
+    "entity_a": "Front Plane",
+    "component_b": "crank-shaft-1",
+    "entity_b": "Front Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-knob-1",
+    "entity_a": "Axis1",
+    "component_b": "crank-arm-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-knob-1",
+    "entity_a": "Axis1",
+    "component_b": "crank-arm-1",
+    "entity_b": "SmallHolePlane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank-knob-1",
+    "entity_a": "StepPlane",
+    "component_b": "crank-arm-1",
+    "entity_b": "TopFacePlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "component_count": 3,
+    "mate_count": 6,
+    "no_interference": true,
+    "bounding_box_mm": [
+     31.75,
+     55.875,
+     81.35
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_assembly",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank sub.SLDASM"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "close_model",
+  "args": {
+   "input_data": {
+    "save": false
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "create_assembly",
+  "args": {
+   "input_data": {
+    "name": "UJoint"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/bracket.SLDPRT",
+    "x": 0,
+    "y": 41.275,
+    "z": 37.4727
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/Yoke_male.SLDPRT",
+    "x": 0,
+    "y": 68.2625,
+    "z": 38.1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/spider.SLDPRT",
+    "x": 0,
+    "y": 44.45,
+    "z": 38.1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/pin.SLDPRT",
+    "x": 0,
+    "y": 44.45,
+    "z": 38.1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_components",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "Yoke_male-1",
+    "entity_a": "Axis1",
+    "component_b": "bracket-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "Yoke_male-1",
+    "entity_a": "Axis1",
+    "component_b": "bracket-1",
+    "entity_b": "HoleAxisPlane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "Yoke_male-1",
+    "entity_a": "TopFacePlane",
+    "component_b": "bracket-1",
+    "entity_b": "ArmUnderside",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-1",
+    "entity_a": "Right Plane",
+    "component_b": "Yoke_male-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-1",
+    "entity_a": "Front Plane",
+    "component_b": "Yoke_male-1",
+    "entity_b": "Front Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-1",
+    "entity_a": "Top Plane",
+    "component_b": "Yoke_male-1",
+    "entity_b": "PivotPlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "spider-1",
+    "entity_a": "AxisX",
+    "component_b": "pin-1",
+    "entity_b": "AxisX",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "spider-1",
+    "entity_a": "Right Plane",
+    "component_b": "pin-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "component_count": 4,
+    "mate_count": 8,
+    "no_interference": true
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/Yoke_female.SLDPRT",
+    "x": 0,
+    "y": 20,
+    "z": 55
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/pin.SLDPRT",
+    "x": 0,
+    "y": 44.45,
+    "z": 38.1
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_components",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-2",
+    "entity_a": "Right Plane",
+    "component_b": "Yoke_female-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-2",
+    "entity_a": "Front Plane",
+    "component_b": "Yoke_female-1",
+    "entity_b": "Front Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-2",
+    "entity_a": "Top Plane",
+    "component_b": "Yoke_female-1",
+    "entity_b": "PivotPlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-2",
+    "entity_a": "AxisX",
+    "component_b": "spider-1",
+    "entity_b": "AxisZ",
+    "mate_type": "coincident"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "pin-2",
+    "entity_a": "Right Plane",
+    "component_b": "spider-1",
+    "entity_b": "Front Plane",
+    "mate_type": "coincident",
+    "alignment": "closest"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "Yoke_female-1",
+    "entity_a": "Axis1",
+    "component_b": "bracket-1",
+    "entity_b": "Right Plane",
+    "mate_type": "parallel"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "Yoke_female-1",
+    "entity_a": "TopFacePlane",
+    "component_b": "bracket-1",
+    "entity_b": "Top Plane",
+    "mate_type": "angle",
+    "angle": 40,
+    "alignment": "anti_aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "check_interference",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "measure_entities",
+  "args": {
+   "input_data": {
+    "entities": [
+     "face:0,0.0152636,0.0625905"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "measure_entities",
+  "args": {
+   "input_data": {
+    "entities": [
+     "face:0.01905,0.029129,0.050956"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "measure_entities",
+  "args": {
+   "input_data": {
+    "entities": [
+     "face:0.010,0.0152636,0.0625905",
+     "face:-0.015,0.013746,0.060831"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "measure_entities",
+  "args": {
+   "input_data": {
+    "entities": [
+     "face:0.01905,0.029129,0.050956",
+     "face:-0.015,0.013746,0.060831"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "export_image",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/uj_right.png",
+    "view_orientation": "right",
+    "width": 900,
+    "height": 900
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "delete_feature",
+  "args": {
+   "input_data": {
+    "name": "Angle1"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "Yoke_female-1",
+    "entity_a": "TopFacePlane",
+    "component_b": "bracket-1",
+    "entity_b": "Front Plane",
+    "mate_type": "angle",
+    "angle": 50,
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "export_image",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/uj_right2.png",
+    "view_orientation": "right",
+    "width": 900,
+    "height": 900
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "check_interference",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "check_interference",
+  "args": {
+   "input_data": {
+    "components": [
+     "pin-1",
+     "pin-2"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "check_interference",
+  "args": {
+   "input_data": {
+    "components": [
+     "bracket-1",
+     "Yoke_female-1"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "check_interference",
+  "args": {
+   "input_data": {
+    "components": [
+     "bracket-1",
+     "Yoke_female-1",
+     "Yoke_male-1",
+     "spider-1",
+     "pin-1",
+     "pin-2"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "insert_component",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/crank sub.SLDASM",
+    "x": 0,
+    "y": 117.8375,
+    "z": 6.95
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "list_components",
+  "args": {},
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank sub-1",
+    "entity_a": "Right Plane",
+    "component_b": "Yoke_male-1",
+    "entity_b": "Right Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank sub-1",
+    "entity_a": "Front Plane",
+    "component_b": "Yoke_male-1",
+    "entity_b": "Front Plane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "add_mate",
+  "args": {
+   "input_data": {
+    "component_a": "crank sub-1",
+    "entity_a": "Top Plane",
+    "component_b": "bracket-1",
+    "entity_b": "CrankBottomPlane",
+    "mate_type": "coincident",
+    "alignment": "aligned"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "check_interference",
+  "args": {
+   "input_data": {
+    "components": [
+     "crank sub-1",
+     "Yoke_male-1",
+     "bracket-1",
+     "Yoke_female-1",
+     "spider-1",
+     "pin-1",
+     "pin-2"
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "verify_model",
+  "args": {
+   "input_data": {
+    "component_count": 7,
+    "mate_count": 18,
+    "bounding_box_mm": [
+     38.1,
+     152.125,
+     113.2704
+    ]
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "rebuild_model",
+  "args": {
+   "input_data": {}
+  },
+  "status": "success"
+ },
+ {
+  "tool": "save_assembly",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/UJoint.SLDASM"
+   }
+  },
+  "status": "success"
+ },
+ {
+  "tool": "export_image",
+  "args": {
+   "input_data": {
+    "file_path": "{out}/uj_iso.png",
+    "view_orientation": "isometric",
+    "width": 900,
+    "height": 900
+   }
+  },
+  "status": "success"
+ }
+]
