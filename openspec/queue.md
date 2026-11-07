@@ -11,7 +11,7 @@ Last updated 2026-11-06.
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
 | 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` (archived) | Done 2026-11-05 (#202, #203, #204). Left: after the next release, ask Glama for a rescan and record the score in the internal assessment |
-| 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` | Merged (#205). Measured 2026-11-06 on the U-joint; the demo and write-up ship in the U-joint demo PR, which also closes #147 (superseded) |
+| 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` (archived) | Done 2026-11-06 (#205, #211; #147 closed as superseded) |
 | 3 | The circuit breaker locks a tool out after a success and never reopens; a reset tool | #208 | not yet written | Next |
 | 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` | Plan written 2026-11-06, in review |
 | 5 | Tool gaps found building the U-joint: face mates, fixed parts and flexible sub-assemblies, angled planes, angled chamfers, `both_directions`, a stale interference result, thin extrudes | #209 | not yet written | |
