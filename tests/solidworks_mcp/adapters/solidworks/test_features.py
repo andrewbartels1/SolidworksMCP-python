@@ -503,6 +503,32 @@ def test_add_chamfer_empty_edge_names_does_not_touch_selection() -> None:
     select_by_id2.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("angle", "flip", "options"), [(45.0, False, 1), (60.0, False, 1), (60.0, True, 0)]
+)
+def test_add_chamfer_passes_angle_and_flip(
+    angle: float, flip: bool, options: int
+) -> None:
+    import math
+
+    adapter = _FakeFeatureAdapter()
+    insert = Mock(return_value=SimpleNamespace(Name="Chamfer1"))
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=Mock(return_value=True),
+        Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
+        FeatureManager=SimpleNamespace(InsertFeatureChamfer=insert),
+    )
+
+    result = features._add_chamfer_impl(adapter, 2.0, [], angle, flip)
+
+    assert result.is_success
+    args = insert.call_args.args
+    assert args[:3] == (options, 1, 0.002)  # Options, swChamferAngleDistance, m
+    assert args[3] == pytest.approx(math.radians(angle))
+    assert result.data.parameters["angle"] == angle
+    assert result.data.parameters["flip"] is flip
+
+
 def test_add_fillet_sw33_also_uses_new_path() -> None:
     """major=33 (SW 2025) hits the >= 33 branch; name defaults to 'Fillet'
     because IModelDoc2.FeatureFillet3 returns int, not IFeature."""
@@ -2871,6 +2897,43 @@ def test_thin_extrusion_uses_the_same_end_condition() -> None:
 
     assert result.is_success, result.error
     assert calls[0][3] == 6
+
+
+@pytest.mark.parametrize(
+    ("side", "rev_thin_dir"), [("one_side", 0), ("other_side", 1), ("mid_plane", 2)]
+)
+def test_thin_side_sets_the_thin_wall_type(side: str, rev_thin_dir: int) -> None:
+    calls: list[tuple] = []
+    adapter = _extrusion_adapter(
+        FeatureExtrusionThin2=lambda *a: (
+            calls.append(a) or SimpleNamespace(Name="Thin1")
+        )
+    )
+
+    result = features._create_extrusion_impl(
+        adapter,
+        ExtrusionParameters(
+            depth=38.1, thin_feature=True, thin_thickness=6.35, thin_side=side
+        ),
+    )
+
+    assert result.is_success, result.error
+    assert calls[0][21] == rev_thin_dir  # RevThinDir
+    assert result.data.parameters["thin_side"] == side
+
+
+def test_an_unknown_thin_side_fails_clearly() -> None:
+    adapter = _extrusion_adapter(FeatureExtrusionThin2=Mock())
+
+    result = features._create_extrusion_impl(
+        adapter,
+        ExtrusionParameters(
+            depth=5.0, thin_feature=True, thin_thickness=1.0, thin_side="inside"
+        ),
+    )
+
+    assert result.is_error
+    assert "Unsupported thin_side 'inside'" in (result.error or "")
 
 
 def test_extrusion_with_an_unsupported_end_condition_fails_clearly() -> None:

@@ -812,15 +812,10 @@ class TestDrawingToolsBranchCoverage:
     # ── additional drawing tool branches (legacy tool set) ───────────────
 
     @pytest.mark.asyncio
-    async def test_add_dimension_raw_dict_payload_normalization(
+    async def test_add_dimension_accepts_a_plain_dict(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """Covers dict payload branch with entities/position alias mapping.
-
-        The entities/position aliases must reach the adapter call as
-        entity1/entity2/position_x/position_y even when the caller only
-        supplied entities/position.
-        """
+        """A plain dict is validated as AddDimensionInput and reaches the adapter."""
         await register_drawing_tools(mcp_server, mock_adapter, mock_config)
 
         mock_adapter.add_dimension = AsyncMock(
@@ -834,8 +829,10 @@ class TestDrawingToolsBranchCoverage:
         result = await tool_func(
             {
                 "dimension_type": "linear",
-                "entities": ["Edge1", "Edge2"],
-                "position": [11.0, 22.0],
+                "entity1": "Edge1",
+                "entity2": "Edge2",
+                "position_x": 11.0,
+                "position_y": 22.0,
                 "precision": 3,
             }
         )

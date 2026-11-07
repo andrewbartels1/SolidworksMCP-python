@@ -364,11 +364,7 @@ async def register_macro_recording_tools(
         Returns:
             dict[str, Any]: The results, or a `not_supported` error.
         """
-        payload = (
-            input_data.model_dump()
-            if hasattr(input_data, "model_dump")
-            else dict(input_data)
-        )
+        payload = input_data.model_dump()
 
         if hasattr(adapter, "batch_execute_macros"):
             result = await adapter.batch_execute_macros(payload)
@@ -402,11 +398,7 @@ async def register_macro_recording_tools(
         Returns:
             dict[str, Any]: The suggestions, or a `not_supported` error.
         """
-        payload = (
-            input_data.model_dump()
-            if hasattr(input_data, "model_dump")
-            else dict(input_data)
-        )
+        payload = dict(input_data)
 
         if hasattr(adapter, "optimize_macro"):
             result = await adapter.optimize_macro(payload)
@@ -440,11 +432,7 @@ async def register_macro_recording_tools(
         Returns:
             dict[str, Any]: The library, or a `not_supported` error.
         """
-        payload = (
-            input_data.model_dump()
-            if hasattr(input_data, "model_dump")
-            else dict(input_data)
-        )
+        payload = dict(input_data)
 
         if hasattr(adapter, "create_macro_library"):
             result = await adapter.create_macro_library(payload)

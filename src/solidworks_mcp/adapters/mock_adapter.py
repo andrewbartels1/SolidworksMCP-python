@@ -856,10 +856,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         return await self._mock_edge_feature("Fillet", radius, edge_names)
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
-        """Mock equal-distance chamfer (see :meth:`_mock_edge_feature`)."""
-        return await self._mock_edge_feature("Chamfer", distance, edge_names)
+        """Mock angle-distance chamfer (see :meth:`_mock_edge_feature`)."""
+        result = await self._mock_edge_feature("Chamfer", distance, edge_names)
+        if result.is_success:
+            result.data.parameters.update({"angle": angle, "flip": flip})
+        return result
 
     async def _mock_edge_feature(
         self, kind: str, size: float, edge_names: list[str]
@@ -1160,8 +1167,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "draft_angle": params.draft_angle,
                 "reverse_direction": params.reverse_direction,
                 "both_directions": params.both_directions,
+                "end_condition": "MidPlane"
+                if params.both_directions
+                else params.end_condition,
                 "thin_feature": params.thin_feature,
                 "thin_thickness": params.thin_thickness,
+                "thin_side": params.thin_side if params.thin_feature else None,
             },
             properties={"created": datetime.now().isoformat(), "mock": True},
         )

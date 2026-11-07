@@ -4,7 +4,7 @@ Provides tools for creating and manipulating SolidWorks models, including parts,
 assemblies, drawings, and features like extrusions, revolves, etc.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -195,6 +195,7 @@ class CreateExtrusionInput(CompatInput):
         sketch_name (str): The sketch name value.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
+        thin_side (str): The side a thin wall grows on.
     """
 
     sketch_name: str = Field(description="Sketch name to extrude")
@@ -206,11 +207,28 @@ class CreateExtrusionInput(CompatInput):
         default=False, description="Reverse extrusion direction"
     )
     both_directions: bool = Field(
-        default=False, description="Extrude in both directions"
+        default=False,
+        description=(
+            "Extrude symmetrically about the sketch plane (mid-plane): `depth` is "
+            "the total thickness, half on each side"
+        ),
     )
-    thin_feature: bool = Field(default=False, description="Create as thin wall feature")
+    thin_feature: bool = Field(
+        default=False,
+        description=(
+            "Make a thin wall of `thin_thickness` from the sketch's outline; the "
+            "sketch may be an open chain (a bent plate's centreline)"
+        ),
+    )
     thin_thickness: float | None = Field(
-        default=None, description="Thickness for thin wall feature in mm"
+        default=None, description="Wall thickness in mm; required with thin_feature"
+    )
+    thin_side: Literal["one_side", "other_side", "mid_plane"] = Field(
+        default="one_side",
+        description=(
+            "Which side of the sketch line the thin wall grows on: one_side, "
+            "other_side, or mid_plane (half each side)"
+        ),
     )
     end_condition: str = Field(default="Blind", description="End condition type")
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
@@ -233,6 +251,8 @@ class CreateExtrusionInput(CompatInput):
             raise ValueError("sketch_name is required")
         if self.reverse is not None:
             self.reverse_direction = self.reverse
+        if self.thin_feature and not (self.thin_thickness and self.thin_thickness > 0):
+            raise ValueError("thin_feature needs a positive thin_thickness (mm)")
 
 
 class CreateRevolveInput(CompatInput):
@@ -502,14 +522,32 @@ class AddFilletInput(CompatInput):
 
 
 class AddChamferInput(CompatInput):
-    """Input schema for adding an equal-distance chamfer feature.
+    """Input schema for adding a chamfer feature.
 
     Attributes:
         distance (float): Chamfer distance in millimeters.
         edge_names (list[str]): Edge names to chamfer.
+        angle (float): Chamfer angle in degrees.
+        flip (bool): Measure the distance along the other face.
     """
 
-    distance: float = Field(description="Chamfer distance in millimeters")
+    distance: float = Field(
+        description="Chamfer distance in millimeters, along one of the edge's faces"
+    )
+    angle: float = Field(
+        default=45.0,
+        description=(
+            "Chamfer angle in degrees, between 0 and 90; 45 makes both legs "
+            "equal to distance"
+        ),
+    )
+    flip: bool = Field(
+        default=False,
+        description=(
+            "Measure distance along the edge's other face (swaps the long and "
+            "short legs of an angled chamfer)"
+        ),
+    )
     edge_names: list[str] = Field(
         default_factory=list,
         description=(
@@ -533,6 +571,8 @@ class AddChamferInput(CompatInput):
     def model_post_init(self, __context: Any) -> None:
         if self.distance <= 0:
             raise ValueError("distance must be positive")
+        if not 0 < self.angle < 90:
+            raise ValueError("angle must be between 0 and 90 degrees")
 
 
 class CreateAssemblyInput(CompatInput):
@@ -1151,10 +1191,14 @@ async def register_modeling_tools(
 
         Use it after `exit_sketch`; to remove material, use `create_cut_extrude`. It
         extrudes the sketch `exit_sketch` closed, whatever `sketch_name` says. End
-        conditions: Blind (default), MidPlane, ThroughAll, UpToNext. Needs: an open part
-        and a closed profile just exited. Changes: adds a Boss-Extrude feature. Returns:
-        `extrusion` (`name`, `depth`) and `measured_change` (volume, bounding box and
-        solid-body count before and after; left out when the model can't be read).
+        conditions: Blind (default), MidPlane, ThroughAll, UpToNext; `both_directions`
+        means MidPlane. With `thin_feature` and `thin_thickness` it makes a wall from the
+        sketch's outline, and an open chain works (a bent plate from its centreline).
+        Needs: an open part and a profile just exited (closed, unless thin). Changes:
+        adds a Boss-Extrude feature. Returns: `extrusion` (`name`, `depth`, the
+        `end_condition` SolidWorks used, `both_directions`, and `thin` when thin) and
+        `measured_change` (volume, bounding box and solid-body count before and after;
+        left out when the model can't be read).
 
         Args:
             input_data: The extrusion. `sketch_name` and `depth` (mm) are required;
@@ -1174,6 +1218,7 @@ async def register_modeling_tools(
             both_directions=input_data.both_directions,
             thin_feature=input_data.thin_feature,
             thin_thickness=input_data.thin_thickness,
+            thin_side=input_data.thin_side,
             end_condition=input_data.end_condition,
             merge_result=input_data.merge_result,
             feature_scope=False,
@@ -1186,17 +1231,25 @@ async def register_modeling_tools(
         require_success(result, context="Failed to create extrusion")
         after = await _read_summary(adapter) if before is not None else None
         feature = result.data
+        name = _result_value(feature, "feature_name", "name", default="Extrusion")
+        applied = _result_value(feature, "parameters", default=None) or {}
+        extrusion: dict[str, Any] = {
+            "name": name,
+            "sketch": input_data.sketch_name,
+            "depth": input_data.depth,
+            "end_condition": applied.get("end_condition")
+            or ("MidPlane" if input_data.both_directions else input_data.end_condition),
+            "both_directions": input_data.both_directions,
+        }
+        if input_data.thin_feature:
+            extrusion["thin"] = {
+                "thickness": input_data.thin_thickness,
+                "side": input_data.thin_side,
+            }
         reply = {
             "status": "success",
-            "message": f"Created extrusion: {_result_value(feature, 'feature_name', 'name', default='Extrusion')}",
-            "extrusion": {
-                "name": _result_value(
-                    feature, "feature_name", "name", default="Extrusion"
-                ),
-                "sketch": input_data.sketch_name,
-                "depth": input_data.depth,
-                "direction": input_data.direction,
-            },
+            "message": f"Created extrusion: {name}",
+            "extrusion": extrusion,
             "execution_time": result.execution_time,
         }
         return _attach_measured_change(reply, before, after)
@@ -1459,12 +1512,14 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
-        """Bevel edges of the active part with an equal-distance chamfer at 45 degrees.
+        """Bevel edges of the active part with a chamfer: `distance` along one face at `angle` (45 by default).
 
         Name the edges as "Edge<1>", a point "x,y,z" (metres) or "face:x,y,z" for every
         edge of a face; or leave `edge_names` empty to use the current selection (e.g.
-        from `select_face_edges`). Needs: an open part with a solid body. Changes: adds
-        a Chamfer feature. Returns: `chamfer` with `name`, `distance` and `edges`.
+        from `select_face_edges`). At 45 degrees both legs equal `distance`; at another
+        angle, `flip` swaps which face `distance` is measured on. Needs: an open part
+        with a solid body. Changes: adds a Chamfer feature. Returns: `chamfer` with
+        `name`, `distance`, `angle`, `flip` and `edges`.
 
         Args:
             input_data: The chamfer. `distance` (mm) is required; `edge_names`
@@ -1474,7 +1529,12 @@ async def register_modeling_tools(
             dict[str, Any]: The created chamfer.
         """
         input_data = normalize_input(input_data, AddChamferInput)
-        result = await adapter.add_chamfer(input_data.distance, input_data.edge_names)
+        result = await adapter.add_chamfer(
+            input_data.distance,
+            input_data.edge_names,
+            input_data.angle,
+            input_data.flip,
+        )
         require_success(result, context="Failed to add chamfer")
         feature = result.data
         return {
@@ -1485,6 +1545,8 @@ async def register_modeling_tools(
                     feature, "feature_name", "name", default="Chamfer"
                 ),
                 "distance": input_data.distance,
+                "angle": input_data.angle,
+                "flip": input_data.flip,
                 "edges": input_data.edge_names,
             },
             "execution_time": result.execution_time,

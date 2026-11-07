@@ -214,6 +214,8 @@ class ExtrusionParameters(BaseModel):
             than silently falling back to some other sketch.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
+        thin_side (str): Which side of the sketch a thin wall grows on:
+            ``one_side``, ``other_side`` or ``mid_plane``.
         up_to_surface (str | None): The up to surface value.
     """
 
@@ -223,6 +225,7 @@ class ExtrusionParameters(BaseModel):
     both_directions: bool = False
     thin_feature: bool = False
     thin_thickness: float | None = None
+    thin_side: str = "one_side"
     auto_fillet_corners: bool = False
     fillet_corners_radius: float = 0.0
     end_condition: str = "Blind"
@@ -975,16 +978,21 @@ class SolidWorksAdapter(ABC):
         )
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[Any]:
-        """Add an equal-distance chamfer feature to selected edges.
+        """Add an angle-distance chamfer to the named or selected edges.
 
-        Chamfers the selected edges of the current solid body by the given
-        distance.
+        At the default 45 degrees both legs equal ``distance``.
 
         Args:
-            distance (float): Chamfer distance in millimeters.
+            distance (float): Chamfer distance in millimeters, along one face.
             edge_names (list[str]): List of edge names to chamfer.
+            angle (float): Chamfer angle in degrees. Defaults to 45.
+            flip (bool): Measure ``distance`` along the other face.
 
         Returns:
             AdapterResult: Feature result or error.

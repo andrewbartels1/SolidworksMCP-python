@@ -393,7 +393,7 @@ async def register_analysis_tools(
 
     @mcp.tool()
     async def get_mass_properties(
-        input_data: MassPropertiesInput | dict[str, Any] | None = None,
+        input_data: MassPropertiesInput | None = None,
     ) -> dict[str, Any]:
         """Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
 
@@ -410,13 +410,7 @@ async def register_analysis_tools(
         Returns:
             dict[str, Any]: The mass properties.
         """
-        if input_data is None:
-            normalized_input = MassPropertiesInput()
-        elif isinstance(input_data, MassPropertiesInput):
-            normalized_input = input_data
-        else:
-            normalized_input = MassPropertiesInput.model_validate(input_data)
-        return await calculate_mass_properties(normalized_input)
+        return await calculate_mass_properties(input_data or MassPropertiesInput())
 
     @mcp.tool()
     async def check_interference(input_data: InterferenceCheckInput) -> dict[str, Any]:

@@ -257,7 +257,8 @@ class TestModelingTools:
         assert result["status"] == "success"
         assert result["extrusion"]["sketch"] == "Sketch1"
         assert result["extrusion"]["depth"] == 25.0
-        assert result["extrusion"]["direction"] == "blind"
+        assert result["extrusion"]["end_condition"] == "Blind"
+        assert "direction" not in result["extrusion"]
 
     @pytest.mark.asyncio
     async def test_create_revolve_full(self, mcp_server, mock_adapter, mock_config):
@@ -807,7 +808,9 @@ class TestModelingTools:
         assert success_result["status"] == "success"
         assert success_result["chamfer"]["distance"] == 1.5
         assert success_result["chamfer"]["edges"] == ["Edge<1>", "Edge<2>"]
-        mock_adapter.add_chamfer.assert_awaited_once_with(1.5, ["Edge<1>", "Edge<2>"])
+        mock_adapter.add_chamfer.assert_awaited_once_with(
+            1.5, ["Edge<1>", "Edge<2>"], 45.0, False
+        )
 
         mock_adapter.add_chamfer = AsyncMock(
             return_value=Mock(
@@ -2060,3 +2063,88 @@ async def test_rebuild_model_tool_no_model(
     assert result["status"] == "error"
     assert "No active model" in result["message"]
     assert "data" not in result
+
+
+@pytest.mark.asyncio
+async def test_extrusion_reply_says_mid_plane_for_both_directions(
+    mcp_server, mock_adapter
+) -> None:
+    await mock_adapter.create_part()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    result = await tool(
+        {"sketch_name": "Sketch1", "depth": 38.1, "both_directions": True}
+    )
+
+    assert result["extrusion"]["end_condition"] == "MidPlane"
+    assert result["extrusion"]["both_directions"] is True
+    assert "thin" not in result["extrusion"]
+
+
+@pytest.mark.asyncio
+async def test_a_thin_extrusion_reports_its_wall(mcp_server, mock_adapter) -> None:
+    await mock_adapter.create_part()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    result = await tool(
+        {
+            "sketch_name": "Sketch1",
+            "depth": 38.1,
+            "thin_feature": True,
+            "thin_thickness": 6.35,
+            "thin_side": "other_side",
+        }
+    )
+
+    assert result["extrusion"]["thin"] == {"thickness": 6.35, "side": "other_side"}
+    feature = next(iter(mock_adapter._features.values()))
+    assert feature.parameters["thin_side"] == "other_side"
+
+
+@pytest.mark.asyncio
+async def test_extrusion_falls_back_to_the_request_when_the_adapter_is_silent(
+    mcp_server, mock_adapter
+) -> None:
+    mock_adapter.create_extrusion = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"name": "Boss-Extrude1"}
+        )
+    )
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    result = await tool({"sketch_name": "Sketch1", "depth": 5, "both_directions": True})
+
+    assert result["extrusion"]["end_condition"] == "MidPlane"
+
+
+def test_a_thin_wall_needs_a_thickness() -> None:
+    with pytest.raises(
+        ValueError, match="thin_feature needs a positive thin_thickness"
+    ):
+        CreateExtrusionInput(sketch_name="Sketch1", depth=5, thin_feature=True)
+
+
+def test_a_chamfer_angle_must_be_between_0_and_90() -> None:
+    with pytest.raises(ValueError, match="angle must be between 0 and 90"):
+        AddChamferInput(distance=1.0, angle=90)
+
+
+@pytest.mark.asyncio
+async def test_the_mock_chamfer_records_angle_and_flip(mock_adapter) -> None:
+    await mock_adapter.create_part()
+
+    result = await mock_adapter.add_chamfer(1.0, ["Edge<1>"], 60.0, True)
+    refused = await mock_adapter.add_chamfer(1.0, [], 60.0, True)
+
+    assert result.data.parameters["angle"] == 60.0
+    assert result.data.parameters["flip"] is True
+    assert refused.is_error

@@ -82,9 +82,7 @@ def _beta(reason: str) -> Support:
     return Support(SupportLevel.BETA, reason)
 
 
-_EXPORT_FORMAT = _beta(
-    "the file extension sets the format; `format_type` and `options` are ignored."
-)
+_EXPORT_FORMAT = _beta("`options` is ignored; the file extension sets the format.")
 
 SUPPORT_LEVELS: dict[str, Support] = {
     # analysis

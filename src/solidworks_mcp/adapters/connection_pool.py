@@ -657,11 +657,16 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
         """Add chamfer using pool."""
         return await self._execute_with_pool(
-            "add_chamfer", lambda adapter: adapter.add_chamfer(distance, edge_names)
+            "add_chamfer",
+            lambda adapter: adapter.add_chamfer(distance, edge_names, angle, flip),
         )
 
     async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:

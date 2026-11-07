@@ -99,9 +99,13 @@ class SolidWorksFeaturesMixin:
         return result
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
-        return _add_chamfer_impl(self, distance, edge_names)
+        return _add_chamfer_impl(self, distance, edge_names, angle, flip)
 
     async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
         return _delete_feature_impl(self, name)
@@ -351,6 +355,10 @@ _EXTRUSION_END_CONDITIONS = {
 }
 
 
+#: ``swThinWallType_e`` for each ``thin_side``.
+_THIN_SIDES: dict[str, int] = {"one_side": 0, "other_side": 1, "mid_plane": 2}
+
+
 def _extrusion_end_condition(
     adapter: Any, end_condition: str, both_directions: bool
 ) -> tuple[str, int]:
@@ -465,7 +473,13 @@ def _create_extrusion_impl(
             both_directions=bool(getattr(params, "both_directions", False)),
             auto_fillet_corners=bool(getattr(params, "auto_fillet_corners", False)),
             fillet_corners_radius=float(getattr(params, "fillet_corners_radius", 0.0)),
+            thin_side=str(getattr(params, "thin_side", "one_side") or "one_side"),
         )
+        if normalized.thin_side not in _THIN_SIDES:
+            raise ValueError(
+                f"Unsupported thin_side {normalized.thin_side!r}; use one of: "
+                + ", ".join(_THIN_SIDES)
+            )
         feature_manager = adapter.currentModel.FeatureManager
         t0 = adapter.constants.get("swStartSketchPlane", 0)
         end_name, t1 = _extrusion_end_condition(
@@ -497,9 +511,9 @@ def _create_extrusion_impl(
                     normalized.merge_result,
                     normalized.thin_thickness / 1000.0,
                     normalized.thin_thickness / 1000.0,
-                    0.0,
-                    0,
-                    0,
+                    0.0,  # EndThk
+                    _THIN_SIDES[normalized.thin_side],  # RevThinDir: swThinWallType_e
+                    0,  # CapEnds
                     normalized.auto_fillet_corners,
                     normalized.fillet_corners_radius / 1000.0,
                     False,
@@ -595,6 +609,8 @@ def _create_extrusion_impl(
                 "reverse_direction": normalized.reverse_direction,
                 "thin_feature": normalized.thin_feature,
                 "thin_thickness": normalized.thin_thickness,
+                "thin_side": normalized.thin_side if normalized.thin_feature else None,
+                "both_directions": normalized.both_directions,
                 "end_condition": end_name,
             },
             properties={"created": datetime.now().isoformat()},
@@ -2065,14 +2081,21 @@ def _add_fillet_impl(
 
 
 def _add_chamfer_impl(
-    adapter: Any, distance: float, edge_names: list[str]
+    adapter: Any,
+    distance: float,
+    edge_names: list[str],
+    angle: float = 45.0,
+    flip: bool = False,
 ) -> AdapterResult[SolidWorksFeature]:
-    """Create an equal-distance chamfer on one or more named edges.
+    """Create an angle-distance chamfer on one or more named edges.
 
     Each edge in ``edge_names`` is selected by name using
     ``Extension.SelectByID2`` with entity type ``"EDGE"``.  After all edges
     are in the selection set, ``IFeatureManager::InsertFeatureChamfer`` is
-    called in equal-distance mode (type ``1``). A version-gated
+    called with ``swChamferAngleDistance`` (type ``1``; equal distance is
+    16). At 45 degrees the two legs are equal, which is what this call has
+    always made. ``Options`` 1 is ``swFeatureChamferFlipDirection``, kept as
+    the default so existing chamfers are unchanged; ``flip`` clears it. A version-gated
     ``IModelDoc2::FeatureChamferType`` path was tried for SW 2025+ but
     live-verified to silently create an empty, zero-volume feature -- see
     the comment at its call site for how this was confirmed and why
@@ -2081,8 +2104,10 @@ def _add_chamfer_impl(
     Args:
         adapter: A fully connected ``PyWin32Adapter`` with a non-``None``
             ``currentModel``.
-        distance: Chamfer distance in **millimetres**.  Converted to metres
-            internally.
+        distance: Chamfer distance in **millimetres**, along one face.
+            Converted to metres internally.
+        angle: Chamfer angle in degrees (0-90 exclusive). Defaults to 45.
+        flip: Measure ``distance`` along the other face.
         edge_names: List of SolidWorks edge entity names, e.g.
             ``["Edge<2>", "Edge<5>"]``, coordinate hints in metres
             (``"x,y,z"``), or ``"face:x,y,z"`` to select a whole face and
@@ -2168,10 +2193,10 @@ def _add_chamfer_impl(
         feature_name = "Chamfer"
         feature, insert_err = adapter._attempt_with_error(
             lambda: fm.InsertFeatureChamfer(
-                1,  # Options
-                1,  # ChamferType = equal distance
+                0 if flip else 1,  # Options: swFeatureChamferFlipDirection
+                1,  # ChamferType: swChamferAngleDistance
                 distance / 1000.0,  # Width in metres
-                math.pi / 4,  # 45 degree angle
+                math.radians(angle),
                 0.0,
                 0.0,
                 0.0,
@@ -2189,7 +2214,12 @@ def _add_chamfer_impl(
             name=feature_name,
             type="Chamfer",
             id=adapter._get_feature_id(feature) if feature else "",
-            parameters={"distance": distance, "edges": edge_names},
+            parameters={
+                "distance": distance,
+                "angle": angle,
+                "flip": flip,
+                "edges": edge_names,
+            },
             properties={"created": datetime.now().isoformat()},
         )
 

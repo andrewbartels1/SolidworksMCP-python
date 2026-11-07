@@ -874,7 +874,7 @@ class TestConnectionPoolAdapterExtras:
             ):
                 return _ok("mate")
 
-            async def add_chamfer(self, distance, edge_names):
+            async def add_chamfer(self, distance, edge_names, angle=45.0, flip=False):
                 return _ok("chamfer")
 
             async def get_selected_entities(self):

@@ -88,8 +88,8 @@ their reason), then run `python -m solidworks_mcp.progress.generate`.
 - `sketch_tutorial_simple_hole` suggests a negative-depth extrusion for the
   hole instead of `create_cut_extrude`.
 - `save_as` ignores `overwrite` (an existing file is replaced) and
-  `save_file` ignores `force_save`; the `export_*` tools require a
-  `format_type` they ignore (the extension decides) and ignore `options`;
+  `save_file` ignores `force_save`; the `export_*` file tools ignore
+  `options` (`format_type` is optional since #209: the extension decides);
   `ExportSTEPInput`, `ExportIGESInput` and `ExportSTLInput` are unused.
 - `check_interference` passes `include_hidden` where the adapter reads
   `ignore_hidden`, so it has no effect.

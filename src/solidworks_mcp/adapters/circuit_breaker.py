@@ -687,13 +687,22 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
         """Add chamfer through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_chamfer",
-            lambda: self.adapter.add_chamfer(distance, edge_names),
-            input_dict={"distance": distance, "edge_names": edge_names},
+            lambda: self.adapter.add_chamfer(distance, edge_names, angle, flip),
+            input_dict={
+                "distance": distance,
+                "edge_names": edge_names,
+                "angle": angle,
+                "flip": flip,
+            },
         )
 
     async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:

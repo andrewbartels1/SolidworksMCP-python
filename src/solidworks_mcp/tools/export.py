@@ -35,8 +35,12 @@ class ExportFileInput(CompatInput):
     """
 
     file_path: str = Field(description="Full path for the exported file")
-    format_type: str = Field(
-        description="Export format (step, iges, stl, pdf, dwg, jpg, png)"
+    format_type: str | None = Field(
+        default=None,
+        description=(
+            "Not needed: the file extension sets the format; defaults to the "
+            "tool's own format"
+        ),
     )
     options: dict[str, Any] | None = Field(
         default=None, description="Format-specific export options"
@@ -350,18 +354,15 @@ class BatchExportInput(CompatInput):
 
 
 def _file_input(input_data: Any, format_type: str) -> Any:
-    """Validate a plain-dict argument as ``ExportFileInput``.
+    """Fill ``format_type`` with the tool's own format when it was left out.
 
-    Over MCP the arguments arrive already validated; a script calling the
-    tool function directly passes a dict, which has no ``file_path``
-    attribute. The tool's own format fills ``format_type`` when the dict
-    leaves it out. Models, including the per-format aliases, pass through.
+    The file extension decides the format; the adapter is still told which
+    format the tool exports. The per-format models (``ExportSTEPInput`` and
+    the like) pass through unchanged.
     """
-    if isinstance(input_data, dict):
-        return normalize_input(
-            {"format_type": format_type, **input_data}, ExportFileInput
-        )
-    return input_data
+    if not isinstance(input_data, ExportFileInput) or input_data.format_type:
+        return input_data
+    return input_data.model_copy(update={"format_type": format_type})
 
 
 async def register_export_tools(
@@ -404,7 +405,7 @@ async def register_export_tools(
 
         Args:
             input_data: The export. `file_path` (ending in .step or .stp) is required;
-                `format_type` is required by the schema but the extension decides the
+                `format_type` is not needed: the file extension decides the
                 format, and `options` is not used yet.
 
         Returns:
@@ -449,7 +450,7 @@ async def register_export_tools(
 
         Args:
             input_data: The export. `file_path` (ending in .igs or .iges) is required;
-                `format_type` is required by the schema but the extension decides the
+                `format_type` is not needed: the file extension decides the
                 format, and `options` is not used yet.
 
         Returns:
@@ -493,7 +494,7 @@ async def register_export_tools(
 
         Args:
             input_data: The export. `file_path` (ending in .stl) is required;
-                `format_type` is required by the schema but the extension decides the
+                `format_type` is not needed: the file extension decides the
                 format, and `options` is not used yet.
 
         Returns:
@@ -538,7 +539,7 @@ async def register_export_tools(
 
         Args:
             input_data: The export. `file_path` (ending in .pdf) is required;
-                `format_type` is required by the schema but the extension decides the
+                `format_type` is not needed: the file extension decides the
                 format, and `options` is not used yet.
 
         Returns:
@@ -582,7 +583,7 @@ async def register_export_tools(
 
         Args:
             input_data: The export. `file_path` (ending in .dwg) is required;
-                `format_type` is required by the schema but the extension decides the
+                `format_type` is not needed: the file extension decides the
                 format, and `options` is not used yet.
 
         Returns:

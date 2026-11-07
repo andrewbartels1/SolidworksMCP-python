@@ -33,6 +33,22 @@ _TOOLS = (
 )
 
 
+#: The smallest valid input of each tool that has required fields.
+_VALID_INPUT: dict[str, dict[str, Any]] = {
+    "insert_bom_table": {"view_name": "Drawing View1"},
+    "add_gtol": {"characteristic": "position", "tolerance": 0.1},
+    "add_datum_tag": {
+        "label": "A",
+        "attach_x_mm": 10,
+        "attach_y_mm": 10,
+        "x_mm": 20,
+        "y_mm": 20,
+    },
+    "set_sheet_scale": {"numerator": 1, "denominator": 2},
+    "generate_drawing_package": {"model_path": "C:/parts/block.sldprt"},
+}
+
+
 async def _tool(mcp_server: Any, name: str) -> Any:
     return next(t.fn for t in await mcp_server.list_tools() if t.name == name)
 
@@ -331,7 +347,7 @@ async def test_missing_adapter_method_is_reported(
 ) -> None:
     await register_drawing_automation_tools(mcp_server, object(), mock_config)
 
-    result = await (await _tool(mcp_server, tool))({})
+    result = await (await _tool(mcp_server, tool))(_VALID_INPUT.get(tool, {}))
 
     assert result["error_type"] == "not_supported"
     assert f"does not support {tool}" in result["message"]

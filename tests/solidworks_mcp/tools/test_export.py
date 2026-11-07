@@ -800,3 +800,20 @@ async def test_export_tools_native_adapter_methods(mcp_server, mock_config):
             )
         )
     )["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_a_file_export_without_format_type_uses_the_tools_own(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    await register_export_tools(mcp_server, mock_adapter, mock_config)
+    mock_adapter.export_step = AsyncMock(
+        return_value=Mock(is_success=True, data={}, execution_time=0.1)
+    )
+    tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "export_step")
+
+    result = await tool({"file_path": "C:/out/part.step"})
+
+    assert result["status"] == "success"
+    assert mock_adapter.export_step.call_args.args[0]["format_type"] == "step"
+    assert ExportFileInput(file_path="C:/out/part.step").format_type is None

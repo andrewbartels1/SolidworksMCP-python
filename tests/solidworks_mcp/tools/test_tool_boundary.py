@@ -17,6 +17,7 @@ from solidworks_mcp.tools.tool_boundary import (
     ToolOperationError,
     ToolRegistrar,
     describe_validation_error,
+    model_parameters,
     normalize_input,
     require_success,
     tool_boundary,
@@ -493,3 +494,52 @@ async def test_failure_data_is_returned_when_requested() -> None:
 
     assert (await with_data())["data"] == {"error_count": 1}
     assert "data" not in await without_data()
+
+
+# ---- plain dicts --------------------------------------------------------------
+
+
+class _Payload(BaseModel):
+    depth: float
+
+
+@pytest.mark.asyncio
+async def test_a_dict_is_validated_as_the_tools_model() -> None:
+    seen: list[Any] = []
+
+    async def body(input_data: _Payload) -> dict[str, Any]:
+        seen.append(input_data)
+        return {"status": "success"}
+
+    wrapped = tool_boundary(body)
+
+    assert (await wrapped({"depth": 2})) == {"status": "success"}
+    assert (await wrapped(input_data={"depth": 3})) == {"status": "success"}
+    assert seen == [_Payload(depth=2), _Payload(depth=3)]
+
+
+@pytest.mark.asyncio
+async def test_a_bad_dict_is_invalid_input() -> None:
+    async def body(input_data: _Payload | None = None) -> dict[str, Any]:
+        return {"status": "success"}
+
+    result = await tool_boundary(body)({"depth": "deep"})
+
+    assert result["error_type"] == "invalid_input"
+    assert "depth" in result["message"]
+
+
+def test_model_parameters_finds_models_alone_or_optional() -> None:
+    async def body(
+        a: _Payload, b: _Payload | None, c: dict[str, Any], d: int | str
+    ) -> dict[str, Any]:
+        return {}
+
+    assert model_parameters(body) == {"a": _Payload, "b": _Payload}
+
+
+def test_model_parameters_is_empty_when_annotations_cannot_resolve() -> None:
+    async def body(input_data: NoSuchModel) -> dict[str, Any]:  # noqa: F821
+        return {}
+
+    assert model_parameters(body) == {}
