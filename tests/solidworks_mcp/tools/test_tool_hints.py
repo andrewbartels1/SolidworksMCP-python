@@ -31,7 +31,7 @@ async def test_every_tool_carries_its_hints_and_family(mock_adapter) -> None:
         hints = TOOL_HINTS[name]
         assert tool.title == hints.title, name
         assert tool.annotations == hints.annotations(), name
-        assert tool.tags == {tool.fn.__module__.rsplit(".", 1)[-1]}, name
+        assert tool.fn.__module__.rsplit(".", 1)[-1] in tool.tags, name
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_spot_checks(mock_adapter) -> None:
     assert tools["list_features"].annotations.readOnlyHint is True
     assert tools["delete_feature"].annotations.destructiveHint is True
     assert tools["create_extrusion"].annotations.readOnlyHint is False
-    assert tools["create_extrusion"].tags == {"modeling"}
+    assert tools["create_extrusion"].tags == {"modeling", "level:beta"}
     assert tools["save_file"].annotations.destructiveHint is True
 
 

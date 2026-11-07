@@ -1,10 +1,10 @@
 ## 1. Support levels
 
-- [ ] 1.1 `src/solidworks_mcp/tools/support_levels.py`: the table, filled by the rules in design.md; tests in `tests/solidworks_mcp/tools/test_support_levels.py`
-- [ ] 1.2 Review the first assignment with the user, tool by tool for the borderline ones; record the reasons
-- [ ] 1.3 `tool_boundary.py`: add the `level:<level>` tag and the `warning` on beta/experimental successes; tests beside it
-- [ ] 1.4 `tests/integration/test_support_levels.py`: every tool listed, no stale names, planned ⇔ "Not available yet", stable has a live test or is offline
-- [ ] 1.5 Rewrite the opening sentence of every beta and experimental tool's description; extend the description check
+- [x] 1.1 `src/solidworks_mcp/tools/support_levels.py`: the table, filled by the rules in design.md; tests in `tests/solidworks_mcp/tools/test_support_levels.py`
+- [x] 1.2 Review the first assignment with the user, tool by tool for the borderline ones; record the reasons
+- [x] 1.3 `tool_boundary.py`: add the `level:<level>` tag and the `warning` on beta/experimental successes; tests beside it
+- [x] 1.4 `tests/integration/test_support_levels.py`: every tool listed, no stale names, planned ⇔ "Not available yet", stable has a live test or is offline
+- [x] 1.5 Open every beta and experimental tool's description with its level (done by the registrar from the table; see design.md); extend the description check
 
 ## 2. COM coverage
 

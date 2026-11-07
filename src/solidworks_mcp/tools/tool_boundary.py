@@ -11,7 +11,9 @@ Tools contain business logic only. They:
 ``status``, ``message``, ``error_type``, ``hint`` and ``execution_time`` (the
 adapter's timing, else the tool's own wall time) - using :class:`ErrorClassifier` to name the failure.
 :class:`ToolRegistrar` applies the boundary to every tool at registration, so no
-tool can forget it.
+tool can forget it. It also adds each tool's support level (from
+``support_levels.py``) to its tags and, for a beta or experimental tool, a
+``warning`` to its successful results.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, cast
 
+from fastmcp.utilities.docstring_parsing import parse_docstring
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
@@ -33,6 +36,7 @@ from .error_classifier import (
     Classification,
     ErrorClassifier,
 )
+from .support_levels import SUPPORT_LEVELS, Support
 from .tool_hints import TOOL_HINTS, ToolHints
 
 _INVALID_INPUT_HINT = (
@@ -177,11 +181,22 @@ def error_payload(
 def tool_boundary(
     fn: Callable[..., Awaitable[dict[str, Any]]],
     classifier: ErrorClassifier = _CLASSIFIER,
+    warning: str | None = None,
 ) -> Callable[..., Awaitable[dict[str, Any]]]:
     """Wrap an async tool so every failure becomes an error payload.
 
     ``functools.wraps`` keeps the signature, so FastMCP builds the same input
     schema for the wrapped tool.
+
+    Args:
+        fn: The tool function.
+        classifier: Names the failure in an error payload.
+        warning: Added as ``warning`` to every successful result (a beta or
+            experimental tool's level), after any warning of the tool's own;
+            errors carry a ``hint`` instead.
+
+    Returns:
+        The wrapped tool.
     """
     tool_name = fn.__name__
 
@@ -193,7 +208,7 @@ def tool_boundary(
             return time.perf_counter() - started
 
         try:
-            return await fn(*args, **kwargs)
+            result = await fn(*args, **kwargs)
         except InvalidInputError as exc:
             return error_payload(
                 f"Invalid input: {exc}",
@@ -228,6 +243,11 @@ def tool_boundary(
                 classifier.classify(str(exc), exc, fallback=INTERNAL),
                 elapsed(),
             )
+        if warning is not None and result.get("status") == "success":
+            # A tool's own warning (e.g. a cut that removed nothing) comes first.
+            own = result.get("warning")
+            return {**result, "warning": f"{own} {warning}" if own else warning}
+        return result
 
     wrapper.__tool_boundary__ = True  # type: ignore[attr-defined]
     return wrapper
@@ -254,8 +274,10 @@ class ToolRegistrar:
     """A FastMCP stand-in whose ``tool()`` applies :func:`tool_boundary` first.
 
     It also gives each tool its title and behaviour hints from the hints
-    table, and its family tag (see :func:`tool_family`). Everything else is
-    forwarded to the wrapped server unchanged.
+    table, its family tag (see :func:`tool_family`), and its support level
+    from the levels table: a ``level:<level>`` tag and, below stable, a
+    ``warning`` on success. Everything else is forwarded to the wrapped
+    server unchanged.
     """
 
     def __init__(
@@ -263,18 +285,36 @@ class ToolRegistrar:
         mcp: Any,
         classifier: ErrorClassifier = _CLASSIFIER,
         hints: Mapping[str, ToolHints] = TOOL_HINTS,
+        levels: Mapping[str, Support] = SUPPORT_LEVELS,
     ) -> None:
         self._mcp = mcp
         self._classifier = classifier
         self._hints = hints
+        self._levels = levels
+
+    def _support(self, name: str) -> Support:
+        """The support entry of a tool being registered.
+
+        Raises:
+            KeyError: If the tool has no entry in the levels table.
+        """
+        support = self._levels.get(name)
+        if support is None:
+            raise KeyError(
+                f"Tool {name!r} has no entry in tools/support_levels.py; add its "
+                "support level (stable, beta, experimental or planned) there."
+            )
+        return support
 
     def _metadata(
         self, fn: Callable[..., Any], kwargs: dict[str, Any]
     ) -> dict[str, Any]:
         """The registration kwargs with the tool's title, hints and tag added.
 
-        Explicit ``title``/``annotations`` kwargs win over the table; tags
-        are merged.
+        Explicit ``title``/``annotations``/``description`` kwargs win over
+        the tables; tags are merged. A beta or experimental tool's
+        description opens with its level sentence, the same as its
+        ``warning``.
 
         Args:
             fn: The tool function being registered.
@@ -284,7 +324,7 @@ class ToolRegistrar:
             dict[str, Any]: The keyword arguments to pass on to FastMCP.
 
         Raises:
-            KeyError: If the tool has no entry in the hints table.
+            KeyError: If the tool has no entry in the hints or levels table.
         """
         name = kwargs.get("name") or fn.__name__
         hints = self._hints.get(name)
@@ -296,8 +336,21 @@ class ToolRegistrar:
         merged = dict(kwargs)
         merged.setdefault("title", hints.title)
         merged.setdefault("annotations", hints.annotations())
-        merged["tags"] = {tool_family(fn), *(kwargs.get("tags") or ())}
+        support = self._support(name)
+        merged["tags"] = {
+            tool_family(fn),
+            f"level:{support.level.value}",
+            *(kwargs.get("tags") or ()),
+        }
+        warning = support.warning()
+        if warning is not None and "description" not in kwargs:
+            body = parse_docstring(fn).description
+            merged["description"] = "\n\n".join(filter(None, (warning, body)))
         return merged
+
+    def _wrap(self, fn: Callable[..., Awaitable[dict[str, Any]]], name: str) -> Any:
+        """The tool inside the boundary, with its level's success warning."""
+        return tool_boundary(fn, self._classifier, self._support(name).warning())
 
     @classmethod
     def of(cls, mcp: Any) -> ToolRegistrar:
@@ -312,9 +365,7 @@ class ToolRegistrar:
         """Same contract as ``FastMCP.tool``, with the boundary and hints applied."""
         if args and callable(args[0]) and len(args) == 1 and not kwargs:
             fn = args[0]
-            return self._mcp.tool(**self._metadata(fn, {}))(
-                tool_boundary(fn, self._classifier)
-            )
+            return self._mcp.tool(**self._metadata(fn, {}))(self._wrap(fn, fn.__name__))
 
         if args and isinstance(args[0], str):
             kwargs = {"name": args[0], **kwargs}
@@ -322,7 +373,7 @@ class ToolRegistrar:
 
         def decorator(fn: Callable[..., Awaitable[dict[str, Any]]]) -> Any:
             register = self._mcp.tool(*args, **self._metadata(fn, kwargs))
-            return register(tool_boundary(fn, self._classifier))
+            return register(self._wrap(fn, kwargs.get("name") or fn.__name__))
 
         return decorator
 

@@ -70,7 +70,7 @@ async def test_reports_volume_and_size_change(mcp_server, mock_adapter, name):
         "solid_body_count_before": 0,
         "solid_body_count_after": 1,
     }
-    assert "warning" not in result
+    assert "changed no volume" not in result.get("warning", "")
 
 
 @pytest.mark.asyncio
@@ -96,7 +96,14 @@ async def test_adapter_without_the_read_leaves_reply_unchanged(mcp_server):
         _CALLS["create_extrusion"]
     )
 
-    assert set(result) == {"status", "message", "extrusion", "execution_time"}
+    # create_extrusion is beta, so the boundary adds its level warning.
+    assert set(result) == {
+        "status",
+        "message",
+        "extrusion",
+        "execution_time",
+        "warning",
+    }
 
 
 @pytest.mark.asyncio
@@ -131,7 +138,7 @@ async def test_failed_after_read_does_not_fail_the_feature(mcp_server, mock_adap
     assert change["volume_delta_mm3"] is None
     assert change["solid_body_count_after"] is None
     assert change["note"].endswith("COM call timed out")
-    assert "warning" not in result
+    assert "changed no volume" not in result.get("warning", "")
 
 
 @pytest.mark.asyncio

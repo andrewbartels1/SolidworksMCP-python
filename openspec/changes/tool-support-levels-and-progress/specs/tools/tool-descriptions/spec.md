@@ -10,4 +10,4 @@ A `beta` or `experimental` tool's description SHALL open with its level and the 
 
 #### Scenario: The level changes
 - **WHEN** a tool's level changes in the table
-- **THEN** the description check fails until the opening sentence matches the new level
+- **THEN** its description's opening sentence changes with it, with no edit to the tool, because the server adds that sentence from the table at registration; the check fails if a tool's description doesn't open with its level
