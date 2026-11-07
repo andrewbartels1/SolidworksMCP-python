@@ -14,6 +14,18 @@ Python MCP server for SolidWorks automation with 154 tools, plus an optional age
 
 ## See it work
 
+### A whole mechanism from a description
+
+We took SolidWorks' own U-Joint sample, read every part, sketch, feature and mate, and wrote it up as a plain-English prompt: eight parts, a crank sub-assembly, and a main assembly that has to move like a real joint. Then Claude Code (Opus 5.5, medium effort) built it from that prompt alone.
+
+![The original U-Joint sample beside the agent's build: the same bracket, yokes, spider, pins, crank and knob, in the same pose](docs/assets/demos/ujoint/ujoint_original_vs_agent.jpg)
+
+![The agent's 294 tool calls replayed in SolidWorks: eight parts sketched and cut, then the crank sub-assembly and the U-joint mated together](docs/assets/demos/ujoint/test_ujoint_from_prompt_to_assembly-motion.gif)
+
+Six of the eight parts match the sample's volume within 0.2 %, and all eight within 1 %. The mates leave the mechanism free to turn. The recording replays the session's 294 calls (sped up 80 times). The [walkthrough](https://andrewbartels1.github.io/SolidworksMCP-python/demos/#ujoint) has the prompt, the part-by-part comparison, and what the agent couldn't do. The same prompt run with and without the [agent skill](https://andrewbartels1.github.io/SolidworksMCP-python/agents/agent-skill/) made the same parts, which is why we want skills that improve results (#207).
+
+### A drawing package from one prompt
+
 > Make a 100 x 50 x 10 mm AISI 1020 mounting plate with four M5 clearance holes, 10 mm in from each edge, and draw it fully dimensioned. Stack two of them 10 mm apart, check the result, and draw the assembly with a BOM.
 
 ![A fully dimensioned plate, its drawing with GD&T, two plates mated 10 mm apart and the assembly drawing with a BOM, built in SolidWorks through the MCP tools](docs/assets/demos/readme/test_plate_stack_from_prompt_to_drawing-motion.gif)
