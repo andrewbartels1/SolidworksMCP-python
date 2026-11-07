@@ -10,6 +10,7 @@ Last updated 2026-11-06.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
+| 0 | Hotfix: the monitor-stand GIF looked empty in the README and Demos grids (its first 8 frames were SolidWorks' blank start screen, and GitHub shows only the first frame to readers with reduced motion) | none | none (asset fix) | Fixed 2026-11-06 on `fix/monitor-stand-gif-poster`: the GIF opens on the finished stand for 2 s, then plays the build. Awaiting push approval |
 | 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` (archived) | Done 2026-11-05 (#202, #203, #204). Left: after the next release, ask Glama for a rescan and record the score in the internal assessment |
 | 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` (archived) | Done 2026-11-06 (#205, #211; #147 closed as superseded) |
 | 3 | The circuit breaker locks a tool out after a success and never reopens; a reset tool | #208 | `circuit-breaker-recovery` (archived) | Done 2026-11-06 (#213) |
