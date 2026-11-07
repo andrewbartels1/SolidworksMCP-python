@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Support levels for every tool** (#79). Each tool is `stable` (checked
+  live, no known fault), `beta` (a known fault or partial COM coverage),
+  `experimental` (not yet checked live) or `planned` (not implemented),
+  in one table, `tools/support_levels.py`. The level is in the tool's tags
+  (`level:beta`); a beta or experimental tool's description opens with it,
+  and its successful results carry it as `warning`. A check keeps the table
+  in step with the code. Today: 81 stable, 24 beta, 10 experimental, 40
+  planned. `tutorial_simple_hole` is now planned: its cut step fails on
+  SolidWorks.
+- **Progress bars and a progress page** (#79). The README opens with an
+  image of the tools by level and the share of the core SolidWorks COM API
+  the adapters reach (208 of 2,838 methods), counted from a committed
+  snapshot of the type library. The docs site's new Progress page lists
+  every tool with its level and reason, filterable by level and family.
+  `python -m solidworks_mcp.progress.generate` regenerates both; a test
+  fails when they're stale.
+
 - **`reset_circuit_breaker`** (#208). Re-opens operations the server paused
   after repeated failures, all of them or one by name; the `circuit_open`
   hint now names it.

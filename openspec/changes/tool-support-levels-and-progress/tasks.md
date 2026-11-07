@@ -16,14 +16,14 @@
 - [x] 3.1 `solidworks_mcp.progress.generate`: `progress.svg`, `progress.json` and `tables.html`; tests
 - [x] 3.2 `tests/integration/test_progress_up_to_date.py`: fails when either is stale, naming the command
 - [x] 3.3 `docs/progress.md` with the no-script table and `docs/javascripts/progress.js` filters; mkdocs nav; `mkdocs build --strict`
-- [ ] 3.4 Show the user the SVG and the page before wiring them into the README
+- [x] 3.4 Show the user the SVG and the page before wiring them into the README
 
 ## 4. README and docs
 
-- [ ] 4.1 README: the progress image at the top linking to the page; a "two tools in one" section (Python interface for scripting SolidWorks, and an MCP server on it)
-- [ ] 4.2 `docs/agents/tool-description-standard.md` and the agent skill: what the levels mean; the queue's small-faults list note: a fixed fault moves its tool up a level
-- [ ] 4.3 CHANGELOG; `openspec/queue.md` (this change before #179; #79's coverage half done)
+- [x] 4.1 README: the progress image at the top linking to the page; a "two tools in one" section (Python interface for scripting SolidWorks, and an MCP server on it)
+- [x] 4.2 `docs/agents/tool-description-standard.md` and the agent skill: what the levels mean; the queue's small-faults list note: a fixed fault moves its tool up a level
+- [x] 4.3 CHANGELOG; `openspec/queue.md` (this change before #179; #79's coverage half done)
 
 ## 5. Ship
 
-- [ ] 5.1 Full mock suite, ruff, 100 % coverage, `mkdocs build --strict`
+- [x] 5.1 Full mock suite, ruff, 100 % coverage, `mkdocs build --strict`

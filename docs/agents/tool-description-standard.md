@@ -72,6 +72,24 @@ future release." Then point to the tool to use instead, if there is one, and
 phrase what it would change or return as "once available". The list of these
 tools is in `openspec/queue.md`.
 
+## Support levels
+
+Add one line to `SUPPORT_LEVELS` in `tools/support_levels.py` for every new
+tool; registration fails without it. A tool is `stable` once a live test
+calls it and it has no known fault, `beta` when it works on SolidWorks but
+has a known fault or covers only part of its COM call, `experimental` when
+no live test has checked it, and `planned` when nothing implements it (its
+description says "Not available yet"). Below stable, give a one-sentence
+reason.
+
+Don't write the level into the docstring: the server opens a beta or
+experimental tool's description with "Beta: <reason>" or "Experimental:
+<reason>" from the table, adds the same sentence to its successful results as
+`warning`, and tags every tool `level:<level>`. After changing a level, run
+`python -m solidworks_mcp.progress.generate` so the README image and the
+[progress page](../progress.md) follow; `tests/integration/test_support_levels.py`
+and `test_progress_up_to_date.py` check both.
+
 ## Behaviour hints
 
 Add one line to `TOOL_HINTS` in `tools/tool_hints.py` for every new tool;

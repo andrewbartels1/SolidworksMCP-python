@@ -32,10 +32,11 @@ it will again.
 
 ## Tools that can't run yet
 
-39 tools are registered but no adapter implements them. Their description
-starts "Not available yet"; every call returns `not_supported`. They are
+40 tools are registered but nothing implements them (support level
+`planned`). Their description says "Not available yet"; every call returns
+`not_supported`. They are
 mostly batch, template, macro-recording and drawing-analysis tools, plus
-`add_dimension`, `create_section_view`, `create_detail_view`,
+`tutorial_simple_hole`, `add_dimension`, `create_section_view`, `create_detail_view`,
 `update_title_block`, `analyze_geometry`, `get_material_properties` and
 `batch_export`. Each description names what to use today.
 
@@ -54,5 +55,4 @@ mostly batch, template, macro-recording and drawing-analysis tools, plus
 | `calculate_mass_properties` labels moments of inertia kg·mm², but they are kg·m². | Read them as kg·m². |
 | `check_interference` ignores `include_hidden`. | Show the components you want checked. |
 | `execute_macro` runs a macro once, whatever `repeat_count` says, and runs only binary `.swp` files. | Call it again for a repeat. |
-| `tutorial_simple_hole` fails at its cut step on real SolidWorks. | Use `create_sketch`, `add_circle`, `exit_sketch` and `create_cut_extrude`. |
 | `add_mate` can mate only reference planes and axes, by name. | Model parts so their planes line up with the mates you need. |

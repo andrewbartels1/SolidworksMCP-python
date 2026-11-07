@@ -12,6 +12,29 @@
 
 Python MCP server for SolidWorks automation with 155 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
+[![155 MCP tools by support level, and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.github.io/SolidworksMCP-python/progress/)
+
+<sub>Generated from the code; click it for every tool, its level and why, filterable by level and family.</sub>
+
+### Two tools in one
+
+- **A Python interface for scripting SolidWorks.** The adapters wrap SolidWorks' COM API in plain `async` Python calls, so you can automate it from your own scripts without an AI in the loop:
+
+  ```python
+  from solidworks_mcp.adapters.base import ExtrusionParameters
+  from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+
+  adapter = PyWin32Adapter({})
+  await adapter.connect()
+  await adapter.create_part()
+  await adapter.create_sketch("Top")
+  await adapter.add_rectangle(-20, -10, 20, 10)  # mm
+  await adapter.exit_sketch()
+  await adapter.create_extrusion(ExtrusionParameters(depth=10))
+  ```
+
+- **An MCP tool server on top of it.** The same calls, exposed as 155 MCP tools, so an agent such as Claude Code can build parts, assemblies and drawings from a description. Each tool carries a support level (stable, beta, experimental or planned), so the agent knows how far to trust it.
+
 ## See it work
 
 ### A whole mechanism from a description
@@ -173,6 +196,7 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
 - Tested on SolidWorks 2026. Earlier versions may work but are untested; if you try one, please [open an issue](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new/choose) with what worked.
 - Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
+- Every tool's support level, and the reason a tool isn't stable yet, is on the [progress page](https://andrewbartels1.github.io/SolidworksMCP-python/progress/).
 
 ## Not Yet / Simulated
 
