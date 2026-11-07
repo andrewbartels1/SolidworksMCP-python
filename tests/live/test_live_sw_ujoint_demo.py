@@ -199,7 +199,9 @@ async def test_ujoint_from_prompt_to_assembly(scratch: Any, tmp_path: Path) -> N
         differed
     )
     saved = sorted(
-        p.name for p in out.iterdir() if p.suffix.upper() in {".SLDPRT", ".SLDASM"}
+        p.name
+        for p in out.iterdir()
+        if p.suffix.upper() in {".SLDPRT", ".SLDASM"} and not p.name.startswith("~$")
     )
     scratch.written_files += [str(out / name) for name in saved]
     assert "UJoint.SLDASM" in saved and len(saved) == 10, saved
