@@ -48,17 +48,17 @@
 ## 5. Ship
 
 - [x] 5.1 Full mock suite, ruff, 100 % coverage, `mkdocs build --strict`
-- [ ] 5.2 Ask the user, then run the measurement on real SolidWorks: the
+- [x] 5.2 Ask the user, then run the measurement on real SolidWorks: the
       U-joint prompt (SolidWorks' U-Joint sample, read part by part and
       written as a plain-English prompt) in a fresh agent session without the
       skill, then with it installed, each from a clean folder with the same
       breaker timeout; record tool calls, errors, part volumes against the
       sample and the mates, in `docs/agents/agent-skill.md` (decided
       2026-11-06: the monitor stand was too easy to show a difference)
-- [ ] 5.3 `tests/live/test_live_sw_ujoint_demo.py`: open on the original
+- [x] 5.3 `tests/live/test_live_sw_ujoint_demo.py`: open on the original
       sample, then the prompt, then replay the with-skill session's calls
       (`tests/live/data/ujoint/`) as captioned frames, each ending as it did
       in the session; record it with `live_demo.ps1 -Record`
-- [ ] 5.4 README and Demos page: the U-joint as the top demo, above the
+- [x] 5.4 README and Demos page: the U-joint as the top demo, above the
       monitor stand, showing the original beside the agent's result and the
       with/without comparison
