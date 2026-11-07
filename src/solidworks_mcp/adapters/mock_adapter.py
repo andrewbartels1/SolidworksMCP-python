@@ -3057,6 +3057,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mock mating two components in the active assembly.
 
@@ -3072,10 +3074,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             distance (float): Distance in millimetres, for a distance mate.
                 Defaults to 0.0.
             angle (float): Angle in degrees, for an angle mate. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component (part coordinates, mm), used instead of entity_a.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
+        from .solidworks.face_selection import mate_entity_label
+
         known_mate_types = {
             "coincident",
             "concentric",
@@ -3106,7 +3113,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "mate_type": mate_type,
                 "alignment": alignment,
                 "components": [component_a, component_b],
-                "entities": [entity_a, entity_b],
+                "entities": [
+                    mate_entity_label(entity_a, face_a),
+                    mate_entity_label(entity_b, face_b),
+                ],
                 "distance": distance or None,
                 "angle": angle or None,
                 # The real adapter fills these by comparing every component's

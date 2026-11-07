@@ -877,6 +877,8 @@ class TestConnectionPoolAdapterExtras:
                 alignment="aligned",
                 distance=0.0,
                 angle=0.0,
+                face_a=None,
+                face_b=None,
             ):
                 return _ok("mate")
 

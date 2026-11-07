@@ -1289,6 +1289,8 @@ class SolidWorksAdapter(ABC):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mate two components together in the active assembly.
 
@@ -1306,6 +1308,10 @@ class SolidWorksAdapter(ABC):
             distance (float): Distance in millimetres, for a distance mate.
                 Defaults to 0.0.
             angle (float): Angle in degrees, for an angle mate. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component, in its part coordinates (mm), used instead of
+                ``entity_a``.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: Mate details, or error.

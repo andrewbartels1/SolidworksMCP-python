@@ -2182,3 +2182,40 @@ async def test_reference_plane_tool_passes_axis_and_face_point(
     assert angled["plane"]["angle"] == 40
     assert on_face["plane"]["face_point"] == [0, 10, 5]
     assert on_face["plane"]["reference"] is None
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"entity_a": "Top Plane", "face_a": [0, 0, 0]}, "entity_a or face_a"),
+        ({"face_b": [0, 0]}, "face_b must be"),
+    ],
+)
+def test_add_mate_input_refusals(kwargs: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        AddMateInput(component_a="a-1", component_b="b-1", **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_add_mate_tool_passes_faces_and_defaults_the_planes(
+    mcp_server, mock_adapter
+) -> None:
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "add_mate")
+
+    by_face = await tool(
+        {
+            "component_a": "bracket-1",
+            "component_b": "pin-1",
+            "face_a": [0, 76.2, 38.1],
+            "face_b": [0, 4.7, 0],
+            "mate_type": "concentric",
+        }
+    )
+    by_plane = await tool({"component_a": "bracket-1", "component_b": "pin-1"})
+
+    assert by_face["mate"]["entities"] == [
+        "face at [0.0, 76.2, 38.1] mm",
+        "face at [0.0, 4.7, 0.0] mm",
+    ]
+    assert by_plane["mate"]["entities"] == ["Front Plane", "Front Plane"]

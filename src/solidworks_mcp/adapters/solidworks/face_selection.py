@@ -73,6 +73,23 @@ def side_vector(side: str) -> tuple[float, float, float]:
         ) from None
 
 
+def mate_entity_label(entity: str, face: list[float] | None) -> str:
+    """How a mate's reply names one side: the entity, or the face point.
+
+    Shared by the live and mock adapters.
+
+    Args:
+        entity: The named entity (used when no face is given).
+        face: A point on a face, in part coordinates (mm).
+
+    Returns:
+        str: e.g. ``"Front Plane"`` or ``"face at [0.0, 5.0, 0.0] mm"``.
+    """
+    if face is None:
+        return entity
+    return f"face at {[float(c) for c in face]} mm"
+
+
 def validate_face_query(
     point: list[float] | None,
     side: str | None,
@@ -265,6 +282,21 @@ class FaceEdgeSelector:
         part = self._model
         _flag(self._adapter, part, "GetBodies2")
         bodies = as_list(_attempt(self._adapter, lambda: part.GetBodies2(0, False)))
+        return self._body_faces(bodies)
+
+    def component_faces(self, component: Any) -> list[FaceInfo]:
+        """Return every face of a component's solid bodies.
+
+        Measured on SW 2026: these faces report their geometry in the
+        component's own part coordinates, wherever it sits in the assembly,
+        and ``IEntity::GetComponent`` on them returns the component.
+        """
+        _flag(self._adapter, component, "GetBodies2")
+        bodies = as_list(_attempt(self._adapter, lambda: component.GetBodies2(0)))
+        return self._body_faces(bodies)
+
+    def _body_faces(self, bodies: list[Any]) -> list[FaceInfo]:
+        """Describe every face of ``bodies``."""
         out: list[FaceInfo] = []
         for body in bodies:
             _flag(self._adapter, body, "GetFaces")

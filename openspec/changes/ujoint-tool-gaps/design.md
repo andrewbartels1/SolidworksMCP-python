@@ -65,6 +65,13 @@ component's faces (`GetBodies2`, the face closest to the point within
 component faces report assembly or part coordinates is measured live first
 (a read-only probe); the transform step is kept only if needed.
 
+**Measured 2026-11-06 (SW 2026, read-only probe):** a 100 x 50 x 10 block
+inserted 50 mm along x had `Transform2` translation (0.05, -0.005, 0) m, yet
+every face from `IComponent2::GetBodies2(0)` reported its box in **part**
+coordinates (x from -50 to 50 mm), and `IEntity::GetComponent` on such a face
+returned the component. So the point is matched against the component's faces
+in part coordinates directly, and no transform is needed.
+
 Alternative, `SelectByID2("", "FACE", x, y, z)` at an assembly point:
 rejected. A pin's surface and its hole's surface are at the same points, so
 the pick could land on the wrong component.

@@ -1650,6 +1650,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add mate through circuit breaker.
 
@@ -1664,6 +1666,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             alignment (str): Mate alignment. Defaults to "aligned".
             distance (float): Distance in millimetres. Defaults to 0.0.
             angle (float): Angle in degrees. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component, in its part coordinates (mm), instead of entity_a.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -1679,6 +1684,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 alignment,
                 distance,
                 angle,
+                face_a,
+                face_b,
             ),
             input_dict={
                 "component_a": component_a,
@@ -1689,6 +1696,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "alignment": alignment,
                 "distance": distance,
                 "angle": angle,
+                "face_a": face_a,
+                "face_b": face_b,
             },
         )
 

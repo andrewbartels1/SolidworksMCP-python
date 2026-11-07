@@ -10,8 +10,8 @@
 
 ## 3. Assemblies
 
-- [ ] 3.1 Live read-only probe: in which space a component's faces report coordinates; record it in design.md
-- [ ] 3.2 `add_mate`: `face_a` / `face_b` through every adapter layer; tests
+- [x] 3.1 Live read-only probe: in which space a component's faces report coordinates; record it in design.md
+- [x] 3.2 `add_mate`: `face_a` / `face_b` through every adapter layer; tests
 - [ ] 3.3 `set_component_state` tool and adapter method (base, mock, COM, breaker, pool), hints, support level; tests
 
 ## 4. Docs and levels

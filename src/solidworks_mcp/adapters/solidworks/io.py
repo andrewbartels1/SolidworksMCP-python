@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
+from .face_selection import mate_entity_label
 
 try:
     import pythoncom
@@ -291,6 +292,50 @@ def _byref_bstr() -> Any:
         int(getattr(pythoncom, "VT_BYREF", 0)) | int(getattr(pythoncom, "VT_BSTR", 0)),
         "",
     )
+
+
+def _select_component_face(
+    adapter: Any,
+    model: Any,
+    component: Any,
+    component_name: str,
+    point: list[float],
+    append: bool,
+) -> None:
+    """Select the face of ``component`` at ``point`` (its part coordinates, mm).
+
+    Only that component's faces are searched, so coincident surfaces of two
+    parts (a pin in its hole) can't be confused.
+
+    Args:
+        adapter: The connected adapter.
+        model: The active assembly document.
+        component: The ``IComponent2`` dispatch.
+        component_name: Its instance name, for messages.
+        point: ``[x, y, z]`` mm on the face, in the component's part coordinates.
+        append: Add to the current selection.
+
+    Raises:
+        Exception: When no face of the component lies at the point, or it
+            won't select.
+    """
+    from .face_selection import FaceEdgeSelector
+
+    selector = FaceEdgeSelector(adapter)
+    try:
+        face = selector.face_at_point(selector.component_faces(component), point)
+    except LookupError as exc:
+        raise Exception(
+            f"Face not found on {component_name} at {list(point)} mm (part "
+            f"coordinates): {exc}"
+        ) from exc
+    sel_mgr = _sw_type_info.flagged(model.SelectionManager, "ISelectionMgr")
+    select_data = adapter._attempt(lambda: sel_mgr.CreateSelectData(), default=None)
+    handle = _sw_type_info.flagged(face.handle, "IEntity")
+    if not adapter._attempt(lambda: handle.Select4(append, select_data), default=False):
+        raise Exception(
+            f"Failed to select the face of {component_name} at {list(point)} mm"
+        )
 
 
 def _byref_int() -> Any:
@@ -2616,17 +2661,19 @@ class SolidWorksIOMixin:
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mate two components together.
 
-        Wraps ``IAssemblyDoc::AddMate5``.  The two entities are selected via
-        ``IComponent2::FeatureByName`` + ``IFeature::Select2`` rather than
-        ``SelectByID2``, which raises ``Type mismatch`` on this build.
-
-        That restricts the entities to *named tree features* — the reference
-        planes and axes of each component.  Plane-to-plane mating covers
-        alignment and stacking, which is the common case; mating to a specific
-        face or edge needs entity names this adapter cannot enumerate.
+        Wraps ``IAssemblyDoc::AddMate5``. A named entity (a reference plane or
+        axis) is selected via ``IComponent2::FeatureByName`` +
+        ``IFeature::Select2``. A face is given as a point on it in the
+        component's own part coordinates: the face is found among *that
+        component's* faces only (``IComponent2::GetBodies2``, which report
+        part coordinates; measured on SW 2026) and selected with
+        ``IEntity::Select4``. Searching one component means a pin and the
+        hole it sits in, whose surfaces share points, can't be confused.
 
         Args:
             component_a (str): First component instance name, as reported by
@@ -2639,6 +2686,10 @@ class SolidWorksIOMixin:
             alignment (str): ``aligned``, ``anti_aligned`` or ``closest``.
             distance (float): Distance in millimetres, for a distance mate.
             angle (float): Angle in degrees, for an angle mate.
+            face_a (list[float] | None): ``[x, y, z]`` mm on a face of the
+                first component, in its part coordinates; used instead of
+                ``entity_a``.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The mate created, plus the bounding
@@ -2692,6 +2743,7 @@ class SolidWorksIOMixin:
                 raise Exception("Could not read the assembly's components")
 
             wanted = {component_a: entity_a, component_b: entity_b}
+            faces = {component_a: face_a, component_b: face_b}
             found: dict[str, Any] = {}
             for component in components:
                 wrapped = _as_com(adapter, component, "IComponent2")
@@ -2721,6 +2773,12 @@ class SolidWorksIOMixin:
             for index, component_name in enumerate((component_a, component_b)):
                 wrapped = found[component_name]
                 entity_name = wanted[component_name]
+                point = faces[component_name]
+                if point is not None:
+                    _select_component_face(
+                        adapter, model, wrapped, component_name, point, index > 0
+                    )
+                    continue
                 feature = adapter._attempt(
                     lambda w=wrapped, e=entity_name: w.FeatureByName(e), default=None
                 )
@@ -2794,7 +2852,10 @@ class SolidWorksIOMixin:
                 "mate_type": mate_key,
                 "alignment": align_key,
                 "components": [component_a, component_b],
-                "entities": [entity_a, entity_b],
+                "entities": [
+                    mate_entity_label(entity_a, face_a),
+                    mate_entity_label(entity_b, face_b),
+                ],
                 "distance": distance or None,
                 "angle": angle or None,
                 "moved_components": moved,

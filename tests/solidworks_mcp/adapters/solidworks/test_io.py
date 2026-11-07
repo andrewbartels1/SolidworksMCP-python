@@ -36,6 +36,7 @@ import inspect
 import struct
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, call
 
 import pytest
@@ -3933,6 +3934,80 @@ class TestAssemblyAndDrawingSuccessPaths:
         assert result.data["mate_type"] == "coincident"
         assert result.data["moved_components"] == ["part-2"]
         assert result.data["geometry_moved"] is True
+
+    @staticmethod
+    def _face_mate(monkeypatch, handle: Any, found: bool = True) -> PyWin32Adapter:
+        """A two-component assembly whose 'pin-1' has one face, at ``handle``."""
+        from solidworks_mcp.adapters.solidworks import face_selection
+
+        adapter = TestAssemblyAndDrawingSuccessPaths._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="bracket-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="pin-1", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(_io_module, "_byref_int", lambda: SimpleNamespace(value=1))
+        monkeypatch.setattr(_io_module, "_component_transforms", lambda _a, _asm: {})
+        face = face_selection.FaceInfo(0, (0.0, 0.0, 0.0), (0.0,) * 6, 1.0, handle)
+
+        class _Selector:
+            def __init__(self, _adapter: Any) -> None:
+                pass
+
+            def component_faces(self, component: Any) -> list[Any]:
+                assert component.Name2 == "pin-1"
+                return [face]
+
+            def face_at_point(self, faces: list[Any], point: list[float]) -> Any:
+                if not found:
+                    raise LookupError(f"No face found at point {point} mm.")
+                return faces[0]
+
+        monkeypatch.setattr(face_selection, "FaceEdgeSelector", _Selector)
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_add_mate_selects_a_face_of_that_component(self, monkeypatch) -> None:
+        picks: list[bool] = []
+        handle = SimpleNamespace(
+            Select4=lambda append, data: picks.append(append) or True
+        )
+        adapter = self._face_mate(monkeypatch, handle)
+
+        result = await adapter.add_mate(
+            "bracket-1", "pin-1", "Top Plane", mate_type="concentric", face_b=[0, 5, 0]
+        )
+
+        assert result.is_success, result.error
+        assert picks == [True]  # the second side appends to the first
+        assert result.data["entities"] == ["Top Plane", "face at [0.0, 5.0, 0.0] mm"]
+        assert result.data["geometry_moved"] is None
+
+    @pytest.mark.asyncio
+    async def test_add_mate_names_a_missing_face(self, monkeypatch) -> None:
+        adapter = self._face_mate(monkeypatch, None, found=False)
+
+        result = await adapter.add_mate("bracket-1", "pin-1", face_b=[0, 99, 0])
+
+        assert result.is_error
+        assert "Face not found on pin-1 at [0, 99, 0] mm" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_mate_reports_a_face_that_will_not_select(
+        self, monkeypatch
+    ) -> None:
+        handle = SimpleNamespace(Select4=lambda append, data: False)
+        adapter = self._face_mate(monkeypatch, handle)
+
+        result = await adapter.add_mate("bracket-1", "pin-1", face_b=[0, 5, 0])
+
+        assert result.is_error
+        assert "Failed to select the face of pin-1" in (result.error or "")
 
     @pytest.mark.asyncio
     async def test_list_components_returns_their_names(self, monkeypatch) -> None:

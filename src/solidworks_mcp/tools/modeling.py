@@ -767,15 +767,34 @@ class AddMateInput(CompatInput):
         description="First component instance name, as reported by list_components"
     )
     component_b: str = Field(description="Second component instance name")
-    entity_a: str = Field(
-        default="Front Plane",
+    entity_a: str | None = Field(
+        default=None,
         description=(
-            "Named feature on the first component. Only tree features "
-            "(reference planes and axes) can be selected"
+            "Named reference plane or axis on the first component, e.g. 'Front "
+            "Plane'; defaults to 'Front Plane' when face_a is not given either"
         ),
     )
-    entity_b: str = Field(
-        default="Front Plane", description="Named feature on the second component"
+    entity_b: str | None = Field(
+        default=None,
+        description=(
+            "Named reference plane or axis on the second component; defaults "
+            "to 'Front Plane' when face_b is not given either"
+        ),
+    )
+    face_a: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a face of the first component, in that part's "
+            "own coordinates (as it was modelled), instead of entity_a: e.g. a "
+            "point on a pin's round face for a concentric mate"
+        ),
+    )
+    face_b: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a face of the second component, in its own "
+            "part coordinates, instead of entity_b"
+        ),
     )
     mate_type: str = Field(
         default="coincident",
@@ -795,6 +814,15 @@ class AddMateInput(CompatInput):
     def model_post_init(self, __context: Any) -> None:
         if not self.component_a.strip() or not self.component_b.strip():
             raise ValueError("component_a and component_b are required")
+        for side in ("a", "b"):
+            entity, face = (
+                getattr(self, f"entity_{side}"),
+                getattr(self, f"face_{side}"),
+            )
+            if entity and face is not None:
+                raise ValueError(f"give entity_{side} or face_{side}, not both")
+            if face is not None and len(face) != 3:
+                raise ValueError(f"face_{side} must be [x, y, z] in millimetres")
 
 
 class CreateReferencePlaneInput(CompatInput):
@@ -1689,16 +1717,18 @@ async def register_modeling_tools(
     async def add_mate(input_data: AddMateInput) -> dict[str, Any]:
         """Mate two components of the active assembly: coincident, concentric, parallel, perpendicular, tangent, distance or angle.
 
-        Only reference planes and axes can be mated (by name, e.g. "Front Plane"), not
-        faces or edges. Get instance names from `list_components`. Needs: an open
-        assembly with both components. Changes: adds a mate and may move components.
-        Returns: `mate` with `mate_type`, `components`, `entities`, `geometry_moved` and
-        `moved_components`.
+        Each side is a named reference plane or axis (`entity_a`, e.g. "Front Plane"),
+        or a face given by a point on it (`face_a`, mm, in that part's own coordinates):
+        a pin's round face and a hole's face make a concentric mate. Get instance names
+        from `list_components`. Needs: an open assembly with both components. Changes:
+        adds a mate and may move components. Returns: `mate` with `mate_type`,
+        `components`, `entities`, `geometry_moved` and `moved_components`.
 
         Args:
             input_data: The mate. `component_a` and `component_b` are required;
-                `entity_a`/`entity_b` ("Front Plane"), `mate_type` (coincident),
-                `alignment`, `distance` (mm) and `angle` (degrees) have defaults.
+                each side takes `entity_*` or `face_*` (default "Front Plane");
+                `mate_type` (coincident), `alignment`, `distance` (mm) and `angle`
+                (degrees) have defaults.
 
         Returns:
             dict[str, Any]: The mate added.
@@ -1707,12 +1737,14 @@ async def register_modeling_tools(
         result = await adapter.add_mate(
             input_data.component_a,
             input_data.component_b,
-            input_data.entity_a,
-            input_data.entity_b,
+            input_data.entity_a or "Front Plane",
+            input_data.entity_b or "Front Plane",
             input_data.mate_type,
             input_data.alignment,
             input_data.distance,
             input_data.angle,
+            input_data.face_a,
+            input_data.face_b,
         )
         require_success(result, context="Failed to add mate")
         data = result.data if isinstance(result.data, dict) else {}
