@@ -29,6 +29,24 @@ First assignment, by rule, then reviewed by hand with the user:
 - `stable`: called by a live test or a demo script a live test runs, or a tool that never calls SolidWorks and is unit-tested (the VBA generators, the API lookups);
 - `experimental`: the rest.
 
+First assignment (2026-11-06, 155 tools): 81 stable, 24 beta, 10
+experimental, 40 planned. Corrections to the rule, reviewed with the user:
+- The rule's text match named three tools only because a fault's wording
+  mentions them (`exit_sketch`, `create_cut_extrude`, `create_drawing_view`):
+  stable.
+- The five `export_*` file tools ignore `format_type` and `options` (a fault
+  the rule's text match missed): beta. `export_image` has no such field:
+  stable.
+- `get_material` and `add_mate` cover only part of their COM call: beta.
+- Tools that work on SolidWorks but ignore one optional input (`create_part`,
+  `create_assembly`, `create_drawing`, `create_sketch`, `create_extrusion`,
+  `create_revolve`, the `export_*` tools, ...): beta, the user's call. Each
+  fix moves its tool up.
+- `tutorial_simple_hole` always fails at its cut step on SolidWorks:
+  planned, the user's call; its description now says "Not available yet".
+- `generate_vba_code`, `compare_drawing_versions` and `compare_templates` go
+  through the adapter but have no live test: experimental.
+
 ### "Stable needs a live test", checked by text
 
 The check looks for the tool's name as a whole word in `tests/live/*.py` and in the `scripts/demo_*.py` files those tests load. Tools of the offline families (`vba_generation`, `type_library`, `docs_discovery`) are exempt. Alternative, recording which tools a live run actually called: rejected, live runs don't happen in CI.
@@ -37,11 +55,34 @@ The check looks for the tool's name as a whole word in `tests/live/*.py` and in 
 
 Added by the boundary to a successful result of a beta or experimental tool. It's additive, so existing clients and the stable payload shape (`status`, `message`, `execution_time`, data) are unaffected. Errors don't get it: they already carry `hint`.
 
+### Level in the description: added by the registrar
+
+`ToolRegistrar` opens a beta or experimental tool's description with the same
+sentence as its `warning` ("Beta: <reason>"), followed by the docstring's text
+(FastMCP's `parse_docstring`). Alternative, writing that sentence into ~35
+docstrings by hand: rejected during implementation, the reason would live in
+two places and go stale when a level changes. A tool's own `warning` (a cut
+that removed nothing) and the level's are joined, the tool's first.
+
 ### COM snapshot: `docs/assets/progress/com_snapshot.json`
 
 `{sw_version, interfaces: {name: [methods]}}`, written by `src/utils/snapshot_com_api.py` (Windows only, run by hand after a SolidWorks upgrade). Committed so the generator and the check run anywhere. About 150 KB, acceptable.
 
 Core interfaces, fixed in the generator: `ISldWorks`, `IModelDoc2`, `IModelDocExtension`, `IPartDoc`, `IAssemblyDoc`, `IDrawingDoc`, `IFeatureManager`, `ISketchManager`, `ISelectionMgr`, `IComponent2`, `IFeature`, `ISketch`. Coverage of each = its method names called anywhere in the adapters, out of its methods.
+
+### Where the code lives: `solidworks_mcp.progress`
+
+Moved from `src/utils/` during implementation: `src/utils` is outside the
+coverage run and has no tests, and the counting and drawing code should be
+tested like the rest. The package has `com_coverage.py` (snapshot, scan,
+counts), `snapshot.py` (`python -m solidworks_mcp.progress.snapshot`,
+Windows), `svg.py` and `generate.py` (`python -m
+solidworks_mcp.progress.generate`). `sw_type_info` gains two read-only
+accessors, `all_interface_methods()` and `type_library_name()`, for the
+snapshot. The scan counts names used as attributes or passed as strings
+(`flag_members(obj, "EditDelete")`), across every file under `adapters/`.
+The page's tables are a generated `tables.html` included with a snippet (a
+`.md` under `docs/` would become a page of its own).
 
 ### Generator and check
 

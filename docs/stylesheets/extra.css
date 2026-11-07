@@ -84,3 +84,29 @@
 .status-completed { color: #28a745; }
 .status-in-progress { color: #ffc107; }
 .status-planned { color: var(--solidworks-gray); }
+/* Progress page: support-level badges, filter chips */
+.level, .progress-chip {
+    display: inline-block;
+    padding: 0.05em 0.6em;
+    border-radius: 1em;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #fff;
+    background: #6e7681;
+}
+.level-stable { background: #2ea043; }
+.level-beta { background: #d29922; }
+.level-experimental { background: #db6d28; }
+.level-planned { background: #484f58; }
+.progress-filters { margin: 0.5em 0 1em; }
+.progress-filter-group { margin: 0.3em 0; }
+.progress-chip {
+    border: 0;
+    margin: 0.15em;
+    cursor: pointer;
+    opacity: 0.55;
+}
+.progress-chip[aria-pressed="true"] { opacity: 1; outline: 2px solid var(--md-accent-fg-color); }
+.progress-count { font-size: 0.8em; color: var(--md-default-fg-color--light); }
+table[data-progress] td small { color: var(--md-default-fg-color--light); }
+table[data-progress] td code { white-space: nowrap; }

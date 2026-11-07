@@ -245,3 +245,33 @@ def test_load_wrapper_generates_the_wrapper_when_not_cached(monkeypatch) -> None
     sw_type_info._load_wrapper()
 
     assert sw_type_info._wrapper_module is generated
+
+
+def test_all_interface_methods_and_library_name_when_loaded(monkeypatch) -> None:
+    """The public reads return a copy of the loaded names and the wrapper name."""
+    from types import SimpleNamespace
+
+    from solidworks_mcp.adapters import sw_type_info
+
+    loaded = {"IFeature": frozenset({"GetNextFeature"})}
+    monkeypatch.setattr(sw_type_info, "_interface_methods", loaded)
+    monkeypatch.setattr(
+        sw_type_info, "_wrapper_module", SimpleNamespace(__name__="gen_py.x0x34x0")
+    )
+
+    methods = sw_type_info.all_interface_methods()
+
+    assert methods == loaded and methods is not loaded
+    assert sw_type_info.type_library_name() == "gen_py.x0x34x0"
+
+
+def test_library_name_is_none_without_the_wrapper(monkeypatch) -> None:
+    """With no wrapper and no pywin32, both reads are empty."""
+    from solidworks_mcp.adapters import sw_type_info
+
+    monkeypatch.setattr(sw_type_info, "PYWIN32_AVAILABLE", False)
+    monkeypatch.setattr(sw_type_info, "_wrapper_module", None)
+    monkeypatch.setattr(sw_type_info, "_interface_methods", {})
+
+    assert sw_type_info.type_library_name() is None
+    assert sw_type_info.all_interface_methods() == {}

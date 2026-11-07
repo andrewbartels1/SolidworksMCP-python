@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.tools.error_classifier import RPC_S_SERVER_UNAVAILABLE
+from solidworks_mcp.tools.support_levels import Support, SupportLevel
 from solidworks_mcp.tools.tool_boundary import (
     InvalidInputError,
     ToolOperationError,
@@ -266,12 +267,14 @@ _TEST_HINTS = {
     name: ToolHints(name.title(), read_only=False, destructive=False, idempotent=False)
     for name in ("body", "renamed", "second", "positional")
 }
+#: Support levels for the same stand-in tools: all stable.
+_TEST_LEVELS = {name: Support(SupportLevel.STABLE) for name in _TEST_HINTS}
 
 
 @pytest.mark.asyncio
 async def test_registrar_keeps_the_schema_and_applies_the_boundary() -> None:
     plain, wrapped = FastMCP("plain"), FastMCP("wrapped")
-    registrar = ToolRegistrar(wrapped, hints=_TEST_HINTS)
+    registrar = ToolRegistrar(wrapped, hints=_TEST_HINTS, levels=_TEST_LEVELS)
 
     async def body(input_data: _Args) -> dict[str, Any]:
         raise ToolOperationError("Feature not found: X")
@@ -294,7 +297,7 @@ async def test_registrar_applies_the_title_hints_and_family_tag() -> None:
         "body": ToolHints("Body", read_only=True, destructive=False, idempotent=True)
     }
 
-    @ToolRegistrar(mcp, hints=hints).tool()
+    @ToolRegistrar(mcp, hints=hints, levels=_TEST_LEVELS).tool()
     async def body() -> dict[str, Any]:
         return {"status": "success"}
 
@@ -304,7 +307,7 @@ async def test_registrar_applies_the_title_hints_and_family_tag() -> None:
     assert tool.annotations.readOnlyHint is True
     assert tool.annotations.destructiveHint is False
     assert tool.annotations.idempotentHint is True
-    assert tool.tags == {"test_tool_boundary"}
+    assert tool.tags == {"test_tool_boundary", "level:stable"}
 
 
 @pytest.mark.asyncio
@@ -312,7 +315,7 @@ async def test_registrar_keeps_explicit_metadata_and_merges_tags() -> None:
     mcp = FastMCP("t")
     explicit = ToolHints("Explicit", read_only=True, destructive=False, idempotent=True)
 
-    @ToolRegistrar(mcp, hints=_TEST_HINTS).tool(
+    @ToolRegistrar(mcp, hints=_TEST_HINTS, levels=_TEST_LEVELS).tool(
         title="Mine", annotations=explicit.annotations(), tags={"extra"}
     )
     async def body() -> dict[str, Any]:
@@ -322,14 +325,14 @@ async def test_registrar_keeps_explicit_metadata_and_merges_tags() -> None:
     assert tool.title == "Mine"
     assert tool.annotations is not None
     assert tool.annotations.title == "Explicit"
-    assert tool.tags == {"extra", "test_tool_boundary"}
+    assert tool.tags == {"extra", "test_tool_boundary", "level:stable"}
 
 
 @pytest.mark.asyncio
 async def test_registrar_reads_a_positional_name() -> None:
     mcp = FastMCP("t")
 
-    @ToolRegistrar(mcp, hints=_TEST_HINTS).tool("positional")
+    @ToolRegistrar(mcp, hints=_TEST_HINTS, levels=_TEST_LEVELS).tool("positional")
     async def body() -> dict[str, Any]:
         return {"status": "success"}
 
@@ -354,7 +357,7 @@ def test_registrar_refuses_a_tool_with_no_hints_entry() -> None:
 @pytest.mark.asyncio
 async def test_registrar_forwards_tool_kwargs_and_bare_decorator() -> None:
     mcp = FastMCP("t")
-    registrar = ToolRegistrar(mcp, hints=_TEST_HINTS)
+    registrar = ToolRegistrar(mcp, hints=_TEST_HINTS, levels=_TEST_LEVELS)
 
     @registrar.tool(name="renamed")
     async def first() -> dict[str, Any]:
@@ -368,6 +371,78 @@ async def test_registrar_forwards_tool_kwargs_and_bare_decorator() -> None:
     assert names == {"renamed", "second"}
     result = await mcp.call_tool("second", {})
     assert result.structured_content["error_type"] == "internal"
+
+
+def test_registrar_refuses_a_tool_with_no_level_entry() -> None:
+    registrar = ToolRegistrar(FastMCP("t"), hints=_TEST_HINTS, levels={})
+
+    async def body() -> dict[str, Any]:
+        return {"status": "success"}
+
+    with pytest.raises(
+        KeyError, match="'body' has no entry in tools/support_levels.py"
+    ):
+        registrar.tool()(body)
+
+
+@pytest.mark.asyncio
+async def test_a_beta_tool_tags_its_level_and_warns_on_success_only() -> None:
+    mcp = FastMCP("t")
+    beta = Support(SupportLevel.BETA, "one input is ignored.")
+    registrar = ToolRegistrar(
+        mcp, hints=_TEST_HINTS, levels={"body": beta, "second": beta}
+    )
+
+    @registrar.tool()
+    async def body() -> dict[str, Any]:
+        """Do the thing."""
+        return {"status": "success", "message": "done", "data": {"x": 1}}
+
+    @registrar.tool()
+    async def second() -> dict[str, Any]:
+        raise ToolOperationError("Feature not found: X")
+
+    listed = {t.name: t for t in await mcp.list_tools()}
+    assert listed["body"].description == (
+        "Beta: one input is ignored.\n\nDo the thing."
+    )
+    assert listed["second"].description == "Beta: one input is ignored."
+    tags = {name: t.tags for name, t in listed.items()}
+    ok = (await mcp.call_tool("body", {})).structured_content
+    failed = (await mcp.call_tool("second", {})).structured_content
+    assert tags["body"] == {"test_tool_boundary", "level:beta"}
+    assert ok == {
+        "status": "success",
+        "message": "done",
+        "data": {"x": 1},
+        "warning": "Beta: one input is ignored.",
+    }
+    assert failed["status"] == "error" and "warning" not in failed
+
+
+@pytest.mark.asyncio
+async def test_a_tools_own_warning_comes_before_its_level() -> None:
+    mcp = FastMCP("t")
+    beta = Support(SupportLevel.BETA, "one input is ignored.")
+
+    @ToolRegistrar(mcp, hints=_TEST_HINTS, levels={"body": beta}).tool()
+    async def body() -> dict[str, Any]:
+        return {"status": "success", "warning": "The cut removed nothing."}
+
+    result = (await mcp.call_tool("body", {})).structured_content
+
+    assert result["warning"] == ("The cut removed nothing. Beta: one input is ignored.")
+
+
+@pytest.mark.asyncio
+async def test_a_stable_tool_result_has_no_warning() -> None:
+    mcp = FastMCP("t")
+
+    @ToolRegistrar(mcp, hints=_TEST_HINTS, levels=_TEST_LEVELS).tool()
+    async def body() -> dict[str, Any]:
+        return {"status": "success"}
+
+    assert (await mcp.call_tool("body", {})).structured_content == {"status": "success"}
 
 
 def test_registrar_forwards_other_attributes() -> None:

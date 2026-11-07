@@ -1062,9 +1062,10 @@ async def register_sketching_tools(
     ) -> dict[str, Any]:
         """Draw a circle on a plane and cut it as a hole, as one worked example.
 
-        On real SolidWorks the cut step is not implemented yet: the call draws and
-        closes the sketch, then fails. Use `create_sketch`, `add_circle`, `exit_sketch`
-        and `create_cut_extrude` instead. Needs: an open part with a solid body.
+        Not available yet on real SolidWorks: its cut step has no COM implementation,
+        so the call draws and closes the sketch, then fails. It is planned for a future
+        release. Use `create_sketch`, `add_circle`, `exit_sketch` and
+        `create_cut_extrude` instead. Needs: an open part with a solid body.
         Changes: adds a sketch (and, with the mock adapter, a cut). Returns: `tutorial`
         with `plane`, `diameter`, `depth` and `steps`.
 

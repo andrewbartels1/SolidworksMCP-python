@@ -1,0 +1,1391 @@
+{
+ "tools": {
+  "total": 155,
+  "by_level": {
+   "stable": 81,
+   "beta": 24,
+   "experimental": 10,
+   "planned": 40
+  },
+  "list": [
+   {
+    "name": "activate_document",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Make an already-open document the active one, so the next tools act on it."
+   },
+   {
+    "name": "add_annotation",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Add an annotation (a note, balloon or surface-finish symbol) to the active drawing."
+   },
+   {
+    "name": "add_arc",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a circular arc in the open sketch from its centre, start point and end point, in mm."
+   },
+   {
+    "name": "add_centerline",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a centreline (construction line) in the open sketch, in mm."
+   },
+   {
+    "name": "add_chamfer",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Bevel edges of the active part with an equal-distance chamfer at 45 degrees."
+   },
+   {
+    "name": "add_circle",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a circle in the open sketch from its centre and radius, in mm."
+   },
+   {
+    "name": "add_datum_tag",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a datum feature symbol (A, B, C, ...) on an edge of the active drawing."
+   },
+   {
+    "name": "add_dimension",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Add one dimension between drawing entities at a position on the sheet."
+   },
+   {
+    "name": "add_drawing_view",
+    "family": "drawing",
+    "level": "beta",
+    "reason": "only ever adds a view, whatever `operation` says; use `create_drawing_view`.",
+    "summary": "Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`."
+   },
+   {
+    "name": "add_ellipse",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw an ellipse in the open sketch from its centre and axis lengths, in mm."
+   },
+   {
+    "name": "add_fillet",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Round edges of the active part with a constant-radius fillet."
+   },
+   {
+    "name": "add_gtol",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a GD&T feature control frame to the active drawing, e.g. position Ø0.2 (M) to A|B|C."
+   },
+   {
+    "name": "add_line",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a straight line between two points in the open sketch, in mm."
+   },
+   {
+    "name": "add_mate",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "mates only reference planes and axes, by name, not faces.",
+    "summary": "Mate two components of the active assembly: coincident, concentric, parallel, perpendicular, tangent, distance or angle."
+   },
+   {
+    "name": "add_note",
+    "family": "drawing",
+    "level": "stable",
+    "reason": "",
+    "summary": "Place a text note on the active drawing sheet at a position in millimetres."
+   },
+   {
+    "name": "add_polygon",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a regular polygon (e.g. a hexagon) in the open sketch from its centre, radius and number of sides."
+   },
+   {
+    "name": "add_rectangle",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a closed, axis-aligned rectangle in the open sketch from two opposite corners, in mm."
+   },
+   {
+    "name": "add_sketch_constraint",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a geometric relation between sketch entities: horizontal, vertical, parallel, perpendicular, tangent, coincident, concentric, equal, symmetric, collinear or fix."
+   },
+   {
+    "name": "add_sketch_dimension",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a driving dimension to sketch entities: linear, angular, radial or diameter."
+   },
+   {
+    "name": "add_spline",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draw a smooth spline through a list of points in the open sketch, in mm."
+   },
+   {
+    "name": "analyze_drawing_annotations",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Check a drawing's notes, symbols and text styles for consistency."
+   },
+   {
+    "name": "analyze_drawing_comprehensive",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Run every drawing check (dimensions, views, annotations, standards) on a drawing file in one call."
+   },
+   {
+    "name": "analyze_drawing_dimensions",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Check a drawing's dimensions for consistent precision, tolerance formatting and completeness."
+   },
+   {
+    "name": "analyze_drawing_views",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Check how a drawing's views are chosen and laid out."
+   },
+   {
+    "name": "analyze_geometry",
+    "family": "analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Run a geometry analysis on the active model, such as curvature, draft or wall thickness."
+   },
+   {
+    "name": "analyze_macro",
+    "family": "macro_recording",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Analyse a macro's structure, dependencies and complexity, and suggest optimisations."
+   },
+   {
+    "name": "apply_template",
+    "family": "template_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Apply a saved template's properties, dimensions and materials to a model."
+   },
+   {
+    "name": "arrange_dimensions",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Move drawing dimensions out of their views into tidy rows so nothing overlaps, then check the sheet."
+   },
+   {
+    "name": "auto_center_marks",
+    "family": "drawing",
+    "level": "stable",
+    "reason": "",
+    "summary": "Insert centre marks on the holes, slots and (optionally) fillets of one drawing view."
+   },
+   {
+    "name": "auto_dimension_view",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Dimension a drawing view automatically with SolidWorks' auto-dimension scheme."
+   },
+   {
+    "name": "automation_start_macro_recording",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Start SolidWorks' macro recorder (the automation family's copy of `start_macro_recording`)."
+   },
+   {
+    "name": "automation_stop_macro_recording",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Stop a macro recording and save it (the automation family's copy of `stop_macro_recording`)."
+   },
+   {
+    "name": "batch_apply_template",
+    "family": "template_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Apply one template to every matching model in a folder."
+   },
+   {
+    "name": "batch_execute_macros",
+    "family": "macro_recording",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Run several macros in sequence against the files in a folder."
+   },
+   {
+    "name": "batch_export",
+    "family": "export",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Export every matching SolidWorks file in a folder to one format."
+   },
+   {
+    "name": "batch_file_operations",
+    "family": "file_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Copy, move, rename or delete SolidWorks files on disk in one call."
+   },
+   {
+    "name": "batch_process_files",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Run one operation (rebuild, save as, export or property update) on every matching file in a folder."
+   },
+   {
+    "name": "calculate_mass_properties",
+    "family": "analysis",
+    "level": "beta",
+    "reason": "moments of inertia are labelled kg·mm² but are kg·m²; its input fields are unused.",
+    "summary": "Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia."
+   },
+   {
+    "name": "check_drawing_compliance",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Check a drawing's title block and sheet format against a drafting standard (ISO, ANSI or DIN)."
+   },
+   {
+    "name": "check_drawing_standards",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Check the active drawing against a drafting standard and score it."
+   },
+   {
+    "name": "check_interference",
+    "family": "analysis",
+    "level": "beta",
+    "reason": "`include_hidden` has no effect.",
+    "summary": "Find where the components of the active assembly overlap (Tools > Interference Detection)."
+   },
+   {
+    "name": "check_sketch_fully_defined",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Check whether a sketch is fully defined, under-defined or over-defined."
+   },
+   {
+    "name": "classify_feature_tree",
+    "family": "file_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Classify the active model's kind (part, sheet metal, assembly, drawing and so on) from its feature tree, and suggest how to work on it."
+   },
+   {
+    "name": "close_model",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Close the active document, saving it first only if asked."
+   },
+   {
+    "name": "compare_drawing_versions",
+    "family": "drawing_analysis",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Compare two drawing files on disk: whether they are byte-identical, and how their sizes differ."
+   },
+   {
+    "name": "compare_templates",
+    "family": "template_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Compare two template files on disk: whether they are byte-identical, and how their sizes differ."
+   },
+   {
+    "name": "convert_file_format",
+    "family": "file_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Convert a SolidWorks file on disk to another format without opening it first."
+   },
+   {
+    "name": "create_assembly",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "`components` is ignored; use `insert_component`.",
+    "summary": "Create a new, empty assembly document and make it active, ready for `insert_component`."
+   },
+   {
+    "name": "create_axis",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a reference axis along the model's x, y or z direction, through the origin."
+   },
+   {
+    "name": "create_cut_extrude",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Cut material from the active part with a closed sketch profile: holes, slots, windows."
+   },
+   {
+    "name": "create_detail_view",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Magnify a circular area of a drawing view as a detail view."
+   },
+   {
+    "name": "create_drawing",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "`model_path` and `sheet_format` are ignored.",
+    "summary": "Create a new, empty drawing document and make it active."
+   },
+   {
+    "name": "create_drawing_view",
+    "family": "drawing",
+    "level": "stable",
+    "reason": "",
+    "summary": "Place one named view of a part or assembly on the active drawing sheet."
+   },
+   {
+    "name": "create_extrusion",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "`sketch_name` and `direction` are ignored; it extrudes the sketch closed last.",
+    "summary": "Extrude the sketch you just closed into a solid boss, added to the active part."
+   },
+   {
+    "name": "create_loft",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Loft a solid through two or more closed profile sketches, in order (Insert > Boss/Base > Loft)."
+   },
+   {
+    "name": "create_macro_library",
+    "family": "macro_recording",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Set up a shared folder of categorised, documented macros."
+   },
+   {
+    "name": "create_part",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "`material` is ignored; use `set_material`.",
+    "summary": "Create a new, empty part document and make it active, ready for `create_sketch`."
+   },
+   {
+    "name": "create_reference_plane",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a reference plane parallel to a plane or flat face, offset by a distance in mm."
+   },
+   {
+    "name": "create_reference_point",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a reference point on an edge (at a distance or percentage along it) or at the centre of a face."
+   },
+   {
+    "name": "create_revolve",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "`sketch_name` and `axis_entity` are ignored; it revolves the sketch closed last around its centreline.",
+    "summary": "Revolve the sketch you just closed around the centreline drawn in it, adding a solid to the active part."
+   },
+   {
+    "name": "create_section_view",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Cut a section view along a line across a drawing view."
+   },
+   {
+    "name": "create_sketch",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "echoes a `sketch_name` you pass instead of SolidWorks' own name.",
+    "summary": "Open a new sketch on a plane of the active part, ready for lines, circles and other sketch entities."
+   },
+   {
+    "name": "create_sweep",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Sweep a closed profile sketch along a path sketch to make a solid (Insert > Boss/Base > Sweep)."
+   },
+   {
+    "name": "create_technical_drawing",
+    "family": "drawing",
+    "level": "beta",
+    "reason": "ignores `template`, `sheet_size`, `title` and `output_path`; it only places three views.",
+    "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
+   },
+   {
+    "name": "create_template",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Create a part, assembly or drawing template file (.prtdot, .asmdot, .drwdot) with standard settings."
+   },
+   {
+    "name": "delete_feature",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "on SolidWorks its message doesn't name the dependent features it removed.",
+    "summary": "Delete a feature or sketch from the active model, along with the features that depend on it."
+   },
+   {
+    "name": "discover_solidworks_docs",
+    "family": "docs_discovery",
+    "level": "stable",
+    "reason": "",
+    "summary": "Rebuild the SolidWorks API index on purpose. The lookups don't need it."
+   },
+   {
+    "name": "execute_macro",
+    "family": "macro_recording",
+    "level": "beta",
+    "reason": "runs the macro once whatever `repeat_count` says, and only binary .swp files.",
+    "summary": "Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once."
+   },
+   {
+    "name": "execute_workflow",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Run a named sequence of tool steps, in order or in parallel, with an error policy."
+   },
+   {
+    "name": "exit_sketch",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Close the open sketch so a feature can use it."
+   },
+   {
+    "name": "export_dwg",
+    "family": "export",
+    "level": "beta",
+    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "summary": "Export the active document to DWG, like File > Save As with the DWG type."
+   },
+   {
+    "name": "export_flat_pattern",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "Export the active sheet-metal part's flat pattern to DXF or DWG, for laser or waterjet cutting."
+   },
+   {
+    "name": "export_iges",
+    "family": "export",
+    "level": "beta",
+    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "summary": "Export the active document to IGES, like File > Save As with the IGES type."
+   },
+   {
+    "name": "export_image",
+    "family": "export",
+    "level": "stable",
+    "reason": "",
+    "summary": "Save a picture of the active model in a standard view, as PNG or JPG, at a chosen size."
+   },
+   {
+    "name": "export_pdf",
+    "family": "export",
+    "level": "beta",
+    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "summary": "Export the active document to PDF, like File > Save As with the PDF type."
+   },
+   {
+    "name": "export_step",
+    "family": "export",
+    "level": "beta",
+    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "summary": "Export the active document to STEP, like File > Save As with the STEP type."
+   },
+   {
+    "name": "export_stl",
+    "family": "export",
+    "level": "beta",
+    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "summary": "Export the active document to STL, like File > Save As with the STL type."
+   },
+   {
+    "name": "extract_template",
+    "family": "template_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Capture a model's settings (custom properties, dimensions, units) as a reusable template file."
+   },
+   {
+    "name": "find_related_api_members",
+    "family": "docs_discovery",
+    "level": "stable",
+    "reason": "",
+    "summary": "Find SolidWorks API members related to an interface or member name."
+   },
+   {
+    "name": "generate_drawing_package",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Create a complete A3 drawing of a part or assembly in one call, and save it with a PDF."
+   },
+   {
+    "name": "generate_drawing_report",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Write a quality report that combines every drawing check."
+   },
+   {
+    "name": "generate_vba_assembly_insert",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that inserts a component into the active assembly at a point."
+   },
+   {
+    "name": "generate_vba_assembly_mates",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that adds a concentric, distance, parallel, perpendicular or coincident mate between two selected faces or edges."
+   },
+   {
+    "name": "generate_vba_batch_export",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that opens every matching file in a folder and saves a STEP copy of each to another folder."
+   },
+   {
+    "name": "generate_vba_code",
+    "family": "automation",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, the active document and optional error handling, with the operation itself left as a TODO."
+   },
+   {
+    "name": "generate_vba_drawing_dimensions",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that adds a dimension to the selected drawing entities and sets its precision."
+   },
+   {
+    "name": "generate_vba_drawing_views",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that places a model's standard views (front, top, right) on the active drawing."
+   },
+   {
+    "name": "generate_vba_extrusion",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that makes an extrusion with the full FeatureExtrusion options: both directions, draft, thin wall, end conditions."
+   },
+   {
+    "name": "generate_vba_file_operations",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that sets a custom property in every configuration, or runs Pack and Go on the active document."
+   },
+   {
+    "name": "generate_vba_macro_recorder",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA starting point: a macro skeleton to fill in, or a note on starting and stopping SolidWorks' macro recorder."
+   },
+   {
+    "name": "generate_vba_part_modeling",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro for a shell or a fillet on the active part."
+   },
+   {
+    "name": "generate_vba_revolve",
+    "family": "vba_generation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro that revolves the selected sketch, with both-direction and thin-wall options."
+   },
+   {
+    "name": "get_custom_properties",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "Read the active document's custom properties, such as PartNo, Description or Revision."
+   },
+   {
+    "name": "get_dimension",
+    "family": "modeling",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Read one dimension of the active model by its full name, e.g. \"D1@Sketch1\"."
+   },
+   {
+    "name": "get_file_properties",
+    "family": "file_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes."
+   },
+   {
+    "name": "get_mass_properties",
+    "family": "analysis",
+    "level": "stable",
+    "reason": "",
+    "summary": "Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia."
+   },
+   {
+    "name": "get_material",
+    "family": "engineering_data",
+    "level": "beta",
+    "reason": "reads the material's name and library, not its properties.",
+    "summary": "Report the material assigned to the active part."
+   },
+   {
+    "name": "get_material_properties",
+    "family": "analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Report the physical properties of the active part's material: density, modulus, Poisson's ratio, strength."
+   },
+   {
+    "name": "get_model_info",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Report the active document's title, path, type, active configuration, unsaved changes, feature count and rebuild status."
+   },
+   {
+    "name": "get_selected_entities",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Describe the faces, edges and vertices selected in the SolidWorks window right now."
+   },
+   {
+    "name": "insert_bom_table",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Insert a bill-of-materials table for an assembly view on the active drawing."
+   },
+   {
+    "name": "insert_component",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Insert a part or sub-assembly file into the active assembly at a position in mm."
+   },
+   {
+    "name": "insert_model_dimensions",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Bring the model's dimensions into the active drawing's views, each dimension shown once."
+   },
+   {
+    "name": "list_available_materials",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "List the materials in the installed SolidWorks material libraries."
+   },
+   {
+    "name": "list_components",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "List the top-level components of the active assembly by instance name, e.g. \"bracket-1\"."
+   },
+   {
+    "name": "list_configurations",
+    "family": "file_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "List the names of the active model's configurations."
+   },
+   {
+    "name": "list_drawing_views",
+    "family": "drawing",
+    "level": "stable",
+    "reason": "",
+    "summary": "List the views on the active drawing, by name."
+   },
+   {
+    "name": "list_features",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "List the feature tree of the active part or assembly, in order."
+   },
+   {
+    "name": "list_model_dimensions",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "List every dimension in the active part or assembly with its full name and value."
+   },
+   {
+    "name": "list_open_documents",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "List every document open in SolidWorks and say which one is active."
+   },
+   {
+    "name": "list_template_library",
+    "family": "template_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "List the templates in the shared template library."
+   },
+   {
+    "name": "load_assembly",
+    "family": "file_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Open an assembly (.sldasm) from disk and make it the active document."
+   },
+   {
+    "name": "load_part",
+    "family": "file_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Open a part (.sldprt) from disk and make it the active document."
+   },
+   {
+    "name": "lookup_api_interface",
+    "family": "docs_discovery",
+    "level": "stable",
+    "reason": "",
+    "summary": "List every method and property of a SolidWorks COM interface."
+   },
+   {
+    "name": "lookup_api_method",
+    "family": "docs_discovery",
+    "level": "stable",
+    "reason": "",
+    "summary": "Look up one SolidWorks API method or property: parameters, return type, description."
+   },
+   {
+    "name": "manage_design_table",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Create, read or update a design table (an Excel sheet that drives a model's configurations)."
+   },
+   {
+    "name": "manage_file_properties",
+    "family": "file_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Read or change the file-level properties of a SolidWorks file on disk."
+   },
+   {
+    "name": "measure_entities",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "Measure faces, edges or vertices of the active model with SolidWorks' Measure tool."
+   },
+   {
+    "name": "mirror_feature",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "mirroring a cut is reported as an error.",
+    "summary": "Mirror solid bodies or features of the active part about a plane."
+   },
+   {
+    "name": "open_model",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Open a part, assembly or drawing from disk and make it the active document."
+   },
+   {
+    "name": "optimize_macro",
+    "family": "macro_recording",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Suggest improvements to a macro's code for speed and reliability."
+   },
+   {
+    "name": "optimize_performance",
+    "family": "automation",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Review SolidWorks' performance settings and apply faster ones."
+   },
+   {
+    "name": "pack_and_go_assembly",
+    "family": "file_management",
+    "level": "experimental",
+    "reason": "not yet checked by a live test on real SolidWorks.",
+    "summary": "Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go)."
+   },
+   {
+    "name": "pattern_circular",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "patterning a cut is reported as an error.",
+    "summary": "Repeat features of the active part around an axis, e.g. a ring of bosses or ribs."
+   },
+   {
+    "name": "rebuild_model",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Rebuild the active model and report each feature that fails, with the reason and a fix."
+   },
+   {
+    "name": "rename_feature",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Rename a feature in the active model's feature tree."
+   },
+   {
+    "name": "reset_circuit_breaker",
+    "family": "server_admin",
+    "level": "stable",
+    "reason": "",
+    "summary": "Let calls through again to operations the server paused after repeated failures."
+   },
+   {
+    "name": "save_as",
+    "family": "file_management",
+    "level": "beta",
+    "reason": "replaces an existing file whatever `overwrite` says.",
+    "summary": "Save the active document under a new path, as a SolidWorks file or in an exchange format such as STEP or IGES."
+   },
+   {
+    "name": "save_assembly",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Save the active assembly in place, or as a new .sldasm, optionally copying the parts it uses alongside."
+   },
+   {
+    "name": "save_body_as_part",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Save one solid body of the active multibody part as a new part file (Insert > Features > Save Bodies)."
+   },
+   {
+    "name": "save_file",
+    "family": "file_management",
+    "level": "beta",
+    "reason": "`force_save` is ignored.",
+    "summary": "Save the active document, to its own path or to a new path in its own format."
+   },
+   {
+    "name": "save_part",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Save the active part in place, or as a new .sldprt with the target path checked first."
+   },
+   {
+    "name": "save_to_template_library",
+    "family": "template_management",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Add a template to a shared, categorised template library."
+   },
+   {
+    "name": "search_solidworks_api_help",
+    "family": "docs_discovery",
+    "level": "stable",
+    "reason": "",
+    "summary": "Search SolidWorks API interface and member names by keyword."
+   },
+   {
+    "name": "select_face_edges",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Select every edge of one face of the active part, ready for `add_fillet` or `add_chamfer` with no edge names."
+   },
+   {
+    "name": "select_feature",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Select a feature, sketch, plane or component by name in the active document."
+   },
+   {
+    "name": "set_custom_property",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "Create or overwrite one text custom property on the active document, e.g. PartNo or DrawnBy."
+   },
+   {
+    "name": "set_dimension",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Change one length dimension of the active model, in mm, and rebuild."
+   },
+   {
+    "name": "set_material",
+    "family": "engineering_data",
+    "level": "stable",
+    "reason": "",
+    "summary": "Assign a library material to the active part, e.g. \"AISI 1020\" or \"6061-T6 (SS)\"."
+   },
+   {
+    "name": "set_sheet_scale",
+    "family": "drawing_automation",
+    "level": "stable",
+    "reason": "",
+    "summary": "Set the active drawing sheet's scale, e.g. 1:2; views that use the sheet scale follow it."
+   },
+   {
+    "name": "set_units",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Set the active document's length units: mm, cm, m, in or ft."
+   },
+   {
+    "name": "sketch_circular_pattern",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Repeat sketch entities around the sketch origin, e.g. a bolt circle."
+   },
+   {
+    "name": "sketch_linear_pattern",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Repeat sketch entities in a straight line at a fixed spacing."
+   },
+   {
+    "name": "sketch_mirror",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Mirror sketch entities about a centreline in the open sketch."
+   },
+   {
+    "name": "sketch_offset",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Offset sketch entities by a distance in mm, outward or inward, e.g. for a wall or a clearance."
+   },
+   {
+    "name": "sketch_tutorial_simple_hole",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "suggests a negative-depth extrusion for the hole instead of `create_cut_extrude`.",
+    "summary": "Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch."
+   },
+   {
+    "name": "start_macro_recording",
+    "family": "macro_recording",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Start SolidWorks' macro recorder, to capture what the user does as a macro."
+   },
+   {
+    "name": "stop_macro_recording",
+    "family": "macro_recording",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Stop the macro recorder and save the recorded macro."
+   },
+   {
+    "name": "suppress_feature",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Suppress or unsuppress a feature of the active model; suppressed features stay in the tree but are not built."
+   },
+   {
+    "name": "tutorial_simple_hole",
+    "family": "sketching",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Draw a circle on a plane and cut it as a hole, as one worked example."
+   },
+   {
+    "name": "undo",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Undo the last operations in the active model (Edit > Undo)."
+   },
+   {
+    "name": "update_sheet_format",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Change the active drawing's sheet format file and title-block fields."
+   },
+   {
+    "name": "update_title_block",
+    "family": "drawing",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on)."
+   },
+   {
+    "name": "validate_drawing_completeness",
+    "family": "drawing_analysis",
+    "level": "planned",
+    "reason": "no adapter implements it yet.",
+    "summary": "Check that a drawing carries everything needed to manufacture the part."
+   },
+   {
+    "name": "verify_model",
+    "family": "analysis",
+    "level": "stable",
+    "reason": "",
+    "summary": "Check the active part or assembly against what you meant to build, one pass/fail check per expected value."
+   }
+  ]
+ },
+ "com": {
+  "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
+  "core": {
+   "covered": 208,
+   "total": 2838
+  },
+  "api": {
+   "covered": 232,
+   "total": 5985
+  },
+  "interfaces": [
+   {
+    "name": "ISldWorks",
+    "covered": [
+     "ActivateDoc3",
+     "CloseAllDocuments",
+     "CloseDoc",
+     "Frame",
+     "GetConfigurationNames",
+     "GetCurrentLanguage",
+     "GetDocuments",
+     "GetExecutablePath",
+     "GetExportFileData",
+     "GetMassProperties",
+     "GetOpenDocumentByName",
+     "GetUserPreferenceStringValue",
+     "GetUserPreferenceToggle",
+     "NewAssembly",
+     "NewDocument",
+     "NewDrawing2",
+     "NewPart",
+     "OpenDoc6",
+     "RevisionNumber",
+     "RunMacro2",
+     "SetUserPreferenceIntegerValue",
+     "SetUserPreferenceToggle"
+    ],
+    "total": 330
+   },
+   {
+    "name": "IModelDoc2",
+    "covered": [
+     "AddDiameterDimension2",
+     "AddDimension",
+     "AddDimension2",
+     "AddRadialDimension2",
+     "AddRelation",
+     "ClearSelection2",
+     "CreateArc",
+     "CreateCenterLine",
+     "CreateCircleByRadius",
+     "CreateCircularSketchStepAndRepeat",
+     "CreateEllipse",
+     "CreateLine",
+     "CreateLinearSketchStepAndRepeat",
+     "EditDelete",
+     "EditRebuild3",
+     "EditSuppress2",
+     "EditUndo",
+     "EditUndo2",
+     "EditUnsuppress2",
+     "FeatureByPositionReverse",
+     "FeatureChamferType",
+     "FeatureCut3",
+     "FeatureCut4",
+     "FeatureFillet3",
+     "FeatureRevolve2",
+     "FirstFeature",
+     "ForceRebuild3",
+     "GetActiveConfiguration",
+     "GetActiveSketch2",
+     "GetConfigurationNames",
+     "GetFeatureCount",
+     "GetLineCount",
+     "GetMassProperties",
+     "GetNext",
+     "GetPathName",
+     "GetSaveFlag",
+     "GetTitle",
+     "GetType",
+     "GetUserPreferenceStringValue",
+     "GetUserPreferenceToggle",
+     "GraphicsRedraw2",
+     "InsertAxis2",
+     "InsertDatumTag2",
+     "InsertGtol",
+     "InsertNote",
+     "InsertProtrusionBlend2",
+     "InsertProtrusionSwept4",
+     "InsertSketch",
+     "Lock",
+     "Parameter",
+     "Save",
+     "Save3",
+     "SaveAs",
+     "SaveAs2",
+     "SaveAs3",
+     "SaveBMP",
+     "Select",
+     "SetSaveFlag",
+     "SetUserPreferenceIntegerValue",
+     "SetUserPreferenceToggle",
+     "ShowNamedView2",
+     "SketchAddConstraints",
+     "SketchMirror",
+     "SketchOffset2",
+     "ViewZoomtofit",
+     "ViewZoomtofit2"
+    ],
+    "total": 758
+   },
+   {
+    "name": "IModelDocExtension",
+    "covered": [
+     "AddDimension",
+     "CreateMassProperty",
+     "CreateMeasure",
+     "CustomPropertyManager",
+     "DeleteSelection2",
+     "GetAnnotations",
+     "GetMassProperties",
+     "GetPackAndGo",
+     "GetUserPreferenceInteger",
+     "GetUserPreferenceToggle",
+     "GetWhatsWrong",
+     "GetWhatsWrongCount",
+     "InsertBomTable4",
+     "SaveAs",
+     "SaveAs2",
+     "SaveAs3",
+     "SavePackAndGo",
+     "SelectByID2",
+     "SetUserPreferenceInteger",
+     "SetUserPreferenceToggle"
+    ],
+    "total": 337
+   },
+   {
+    "name": "IPartDoc",
+    "covered": [
+     "ExportToDWG2",
+     "FeatureByName",
+     "FeatureExtrusion2",
+     "FeatureExtrusion3",
+     "FeatureExtrusionThin2",
+     "FeatureRevolve2",
+     "FirstFeature",
+     "GetBodies2",
+     "GetMaterialPropertyName2",
+     "GetPartBox",
+     "InsertMirrorFeature",
+     "SetMaterialPropertyName2"
+    ],
+    "total": 167
+   },
+   {
+    "name": "IAssemblyDoc",
+    "covered": [
+     "AddComponent4",
+     "AddComponent5",
+     "AddMate5",
+     "FeatureByName",
+     "GetBox",
+     "GetComponentByName",
+     "GetComponentCount",
+     "GetComponents"
+    ],
+    "total": 198
+   },
+   {
+    "name": "IDrawingDoc",
+    "covered": [
+     "ActivateView",
+     "AutoDimension",
+     "Create1stAngleViews2",
+     "Create3rdAngleViews2",
+     "CreateDrawViewFromModelView3",
+     "EditSheet",
+     "EditTemplate",
+     "FeatureByName",
+     "GetCurrentSheet",
+     "GetFirstView",
+     "GetViews",
+     "InsertModelAnnotations3",
+     "SetupSheet5"
+    ],
+    "total": 272
+   },
+   {
+    "name": "IFeatureManager",
+    "covered": [
+     "CreateSaveBodyFeature",
+     "FeatureCircularPattern5",
+     "FeatureCut3",
+     "FeatureCut4",
+     "FeatureExtrusion2",
+     "FeatureExtrusion3",
+     "FeatureExtrusionThin2",
+     "FeatureFillet3",
+     "FeatureRevolve2",
+     "GetFeatureCount",
+     "InsertFeatureChamfer",
+     "InsertMirrorFeature",
+     "InsertProtrusionBlend2",
+     "InsertProtrusionSwept4",
+     "InsertRefPlane",
+     "InsertReferencePoint"
+    ],
+    "total": 268
+   },
+   {
+    "name": "ISketchManager",
+    "covered": [
+     "CreateArc",
+     "CreateCenterLine",
+     "CreateCircleByRadius",
+     "CreateCircularSketchStepAndRepeat",
+     "CreateCornerRectangle",
+     "CreateEllipse",
+     "CreateLine",
+     "CreateLinearSketchStepAndRepeat",
+     "CreatePolygon",
+     "CreateSpline2",
+     "InsertSketch",
+     "SketchOffset2"
+    ],
+    "total": 83
+   },
+   {
+    "name": "ISelectionMgr",
+    "covered": [
+     "CreateSelectData",
+     "GetSelectedObject6",
+     "GetSelectedObjectCount2",
+     "GetSelectedObjectType3"
+    ],
+    "total": 61
+   },
+   {
+    "name": "IComponent2",
+    "covered": [
+     "CustomPropertyManager",
+     "FeatureByName",
+     "FirstFeature",
+     "GetBodies2",
+     "GetBox",
+     "GetConfigurationNames",
+     "GetID",
+     "GetModelDoc2",
+     "GetPathName",
+     "GetType",
+     "IsSuppressed",
+     "Select",
+     "Select2",
+     "Select4"
+    ],
+    "total": 147
+   },
+   {
+    "name": "IFeature",
+    "covered": [
+     "GetBox",
+     "GetErrorCode2",
+     "GetFaces",
+     "GetFirstDisplayDimension",
+     "GetFirstSubFeature",
+     "GetID",
+     "GetNameForSelection",
+     "GetNextDisplayDimension",
+     "GetNextFeature",
+     "GetNextSubFeature",
+     "GetParents",
+     "GetSpecificFeature2",
+     "GetTypeName2",
+     "IsSuppressed",
+     "IsSuppressed2",
+     "Parameter",
+     "Select",
+     "Select2"
+    ],
+    "total": 115
+   },
+   {
+    "name": "ISketch",
+    "covered": [
+     "AutoDimension",
+     "GetLineCount",
+     "GetSketchSegments"
+    ],
+    "total": 102
+   }
+  ]
+ }
+}

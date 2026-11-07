@@ -12,8 +12,8 @@ Last updated 2026-11-06.
 | --- | --- | --- | --- | --- |
 | 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` (archived) | Done 2026-11-05 (#202, #203, #204). Left: after the next release, ask Glama for a rescan and record the score in the internal assessment |
 | 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` (archived) | Done 2026-11-06 (#205, #211; #147 closed as superseded) |
-| 3 | The circuit breaker locks a tool out after a success and never reopens; a reset tool | #208 | `circuit-breaker-recovery` | Implemented 2026-11-06, in review |
-| 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` | Plan written 2026-11-06, in review |
+| 3 | The circuit breaker locks a tool out after a success and never reopens; a reset tool | #208 | `circuit-breaker-recovery` (archived) | Done 2026-11-06 (#213) |
+| 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` | Implemented 2026-11-06, in review. #79's coverage half is done; its licence-tier half is item 8 |
 | 5 | Tool gaps found building the U-joint: face mates, fixed parts and flexible sub-assemblies, angled planes, angled chamfers, `both_directions`, a stale interference result, thin extrudes | #209 | not yet written | |
 | 6 | `--selftest` command and a compatibility-report issue template | #179 | not yet written | |
 | 7 | Skills that improve the agent's results, measured on the U-joint prompt (Opus 5.5 at medium effort: the first skill changed how the agent worked, not what it built) | #207 | not yet written | |
@@ -29,7 +29,8 @@ Last updated 2026-11-06.
 
 Each one's description says "Not available yet ... planned for a future
 release" (the wording is in `docs/agents/tool-description-standard.md`).
-Found while rewriting the descriptions (39 in all).
+Found while rewriting the descriptions (39), plus `tutorial_simple_hole`
+(40 in all). Their support level is `planned`.
 
 - **Drawing analysis (7):** `analyze_drawing_comprehensive`,
   `analyze_drawing_dimensions`, `analyze_drawing_annotations`,
@@ -52,12 +53,16 @@ Found while rewriting the descriptions (39 in all).
   `batch_file_operations`.
 - **Export (1):** `batch_export`.
 - **Analysis (2):** `analyze_geometry`, `get_material_properties`.
+- **Sketching (1):** `tutorial_simple_hole`: its cut step fails on
+  SolidWorks (it calls the adapter's `create_cut`, which only the mock has).
 
 ## Small faults (item 14)
 
 When one is fixed, remove it from the agent skill's
 `src/solidworks_mcp/skills/solidworks-mcp/references/errors-and-limits.md`
-in the same change.
+in the same change, and move its tool up a level in
+`src/solidworks_mcp/tools/support_levels.py` (beta tools list the fault as
+their reason), then run `python -m solidworks_mcp.progress.generate`.
 
 - `execute_macro` ignores `repeat_count`: it runs the macro once, but its
   message says "executed N times".
@@ -80,9 +85,7 @@ in the same change.
 - `delete_feature` reads `removed_features`, but the real adapter returns
   `features_removed` (a count), so on SolidWorks its message never mentions
   the dependent features that went too.
-- `tutorial_simple_hole` calls the adapter's `create_cut`, which only the
-  mock implements: on SolidWorks it draws the sketch, then fails.
-  `sketch_tutorial_simple_hole` suggests a negative-depth extrusion for the
+- `sketch_tutorial_simple_hole` suggests a negative-depth extrusion for the
   hole instead of `create_cut_extrude`.
 - `save_as` ignores `overwrite` (an existing file is replaced) and
   `save_file` ignores `force_save`; the `export_*` tools require a

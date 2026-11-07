@@ -92,9 +92,15 @@ ones, and `rebuild_model`, `undo` and what to tell the user:
 
 ## What doesn't work yet
 
-- 39 tools are registered but no adapter implements them: their description
-  starts "Not available yet" and every call returns `not_supported`. Use the
-  tool their description names instead.
+- Every tool has a support level, in its tags (`level:stable`, `level:beta`,
+  `level:experimental`, `level:planned`). A beta tool works but has a known
+  gap, and an experimental one hasn't been checked on real SolidWorks: their
+  description opens with "Beta: ..." or "Experimental: ...", and a successful
+  result carries the same sentence as `warning`. Read it, and check the
+  result (`verify_model`, `list_features`) before building on it.
+- 40 tools are planned: registered, but nothing implements them. Their
+  description says "Not available yet" and every call returns
+  `not_supported`. Use the tool their description names instead.
 - Some tools ignore some of their inputs, and a few behave in ways you must
   work around. The list, with the workaround for each:
   [references/errors-and-limits.md](references/errors-and-limits.md).

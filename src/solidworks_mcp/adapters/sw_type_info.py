@@ -145,6 +145,28 @@ def interface_method_names(interface: str) -> frozenset[str]:
     return _interface_methods.get(interface, frozenset())
 
 
+def all_interface_methods() -> dict[str, frozenset[str]]:
+    """Every interface's method names, as the type library declares them.
+
+    Returns:
+        dict[str, frozenset[str]]: Interface name to method names; empty if
+        the wrapper isn't available.
+    """
+    _ensure_loaded()
+    return dict(_interface_methods)
+
+
+def type_library_name() -> str | None:
+    """The loaded gen_py wrapper's module name, which carries its version.
+
+    Returns:
+        str | None: e.g. ``"win32com.gen_py.<IID>x0x34x0"``; None if the
+        wrapper isn't available.
+    """
+    _ensure_loaded()
+    return None if _wrapper_module is None else _wrapper_module.__name__
+
+
 # Interface sets most tool operations need to flag. When acquiring a doc
 # dispatch, always flag IModelDoc2 (base) plus the subclass that matches the
 # doc type. For the app root, flag ISldWorks.
