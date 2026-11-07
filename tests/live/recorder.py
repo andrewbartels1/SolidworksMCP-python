@@ -76,12 +76,17 @@ class Recorder:
             self._thread.join(timeout=10)
         (self.directory / f"end-{self._ms():08d}").touch()
 
-    def caption(self, label: str, payload: Any, call: str | None) -> None:
+    def caption(
+        self, label: str, payload: Any, call: str | None, max_lines: int | None = None
+    ) -> None:
         """Save an evidence caption, shown under every frame from now on."""
         from tests.live.evidence import caption_panel
 
         width = self._width or 1280
-        panel = caption_panel(width, label, payload, call)
+        if max_lines is None:
+            panel = caption_panel(width, label, payload, call)
+        else:
+            panel = caption_panel(width, label, payload, call, max_lines)
         panel.save(self.directory / f"caption-{self._ms():08d}.png")
 
     def _run(self) -> None:
@@ -157,11 +162,16 @@ def stop(recorder: Recorder) -> None:
     print(f"[recorder] {recorder.frames} frames in {recorder.directory}", flush=True)
 
 
-def note_caption(label: str, payload: Any, call: str | None) -> None:
-    """Stamp an evidence caption into the running recording, if there is one."""
+def note_caption(
+    label: str, payload: Any, call: str | None, max_lines: int | None = None
+) -> None:
+    """Stamp an evidence caption into the running recording, if there is one.
+
+    ``max_lines`` overrides the caption's usual line limit (see ``evidence``).
+    """
     if _ACTIVE is None:
         return
     try:
-        _ACTIVE.caption(label, payload, call)
+        _ACTIVE.caption(label, payload, call, max_lines)
     except Exception as exc:  # noqa: BLE001 - a recording never fails a test
         print(f"[recorder] caption skipped: {exc}", flush=True)

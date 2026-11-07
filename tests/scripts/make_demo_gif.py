@@ -33,8 +33,13 @@ _FRAME = re.compile(r"^(?P<test>.+)-(?P<index>\d{2})\.png$")
 _CAPTION_BACKGROUND = (24, 24, 28)
 
 
-def build_gifs(directory: Path, width: int, seconds: float) -> list[Path]:
-    """Write one GIF per test found in ``directory``; return their paths."""
+def build_gifs(
+    directory: Path, width: int, seconds: float, prompt_seconds: float = 4.0
+) -> list[Path]:
+    """Write one GIF per test found in ``directory``; return their paths.
+
+    The first frame, the prompt, shows for ``prompt_seconds``.
+    """
     frames: dict[str, list[Path]] = defaultdict(list)
     for path in sorted(directory.glob("*.png")):
         match = _FRAME.match(path.name)
@@ -61,7 +66,7 @@ def build_gifs(directory: Path, width: int, seconds: float) -> list[Path]:
             save_all=True,
             append_images=images[1:],
             duration=[
-                int((_PROMPT_SECONDS if i == 0 else seconds) * 1000)
+                int((prompt_seconds if i == 0 else seconds) * 1000)
                 for i in range(len(images))
             ],
             loop=0,
@@ -73,10 +78,6 @@ def build_gifs(directory: Path, width: int, seconds: float) -> list[Path]:
 
 
 _STAMP = re.compile(r"^(?P<kind>frame|caption|end)-(?P<ms>\d{8})(?:\.png)?$")
-
-
-#: How long the first frame (the prompt and the plan) shows.
-_PROMPT_SECONDS = 4.0
 
 
 def _timeline(folder: Path) -> tuple[list, list, int]:
@@ -114,11 +115,13 @@ def build_recording(
     speed: float,
     max_hold: float,
     min_caption: float = 0.6,
+    prompt_seconds: float = 4.0,
 ) -> Path | None:
     """One recording as a GIF; ``None`` when it holds no frames.
 
     A frame where a new caption appears shows for at least ``min_caption``
-    seconds, so a tool call can be read however fast the rest plays.
+    seconds, so a tool call can be read however fast the rest plays; the
+    first caption, the prompt, for at least ``prompt_seconds``.
     """
     frames, captions, end = _timeline(folder)
     if not frames:
@@ -160,7 +163,7 @@ def build_recording(
         if caption_path is not None and caption_path != _latest(captions, ms - 1):
             # The first caption is the prompt: give it time to be read.
             first = caption_path == captions[0][1]
-            seconds = max(seconds, _PROMPT_SECONDS if first else min_caption)
+            seconds = max(seconds, prompt_seconds if first else min_caption)
         images.append(frame.quantize(palette=palette, dither=Image.Dither.NONE))
         durations.append(max(20, int(seconds * 1000)))
     images[0].save(
@@ -199,6 +202,7 @@ def build_recordings(
     speed: float,
     max_hold: float,
     min_caption: float = 0.6,
+    prompt_seconds: float = 4.0,
 ) -> list[Path]:
     """``<test>-motion.gif`` for every recording under ``directory/recording``."""
     root = directory / "recording"
@@ -213,6 +217,7 @@ def build_recordings(
             speed,
             max_hold,
             min_caption,
+            prompt_seconds,
         )
         if gif is not None:
             written.append(gif)
@@ -240,11 +245,22 @@ def main() -> None:
         default=0.6,
         help="shortest a frame with a new caption shows (s)",
     )
+    parser.add_argument(
+        "--prompt-seconds",
+        type=float,
+        default=4.0,
+        help="how long the first frame, the prompt, shows (s)",
+    )
     args = parser.parse_args()
-    paths = build_gifs(args.directory, args.width, args.seconds)
+    paths = build_gifs(args.directory, args.width, args.seconds, args.prompt_seconds)
     if args.recording:
         paths += build_recordings(
-            args.directory, args.width, args.speed, args.max_hold, args.min_caption
+            args.directory,
+            args.width,
+            args.speed,
+            args.max_hold,
+            args.min_caption,
+            args.prompt_seconds,
         )
     for path in paths:
         print(f"{path} ({path.stat().st_size // 1024} KB)")

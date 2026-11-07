@@ -62,28 +62,31 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 
 <table>
 <tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#monitor-stand"><img src="docs/assets/demos/monitor-stand/test_monitor_stand_from_prompt_to_part-motion.gif" alt="A 3D-printable monitor stand from a prompt" width="100%"><img src="docs/assets/demos/monitor-stand/monitor_stand_printing.gif" alt="The monitor stand being 3D printed" width="100%"></a><br><sub>A 3D-printable monitor stand from a prompt, then printed</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-block"><img src="docs/assets/demos/verify-model/test_verify_model_passes_a_block_and_names_what_is_wrong.gif" alt="verify_model passes a block and names what is wrong" width="100%"></a><br><sub><code>verify_model</code> passes a block and names what is wrong</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-assembly"><img src="docs/assets/demos/verify-model/test_assembly_counts_components_mates_and_interference.gif" alt="An assembly: parts, mates and interference" width="100%"></a><br><sub>An assembly: parts, mates and interference</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-cut"><img src="docs/assets/demos/verify-model/test_cut_reports_the_volume_it_removed.gif" alt="A cut reports the volume it removed" width="100%"></a><br><sub>A cut reports the volume it removed</sub></td>
 </tr>
 <tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-cut"><img src="docs/assets/demos/verify-model/test_cut_reports_the_volume_it_removed.gif" alt="A cut reports the volume it removed" width="100%"></a><br><sub>A cut reports the volume it removed</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-revolve"><img src="docs/assets/demos/verify-model/test_revolve_reports_the_volume_it_added.gif" alt="A revolve reports the volume it added" width="100%"></a><br><sub>A revolve reports the volume it added</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-round"><img src="docs/assets/demos/verify-model/test_round_part_size_is_exact.gif" alt="A round part's size is exact" width="100%"></a><br><sub>A round part's size is exact</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-selection"><img src="docs/assets/demos/verify-model/test_reading_the_model_keeps_the_selection.gif" alt="Reading the model keeps the selection" width="100%"></a><br><sub>Reading the model keeps the selection</sub></td>
 </tr>
 <tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-selection"><img src="docs/assets/demos/verify-model/test_reading_the_model_keeps_the_selection.gif" alt="Reading the model keeps the selection" width="100%"></a><br><sub>Reading the model keeps the selection</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#package-block"><img src="docs/assets/demos/drawing-package/test_generate_drawing_package_on_a_block.gif" alt="A full drawing package from one call" width="100%"></a><br><sub>A full drawing package from one call</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#sheet-scale"><img src="docs/assets/demos/drawing-package/test_set_sheet_scale_halves_the_views.gif" alt="Setting the sheet scale" width="100%"></a><br><sub>Setting the sheet scale</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#bom"><img src="docs/assets/demos/drawing-package/test_insert_bom_table_lists_both_parts.gif" alt="A BOM on an assembly drawing" width="100%"></a><br><sub>A BOM on an assembly drawing</sub></td>
 </tr>
 <tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#bom"><img src="docs/assets/demos/drawing-package/test_insert_bom_table_lists_both_parts.gif" alt="A BOM on an assembly drawing" width="100%"></a><br><sub>A BOM on an assembly drawing</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#insert-model-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_insert_model_dimensions_shows_each_dimension_once.gif" alt="Each model dimension shown once" width="100%"></a><br><sub>Each model dimension shown once</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#arrange-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_arrange_dimensions_clears_every_overlap.gif" alt="Clearing every overlap" width="100%"></a><br><sub>Clearing every overlap</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#material"><img src="docs/assets/demos/engineering-data/test_material_applies_and_changes_mass.gif" alt="Material and mass" width="100%"></a><br><sub>Material and mass</sub></td>
 </tr>
 <tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#material"><img src="docs/assets/demos/engineering-data/test_material_applies_and_changes_mass.gif" alt="Material and mass" width="100%"></a><br><sub>Material and mass</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#dimensions-and-measure"><img src="docs/assets/demos/engineering-data/test_dimensions_list_and_measure.gif" alt="Listing dimensions and measuring a face" width="100%"></a><br><sub>Listing dimensions and measuring a face</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#flat-pattern"><img src="docs/assets/demos/engineering-data/test_export_flat_pattern_writes_a_dxf.gif" alt="Flat pattern of a sheet-metal part" width="100%"></a><br><sub>Flat pattern of a sheet-metal part</sub></td>
+</tr>
+<tr>
 <td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#custom-property"><img src="docs/assets/demos/engineering-data/test_custom_property_round_trip.gif" alt="Custom properties" width="100%"></a><br><sub>Custom properties</sub></td>
 </tr>
 </table>

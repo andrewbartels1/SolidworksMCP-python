@@ -23,12 +23,16 @@
 #
 # -Trace prints every SolidWorks call with a timestamp as it starts and ends,
 # so a sound or flash in SolidWorks can be matched to the call behind it.
+#
+# -PromptSeconds sets how long the GIFs hold their first frame, the prompt
+# (default 4).
 param(
     [Parameter(Mandatory = $true)][string]$Test,
     [string]$CaptureDir = "",
     [switch]$Record,
     [switch]$Trace,
-    [double]$Speed = 5.0
+    [double]$Speed = 5.0,
+    [double]$PromptSeconds = 4.0
 )
 
 Set-Location (Resolve-Path "$PSScriptRoot\..\..")
@@ -63,7 +67,7 @@ if ($Record) {
     }
 
 if ($CaptureDir -and $Record) {
-    & .\.venv\Scripts\python.exe tests\scripts\make_demo_gif.py $CaptureDir --recording --speed $Speed
+    & .\.venv\Scripts\python.exe tests\scripts\make_demo_gif.py $CaptureDir --recording --speed $Speed --prompt-seconds $PromptSeconds
 } elseif ($CaptureDir) {
-    & .\.venv\Scripts\python.exe tests\scripts\make_demo_gif.py $CaptureDir
+    & .\.venv\Scripts\python.exe tests\scripts\make_demo_gif.py $CaptureDir --prompt-seconds $PromptSeconds
 }
