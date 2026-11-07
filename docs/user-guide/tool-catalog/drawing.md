@@ -10,7 +10,7 @@ Create and edit 2-D technical drawings: add projected/section/detail views, plac
 
 ### `create_drawing_view`
 
-Create a drawing view of a SolidWorks model.
+Place one named view of a part or assembly on the active drawing sheet.
 
 **Prerequisite:** SolidWorks running
 
@@ -38,7 +38,7 @@ Create a drawing view of a SolidWorks model.
 
 ### `add_dimension`
 
-Add a dimension to the current drawing.
+Add one dimension between drawing entities at a position on the sheet.
 
 **Prerequisite:** SolidWorks running
 
@@ -68,7 +68,7 @@ Add a dimension to the current drawing.
 
 ### `add_note`
 
-Add a note or annotation to the current drawing.
+Place a text note on the active drawing sheet at a position in millimetres.
 
 **Prerequisite:** SolidWorks running
 
@@ -96,7 +96,7 @@ Add a note or annotation to the current drawing.
 
 ### `create_section_view`
 
-Create a section view of the current drawing.
+Cut a section view along a line across a drawing view.
 
 **Prerequisite:** SolidWorks running
 
@@ -126,7 +126,7 @@ Create a section view of the current drawing.
 
 ### `create_detail_view`
 
-Create a detail view of a specific area.
+Magnify a circular area of a drawing view as a detail view.
 
 **Prerequisite:** SolidWorks running
 
@@ -158,7 +158,7 @@ Create a detail view of a specific area.
 
 ### `update_sheet_format`
 
-Update the sheet format and title block information.
+Change the active drawing's sheet format file and title-block fields.
 
 **Prerequisite:** SolidWorks running
 
@@ -186,7 +186,7 @@ Update the sheet format and title block information.
 
 ### `auto_dimension_view`
 
-Automatically dimension a drawing view.
+Dimension a drawing view automatically with SolidWorks' auto-dimension scheme.
 
 **Prerequisite:** SolidWorks running
 
@@ -200,7 +200,7 @@ Automatically dimension a drawing view.
 
 ### `check_drawing_standards`
 
-Check the current drawing against drafting standards.
+Check the active drawing against a drafting standard and score it.
 
 **Prerequisite:** SolidWorks running
 
@@ -214,7 +214,7 @@ Check the current drawing against drafting standards.
 
 ### `create_technical_drawing`
 
-Create a technical drawing from a SolidWorks part or assembly.
+Place a model's three standard views (front, top and side) on the active drawing sheet in one call.
 
 **Prerequisite:** SolidWorks running
 
@@ -241,7 +241,7 @@ Create a technical drawing from a SolidWorks part or assembly.
 
 ### `add_drawing_view`
 
-Add, update, or remove a drawing view in an existing drawing.
+Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`.
 
 **Prerequisite:** SolidWorks running
 
@@ -269,7 +269,7 @@ Add, update, or remove a drawing view in an existing drawing.
 
 ### `add_annotation`
 
-Add an annotation such as a note, balloon, or surface symbol.
+Add an annotation (a note, balloon or surface-finish symbol) to the active drawing.
 
 **Prerequisite:** SolidWorks running
 
@@ -303,7 +303,7 @@ Add an annotation such as a note, balloon, or surface symbol.
 
 ### `update_title_block`
 
-Update title block fields for the active drawing.
+Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on).
 
 **Prerequisite:** SolidWorks running
 
@@ -317,7 +317,7 @@ Update title block fields for the active drawing.
 
 ### `auto_center_marks`
 
-Auto-insert centre marks on circular features in a drawing view. Runs SolidWorks' automatic centre-mark insertion for the named view. The API does not report how many marks it added, so the response gives the view's centre-mark count before and after and the delta — a run that added nothing is still a success.
+Insert centre marks on the holes, slots and (optionally) fillets of one drawing view.
 
 **Prerequisite:** Active drawing containing the named view
 
@@ -342,7 +342,7 @@ Auto-insert centre marks on circular features in a drawing view. Runs SolidWorks
 
 ### `list_drawing_views`
 
-List the views on the active drawing (sheet formats excluded). Read-only — use it to find an existing view's name before targeting it, e.g. with `auto_center_marks`. Errors when the active document is not a drawing.
+List the views on the active drawing, by name.
 
 **Prerequisite:** Active drawing
 

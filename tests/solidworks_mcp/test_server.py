@@ -1042,6 +1042,26 @@ def test_cli_main_routes_setup_to_the_setup_app():
     mock_run.assert_not_called()
 
 
+def test_cli_main_routes_skill_to_the_skill_app():
+    """`solidworks-mcp skill ...` installs the skill, not the server."""
+    from solidworks_mcp.server import cli_main
+
+    with (
+        patch(
+            "solidworks_mcp.server.sys.argv",
+            ["solidworks-mcp", "skill", "install", "--dry-run"],
+        ),
+        patch("solidworks_mcp.skills.install.app") as skill_app,
+        patch("solidworks_mcp.server.typer.run") as mock_run,
+    ):
+        cli_main()
+
+    skill_app.assert_called_once_with(
+        args=["install", "--dry-run"], prog_name="solidworks-mcp skill"
+    )
+    mock_run.assert_not_called()
+
+
 def test_cli_help_lists_each_option_without_internal_text():
     """`--help` shows the summary and one line per option, not the Args section."""
     import click

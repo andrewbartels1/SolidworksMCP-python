@@ -198,6 +198,13 @@ def test_a_failed_check_writes_nothing(
     assert "solidworks" not in _servers(machine["desktop"])
 
 
+def test_setup_ends_with_the_skill_install_hint(machine: dict[str, Any]) -> None:
+    result = _run("--yes")
+
+    assert result.exit_code == 0, result.output
+    assert "solidworks-mcp skill install" in result.output
+
+
 def test_skip_check(machine: dict[str, Any]) -> None:
     result = _run("--yes", "--skip-check")
 

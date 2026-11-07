@@ -20,6 +20,7 @@ from solidworks_mcp.tools.tool_boundary import (
     require_success,
     tool_boundary,
 )
+from solidworks_mcp.tools.tool_hints import ToolHints
 
 
 class _Input(BaseModel):
@@ -260,10 +261,17 @@ class _Args(BaseModel):
     name: str
 
 
+#: Hints for the stand-in tools these tests register.
+_TEST_HINTS = {
+    name: ToolHints(name.title(), read_only=False, destructive=False, idempotent=False)
+    for name in ("body", "renamed", "second", "positional")
+}
+
+
 @pytest.mark.asyncio
 async def test_registrar_keeps_the_schema_and_applies_the_boundary() -> None:
     plain, wrapped = FastMCP("plain"), FastMCP("wrapped")
-    registrar = ToolRegistrar(wrapped)
+    registrar = ToolRegistrar(wrapped, hints=_TEST_HINTS)
 
     async def body(input_data: _Args) -> dict[str, Any]:
         raise ToolOperationError("Feature not found: X")
@@ -280,9 +288,73 @@ async def test_registrar_keeps_the_schema_and_applies_the_boundary() -> None:
 
 
 @pytest.mark.asyncio
+async def test_registrar_applies_the_title_hints_and_family_tag() -> None:
+    mcp = FastMCP("t")
+    hints = {
+        "body": ToolHints("Body", read_only=True, destructive=False, idempotent=True)
+    }
+
+    @ToolRegistrar(mcp, hints=hints).tool()
+    async def body() -> dict[str, Any]:
+        return {"status": "success"}
+
+    (tool,) = await mcp.list_tools()
+    assert tool.title == "Body"
+    assert tool.annotations is not None
+    assert tool.annotations.readOnlyHint is True
+    assert tool.annotations.destructiveHint is False
+    assert tool.annotations.idempotentHint is True
+    assert tool.tags == {"test_tool_boundary"}
+
+
+@pytest.mark.asyncio
+async def test_registrar_keeps_explicit_metadata_and_merges_tags() -> None:
+    mcp = FastMCP("t")
+    explicit = ToolHints("Explicit", read_only=True, destructive=False, idempotent=True)
+
+    @ToolRegistrar(mcp, hints=_TEST_HINTS).tool(
+        title="Mine", annotations=explicit.annotations(), tags={"extra"}
+    )
+    async def body() -> dict[str, Any]:
+        return {"status": "success"}
+
+    (tool,) = await mcp.list_tools()
+    assert tool.title == "Mine"
+    assert tool.annotations is not None
+    assert tool.annotations.title == "Explicit"
+    assert tool.tags == {"extra", "test_tool_boundary"}
+
+
+@pytest.mark.asyncio
+async def test_registrar_reads_a_positional_name() -> None:
+    mcp = FastMCP("t")
+
+    @ToolRegistrar(mcp, hints=_TEST_HINTS).tool("positional")
+    async def body() -> dict[str, Any]:
+        return {"status": "success"}
+
+    (tool,) = await mcp.list_tools()
+    assert (tool.name, tool.title) == ("positional", "Positional")
+
+
+def test_registrar_refuses_a_tool_with_no_hints_entry() -> None:
+    registrar = ToolRegistrar(FastMCP("t"), hints={})
+
+    async def unlisted() -> dict[str, Any]:
+        return {"status": "success"}
+
+    with pytest.raises(
+        KeyError, match="'unlisted' has no entry in tools/tool_hints.py"
+    ):
+        registrar.tool()(unlisted)
+    with pytest.raises(KeyError, match="unlisted"):
+        registrar.tool(unlisted)
+
+
+@pytest.mark.asyncio
 async def test_registrar_forwards_tool_kwargs_and_bare_decorator() -> None:
     mcp = FastMCP("t")
-    registrar = ToolRegistrar(mcp)
+    registrar = ToolRegistrar(mcp, hints=_TEST_HINTS)
 
     @registrar.tool(name="renamed")
     async def first() -> dict[str, Any]:

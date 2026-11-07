@@ -290,25 +290,23 @@ async def register_automation_tools(
 
     @mcp.tool()
     async def generate_vba_code(input_data: GenerateVBAInput) -> dict[str, Any]:
-        """Generate VBA code for SolidWorks automation.
+        """Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, the active document and optional error handling, with the operation itself left as a TODO.
 
-        Analyzes operation description and generates appropriate VBA code with SolidWorks API
-        calls, error handling, and documentation.
+        Use it as a starting point for a custom macro. For a working macro for a
+        specific feature, use a `generate_vba_*` tool (extrusion, revolve, mates,
+        drawing views, batch export). The macro comes back as text for the SolidWorks
+        VBA editor; `execute_macro` runs only binary .swp files. Read-only. Nothing runs
+        in SolidWorks. Returns: `vba_code` with `code`, `operation`, `target_document`,
+        `style`, `lines_of_code` and `includes_error_handling`.
 
         Args:
-            input_data (GenerateVBAInput): The input data value.
+            input_data: The macro to write. Nothing is required: give
+                `operation_description` (it also names the Sub) and
+                `target_document`; `include_error_handling` and `code_style` have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await generate_vba_code({
-                                "operation_description": "Create rectangular extrusion",
-                                "target_document": "Part",
-                                "include_error_handling": True
-                            })
-                            ```
+            dict[str, Any]: The macro text.
         """
         if hasattr(adapter, "generate_vba_code"):
             result = await adapter.generate_vba_code(input_data.model_dump())
@@ -373,15 +371,21 @@ End Sub
 
     @mcp.tool(name="automation_start_macro_recording")
     async def start_macro_recording(input_data: RecordMacroInput) -> dict[str, Any]:
-        """Start recording a macro in SolidWorks.
+        """Start SolidWorks' macro recorder (the automation family's copy of `start_macro_recording`).
 
-        Begins macro recording to capture user actions and generate reusable automation scripts.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Recording is
+        done in SolidWorks today (Tools > Macro > Record). Changes: once available,
+        starts a recording session. Returns: once available, the session details under
+        `data`.
 
         Args:
-            input_data (RecordMacroInput): The input data value.
+            input_data: The recording. Nothing is required: `macro_name`,
+                `output_file`, `recording_mode` and the capture switches have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The session, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -400,16 +404,19 @@ End Sub
 
     @mcp.tool(name="automation_stop_macro_recording")
     async def stop_macro_recording(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Stop recording the current macro.
+        """Stop a macro recording and save it (the automation family's copy of `stop_macro_recording`).
 
-        This tool stops the active macro recording and saves the recorded actions as a VBA
-        macro.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Recording is
+        done in SolidWorks today (Tools > Macro > Stop). Changes: once available, ends
+        the session and writes the macro file. Returns: once available, the saved
+        macro's details.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping; nothing in it is used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: A `not_supported` error.
         """
         raise UnsupportedOperationError(
             "No adapter capability exists for stopping a macro "
@@ -419,16 +426,19 @@ End Sub
 
     @mcp.tool()
     async def batch_process_files(input_data: BatchProcessInput) -> dict[str, Any]:
-        """Handle batch process files.
+        """Run one operation (rebuild, save as, export or property update) on every matching file in a folder.
 
-        This tool processes multiple files in a directory, performing operations like rebuild,
-        save as, export, or property updates.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To export
+        several files today, open each with `open_model` and use `export_step`.
+        Changes: once available, opens, changes and saves each file. Returns: once available, a per-file result under `data`.
 
         Args:
-            input_data (BatchProcessInput): The input data value.
+            input_data: The batch. `source_directory` is required; `operation_type`,
+                `file_pattern`, `target_format` and `recursive` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The results, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -447,16 +457,21 @@ End Sub
 
     @mcp.tool()
     async def manage_design_table(input_data: DesignTableInput) -> dict[str, Any]:
-        """Create or manage design tables for parametric modeling.
+        """Create, read or update a design table (an Excel sheet that drives a model's configurations).
 
-        Design tables allow you to create multiple configurations of a part or assembly by
-        driving parameters from an Excel spreadsheet.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To list a
+        model's configurations today, use `list_configurations`. Changes: once
+        available, inserts or edits the design table and its configurations. Returns:
+        once available, the table's state under `data`.
 
         Args:
-            input_data (DesignTableInput): The input data value.
+            input_data: The design table. Nothing is required: give `model_path`,
+                `operation` and `excel_file`; `parameters`, `configurations` and the
+                auto-update switches have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The result, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -475,16 +490,20 @@ End Sub
 
     @mcp.tool()
     async def execute_workflow(input_data: WorkflowInput) -> dict[str, Any]:
-        """Handle execute workflow.
+        """Run a named sequence of tool steps, in order or in parallel, with an error policy.
 
-        This tool executes a series of automated steps in sequence, with support for parallel
-        execution and error handling.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Call the
+        tools one at a time instead. Changes: once available, whatever the steps change.
+        Returns: once available, each step's result under `data`.
 
         Args:
-            input_data (WorkflowInput): The input data value.
+            input_data: The workflow. `workflow_name` and `steps` (a list of step
+                mappings) are required; `parallel_execution` and `error_handling`
+                have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The step results, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -503,16 +522,21 @@ End Sub
 
     @mcp.tool()
     async def create_template(input_data: TemplateInput) -> dict[str, Any]:
-        """Create a SolidWorks template file.
+        """Create a part, assembly or drawing template file (.prtdot, .asmdot, .drwdot) with standard settings.
 
-        This tool creates templates for parts, assemblies, or drawings with standardized
-        settings, materials, and configurations.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To capture an
+        existing model's settings, `extract_template` is also not available yet.
+        Changes: once available, writes the template file. Returns: once available, the
+        template's path and settings under `data`.
 
         Args:
-            input_data (TemplateInput): The input data value.
+            input_data: The template. `template_type` and `template_name` are
+                required; `source_model`, `output_path` and the include switches have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The template, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -532,16 +556,18 @@ End Sub
 
     @mcp.tool()
     async def optimize_performance(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Optimize SolidWorks performance settings.
+        """Review SolidWorks' performance settings and apply faster ones.
 
-        This tool analyzes the current SolidWorks configuration and suggests or applies
-        performance optimizations.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Changes: once
+        available, SolidWorks system options. Returns: once available, the settings
+        changed under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping of optimisation options; none is required.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The changes, or a `not_supported` error.
         """
         require_capability(
             adapter,

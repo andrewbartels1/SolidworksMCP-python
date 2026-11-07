@@ -156,6 +156,9 @@ def setup(
         console.print("\n[bold]Next[/bold]")
         for target in chosen:
             console.print(f"  {target.name}: {target.restart_hint}")
+        console.print(
+            "  To teach your agent how to use these tools: solidworks-mcp skill install"
+        )
     if failures:
         raise typer.Exit(1)
 

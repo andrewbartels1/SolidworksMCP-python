@@ -10,7 +10,7 @@ Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply ge
 
 ### `create_sketch`
 
-Create a new sketch on the specified plane.
+Open a new sketch on a plane of the active part, ready for lines, circles and other sketch entities.
 
 **Prerequisite:** Active part document, no active sketch
 
@@ -33,7 +33,7 @@ Create a new sketch on the specified plane.
 
 ### `add_line`
 
-Add a line to the current sketch.
+Draw a straight line between two points in the open sketch, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -66,7 +66,7 @@ Add a line to the current sketch.
 
 ### `add_circle`
 
-Add a circle to the current sketch.
+Draw a circle in the open sketch from its centre and radius, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -93,7 +93,7 @@ Add a circle to the current sketch.
 
 ### `add_rectangle`
 
-Add a rectangle to the current sketch.
+Draw a closed, axis-aligned rectangle in the open sketch from two opposite corners, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -126,7 +126,7 @@ Add a rectangle to the current sketch.
 
 ### `exit_sketch`
 
-Exit sketch editing mode.
+Close the open sketch so a feature can use it.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -140,7 +140,7 @@ Exit sketch editing mode.
 
 ### `add_arc`
 
-Add an arc to the current sketch.
+Draw a circular arc in the open sketch from its centre, start point and end point, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -172,7 +172,7 @@ Add an arc to the current sketch.
 
 ### `add_spline`
 
-Add a spline curve to the current sketch.
+Draw a smooth spline through a list of points in the open sketch, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -207,7 +207,7 @@ Add a spline curve to the current sketch.
 
 ### `add_centerline`
 
-Add a centerline to the current sketch.
+Draw a centreline (construction line) in the open sketch, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -240,7 +240,7 @@ Add a centerline to the current sketch.
 
 ### `add_polygon`
 
-Add a regular polygon to the current sketch.
+Draw a regular polygon (e.g. a hexagon) in the open sketch from its centre, radius and number of sides.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -254,7 +254,7 @@ Add a regular polygon to the current sketch.
 
 ### `add_ellipse`
 
-Add an ellipse to the current sketch.
+Draw an ellipse in the open sketch from its centre and axis lengths, in mm.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -268,7 +268,7 @@ Add an ellipse to the current sketch.
 
 ### `add_sketch_constraint`
 
-Add a geometric constraint/relation between sketch entities.
+Add a geometric relation between sketch entities: horizontal, vertical, parallel, perpendicular, tangent, coincident, concentric, equal, symmetric, collinear or fix.
 
 **Prerequisite:** Active sketch edit mode with named entities
 
@@ -349,7 +349,7 @@ Add a geometric constraint/relation between sketch entities.
 
 ### `add_sketch_dimension`
 
-Add a dimension to sketch entities.
+Add a driving dimension to sketch entities: linear, angular, radial or diameter.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -383,7 +383,7 @@ Add a dimension to sketch entities.
 
 ### `sketch_linear_pattern`
 
-Create a linear pattern of sketch entities.
+Repeat sketch entities in a straight line at a fixed spacing.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -397,7 +397,7 @@ Create a linear pattern of sketch entities.
 
 ### `sketch_circular_pattern`
 
-Create a circular pattern of sketch entities.
+Repeat sketch entities around the sketch origin, e.g. a bolt circle.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -411,7 +411,7 @@ Create a circular pattern of sketch entities.
 
 ### `sketch_mirror`
 
-Mirror sketch entities about a centerline.
+Mirror sketch entities about a centreline in the open sketch.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -425,7 +425,7 @@ Mirror sketch entities about a centerline.
 
 ### `sketch_offset`
 
-Create an offset of sketch entities.
+Offset sketch entities by a distance in mm, outward or inward, e.g. for a wall or a clearance.
 
 **Prerequisite:** Active sketch edit mode
 
@@ -439,7 +439,7 @@ Create an offset of sketch entities.
 
 ### `sketch_tutorial_simple_hole`
 
-Tutorial: Create a simple circular hole sketch.
+Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch.
 
 **Prerequisite:** SolidWorks running
 
@@ -453,7 +453,7 @@ Tutorial: Create a simple circular hole sketch.
 
 ### `tutorial_simple_hole`
 
-Create a simple hole as a guided tutorial workflow.
+Draw a circle on a plane and cut it as a hole, as one worked example.
 
 **Prerequisite:** SolidWorks running
 

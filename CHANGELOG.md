@@ -14,12 +14,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An agent skill for using the server** (#175). `solidworks-mcp skill
+  install` puts the `solidworks-mcp` skill in Claude Code's skills folder
+  (`--project` or `--dir` for others); it covers the build order, units
+  (and the inputs that take metres), choosing faces and edges, checking
+  results with `verify_model`, recovering from errors, the tools that don't
+  work yet and the known faults. The server also serves it as
+  `skill://solidworks-mcp/SKILL.md` and sends short usage instructions when
+  a client connects. A test fails if the skill names a tool that is gone or
+  recommends one that can't run.
 - **The server takes `--year`**, the installed SolidWorks release it works
   with (`uvx solidworks-mcp-python --year 2026`). It is required for real
   SolidWorks and `setup` writes it into every client entry, from the newest
   installed release or `setup --year`. Started without it, the server logs a
   warning and uses the newest installed release, so existing entries keep
   working; rerun `solidworks-mcp-python setup` to add it.
+- **Every tool carries MCP behaviour hints and a family tag.** Clients now
+  see a title for each tool and whether it is read-only, destructive or
+  idempotent, so they can ask before a call that deletes or overwrites.
+  Each tool is also tagged with its family (`modeling`, `drawing`, ...).
+  The hints live in one table, `tools/tool_hints.py`; a tool without an
+  entry fails to register. A written standard for tool descriptions
+  (`docs/agents/tool-description-standard.md`) and a test that checks it
+  come with them; the descriptions themselves are rewritten in the next
+  changes (#82).
+- **Clearer descriptions for every tool.** Each of the 154 now says what
+  the tool does, when to use it and which tool to use instead, what it
+  needs, what it changes (or that it is read-only) and what it returns, and
+  names its required inputs; the check now covers every module. The 39
+  tools that no adapter implements yet say so up front ("Not available yet
+  ... planned for a future release"), and inputs a tool ignores are named as
+  unused. `add_drawing_view` and `create_technical_drawing` are no longer
+  marked destructive: neither overwrites anything. The tool catalog pages
+  carry the new summaries (#82).
 
 ### Fixed
 

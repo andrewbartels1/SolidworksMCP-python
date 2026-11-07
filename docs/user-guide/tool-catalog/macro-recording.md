@@ -10,7 +10,7 @@ Record, replay, analyse, and optimise SolidWorks VBA macros. Create macro librar
 
 ### `start_macro_recording`
 
-Start recording a SolidWorks macro.
+Start SolidWorks' macro recorder, to capture what the user does as a macro.
 
 **Prerequisite:** SolidWorks running
 
@@ -42,7 +42,7 @@ Start recording a SolidWorks macro.
 
 ### `stop_macro_recording`
 
-Stop macro recording and save the recorded macro.
+Stop the macro recorder and save the recorded macro.
 
 **Prerequisite:** SolidWorks running
 
@@ -56,7 +56,7 @@ Stop macro recording and save the recorded macro.
 
 ### `execute_macro`
 
-Run a binary SolidWorks macro (`.swp`, or legacy `.swb`). VBA source (`.vb`, `.bas`, text) is rejected as `invalid_input`; save it as a `.swp` in the SolidWorks VBA editor first. The macro must not be interactive (no MsgBox or user forms).
+Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once.
 
 **Prerequisite:** SolidWorks running
 
@@ -87,7 +87,7 @@ Run a binary SolidWorks macro (`.swp`, or legacy `.swb`). VBA source (`.vb`, `.b
 
 ### `analyze_macro`
 
-Analyze a macro for complexity, dependencies, and optimization opportunities.
+Analyse a macro's structure, dependencies and complexity, and suggest optimisations.
 
 **Prerequisite:** SolidWorks running
 
@@ -111,7 +111,7 @@ Analyze a macro for complexity, dependencies, and optimization opportunities.
 
 ### `batch_execute_macros`
 
-Execute multiple macros in batch mode.
+Run several macros in sequence against the files in a folder.
 
 **Prerequisite:** SolidWorks running
 
@@ -138,7 +138,7 @@ Execute multiple macros in batch mode.
 
 ### `optimize_macro`
 
-Optimize an existing macro for better performance and reliability.
+Suggest improvements to a macro's code for speed and reliability.
 
 **Prerequisite:** SolidWorks running
 
@@ -152,7 +152,7 @@ Optimize an existing macro for better performance and reliability.
 
 ### `create_macro_library`
 
-Create a library of organized macros for team sharing and reuse.
+Set up a shared folder of categorised, documented macros.
 
 **Prerequisite:** SolidWorks running
 

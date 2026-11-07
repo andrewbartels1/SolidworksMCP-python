@@ -10,7 +10,7 @@ Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as 
 
 ### `save_file`
 
-Save the current SolidWorks model.
+Save the active document, to its own path or to a new path in its own format.
 
 **Prerequisite:** Active open document
 
@@ -31,7 +31,7 @@ Save the current SolidWorks model.
 
 ### `save_as`
 
-Save the current model to a new location or format.
+Save the active document under a new path, as a SolidWorks file or in an exchange format such as STEP or IGES.
 
 **Prerequisite:** Active open document, writable output path
 
@@ -55,7 +55,7 @@ Save the current model to a new location or format.
 
 ### `get_file_properties`
 
-Get properties of the current SolidWorks file.
+Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes.
 
 **Prerequisite:** Active document
 
@@ -69,7 +69,7 @@ Get properties of the current SolidWorks file.
 
 ### `get_model_info`
 
-Get compact metadata for the active SolidWorks document.
+Report the active document's title, path, type, active configuration, unsaved changes, feature count and rebuild status.
 
 **Prerequisite:** Active document
 
@@ -83,7 +83,7 @@ Get compact metadata for the active SolidWorks document.
 
 ### `list_features`
 
-List feature-tree entries for the active SolidWorks document.
+List the feature tree of the active part or assembly, in order.
 
 **Prerequisite:** Active document
 
@@ -103,7 +103,7 @@ List feature-tree entries for the active SolidWorks document.
 
 ### `classify_feature_tree`
 
-Classify the active model into a likely feature family using `get_model_info` and `list_features`.
+Classify the active model's kind (part, sheet metal, assembly, drawing and so on) from its feature tree, and suggest how to work on it.
 
 Useful for routing between direct MCP modeling, VBA-backed workflows, assembly planning,
 and low-confidence “inspect more” cases before any write operations.
@@ -128,7 +128,7 @@ and low-confidence “inspect more” cases before any write operations.
 
 ### `list_configurations`
 
-List configuration names for the active SolidWorks document.
+List the names of the active model's configurations.
 
 **Prerequisite:** Active document
 
@@ -142,7 +142,7 @@ List configuration names for the active SolidWorks document.
 
 ### `manage_file_properties`
 
-Read, update, copy, move, rename, or delete file-related properties.
+Read or change the file-level properties of a SolidWorks file on disk.
 
 **Prerequisite:** Active document
 
@@ -170,7 +170,7 @@ Read, update, copy, move, rename, or delete file-related properties.
 
 ### `convert_file_format`
 
-Convert a SolidWorks file from one format to another.
+Convert a SolidWorks file on disk to another format without opening it first.
 
 **Prerequisite:** Valid source file path
 
@@ -201,7 +201,7 @@ Convert a SolidWorks file from one format to another.
 
 ### `batch_file_operations`
 
-Run a file operation across multiple files as a batch workflow.
+Copy, move, rename or delete SolidWorks files on disk in one call.
 
 **Prerequisite:** Writable directories
 
@@ -229,7 +229,7 @@ Run a file operation across multiple files as a batch workflow.
 
 ### `load_part`
 
-Load (open) a SolidWorks part file.
+Open a part (.sldprt) from disk and make it the active document.
 
 **Prerequisite:** SolidWorks running, valid .sldprt path
 
@@ -251,7 +251,7 @@ Load (open) a SolidWorks part file.
 
 ### `load_assembly`
 
-Load (open) a SolidWorks assembly file.
+Open an assembly (.sldasm) from disk and make it the active document.
 
 **Prerequisite:** SolidWorks running, valid .sldasm path
 
@@ -273,7 +273,7 @@ Load (open) a SolidWorks assembly file.
 
 ### `save_part`
 
-Save the active SolidWorks part document.
+Save the active part in place, or as a new .sldprt with the target path checked first.
 
 **Prerequisite:** Active Part document
 
@@ -287,7 +287,7 @@ Save the active SolidWorks part document.
 
 ### `save_assembly`
 
-Save the active SolidWorks assembly document.
+Save the active assembly in place, or as a new .sldasm, optionally copying the parts it uses alongside.
 
 **Prerequisite:** Active Assembly document
 
@@ -301,7 +301,7 @@ Save the active SolidWorks assembly document.
 
 ### `pack_and_go_assembly`
 
-Copy a SolidWorks assembly and all its referenced parts to a self-contained folder — equivalent to the SolidWorks GUI **Pack and Go** operation.
+Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go).
 
 The active assembly (or `source_path`) is opened, every referenced component is enumerated via the native SolidWorks IPackAndGo COM API, and all files are written into `target_dir` with internal paths rewritten so the copy opens without any dependency on the original file locations.
 
@@ -352,7 +352,7 @@ All zeros in the per-file status array (`all_files_saved: true`) means SolidWork
 
 ### `list_open_documents`
 
-List every SolidWorks document currently open. Read-only — does not change which document is active. Use it to discover what is open (an assembly plus its parts, a drawing plus its model) before switching with `activate_document`.
+List every document open in SolidWorks and say which one is active.
 
 **Prerequisite:** SolidWorks running
 
@@ -376,7 +376,7 @@ List every SolidWorks document currently open. Read-only — does not change whi
 
 ### `activate_document`
 
-Switch which open document is the active one. Matches the argument against open documents by title, full path, or file name (case-insensitive), calls `ActivateDoc3`, and reads the active document back to confirm the switch took.
+Make an already-open document the active one, so the next tools act on it.
 
 **Prerequisite:** The target document is already open
 
@@ -398,7 +398,7 @@ Switch which open document is the active one. Matches the argument against open 
 
 ### `get_selected_entities`
 
-Report the faces/edges/vertices currently selected in the live SolidWorks UI. Use this to find out exactly what the user has clicked on before applying a feature (e.g. "chamfer the face I selected") instead of guessing from coordinates or a screenshot. Each entry includes enough geometry (bounding box, center, area/length, normal where applicable) to identify which face/edge is which, and the center coordinates can be fed straight into `add_chamfer`/`add_fillet`'s `"face:x,y,z"` or coordinate `edge_names` syntax.
+Describe the faces, edges and vertices selected in the SolidWorks window right now.
 
 **Prerequisite:** Active document with at least one entity selected in the SolidWorks UI (returns an empty list otherwise)
 
@@ -422,7 +422,7 @@ Report the faces/edges/vertices currently selected in the live SolidWorks UI. Us
 
 ### `save_body_as_part`
 
-Extract one solid body from the active multibody part into its own standalone `.sldprt`. Runs SolidWorks' Save Bodies on a single named body; the body is matched by name against the active part's solid bodies (the response lists every solid body found, so an unknown name reports the real options). Success is confirmed by the file existing on disk afterwards.
+Save one solid body of the active multibody part as a new part file (Insert > Features > Save Bodies).
 
 **Prerequisite:** Active multibody part
 

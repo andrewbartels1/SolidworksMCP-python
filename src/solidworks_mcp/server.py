@@ -18,6 +18,7 @@ from typing import Any
 
 import typer
 from fastmcp import FastMCP
+from fastmcp.server.providers.skills import SkillProvider
 from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -31,6 +32,7 @@ from .agents.history_db import insert_tool_event
 from .cache.response_cache import CachePolicy, ResponseCache
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
 from .exceptions import SolidWorksMCPError
+from .skills import SERVER_INSTRUCTIONS, SKILL_DIR
 from .version import __version__
 
 AGENT_SYSTEM_PROMPT = (
@@ -86,7 +88,13 @@ class SolidWorksMCPServer:
         """
         self.config = config
         self.state = MCPServerState(config=config)
-        self.mcp = FastMCP("SolidWorks MCP Server", version=__version__)
+        self.mcp = FastMCP(
+            "SolidWorks MCP Server",
+            version=__version__,
+            instructions=SERVER_INSTRUCTIONS,
+        )
+        # The usage skill, as skill:// resources; needs no SolidWorks connection.
+        self.mcp.add_provider(SkillProvider(SKILL_DIR))
         self.server: FastMCP | None = None
         self._setup_complete = False
         self._db_logging_enabled = self._env_truthy(
@@ -785,7 +793,8 @@ async def main() -> None:
 def cli_main() -> None:
     """Console script entry point using Typer CLI.
 
-    ``solidworks-mcp setup ...`` runs the guided client setup; anything else
+    ``solidworks-mcp setup ...`` runs the guided client setup,
+    ``solidworks-mcp skill ...`` installs the usage skill; anything else
     starts the server.
 
     Returns:
@@ -795,6 +804,11 @@ def cli_main() -> None:
         from .setup.cli import app
 
         app(args=sys.argv[2:], prog_name="solidworks-mcp setup")
+        return
+    if sys.argv[1:2] == ["skill"]:
+        from .skills.install import app as skill_app
+
+        skill_app(args=sys.argv[2:], prog_name="solidworks-mcp skill")
         return
     typer.run(cli)
 

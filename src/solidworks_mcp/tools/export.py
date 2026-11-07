@@ -392,42 +392,21 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_step(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the current model to STEP format.
+        """Export the active document to STEP, like File > Save As with the STEP type.
 
-        Exports SolidWorks models to STEP (Standard for the Exchange of Product Data) format,
-        the preferred neutral CAD format for interoperability between different CAD systems and
-        manufacturers.
+        Use it to hand a model to another CAD system; it is the most widely read
+        exchange format. SolidWorks picks the format from the file's extension, so end
+        `file_path` in .step or .stp. Needs: an open, active part or assembly. Changes:
+        writes the file, creating its folder and replacing a file already there; the
+        open document is unchanged. Returns: `export` with `file_path` and `format`.
 
         Args:
-            input_data (ExportFileInput): The input data value.
+            input_data: The export. `file_path` (ending in .step or .stp) is required;
+                `format_type` is required by the schema but the extension decides the
+                format, and `options` is not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Export part to STEP for manufacturing
-                            result = await export_step({
-                                "file_path": "C:/Exports/bracket.step",
-                                "format_type": "step",
-                                "options": {
-                                    "units": "mm",
-                                    "version": "214",
-                                    "precision": 0.01
-                                }
-                            })
-
-                            if result["status"] == "success":
-                                export = result["export"]
-                                print(f"STEP file created: {export['file_path']}")
-                                # Ready for CNC programming or CAM software
-                            ```
-
-                        Note:
-                            - STEP format preserves precise geometric data for manufacturing
-                            - Most widely supported neutral CAD format in industry
-                            - Recommended for supplier collaboration and CNC machining
-                            - Supports assemblies, parts, and surface models
+            dict[str, Any]: The file written.
         """
         input_data = _file_input(input_data, "step")
         file_path = input_data.file_path
@@ -458,42 +437,21 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_iges(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the current model to IGES format.
+        """Export the active document to IGES, like File > Save As with the IGES type.
 
-        Exports SolidWorks models to IGES (Initial Graphics Exchange Specification) format, a
-        legacy neutral CAD format still widely used for surface modeling and older CAD system
-        compatibility.
+        Use it only when the receiver can't read STEP; prefer `export_step`. SolidWorks
+        picks the format from the file's extension, so end `file_path` in .igs or .iges.
+        Needs: an open, active part or assembly. Changes: writes the file, creating its
+        folder and replacing a file already there; the open document is unchanged.
+        Returns: `export` with `file_path` and `format`.
 
         Args:
-            input_data (ExportFileInput): The input data value.
+            input_data: The export. `file_path` (ending in .igs or .iges) is required;
+                `format_type` is required by the schema but the extension decides the
+                format, and `options` is not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Export surface model for legacy CAD system
-                            result = await export_iges({
-                                "file_path": "C:/Exports/surface_model.iges",
-                                "format_type": "iges",
-                                "options": {
-                                    "units": "mm",
-                                    "surfaces_only": True,
-                                    "trim_curves": True
-                                }
-                            })
-
-                            if result["status"] == "success":
-                                export = result["export"]
-                                print(f"IGES file created: {export['file_path']}")
-                                # Compatible with older CAD/CAM systems
-                            ```
-
-                        Note:
-                            - IGES format is older but still required for some legacy systems
-                            - Excellent for surface modeling and complex curve data
-                            - Use STEP format for newer systems when possible
-                            - Common in aerospace and automotive surface design
+            dict[str, Any]: The file written.
         """
         input_data = _file_input(input_data, "iges")
         if hasattr(adapter, "export_iges"):
@@ -522,42 +480,22 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_stl(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the current model to STL format.
+        """Export the active document to STL, like File > Save As with the STL type.
 
-        Exports SolidWorks models to STL (Stereolithography) format, the standard file format
-        for 3D printing, rapid prototyping, and additive manufacturing applications.
+        Use it for 3D printing. An assembly is exported whole, with lightweight
+        components resolved first. SolidWorks picks the format from the file's
+        extension, so end `file_path` in .stl. Needs: an open, active part or assembly.
+        Changes: writes the file, creating its folder and replacing a file already
+        there; the open document is unchanged. Returns: `export` with `file_path` and
+        `format`.
 
         Args:
-            input_data (ExportFileInput): The input data value.
+            input_data: The export. `file_path` (ending in .stl) is required;
+                `format_type` is required by the schema but the extension decides the
+                format, and `options` is not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Export high-resolution STL for 3D printing
-                            result = await export_stl({
-                                "file_path": "C:/3DPrint/prototype.stl",
-                                "format_type": "stl",
-                                "options": {
-                                    "resolution": "fine",
-                                    "units": "mm",
-                                    "ascii": False,
-                                    "deviation": 0.1
-                                }
-                            })
-
-                            if result["status"] == "success":
-                                export = result["export"]
-                                print(f"STL ready for 3D printing: {export['file_path']}")
-                                # Load into slicer software for printing
-                            ```
-
-                        Note:
-                            - STL format creates triangulated mesh representation
-                            - Resolution affects both file size and print quality
-                            - Binary format is more compact than ASCII
-                            - Essential for 3D printing and rapid prototyping workflows
+            dict[str, Any]: The file written.
         """
         input_data = _file_input(input_data, "stl")
         if hasattr(adapter, "export_stl"):
@@ -587,47 +525,22 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_pdf(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the current model or drawing to PDF format.
+        """Export the active document to PDF, like File > Save As with the PDF type.
 
-        Creates PDF documents from SolidWorks drawings, assemblies, or parts for documentation,
-        sharing, review, and archival purposes. Essential for design review and manufacturing
-        documentation.
+        Use it to share a drawing; `generate_drawing_package` already saves a PDF with
+        the drawing it creates. SolidWorks picks the format from the file's extension,
+        so end `file_path` in .pdf. Needs: an open, active drawing (a part or assembly
+        gives a PDF of the view). Changes: writes the file, creating its folder and
+        replacing a file already there; the open document is unchanged. Returns:
+        `export` with `file_path` and `format`.
 
         Args:
-            input_data (ExportFileInput): The input data value.
+            input_data: The export. `file_path` (ending in .pdf) is required;
+                `format_type` is required by the schema but the extension decides the
+                format, and `options` is not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Export technical drawings to secured PDF
-                            result = await export_pdf({
-                                "file_path": "C:/Documentation/assembly_drawing.pdf",
-                                "format_type": "pdf",
-                                "options": {
-                                    "quality": "high",
-                                    "sheets": "all",
-                                    "3d_pdf": False,
-                                    "security": {
-                                        "password": "project123",
-                                        "allow_printing": True,
-                                        "allow_editing": False
-                                    }
-                                }
-                            })
-
-                            if result["status"] == "success":
-                                export = result["export"]
-                                print(f"PDF documentation: {export['file_path']}")
-                                # Ready for distribution and review
-                            ```
-
-                        Note:
-                            - PDF format preserves drawing layout and annotations
-                            - Ideal for design reviews and manufacturing documentation
-                            - Can include multiple sheets from drawing files
-                            - Supports password protection and access controls
+            dict[str, Any]: The file written.
         """
         input_data = _file_input(input_data, "pdf")
         if hasattr(adapter, "export_pdf"):
@@ -657,43 +570,21 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_dwg(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the current drawing to DWG format.
+        """Export the active document to DWG, like File > Save As with the DWG type.
 
-        Converts SolidWorks drawings to DWG (Drawing) format, the native AutoCAD file format
-        widely used in architecture, engineering, and construction industries for 2D technical
-        drawings.
+        Use it to hand a drawing to AutoCAD users. SolidWorks picks the format from the
+        file's extension, so end `file_path` in .dwg. Needs: an open, active drawing.
+        Changes: writes the file, creating its folder and replacing a file already
+        there; the open document is unchanged. Returns: `export` with `file_path` and
+        `format`.
 
         Args:
-            input_data (ExportFileInput): The input data value.
+            input_data: The export. `file_path` (ending in .dwg) is required;
+                `format_type` is required by the schema but the extension decides the
+                format, and `options` is not used yet.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Export architectural drawings to AutoCAD format
-                            result = await export_dwg({
-                                "file_path": "C:/CAD/floor_plan.dwg",
-                                "format_type": "dwg",
-                                "options": {
-                                    "version": "2018",
-                                    "units": "mm",
-                                    "layers": True,
-                                    "line_weights": True
-                                }
-                            })
-
-                            if result["status"] == "success":
-                                export = result["export"]
-                                print(f"AutoCAD file ready: {export['file_path']}")
-                                # Compatible with AutoCAD and DWG viewers
-                            ```
-
-                        Note:
-                            - DWG format ensures compatibility with AutoCAD ecosystem
-                            - Only applicable to SolidWorks drawing files (not 3D models)
-                            - Version compatibility important for legacy AutoCAD systems
-                            - Preserves dimensions, annotations, and drawing structure
+            dict[str, Any]: The file written.
         """
         input_data = _file_input(input_data, "dwg")
         if hasattr(adapter, "export_dwg"):
@@ -723,38 +614,22 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_image(input_data: ExportImageInput) -> dict[str, Any]:
-        """Export images of the current model.
+        """Save a picture of the active model in a standard view, as PNG or JPG, at a chosen size.
 
-        Captures high-quality rendered images of SolidWorks models from various view
-        orientations for documentation, presentations, marketing materials, and web publication.
+        Use it to show a result, or to check a model's shape after a change. The view is
+        set first (front, back, left, right, top, bottom, isometric, dimetric,
+        trimetric, or current to keep the user's view). Needs: an open, active document.
+        Changes: writes the image file, and turns the model to the view asked for.
+        Returns: `data` with `file_path`, `format`, `dimensions` (the size written),
+        `requested_dimensions` and `view`.
 
         Args:
-            input_data (ExportImageInput): The input data value.
+            input_data: The image. `file_path` (or `output_path`) is needed; the
+                format follows its extension. `width`/`height` (or `resolution` as
+                "1920x1080") and `view_orientation` (isometric) have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Create high-res marketing image
-                            result = await export_images({
-                                "file_path": "C:/Marketing/product_hero.png",
-                                "format_type": "png",
-                                "width": 3840, "height": 2160,  # 4K resolution
-                                "view_orientation": "isometric"
-                            })
-
-                            if result["status"] == "success":
-                                export = result["export"]
-                                print(f"High-res image: {export['dimensions']} {export['format']}")
-                                # Ready for marketing and presentation use
-                            ```
-
-                        Note:
-                            - PNG format supports transparency for overlay graphics
-                            - Higher resolutions create larger file sizes but better quality
-                            - Isometric views are ideal for technical documentation
-                            - Consider lighting and material settings for best results
+            dict[str, Any]: The image written.
         """
         input_data = normalize_input(input_data, ExportImageInput)
         if hasattr(adapter, "export_image"):
@@ -792,41 +667,21 @@ async def register_export_tools(
 
     @mcp.tool()
     async def batch_export(input_data: BatchExportInput) -> dict[str, Any]:
-        """Batch export multiple SolidWorks files to a target format.
+        """Export every matching SolidWorks file in a folder to one format.
 
-        Processes entire directories of SolidWorks files and converts them to specified target
-        formats. Essential for project migrations, supplier deliverables, and large-scale format
-        conversions.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Today, open
+        each file with `open_model` and use an `export_*` tool. Changes: once available,
+        writes one exported file per source file. Returns: once available, a per-file
+        result under `data`.
 
         Args:
-            input_data (BatchExportInput): The input data value.
+            input_data: The batch. `source_directory` and `output_directory` are
+                required; `format_type`, `file_pattern` and `recursive` have
+                defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Convert entire project to STEP for manufacturing
-                            result = await batch_export({
-                                "source_directory": "C:/SolidWorks_Project/Parts",
-                                "output_directory": "C:/Manufacturing/STEP_Files",
-                                "format_type": "step",
-                                "recursive": True,
-                                "file_patterns": ["*.sldprt", "*.sldasm"]
-                            })
-
-                            if result["status"] == "success":
-                                batch = result["batch_export"]
-                                print(f"Processed {batch['files_processed']} files")
-                                print(f"Success: {batch['files_successful']}, Failed: {batch['files_failed']}")
-                                # All parts ready for CNC programming
-                            ```
-
-                        Note:
-                            - Process can take significant time for large directories
-                            - Failed exports are logged with specific error messages
-                            - Maintains directory structure in output location
-                            - Essential for project deliverables and supplier packages
+            dict[str, Any]: The results, or a `not_supported` error.
         """
         require_capability(
             adapter,

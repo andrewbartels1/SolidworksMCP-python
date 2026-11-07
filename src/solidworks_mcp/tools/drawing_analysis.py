@@ -142,16 +142,20 @@ async def register_drawing_analysis_tools(
     async def analyze_drawing_comprehensive(
         input_data: DrawingAnalysisInput,
     ) -> dict[str, Any]:
-        """Handle analyze drawing comprehensive.
+        """Run every drawing check (dimensions, views, annotations, standards) on a drawing file in one call.
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To see what a
+        drawing holds today, use `list_drawing_views`. Read-only. Returns: once
+        available, the combined findings under `data`.
 
         Args:
-            input_data (DrawingAnalysisInput): The input data value.
+            input_data: The drawing to check. `drawing_path` (.slddrw) is required;
+                `analysis_type`, `analysis_depth`, `standards_check` and
+                `generate_report` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await analyze_drawing_comprehensive(analysis_input)
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -173,21 +177,21 @@ async def register_drawing_analysis_tools(
     async def analyze_drawing_dimensions(
         input_data: DimensionAnalysisInput,
     ) -> dict[str, Any]:
-        """Analyze dimensions in a SolidWorks drawing for consistency and completeness.
+        """Check a drawing's dimensions for consistent precision, tolerance formatting and completeness.
 
-        This tool performs detailed dimensional analysis including precision, tolerances, and
-        completeness checking.
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To bring the
+        model's dimensions into a drawing, use `insert_model_dimensions`. Read-only.
+        Returns: once available, the dimension findings under `data`.
 
         Args:
-            input_data (DimensionAnalysisInput): The input data value.
+            input_data: The drawing to check. `drawing_path` is required; the
+                `check_precision`, `check_tolerances` and `check_completeness`
+                switches default to on.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await analyze_drawing_dimensions(dimension_input)
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
-
         require_capability(
             adapter,
             "analyze_drawing_dimensions",
@@ -207,21 +211,19 @@ async def register_drawing_analysis_tools(
     async def analyze_drawing_annotations(
         input_data: AnnotationAnalysisInput,
     ) -> dict[str, Any]:
-        """Analyze drawing annotations and notes quality.
+        """Check a drawing's notes, symbols and text styles for consistency.
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Read-only.
+        Returns: once available, the annotation findings under `data`.
 
         Args:
-            input_data (AnnotationAnalysisInput): The input data value.
+            input_data: The drawing to check. `drawing_path` is required; the
+                `check_notes`, `check_symbols`, `check_text_styles` and
+                `check_annotations` switches default to on.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await analyze_drawing_annotations(annotation_input)
-        """
-        """
-        Analyze annotations in a SolidWorks drawing for consistency and standards compliance.
-
-        This tool examines notes, symbols, and text formatting for quality and compliance.
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -242,21 +244,20 @@ async def register_drawing_analysis_tools(
     async def check_drawing_compliance(
         input_data: ComplianceCheckInput,
     ) -> dict[str, Any]:
-        """Check drawing compliance with company standards.
+        """Check a drawing's title block and sheet format against a drafting standard (ISO, ANSI or DIN).
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. For the same
+        check on the active drawing, `check_drawing_standards` is also not available
+        yet. Read-only. Returns: once available, the compliance findings under `data`.
 
         Args:
-            input_data (ComplianceCheckInput): The input data value.
+            input_data: The drawing and standard. `drawing_path` is required;
+                `standard` defaults to "ISO", and `check_title_block` and
+                `check_sheet_format` default to on.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await check_drawing_compliance(compliance_input)
-        """
-        """
-        Check drawing compliance against specified drafting standards.
-
-        This tool verifies compliance with ISO, ANSI, DIN, or other drafting standards.
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         require_capability(
             adapter,
@@ -275,21 +276,18 @@ async def register_drawing_analysis_tools(
 
     @mcp.tool()
     async def analyze_drawing_views(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Analyze drawing views arrangement and quality.
+        """Check how a drawing's views are chosen and laid out.
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. To list the
+        views on the active drawing today, use `list_drawing_views`. Read-only. Returns:
+        once available, the view findings under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `drawing_path` of the drawing to check.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await analyze_drawing_views(view_input)
-        """
-        """
-        Analyze drawing views for clarity, completeness, and optimal presentation.
-
-        This tool examines view selection, placement, and clarity.
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         if hasattr(adapter, "analyze_drawing_views"):
             result = await adapter.analyze_drawing_views(input_data)
@@ -310,21 +308,18 @@ async def register_drawing_analysis_tools(
 
     @mcp.tool()
     async def generate_drawing_report(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Generate comprehensive drawing analysis report.
+        """Write a quality report that combines every drawing check.
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Read-only.
+        Returns: once available, the report under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `drawing_path` of the drawing to report
+                on.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await generate_drawing_report(report_input)
-        """
-        """
-        Generate a comprehensive quality report for a drawing.
-
-        This tool creates a detailed report combining all analysis results.
+            dict[str, Any]: The report, or a `not_supported` error.
         """
         if hasattr(adapter, "generate_drawing_report"):
             result = await adapter.generate_drawing_report(input_data)
@@ -345,25 +340,19 @@ async def register_drawing_analysis_tools(
 
     @mcp.tool()
     async def compare_drawing_versions(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Compare different versions of drawing files.
+        """Compare two drawing files on disk: whether they are byte-identical, and how their sizes differ.
+
+        Use it to tell whether a drawing changed between two saved versions. It does not
+        open SolidWorks, so it can't say which views, dimensions or notes differ. Needs:
+        both files on disk. Read-only. Returns: `comparison` with `file_1` and `file_2`
+        (size, modified time, SHA-256), `identical` and `size_delta_bytes`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with both full paths, `drawing_version_1` and
+                `drawing_version_2`; both are required.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await compare_drawing_versions(version_input)
-        """
-        """
-        Compare two drawing files on disk using real filesystem facts.
-
-        This tool cannot parse SLDDRW internals (no SolidWorks session is
-        opened), so it does not report geometric/dimension/annotation
-        differences. It reports what it can honestly determine from the
-        filesystem: whether each file exists, its size, modified time, and
-        whether the two files are byte-for-byte identical.
+            dict[str, Any]: The comparison.
         """
         drawing_v1 = input_data.get("drawing_version_1", "")
         drawing_v2 = input_data.get("drawing_version_2", "")
@@ -418,21 +407,17 @@ async def register_drawing_analysis_tools(
     async def validate_drawing_completeness(
         input_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """Validate drawing completeness for production readiness.
+        """Check that a drawing carries everything needed to manufacture the part.
+
+        Not available yet: no adapter implements it, so every call returns an error with
+        `error_type: "not_supported"`. It is planned for a future release. Read-only.
+        Returns: once available, the missing items under `data`.
 
         Args:
-            input_data (dict[str, Any]): The input data value.
+            input_data: A mapping with the `drawing_path` of the drawing to check.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            >>> result = await validate_drawing_completeness(validation_input)
-        """
-        """
-        Validate that a drawing contains all necessary information for manufacturing.
-
-        This tool checks for completeness from a manufacturing perspective.
+            dict[str, Any]: The findings, or a `not_supported` error.
         """
         drawing_path = input_data.get("drawing_path", "")
 

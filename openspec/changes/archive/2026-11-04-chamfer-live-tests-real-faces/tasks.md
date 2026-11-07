@@ -20,4 +20,4 @@
 
 - [x] 4.1 ruff, the non-live suite at 100% coverage, `openspec validate --strict`
 - [x] 4.2 Live run of both test files and the API lookup chamfer demo with `live_demo.ps1 -Trace`, with the user's permission; find what makes SolidWorks bonk
-- [ ] 4.3 PR closing #199
+- [x] 4.3 PR closing #199 (#201)

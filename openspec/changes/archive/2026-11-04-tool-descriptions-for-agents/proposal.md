@@ -12,11 +12,12 @@ share four faults, and the current code reproduces all of them:
 - **Side effects not stated**: nothing says whether a call changes the
   model, saves files or only reads.
 - **A generic parameter**: 144 of 154 tools take one `input_data` object,
-  and 98 describe it only as "The input data value." The fields inside are
-  mostly described already.
+  and 99 describe it only as "The input data value." The 493 fields inside
+  are all described already, but nothing keeps them that way.
 
 This implements the docstring half of #82 (audit every tool's docstring for
-LLM usefulness).
+LLM usefulness). Guidance across tools (the server's `instructions` and an
+agent skill) is #175, the change after this one.
 
 ## What Changes
 
@@ -33,9 +34,11 @@ LLM usefulness).
 - **MCP behaviour hints on every tool**: `readOnlyHint`, `destructiveHint`,
   `idempotentHint` and a human `title`. They come from one table, which the
   registrar applies at registration, so clients and directories can see
-  which tools change the model.
+  which tools change the model. The registrar also tags each tool with its
+  family (its module), ready for the toolsets of #176.
 - **A check in the test suite** that fails when a registered tool breaks
-  the standard or has no hints entry, so new tools can't regress.
+  the standard, has an undescribed input field, or has no hints entry, so
+  new tools can't regress.
 
 Out of scope:
 

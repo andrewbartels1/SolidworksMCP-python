@@ -975,33 +975,19 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def open_model(input_data: OpenModelInput) -> dict[str, Any]:
-        """Open a SolidWorks model (part, assembly, or drawing).
+        """Open a part, assembly or drawing from disk and make it the active document.
 
-        Opens an existing SolidWorks file and makes it the active document for further
-        operations. Supports all standard SolidWorks file formats and provides detailed model
-        information upon successful opening.
+        Use it to start work on an existing file. To switch to a document that is
+        already open, use `activate_document`. Needs: the file on disk (a vault file
+        must be checked out). Changes: opens the document; nothing is written. Returns:
+        `model` with `title`, `type`, `path` and `configuration`.
 
         Args:
-            input_data (OpenModelInput): The input data value.
+            input_data: The file. `file_path` (.sldprt, .sldasm or .slddrw) is
+                required.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await open_model({
-                                "file_path": "C:/Models/bracket.sldprt"
-                            })
-
-                            if result["status"] == "success":
-                                model = result["model"]
-                                print(f"Opened {model['type']}: {model['name']}")
-                                print(f"Configuration: {model['configuration']}")
-                            ```
-
-                        Note:
-                            File path must be absolute and accessible to SolidWorks.
-                            Model becomes the active document for subsequent operations.
+            dict[str, Any]: The opened document.
         """
         input_data = normalize_input(input_data, OpenModelInput)
         result = await adapter.open_model(input_data.file_path)
@@ -1027,33 +1013,21 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_part(input_data: CreatePartInput) -> dict[str, Any]:
-        """Create a new SolidWorks part document.
+        """Create a new, empty part document and make it active, ready for `create_sketch`.
 
-        Creates a new SolidWorks part document from ``template`` (a .prtdot path) or,
-        without one, the default part template. The new part becomes the active document
-        and is ready for modeling operations such as sketch creation and feature addition.
+        Uses `template` (a .prtdot) or the default part template, then sets `units` if
+        given. The part is not saved until `save_part`. Needs: SolidWorks running.
+        Changes: opens a new part document. Returns: `part` with `name`, `units` and
+        `template`. `material` is not applied; use `set_material` after the first
+        feature.
 
         Args:
-            input_data (CreatePartInput): The input data value.
+            input_data: The part. `name` is required (used in the reply; SolidWorks
+                names the document); `template` and `units` (mm, cm, m, in, ft) have
+                defaults, and `material` is not used.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await create_part()
-
-                            if result["status"] == "success":
-                                part = result["model"]
-                                print(f"Created new part: {part['name']}")
-                                # Ready for sketching and feature creation
-                            ```
-
-                        Note:
-                            - Uses ``template`` when given, else the default part template
-                            - Part document is created in memory (not saved)
-                            - Use save operations to persist to disk
-                            - Subsequent modeling operations will apply to this part
+            dict[str, Any]: The new part.
         """
         input_data = normalize_input(input_data, CreatePartInput)
         result = await adapter.create_part(
@@ -1078,36 +1052,19 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_assembly(input_data: CreateAssemblyInput) -> dict[str, Any]:
-        """Create a new SolidWorks assembly document.
+        """Create a new, empty assembly document and make it active, ready for `insert_component`.
 
-        Creates a new SolidWorks assembly document from ``template`` (a .asmdot path) or,
-        without one, the default assembly template. The new assembly becomes the active
-        document and is ready for component insertion, mating, and assembly-level operations.
+        Uses `template` (an .asmdot) or the default assembly template. It is not saved
+        until `save_assembly`. Needs: SolidWorks running. Changes: opens a new assembly
+        document. Returns: `assembly` with `name` and `template`. `components` are not
+        inserted; call `insert_component` for each.
 
         Args:
-            input_data (CreateAssemblyInput): The input data value.
+            input_data: The assembly. `name` is required; `template` has a default,
+                and `components` is not used.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            result = await create_assembly()
-
-                            if result["status"] == "success":
-                                assembly = result["model"]
-                                print(f"Created new assembly: {assembly['name']}")
-                                # Ready for component insertion and mating
-                            ```
-
-                        Note:
-                            - Uses ``template`` when given, else the default assembly template
-                            - Assembly document is created in memory (not saved)
-                            - Use save operations to persist to disk
-                            - Ready for component insertion and mate creation
-                            - Assembly tree will initially be empty
-
-                        The new assembly will become the active document.
+            dict[str, Any]: The new assembly.
         """
         input_data = normalize_input(input_data, CreateAssemblyInput)
         result = await adapter.create_assembly(input_data.name, input_data.template)
@@ -1128,17 +1085,19 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_drawing(input_data: CreateDrawingInput) -> dict[str, Any]:
-        """Create a new SolidWorks drawing document.
+        """Create a new, empty drawing document and make it active.
 
-        This tool creates a new drawing document from ``template`` (a .drwdot path) or,
-        without one, the default drawing template. The new drawing will become the active
-        document.
+        Uses `template` (a .drwdot) or the default drawing template. Then place views
+        with `create_drawing_view`; for a whole drawing from a model in one call, use
+        `generate_drawing_package` instead. Needs: SolidWorks running. Changes: opens a
+        new drawing document. Returns: `drawing` with `name` and `template`.
 
         Args:
-            input_data (CreateDrawingInput): The input data value.
+            input_data: The drawing. `name` is required; `template` has a default,
+                and `model_path` and `sheet_format` are not used.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The new drawing.
         """
         input_data = normalize_input(input_data, CreateDrawingInput)
         result = await adapter.create_drawing(input_data.name, input_data.template)
@@ -1163,34 +1122,17 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def close_model(input_data: CloseModelInput) -> dict[str, Any]:
-        """Close the current SolidWorks model.
+        """Close the active document, saving it first only if asked.
 
-        Closes the currently active SolidWorks document with an option to save changes before
-        closing. This is essential for proper model lifecycle management and preventing data
-        loss.
+        Use it when you are done with a document. Unsaved changes are lost unless `save`
+        is on. Needs: an open, active document. Changes: closes the document, and with
+        `save` writes it first. Returns: `saved`, whether a save was asked for.
 
         Args:
-            input_data (CloseModelInput): The input data value.
+            input_data: The close. Nothing is required: `save` is off.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Close without saving
-                            result = await close_model({"save": False})
-
-                            # Save and close
-                            result = await close_model({"save": True})
-
-                            if result["status"] == "success":
-                                print(f"Model closed, saved: {result['saved']}")
-                            ```
-
-                        Note:
-                            - Unsaved changes will be lost if save=False
-                            - Always save important work before closing
-                            - Model must be open to close it
+            dict[str, Any]: The close result.
         """
         input_data = normalize_input(input_data, CloseModelInput)
         result = await adapter.close_model(input_data.save)
@@ -1205,40 +1147,23 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_extrusion(input_data: CreateExtrusionInput) -> dict[str, Any]:
-        """Create an extrusion feature from the active sketch.
+        """Extrude the sketch you just closed into a solid boss, added to the active part.
 
-        Creates a 3D extrusion feature (boss or cut) from the currently active 2D sketch.
-        Supports advanced options like draft angles, thin features, bidirectional extrusion, and
-        various end conditions for professional modeling workflows.
+        Use it after `exit_sketch`; to remove material, use `create_cut_extrude`. It
+        extrudes the sketch `exit_sketch` closed, whatever `sketch_name` says. End
+        conditions: Blind (default), MidPlane, ThroughAll, UpToNext. Needs: an open part
+        and a closed profile just exited. Changes: adds a Boss-Extrude feature. Returns:
+        `extrusion` (`name`, `depth`) and `measured_change` (volume, bounding box and
+        solid-body count before and after; left out when the model can't be read).
 
         Args:
-            input_data (CreateExtrusionInput): The input data value.
+            input_data: The extrusion. `sketch_name` and `depth` (mm) are required;
+                `end_condition`, `both_directions`, `reverse_direction`,
+                `draft_angle`, `thin_feature`/`thin_thickness` and `merge_result`
+                have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Simple boss extrusion
-                            result = await create_extrusion({
-                                "depth": 25.0,
-                                "merge_result": True
-                            })
-
-                            # Cut with draft angle
-                            result = await create_extrusion({
-                                "depth": 10.0,
-                                "reverse_direction": True,
-                                "draft_angle": 2.0
-                            })
-
-                            # Thin wall feature
-                            result = await create_extrusion({
-                                "depth": 50.0,
-                                "thin_feature": True,
-                                "thin_thickness": 2.0
-                            })
-                            ```
+            dict[str, Any]: The created feature.
         """
         input_data = normalize_input(input_data, CreateExtrusionInput)
         # Convert input to ExtrusionParameters
@@ -1278,39 +1203,22 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_revolve(input_data: CreateRevolveInput) -> dict[str, Any]:
-        """Create a revolve feature from the active sketch.
+        """Revolve the sketch you just closed around the centreline drawn in it, adding a solid to the active part.
 
-        Creates a 3D revolve feature by rotating the active 2D sketch profile around a specified
-        axis of revolution. Supports full and partial revolves, thin features, and bidirectional
-        revolution for comprehensive rotational modeling.
+        Use it for turned shapes (shafts, knobs). Draw the axis with `add_centerline` in
+        the same sketch; `sketch_name` and `axis_entity` are not used: the sketch
+        `exit_sketch` closed and its centreline are. Needs: an open part and a closed
+        profile with a centreline. Changes: adds a Revolve feature. Returns: `revolve`
+        (`name`, `angle`) and `measured_change` (volume, bounding box and solid-body
+        count before and after; left out when the model can't be read).
 
         Args:
-            input_data (CreateRevolveInput): The input data value.
+            input_data: The revolve. `sketch_name`, `axis_entity` and `angle`
+                (degrees, 360 for a full turn) are required; `both_directions`,
+                `reverse_direction`, `thin_feature` and `merge_result` have defaults.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Full revolution (cylinder)
-                            result = await create_revolve({
-                                "angle": 360.0,
-                                "merge_result": True
-                            })
-
-                            # Partial revolution (arc section)
-                            result = await create_revolve({
-                                "angle": 120.0,
-                                "both_directions": True
-                            })
-
-                            # Thin wall revolution (pipe)
-                            result = await create_revolve({
-                                "angle": 360.0,
-                                "thin_feature": True,
-                                "thin_thickness": 3.0
-                            })
-                            ```
+            dict[str, Any]: The created feature.
         """
         input_data = normalize_input(input_data, CreateRevolveInput)
         # Convert input to RevolveParameters
@@ -1347,34 +1255,18 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def get_dimension(input_data: GetDimensionInput) -> dict[str, Any]:
-        """Get the value of a dimension from the current model.
+        """Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
-        Retrieves the current value of a named dimension from the active SolidWorks model.
-        Dimensions can be from sketches, features, or global dimensions. Useful for parametric
-        modeling and design validation.
+        Find names with `list_model_dimensions`. Needs: an open part or assembly.
+        Read-only. Returns: `dimension` with `name`, `value` and `units` (mm for a
+        length).
 
         Args:
-            input_data (GetDimensionInput): The input data value.
+            input_data: The dimension. Give `name` (or `dimension_name`), e.g.
+                "D1@Boss-Extrude1".
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
-
-        Example:
-                            ```python
-                            # Get sketch dimension
-                            result = await get_dimension({
-                                "name": "D1@Sketch1"
-                            })
-
-                            if result["status"] == "success":
-                                dim = result["dimension"]
-                                print(f"Dimension {dim['name']}: {dim['value']} {dim['units']}")
-
-                            # Get feature dimension
-                            result = await get_dimension({
-                                "name": "D1@Boss-Extrude1"
-                            })
-                            ```
+            dict[str, Any]: The dimension's value.
         """
         input_data = normalize_input(input_data, GetDimensionInput)
         result = await adapter.get_dimension(input_data.name)
@@ -1396,16 +1288,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def set_dimension(input_data: SetDimensionInput) -> dict[str, Any]:
-        """Set the value of a dimension in the current model.
+        """Change one length dimension of the active model, in mm, and rebuild.
 
-        This tool modifies the value of a named dimension and rebuilds the model. Use this to
-        parametrically modify your model dimensions.
+        Use it to resize an existing model; find the full name with
+        `list_model_dimensions` and check the result with `rebuild_model` or
+        `verify_model`. The value is always millimetres. Needs: an open part or
+        assembly. Changes: the dimension and the geometry it drives. Returns:
+        `dimension_update` with `name`, `old_value` and `new_value`.
 
         Args:
-            input_data (SetDimensionInput): The input data value.
+            input_data: The change. `value` (mm) is required, with `name` (or
+                `dimension_name`) such as "D1@Sketch1"; `units` is not used.
 
         Returns:
-            dict[str, Any]: A dictionary containing the resulting values.
+            dict[str, Any]: The old and new values.
         """
         input_data = normalize_input(input_data, SetDimensionInput)
         result = await adapter.set_dimension(input_data.name, input_data.value)
@@ -1428,23 +1324,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def set_units(input_data: SetUnitsInput) -> dict[str, Any]:
-        """Set the active document's linear unit system.
+        """Set the active document's length units: mm, cm, m, in or ft.
 
-        Accepts ``mm``, ``cm``, ``m``, ``in`` or ``ft`` (plus common aliases
-        such as ``inch`` or ``millimeters``). The setting is applied and then
-        read back from the document; if the readback disagrees the tool
-        reports an error rather than a false success.
+        Use it on a new part before sketching if you want other than the template's
+        units. Aliases such as "inch" are accepted. The setting is read back, so success
+        means it applied. Tool inputs stay in mm whatever the document shows. Needs: an
+        open, active document. Changes: the document's unit system. Returns: `data` with
+        `unit_system`, the values applied and observed, and `verified`.
 
         Args:
-            input_data (SetUnitsInput): The target unit system.
+            input_data: The units. `unit_system` (mm, cm, m, in or ft) is
+                required.
 
         Returns:
-            dict[str, Any]: Status and what was applied.
-
-        Example:
-            ```python
-            await set_units({"unit_system": "in"})
-            ```
+            dict[str, Any]: The units set.
         """
         input_data = normalize_input(input_data, SetUnitsInput)
         result = await adapter.set_units(input_data.unit_system)
@@ -1463,53 +1356,25 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_cut_extrude(input_data: CreateCutExtrudeInput) -> dict[str, Any]:
-        """Cut material from a sketch profile in the active model.
+        """Cut material from the active part with a closed sketch profile: holes, slots, windows.
 
-        Creates a Cut-Extrude feature (Insert > Cut > Extrude). Use this after
-        exit_sketch when you want to remove material — e.g. to create windows,
-        holes, slots, or any through/blind cut in an existing solid body.
-
-        Sketch selection is never a silent guess: pass ``sketch_name``
-        explicitly whenever you're not certain which sketch this should act
-        on (e.g. more than one sketch could be unconsumed, or other tool
-        calls ran in between). If omitted, only the sketch most recently
-        created/exited in this same session is used, and only when it still
-        exists in the model — there is no further fallback. Any ambiguity or
-        mismatch is reported back as an error naming the sketch(es) actually
-        found in the model, rather than cutting the wrong profile.
-
-        Direction: a one-way cut (Blind or ThroughAll) goes along the sketch
-        plane's normal. From a sketch on a face, or on a plane that touches
-        the body only on one side (e.g. a Top Plane sketch under a block
-        extruded up from it), that can point away from the material. The
-        tool then cuts the other way and returns
-        ``cut_extrude.direction_flipped: true``, so you don't need to guess
-        ``reverse_direction``. For a sketch on a plane through the middle of
-        the body, use ``ThroughAllBoth`` (or ``ThroughAll`` with
-        ``both_directions``) to cut both sides.
+        Use it after `exit_sketch`. Pass `sketch_name` unless the sketch you just closed
+        is the one: with no name only that sketch is used, and any doubt is an error
+        naming the sketches found. A one-way cut that finds no material is retried the
+        other way (`direction_flipped`). For a sketch inside the body, use
+        ThroughAllBoth. Needs: an open part with a solid body. Changes: adds a
+        Cut-Extrude feature. Returns: `cut_extrude` (`name`, `sketch_name`,
+        `direction_flipped`) and `measured_change` (volume, bounding box and solid-body
+        count before and after; left out when the model can't be read).
 
         Args:
-            input_data (CreateCutExtrudeInput): Depth, direction, draft, and
-                optional sketch_name parameters.
+            input_data: The cut. `depth` (mm) is required; `sketch_name`,
+                `end_condition` (Blind, ThroughAll, ThroughAllBoth),
+                `both_directions`, `reverse_direction` and `draft_angle` have
+                defaults.
 
         Returns:
-            dict[str, Any]: Status and ``cut_extrude`` (name, depth,
-                sketch_name, direction_flipped), plus ``measured_change``
-                (volume and bounding box before and after) when the model
-                can be read. On error, ``message`` identifies exactly which
-                stage failed (sketch not found, sketch selection rejected by
-                SolidWorks, the FeatureCut COM error, or ``error_type:
-                feature_not_built`` when SolidWorks built nothing in either
-                direction) rather than a generic failure string.
-
-        Example:
-            ```python
-            # Cut a blind pocket 10 mm deep from a named sketch
-            result = await create_cut_extrude({"depth": 10.0, "sketch_name": "Sketch3"})
-
-            # Through-all cut using the most recently exited sketch
-            result = await create_cut_extrude({"depth": 200.0})
-            ```
+            dict[str, Any]: The created cut.
         """
         input_data = normalize_input(input_data, CreateCutExtrudeInput)
         params = ExtrusionParameters(
@@ -1560,23 +1425,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def add_fillet(input_data: AddFilletInput) -> dict[str, Any]:
-        """Add a fillet (rounded edge) to selected edges of the current model.
+        """Round edges of the active part with a constant-radius fillet.
 
-        Rounds the specified named edges with the given radius. Edge names use the
-        SolidWorks convention, e.g. 'Edge<1>', or you can leave edge_names empty to
-        fillet all edges if the adapter supports it.
+        Name the edges as "Edge<1>", a point "x,y,z" (metres) or "face:x,y,z" for every
+        edge of a face; or leave `edge_names` empty to use the current selection (e.g.
+        from `select_face_edges`). A fillet that leaves the volume unchanged is an
+        error. Needs: an open part with a solid body. Changes: adds a Fillet feature.
+        Returns: `fillet` with `name`, `radius` and `edges`.
 
         Args:
-            input_data (AddFilletInput): Radius and edge names.
+            input_data: The fillet. `radius` (mm) is required; `edge_names`
+                defaults to the current selection.
 
         Returns:
-            dict[str, Any]: Status and feature details.
-
-        Example:
-            ```python
-            # Fillet two specific edges with 2 mm radius
-            result = await add_fillet({"radius": 2.0, "edge_names": ["Edge<1>", "Edge<2>"]})
-            ```
+            dict[str, Any]: The created fillet.
         """
         input_data = normalize_input(input_data, AddFilletInput)
         result = await adapter.add_fillet(input_data.radius, input_data.edge_names)
@@ -1597,23 +1459,19 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
-        """Add an equal-distance chamfer to selected edges of the current model.
+        """Bevel edges of the active part with an equal-distance chamfer at 45 degrees.
 
-        Chamfers the specified named edges with the given distance. Edge names use
-        the SolidWorks convention, e.g. 'Edge<1>', or you can leave edge_names empty
-        to chamfer all edges if the adapter supports it.
+        Name the edges as "Edge<1>", a point "x,y,z" (metres) or "face:x,y,z" for every
+        edge of a face; or leave `edge_names` empty to use the current selection (e.g.
+        from `select_face_edges`). Needs: an open part with a solid body. Changes: adds
+        a Chamfer feature. Returns: `chamfer` with `name`, `distance` and `edges`.
 
         Args:
-            input_data (AddChamferInput): Distance and edge names.
+            input_data: The chamfer. `distance` (mm) is required; `edge_names`
+                defaults to the current selection.
 
         Returns:
-            dict[str, Any]: Status and feature details.
-
-        Example:
-            ```python
-            # Chamfer two specific edges with a 1.5 mm distance
-            result = await add_chamfer({"distance": 1.5, "edge_names": ["Edge<1>", "Edge<2>"]})
-            ```
+            dict[str, Any]: The created chamfer.
         """
         input_data = normalize_input(input_data, AddChamferInput)
         result = await adapter.add_chamfer(input_data.distance, input_data.edge_names)
@@ -1634,33 +1492,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_sweep(input_data: CreateSweepInput) -> dict[str, Any]:
-        """Sweep the active profile sketch along a named path sketch.
+        """Sweep a closed profile sketch along a path sketch to make a solid (Insert > Boss/Base > Sweep).
 
-        Creates a swept boss/protrusion (Insert > Boss/Base > Sweep). Requires
-        two sketches in the active part: a closed profile sketch and an open
-        path sketch named by ``path``. The profile is inferred as the sketch
-        that is not the path (in the usual "draw profile, draw path, sweep"
-        flow this is unambiguous). Optionally applies a constant twist along
-        the path.
+        Draw the closed profile and the open path as two sketches first. The profile is
+        the sketch you closed last that isn't the path. Needs: an open part with both
+        sketches. Changes: adds a Sweep feature. Returns: `sweep` with `name`, `path`,
+        `twist_along_path` and `twist_angle`.
 
         Args:
-            input_data (CreateSweepInput): Path name and twist/merge options.
+            input_data: The sweep. `path` (the path sketch's name) is required;
+                `twist_along_path`, `twist_angle` (degrees) and `merge_result` have
+                defaults.
 
         Returns:
-            dict[str, Any]: Status and feature details.
-
-        Example:
-            ```python
-            # Sweep a circular profile along "Sketch2"
-            result = await create_sweep({"path": "Sketch2"})
-
-            # Sweep with a 90-degree twist along the path
-            result = await create_sweep({
-                "path": "Sketch2",
-                "twist_along_path": True,
-                "twist_angle": 90.0,
-            })
-            ```
+            dict[str, Any]: The created sweep.
         """
         input_data = normalize_input(input_data, CreateSweepInput)
         params = SweepParameters(
@@ -1686,30 +1531,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_loft(input_data: CreateLoftInput) -> dict[str, Any]:
-        """Loft a solid between two or more profile sketches.
+        """Loft a solid through two or more closed profile sketches, in order (Insert > Boss/Base > Loft).
 
-        Creates a lofted boss/protrusion (Insert > Boss/Base > Loft) blending
-        the listed profile sketches in order. Each profile must be a closed
-        contour. Optional guide curves shape the transition between profiles.
+        Use it for shapes that change section, such as a wing or a transition duct. Put
+        each profile on its own plane (see `create_reference_plane`). Needs: an open
+        part with the profile sketches. Changes: adds a Loft feature. Returns: `loft`
+        with `name`, `profiles` and `guide_curves`.
 
         Args:
-            input_data (CreateLoftInput): Profile names, optional guide curves,
-                and tangency/merge options.
+            input_data: The loft. `profiles` (sketch names, in order) is required;
+                `guide_curves`, `start_tangent`, `end_tangent` and `merge_result`
+                have defaults.
 
         Returns:
-            dict[str, Any]: Status and feature details.
-
-        Example:
-            ```python
-            # Loft between two profiles (e.g. a tapered bevel)
-            result = await create_loft({"profiles": ["Sketch1", "Sketch2"]})
-
-            # Loft with guide curves
-            result = await create_loft({
-                "profiles": ["Sketch1", "Sketch2"],
-                "guide_curves": ["Sketch3"],
-            })
-            ```
+            dict[str, Any]: The created loft.
         """
         input_data = normalize_input(input_data, CreateLoftInput)
         params = LoftParameters(
@@ -1735,27 +1570,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def insert_component(input_data: InsertComponentInput) -> dict[str, Any]:
-        """Insert a part or sub-assembly into the active assembly.
+        """Insert a part or sub-assembly file into the active assembly at a position in mm.
 
-        Call ``create_assembly`` first. Position is in millimetres from the
-        assembly origin.
-
-        **The component file must contain solid geometry** — SolidWorks
-        silently refuses to insert an empty part, so a missing or empty
-        component surfaces as an error rather than a fabricated success.
+        Use it after `create_assembly`, then position components with `add_mate`. The
+        file must contain solid geometry; an empty or missing file is an error. Needs:
+        an open, active assembly and the file on disk. Changes: adds a component.
+        Returns: `component` with its instance name (`component`, which `add_mate`
+        takes), `file_path`, `position` and the counts before and after.
 
         Args:
-            input_data (InsertComponentInput): File path and position.
+            input_data: The component. `file_path` is required; `x`, `y`, `z` (mm
+                from the assembly origin) default to 0.
 
         Returns:
-            dict[str, Any]: Status, the component's instance name and counts.
-
-        Example:
-            ```python
-            await create_assembly({"name": "bracket_asm"})
-            await insert_component({"file_path": "C:/parts/plate.sldprt"})
-            await insert_component({"file_path": "C:/parts/plate.sldprt", "x": 100.0})
-            ```
+            dict[str, Any]: The inserted component.
         """
         input_data = normalize_input(input_data, InsertComponentInput)
         result = await adapter.insert_component(
@@ -1772,31 +1600,21 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def add_mate(input_data: AddMateInput) -> dict[str, Any]:
-        """Mate two components in the active assembly.
+        """Mate two components of the active assembly: coincident, concentric, parallel, perpendicular, tangent, distance or angle.
 
-        Positions components relative to one another — coincident planes to
-        stack or align them, concentric to line up axes, distance to hold a
-        gap.
-
-        Entities are selected by feature name, so only each component's
-        reference planes and axes can be mated. Mating to a specific face or
-        edge needs entity names this adapter cannot enumerate.
+        Only reference planes and axes can be mated (by name, e.g. "Front Plane"), not
+        faces or edges. Get instance names from `list_components`. Needs: an open
+        assembly with both components. Changes: adds a mate and may move components.
+        Returns: `mate` with `mate_type`, `components`, `entities`, `geometry_moved` and
+        `moved_components`.
 
         Args:
-            input_data (AddMateInput): Components, entities and mate type.
+            input_data: The mate. `component_a` and `component_b` are required;
+                `entity_a`/`entity_b` ("Front Plane"), `mate_type` (coincident),
+                `alignment`, `distance` (mm) and `angle` (degrees) have defaults.
 
         Returns:
-            dict[str, Any]: Status and mate details.
-
-        Example:
-            ```python
-            components = await list_components()
-            await add_mate({
-                "component_a": components["components"][0],
-                "component_b": components["components"][1],
-                "mate_type": "coincident",
-            })
-            ```
+            dict[str, Any]: The mate added.
         """
         input_data = normalize_input(input_data, AddMateInput)
         result = await adapter.add_mate(
@@ -1829,10 +1647,10 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def list_components() -> dict[str, Any]:
-        """List the top-level components of the active assembly.
+        """List the top-level components of the active assembly by instance name, e.g. "bracket-1".
 
-        Returns:
-            dict[str, Any]: Status and the component instance names.
+        Use it before `add_mate`, which takes these names. Needs: an open, active
+        assembly. Read-only. Returns: `components` (instance names).
         """
         result = await adapter.list_components()
         require_success(result, context="Failed to list components")
@@ -1846,22 +1664,18 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def delete_feature(input_data: DeleteFeatureInput) -> dict[str, Any]:
-        """Delete a feature or sketch from the active model.
+        """Delete a feature or sketch from the active model, along with the features that depend on it.
 
-        Deleting a parent feature also removes everything that depends on it —
-        SolidWorks' normal cascade — so the response lists every feature that
-        went, not just the one named.
+        Use `suppress_feature` instead when you might want it back. Find names with
+        `list_features`. Needs: an open part or assembly. Changes: removes the feature
+        and its dependents (`undo` can restore them). Returns: `data` with `deleted`,
+        `features_before`, `features_after` and `features_removed`.
 
         Args:
-            input_data (DeleteFeatureInput): The feature to delete.
+            input_data: The feature. `name` (e.g. "Fillet1") is required.
 
         Returns:
-            dict[str, Any]: Status and what was removed.
-
-        Example:
-            ```python
-            await delete_feature({"name": "Boss-Extrude1"})
-            ```
+            dict[str, Any]: What was deleted.
         """
         input_data = normalize_input(input_data, DeleteFeatureInput)
         result = await adapter.delete_feature(input_data.name)
@@ -1884,23 +1698,19 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def suppress_feature(input_data: SuppressFeatureInput) -> dict[str, Any]:
-        """Suppress or unsuppress a feature in the active model.
+        """Suppress or unsuppress a feature of the active model; suppressed features stay in the tree but are not built.
 
-        Suppressing rolls a feature and its children out of the model without
-        deleting it — the reversible way to turn off a feature that is causing
-        trouble.
+        Use it to turn off a feature that breaks the rebuild without deleting it. Needs:
+        an open part or assembly. Changes: the feature's suppression state, and its
+        children's. Returns: `data` with `feature`, `requested`, `suppressed` (read
+        back; null when unreadable) and `was_suppressed`.
 
         Args:
-            input_data (SuppressFeatureInput): The feature and desired state.
+            input_data: The feature. `name` is required; `suppress` defaults to on
+                (pass false to unsuppress).
 
         Returns:
-            dict[str, Any]: Status and the resulting suppression state.
-
-        Example:
-            ```python
-            await suppress_feature({"name": "Fillet1"})
-            await suppress_feature({"name": "Fillet1", "suppress": False})
-            ```
+            dict[str, Any]: The new state.
         """
         input_data = normalize_input(input_data, SuppressFeatureInput)
         result = await adapter.suppress_feature(input_data.name, input_data.suppress)
@@ -1919,23 +1729,19 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def rename_feature(input_data: RenameFeatureInput) -> dict[str, Any]:
-        """Rename a feature on the feature tree.
+        """Rename a feature in the active model's feature tree.
 
-        SolidWorks silently refuses a rename onto a name another feature
-        already uses, so the new name is read back and a mismatch is reported
-        as an error rather than a quiet success. Renaming a feature to its
-        current name is a no-op success.
+        Use it to give features meaningful names (e.g. "MountingHoles"). The new name is
+        read back: a name another feature already uses is an error. Renaming to the
+        current name succeeds with no change. Needs: an open part or assembly. Changes:
+        the feature's name. Returns: `data` with `old_name`, `new_name`, `renamed` and,
+        when unchanged, `reason`.
 
         Args:
-            input_data (RenameFeatureInput): The feature and its new name.
+            input_data: The rename. `old_name` and `new_name` are required.
 
         Returns:
-            dict[str, Any]: Status and the old and new names.
-
-        Example:
-            ```python
-            await rename_feature({"old_name": "Fillet1", "new_name": "EdgeBreak"})
-            ```
+            dict[str, Any]: The rename.
         """
         input_data = normalize_input(input_data, RenameFeatureInput)
         result = await adapter.rename_feature(input_data.old_name, input_data.new_name)
@@ -1963,24 +1769,18 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def select_feature(input_data: SelectFeatureInput) -> dict[str, Any]:
-        """Select a named feature, sketch, plane or component.
+        """Select a feature, sketch, plane or component by name in the active document.
 
-        Replaces the current selection by default; pass ``append: true`` to
-        add to it (e.g. to select several features in turn). A name that
-        cannot be selected is an error, never a quiet success.
+        Use it to set up a selection that the next SolidWorks operation acts on.
+        `append` adds to the selection instead of replacing it. A name that can't be
+        selected is an error. Needs: an open document. Changes: the selection only.
+        Returns: `data` with `selected_name` and `selection_count`.
 
         Args:
-            input_data (SelectFeatureInput): The feature name and append flag.
+            input_data: The selection. `feature_name` is required; `append` is off.
 
         Returns:
-            dict[str, Any]: Status, the matched name and how many entities are
-            now selected.
-
-        Example:
-            ```python
-            await select_feature({"feature_name": "Boss-Extrude1"})
-            await select_feature({"feature_name": "Sketch1", "append": True})
-            ```
+            dict[str, Any]: The selection.
         """
         input_data = normalize_input(input_data, SelectFeatureInput)
         result = await adapter.select_feature(
@@ -2000,35 +1800,20 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def select_face_edges(input_data: SelectFaceEdgesInput) -> dict[str, Any]:
-        """Select every edge of one face of the active part (multi-select).
+        """Select every edge of one face of the active part, ready for `add_fillet` or `add_chamfer` with no edge names.
 
-        Identify the face with exactly one of ``point`` (a point on it, mm),
-        ``side`` (``top``/``bottom``/``front``/``back``/``right``/``left`` or
-        ``+X``..``-Z``; top=+Y, front=+Z, right=+X as in SolidWorks' default
-        views - the furthest flat face facing that way) or ``plane`` (a
-        reference plane name - the body face lying on it). ``edge_type``
-        narrows to ``linear`` or ``circular`` edges (e.g. hole rims).
-
-        The edges become the live SolidWorks selection, so the next
-        ``add_chamfer`` / ``add_fillet`` call with an empty ``edge_names``
-        acts on exactly them. Anything that changes the selection in between
-        (including the user clicking in SolidWorks) changes what is used.
+        Pick the face with one of `point` (a point on it, mm), `side` (top, bottom,
+        front, back, right, left or +X..-Z; the furthest flat face that way) or `plane`
+        (the face lying on that plane). `edge_type` narrows to linear or circular edges
+        (hole rims). Needs: an open part. Changes: the selection only. Returns: `data`
+        with `face`, `edges`, `selected_edges` and `selection_count`.
 
         Args:
-            input_data (SelectFaceEdgesInput): Face identifier, edge filter and
-                append flag.
+            input_data: The face. Give exactly one of `point`, `side` or `plane`;
+                `edge_type` (all) and `append` (off) have defaults.
 
         Returns:
-            dict[str, Any]: Status plus ``data.face`` (centre, normal, area),
-            ``data.edges`` (one entry per selected edge: curve type,
-            endpoints/length or centre/radius) and ``data.selection_count``.
-
-        Example:
-            ```python
-            # Chamfer the hole rims on the top face
-            await select_face_edges({"side": "top", "edge_type": "circular"})
-            await add_chamfer({"distance": 0.5, "edge_names": []})
-            ```
+            dict[str, Any]: The edges selected.
         """
         input_data = normalize_input(input_data, SelectFaceEdgesInput)
         result = await adapter.select_face_edges(
@@ -2056,26 +1841,20 @@ async def register_modeling_tools(
     async def rebuild_model(
         input_data: RebuildModelInput | None = None,
     ) -> dict[str, Any]:
-        """Force a rebuild of the active model and report what is wrong.
+        """Rebuild the active model and report each feature that fails, with the reason and a fix.
 
-        Use after programmatic edits (``set_dimension``, feature edits) to
-        confirm the model rebuilds cleanly. When features fail, the response
-        is an error whose ``data.errors`` names each failing feature with its
-        SolidWorks error code, the features/sketches it depends on, and a
-        concrete ``hint`` for fixing it. Warnings alone still succeed.
+        Use it after `set_dimension` or other edits to confirm the model is sound.
+        Failing features make the call an error whose `data.errors` names each one, its
+        SolidWorks error, what it depends on and a `hint`; warnings alone still succeed.
+        Needs: an open part or assembly. Changes: rebuilds the model. Returns: `data`
+        with `rebuilt`, `errors`, `error_count`, `warning_count` and `summary`.
 
         Args:
-            input_data (RebuildModelInput | None): ``top_level_only`` for
-                assemblies; omit for a full rebuild.
+            input_data: Nothing is required: `top_level_only` is off (a full
+                rebuild).
 
         Returns:
-            dict[str, Any]: Status, a one-line summary, and ``data`` with
-            ``errors``, ``error_count`` and ``warning_count``.
-
-        Example:
-            ```python
-            await rebuild_model()
-            ```
+            dict[str, Any]: The rebuild report.
         """
         input_data = normalize_input(input_data or {}, RebuildModelInput)
         result = require_success(
@@ -2093,22 +1872,18 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def undo(input_data: UndoInput | None = None) -> dict[str, Any]:
-        """Undo the last operations in the active model.
+        """Undo the last operations in the active model (Edit > Undo).
 
-        SolidWorks accepts an undo with nothing left to undo without
-        complaining, so the response reports whether the feature tree actually
-        changed rather than assuming it did.
+        Use it to step back after a feature went wrong. SolidWorks accepts an undo with
+        nothing to undo, so the reply says whether the feature tree changed. Needs: an
+        open document. Changes: reverts the last `count` operations. Returns: `data`
+        with `requested_steps`, `features_before`, `features_after` and `tree_changed`.
 
         Args:
-            input_data (UndoInput | None): How many steps to undo.
+            input_data: Nothing is required: `count` defaults to 1.
 
         Returns:
-            dict[str, Any]: Status and whether the tree changed.
-
-        Example:
-            ```python
-            await undo({"count": 1})
-            ```
+            dict[str, Any]: What changed.
         """
         input_data = normalize_input(input_data or UndoInput(), UndoInput)
         result = await adapter.undo(input_data.count)
@@ -2133,33 +1908,20 @@ async def register_modeling_tools(
     async def create_reference_plane(
         input_data: CreateReferencePlaneInput,
     ) -> dict[str, Any]:
-        """Create a reference plane offset from an existing plane or planar face.
+        """Add a reference plane parallel to a plane or flat face, offset by a distance in mm.
 
-        Adds a new plane to the feature tree, parallel to and offset from the
-        named reference. The returned plane name can be passed straight to
-        ``create_sketch`` to sketch anywhere other than the six built-in
-        planes.
-
-        Angled planes are not supported by this tool: an angled plane needs a
-        second reference (an axis or edge) to rotate about, which this
-        signature cannot take. Use ``offset`` for parallel planes. An
-        ``offset`` of zero is rejected — a plane coincident with its
-        reference is not useful.
+        Use it to sketch somewhere other than the three default planes: pass the new
+        plane's name to `create_sketch`. Angled planes are not supported (a non-zero
+        `angle` is an error), and a zero offset is refused. Needs: an open part.
+        Changes: adds a plane feature. Returns: `plane` with `name`, `reference`,
+        `offset` and `flip`.
 
         Args:
-            input_data (CreateReferencePlaneInput): Reference name, offset,
-                angle and flip.
+            input_data: The plane. `reference` (e.g. "Front Plane") and a non-zero
+                `offset` (mm) are needed; `flip` is off.
 
         Returns:
-            dict[str, Any]: Status and the new plane's details.
-
-        Example:
-            ```python
-            plane = await create_reference_plane(
-                {"reference": "Front Plane", "offset": 76.2}
-            )
-            await create_sketch({"plane": plane["plane"]["name"]})
-            ```
+            dict[str, Any]: The new plane.
         """
         input_data = normalize_input(input_data, CreateReferencePlaneInput)
         result = await adapter.create_reference_plane(
@@ -2179,22 +1941,17 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_axis(input_data: CreateAxisInput) -> dict[str, Any]:
-        """Create a reference axis along a principal direction.
+        """Add a reference axis along the model's x, y or z direction, through the origin.
 
-        Builds an axis from the intersection of two built-in planes: x from
-        Top + Front, y from Front + Right, z from Top + Right.
+        Use it before `pattern_circular`, which rotates features about an axis. It is
+        built where two default planes meet. Needs: an open part. Changes: adds an axis
+        feature. Returns: `axis` with `reference`, `planes` and the feature counts.
 
         Args:
-            input_data (CreateAxisInput): The principal direction ('x', 'y'
-                or 'z').
+            input_data: The axis. `reference` ("x", "y" or "z") is required.
 
         Returns:
-            dict[str, Any]: Status and the axis details (planes used).
-
-        Example:
-            ```python
-            result = await create_axis({"reference": "z"})
-            ```
+            dict[str, Any]: The new axis.
         """
         input_data = normalize_input(input_data, CreateAxisInput)
         result = await adapter.create_axis(input_data.reference)
@@ -2212,33 +1969,20 @@ async def register_modeling_tools(
     async def create_reference_point(
         input_data: CreateReferencePointInput,
     ) -> dict[str, Any]:
-        """Create a reference point on the active part.
+        """Add a reference point on an edge (at a distance or percentage along it) or at the centre of a face.
 
-        Two modes:
-
-        - ``along_curve`` — a point on the edge under ``(x, y, z)`` mm, placed
-          ``distance`` mm from the edge start, or at ``percent`` (0–100) of
-          its length. Give exactly one of ``distance`` / ``percent``.
-        - ``face_center`` — a point at the centroid of the face under
-          ``(x, y, z)`` mm.
-
-        The coordinate must lie on the target edge/face; SolidWorks resolves
-        it with a coordinate pick. ``InsertReferencePoint`` always returns a
-        feature, so success is confirmed by the feature tree growing.
+        Use it to mark a position for a later feature or measurement. Pick the edge or
+        face with a point on it in mm. Needs: an open part with that edge or face.
+        Changes: adds a point feature. Returns: `point` with `mode`, `at_mm`,
+        `distance_mm` or `percent`, and the feature counts.
 
         Args:
-            input_data (CreateReferencePointInput): Mode, coordinate, and the
-                along-curve parameter.
+            input_data: The point. `mode` (along_curve or face_center) and `x`,
+                `y`, `z` (mm) are required; for along_curve give one of `distance`
+                (mm) or `percent`.
 
         Returns:
-            dict[str, Any]: Status and the point details (feature counts).
-
-        Example:
-            ```python
-            await create_reference_point({
-                "mode": "along_curve", "x": 25, "y": 0, "z": 10, "percent": 50
-            })
-            ```
+            dict[str, Any]: The new point.
         """
         input_data = normalize_input(input_data, CreateReferencePointInput)
         result = await adapter.create_reference_point(
@@ -2269,28 +2013,21 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def mirror_feature(input_data: MirrorFeatureInput) -> dict[str, Any]:
-        """Mirror solid bodies or features about a plane.
+        """Mirror solid bodies or features of the active part about a plane.
 
-        Selects the named sources and the mirror plane, then mirrors them.
-        The mirror is verified by comparing model volume before and after:
-        SolidWorks can report a feature even when it mirrored nothing, so a
-        volume that did not grow is reported as an error rather than a
-        false success.
+        Use it for symmetric parts: model one half, then mirror. Body mirroring (the
+        default) is what works for lofts and sweeps. The volume must grow, so mirroring
+        a cut is reported as an error today. Needs: an open part with the named bodies
+        or features. Changes: adds a Mirror feature. Returns: `mirror` with `name`,
+        `mirrored`, `mirror_plane`, `merge` and `mirror_bodies`.
 
         Args:
-            input_data (MirrorFeatureInput): Source names, mirror plane, and
-                merge/mirror_bodies flags.
+            input_data: The mirror. `features` (at least one name) and
+                `mirror_plane` (e.g. "Right Plane") are required; `merge` and
+                `mirror_bodies` are on.
 
         Returns:
-            dict[str, Any]: Status and the mirror feature's details,
-            including volume before/after and the resulting ratio.
-
-        Example:
-            ```python
-            result = await mirror_feature(
-                {"features": ["Loft1"], "mirror_plane": "Right Plane"}
-            )
-            ```
+            dict[str, Any]: The mirror created.
         """
         input_data = normalize_input(input_data, MirrorFeatureInput)
         result = await adapter.mirror_feature(
@@ -2311,28 +2048,22 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def pattern_circular(input_data: PatternCircularInput) -> dict[str, Any]:
-        """Pattern features around an axis.
+        """Repeat features of the active part around an axis, e.g. a ring of bosses or ribs.
 
-        Selects the named axis and features, then creates a circular
-        pattern. The pattern is verified by comparing model volume before
-        and after: SolidWorks can report a feature even when it patterned
-        nothing, so a volume that did not grow is reported as an error
-        rather than a false success.
+        Create the axis first with `create_axis`. The volume must grow, so patterning a
+        cut (a ring of holes) is reported as an error today; draw the holes in one
+        sketch with `sketch_circular_pattern` and cut once instead. Needs: an open part
+        with the named features and axis. Changes: adds a circular pattern feature.
+        Returns: `pattern` with `name`, `patterned`, `axis`, `count`, `angle` and
+        `equal_spacing`.
 
         Args:
-            input_data (PatternCircularInput): Feature names, axis, count,
-                angle, and equal_spacing.
+            input_data: The pattern. `features` (at least one), `axis` and `count`
+                (2 or more, the original included) are required; `angle` (360) and
+                `equal_spacing` (on) have defaults.
 
         Returns:
-            dict[str, Any]: Status and the pattern's details, including
-            volume before/after and the resulting ratio.
-
-        Example:
-            ```python
-            result = await pattern_circular(
-                {"features": ["Boss-Extrude1"], "axis": "Axis1", "count": 4}
-            )
-            ```
+            dict[str, Any]: The pattern created.
         """
         input_data = normalize_input(input_data, PatternCircularInput)
         result = await adapter.pattern_circular(
