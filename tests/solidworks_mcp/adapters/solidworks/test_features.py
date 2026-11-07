@@ -2778,13 +2778,29 @@ class TestReferenceGeometryOutcomes:
         adapter.currentModel = MagicMock()
         adapter.currentModel.FeatureByName.return_value = _selectable_feature()
         adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        adapter.currentModel.FeatureByPositionReverse.return_value = SimpleNamespace(
+            Name="Axis1"
+        )
 
         result = _create_axis_impl(adapter, "-Z")
 
+        assert result.data["name"] == "Axis1"
         assert result.data["reference"] == "z"
         assert len(result.data["planes"]) == 2
         assert result.data["features_before"] == 5
         assert result.data["features_after"] == 6
+
+    def test_an_axis_whose_name_cannot_be_read_says_none(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = _selectable_feature()
+        adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        adapter.currentModel.FeatureByPositionReverse.return_value = None
+
+        result = _create_axis_impl(adapter, "x")
+
+        assert result.is_success
+        assert result.data["name"] is None
 
     def test_unknown_point_mode_is_refused(self) -> None:
         result = features._create_reference_point_impl(

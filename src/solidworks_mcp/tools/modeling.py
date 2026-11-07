@@ -2141,7 +2141,8 @@ async def register_modeling_tools(
 
         Use it before `pattern_circular`, which rotates features about an axis. It is
         built where two default planes meet. Needs: an open part. Changes: adds an axis
-        feature. Returns: `axis` with `reference`, `planes` and the feature counts.
+        feature. Returns: `axis` with `name` (e.g. "Axis1", for
+        `create_reference_plane`'s `axis`), `reference`, `planes` and the feature counts.
 
         Args:
             input_data: The axis. `reference` ("x", "y" or "z") is required.

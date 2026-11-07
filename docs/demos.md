@@ -559,6 +559,140 @@ and reports the assembly's size.
 
 1. `verify_model({"component_count": 2, "mate_count": 2, "no_interference": true})`
 
+## The tools the U-joint was missing {#tool-gaps}
+
+Building the [U-joint](#ujoint) from a prompt, both agent sessions hit the
+same walls: no face mates, no way to let a part move, no angled planes or
+chamfers, and an extrusion reply that hid what it built (#209). Each demo
+below is a live test of the fix on SolidWorks 2026, calling the MCP tools
+with plain dicts, as a script would.
+
+Source: [`tests/live/test_live_sw_ujoint_tool_gaps.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_ujoint_tool_gaps.py).
+
+### A bent plate from an open outline {#thin-plate}
+
+![create_extrusion turning an open L-shaped sketch into a 6.35 mm bent plate, 38.1 mm wide, mid-plane](assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate.gif)
+
+> *Example prompt:* Make a bent plate: an 80 mm wall and a 40 mm foot,
+> 6.35 mm thick, 38.1 mm wide, centred on the Right plane.
+
+**What it shows.** Two lines, not a closed outline, extruded as a 6.35 mm
+thin wall on both sides of the line and 19.05 mm each way. One body of
+29,032.2 mm³, exactly (80 + 40) x 6.35 x 38.1, and the reply says
+`MidPlane` and the wall it built.
+
+**Tool calls**
+
+1. `create_extrusion({"sketch_name": "Sketch1", "depth": 38.1, "both_directions": true, "thin_feature": true, "thin_thickness": 6.35, "thin_side": "mid_plane"})`
+
+### Both directions, and the reply says so {#mid-plane}
+
+![create_extrusion 20 mm both ways from the Front Plane, spanning z -10 to 10 and reporting MidPlane](assets/demos/tool-gaps/test_both_directions_is_symmetric_and_says_mid_plane.gif)
+
+> *Example prompt:* Extrude this rectangle 20 mm, centred on its sketch plane.
+
+**What it shows.** The body spans -10 to 10 mm about the sketch plane, and
+the reply's `end_condition` is `MidPlane`. It used to echo `direction:
+blind`, so an agent thought `both_directions` was ignored.
+
+**Tool calls**
+
+1. `create_extrusion({"sketch_name": "Sketch1", "depth": 20, "both_directions": true})`
+
+### A 60° chamfer, and flipping it {#angled-chamfer}
+
+![add_chamfer cutting a 2 mm chamfer at 60 degrees, then the same chamfer flipped on the opposite edge](assets/demos/tool-gaps/test_a_60_degree_chamfer_and_flip_swaps_its_legs.gif)
+
+> *Example prompt:* Chamfer the top front edge 2 mm at 60°, and the back
+> edge the other way round.
+
+**What it shows.** Each chamfer removes 138.56 mm³ (½ x 2 x 2·tan 60° x
+40 mm). Unflipped, the chamfer face slopes 60° from the top; flipped, 30°:
+`flip` swaps which face the 2 mm is measured on.
+
+**Tool calls**
+
+1. `add_chamfer({"distance": 2, "angle": 60, "edge_names": ["0,0.01,0.01"]})`
+2. `add_chamfer({"distance": 2, "angle": 60, "flip": true, "edge_names": ["0,0.01,-0.01"]})`
+
+### A plane at 40° about an axis {#angled-plane}
+
+![create_axis making Axis1, then create_reference_plane making a plane at 40 degrees to the Top Plane about it](assets/demos/tool-gaps/test_a_plane_at_40_degrees_about_an_axis.gif)
+
+> *Example prompt:* Add a plane at 40° to the Top Plane, tilted about the x
+> axis.
+
+**What it shows.** `create_axis` names the axis it makes, and the new plane
+is exactly 40° from the Top Plane about it.
+
+**Tool calls**
+
+1. `create_axis({"reference": "x"})`
+2. `create_reference_plane({"reference": "Top Plane", "angle": 40, "axis": "Axis1"})`
+
+### A plane off a sloped face {#face-plane}
+
+![create_reference_plane making a plane 5 mm off a wedge's sloped face, from a point on that face](assets/demos/tool-gaps/test_a_plane_offset_from_a_sloped_face.gif)
+
+> *Example prompt:* Put a plane 5 mm above the sloped face of this wedge.
+
+**What it shows.** A point on the 3-4-5 slope picks the face. The plane's
+normal is (0.6, 0.8, 0), parallel to the slope, and it sits 5.000 mm off it.
+
+**Tool calls**
+
+1. `create_reference_plane({"face_point": [20, 15, 5], "offset": 5})`
+
+### A pin in its hole, by two faces {#face-mate}
+
+![add_mate putting a pin concentric in a plate's hole, picking each face by a point in its own part](assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces.gif)
+
+> *Example prompt:* Put the pin in the plate's hole.
+
+**What it shows.** Each face is a point in its own part's coordinates, as
+the part was modelled: the hole's wall at (25, 5, 0) and the pin's surface at
+(4.75, 15, 0). After the concentric mate, the pin's axis is exactly where the
+hole is, 20 mm from the plate's origin.
+
+**Tool calls**
+
+1. `add_mate({"component_a": "gap_plate-1", "component_b": "gap_pin-1", "face_a": [25, 5, 0], "face_b": [4.75, 15, 0], "mate_type": "concentric"})`
+
+### Fixed, floating and flexible {#component-state}
+
+![set_component_state floating and fixing a part, then making a sub-assembly flexible with its other settings unchanged](assets/demos/tool-gaps/test_components_fix_float_and_a_sub_assembly_turns_flexible.gif)
+
+> *Example prompt:* Let the crank sub-assembly turn inside the main
+> assembly.
+
+**What it shows.** The first part in, which SolidWorks fixes, floats and is
+fixed again. A sub-assembly turns flexible, so its own mates can move in the
+main assembly, and its suppression, visibility, configuration and BOM
+setting are unchanged.
+
+**Tool calls**
+
+1. `set_component_state({"component": "gap_plate-1", "fixed": false})`
+2. `set_component_state({"component": "gap_plate-1", "fixed": true})`
+3. `set_component_state({"component": "gap_pin_plate-1", "flexible": true})`
+
+### Interference, before and after {#fresh-interference}
+
+![check_interference finding the pin through the plate, then none once the pin is mated into the hole](assets/demos/tool-gaps/test_interference_is_fresh_after_a_mate.gif)
+
+> *Example prompt:* Does anything overlap? Now put the pin in the hole and
+> check again.
+
+**What it shows.** The pin, inserted through the plate, overlaps it once;
+mated into the Ø10 hole it overlaps nothing. The second check is fresh, not
+the first one's cached answer.
+
+**Tool calls**
+
+1. `check_interference({"components": ["gap_plate-1", "gap_pin-1"]})`
+2. `add_mate({... "mate_type": "concentric"})`
+3. `check_interference({"components": ["gap_plate-1", "gap_pin-1"]})`
+
 ## Drawing packages {#drawing-package}
 
 The drawing-package tools make a complete drawing from a model, and set the

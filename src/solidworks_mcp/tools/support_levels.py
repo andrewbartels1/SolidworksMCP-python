@@ -197,7 +197,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     # modeling
     "add_chamfer": _STABLE,
     "add_fillet": _STABLE,
-    "add_mate": _beta("mates only reference planes and axes, by name, not faces."),
+    "add_mate": _STABLE,
     "close_model": _STABLE,
     "create_assembly": _beta("`components` is ignored; use `insert_component`."),
     "create_axis": _STABLE,

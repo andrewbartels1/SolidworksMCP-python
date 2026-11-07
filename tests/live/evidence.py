@@ -184,6 +184,13 @@ def _solidworks_window_image() -> Any:
     from PIL import Image
 
     hwnd = solidworks_window()
+    if win32gui.IsIconic(hwnd):
+        # A minimized window has nothing to copy; without this the frames
+        # come out as captions over a blank strip.
+        raise RuntimeError(
+            "SolidWorks is minimized, so its window can't be captured; restore "
+            "it (it may stay behind other windows) and run again."
+        )
     left, top, right, bottom = win32gui.GetWindowRect(hwnd)
     width, height = right - left, bottom - top
     window_dc = win32gui.GetWindowDC(hwnd)

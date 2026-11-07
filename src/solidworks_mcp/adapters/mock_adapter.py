@@ -3268,10 +3268,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         # Invent a sequential "AxisN" name, tracked on self._axes, the same
         # way create_reference_plane invents "PlaneN" names on
-        # self._reference_planes. InsertAxis2 returns only a bool, so the
-        # live adapter cannot report a name either - but pattern_circular
-        # needs some name to validate the axis argument against, and this
-        # keeps the mock's bookkeeping consistent with the plane convention.
+        # self._reference_planes. The live adapter reads the new axis's name
+        # from the end of the feature tree (InsertAxis2 returns only a bool).
         self._axes.append(f"Axis{len(self._axes) + 1}")
 
         return AdapterResult(

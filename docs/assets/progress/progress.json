@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 155,
+  "total": 156,
   "by_level": {
-   "stable": 81,
-   "beta": 24,
+   "stable": 83,
+   "beta": 23,
    "experimental": 10,
    "planned": 40
   },
@@ -41,7 +41,7 @@
     "family": "modeling",
     "level": "stable",
     "reason": "",
-    "summary": "Bevel edges of the active part with an equal-distance chamfer at 45 degrees."
+    "summary": "Bevel edges of the active part with a chamfer: `distance` along one face at `angle` (45 by default)."
    },
    {
     "name": "add_circle",
@@ -102,8 +102,8 @@
    {
     "name": "add_mate",
     "family": "modeling",
-    "level": "beta",
-    "reason": "mates only reference planes and axes, by name, not faces.",
+    "level": "stable",
+    "reason": "",
     "summary": "Mate two components of the active assembly: coincident, concentric, parallel, perpendicular, tangent, distance or angle."
    },
    {
@@ -412,7 +412,7 @@
     "family": "modeling",
     "level": "stable",
     "reason": "",
-    "summary": "Add a reference plane parallel to a plane or flat face, offset by a distance in mm."
+    "summary": "Add a reference plane offset from, at an angle to, or on a plane or flat face."
    },
    {
     "name": "create_reference_point",
@@ -502,7 +502,7 @@
     "name": "export_dwg",
     "family": "export",
     "level": "beta",
-    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "reason": "`options` is ignored; the file extension sets the format.",
     "summary": "Export the active document to DWG, like File > Save As with the DWG type."
    },
    {
@@ -516,7 +516,7 @@
     "name": "export_iges",
     "family": "export",
     "level": "beta",
-    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "reason": "`options` is ignored; the file extension sets the format.",
     "summary": "Export the active document to IGES, like File > Save As with the IGES type."
    },
    {
@@ -530,21 +530,21 @@
     "name": "export_pdf",
     "family": "export",
     "level": "beta",
-    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "reason": "`options` is ignored; the file extension sets the format.",
     "summary": "Export the active document to PDF, like File > Save As with the PDF type."
    },
    {
     "name": "export_step",
     "family": "export",
     "level": "beta",
-    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "reason": "`options` is ignored; the file extension sets the format.",
     "summary": "Export the active document to STEP, like File > Save As with the STEP type."
    },
    {
     "name": "export_stl",
     "family": "export",
     "level": "beta",
-    "reason": "the file extension sets the format; `format_type` and `options` are ignored.",
+    "reason": "`options` is ignored; the file extension sets the format.",
     "summary": "Export the active document to STL, like File > Save As with the STL type."
    },
    {
@@ -961,6 +961,13 @@
     "summary": "Select a feature, sketch, plane or component by name in the active document."
    },
    {
+    "name": "set_component_state",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Fix or float a component of the active assembly, or make a sub-assembly rigid or flexible."
+   },
+   {
     "name": "set_custom_property",
     "family": "engineering_data",
     "level": "stable",
@@ -1098,11 +1105,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 208,
+   "covered": 214,
    "total": 2838
   },
   "api": {
-   "covered": 232,
+   "covered": 238,
    "total": 5985
   },
   "interfaces": [
@@ -1256,11 +1263,14 @@
      "AddComponent4",
      "AddComponent5",
      "AddMate5",
+     "CompConfigProperties5",
      "FeatureByName",
+     "FixComponent",
      "GetBox",
      "GetComponentByName",
      "GetComponentCount",
-     "GetComponents"
+     "GetComponents",
+     "UnfixComponent"
     ],
     "total": 198
    },
@@ -1345,7 +1355,10 @@
      "GetID",
      "GetModelDoc2",
      "GetPathName",
+     "GetSuppression2",
      "GetType",
+     "IsEnvelope",
+     "IsFixed",
      "IsSuppressed",
      "Select",
      "Select2",

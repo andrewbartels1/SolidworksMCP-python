@@ -29,8 +29,20 @@ step. Values are examples; sizes are millimetres.
 ## Sketching somewhere other than the three planes
 
 `create_reference_plane` with `reference: "Top Plane"` and `offset: 10` makes
-a plane 10 mm up; its name (e.g. "Plane1") goes into `create_sketch`. Angled
-planes aren't supported yet.
+a plane 10 mm up; its name (e.g. "Plane1") goes into `create_sketch`.
+
+- At an angle: `create_axis` first (its reply names the axis, e.g. "Axis1"),
+  then `reference`, `angle` (degrees) and `axis`.
+- On or off a face, sloped or not: `face_point`, a point on the face in mm,
+  with `offset` (0 puts the plane on the face).
+
+## A bent plate or other wall from an open outline
+
+Draw the outline as an open chain of `add_line` (the plate's centreline or
+one edge), `exit_sketch`, then `create_extrusion` with `thin_feature: true`,
+`thin_thickness` and `thin_side` (`"one_side"`, `"other_side"` or `"mid_plane"`).
+`both_directions: true` extrudes half the depth each side of the sketch
+plane; the reply's `end_condition` says `MidPlane`.
 
 ## A revolved part (a knob or a shaft)
 
@@ -68,8 +80,14 @@ To turn a feature off without deleting it, `suppress_feature`. After
 2. `create_assembly`, then `insert_component` for each part, with a
    position in mm.
 3. `list_components` for the instance names (e.g. "plate-1").
-4. `add_mate` between components, by reference plane or axis name
-   ("Front Plane", "Axis1"). Faces and edges can't be mated by these tools.
+4. `add_mate` between components. Each side is a reference plane or axis
+   name (`entity_a`: "Front Plane", "Axis1") or a face (`face_a`: a point on
+   it, in mm, in that part's own coordinates, as you modelled it). A pin in a
+   hole: `concentric`, a point on the pin's round face and one on the hole's
+   wall.
+   The first part inserted is fixed. To let mates move it, or to hold a part
+   still, use `set_component_state` (`fixed`); to let a sub-assembly's own
+   mates move in the main assembly (a crank that turns), `flexible: true`.
 5. `check_interference`, then `verify_model` with `component_count`,
    `mate_count` and `no_interference: true`.
 6. `save_assembly`, or `pack_and_go_assembly` for a self-contained folder.

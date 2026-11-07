@@ -3018,7 +3018,14 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
                 "unchanged."
             )
 
+        # The new axis is the last feature; its name is what create_reference_plane's
+        # `axis` takes. None if it can't be read, never invented.
+        newest = adapter._attempt(
+            lambda: adapter.currentModel.FeatureByPositionReverse(0), default=None
+        )
+        name = adapter._attempt(lambda: newest.Name, default=None) if newest else None
         return {
+            "name": str(name) if name else None,
             "reference": key,
             "planes": [plane_a, plane_b],
             "features_before": before,

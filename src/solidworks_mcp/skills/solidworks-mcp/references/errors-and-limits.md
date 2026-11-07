@@ -55,4 +55,4 @@ mostly batch, template, macro-recording and drawing-analysis tools, plus
 | `calculate_mass_properties` labels moments of inertia kg·mm², but they are kg·m². | Read them as kg·m². |
 | `check_interference` ignores `include_hidden`. | Show the components you want checked. |
 | `execute_macro` runs a macro once, whatever `repeat_count` says, and runs only binary `.swp` files. | Call it again for a repeat. |
-| `add_mate` can mate only reference planes and axes, by name. | Model parts so their planes line up with the mates you need. |
+| `add_mate` can't mate edges or vertices, only planes, axes and faces. | Mate the faces that meet at the edge. |
