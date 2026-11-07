@@ -8,12 +8,192 @@ captioned beneath the SolidWorks window.
 Each entry has:
 
 - **what it shows**, and what the run checked;
-- **the prompt**: the real one for the prompt-to-drawing demo. The other demos
-  are live tests that call the tools directly, so their prompt is an example
-  of what you would type to get the same calls;
+- **the prompt**: the real one for the prompt-to-drawing and monitor-stand
+  demos. The other demos are live tests that call the tools directly, so
+  their prompt is an example of what you would type to get the same calls;
 - **the tool calls**, in order;
 - **the source**: the test that made the GIF. Run any of them yourself (see
   [Run a demo yourself](#run-a-demo-yourself)).
+
+## From a prompt to a printable monitor stand {#monitor-stand}
+
+![The user's prompt, then an arched monitor stand built in SolidWorks through the MCP tools: a block, two cuts leaving four legs, arches at the front and sides, a pocket for the monitor's base, checked, saved and exported as an STL, ending in an isometric view](assets/demos/monitor-stand/test_monitor_stand_from_prompt_to_part-motion.gif)
+
+The recording opens on the prompts, then replays the build as the script
+below runs it, at the sizes the stand was finished at by hand (see
+"Finished by hand"): 24 tool calls, each captioned with its result, and the
+finished part in an isometric view. It is sped up five times.
+
+**Printed.** The finished stand on the printer, in PETG, printed on its side
+with tree supports (sped up):
+
+![The monitor stand being 3D printed on its side in black PETG, with tree supports under the arches](assets/demos/monitor-stand/monitor_stand_printing.gif)
+
+**Prompts.** A real Claude Code session with the server connected; the
+user's words, unedited.
+
+> Ok, so this is fairly simple, so please make sure to reason through all
+> the pieces and steps to make sure the tool calls make sense. I'm looking
+> to make a simple square(ish) monitor stand with 4 legs, and large fillets
+> on all corners where the legs meet the base where the monitor stand will
+> rest on, think mini-table with an arch on 3 sides, front, left and right,
+> but not the back.
+>
+> The monitor base itself is 170mm "deep" in the y direction if the positive
+> X-axis is on your left and running left and right of you, and 173.71mm
+> "wide" in the x-axis, and we'll want to add 1 cm to each side, extrude
+> that some amount that makes sense for PETG, let's say 1.5 cm? I want it to
+> look proportional, now the legs should be around 4 cm square on each
+> corner, and I want the height to be roughly 50-55mm in total height from
+> the bottom of the legs to the top of the monitor base
+
+The agent replied with a plan and two questions (what the back should be,
+and where to save). The answers: a plain square opening at the back, and a
+folder for the part. After the build, one follow-up:
+
+> can you make a shallow cut lip 1-2 mm wider than the actual x and y
+> dimentions of the top where the display monitor would be so it sits "in"
+> the monitor stand 3-4 mm.
+
+**What it shows.** A 3D-printable part designed from a description, with
+every step checked against a hand calculation as it was built. The agent
+turns "roughly" and "around" into numbers and says why. It works out every
+sketch and each fillet edge's position before the first call. It asks only
+what it can't decide alone: the back of the stand and where to save.
+
+| Step | SolidWorks reads back | Hand calculation |
+| --- | --- | --- |
+| Block | 2 024 269.5 mm³, 193.71 x 55 x 190 mm | 193.71 x 190 x 55 |
+| Front/back opening | −864 196 mm³ | 113.71 x 40 x 190 |
+| Left/right opening | −352 000 mm³; 808 073.5 mm³ left | 110 x 40 x 80; top plate + four legs |
+| Six R25 arch fillets | 843 259.2 mm³ | +6 x (1 − π/4) x 25² x 40 = 840 264 (0.4 % low: the blend where the front and side arches meet at each front leg's inner corner is left out) |
+| Pocket | −90 666.36 mm³; 752 592.9 mm³ final | 175.71 x 172 x 3 |
+
+**The plan the agent made**
+
+1. Top plate 193.71 x 190 x 15 mm (the monitor base plus 10 mm each
+   side), legs 40 x 40 mm, 55 mm overall: the top of the range, so R25
+   arches still leave 15 mm of straight leg and about 60 mm of flat
+   ceiling in each opening.
+2. Extrude the full footprint 55 mm, then cut the front/back opening and
+   the left/right opening through the block, 40 mm high; four legs remain.
+3. One R25 fillet on the six edges where a leg's inner face meets the
+   underside, picked by each edge's midpoint: two for the front arch, four
+   for the sides. The back legs' edges facing the back stay sharp.
+4. The follow-up: a pocket 1 mm larger than the monitor base on each side
+   (175.71 x 172 mm), 3 mm deep, on a plane at the top face.
+5. SolidWorks' Y axis is up, so the prompt's "deep" runs along Z. Every
+   sketch is centred on the origin, so no sketch axis can mirror anything.
+
+**The tool calls**
+
+1. **Part**: `create_part`, `set_units` mm.
+2. **Block**: `create_sketch` Top, `add_rectangle`, `exit_sketch`,
+   `create_extrusion` 55 mm.
+3. **Openings**: on Front, then on Right, `create_sketch`,
+   `add_rectangle`, `exit_sketch` and `create_cut_extrude`
+   `ThroughAllBoth`.
+4. **Arches**: one `add_fillet` R25 on six edges.
+5. **Check and save**: `rebuild_model`, `verify_model`, `save_part`.
+6. **Pocket** (the follow-up): `list_open_documents` (the stand is still
+   the active part), `create_reference_plane`, then `create_sketch`,
+   `add_rectangle`, `exit_sketch`, `create_cut_extrude` 3 mm, and
+   `rebuild_model`, `verify_model`, `save_part` again.
+
+??? info "All 28 calls with their arguments"
+
+    | # | Tool | Arguments |
+    | --- | --- | --- |
+    | 1 | `create_part` | `{"name": "MonitorStand", "units": "mm"}` |
+    | 2 | `set_units` | `{"unit_system": "mm"}` |
+    | 3 | `create_sketch` | `{"plane": "Top"}` |
+    | 4 | `add_rectangle` | `{"x1": -96.855, "y1": -95, "x2": 96.855, "y2": 95}` |
+    | 5 | `exit_sketch` | `{}` |
+    | 6 | `create_extrusion` | `{"sketch_name": "Sketch1", "depth": 55}` |
+    | 7 | `create_sketch` | `{"plane": "Front"}` |
+    | 8 | `add_rectangle` | `{"x1": -56.855, "y1": 0, "x2": 56.855, "y2": 40}` |
+    | 9 | `exit_sketch` | `{}` |
+    | 10 | `create_cut_extrude` | `{"sketch_name": "Sketch2", "depth": 200, "end_condition": "ThroughAllBoth"}` |
+    | 11 | `create_sketch` | `{"plane": "Right"}` |
+    | 12 | `add_rectangle` | `{"x1": -55, "y1": 0, "x2": 55, "y2": 40}` |
+    | 13 | `exit_sketch` | `{}` |
+    | 14 | `create_cut_extrude` | `{"sketch_name": "Sketch3", "depth": 200, "end_condition": "ThroughAllBoth"}` |
+    | 15 | `add_fillet` | `{"radius": 25, "edge_names": ["0.056855,0.040,0.075", "-0.056855,0.040,0.075", "0.076855,0.040,0.055", "-0.076855,0.040,0.055", "0.076855,0.040,-0.055", "-0.076855,0.040,-0.055"]}` |
+    | 16 | `rebuild_model` | `{}` |
+    | 17 | `verify_model` | `{"bounding_box_mm": [193.71, 55, 190], "volume_mm3": 840264, "solid_body_count": 1, "feature_count": 4, "relative_tolerance": 0.005}` |
+    | 18 | `save_part` | `{"file_path": "MonitorStand.SLDPRT"}` |
+    | 19 | `list_open_documents` | `{}` |
+    | 20 | `create_reference_plane` | `{"reference": "Top Plane", "offset": 55}` |
+    | 21 | `create_sketch` | `{"plane": "Plane1"}` |
+    | 22 | `add_rectangle` | `{"x1": -87.855, "y1": -86, "x2": 87.855, "y2": 86}` |
+    | 23 | `exit_sketch` | `{}` |
+    | 24 | `create_cut_extrude` | `{"sketch_name": "Sketch4", "depth": 3, "end_condition": "Blind"}` |
+    | 25 | `rebuild_model` | `{}` |
+    | 26 | `verify_model` | `{"bounding_box_mm": [193.71, 55, 190], "volume_mm3": 752592.9, "solid_body_count": 1, "relative_tolerance": 0.001}` |
+    | 27 | `save_part` | `{}` |
+    | 28 | `verify_model` | `{"feature_count": 6}` |
+
+    The fillet's edges are midpoints in metres; the other lengths are mm.
+    The save path is shortened to the file name here.
+
+!!! tip "Printing it"
+    The pocket is cut into the top face, so the stand needs some support
+    either way up: top-down with support in the pocket, or legs-down with
+    support under the arches. The print recording above has it on its side,
+    with tree supports.
+
+**Finished by hand.** The user then made three changes in SolidWorks:
+
+| Change | Session | By hand |
+| --- | --- | --- |
+| Overall height (`D1@Boss-Extrude1`) | 55 mm | 66 mm, so the top is 26 mm and the legs stay 40 mm |
+| Pocket depth (`D1@Cut-Extrude3`) | 3 mm | 11.46 mm, leaving a 14.54 mm floor under the monitor |
+| Pocket plane (`Plane1`) | Top Plane offset 55 mm | The stand's top face, offset 0, so it follows the height |
+
+Asked to read the part, the agent found the changes with `list_features`,
+`list_model_dimensions` (per feature) and `verify_model`. A 26 mm top with
+the same legs, arches and pocket outline, cut 11.46 mm deep, comes to
+901 762 mm³ by hand. SolidWorks measures 901 769 mm³.
+
+The script below was then updated to reproduce this part: 66 mm, a 26 mm
+top and an 11.46 mm pocket are its defaults. One thing can't be matched:
+the tools can only offset a plane from a named plane, so the script puts
+the pocket's plane at Top Plane offset by the height. The solid is the
+same, but the plane doesn't follow a height edited by hand. To change the
+height, rerun the script.
+
+**Rebuild it, or at another size.** The script replays the
+calls with every dimension an option, and checks the result the same way.
+At its defaults it makes the 24 calls in the recording; the session's own
+28 calls are listed above.
+
+```powershell
+# The finished stand
+.\.venv\Scripts\python.exe scripts\demo_monitor_stand.py --out "C:\path\to\MonitorStand.SLDPRT"
+
+# The stand as the session left it
+.\.venv\Scripts\python.exe scripts\demo_monitor_stand.py --out "C:\path\to\MonitorStand.SLDPRT" `
+    --height 55 --top 15 --pocket-depth 3
+
+# Taller arches and a shallower pocket, over the saved part, with an STL
+.\.venv\Scripts\python.exe scripts\demo_monitor_stand.py --out "C:\path\to\MonitorStand.SLDPRT" `
+    --height 70 --fillet 30 --pocket-depth 8 --replace --stl
+```
+
+Run it with `--help` for every option: monitor base size, margin, top, leg,
+height, fillet, pocket clearance and depth.
+
+To record the demo again:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 `
+    -Test tests/live/test_live_sw_monitor_stand_demo.py `
+    -CaptureDir docs/assets/demos/monitor-stand -Record -PromptSeconds 12
+```
+
+**Source:** [`tests/live/test_live_sw_monitor_stand_demo.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_monitor_stand_demo.py),
+which runs the build in
+[`scripts/demo_monitor_stand.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/scripts/demo_monitor_stand.py)
 
 ## From a prompt to an assembly drawing {#prompt-to-drawing}
 
@@ -461,6 +641,7 @@ the test harness:
 | [`scripts/demo_sweep_loft.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/scripts/demo_sweep_loft.py) | A lofted cone and a swept coil spring in one multibody part |
 | [`scripts/demo_analysis.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/scripts/demo_analysis.py) | Model info, features, configurations and mass properties read back, and a dimension read and changed |
 | [`scripts/demo_export.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/scripts/demo_export.py) | One part exported to STEP, STL, IGES and PNG |
+| [`scripts/demo_monitor_stand.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/scripts/demo_monitor_stand.py) | The [arched monitor stand](#monitor-stand), as finished or at any size, through the MCP tools |
 | [`scripts/demo_save_validation.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/scripts/demo_save_validation.py) | Saving refuses a missing folder and an existing file unless overwrite is set |
 | [`demo_recording_heat_insert.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/docs/getting-started/tutorial-parts/demo_recording_heat_insert.py) | A recording-friendly build that prints the prompt and its own source first |
 | [`list_features_assembly_demo.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/docs/getting-started/tutorial-parts/list_features_assembly_demo.py) | `list_features` on a part and an assembly from the SolidWorks sample set |

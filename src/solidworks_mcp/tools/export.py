@@ -349,6 +349,19 @@ class BatchExportInput(CompatInput):
             self.recursive = True
 
 
+def _file_input(input_data: Any, format_type: str) -> Any:
+    """Validate a plain-dict argument as ``ExportFileInput``.
+
+    Over MCP the arguments arrive already validated; a script calling the
+    tool function directly passes a dict, which has no ``file_path``
+    attribute. The tool's own format fills ``format_type`` when the dict
+    leaves it out. Models, including the per-format aliases, pass through.
+    """
+    if isinstance(input_data, dict):
+        return normalize_input({"format_type": format_type, **input_data}, ExportFileInput)
+    return input_data
+
+
 async def register_export_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -395,15 +408,11 @@ async def register_export_tools(
         Returns:
             dict[str, Any]: The file written.
         """
-        if hasattr(input_data, "model_dump"):
-            payload = input_data.model_dump()
-            file_path = input_data.file_path
-        else:
-            payload = dict(input_data)
-            file_path = str(payload.get("file_path") or "")
+        input_data = _file_input(input_data, "step")
+        file_path = input_data.file_path
 
         if hasattr(adapter, "export_step"):
-            result = await adapter.export_step(payload)
+            result = await adapter.export_step(input_data.model_dump())
         else:
             result = await adapter.export_file(file_path, "step")
 
@@ -444,6 +453,7 @@ async def register_export_tools(
         Returns:
             dict[str, Any]: The file written.
         """
+        input_data = _file_input(input_data, "iges")
         if hasattr(adapter, "export_iges"):
             result = await adapter.export_iges(input_data.model_dump())
         else:
@@ -487,6 +497,7 @@ async def register_export_tools(
         Returns:
             dict[str, Any]: The file written.
         """
+        input_data = _file_input(input_data, "stl")
         if hasattr(adapter, "export_stl"):
             result = await adapter.export_stl(input_data.model_dump())
         else:
@@ -531,6 +542,7 @@ async def register_export_tools(
         Returns:
             dict[str, Any]: The file written.
         """
+        input_data = _file_input(input_data, "pdf")
         if hasattr(adapter, "export_pdf"):
             result = await adapter.export_pdf(input_data.model_dump())
         else:
@@ -574,6 +586,7 @@ async def register_export_tools(
         Returns:
             dict[str, Any]: The file written.
         """
+        input_data = _file_input(input_data, "dwg")
         if hasattr(adapter, "export_dwg"):
             result = await adapter.export_dwg(input_data.model_dump())
         else:

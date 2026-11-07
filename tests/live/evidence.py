@@ -61,6 +61,7 @@ def evidence(
     call: str | None = None,
     picture: Any = None,
     quick: bool = False,
+    max_lines: int = _CAPTION_MAX_LINES,
 ) -> None:
     """Print one proof, hold if asked, then capture it if asked.
 
@@ -76,13 +77,15 @@ def evidence(
             exported PDF's page from :func:`pdf_page`.
         quick: Print it only: no caption in a recording, no hold and no
             still, for a run of small steps the recording shows as motion.
+        max_lines: Caption lines kept before the rest is cut to ``...``;
+            raise it for a caption that must show in full, such as a prompt.
     """
     _print(label, payload, call)
     from tests.live import recorder
 
     if quick:
         return
-    recorder.note_caption(label, payload, call)
+    recorder.note_caption(label, payload, call, max_lines)
     try:
         hold = float(os.getenv("SW_DEMO_HOLD_SECONDS", "0"))
     except ValueError:
@@ -92,7 +95,7 @@ def evidence(
     capture_dir = os.getenv("SW_DEMO_CAPTURE_DIR")
     if capture_dir:
         try:
-            _capture(Path(capture_dir), label, payload, call, picture)
+            _capture(Path(capture_dir), label, payload, call, picture, max_lines)
         except Exception as exc:  # noqa: BLE001 - a picture never fails a test
             print(f"[evidence] (capture skipped: {exc})", flush=True)
 
@@ -213,7 +216,11 @@ def _solidworks_window_image() -> Any:
 
 
 def _caption_lines(
-    label: str, payload: Any, call: str | None = None, chars: int = _CAPTION_WIDTH_CHARS
+    label: str,
+    payload: Any,
+    call: str | None = None,
+    chars: int = _CAPTION_WIDTH_CHARS,
+    max_lines: int = _CAPTION_MAX_LINES,
 ) -> list[tuple[str, str]]:
     """Wrap the label, call and a readable payload for the caption panel.
 
@@ -231,8 +238,8 @@ def _caption_lines(
     body = pprint.pformat(payload, width=chars, sort_dicts=False)
     for raw in body.splitlines():
         lines.extend(("code", w) for w in textwrap.wrap(raw, chars))
-    if len(lines) > _CAPTION_MAX_LINES:
-        lines = lines[: _CAPTION_MAX_LINES - 1] + [("tag", "...")]
+    if len(lines) > max_lines:
+        lines = lines[: max_lines - 1] + [("tag", "...")]
     return lines
 
 
@@ -257,7 +264,13 @@ def _draw_code(draw: Any, x: float, y: int, text: str, font: Any) -> None:
             x += draw.textlength(value, font=font)
 
 
-def caption_panel(width: int, label: str, payload: Any, call: str | None) -> Any:
+def caption_panel(
+    width: int,
+    label: str,
+    payload: Any,
+    call: str | None,
+    max_lines: int = _CAPTION_MAX_LINES,
+) -> Any:
     """The evidence caption drawn as a dark panel ``width`` pixels wide."""
     from PIL import Image, ImageDraw, ImageFont
 
@@ -268,7 +281,7 @@ def caption_panel(width: int, label: str, payload: Any, call: str | None) -> Any
         font = bold = ImageFont.load_default()
     # Consolas is 0.55 em wide: wrap at what fits across the panel.
     chars = max(40, int((width - 24) / (0.55 * _CAPTION_FONT_SIZE)))
-    lines = _caption_lines(label, payload, call, chars)
+    lines = _caption_lines(label, payload, call, chars, max_lines)
     height = 16 + _CAPTION_LINE_HEIGHT * len(lines)
     panel = Image.new("RGB", (width, height), _BACKGROUND)
     draw = ImageDraw.Draw(panel)
@@ -301,7 +314,12 @@ def pdf_page(path: str | Path, width: int = 1800) -> Any:
 
 
 def _capture(
-    directory: Path, label: str, payload: Any, call: str | None, picture: Any = None
+    directory: Path,
+    label: str,
+    payload: Any,
+    call: str | None,
+    picture: Any = None,
+    max_lines: int = _CAPTION_MAX_LINES,
 ) -> None:
     """Save the SolidWorks window (or ``picture``) with the evidence beneath it."""
     from PIL import Image
@@ -309,7 +327,7 @@ def _capture(
     shot = picture if picture is not None else _solidworks_window_image()
     if shot.width < _MIN_FRAME_WIDTH:
         shot = Image.new("RGB", (_MIN_FRAME_WIDTH, 0))
-    panel = caption_panel(shot.width, label, payload, call)
+    panel = caption_panel(shot.width, label, payload, call, max_lines)
     frame = Image.new("RGB", (shot.width, shot.height + panel.height))
     frame.paste(shot, (0, 0))
     frame.paste(panel, (0, shot.height))
