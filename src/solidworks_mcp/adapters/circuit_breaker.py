@@ -335,6 +335,53 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
     # Adapter interface implementation
 
+    def reset(self, operation: str | None = None) -> list[str]:
+        """Close the breaker for one operation, or for all of them.
+
+        Args:
+            operation: The operation to reset; ``None`` resets every one.
+
+        Returns:
+            list[str]: The operations that were open or half-open.
+        """
+        if operation is None:
+            buckets = dict(self._buckets)
+        else:
+            buckets = (
+                {operation: self._buckets[operation]}
+                if operation in self._buckets
+                else {}
+            )
+        was_open = [
+            name
+            for name, bucket in buckets.items()
+            if bucket.state != CircuitState.CLOSED
+        ]
+        for bucket in buckets.values():
+            bucket.state = CircuitState.CLOSED
+            bucket.failure_count = 0
+            bucket.half_open_calls = 0
+        if operation is None:
+            self.state = CircuitState.CLOSED
+            self.failure_count = 0
+            self.half_open_calls = 0
+        return sorted(was_open)
+
+    async def reset_circuit_breakers(
+        self, operation: str | None = None
+    ) -> AdapterResult[dict[str, list[str]]]:
+        """Reset breakers through the adapter interface (see :meth:`reset`).
+
+        Args:
+            operation: The operation to reset; ``None`` resets every one.
+
+        Returns:
+            AdapterResult[dict[str, list[str]]]: ``reset``, the operations that were open.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"reset": self.reset(operation)}
+        )
+
     async def connect(self) -> None:
         """Connect through circuit breaker.
 

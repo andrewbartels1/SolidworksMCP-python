@@ -1077,3 +1077,41 @@ async def test_circuit_breaker_forwards_explicit_templates() -> None:
     assert part.data.properties["template"] == "C:/t/Part.prtdot"
     assert assembly.data.properties["template"] == "C:/t/Asm.asmdot"
     assert drawing.data.properties["template"] == "C:/t/Drw.drwdot"
+
+
+class TestReset:
+    """``reset`` and ``reset_circuit_breakers`` (#208)."""
+
+    def test_reset_all_closes_buckets_and_the_default_state(self) -> None:
+        breaker = CircuitBreakerAdapter()
+        breaker._get_bucket("a").state = CircuitState.OPEN
+        breaker._get_bucket("b").state = CircuitState.HALF_OPEN
+        breaker._get_bucket("c")
+        breaker.state = CircuitState.OPEN
+        breaker.failure_count = 9
+
+        assert breaker.reset() == ["a", "b"]
+        assert {b.state for b in breaker._buckets.values()} == {CircuitState.CLOSED}
+        assert breaker.state == CircuitState.CLOSED and breaker.failure_count == 0
+
+    def test_reset_one_leaves_the_others(self) -> None:
+        breaker = CircuitBreakerAdapter()
+        breaker._get_bucket("a").state = CircuitState.OPEN
+        breaker._get_bucket("b").state = CircuitState.OPEN
+        breaker.state = CircuitState.OPEN
+
+        assert breaker.reset("a") == ["a"]
+        assert breaker._get_bucket("b").state == CircuitState.OPEN
+        assert breaker.state == CircuitState.OPEN
+
+    def test_reset_an_unknown_operation_is_a_no_op(self) -> None:
+        assert CircuitBreakerAdapter().reset("never_called") == []
+
+    @pytest.mark.asyncio
+    async def test_reset_circuit_breakers_reports_through_a_result(self) -> None:
+        breaker = CircuitBreakerAdapter()
+        breaker._get_bucket("a").state = CircuitState.OPEN
+
+        result = await breaker.reset_circuit_breakers()
+
+        assert result.is_success and result.data == {"reset": ["a"]}

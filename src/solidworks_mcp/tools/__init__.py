@@ -19,6 +19,7 @@ from .export import register_export_tools
 from .file_management import register_file_management_tools
 from .macro_recording import register_macro_recording_tools
 from .modeling import register_modeling_tools
+from .server_admin import register_server_admin_tools
 from .sketching import register_sketching_tools
 from .template_management import register_template_management_tools
 from .vba_generation import register_vba_generation_tools
@@ -52,6 +53,7 @@ async def register_tools(mcp: FastMCP, adapter: Any, config: Any) -> int:
     await register_template_management_tools(mcp, adapter, config)
     await register_macro_recording_tools(mcp, adapter, config)
     await register_docs_discovery_tools(mcp, adapter, config)
+    await register_server_admin_tools(mcp, adapter, config)
 
     tool_count = len(await mcp.list_tools())
 

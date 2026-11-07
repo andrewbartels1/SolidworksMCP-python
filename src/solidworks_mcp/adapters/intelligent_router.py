@@ -78,7 +78,8 @@ class IntelligentRouter:
             # "calculate_mass_properties",
             "get_material_properties",
             "analyze_geometry",
-            "check_interference",
+            # "check_interference": changes as components are mated or moved;
+            # a cached answer ignored the changes (#209).
             # Drawing analysis operations
             "analyze_drawing_comprehensive",
             "analyze_drawing_dimensions",

@@ -30,7 +30,7 @@ Run `uvx solidworks-mcp-python setup` again any time to add a client. To work on
 Open SolidWorks, restart your client as setup told you, and ask *"What model is open in SolidWorks?"*. The server's log includes:
 
 - `SolidWorks COM interface is available`
-- `Registered 154 SolidWorks tools` (the count grows as tools are added)
+- `Registered 155 SolidWorks tools` (the count grows as tools are added)
 - `Connected to SolidWorks`
 
 If it says `Could not connect to SolidWorks`, SolidWorks wasn't open when the server started. Open it and restart the server from your client.

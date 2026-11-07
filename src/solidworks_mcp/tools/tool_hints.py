@@ -115,6 +115,8 @@ TOOL_HINTS: dict[str, ToolHints] = {
     # docs_discovery
     "discover_solidworks_docs": _sets("Rebuild SolidWorks API Index"),
     "search_solidworks_api_help": _reads("Search SolidWorks API"),
+    # server_admin
+    "reset_circuit_breaker": _sets("Reset Circuit Breaker"),
     "lookup_api_method": _reads("Look Up API Method"),
     "lookup_api_interface": _reads("Look Up API Interface"),
     "find_related_api_members": _reads("Find Related API Members"),

@@ -372,6 +372,31 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             error=f"Operation {operation_name} failed after {self.max_retries} retries: {last_error}",
         )
 
+    async def reset_circuit_breakers(
+        self, operation: str | None = None
+    ) -> AdapterResult[dict[str, list[str]]]:
+        """Reset the circuit breakers of the pooled adapters.
+
+        Every slot may hold the same breaker-wrapped adapter, so each one is
+        reset once.
+
+        Args:
+            operation: The operation to reset; ``None`` resets every one.
+
+        Returns:
+            AdapterResult[dict[str, list[str]]]: ``reset``, the operations that were open.
+        """
+        was_open: set[str] = set()
+        unique = {id(adapter): adapter for adapter in self.pool}
+        for adapter in unique.values():
+            reset = getattr(adapter, "reset_circuit_breakers", None)
+            if reset is not None:
+                result = await reset(operation)
+                was_open.update((result.data or {}).get("reset", []))
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"reset": sorted(was_open)}
+        )
+
     # Adapter interface implementation
 
     async def connect(self) -> None:

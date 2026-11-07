@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`reset_circuit_breaker`** (#208). Re-opens operations the server paused
+  after repeated failures, all of them or one by name; the `circuit_open`
+  hint now names it.
+
 - **The U-joint demo** (#175, #207). SolidWorks' U-Joint sample, written up
   as a prompt and built by Claude Code (Opus 5.5, medium effort) in 294
   tool calls, is the top demo in the README and on the Demos page, beside
@@ -57,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carry the new summaries (#82).
 
 ### Fixed
+
+- **One failed call could pause a tool for good** (#208). The server's router
+  fell back to the VBA adapter, which called back into the router, so one
+  failed `create_extrusion` counted as many failures and opened the circuit
+  breaker at once; every retry did the same. The fallback is gone (it only
+  re-ran the same COM call).
+- **`check_interference` repeated an old result** (#209). Its result was
+  cached for 60 seconds while components moved; it is no longer cached.
 
 - **The live chamfer and fillet tests treat the faces they name** (#199).
   They assumed the test block's height ran along Z; it runs along Y, so they

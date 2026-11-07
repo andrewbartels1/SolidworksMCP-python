@@ -58,7 +58,7 @@ Nothing in the install or setup signs in to anything. The only download is the P
 Open SolidWorks, restart your client as setup told you, and ask *"What model is open in SolidWorks?"*. The server's log (VS Code shows it under the server's output; Claude Desktop writes `%LOCALAPPDATA%\Claude\Logs\mcp-server-solidworks.log`) includes:
 
 - `SolidWorks COM interface is available`
-- `Registered 154 SolidWorks tools` (the count grows as tools are added)
+- `Registered 155 SolidWorks tools` (the count grows as tools are added)
 - `Connected to SolidWorks`
 
 VS Code labels every line the server writes to stderr as `[warning]`. That is where its normal log goes, since stdout carries the MCP messages, so those labels aren't problems.
