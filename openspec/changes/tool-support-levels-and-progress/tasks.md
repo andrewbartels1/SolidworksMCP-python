@@ -8,14 +8,14 @@
 
 ## 2. COM coverage
 
-- [ ] 2.1 `src/utils/snapshot_com_api.py` (Windows, by hand) and the committed `docs/assets/progress/com_snapshot.json`
-- [ ] 2.2 The adapter scan and core-interface coverage, with tests on a small fixture
+- [x] 2.1 `solidworks_mcp.progress.snapshot` (Windows, by hand; see design.md) and the committed `docs/assets/progress/com_snapshot.json`
+- [x] 2.2 The adapter scan and core-interface coverage, with tests on a small fixture
 
 ## 3. Progress image, data and page
 
-- [ ] 3.1 `src/utils/generate_progress.py`: `progress.svg` and `progress.json`; tests
-- [ ] 3.2 `tests/integration/test_progress_up_to_date.py`: fails when either is stale, naming the command
-- [ ] 3.3 `docs/progress.md` with the no-script table and `docs/javascripts/progress.js` filters; mkdocs nav; `mkdocs build --strict`
+- [x] 3.1 `solidworks_mcp.progress.generate`: `progress.svg`, `progress.json` and `tables.html`; tests
+- [x] 3.2 `tests/integration/test_progress_up_to_date.py`: fails when either is stale, naming the command
+- [x] 3.3 `docs/progress.md` with the no-script table and `docs/javascripts/progress.js` filters; mkdocs nav; `mkdocs build --strict`
 - [ ] 3.4 Show the user the SVG and the page before wiring them into the README
 
 ## 4. README and docs

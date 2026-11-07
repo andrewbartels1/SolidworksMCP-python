@@ -70,6 +70,20 @@ that removed nothing) and the level's are joined, the tool's first.
 
 Core interfaces, fixed in the generator: `ISldWorks`, `IModelDoc2`, `IModelDocExtension`, `IPartDoc`, `IAssemblyDoc`, `IDrawingDoc`, `IFeatureManager`, `ISketchManager`, `ISelectionMgr`, `IComponent2`, `IFeature`, `ISketch`. Coverage of each = its method names called anywhere in the adapters, out of its methods.
 
+### Where the code lives: `solidworks_mcp.progress`
+
+Moved from `src/utils/` during implementation: `src/utils` is outside the
+coverage run and has no tests, and the counting and drawing code should be
+tested like the rest. The package has `com_coverage.py` (snapshot, scan,
+counts), `snapshot.py` (`python -m solidworks_mcp.progress.snapshot`,
+Windows), `svg.py` and `generate.py` (`python -m
+solidworks_mcp.progress.generate`). `sw_type_info` gains two read-only
+accessors, `all_interface_methods()` and `type_library_name()`, for the
+snapshot. The scan counts names used as attributes or passed as strings
+(`flag_members(obj, "EditDelete")`), across every file under `adapters/`.
+The page's tables are a generated `tables.html` included with a snippet (a
+`.md` under `docs/` would become a page of its own).
+
 ### Generator and check
 
 `src/utils/generate_progress.py` writes `docs/assets/progress/progress.svg` and `progress.json` (per tool: name, family, level, reason, first sentence of its description; per core interface: covered and total). `tests/integration/test_progress_up_to_date.py` builds both in memory and compares them with the committed files; on a mismatch it prints the command to run. Alternative, regenerating in CI and committing: rejected, CI shouldn't push to branches.
