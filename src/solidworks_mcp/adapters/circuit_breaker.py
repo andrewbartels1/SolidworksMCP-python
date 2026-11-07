@@ -765,16 +765,22 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create reference plane through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "create_reference_plane",
-            lambda: self.adapter.create_reference_plane(reference, offset, angle, flip),
+            lambda: self.adapter.create_reference_plane(
+                reference, offset, angle, flip, axis, face_point
+            ),
             input_dict={
                 "reference": reference,
                 "offset": offset,
                 "angle": angle,
                 "flip": flip,
+                "axis": axis,
+                "face_point": face_point,
             },
         )
 

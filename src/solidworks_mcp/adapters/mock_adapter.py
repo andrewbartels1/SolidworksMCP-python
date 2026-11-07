@@ -3128,51 +3128,36 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock creating a reference plane offset from an existing plane.
+        """Mock creating a reference plane offset from, angled to, or on a face.
 
-        Mirrors the live adapter's refusals rather than fabricating a
-        result it cannot know: an angled plane needs a second reference this
-        signature cannot supply, and an offset of zero would be coincident
-        with its reference. See ``_create_reference_plane_impl`` in
-        ``solidworks/features.py`` for the live contract this mirrors.
-
-        On success, invents a sequential ``PlaneN`` name tracked on
+        Refuses exactly what the live adapter refuses (the shared
+        ``reference_plane_refusal`` in ``solidworks/features.py``). On
+        success, invents a sequential ``PlaneN`` name tracked on
         ``self._reference_planes`` and advances the shared mock feature-tree
         counter so ``features_before``/``features_after`` differ by exactly
         one, the same signal the live adapter derives from
         ``IFeatureManager::GetFeatureCount``.
 
         Args:
-            reference (str): Name of the reference plane or planar face.
+            reference (str): Name of the reference plane.
             offset (float): Offset distance in millimetres. Defaults to 0.0.
-            angle (float): Angle in degrees; unsupported (non-zero errors).
-                Defaults to 0.0.
+            angle (float): Angle in degrees about ``axis``. Defaults to 0.0.
             flip (bool): Reverse the offset direction. Defaults to False.
+            axis (str | None): Axis to rotate about, for an angle.
+            face_point (list[float] | None): Point on a flat face, in mm.
 
         Returns:
             AdapterResult[dict[str, Any]]: The new plane's name and
             parameters, or error.
         """
-        if angle:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    "create_reference_plane does not support 'angle' yet: an "
-                    "angled plane needs a second reference (an axis or edge "
-                    "to rotate about) which this signature cannot take. Use "
-                    "'offset' for parallel planes."
-                ),
-            )
+        from .solidworks.features import reference_plane_refusal
 
-        if not offset:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    "create_reference_plane requires a non-zero offset - a "
-                    "plane coincident with its reference is not useful"
-                ),
-            )
+        refusal = reference_plane_refusal(reference, offset, angle, axis, face_point)
+        if refusal is not None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=refusal)
 
         await asyncio.sleep(self._delays["feature_operation"])
         self._operation_count += 1
@@ -3187,9 +3172,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data={
                 "name": self._reference_planes[-1],
-                "reference": reference,
-                "offset": offset,
-                "angle": None,
+                "reference": reference if face_point is None else None,
+                "face_point": face_point,
+                "offset": offset or None,
+                "angle": angle or None,
+                "axis": axis if angle else None,
                 "flip": flip,
                 "features_before": before,
                 "features_after": after,

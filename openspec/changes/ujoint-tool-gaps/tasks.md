@@ -6,7 +6,7 @@
 
 - [x] 2.1 `create_extrusion`: reply reports the applied end condition, `both_directions`, thin thickness and `thin_side`; `thin_side` input mapped to `RevThinDir`; tests
 - [x] 2.2 `add_chamfer`: `angle` and `flip` through every adapter layer; correct the chamfer-type comment; tests
-- [ ] 2.3 `create_reference_plane`: `axis` with `angle`, and `face_point`; every adapter layer; tests
+- [x] 2.3 `create_reference_plane`: `axis` with `angle`, and `face_point`; every adapter layer; tests
 
 ## 3. Assemblies
 

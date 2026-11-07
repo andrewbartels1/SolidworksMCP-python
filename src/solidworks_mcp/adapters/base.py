@@ -1098,14 +1098,19 @@ class SolidWorksAdapter(ABC):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Create a reference plane offset from, or angled to, an existing plane.
+        """Create a reference plane offset from, angled to, or on a plane or face.
 
         Args:
-            reference (str): Name of the reference plane or planar face.
+            reference (str): Name of the reference plane.
             offset (float): Offset distance in millimetres. Defaults to 0.0.
-            angle (float): Angle in degrees. Defaults to 0.0.
+            angle (float): Angle in degrees about ``axis``. Defaults to 0.0.
             flip (bool): Reverse the offset or angle direction. Defaults to False.
+            axis (str | None): Named axis to rotate about; needed with ``angle``.
+            face_point (list[float] | None): ``[x, y, z]`` mm on a flat face to
+                use as the reference instead of ``reference``.
 
         Returns:
             AdapterResult[dict[str, Any]]: The new plane's name and parameters, or error.

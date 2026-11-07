@@ -714,12 +714,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create reference plane using pool."""
         return await self._execute_with_pool(
             "create_reference_plane",
             lambda adapter: adapter.create_reference_plane(
-                reference, offset, angle, flip
+                reference, offset, angle, flip, axis, face_point
             ),
         )
 

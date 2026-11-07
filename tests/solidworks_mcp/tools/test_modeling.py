@@ -1364,7 +1364,7 @@ class TestReferenceGeometryTools:
 
     def test_create_reference_plane_input_rejects_blank_reference(self):
         """CreateReferencePlaneInput.model_post_init rejects a blank reference."""
-        with pytest.raises(ValueError, match="reference is required"):
+        with pytest.raises(ValueError, match="exactly one of reference or face_point"):
             CreateReferencePlaneInput(reference="   ", offset=10.0)
 
     def test_set_units_input_rejects_blank_unit_system(self):
@@ -2148,3 +2148,37 @@ async def test_the_mock_chamfer_records_angle_and_flip(mock_adapter) -> None:
     assert result.data.parameters["angle"] == 60.0
     assert result.data.parameters["flip"] is True
     assert refused.is_error
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"reference": "Top Plane", "face_point": [0, 0, 0]}, "exactly one of"),
+        ({"face_point": [0, 0]}, "face_point must be"),
+        ({"reference": "Top Plane", "angle": 30}, "needs axis"),
+    ],
+)
+def test_reference_plane_input_refusals(kwargs: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        CreateReferencePlaneInput(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_reference_plane_tool_passes_axis_and_face_point(
+    mcp_server, mock_adapter
+) -> None:
+    await mock_adapter.create_part()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn
+        for t in await mcp_server.list_tools()
+        if t.name == "create_reference_plane"
+    )
+
+    angled = await tool({"reference": "Top Plane", "angle": 40, "axis": "Axis1"})
+    on_face = await tool({"face_point": [0, 10, 5]})
+
+    assert angled["plane"]["axis"] == "Axis1"
+    assert angled["plane"]["angle"] == 40
+    assert on_face["plane"]["face_point"] == [0, 10, 5]
+    assert on_face["plane"]["reference"] is None

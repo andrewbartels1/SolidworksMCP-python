@@ -139,8 +139,12 @@ class SolidWorksFeaturesMixin:
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        return _create_reference_plane_impl(self, reference, offset, angle, flip)
+        return _create_reference_plane_impl(
+            self, reference, offset, angle, flip, axis, face_point
+        )
 
     async def create_axis(self, reference: str) -> AdapterResult[dict[str, Any]]:
         return _create_axis_impl(self, reference)
@@ -2615,6 +2619,7 @@ def _undo_impl(adapter: Any, count: int) -> AdapterResult[dict[str, Any]]:
 #: ``swRefPlaneReferenceConstraints_e`` members used by ``InsertRefPlane``.
 _REF_PLANE_DISTANCE = 8
 _REF_PLANE_ANGLE = 16
+_REF_PLANE_COINCIDENT = 4
 _REF_PLANE_OPTION_FLIP = 256
 
 #: Plane pairs whose intersection defines each principal axis. ``InsertAxis2``
@@ -2737,36 +2742,121 @@ def _select_reference_entity(
     return False
 
 
+def _select_face_at_point(adapter: Any, point_mm: list[float], mark: int) -> bool:
+    """Select the planar face of the active part at ``point_mm`` under ``mark``.
+
+    The face is found as ``select_face_edges`` finds it (the face whose
+    closest point is within 0.01 mm), then selected with ``IEntity.Select4``
+    and a ``SelectData`` carrying the mark ``InsertRefPlane`` reads.
+
+    Args:
+        adapter: A connected adapter with a part open.
+        point_mm: ``[x, y, z]`` on the face, in millimetres.
+        mark: Selection mark for this reference.
+
+    Returns:
+        bool: True when the face was selected.
+
+    Raises:
+        LookupError: When no face lies at the point, or the face isn't flat.
+    """
+    from .face_selection import FaceEdgeSelector
+
+    selector = FaceEdgeSelector(adapter)
+    face = selector.face_at_point(selector.faces(), point_mm)
+    if not face.is_planar:
+        raise LookupError(
+            f"The face at {list(point_mm)} mm is not flat; a plane needs a flat face."
+        )
+    sel_mgr = adapter.currentModel.SelectionManager
+    _flag(adapter, sel_mgr, "CreateSelectData")
+    select_data = _attempt(adapter, lambda: sel_mgr.CreateSelectData())
+    select_data.Mark = mark
+    _flag(adapter, face.handle, "Select4")
+    return bool(
+        _attempt(adapter, lambda: face.handle.Select4(False, select_data), False)
+    )
+
+
+def reference_plane_refusal(
+    reference: str,
+    offset: float,
+    angle: float,
+    axis: str | None,
+    face_point: list[float] | None,
+) -> str | None:
+    """Why a reference-plane request can't be made, or None when it can.
+
+    Shared by the live and mock adapters so both refuse the same requests.
+
+    Args:
+        reference: Named reference plane (unused with ``face_point``).
+        offset: Offset in mm.
+        angle: Angle in degrees.
+        axis: Axis to rotate about, for an angle.
+        face_point: Point on a flat face to use as the reference.
+
+    Returns:
+        str | None: The refusal message, or None.
+    """
+    if not reference and face_point is None:
+        return (
+            "create_reference_plane requires a reference plane name or a "
+            "face_point on a flat face"
+        )
+    if angle and not axis:
+        return (
+            "An angled plane needs an axis to rotate about: pass 'axis' "
+            "(e.g. 'Axis1', made with create_axis)."
+        )
+    if not angle and not offset and face_point is None:
+        return (
+            "create_reference_plane requires a non-zero offset - a plane "
+            "coincident with a named plane is not useful"
+        )
+    return None
+
+
 def _create_reference_plane_impl(
     adapter: Any,
     reference: str,
     offset: float,
     angle: float,
     flip: bool,
+    axis: str | None = None,
+    face_point: list[float] | None = None,
 ) -> AdapterResult[dict[str, Any]]:
-    """Create a reference plane offset from, or angled to, an existing plane.
+    """Create a reference plane offset from, angled to, or on a plane or face.
 
     Wraps ``IFeatureManager::InsertRefPlane(FirstConstraint,
-    FirstConstraintAngleOrDistance, Second, 0, Third, 0)``. The reference
-    entity must be selected under **mark 0** first, which is what the
-    SolidWorks documentation example does before the identical call.
+    FirstConstraintAngleOrDistance, Second, value, Third, value)``. The
+    reference (a named plane, or the flat face at ``face_point``) is selected
+    under **mark 0**; for an angled plane, ``axis`` is selected under
+    **mark 1** with the Coincident constraint, which is the second reference
+    an angled plane needs (an angle constraint on one plane alone adds
+    nothing, measured on SW 2025).
 
-    This is what lets a sketch be opened anywhere other than the six built-in
-    planes. ``create_sketch`` already accepts a plane by its tree name, so the
-    name returned here can be passed straight to it - verified live: a plane
-    76.2 mm off the Front Plane came back as ``"Plane1"``, and a circle
-    sketched on it extruded to exactly the expected volume.
+    ``create_sketch`` accepts a plane by its tree name, so the name returned
+    here can be passed straight to it - verified live: a plane 76.2 mm off
+    the Front Plane came back as ``"Plane1"``, and a circle sketched on it
+    extruded to exactly the expected volume.
 
     Args:
         adapter: A connected ``PyWin32Adapter`` with a valid ``currentModel``.
-        reference: Name of the reference plane or planar face.
+        reference: Name of the reference plane; ignored when ``face_point``
+            is given.
         offset: Offset distance in **millimetres**, converted to metres.
-        angle: Angle in **degrees**; used instead of ``offset`` when non-zero.
+        angle: Angle in **degrees** about ``axis``; used instead of ``offset``
+            when non-zero.
         flip: Reverse the offset or angle direction.
+        axis: Named axis to rotate about (e.g. ``"Axis1"``); required with
+            ``angle``.
+        face_point: ``[x, y, z]`` mm on a flat face to use as the reference;
+            with a zero offset the plane lies on the face.
 
     Returns:
         AdapterResult[dict[str, Any]]: The new plane's name and the parameters
-        used. ``ERROR`` when there is no model, the reference cannot be
+        used. ``ERROR`` when there is no model, a reference cannot be
         selected, or no plane was added to the tree.
 
     Raises:
@@ -2774,42 +2864,19 @@ def _create_reference_plane_impl(
 
     Example::
 
-        plane = await adapter.create_reference_plane("Front Plane", offset=76.2)
+        plane = await adapter.create_reference_plane("Top Plane", angle=40, axis="Axis1")
         await adapter.create_sketch(plane.data["name"])
     """
     if not adapter.currentModel:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
-    if not reference:
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR,
-            error="create_reference_plane requires a reference plane/face name",
-        )
+    refusal = reference_plane_refusal(reference, offset, angle, axis, face_point)
+    if refusal is not None:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error=refusal)
 
-    if angle:
-        # Measured on SW 2025: InsertRefPlane with the angle constraint and a
-        # single selected plane adds nothing to the tree and reports no error.
-        # An angled plane is under-defined by one reference - SolidWorks needs
-        # a second entity (an axis or edge) under mark 1 to rotate about.
-        # Refusing is better than returning a plane name that does not exist.
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR,
-            error=(
-                "create_reference_plane does not support 'angle' yet: an "
-                "angled plane needs a second reference (an axis or edge to "
-                "rotate about) which this signature cannot take. Use 'offset' "
-                "for parallel planes."
-            ),
-        )
-
-    if not offset:
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR,
-            error=(
-                "create_reference_plane requires a non-zero offset - a plane "
-                "coincident with its reference is not useful"
-            ),
-        )
+    described = (
+        f"the face at {list(face_point)} mm" if face_point is not None else reference
+    )
 
     def _plane_operation() -> dict[str, Any]:
         before = _feature_count(adapter)
@@ -2817,34 +2884,48 @@ def _create_reference_plane_impl(
             lambda: adapter.currentModel.ClearSelection2(True), default=None
         )
 
-        if not _select_reference_entity(adapter, reference, 0, append=False):
+        if face_point is not None:
+            if not _select_face_at_point(adapter, face_point, 0):
+                raise Exception(f"Failed to select {described}.")
+        elif not _select_reference_entity(adapter, reference, 0, append=False):
             raise Exception(
                 f"Failed to select reference plane/face: {reference}. "
-                "Use an existing plane name (e.g. 'Front Plane') or a planar "
-                "face."
+                "Use an existing plane name (e.g. 'Front Plane'), or face_point "
+                "for a face."
             )
 
-        value, flip_bits = _offset_plane_distance(offset, flip)
-        constraint = _REF_PLANE_DISTANCE | flip_bits
+        if angle:
+            if not _select_named_feature(adapter, str(axis), 1, append=True):
+                raise Exception(
+                    f"Failed to select axis '{axis}'. Use an axis in the tree, "
+                    "e.g. one made with create_axis."
+                )
+            first = _REF_PLANE_ANGLE | (_REF_PLANE_OPTION_FLIP if flip else 0)
+            value = math.radians(float(angle))
+            second = _REF_PLANE_COINCIDENT
+        elif offset:
+            value, flip_bits = _offset_plane_distance(offset, flip)
+            first = _REF_PLANE_DISTANCE | flip_bits
+            second = 0
+        else:
+            first, value, second = _REF_PLANE_COINCIDENT, 0.0, 0
 
         feature_manager = sw_type_info.flagged(
             adapter.currentModel.FeatureManager, "IFeatureManager"
         )
         plane = adapter._attempt(
-            lambda: feature_manager.InsertRefPlane(constraint, value, 0, 0.0, 0, 0.0),
+            lambda: feature_manager.InsertRefPlane(first, value, second, 0.0, 0, 0.0),
             default=None,
         )
 
         after = _feature_count(adapter)
         if before is not None and after is not None and after <= before:
             raise Exception(
-                f"No reference plane was added from '{reference}' - the "
+                f"No reference plane was added from {described} - the "
                 f"feature tree still has {after} feature(s)."
             )
         if plane is None:
-            raise Exception(
-                f"InsertRefPlane returned nothing for reference '{reference}'"
-            )
+            raise Exception(f"InsertRefPlane returned nothing for {described}")
 
         name = adapter._attempt(
             lambda: adapter._get_attr_or_call(plane, "Name"), default=None
@@ -2859,9 +2940,11 @@ def _create_reference_plane_impl(
 
         return {
             "name": str(name),
-            "reference": reference,
+            "reference": reference if face_point is None else None,
+            "face_point": list(face_point) if face_point is not None else None,
             "offset": offset or None,
             "angle": angle or None,
+            "axis": axis if angle else None,
             "flip": flip,
             "features_before": before,
             "features_after": after,

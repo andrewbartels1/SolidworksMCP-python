@@ -786,7 +786,13 @@ class TestConnectionPoolAdapterExtras:
                 return None
 
             async def create_reference_plane(
-                self, reference, offset=0.0, angle=0.0, flip=False
+                self,
+                reference,
+                offset=0.0,
+                angle=0.0,
+                flip=False,
+                axis=None,
+                face_point=None,
             ):
                 return _ok("plane")
 

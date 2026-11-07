@@ -801,32 +801,57 @@ class CreateReferencePlaneInput(CompatInput):
     """Input schema for creating a reference plane.
 
     Attributes:
-        reference (str): Name of the reference plane or planar face.
+        reference (str): Name of the reference plane.
+        face_point (list[float] | None): A point on a flat face to use instead.
         offset (float): Offset distance in millimetres.
         angle (float): Angle in degrees.
+        axis (str | None): Axis to rotate about, for an angle.
         flip (bool): Reverse the offset or angle direction.
     """
 
     reference: str = Field(
-        description="Name of the reference plane or planar face to offset "
-        "from, e.g. 'Front Plane'"
+        default="",
+        description=(
+            "Name of the reference plane, e.g. 'Front Plane' or 'Plane1'; leave "
+            "it out when giving face_point"
+        ),
+    )
+    face_point: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a flat face of the part (sloped or not), to use "
+            "that face as the reference instead of a named plane"
+        ),
     )
     offset: float = Field(
         default=0.0,
-        description="Offset distance in millimetres. Must be non-zero — a "
-        "plane coincident with its reference is not useful",
+        description=(
+            "Offset distance in millimetres. Non-zero for a named plane; 0 with "
+            "face_point puts the plane on the face"
+        ),
     )
     angle: float = Field(
         default=0.0,
-        description="Angle in degrees. Not yet supported: an angled plane "
-        "needs a second reference this tool cannot take, so a non-zero "
-        "value errors. Use offset for parallel planes",
+        description="Angle in degrees between the new plane and the reference, about axis",
     )
-    flip: bool = Field(default=False, description="Reverse the offset direction")
+    axis: str | None = Field(
+        default=None,
+        description=(
+            "Name of the axis the plane rotates about, e.g. 'Axis1' from "
+            "create_axis; required with angle"
+        ),
+    )
+    flip: bool = Field(
+        default=False, description="Reverse the offset side or the angle direction"
+    )
 
     def model_post_init(self, __context: Any) -> None:
-        if not self.reference.strip():
-            raise ValueError("reference is required")
+        if bool(self.reference.strip()) == (self.face_point is not None):
+            raise ValueError("give exactly one of reference or face_point")
+        if self.face_point is not None and len(self.face_point) != 3:
+            raise ValueError("face_point must be [x, y, z] in millimetres")
+        if self.angle and not self.axis:
+            raise ValueError("an angled plane needs axis, the axis to rotate about")
 
 
 class CreateAxisInput(CompatInput):
@@ -1970,17 +1995,19 @@ async def register_modeling_tools(
     async def create_reference_plane(
         input_data: CreateReferencePlaneInput,
     ) -> dict[str, Any]:
-        """Add a reference plane parallel to a plane or flat face, offset by a distance in mm.
+        """Add a reference plane offset from, at an angle to, or on a plane or flat face.
 
         Use it to sketch somewhere other than the three default planes: pass the new
-        plane's name to `create_sketch`. Angled planes are not supported (a non-zero
-        `angle` is an error), and a zero offset is refused. Needs: an open part.
-        Changes: adds a plane feature. Returns: `plane` with `name`, `reference`,
-        `offset` and `flip`.
+        plane's name to `create_sketch`. Offset: `reference` and a non-zero `offset`
+        (mm). Angle: `reference`, `angle` (degrees) and `axis`, an axis lying in the
+        reference (make one with `create_axis`). Face: `face_point`, a point on a flat
+        face (sloped or not), with an `offset` or 0 for a plane on the face. Needs: an
+        open part. Changes: adds a plane feature. Returns: `plane` with `name` and the
+        inputs used.
 
         Args:
-            input_data: The plane. `reference` (e.g. "Front Plane") and a non-zero
-                `offset` (mm) are needed; `flip` is off.
+            input_data: The plane. Exactly one of `reference` and `face_point`;
+                then `offset`, or `angle` with `axis`; `flip` is off.
 
         Returns:
             dict[str, Any]: The new plane.
@@ -1991,6 +2018,8 @@ async def register_modeling_tools(
             input_data.offset,
             input_data.angle,
             input_data.flip,
+            input_data.axis,
+            input_data.face_point,
         )
         require_success(result, context="Failed to create reference plane")
         data = result.data if isinstance(result.data, dict) else {}

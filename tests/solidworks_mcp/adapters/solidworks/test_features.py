@@ -1605,7 +1605,7 @@ class TestCreateReferencePlaneImplMoreErrors:
         result = _create_reference_plane_impl(adapter, "", 10.0, 0.0, False)
 
         assert result.is_error
-        assert "requires a reference plane/face name" in (result.error or "")
+        assert "requires a reference plane name or a face_point" in (result.error or "")
 
     def test_flip_true_combines_the_option_flag_on_success(self, monkeypatch) -> None:
         adapter = _build_adapter(monkeypatch)
@@ -2498,6 +2498,27 @@ def test_fillet_and_chamfer_pick_coordinate_specs_by_nearest_entity(
     assert "Failed to select edge: face:0.01,0.02,0.0" in (result.error or "")
 
 
+def _patch_face(
+    monkeypatch: pytest.MonkeyPatch, normal: tuple[float, float, float], handle: Any
+) -> None:
+    """Make FaceEdgeSelector find one face with ``normal`` at any point."""
+    from solidworks_mcp.adapters.solidworks import face_selection
+
+    face = face_selection.FaceInfo(0, normal, (0.0,) * 6, 1.0, handle)
+
+    class _Selector:
+        def __init__(self, adapter: Any) -> None:
+            pass
+
+        def faces(self) -> list[Any]:
+            return [face]
+
+        def face_at_point(self, faces: list[Any], point: list[float]) -> Any:
+            return faces[0]
+
+    monkeypatch.setattr(face_selection, "FaceEdgeSelector", _Selector)
+
+
 def _selectable_feature(**attrs: Any) -> SimpleNamespace:
     return SimpleNamespace(Select2=lambda _append, _mark: True, **attrs)
 
@@ -2631,11 +2652,113 @@ class TestFeatureTreeEditOutcomes:
 class TestReferenceGeometryOutcomes:
     """Reference plane, axis and point: refusals and successes."""
 
-    def test_angled_plane_is_refused(self, monkeypatch) -> None:
+    def test_an_angle_without_an_axis_is_refused(self, monkeypatch) -> None:
         adapter = _build_adapter(monkeypatch)
         adapter.currentModel = MagicMock()
         result = _create_reference_plane_impl(adapter, "Top Plane", 0.0, 30.0, False)
-        assert "does not support 'angle' yet" in (result.error or "")
+        assert "needs an axis to rotate about" in (result.error or "")
+
+    @pytest.mark.parametrize(("flip", "first"), [(False, 16), (True, 16 | 256)])
+    def test_an_angled_plane_selects_the_axis_under_mark_1(
+        self, monkeypatch, flip: bool, first: int
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        marks: list[tuple[str, bool, int]] = []
+
+        def feature(name: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                Select2=lambda append, mark: marks.append((name, append, mark)) or True
+            )
+
+        adapter.currentModel.FeatureByName.side_effect = feature
+        manager = MagicMock()
+        manager.GetFeatureCount.side_effect = [5, 6]
+        manager.InsertRefPlane.return_value = SimpleNamespace(Name="Plane1")
+        adapter.currentModel.FeatureManager = manager
+
+        result = _create_reference_plane_impl(
+            adapter, "Top Plane", 0.0, 40.0, flip, axis="Axis1"
+        )
+
+        assert result.is_success, result.error
+        assert marks == [("Top Plane", False, 0), ("Axis1", True, 1)]
+        args = manager.InsertRefPlane.call_args.args
+        assert args[0] == first
+        assert args[1] == pytest.approx(math.radians(40))
+        assert args[2] == 4  # Coincident with the axis
+        assert result.data["axis"] == "Axis1"
+        assert result.data["angle"] == 40.0
+
+    def test_an_axis_that_cannot_be_selected_is_named(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.side_effect = lambda name: (
+            _selectable_feature() if name == "Top Plane" else None
+        )
+
+        result = _create_reference_plane_impl(
+            adapter, "Top Plane", 0.0, 40.0, False, axis="Axis9"
+        )
+
+        assert result.is_error
+        assert "Failed to select axis 'Axis9'" in (result.error or "")
+
+    @pytest.mark.parametrize(("offset", "first"), [(5.0, 8), (0.0, 4)])
+    def test_a_face_point_selects_that_face_under_mark_0(
+        self, monkeypatch, offset: float, first: int
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        data = SimpleNamespace(Mark=None)
+        adapter.currentModel.SelectionManager.CreateSelectData.return_value = data
+        selected: list[Any] = []
+        handle = SimpleNamespace(
+            Select4=lambda append, d: selected.append((append, d.Mark)) or True
+        )
+        _patch_face(monkeypatch, normal=(0.0, 0.6, 0.8), handle=handle)
+        manager = MagicMock()
+        manager.GetFeatureCount.side_effect = [5, 6]
+        manager.InsertRefPlane.return_value = SimpleNamespace(Name="Plane1")
+        adapter.currentModel.FeatureManager = manager
+
+        result = _create_reference_plane_impl(
+            adapter, "", offset, 0.0, False, face_point=[1.0, 2.0, 3.0]
+        )
+
+        assert result.is_success, result.error
+        assert selected == [(False, 0)]
+        assert manager.InsertRefPlane.call_args.args[0] == first
+        assert result.data["face_point"] == [1.0, 2.0, 3.0]
+        assert result.data["reference"] is None
+
+    def test_a_curved_face_is_refused(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        _patch_face(monkeypatch, normal=(0.0, 0.0, 0.0), handle=None)
+
+        result = _create_reference_plane_impl(
+            adapter, "", 5.0, 0.0, False, face_point=[1.0, 2.0, 3.0]
+        )
+
+        assert result.is_error
+        assert "is not flat" in (result.error or "")
+
+    def test_a_face_that_will_not_select_is_reported(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        _patch_face(
+            monkeypatch,
+            normal=(0.0, 1.0, 0.0),
+            handle=SimpleNamespace(Select4=lambda append, d: False),
+        )
+
+        result = _create_reference_plane_impl(
+            adapter, "", 5.0, 0.0, False, face_point=[1.0, 2.0, 3.0]
+        )
+
+        assert result.is_error
+        assert "Failed to select the face at [1.0, 2.0, 3.0] mm" in (result.error or "")
 
     def test_plane_without_offset_is_refused(self, monkeypatch) -> None:
         adapter = _build_adapter(monkeypatch)
