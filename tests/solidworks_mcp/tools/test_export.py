@@ -740,7 +740,9 @@ async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("adapter_cls", [_ExportFallbackAdapter, _ExportNativeAdapter])
 @pytest.mark.parametrize("fmt", ["step", "iges", "stl", "pdf", "dwg"])
-async def test_export_tools_accept_a_plain_dict(mcp_server, mock_config, adapter_cls, fmt):
+async def test_export_tools_accept_a_plain_dict(
+    mcp_server, mock_config, adapter_cls, fmt
+):
     """A dict argument, as a script calling the tool function passes, works.
 
     Over MCP the arguments arrive as ``ExportFileInput``; called directly

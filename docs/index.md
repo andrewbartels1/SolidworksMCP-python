@@ -111,7 +111,7 @@ cd SolidworksMCP-python
 Open SolidWorks, restart your client, and ask *"What model is open in SolidWorks?"*. Healthy server logs include:
 
 - `SolidWorks COM interface is available`
-- `Registered 154 SolidWorks tools` (the count grows as tools are added)
+- `Registered 155 SolidWorks tools` (the count grows as tools are added)
 - `Connected to SolidWorks`
 
 ### Linux / WSL only

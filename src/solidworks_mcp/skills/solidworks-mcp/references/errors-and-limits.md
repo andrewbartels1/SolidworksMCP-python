@@ -13,7 +13,7 @@ and a `hint`; some carry `data` with details. Act on `error_type`:
 | `not_found` | A name or path is wrong. List what exists (`list_features`, `list_components`, `list_drawing_views`, `list_open_documents`) and retry with the exact name. |
 | `feature_not_built` | SolidWorks accepted the call but built nothing: the sketch isn't closed, the cut misses the body, the depth is wrong. Change the input, don't repeat the call. |
 | `not_supported` | The tool can't run yet. Use the one its description names. |
-| `circuit_open` | Calls are paused after repeated failures. Wait about a minute, fix the cause, then retry. |
+| `circuit_open` | Calls are paused after repeated failures. Fix the cause (for example, close and draw the sketch again), then call `reset_circuit_breaker` with the operation, or wait out the timeout, and retry. |
 | `solidworks_unavailable` | SolidWorks closed or crashed. Tell the user; they restart it. |
 | `com_member_not_found`, `com_type_mismatch`, `com_wrong_thread` | A server problem, not a modelling one. Stop and tell the user the tool, the arguments and the message. |
 

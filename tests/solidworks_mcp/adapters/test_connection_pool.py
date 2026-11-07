@@ -1802,3 +1802,19 @@ def test_connection_pool_forwards_every_circuit_breaker_passthrough() -> None:
     missing = sorted(circuit_forwards - set(vars(ConnectionPoolAdapter)))
 
     assert missing == []
+
+
+@pytest.mark.asyncio
+async def test_reset_circuit_breakers_resets_a_shared_breaker_once() -> None:
+    """Every slot holds the same breaker; it is reset once (#208)."""
+    from solidworks_mcp.adapters.circuit_breaker import CircuitState
+
+    breaker = CircuitBreakerAdapter()
+    breaker._get_bucket("create_extrusion").state = CircuitState.OPEN
+    pool = ConnectionPoolAdapter(adapter_factory=lambda: breaker, pool_size=3)
+    pool.pool = [breaker, breaker, MockSolidWorksAdapter({})]
+
+    result = await pool.reset_circuit_breakers()
+
+    assert result.data == {"reset": ["create_extrusion"]}
+    assert breaker._get_bucket("create_extrusion").state == CircuitState.CLOSED

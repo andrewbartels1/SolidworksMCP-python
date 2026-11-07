@@ -65,7 +65,7 @@ Open SolidWorks, then run **MCP: List Servers** and start (or restart) `solidwor
 
 - `SolidWorks COM interface is available`
 - `Connected to SolidWorks`
-- `Discovered 154 tools` (the count grows as tools are added)
+- `Discovered 155 tools` (the count grows as tools are added)
 
 VS Code labels every line the server writes to stderr as `[warning]`. That is the server's normal log, so those labels aren't problems.
 

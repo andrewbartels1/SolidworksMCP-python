@@ -1,6 +1,6 @@
 """Main SolidWorks MCP Server implementation using FastMCP and PydanticAI.
 
-This server provides 154 tools for comprehensive SolidWorks automation with configurable
+This server provides 155 tools for comprehensive SolidWorks automation with configurable
 deployment (local/remote) and security options.
 """
 
@@ -27,7 +27,6 @@ from . import adapters, security, tools, utils
 from .adapters.base import AdapterResult
 from .adapters.complexity_analyzer import ComplexityAnalyzer
 from .adapters.intelligent_router import IntelligentRouter
-from .adapters.vba_adapter import VbaGeneratorAdapter
 from .agents.history_db import insert_tool_event
 from .cache.response_cache import CachePolicy, ResponseCache
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
@@ -113,7 +112,6 @@ class SolidWorksMCPServer:
         self.adapter: Any | None = None
         self.agent: Any | None = None
         self._router: IntelligentRouter | None = None
-        self._vba_adapter: VbaGeneratorAdapter | None = None
 
     @staticmethod
     def _env_truthy(value: str | None) -> bool:
@@ -186,7 +184,6 @@ class SolidWorksMCPServer:
             )
         )
         self._router = IntelligentRouter(analyzer=analyzer, cache=cache)
-        self._vba_adapter = VbaGeneratorAdapter(backing_adapter=self.adapter)
 
         if self.config.enable_intelligent_routing:
             self._instrument_adapter_methods()
@@ -254,17 +251,10 @@ class SolidWorksMCPServer:
             if original_operation is None or not callable(original_operation):
                 continue
 
-            vba_operation = None
-            if self._vba_adapter is not None:
-                candidate = getattr(self._vba_adapter, operation_name, None)
-                if callable(candidate):
-                    vba_operation = candidate
-
             async def _routed_call(
                 *call_args: Any,
                 _operation_name: str = operation_name,
                 _com_callable: Any = original_operation,
-                _vba_callable: Any = vba_operation,
                 **call_kwargs: Any,
             ) -> AdapterResult[Any]:
                 """Build internal routed call.
@@ -273,7 +263,6 @@ class SolidWorksMCPServer:
                     *call_args (Any): Additional positional arguments forwarded to the call.
                     _operation_name (str): The operation name value. Defaults to operation_name.
                     _com_callable (Any): The com callable value. Defaults to original_operation.
-                    _vba_callable (Any): The vba callable value. Defaults to vba_operation.
                     **call_kwargs (Any): Additional keyword arguments forwarded to the call.
 
                 Returns:
@@ -301,7 +290,11 @@ class SolidWorksMCPServer:
                     call_args=call_args,
                     call_kwargs=call_kwargs,
                     com_operation=_com_callable,
-                    vba_operation=_vba_callable,
+                    # No VBA fallback: the VBA adapter calls this same adapter,
+                    # so a failed call re-entered this wrapper and recursed,
+                    # counting one failure many times and opening the circuit
+                    # breaker at once (#208).
+                    vba_operation=None,
                     cache_ttl_seconds=self.config.response_cache_ttl_seconds,
                 )
                 return result

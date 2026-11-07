@@ -10,7 +10,7 @@
 [![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 154 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 155 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
 ## See it work
 
@@ -276,7 +276,7 @@ Add this to `%APPDATA%\Code\User\mcp.json`:
 }
 ```
 
-Run **MCP: List Servers** from the Command Palette and start `solidworks`. Its output should end with `Discovered 154 tools` (the count grows as tools are added).
+Run **MCP: List Servers** from the Command Palette and start `solidworks`. Its output should end with `Discovered 155 tools` (the count grows as tools are added).
 
 </details>
 

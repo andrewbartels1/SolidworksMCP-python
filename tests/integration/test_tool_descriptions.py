@@ -28,6 +28,7 @@ _MODULES = [
     "file_management",
     "macro_recording",
     "modeling",
+    "server_admin",
     "sketching",
     "template_management",
     "vba_generation",

@@ -164,9 +164,13 @@ updated 2026-04-24.
 
 ### 4. `Circuit breaker is open for <tool>`
 
-- **Cause:** server-side resilience library trips after N failures in a
-  window. Subsequent calls fail fast even when the underlying issue is fixed.
-- **Fix:** wait for breaker timeout (~30–60s) or restart the server.
+- **Cause:** the server's circuit breaker pauses an operation after 5
+  failures. Subsequent calls fail fast even when the underlying issue is
+  fixed. Before #208 a single failure could count many times: the server's
+  router fell back to the VBA adapter, which re-entered the router.
+- **Fix:** call the `reset_circuit_breaker` tool (all operations, or one by
+  name), or wait for the timeout (`SOLIDWORKS_MCP_CIRCUIT_BREAKER_TIMEOUT`,
+  default 60 s), or restart the server.
 
 ### 5. COM apartment / threading mismatch — FastMCP async workers
 

@@ -10,6 +10,7 @@ import pytest
 from solidworks_mcp.adapters.base import (
     AdapterResult,
     AdapterResultStatus,
+    RevolveParameters,
     SweepParameters,
 )
 from solidworks_mcp.adapters.vba_adapter import VbaGeneratorAdapter
@@ -147,3 +148,27 @@ async def test_vba_adapter_create_loft_calls_backing(monkeypatch):
     result = await adapter.create_loft(loft_params)
     assert result.is_success
     mock_backing.create_loft.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_revolve_runs_on_the_backing_adapter_with_vba_metadata() -> None:
+    backing = SimpleNamespace(
+        create_revolve=AsyncMock(
+            return_value=AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data={"ok": 1}
+            )
+        )
+    )
+    adapter = VbaGeneratorAdapter(backing_adapter=backing)
+
+    result = await adapter.create_revolve(RevolveParameters(angle=360.0))
+
+    assert result.is_success
+    assert result.metadata["route"] == "vba"
+    assert "Sub CreateRevolve()" in result.metadata["vba_code"]
+
+
+def test_unknown_attributes_come_from_the_backing_adapter() -> None:
+    adapter = VbaGeneratorAdapter(backing_adapter=SimpleNamespace(pool_size=3))
+
+    assert adapter.pool_size == 3

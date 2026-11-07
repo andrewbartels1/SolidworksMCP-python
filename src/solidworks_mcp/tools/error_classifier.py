@@ -91,7 +91,9 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         error_type="circuit_open",
         hint=(
             "Calls to this operation are paused after repeated failures. Fix "
-            "the underlying error, then retry after the breaker timeout."
+            "the underlying error, then call `reset_circuit_breaker` (or wait "
+            "for the breaker timeout, SOLIDWORKS_MCP_CIRCUIT_BREAKER_TIMEOUT "
+            "seconds) and retry."
         ),
         patterns=(r"circuit breaker is (open|half[_-]open)",),
     ),

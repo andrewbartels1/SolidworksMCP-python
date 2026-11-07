@@ -1231,6 +1231,22 @@ class SolidWorksAdapter(ABC):
             error="list_components is not implemented by this adapter",
         )
 
+    async def reset_circuit_breakers(
+        self, operation: str | None = None
+    ) -> AdapterResult[dict[str, list[str]]]:
+        """Re-open operations a circuit breaker paused.
+
+        An adapter without a circuit breaker has nothing paused; the breaker
+        and the connection pool override this.
+
+        Args:
+            operation: The operation to reset; ``None`` resets every one.
+
+        Returns:
+            AdapterResult[dict[str, list[str]]]: ``reset``, the operations that were paused.
+        """
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data={"reset": []})
+
     async def get_model_geometry_summary(self) -> AdapterResult[dict[str, Any]]:
         """Summarise the active part or assembly without changing it.
 

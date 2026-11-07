@@ -358,7 +358,9 @@ def _file_input(input_data: Any, format_type: str) -> Any:
     leaves it out. Models, including the per-format aliases, pass through.
     """
     if isinstance(input_data, dict):
-        return normalize_input({"format_type": format_type, **input_data}, ExportFileInput)
+        return normalize_input(
+            {"format_type": format_type, **input_data}, ExportFileInput
+        )
     return input_data
 
 
