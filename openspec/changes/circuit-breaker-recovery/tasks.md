@@ -12,4 +12,4 @@
 ## 3. Docs and ship
 
 - [x] 3.1 `CLAUDE.md` runbook item 4, the agent skill's errors reference, CHANGELOG, queue
-- [ ] 3.2 Full mock suite, ruff, 100 % coverage; then a paced live check with the user's permission
+- [x] 3.2 Full mock suite, ruff, 100 % coverage; then a paced live check with the user's permission
