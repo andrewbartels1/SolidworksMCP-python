@@ -6,22 +6,26 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-05.
+Last updated 2026-11-06.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
 | 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` (archived) | Done 2026-11-05 (#202, #203, #204). Left: after the next release, ask Glama for a rescan and record the score in the internal assessment |
-| 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` | Plan written 2026-11-05, in review |
-| 3 | `--selftest` command and a compatibility-report issue template | #179 | not yet written | |
-| 4 | README: COM API coverage audit and licence-tier tags | #79 | not yet written | |
-| 5 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
-| 6 | Bracket demo GIF for the README: narrow the issue or close it | #147 | not yet written | |
-| 7 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | Bottom of the queue, by request 2026-11-04 |
-| 8 | Optional toolsets or a discovery mode, to cut the tool list's size | #176 | not yet written | After #174, which decides which families are core |
-| 9 | Make the "not available yet" tools work, or retire them: each is registered but no adapter implements it, so every call returns `not_supported` (listed below) | not filed yet | not yet written | Added 2026-11-04. After #174, which may retire some of them as duplicates |
-| 10 | Small faults found while describing the tools (listed below) | not filed yet | not yet written | Added 2026-11-04 |
+| 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` | Merged (#205). Measured 2026-11-06 on the U-joint; the demo and write-up ship in the U-joint demo PR, which also closes #147 (superseded) |
+| 3 | The circuit breaker locks a tool out after a success and never reopens; a reset tool | #208 | not yet written | Next |
+| 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` | Plan written 2026-11-06, in review |
+| 5 | Tool gaps found building the U-joint: face mates, fixed parts and flexible sub-assemblies, angled planes, angled chamfers, `both_directions`, a stale interference result, thin extrudes | #209 | not yet written | |
+| 6 | `--selftest` command and a compatibility-report issue template | #179 | not yet written | |
+| 7 | Skills that improve the agent's results, measured on the U-joint prompt (Opus 5.5 at medium effort: the first skill changed how the agent worked, not what it built) | #207 | not yet written | |
+| 8 | README: licence-tier tags | #79 (other half) | not yet written | |
+| 9 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
+| 10 | Monitor stand demo follow-ups | #206 | not yet written | |
+| 11 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | Bottom of the queue, by request 2026-11-04 |
+| 12 | Optional toolsets or a discovery mode, to cut the tool list's size | #176 | not yet written | After #174, which decides which families are core |
+| 13 | Make the "not available yet" tools work, or retire them: each is registered but no adapter implements it, so every call returns `not_supported` (listed below) | not filed yet | not yet written | After #174, which may retire some of them as duplicates |
+| 14 | Small faults found while describing the tools (listed below) | not filed yet | not yet written | Fixing one moves its tool up a support level (item 4) |
 
-## Tools that can't run yet (item 9)
+## Tools that can't run yet (item 13)
 
 Each one's description says "Not available yet ... planned for a future
 release" (the wording is in `docs/agents/tool-description-standard.md`).
@@ -49,7 +53,7 @@ Found while rewriting the descriptions (39 in all).
 - **Export (1):** `batch_export`.
 - **Analysis (2):** `analyze_geometry`, `get_material_properties`.
 
-## Small faults (item 10)
+## Small faults (item 14)
 
 When one is fixed, remove it from the agent skill's
 `src/solidworks_mcp/skills/solidworks-mcp/references/errors-and-limits.md`
@@ -92,7 +96,7 @@ in the same change.
 - Until #174 lands, item 1's descriptions say which of two overlapping
   tools to use ("For ..., use `other_tool`."), so agents can pick
   correctly before any tool is removed.
-- Item 1's family tags are what item 8's toolsets filter on.
+- Item 1's family tags are what item 12's toolsets filter on.
 - Parked: the intermittent SolidWorks error sound during
   `create_cut_extrude` in the chamfer live tests (#199, #201). Revisit if it
   causes failures; run `live_demo.ps1 -Trace` and read the "The hole cut"

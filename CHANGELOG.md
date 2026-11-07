@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The U-joint demo** (#175, #207). SolidWorks' U-Joint sample, written up
+  as a prompt and built by Claude Code (Opus 5.5, medium effort) in 294
+  tool calls, is the top demo in the README and on the Demos page, beside
+  the original. The same prompt with and without the agent skill made the
+  same parts; the skill page records the comparison.
+- **The monitor stand, printed.** The monitor-stand demo now shows the
+  stand on the printer.
+
 - **An agent skill for using the server** (#175). `solidworks-mcp skill
   install` puts the `solidworks-mcp` skill in Claude Code's skills folder
   (`--project` or `--dir` for others); it covers the build order, units

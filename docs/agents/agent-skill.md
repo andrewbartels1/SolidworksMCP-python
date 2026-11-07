@@ -39,12 +39,61 @@ replacing older copies of them and leaving any other file there alone. It
 reads nothing but the packaged skill (no client config, no other skill) and
 needs no network or login. Re-run it after upgrading the server.
 
+## Does it help? Measured on the U-joint
+
+The skill was tested on a hard prompt: rebuild SolidWorks' own U-Joint
+sample, eight parts, a crank sub-assembly and a main assembly that must move
+as a mechanism, from a plain-English description (see the
+[U-joint demo](../demos.md#ujoint)). Claude Code with **Opus 5.5 at medium
+effort** ran it in fresh sessions on the same SolidWorks: once with the skill
+installed and the server instructions, once without either. Both had the same
+tool descriptions.
+
+| | With skill | Without skill |
+| --- | --- | --- |
+| Time | 23.5 min | 21.9 min |
+| SolidWorks tool calls | 294 | 268 |
+| SolidWorks errors | 3 | 7 |
+| `verify_model` checks | 17 | 8 |
+| Output tokens | 451k | 385k |
+| Main assembly | 7 parts, rotations left free | 7 parts, 20 mates, motion tested with a temporary 30° mate |
+
+Part volumes (mm³) against the original sample:
+
+| Part | Sample | With skill | Without skill |
+| --- | --- | --- | --- |
+| bracket | 56,363.5 | 56,922.8 | 56,922.8 |
+| Yoke_male | 30,825.7 | 30,777.8 | 30,777.9 |
+| Yoke_female | 27,252.8 | 27,210.2 | 27,210.2 |
+| spider | 4,775.0 | 4,775.0 | 4,775.0 |
+| pin | 2,642.9 | 2,642.9 | 2,642.9 |
+| crank-shaft | 5,948.8 | 5,935.5 | 5,935.6 |
+| crank-arm | 8,206.4 | 8,206.4 | 8,206.4 |
+| crank-knob | 7,528.1 | 7,528.1 | 7,528.1 |
+
+The bracket's extra 1 % is the corner where its lip meets the foot: the
+sample's thin feature trims it, and the prompt never described it. The
+crank shaft's 0.2 % is its collar fillets, which are larger than the step they
+sit on (both sessions said so).
+
+**The takeaway:** for Opus 5.5 at medium effort, this skill changed *how* the
+agent worked (fewer errors, twice the checking, about 17 % more tokens), not
+*what* it built: both sessions made the same parts. The tool descriptions
+already carry what the skill says. A skill earns its tokens only when it adds
+what the model can't get from the tools, such as mates that leave a mechanism
+free to move, reference-geometry recipes and design-intent checks. We need
+new and better skills, and [#207](https://github.com/andrewbartels1/SolidworksMCP-python/issues/207) tracks writing and measuring them.
+
+One run per arm is a single data point. An earlier pair of runs, before the
+prompt was corrected, came out the same way. Record the model and effort
+level with every measurement.
+
 ## Keeping it true
 
 `tests/integration/test_skill_content.py` fails when the skill or the
 instructions name a tool that isn't registered, or send an agent to a tool
 that can't run yet (those may be named only in the limits reference, which
-lists them). When a fault in `openspec/queue.md` item 10 is fixed, remove
+lists them). When a fault in `openspec/queue.md` (the small-faults list) is fixed, remove
 it from `references/errors-and-limits.md` in the same change.
 
 For changing the server's COM code, the contributor reference is
