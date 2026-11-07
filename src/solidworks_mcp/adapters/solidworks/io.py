@@ -294,6 +294,74 @@ def _byref_bstr() -> Any:
     )
 
 
+def _find_components(adapter: Any, assembly: Any, names: list[str]) -> dict[str, Any]:
+    """The named top-level components of ``assembly``, as ``IComponent2``.
+
+    Args:
+        adapter: The connected adapter.
+        assembly: The ``IAssemblyDoc`` dispatch.
+        names: Instance names, e.g. ``["bracket-1", "pin-1"]``.
+
+    Returns:
+        dict[str, Any]: Name to wrapped component, one per name.
+
+    Raises:
+        Exception: When the components can't be read, or a name isn't there
+            (the message lists what the assembly holds).
+    """
+    components = adapter._attempt(lambda: assembly.GetComponents(True), default=None)
+    if not isinstance(components, (list, tuple)):
+        raise Exception("Could not read the assembly's components")
+
+    found: dict[str, Any] = {}
+    for component in components:
+        wrapped = _as_com(adapter, component, "IComponent2")
+        if wrapped is None:
+            continue
+        name = adapter._attempt(lambda w=wrapped: w.Name2, default=None)
+        if name and str(name) in names:
+            found[str(name)] = wrapped
+
+    missing = [n for n in names if n not in found]
+    if missing:
+        available = [
+            str(
+                adapter._attempt(
+                    lambda c=c: _as_com(adapter, c, "IComponent2").Name2,
+                    default="?",
+                )
+            )
+            for c in components
+        ]
+        raise Exception(
+            f"Component(s) not found: {', '.join(missing)}. "
+            f"The assembly holds: {', '.join(available)}."
+        )
+    return found
+
+
+def _component_state(adapter: Any, component: Any) -> dict[str, Any]:
+    """Read what ``CompConfigProperties5`` sets, plus whether it is fixed."""
+    visible = adapter._attempt(lambda: component.Visible, default=None)
+    return {
+        "fixed": adapter._attempt(lambda: bool(component.IsFixed()), default=None),
+        "flexible": adapter._attempt(lambda: component.Solving == 1, default=None),
+        "suppression": adapter._attempt(
+            lambda: component.GetSuppression2(), default=None
+        ),
+        "visible": None if visible is None else visible == 1,
+        "referenced_configuration": adapter._attempt(
+            lambda: component.ReferencedConfiguration, default=None
+        ),
+        "exclude_from_bom": adapter._attempt(
+            lambda: bool(component.ExcludeFromBOM), default=None
+        ),
+        "envelope": adapter._attempt(
+            lambda: bool(component.IsEnvelope()), default=None
+        ),
+    }
+
+
 def _select_component_face(
     adapter: Any,
     model: Any,
@@ -2736,38 +2804,9 @@ class SolidWorksIOMixin:
             model = adapter.currentModel
             assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
 
-            components = adapter._attempt(
-                lambda: assembly.GetComponents(True), default=None
-            )
-            if not isinstance(components, (list, tuple)):
-                raise Exception("Could not read the assembly's components")
-
             wanted = {component_a: entity_a, component_b: entity_b}
             faces = {component_a: face_a, component_b: face_b}
-            found: dict[str, Any] = {}
-            for component in components:
-                wrapped = _as_com(adapter, component, "IComponent2")
-                if wrapped is None:
-                    continue
-                name = adapter._attempt(lambda w=wrapped: w.Name2, default=None)
-                if name and str(name) in wanted:
-                    found[str(name)] = wrapped
-
-            missing = [n for n in (component_a, component_b) if n not in found]
-            if missing:
-                available = [
-                    str(
-                        adapter._attempt(
-                            lambda c=c: _as_com(adapter, c, "IComponent2").Name2,
-                            default="?",
-                        )
-                    )
-                    for c in components
-                ]
-                raise Exception(
-                    f"Component(s) not found: {', '.join(missing)}. "
-                    f"The assembly holds: {', '.join(available)}."
-                )
+            found = _find_components(adapter, assembly, [component_a, component_b])
 
             adapter._attempt(lambda: model.ClearSelection2(True), default=None)
             for index, component_name in enumerate((component_a, component_b)):
@@ -2865,6 +2904,98 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("add_mate", _mate),
+        )
+
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Fix or float a component, and make a sub-assembly rigid or flexible.
+
+        Fixing selects the component and calls ``IAssemblyDoc::FixComponent``
+        or ``UnfixComponent``. Solving goes through
+        ``IAssemblyDoc::CompConfigProperties5``, which also sets suppression,
+        visibility, configuration, BOM and envelope for the selected
+        component: each is read from the component first and passed back, so
+        only solving changes.
+
+        Args:
+            component (str): Instance name, as ``list_components`` reports it.
+            fixed (bool | None): True fixes it, False floats it.
+            flexible (bool | None): True flexible, False rigid (sub-assemblies).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The state before and after.
+        """
+        adapter = self._adapter(self)
+        if _doc_type(adapter) != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="set_component_state requires an assembly document",
+            )
+        if fixed is None and flexible is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="Nothing to change: give fixed, flexible or both.",
+            )
+
+        def _state() -> dict[str, Any]:
+            model = adapter.currentModel
+            assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
+            target = _find_components(adapter, assembly, [component])[component]
+            before = _component_state(adapter, target)
+            sel_mgr = _sw_type_info.flagged(model.SelectionManager, "ISelectionMgr")
+
+            def select() -> None:
+                adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+                data = adapter._attempt(
+                    lambda: sel_mgr.CreateSelectData(), default=None
+                )
+                if not adapter._attempt(
+                    lambda: target.Select4(False, data, False), default=False
+                ):
+                    raise Exception(f"Failed to select {component}")
+
+            if fixed is not None:
+                select()
+                call = assembly.FixComponent if fixed else assembly.UnfixComponent
+                adapter._attempt(call, default=None)
+            if flexible is not None:
+                select()
+                config = before["referenced_configuration"] or ""
+                applied = adapter._attempt(
+                    lambda: assembly.CompConfigProperties5(
+                        before["suppression"],
+                        1 if flexible else 0,  # swComponentSolvingOption_e
+                        bool(before["visible"]),
+                        bool(config),
+                        config,
+                        bool(before["exclude_from_bom"]),
+                        bool(before["envelope"]),
+                    ),
+                    default=False,
+                )
+                if not applied:
+                    raise Exception(
+                        f"SolidWorks refused to make {component} "
+                        f"{'flexible' if flexible else 'rigid'}; only a "
+                        "sub-assembly can be flexible."
+                    )
+            adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+            adapter._attempt(lambda: model.EditRebuild3(), default=None)
+            after = _component_state(adapter, target)
+            if fixed is not None and after["fixed"] is not fixed:
+                raise Exception(
+                    f"{component} is still {'floating' if fixed else 'fixed'} "
+                    "after the change."
+                )
+            return {"component": component, "before": before, "after": after}
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("set_component_state", _state),
         )
 
     async def list_components(self) -> AdapterResult[list[str]]:

@@ -1640,6 +1640,19 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"count": count},
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set a component's state through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_component_state",
+            lambda: self.adapter.set_component_state(component, fixed, flexible),
+            input_dict={"component": component, "fixed": fixed, "flexible": flexible},
+        )
+
     async def add_mate(
         self,
         component_a: str,

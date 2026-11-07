@@ -202,6 +202,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # Mates added via add_mate, in order, so the geometry summary can
         # report a mate count without real geometry.
         self._mates: list[dict[str, Any]] = []
+        self._component_states: dict[str, dict[str, bool]] = {}
         # Drawing views placed via create_drawing_view / add_drawing_view /
         # create_technical_drawing, in sheet order. See list_drawing_views.
         self._drawing_views: list[str] = []
@@ -3045,6 +3046,42 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "tree_changed": before != after,
             },
             execution_time=self._delays["model_operation"],
+        )
+
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock fixing, floating and flexing a component.
+
+        Tracks each component's state on ``self._component_states``.
+
+        Args:
+            component (str): Instance name.
+            fixed (bool | None): True fixes it, False floats it.
+            flexible (bool | None): True flexible, False rigid.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The state before and after.
+        """
+        if fixed is None and flexible is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="Nothing to change: give fixed, flexible or both.",
+            )
+        states = self._component_states
+        before = dict(states.get(component, {"fixed": False, "flexible": False}))
+        after = dict(before)
+        if fixed is not None:
+            after["fixed"] = fixed
+        if flexible is not None:
+            after["flexible"] = flexible
+        states[component] = after
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"component": component, "before": before, "after": after},
         )
 
     async def add_mate(

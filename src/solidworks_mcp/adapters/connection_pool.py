@@ -1523,6 +1523,18 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "undo", lambda adapter: adapter.undo(count)
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set a component's state using pool."""
+        return await self._execute_with_pool(
+            "set_component_state",
+            lambda adapter: adapter.set_component_state(component, fixed, flexible),
+        )
+
     async def add_mate(
         self,
         component_a: str,

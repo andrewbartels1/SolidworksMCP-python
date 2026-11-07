@@ -4009,6 +4009,120 @@ class TestAssemblyAndDrawingSuccessPaths:
         assert result.is_error
         assert "Failed to select the face of pin-1" in (result.error or "")
 
+    @staticmethod
+    def _state_adapter(
+        monkeypatch, *, fixed: bool = True, applied: bool = True, selects: bool = True
+    ) -> tuple[PyWin32Adapter, SimpleNamespace, list[Any]]:
+        """An assembly holding 'crank-1', whose state the fakes track."""
+        adapter = TestAssemblyAndDrawingSuccessPaths._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        calls: list[Any] = []
+        comp = SimpleNamespace(
+            Name2="crank-1",
+            Visible=1,
+            Solving=0,
+            ReferencedConfiguration="Default",
+            ExcludeFromBOM=False,
+            IsEnvelope=lambda: False,
+            GetSuppression2=lambda: 3,
+            Select4=lambda append, data, popup: selects,
+        )
+        state = {"fixed": fixed}
+        comp.IsFixed = lambda: state["fixed"]
+        model = adapter.currentModel
+        model.GetComponents.return_value = [comp]
+
+        def fix() -> None:
+            calls.append("fix")
+            state["fixed"] = True
+
+        def unfix() -> None:
+            calls.append("unfix")
+            state["fixed"] = False
+
+        def config(*args: Any) -> bool:
+            calls.append(("config", args))
+            if applied:
+                comp.Solving = args[1]
+            return applied
+
+        model.FixComponent = fix
+        model.UnfixComponent = unfix
+        model.CompConfigProperties5 = config
+        return adapter, comp, calls
+
+    @pytest.mark.asyncio
+    async def test_set_component_state_floats_and_flexes(self, monkeypatch) -> None:
+        adapter, _comp, calls = self._state_adapter(monkeypatch)
+
+        result = await adapter.set_component_state(
+            "crank-1", fixed=False, flexible=True
+        )
+
+        assert result.is_success, result.error
+        assert calls[0] == "unfix"
+        # Suppression, visibility, configuration, BOM and envelope go back as read.
+        assert calls[1] == ("config", (3, 1, True, True, "Default", False, False))
+        assert result.data["before"]["fixed"] is True
+        assert result.data["after"]["fixed"] is False
+        assert result.data["after"]["flexible"] is True
+        assert result.data["after"]["referenced_configuration"] == "Default"
+
+    @pytest.mark.asyncio
+    async def test_set_component_state_fixes(self, monkeypatch) -> None:
+        adapter, _comp, calls = self._state_adapter(monkeypatch, fixed=False)
+
+        result = await adapter.set_component_state("crank-1", fixed=True)
+
+        assert result.is_success, result.error
+        assert calls == ["fix"]
+        assert result.data["after"]["fixed"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_part_cannot_be_flexible(self, monkeypatch) -> None:
+        adapter, _comp, _calls = self._state_adapter(monkeypatch, applied=False)
+
+        result = await adapter.set_component_state("crank-1", flexible=True)
+
+        assert result.is_error
+        assert "only a sub-assembly can be flexible" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_a_component_that_will_not_select_is_reported(
+        self, monkeypatch
+    ) -> None:
+        adapter, _comp, _calls = self._state_adapter(monkeypatch, selects=False)
+
+        result = await adapter.set_component_state("crank-1", fixed=False)
+
+        assert result.is_error
+        assert "Failed to select crank-1" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_a_fix_that_does_not_take_is_reported(self, monkeypatch) -> None:
+        adapter, _comp, _calls = self._state_adapter(monkeypatch, fixed=False)
+        adapter.currentModel.FixComponent = lambda: None  # SolidWorks ignores it
+
+        result = await adapter.set_component_state("crank-1", fixed=True)
+
+        assert result.is_error
+        assert "crank-1 is still floating" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_set_component_state_refusals(self, monkeypatch) -> None:
+        part = self._document(monkeypatch, 1)
+        adapter, _comp, _calls = self._state_adapter(monkeypatch)
+
+        wrong_doc = await part.set_component_state("crank-1", fixed=True)
+        nothing = await adapter.set_component_state("crank-1")
+        missing = await adapter.set_component_state("ghost-1", fixed=True)
+
+        assert "requires an assembly document" in (wrong_doc.error or "")
+        assert "Nothing to change" in (nothing.error or "")
+        assert "Component(s) not found: ghost-1" in (missing.error or "")
+
     @pytest.mark.asyncio
     async def test_list_components_returns_their_names(self, monkeypatch) -> None:
         adapter = self._document(monkeypatch, 2)

@@ -825,6 +825,41 @@ class AddMateInput(CompatInput):
                 raise ValueError(f"face_{side} must be [x, y, z] in millimetres")
 
 
+class SetComponentStateInput(CompatInput):
+    """Input schema for fixing, floating and flexing a component.
+
+    Attributes:
+        component (str): Component instance name.
+        fixed (bool | None): True fixes it, False floats it.
+        flexible (bool | None): True flexible, False rigid.
+    """
+
+    component: str = Field(
+        description="Component instance name, as reported by list_components"
+    )
+    fixed: bool | None = Field(
+        default=None,
+        description=(
+            "true fixes the component in place; false floats it so mates can "
+            "move it; leave it out to keep it as it is"
+        ),
+    )
+    flexible: bool | None = Field(
+        default=None,
+        description=(
+            "For a sub-assembly: true lets its own mates move inside this "
+            "assembly (a crank that turns); false makes it rigid; leave it out "
+            "to keep it as it is"
+        ),
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.component.strip():
+            raise ValueError("component is required")
+        if self.fixed is None and self.flexible is None:
+            raise ValueError("give fixed, flexible or both")
+
+
 class CreateReferencePlaneInput(CompatInput):
     """Input schema for creating a reference plane.
 
@@ -1761,6 +1796,44 @@ async def register_modeling_tools(
             "status": "success",
             "message": message,
             "mate": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def set_component_state(input_data: SetComponentStateInput) -> dict[str, Any]:
+        """Fix or float a component of the active assembly, or make a sub-assembly rigid or flexible.
+
+        Float a part so mates can position it (the first part inserted is fixed); fix
+        one to hold it still. Make a sub-assembly flexible so its own mates move in
+        this assembly (a crank whose knob turns). Only what you pass changes: the
+        component's suppression, visibility and configuration are kept. Needs: an
+        open assembly. Changes: the component's fixed or solving state. Returns:
+        `state` with `component`, `before` and `after` (`fixed`, `flexible` and the
+        properties kept).
+
+        Args:
+            input_data: The component and what to change: `fixed`, `flexible` or
+                both.
+
+        Returns:
+            dict[str, Any]: The state before and after.
+        """
+        input_data = normalize_input(input_data, SetComponentStateInput)
+        result = await adapter.set_component_state(
+            input_data.component, input_data.fixed, input_data.flexible
+        )
+        require_success(result, context="Failed to set the component state")
+        data = result.data if isinstance(result.data, dict) else {}
+        after = data.get("after", {})
+        words = []
+        if input_data.fixed is not None:
+            words.append("fixed" if after.get("fixed") else "floating")
+        if input_data.flexible is not None:
+            words.append("flexible" if after.get("flexible") else "rigid")
+        return {
+            "status": "success",
+            "message": f"{input_data.component} is now {' and '.join(words)}",
+            "state": data,
             "execution_time": result.execution_time,
         }
 

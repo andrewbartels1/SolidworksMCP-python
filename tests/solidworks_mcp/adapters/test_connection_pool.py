@@ -882,6 +882,9 @@ class TestConnectionPoolAdapterExtras:
             ):
                 return _ok("mate")
 
+            async def set_component_state(self, component, fixed=None, flexible=None):
+                return _ok("state")
+
             async def add_chamfer(self, distance, edge_names, angle=45.0, flip=False):
                 return _ok("chamfer")
 
@@ -914,6 +917,7 @@ class TestConnectionPoolAdapterExtras:
             assert (await wrapped.rename_feature("Sketch1", "Sketch2")).is_success
             assert (await wrapped.undo()).is_success
             assert (await wrapped.add_mate("Comp1", "Comp2")).is_success
+            assert (await wrapped.set_component_state("Comp1", fixed=True)).is_success
             assert (await wrapped.add_chamfer(1.0, ["Edge1"])).is_success
             assert (await wrapped.get_selected_entities()).is_success
 

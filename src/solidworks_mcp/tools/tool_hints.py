@@ -215,6 +215,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "create_loft": _adds("Create Loft"),
     "insert_component": _adds("Insert Component"),
     "add_mate": _adds("Add Mate"),
+    "set_component_state": _sets("Set Component State"),
     "list_components": _reads("List Components"),
     "delete_feature": _discards("Delete Feature"),
     "suppress_feature": _sets("Suppress or Unsuppress Feature"),

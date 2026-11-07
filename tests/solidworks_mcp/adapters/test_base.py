@@ -634,6 +634,10 @@ async def test_base_defaults_report_missing_capability() -> None:
     assert not mate_result.is_success
     assert "add_mate" in (mate_result.error or "")
 
+    state_result = await adapter.set_component_state("a-1", fixed=True)
+    assert not state_result.is_success
+    assert "set_component_state" in (state_result.error or "")
+
 
 CAPABILITIESFeatureEditingCapability = [
     "delete_feature",

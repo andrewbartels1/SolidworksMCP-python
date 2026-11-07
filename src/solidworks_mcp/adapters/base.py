@@ -1279,6 +1279,27 @@ class SolidWorksAdapter(ABC):
             error="get_model_geometry_summary is not implemented by this adapter",
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Fix or float a component, and make a sub-assembly rigid or flexible.
+
+        Args:
+            component (str): Instance name, as ``list_components`` reports it.
+            fixed (bool | None): True fixes it, False floats it.
+            flexible (bool | None): True flexible, False rigid.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The state before and after, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_component_state is not implemented by this adapter",
+        )
+
     async def add_mate(
         self,
         component_a: str,

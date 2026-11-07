@@ -84,9 +84,11 @@ Each side takes exactly one of `entity_*` or `face_*`. The default stays
 Input: `component`, and any of `fixed` (true fixes, false floats) and
 `flexible` (true flexible, false rigid). Fix and float select the component
 and call `FixComponent` / `UnfixComponent`. Solving goes through
-`CompConfigProperties6`, which also sets suppression, visibility,
+`CompConfigProperties5`, which also sets suppression, visibility,
 configuration, BOM and envelope: the adapter reads each one from the
-component first and passes it back, so only solving changes. The reply is
+component first and passes it back, so only solving changes. (Version 6
+adds a save-as-part option the component doesn't report, so it would set
+something unread.) The reply is
 the state read back (`fixed`, `flexible`). Alternative, more fields on
 `add_mate`: rejected, a component's state isn't a mate.
 

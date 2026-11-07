@@ -43,6 +43,7 @@ from solidworks_mcp.tools.modeling import (
     RenameFeatureInput,
     SelectFaceEdgesInput,
     SelectFeatureInput,
+    SetComponentStateInput,
     SetDimensionInput,
     SetUnitsInput,
     SuppressFeatureInput,
@@ -2219,3 +2220,43 @@ async def test_add_mate_tool_passes_faces_and_defaults_the_planes(
         "face at [0.0, 4.7, 0.0] mm",
     ]
     assert by_plane["mate"]["entities"] == ["Front Plane", "Front Plane"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"component": " ", "fixed": True}, "component is required"),
+        ({"component": "a-1"}, "give fixed"),
+    ],
+)
+def test_set_component_state_input_refusals(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        SetComponentStateInput(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_set_component_state_tool_says_what_changed(
+    mcp_server, mock_adapter
+) -> None:
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "set_component_state"
+    )
+
+    both = await tool({"component": "crank-1", "fixed": False, "flexible": True})
+    fixed = await tool({"component": "crank-1", "fixed": True})
+    rigid = await tool({"component": "crank-1", "flexible": False})
+
+    assert both["message"] == "crank-1 is now floating and flexible"
+    assert both["state"]["before"] == {"fixed": False, "flexible": False}
+    assert fixed["message"] == "crank-1 is now fixed"
+    assert rigid["message"] == "crank-1 is now rigid"
+
+
+@pytest.mark.asyncio
+async def test_the_mock_refuses_an_empty_state_change(mock_adapter) -> None:
+    result = await mock_adapter.set_component_state("crank-1")
+
+    assert result.is_error
