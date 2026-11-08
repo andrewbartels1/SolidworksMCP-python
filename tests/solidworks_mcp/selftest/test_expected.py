@@ -10,7 +10,7 @@ from solidworks_mcp.selftest import expected as ex
 def test_block_hole_fillet_and_pin_volumes() -> None:
     assert ex.BLOCK_VOLUME_MM3 == 8000.0
     assert ex.HOLE_VOLUME_MM3 == pytest.approx(7214.60, abs=0.01)
-    assert ex.FILLET_VOLUME_MM3 == pytest.approx(7180.26, abs=0.01)
+    assert ex.FILLET_VOLUME_MM3 == pytest.approx(7180.27, abs=0.01)
     assert ex.PIN_VOLUME_MM3 == pytest.approx(1417.64, abs=0.01)
 
 

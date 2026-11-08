@@ -22,11 +22,11 @@
 
 - [x] 3.1 `.github/ISSUE_TEMPLATE/compatibility.yml` with the `summary` field id the link fills, labelled `compatibility` (the label is created on GitHub when the PR merges)
 - [x] 3.2 Point `feedback.yml` and the README's "Tested on" line at the form and the command
-- [ ] 3.3 `docs/compatibility.md` (with the nav entry), seeded from the live run in 4.1; mention the command in the install docs
+- [x] 3.3 `docs/compatibility.md` (with the nav entry), seeded from the live run in 4.1; mention the command in the install docs
 - [x] 3.4 CHANGELOG, and mark #179 in `openspec/queue.md`
 
 ## 4. Live check and sign-off
 
-- [ ] 4.1 Live test `tests/live/test_live_sw_selftest.py`: run the selftest on SolidWorks 2026 with a user-style unsaved part open first; assert every area passes and that part is still open, unsaved and unchanged
-- [ ] 4.2 Run the command by hand for the user (live-demo sign-off), and paste its report into the compatibility page's first row
-- [ ] 4.3 Full mock suite at 100% coverage, ruff, and `mkdocs build --strict`
+- [x] 4.1 Live test `tests/live/test_live_sw_selftest.py`: run the selftest on SolidWorks 2026 with a user-style unsaved part open first; assert every area passes and that part is still open, unsaved and unchanged
+- [x] 4.2 Run the command by hand for the user (live-demo sign-off), and paste its report into the compatibility page's first row
+- [x] 4.3 Full mock suite at 100% coverage, ruff, and `mkdocs build --strict`

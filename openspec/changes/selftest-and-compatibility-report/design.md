@@ -93,7 +93,7 @@ doesn't hide the other results.
   8,000 − π·5²·10 = 7,214.60 mm³; the bounding box is unchanged.
 - **Fillet:** r = 2 mm on one 40 mm top edge, picked by its midpoint
   (0, 10, 10) mm. It removes (1 − π/4)·2²·40 = 34.34 mm³, leaving
-  7,180.26 mm³.
+  7,180.27 mm³.
 - **Pin:** a Ø9.5 circle extruded 20 mm. Volume π·4.75²·20 = 1,417.64 mm³.
 - **Assembly:** the block and the pin, saved in the temporary folder. A
   concentric face mate (the hole's wall at (5, 5, 0), the pin's side at

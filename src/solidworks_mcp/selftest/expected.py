@@ -32,7 +32,7 @@ FILLET_EDGE = "0,0.01,0.01"
 FILLET_VOLUME_MM3 = (
     HOLE_VOLUME_MM3 - (1 - math.pi / 4) * FILLET_RADIUS_MM**2 * BLOCK_X_MM
 )
-# = 7,214.60 - 34.34 = 7,180.26
+# = 7,214.602 - 34.336 = 7,180.27
 
 # The pin: a Ø9.5 circle extruded 20 mm; 0.25 mm clearance in the Ø10 hole.
 PIN_RADIUS_MM = 4.75

@@ -17,7 +17,7 @@ client calls, each against a hand calculation:
 
 | Area | What it does | What it checks |
 | --- | --- | --- |
-| Part | A 40 × 20 × 10 mm block, then a Ø10 hole through it, then a 2 mm fillet on one edge; a Ø9.5 × 20 mm pin | Volume after each feature (8,000, then 7,214.60, then 7,180.26 mm³; the pin 1,417.64 mm³) and each bounding box |
+| Part | A 40 × 20 × 10 mm block, then a Ø10 hole through it, then a 2 mm fillet on one edge; a Ø9.5 × 20 mm pin | Volume after each feature (8,000, then 7,214.60, then 7,180.27 mm³; the pin 1,417.64 mm³) and each bounding box |
 | Assembly | The block and the pin, mated by two faces: concentric in the hole, bottoms flush | 2 components, 2 mates, no interference |
 | Drawing | A new drawing with one isometric view of the block | Exactly one view |
 | Export | The block as STEP | The file exists and isn't empty |
@@ -37,4 +37,4 @@ skipped, and 2 when it can't run (SolidWorks not installed or not running).
 
 | SolidWorks | Date | Part | Assembly | Drawing | Export | Report |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026 SP4.0 | pending | | | | | the live test, `tests/live/test_live_sw_selftest.py` |
+| 2026 SP4.0 (34.4.0), English | 2026-11-08 | PASS 8/8 | PASS 3/3 | PASS 1/1 | PASS 1/1 | the maintainer's run, and the live test `tests/live/test_live_sw_selftest.py` |
