@@ -44,8 +44,10 @@ expected value worked out by hand, within a stated tolerance:
 - export: the STEP file exists and is not empty.
 
 An area whose setup step fails SHALL be FAIL with the tool's error message.
-An area that depends on a failed area (the assembly, drawing and export
-use the saved part) SHALL be SKIP, naming the area it waited on.
+An area that needs a file an earlier area did not save (the assembly,
+drawing and export use the saved parts) SHALL be SKIP, naming what it
+needed. An area whose files were saved SHALL still run when an earlier
+area failed a check, so one wrong value does not hide the other results.
 
 #### Scenario: A wrong volume fails its area
 

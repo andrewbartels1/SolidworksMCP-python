@@ -326,6 +326,32 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             },
         )
 
+    async def get_application_info(self) -> AdapterResult[dict[str, Any]]:
+        """Mock SolidWorks description: a fixed 2026 install in English.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        if not self._connected:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "revision": "34.0.0",
+                "language": "english",
+                "templates": {
+                    kind: {"file_name": f"{kind}.{ext}", "exists": True}
+                    for kind, ext in (
+                        ("part", "prtdot"),
+                        ("assembly", "asmdot"),
+                        ("drawing", "drwdot"),
+                    )
+                },
+            },
+        )
+
     async def open_model(self, file_path: str) -> AdapterResult[SolidWorksModel]:
         """Mock opening a SolidWorks model.
 

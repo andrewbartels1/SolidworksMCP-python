@@ -655,6 +655,9 @@ def _as_com(adapter: Any, obj: Any, interface: str) -> Any:
 # swUserPreferenceIntegerValue_e - values transcribed from swconst.tlb on a
 # live SW 2026 (3DEXPERIENCE R2026x) install; the published API help does not
 # print the integers and they are NOT the "obvious" small numbers.
+#: swUserPreferenceStringValue_e: the default template for each new document.
+_SW_DEFAULT_TEMPLATES = {"part": 8, "assembly": 9, "drawing": 10}
+
 _SW_PREF_UNIT_SYSTEM = 263
 _SW_PREF_UNITS_LINEAR = 47
 _SW_PREF_UNITS_LINEAR_DECIMALS = 49
@@ -2462,6 +2465,52 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("get_model_geometry_summary", _summarise),
+        )
+
+    async def get_application_info(self) -> AdapterResult[dict[str, Any]]:
+        """Read SolidWorks' revision, language and default templates.
+
+        Each value is read on its own, so one unreadable value is ``None``
+        and the rest still come back. Templates are reported by file name
+        only, so no path under the user's profile leaves the adapter.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: See
+            ``SolidWorksAdapter.get_application_info``.
+        """
+        adapter = self._adapter(self)
+        app = adapter.swApp
+        if app is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
+            )
+
+        def _text(read: Any) -> str | None:
+            value = adapter._attempt(read, default=None)
+            return str(value) if value else None
+
+        def _template(preference: int) -> dict[str, Any]:
+            path = _text(lambda: app.GetUserPreferenceStringValue(preference))
+            return {
+                "file_name": os.path.basename(path) if path else None,
+                "exists": bool(path) and os.path.isfile(str(path)),
+            }
+
+        def _read() -> dict[str, Any]:
+            return {
+                "revision": _text(
+                    lambda: adapter._get_attr_or_call(app, "RevisionNumber")
+                ),
+                "language": _text(lambda: app.GetCurrentLanguage()),
+                "templates": {
+                    kind: _template(preference)
+                    for kind, preference in _SW_DEFAULT_TEMPLATES.items()
+                },
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("get_application_info", _read),
         )
 
     async def pack_and_go_assembly(

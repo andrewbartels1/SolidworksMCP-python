@@ -70,6 +70,7 @@ selftest/
   expected.py   # hand calculations, one named constant per check
   documents.py  # DocumentGuard: baseline, temp folder, close-only-ours
   report.py     # area lines, Markdown summary, prefilled issue link
+  results.py    # Check, AreaResult, ToolCaller (raises ToolFailed)
   environment.py# environment section from get_application_info etc.
 ```
 
@@ -79,6 +80,10 @@ Each area has a `name`, the names of the areas it `needs`, and
 made. The runner does not know what an area does, and the report does not
 know how a check was measured, so adding an area touches only `areas.py`
 and `expected.py`.
+
+An area is skipped when a file it needs (the saved block or pin) is
+missing, not when an earlier area failed a check, so one wrong value
+doesn't hide the other results.
 
 ### 4. The part, the assembly and the hand calculations
 

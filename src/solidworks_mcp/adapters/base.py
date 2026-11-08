@@ -1279,6 +1279,24 @@ class SolidWorksAdapter(ABC):
             error="get_model_geometry_summary is not implemented by this adapter",
         )
 
+    async def get_application_info(self) -> AdapterResult[dict[str, Any]]:
+        """Describe the connected SolidWorks without changing anything.
+
+        Only file names leave the adapter, never full paths, so the result
+        can be pasted into a public report. A value that cannot be read is
+        ``None``, never guessed.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``revision`` (e.g. ``"34.4.0"``),
+            ``language`` (e.g. ``"english"``) and ``templates``: for each of
+            ``part``, ``assembly`` and ``drawing``, the default template's
+            ``file_name`` and whether the file ``exists``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_application_info is not implemented by this adapter",
+        )
+
     async def set_component_state(
         self,
         component: str,

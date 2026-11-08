@@ -196,7 +196,7 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 ## Supported Today
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
-- Tested on SolidWorks 2026. Earlier versions may work but are untested; if you try one, please [open an issue](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new/choose) with what worked.
+- Tested on SolidWorks 2026. Earlier versions may work but are untested. To check yours, run `uvx solidworks-mcp-python selftest` with SolidWorks open, then send the result with the [compatibility report form](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=compatibility.yml). The [compatibility page](https://andrewbartels1.github.io/SolidworksMCP-python/compatibility/) lists the releases checked so far.
 - Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
 - Every tool's support level, and the reason a tool isn't stable yet, is on the [progress page](https://andrewbartels1.github.io/SolidworksMCP-python/progress/).
 

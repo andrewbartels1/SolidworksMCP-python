@@ -1448,6 +1448,18 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={},
         )
 
+    async def get_application_info(self) -> AdapterResult[dict[str, Any]]:
+        """Describe the connected SolidWorks through circuit breaker.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_circuit_breaker(
+            "get_application_info",
+            lambda: self.adapter.get_application_info(),
+            input_dict={},
+        )
+
     async def create_drawing_view(
         self, payload: Any = None
     ) -> AdapterResult[dict[str, Any]]:

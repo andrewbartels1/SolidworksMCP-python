@@ -1355,6 +1355,17 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             lambda adapter: adapter.get_model_geometry_summary(),
         )
 
+    async def get_application_info(self) -> AdapterResult[dict[str, Any]]:
+        """Describe the connected SolidWorks using pool.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "get_application_info",
+            lambda adapter: adapter.get_application_info(),
+        )
+
     async def create_drawing_view(
         self, payload: Any = None
     ) -> AdapterResult[dict[str, Any]]:
