@@ -23,29 +23,102 @@ Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
 
 from __future__ import annotations
 
+import functools
+import json
 import math
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from tests.live.evidence import evidence
+from tests.live.evidence import evidence, starting
 
 #: The bent plate: a 80 mm wall and a 40 mm foot, 6.35 mm thick, 38.1 mm wide.
 _WALL, _FOOT, _THICK, _WIDE = 80.0, 40.0, 6.35, 38.1
 
+#: Adapter steps the tests take directly; each is also an MCP tool of that name.
+_CAPTIONED_STEPS = frozenset(
+    {
+        "create_part",
+        "create_sketch",
+        "add_rectangle",
+        "add_circle",
+        "add_line",
+        "exit_sketch",
+        "save_file",
+        "create_assembly",
+        "insert_component",
+    }
+)
+
+
+def _shown(value: Any) -> str:
+    """One argument as a caption shows it: a file path by its name only."""
+    if isinstance(value, str) and ("\\" in value or "/" in value):
+        return json.dumps(Path(value).name)
+    return json.dumps(value, ensure_ascii=False)
+
+
+class _Captioned:
+    """An adapter whose test-level steps caption the recording as they start.
+
+    A recorded demo then shows every call under the motion it causes, not
+    only the final result. Everything else passes straight through.
+    """
+
+    def __init__(self, raw: Any) -> None:
+        self.raw = raw
+
+    def __getattr__(self, name: str) -> Any:
+        member = getattr(self.raw, name)
+        if name not in _CAPTIONED_STEPS:
+            return member
+
+        @functools.wraps(member)
+        async def step(*args: Any) -> Any:
+            starting(name, f"{name}({', '.join(_shown(a) for a in args)})")
+            return await member(*args)
+
+        return step
+
+
+@pytest.fixture(autouse=True)
+def _caption_steps(scratch: Any) -> Iterator[None]:
+    """Caption each direct adapter step; restore the plain adapter for cleanup."""
+    raw = scratch.adapter
+    scratch.adapter = _Captioned(raw)
+    yield
+    scratch.adapter = raw
+
+
+def _captioned_tool(name: str, fn: Any) -> Any:
+    """``fn``, captioning the recording with its call as it starts."""
+
+    @functools.wraps(fn)
+    async def call(arguments: dict[str, Any]) -> Any:
+        starting(name, f"{name}({json.dumps(arguments, ensure_ascii=False)})")
+        return await fn(arguments)
+
+    return call
+
 
 async def _tools(adapter: Any) -> dict[str, Any]:
-    """Register the modelling and analysis tools against ``adapter``; name -> fn."""
+    """Register the modelling and analysis tools against ``adapter``; name -> fn.
+
+    Each tool captions the recording as it is called. The tools drive the
+    plain adapter, so a tool's own adapter call isn't captioned twice.
+    """
     from fastmcp import FastMCP
 
     from solidworks_mcp.tools.analysis import register_analysis_tools
     from solidworks_mcp.tools.modeling import register_modeling_tools
 
+    raw = getattr(adapter, "raw", adapter)
     mcp = FastMCP("ujoint-tool-gaps-live")
-    await register_modeling_tools(mcp, adapter, {})
-    await register_analysis_tools(mcp, adapter, {})
-    return {t.name: t.fn for t in await mcp.list_tools()}
+    await register_modeling_tools(mcp, raw, {})
+    await register_analysis_tools(mcp, raw, {})
+    return {t.name: _captioned_tool(t.name, t.fn) for t in await mcp.list_tools()}
 
 
 async def _summary(adapter: Any) -> dict[str, Any]:
@@ -454,6 +527,17 @@ async def test_components_fix_float_and_a_sub_assembly_turns_flexible(
         assert flexed["state"]["after"][key] == flexed["state"]["before"][key], key
     rigid = await tools["set_component_state"](
         {"component": sub_name, "flexible": False}
+    )
+    evidence(
+        "the sub-assembly back to rigid",
+        {
+            "message": rigid.get("message"),
+            "flexible": [
+                rigid["state"]["before"].get("flexible"),
+                rigid["state"]["after"].get("flexible"),
+            ],
+        },
+        call=f'set_component_state({{"component": "{sub_name}", "flexible": false}})',
     )
     assert rigid["state"]["after"]["flexible"] is False
 
