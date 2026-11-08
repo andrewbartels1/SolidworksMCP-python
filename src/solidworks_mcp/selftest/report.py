@@ -35,10 +35,18 @@ def _unit(unit: str) -> str:
     return unit.replace("³", "3")
 
 
+def _expected(check: Check) -> str:
+    """A check's expected value with its unit, if it has one."""
+    return f"{_value(check.expected)} {_unit(check.unit)}".rstrip()
+
+
 def _tolerance(check: Check) -> str:
-    """A check's tolerance: relative for a volume, absolute otherwise."""
+    """A check's tolerance: relative for a volume, absolute otherwise.
+
+    A count is "exact"; a yes/no or a condition such as "> 0" has none.
+    """
     if check.tolerance is None:
-        return "exact"
+        return "-" if isinstance(check.expected, (bool, str)) else "exact"
     if "³" in check.unit:
         return f"{check.tolerance * 100:g} %"
     return f"{_value(check.tolerance)} {_unit(check.unit)}"
@@ -117,7 +125,7 @@ def summary_markdown(environment: dict[str, Any], results: list[AreaResult]) -> 
                 "| --- | --- | --- | --- | --- |",
             ]
             lines += [
-                f"| {c.name} | {_value(c.expected)} {_unit(c.unit)} | "
+                f"| {c.name} | {_expected(c)} | "
                 f"{_value(c.measured)} | {_tolerance(c)} | "
                 f"{'pass' if c.passed else 'FAIL'} |"
                 for c in result.checks

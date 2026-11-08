@@ -63,8 +63,8 @@ def test_summary_shows_environment_checks_and_tools() -> None:
         "| [40.00, 10.00, 20.00] mm | [40.00, 10.00, 20.00] | 0.01 mm | pass |"
         in summary
     )
-    assert "| pin: solid | 0.5  | not measured | exact | FAIL |" in summary
-    assert "| flag | yes  | no | exact | FAIL |" in summary
+    assert "| pin: solid | 0.5 | not measured | exact | FAIL |" in summary
+    assert "| flag | yes | no | - | FAIL |" in summary
     assert "Tools: `create_part` x2, `create_sketch`" in summary
     assert "#### assembly: SKIP\n\nneeds the saved pin" in summary
 

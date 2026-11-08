@@ -127,7 +127,7 @@ async def test_drawing_counts_its_views(tmp_path: Path, count, passed) -> None:
     await DrawingArea().run(Context(stub, tmp_path, {"block": "b.SLDPRT"}), checks)
 
     assert checks == [
-        Check("drawing: view_count", 1, count, unit="views", passed=passed)
+        Check("drawing: view_count", 1, count, unit="view", passed=passed)
     ]
     view = next(a for n, a, _ in stub.log if n == "add_drawing_view")
     assert view == {"model_file": "b.SLDPRT", "view_type": "isometric"}

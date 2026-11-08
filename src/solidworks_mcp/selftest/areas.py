@@ -231,7 +231,7 @@ class DrawingArea:
                 name="drawing: view_count",
                 expected=ex.DRAWING_VIEW_COUNT,
                 measured=views,
-                unit="views",
+                unit="view",
                 passed=views == ex.DRAWING_VIEW_COUNT,
             )
         )
