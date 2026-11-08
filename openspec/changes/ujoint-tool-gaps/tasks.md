@@ -22,5 +22,5 @@
 ## 5. Live
 
 - [x] 5.1 `tests/live/test_live_sw_ujoint_tool_gaps.py`: one test per tool (thin bent plate, mid-plane extrusion, 60° chamfer, angled plane, face plane, pin-in-hole face mate, fix/float/flexible, a dict call, a repeated interference check)
-- [ ] 5.2 Run them live (paced), record GIFs, add them to the Demos page
+- [x] 5.2 Run them live (paced), record GIFs, add them to the Demos page
 - [x] 5.3 Full mock suite, ruff, 100 % coverage, `mkdocs build --strict`

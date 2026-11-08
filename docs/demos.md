@@ -571,7 +571,7 @@ Source: [`tests/live/test_live_sw_ujoint_tool_gaps.py`](https://github.com/andre
 
 ### A bent plate from an open outline {#thin-plate}
 
-![create_extrusion turning an open L-shaped sketch into a 6.35 mm bent plate, 38.1 mm wide, mid-plane](assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate.gif)
+![create_extrusion turning an open L-shaped sketch into a 6.35 mm bent plate, 38.1 mm wide, mid-plane](assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate-motion.gif)
 
 > *Example prompt:* Make a bent plate: an 80 mm wall and a 40 mm foot,
 > 6.35 mm thick, 38.1 mm wide, centred on the Right plane.
@@ -587,7 +587,7 @@ thin wall on both sides of the line and 19.05 mm each way. One body of
 
 ### Both directions, and the reply says so {#mid-plane}
 
-![create_extrusion 20 mm both ways from the Front Plane, spanning z -10 to 10 and reporting MidPlane](assets/demos/tool-gaps/test_both_directions_is_symmetric_and_says_mid_plane.gif)
+![create_extrusion 20 mm both ways from the Front Plane, spanning z -10 to 10 and reporting MidPlane](assets/demos/tool-gaps/test_both_directions_is_symmetric_and_says_mid_plane-motion.gif)
 
 > *Example prompt:* Extrude this rectangle 20 mm, centred on its sketch plane.
 
@@ -601,7 +601,7 @@ blind`, so an agent thought `both_directions` was ignored.
 
 ### A 60° chamfer, and flipping it {#angled-chamfer}
 
-![add_chamfer cutting a 2 mm chamfer at 60 degrees, then the same chamfer flipped on the opposite edge](assets/demos/tool-gaps/test_a_60_degree_chamfer_and_flip_swaps_its_legs.gif)
+![add_chamfer cutting a 2 mm chamfer at 60 degrees, then the same chamfer flipped on the opposite edge](assets/demos/tool-gaps/test_a_60_degree_chamfer_and_flip_swaps_its_legs-motion.gif)
 
 > *Example prompt:* Chamfer the top front edge 2 mm at 60°, and the back
 > edge the other way round.
@@ -617,7 +617,7 @@ blind`, so an agent thought `both_directions` was ignored.
 
 ### A plane at 40° about an axis {#angled-plane}
 
-![create_axis making Axis1, then create_reference_plane making a plane at 40 degrees to the Top Plane about it](assets/demos/tool-gaps/test_a_plane_at_40_degrees_about_an_axis.gif)
+![create_axis making Axis1, then create_reference_plane making a plane at 40 degrees to the Top Plane about it](assets/demos/tool-gaps/test_a_plane_at_40_degrees_about_an_axis-motion.gif)
 
 > *Example prompt:* Add a plane at 40° to the Top Plane, tilted about the x
 > axis.
@@ -632,7 +632,7 @@ is exactly 40° from the Top Plane about it.
 
 ### A plane off a sloped face {#face-plane}
 
-![create_reference_plane making a plane 5 mm off a wedge's sloped face, from a point on that face](assets/demos/tool-gaps/test_a_plane_offset_from_a_sloped_face.gif)
+![create_reference_plane making a plane 5 mm off a wedge's sloped face, from a point on that face](assets/demos/tool-gaps/test_a_plane_offset_from_a_sloped_face-motion.gif)
 
 > *Example prompt:* Put a plane 5 mm above the sloped face of this wedge.
 
@@ -643,24 +643,28 @@ normal is (0.6, 0.8, 0), parallel to the slope, and it sits 5.000 mm off it.
 
 1. `create_reference_plane({"face_point": [20, 15, 5], "offset": 5})`
 
-### A pin in its hole, by two faces {#face-mate}
+### A pin in its hole, by two face mates {#face-mate}
 
-![add_mate putting a pin concentric in a plate's hole, picking each face by a point in its own part](assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces.gif)
+![add_mate seating a pin in a plate's hole with two face mates, each face picked by a point in its own part](assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces-motion.gif)
 
-> *Example prompt:* Put the pin in the plate's hole.
+> *Example prompt:* Put the pin through the plate's hole, flush with the
+> plate's bottom.
 
 **What it shows.** Each face is a point in its own part's coordinates, as
-the part was modelled: the hole's wall at (25, 5, 0) and the pin's surface at
-(4.75, 15, 0). After the concentric mate, the pin's axis is exactly where the
-hole is, 20 mm from the plate's origin.
+the part was modelled. A concentric mate between the hole's wall (25, 5, 0)
+and the pin's round face (4.75, 15, 0) puts the pin's axis exactly on the
+hole's, 20 mm from the plate's origin. A coincident mate between the two
+bottom faces stops it sliding along that axis: the pin runs from 0 to 30 mm
+above the plate's bottom, through the hole.
 
 **Tool calls**
 
-1. `add_mate({"component_a": "gap_plate-1", "component_b": "gap_pin-1", "face_a": [25, 5, 0], "face_b": [4.75, 15, 0], "mate_type": "concentric"})`
+1. `add_mate({"component_a": "mate_plate-1", "component_b": "mate_pin-1", "face_a": [25, 5, 0], "face_b": [4.75, 15, 0], "mate_type": "concentric"})`
+2. `add_mate({"component_a": "mate_plate-1", "component_b": "mate_pin-1", "face_a": [-20, 0, 0], "face_b": [0, 0, 0], "mate_type": "coincident", "alignment": "aligned"})`
 
 ### Fixed, floating and flexible {#component-state}
 
-![set_component_state floating and fixing a part, then making a sub-assembly flexible with its other settings unchanged](assets/demos/tool-gaps/test_components_fix_float_and_a_sub_assembly_turns_flexible.gif)
+![set_component_state floating and fixing a part, then making a sub-assembly flexible with its other settings unchanged](assets/demos/tool-gaps/test_components_fix_float_and_a_sub_assembly_turns_flexible-motion.gif)
 
 > *Example prompt:* Let the crank sub-assembly turn inside the main
 > assembly.
@@ -672,26 +676,27 @@ setting are unchanged.
 
 **Tool calls**
 
-1. `set_component_state({"component": "gap_plate-1", "fixed": false})`
-2. `set_component_state({"component": "gap_plate-1", "fixed": true})`
+1. `set_component_state({"component": "state_plate-1", "fixed": false})`
+2. `set_component_state({"component": "state_plate-1", "fixed": true})`
 3. `set_component_state({"component": "gap_pin_plate-1", "flexible": true})`
 
 ### Interference, before and after {#fresh-interference}
 
-![check_interference finding the pin through the plate, then none once the pin is mated into the hole](assets/demos/tool-gaps/test_interference_is_fresh_after_a_mate.gif)
+![check_interference finding the pin through the plate, then none once the pin is mated into the hole](assets/demos/tool-gaps/test_interference_is_fresh_after_a_mate-motion.gif)
 
 > *Example prompt:* Does anything overlap? Now put the pin in the hole and
 > check again.
 
-**What it shows.** The pin, inserted through the plate, overlaps it once;
-mated into the Ø10 hole it overlaps nothing. The second check is fresh, not
-the first one's cached answer.
+**What it shows.** The pin, inserted through solid plate, overlaps it
+once. Seated in the Ø10 hole by the two face mates above, the Ø9.5 pin
+overlaps nothing: it passes through the plate with 0.25 mm clearance. The
+second check is fresh, not the first one's cached answer.
 
 **Tool calls**
 
-1. `check_interference({"components": ["gap_plate-1", "gap_pin-1"]})`
-2. `add_mate({... "mate_type": "concentric"})`
-3. `check_interference({"components": ["gap_plate-1", "gap_pin-1"]})`
+1. `check_interference({"components": ["clash_plate-1", "clash_pin-1"]})`
+2. `add_mate` concentric and coincident, as in the demo above
+3. `check_interference({"components": ["clash_plate-1", "clash_pin-1"]})`
 
 ## Drawing packages {#drawing-package}
 

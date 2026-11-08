@@ -94,9 +94,12 @@ async def _part(scratch: Any, tools: dict[str, Any], path: Path, build: Any) -> 
 
 
 async def _plate_and_pin(
-    scratch: Any, tools: dict[str, Any], folder: Path
+    scratch: Any, tools: dict[str, Any], folder: Path, tag: str
 ) -> tuple[str, str]:
-    """A 60 x 40 x 10 plate with a Ø10 hole at x = 20, and a Ø9.5 x 30 pin."""
+    """A 60 x 40 x 10 plate with a Ø10 hole at x = 20, and a Ø9.5 x 30 pin.
+
+    ``tag`` names the files, so two tests never open same-named parts.
+    """
     adapter = scratch.adapter
 
     async def plate(t: dict[str, Any]) -> None:
@@ -123,22 +126,63 @@ async def _plate_and_pin(
         ] == "success"
 
     return (
-        await _part(scratch, tools, folder / "gap_plate.SLDPRT", plate),
-        await _part(scratch, tools, folder / "gap_pin.SLDPRT", pin),
+        await _part(scratch, tools, folder / f"{tag}_plate.SLDPRT", plate),
+        await _part(scratch, tools, folder / f"{tag}_pin.SLDPRT", pin),
     )
 
 
-def _translations(adapter: Any) -> dict[str, tuple[float, float, float]]:
-    """Each top-level component's translation, in mm."""
+async def _plate_then_pin(adapter: Any) -> tuple[str, str]:
+    """The plate's and the pin's instance names, by name, not list order."""
+    names = (await adapter.list_components()).data
+    plate = next(n for n in names if "_plate" in n)
+    pin = next(n for n in names if "_pin" in n)
+    return plate, pin
+
+
+def _transforms(adapter: Any) -> dict[str, list[float]]:
+    """Each top-level component's ``Transform2.ArrayData`` (rotation, then m)."""
     from solidworks_mcp.adapters import sw_type_info
 
     assembly = sw_type_info.flagged(adapter.currentModel, "IAssemblyDoc")
     out = {}
     for component in assembly.GetComponents(True):
         c = sw_type_info.flagged(component, "IComponent2")
-        data = list(c.Transform2.ArrayData)
-        out[str(c.Name2)] = (data[9] * 1000, data[10] * 1000, data[11] * 1000)
+        out[str(c.Name2)] = list(c.Transform2.ArrayData)
     return out
+
+
+def _axis_point_mm(data: list[float], y: float) -> tuple[float, float, float]:
+    """Where the part point (0, y, 0) mm lands in the assembly, in mm.
+
+    Only the rotation's y column matters for a point on the y axis.
+    """
+    return (
+        data[3] * y + data[9] * 1000,
+        data[4] * y + data[10] * 1000,
+        data[5] * y + data[11] * 1000,
+    )
+
+
+async def _seat_pin(
+    tools: dict[str, Any], plate: str, pin: str
+) -> list[dict[str, Any]]:
+    """Two face mates: the pin concentric in the hole, its bottom on the plate's."""
+    concentric = {
+        "component_a": plate,
+        "component_b": pin,
+        "face_a": [25.0, 5.0, 0.0],  # the hole's wall, 5 mm from its axis at x = 20
+        "face_b": [4.75, 15.0, 0.0],  # the pin's round face
+        "mate_type": "concentric",
+    }
+    flush = {
+        "component_a": plate,
+        "component_b": pin,
+        "face_a": [-20.0, 0.0, 0.0],  # the plate's bottom, clear of the hole
+        "face_b": [0.0, 0.0, 0.0],  # the pin's bottom
+        "mate_type": "coincident",
+        "alignment": "aligned",
+    }
+    return [await tools["add_mate"](concentric), await tools["add_mate"](flush)]
 
 
 @pytest.mark.asyncio
@@ -323,38 +367,37 @@ async def test_a_plane_offset_from_a_sloped_face(scratch) -> None:
 async def test_a_pin_mates_concentric_in_its_hole_by_two_faces(
     scratch, tmp_path
 ) -> None:
-    """Face points in each part's own coordinates put the pin's axis on the hole's."""
+    """Two face mates by points in each part's own coordinates seat the pin in its hole."""
     adapter = scratch.adapter
     tools = await _tools(adapter)
-    plate, pin = await _plate_and_pin(scratch, tools, tmp_path)
+    plate, pin = await _plate_and_pin(scratch, tools, tmp_path, "mate")
     assert (await adapter.create_assembly()).is_success
     assert (await adapter.insert_component(plate, 0.0, 0.0, 0.0)).is_success
     assert (await adapter.insert_component(pin, 100.0, 0.0, 0.0)).is_success
     scratch.written_files.append(str(tmp_path / "gap_assembly.SLDASM"))
-    plate_name, pin_name = (await adapter.list_components()).data
+    plate_name, pin_name = await _plate_then_pin(adapter)
 
-    call = {
-        "component_a": plate_name,
-        "component_b": pin_name,
-        "face_a": [25.0, 5.0, 0.0],  # the hole's wall, 5 mm from its axis at x = 20
-        "face_b": [4.75, 15.0, 0.0],  # the pin's surface
-        "mate_type": "concentric",
-    }
-    mate = await tools["add_mate"](call)
-    moved = _translations(adapter)
-    dx = moved[pin_name][0] - moved[plate_name][0]
-    dz = moved[pin_name][2] - moved[plate_name][2]
+    concentric, flush = await _seat_pin(tools, plate_name, pin_name)
+    placed = _transforms(adapter)
+    hole = _axis_point_mm(placed[plate_name], 0.0)  # the plate's bottom, on its origin
+    ends = sorted(
+        _axis_point_mm(placed[pin_name], y) for y in (0.0, 30.0)
+    )  # the pin's axis, bottom to top
+    axis = [round(ends[0][0] - hole[0], 3), round(ends[0][2] - hole[2], 3)]
+    span = [round(ends[0][1] - hole[1], 3), round(ends[1][1] - hole[1], 3)]
     evidence(
-        "pin concentric in the plate's hole, by a point on each face",
+        "pin seated in the plate's hole by two face mates (expect axis 20, 0; y 0..30)",
         {
-            "mate": mate.get("mate"),
-            "pin_axis_from_plate_mm": [round(dx, 3), round(dz, 3)],
+            "mates": [m.get("mate", m).get("entities") for m in (concentric, flush)],
+            "pin_axis_from_plate_mm": axis,
+            "pin_height_above_plate_bottom_mm": span,
         },
-        call=f"add_mate({call})",
+        call="add_mate(concentric, faces), add_mate(coincident, bottoms)",
     )
-    assert mate["status"] == "success", mate
-    assert mate["mate"]["geometry_moved"] is True
-    assert (dx, dz) == pytest.approx((20.0, 0.0), abs=0.01)
+    assert concentric["status"] == "success", concentric
+    assert flush["status"] == "success", flush
+    assert axis == pytest.approx([20.0, 0.0], abs=0.01)
+    assert span == pytest.approx([0.0, 30.0], abs=0.01)
 
 
 @pytest.mark.asyncio
@@ -364,14 +407,14 @@ async def test_components_fix_float_and_a_sub_assembly_turns_flexible(
     """Float and fix a part; flex a sub-assembly, keeping its other settings."""
     adapter = scratch.adapter
     tools = await _tools(adapter)
-    plate, pin = await _plate_and_pin(scratch, tools, tmp_path)
+    plate, pin = await _plate_and_pin(scratch, tools, tmp_path, "state")
     assert (await adapter.create_assembly()).is_success
     assert (await adapter.insert_component(plate, 0.0, 0.0, 0.0)).is_success
     assert (await adapter.insert_component(pin, 100.0, 0.0, 0.0)).is_success
     sub = tmp_path / "gap_pin_plate.SLDASM"
     assert (await adapter.save_file(str(sub))).is_success
     scratch.written_files.append(str(sub))
-    plate_name = (await adapter.list_components()).data[0]
+    plate_name, _pin_name = await _plate_then_pin(adapter)
 
     floated = await tools["set_component_state"](
         {"component": plate_name, "fixed": False}
@@ -417,32 +460,25 @@ async def test_components_fix_float_and_a_sub_assembly_turns_flexible(
 
 @pytest.mark.asyncio
 async def test_interference_is_fresh_after_a_mate(scratch, tmp_path) -> None:
-    """Called with dicts: the pin overlaps the plate, then sits in the hole clear."""
+    """Called with dicts: the pin overlaps the plate, then sits in the Ø10 hole clear."""
     adapter = scratch.adapter
     tools = await _tools(adapter)
-    plate, pin = await _plate_and_pin(scratch, tools, tmp_path)
+    plate, pin = await _plate_and_pin(scratch, tools, tmp_path, "clash")
     assert (await adapter.create_assembly()).is_success
     assert (await adapter.insert_component(plate, 0.0, 0.0, 0.0)).is_success
     assert (await adapter.insert_component(pin, 0.0, 0.0, 0.0)).is_success
     scratch.written_files.append(str(tmp_path / "gap_clash.SLDASM"))
-    plate_name, pin_name = (await adapter.list_components()).data
+    plate_name, pin_name = await _plate_then_pin(adapter)
     check = {"components": [plate_name, pin_name]}
 
     clash = await tools["check_interference"](check)
-    await tools["add_mate"](
-        {
-            "component_a": plate_name,
-            "component_b": pin_name,
-            "face_a": [25.0, 5.0, 0.0],
-            "face_b": [4.75, 15.0, 0.0],
-            "mate_type": "concentric",
-        }
-    )
+    seated = await _seat_pin(tools, plate_name, pin_name)
+    assert all(m["status"] == "success" for m in seated), seated
     clear = await tools["check_interference"](check)
     before = clash["data"]["interference_count"]
     after = clear["data"]["interference_count"]
     evidence(
-        "interference: pin through the plate, then mated into the Ø10 hole",
+        "interference: the pin through solid plate, then seated in the Ø10 hole",
         {"before_mate": before, "after_mate": after},
         call=f"check_interference({check})",
     )
