@@ -657,11 +657,16 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
         """Add chamfer using pool."""
         return await self._execute_with_pool(
-            "add_chamfer", lambda adapter: adapter.add_chamfer(distance, edge_names)
+            "add_chamfer",
+            lambda adapter: adapter.add_chamfer(distance, edge_names, angle, flip),
         )
 
     async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
@@ -709,12 +714,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create reference plane using pool."""
         return await self._execute_with_pool(
             "create_reference_plane",
             lambda adapter: adapter.create_reference_plane(
-                reference, offset, angle, flip
+                reference, offset, angle, flip, axis, face_point
             ),
         )
 
@@ -1516,6 +1523,18 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "undo", lambda adapter: adapter.undo(count)
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set a component's state using pool."""
+        return await self._execute_with_pool(
+            "set_component_state",
+            lambda adapter: adapter.set_component_state(component, fixed, flexible),
+        )
+
     async def add_mate(
         self,
         component_a: str,
@@ -1526,6 +1545,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add mate using pool.
 
@@ -1540,6 +1561,9 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             alignment (str): Mate alignment. Defaults to "aligned".
             distance (float): Distance in millimetres. Defaults to 0.0.
             angle (float): Angle in degrees. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component, in its part coordinates (mm), instead of entity_a.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -1555,6 +1579,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
                 alignment,
                 distance,
                 angle,
+                face_a,
+                face_b,
             ),
         )
 

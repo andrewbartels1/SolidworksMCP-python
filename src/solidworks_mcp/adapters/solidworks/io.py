@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
+from .face_selection import mate_entity_label
 
 try:
     import pythoncom
@@ -291,6 +292,118 @@ def _byref_bstr() -> Any:
         int(getattr(pythoncom, "VT_BYREF", 0)) | int(getattr(pythoncom, "VT_BSTR", 0)),
         "",
     )
+
+
+def _find_components(adapter: Any, assembly: Any, names: list[str]) -> dict[str, Any]:
+    """The named top-level components of ``assembly``, as ``IComponent2``.
+
+    Args:
+        adapter: The connected adapter.
+        assembly: The ``IAssemblyDoc`` dispatch.
+        names: Instance names, e.g. ``["bracket-1", "pin-1"]``.
+
+    Returns:
+        dict[str, Any]: Name to wrapped component, one per name.
+
+    Raises:
+        Exception: When the components can't be read, or a name isn't there
+            (the message lists what the assembly holds).
+    """
+    components = adapter._attempt(lambda: assembly.GetComponents(True), default=None)
+    if not isinstance(components, (list, tuple)):
+        raise Exception("Could not read the assembly's components")
+
+    found: dict[str, Any] = {}
+    for component in components:
+        wrapped = _as_com(adapter, component, "IComponent2")
+        if wrapped is None:
+            continue
+        name = adapter._attempt(lambda w=wrapped: w.Name2, default=None)
+        if name and str(name) in names:
+            found[str(name)] = wrapped
+
+    missing = [n for n in names if n not in found]
+    if missing:
+        available = [
+            str(
+                adapter._attempt(
+                    lambda c=c: _as_com(adapter, c, "IComponent2").Name2,
+                    default="?",
+                )
+            )
+            for c in components
+        ]
+        raise Exception(
+            f"Component(s) not found: {', '.join(missing)}. "
+            f"The assembly holds: {', '.join(available)}."
+        )
+    return found
+
+
+def _component_state(adapter: Any, component: Any) -> dict[str, Any]:
+    """Read what ``CompConfigProperties5`` sets, plus whether it is fixed."""
+    visible = adapter._attempt(lambda: component.Visible, default=None)
+    return {
+        "fixed": adapter._attempt(lambda: bool(component.IsFixed()), default=None),
+        "flexible": adapter._attempt(lambda: component.Solving == 1, default=None),
+        "suppression": adapter._attempt(
+            lambda: component.GetSuppression2(), default=None
+        ),
+        "visible": None if visible is None else visible == 1,
+        "referenced_configuration": adapter._attempt(
+            lambda: component.ReferencedConfiguration, default=None
+        ),
+        "exclude_from_bom": adapter._attempt(
+            lambda: bool(component.ExcludeFromBOM), default=None
+        ),
+        "envelope": adapter._attempt(
+            lambda: bool(component.IsEnvelope()), default=None
+        ),
+    }
+
+
+def _select_component_face(
+    adapter: Any,
+    model: Any,
+    component: Any,
+    component_name: str,
+    point: list[float],
+    append: bool,
+) -> None:
+    """Select the face of ``component`` at ``point`` (its part coordinates, mm).
+
+    Only that component's faces are searched, so coincident surfaces of two
+    parts (a pin in its hole) can't be confused.
+
+    Args:
+        adapter: The connected adapter.
+        model: The active assembly document.
+        component: The ``IComponent2`` dispatch.
+        component_name: Its instance name, for messages.
+        point: ``[x, y, z]`` mm on the face, in the component's part coordinates.
+        append: Add to the current selection.
+
+    Raises:
+        Exception: When no face of the component lies at the point, or it
+            won't select.
+    """
+    from .face_selection import FaceEdgeSelector
+
+    selector = FaceEdgeSelector(adapter)
+    try:
+        face = selector.face_at_point(selector.component_faces(component), point)
+    except LookupError as exc:
+        raise Exception(
+            f"Face not found on {component_name} at {list(point)} mm (part "
+            f"coordinates): {exc}"
+        ) from exc
+    sel_mgr = _sw_type_info.flagged(model.SelectionManager, "ISelectionMgr")
+    select_data = adapter._attempt(lambda: sel_mgr.CreateSelectData(), default=None)
+    handle = _sw_type_info.flagged(face.handle, "IEntity")
+    if not adapter._attempt(lambda: handle.Select4(append, select_data), default=False):
+        raise Exception(
+            f"Failed to select the face of {component_name} at {list(point)} mm"
+        )
 
 
 def _byref_int() -> Any:
@@ -2616,17 +2729,19 @@ class SolidWorksIOMixin:
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mate two components together.
 
-        Wraps ``IAssemblyDoc::AddMate5``.  The two entities are selected via
-        ``IComponent2::FeatureByName`` + ``IFeature::Select2`` rather than
-        ``SelectByID2``, which raises ``Type mismatch`` on this build.
-
-        That restricts the entities to *named tree features* — the reference
-        planes and axes of each component.  Plane-to-plane mating covers
-        alignment and stacking, which is the common case; mating to a specific
-        face or edge needs entity names this adapter cannot enumerate.
+        Wraps ``IAssemblyDoc::AddMate5``. A named entity (a reference plane or
+        axis) is selected via ``IComponent2::FeatureByName`` +
+        ``IFeature::Select2``. A face is given as a point on it in the
+        component's own part coordinates: the face is found among *that
+        component's* faces only (``IComponent2::GetBodies2``, which report
+        part coordinates; measured on SW 2026) and selected with
+        ``IEntity::Select4``. Searching one component means a pin and the
+        hole it sits in, whose surfaces share points, can't be confused.
 
         Args:
             component_a (str): First component instance name, as reported by
@@ -2639,6 +2754,10 @@ class SolidWorksIOMixin:
             alignment (str): ``aligned``, ``anti_aligned`` or ``closest``.
             distance (float): Distance in millimetres, for a distance mate.
             angle (float): Angle in degrees, for an angle mate.
+            face_a (list[float] | None): ``[x, y, z]`` mm on a face of the
+                first component, in its part coordinates; used instead of
+                ``entity_a``.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The mate created, plus the bounding
@@ -2685,42 +2804,20 @@ class SolidWorksIOMixin:
             model = adapter.currentModel
             assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
 
-            components = adapter._attempt(
-                lambda: assembly.GetComponents(True), default=None
-            )
-            if not isinstance(components, (list, tuple)):
-                raise Exception("Could not read the assembly's components")
-
             wanted = {component_a: entity_a, component_b: entity_b}
-            found: dict[str, Any] = {}
-            for component in components:
-                wrapped = _as_com(adapter, component, "IComponent2")
-                if wrapped is None:
-                    continue
-                name = adapter._attempt(lambda w=wrapped: w.Name2, default=None)
-                if name and str(name) in wanted:
-                    found[str(name)] = wrapped
-
-            missing = [n for n in (component_a, component_b) if n not in found]
-            if missing:
-                available = [
-                    str(
-                        adapter._attempt(
-                            lambda c=c: _as_com(adapter, c, "IComponent2").Name2,
-                            default="?",
-                        )
-                    )
-                    for c in components
-                ]
-                raise Exception(
-                    f"Component(s) not found: {', '.join(missing)}. "
-                    f"The assembly holds: {', '.join(available)}."
-                )
+            faces = {component_a: face_a, component_b: face_b}
+            found = _find_components(adapter, assembly, [component_a, component_b])
 
             adapter._attempt(lambda: model.ClearSelection2(True), default=None)
             for index, component_name in enumerate((component_a, component_b)):
                 wrapped = found[component_name]
                 entity_name = wanted[component_name]
+                point = faces[component_name]
+                if point is not None:
+                    _select_component_face(
+                        adapter, model, wrapped, component_name, point, index > 0
+                    )
+                    continue
                 feature = adapter._attempt(
                     lambda w=wrapped, e=entity_name: w.FeatureByName(e), default=None
                 )
@@ -2794,7 +2891,10 @@ class SolidWorksIOMixin:
                 "mate_type": mate_key,
                 "alignment": align_key,
                 "components": [component_a, component_b],
-                "entities": [entity_a, entity_b],
+                "entities": [
+                    mate_entity_label(entity_a, face_a),
+                    mate_entity_label(entity_b, face_b),
+                ],
                 "distance": distance or None,
                 "angle": angle or None,
                 "moved_components": moved,
@@ -2804,6 +2904,98 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("add_mate", _mate),
+        )
+
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Fix or float a component, and make a sub-assembly rigid or flexible.
+
+        Fixing selects the component and calls ``IAssemblyDoc::FixComponent``
+        or ``UnfixComponent``. Solving goes through
+        ``IAssemblyDoc::CompConfigProperties5``, which also sets suppression,
+        visibility, configuration, BOM and envelope for the selected
+        component: each is read from the component first and passed back, so
+        only solving changes.
+
+        Args:
+            component (str): Instance name, as ``list_components`` reports it.
+            fixed (bool | None): True fixes it, False floats it.
+            flexible (bool | None): True flexible, False rigid (sub-assemblies).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The state before and after.
+        """
+        adapter = self._adapter(self)
+        if _doc_type(adapter) != 2:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="set_component_state requires an assembly document",
+            )
+        if fixed is None and flexible is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="Nothing to change: give fixed, flexible or both.",
+            )
+
+        def _state() -> dict[str, Any]:
+            model = adapter.currentModel
+            assembly = _sw_type_info.flagged(model, "IAssemblyDoc")
+            target = _find_components(adapter, assembly, [component])[component]
+            before = _component_state(adapter, target)
+            sel_mgr = _sw_type_info.flagged(model.SelectionManager, "ISelectionMgr")
+
+            def select() -> None:
+                adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+                data = adapter._attempt(
+                    lambda: sel_mgr.CreateSelectData(), default=None
+                )
+                if not adapter._attempt(
+                    lambda: target.Select4(False, data, False), default=False
+                ):
+                    raise Exception(f"Failed to select {component}")
+
+            if fixed is not None:
+                select()
+                call = assembly.FixComponent if fixed else assembly.UnfixComponent
+                adapter._attempt(call, default=None)
+            if flexible is not None:
+                select()
+                config = before["referenced_configuration"] or ""
+                applied = adapter._attempt(
+                    lambda: assembly.CompConfigProperties5(
+                        before["suppression"],
+                        1 if flexible else 0,  # swComponentSolvingOption_e
+                        bool(before["visible"]),
+                        bool(config),
+                        config,
+                        bool(before["exclude_from_bom"]),
+                        bool(before["envelope"]),
+                    ),
+                    default=False,
+                )
+                if not applied:
+                    raise Exception(
+                        f"SolidWorks refused to make {component} "
+                        f"{'flexible' if flexible else 'rigid'}; only a "
+                        "sub-assembly can be flexible."
+                    )
+            adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+            adapter._attempt(lambda: model.EditRebuild3(), default=None)
+            after = _component_state(adapter, target)
+            if fixed is not None and after["fixed"] is not fixed:
+                raise Exception(
+                    f"{component} is still {'floating' if fixed else 'fixed'} "
+                    "after the change."
+                )
+            return {"component": component, "before": before, "after": after}
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("set_component_state", _state),
         )
 
     async def list_components(self) -> AdapterResult[list[str]]:

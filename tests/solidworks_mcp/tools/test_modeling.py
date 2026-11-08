@@ -43,6 +43,7 @@ from solidworks_mcp.tools.modeling import (
     RenameFeatureInput,
     SelectFaceEdgesInput,
     SelectFeatureInput,
+    SetComponentStateInput,
     SetDimensionInput,
     SetUnitsInput,
     SuppressFeatureInput,
@@ -257,7 +258,8 @@ class TestModelingTools:
         assert result["status"] == "success"
         assert result["extrusion"]["sketch"] == "Sketch1"
         assert result["extrusion"]["depth"] == 25.0
-        assert result["extrusion"]["direction"] == "blind"
+        assert result["extrusion"]["end_condition"] == "Blind"
+        assert "direction" not in result["extrusion"]
 
     @pytest.mark.asyncio
     async def test_create_revolve_full(self, mcp_server, mock_adapter, mock_config):
@@ -807,7 +809,9 @@ class TestModelingTools:
         assert success_result["status"] == "success"
         assert success_result["chamfer"]["distance"] == 1.5
         assert success_result["chamfer"]["edges"] == ["Edge<1>", "Edge<2>"]
-        mock_adapter.add_chamfer.assert_awaited_once_with(1.5, ["Edge<1>", "Edge<2>"])
+        mock_adapter.add_chamfer.assert_awaited_once_with(
+            1.5, ["Edge<1>", "Edge<2>"], 45.0, False
+        )
 
         mock_adapter.add_chamfer = AsyncMock(
             return_value=Mock(
@@ -1361,7 +1365,7 @@ class TestReferenceGeometryTools:
 
     def test_create_reference_plane_input_rejects_blank_reference(self):
         """CreateReferencePlaneInput.model_post_init rejects a blank reference."""
-        with pytest.raises(ValueError, match="reference is required"):
+        with pytest.raises(ValueError, match="exactly one of reference or face_point"):
             CreateReferencePlaneInput(reference="   ", offset=10.0)
 
     def test_set_units_input_rejects_blank_unit_system(self):
@@ -2060,3 +2064,199 @@ async def test_rebuild_model_tool_no_model(
     assert result["status"] == "error"
     assert "No active model" in result["message"]
     assert "data" not in result
+
+
+@pytest.mark.asyncio
+async def test_extrusion_reply_says_mid_plane_for_both_directions(
+    mcp_server, mock_adapter
+) -> None:
+    await mock_adapter.create_part()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    result = await tool(
+        {"sketch_name": "Sketch1", "depth": 38.1, "both_directions": True}
+    )
+
+    assert result["extrusion"]["end_condition"] == "MidPlane"
+    assert result["extrusion"]["both_directions"] is True
+    assert "thin" not in result["extrusion"]
+
+
+@pytest.mark.asyncio
+async def test_a_thin_extrusion_reports_its_wall(mcp_server, mock_adapter) -> None:
+    await mock_adapter.create_part()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    result = await tool(
+        {
+            "sketch_name": "Sketch1",
+            "depth": 38.1,
+            "thin_feature": True,
+            "thin_thickness": 6.35,
+            "thin_side": "other_side",
+        }
+    )
+
+    assert result["extrusion"]["thin"] == {"thickness": 6.35, "side": "other_side"}
+    feature = next(iter(mock_adapter._features.values()))
+    assert feature.parameters["thin_side"] == "other_side"
+
+
+@pytest.mark.asyncio
+async def test_extrusion_falls_back_to_the_request_when_the_adapter_is_silent(
+    mcp_server, mock_adapter
+) -> None:
+    mock_adapter.create_extrusion = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"name": "Boss-Extrude1"}
+        )
+    )
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    result = await tool({"sketch_name": "Sketch1", "depth": 5, "both_directions": True})
+
+    assert result["extrusion"]["end_condition"] == "MidPlane"
+
+
+def test_a_thin_wall_needs_a_thickness() -> None:
+    with pytest.raises(
+        ValueError, match="thin_feature needs a positive thin_thickness"
+    ):
+        CreateExtrusionInput(sketch_name="Sketch1", depth=5, thin_feature=True)
+
+
+def test_a_chamfer_angle_must_be_between_0_and_90() -> None:
+    with pytest.raises(ValueError, match="angle must be between 0 and 90"):
+        AddChamferInput(distance=1.0, angle=90)
+
+
+@pytest.mark.asyncio
+async def test_the_mock_chamfer_records_angle_and_flip(mock_adapter) -> None:
+    await mock_adapter.create_part()
+
+    result = await mock_adapter.add_chamfer(1.0, ["Edge<1>"], 60.0, True)
+    refused = await mock_adapter.add_chamfer(1.0, [], 60.0, True)
+
+    assert result.data.parameters["angle"] == 60.0
+    assert result.data.parameters["flip"] is True
+    assert refused.is_error
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"reference": "Top Plane", "face_point": [0, 0, 0]}, "exactly one of"),
+        ({"face_point": [0, 0]}, "face_point must be"),
+        ({"reference": "Top Plane", "angle": 30}, "needs axis"),
+    ],
+)
+def test_reference_plane_input_refusals(kwargs: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        CreateReferencePlaneInput(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_reference_plane_tool_passes_axis_and_face_point(
+    mcp_server, mock_adapter
+) -> None:
+    await mock_adapter.create_part()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn
+        for t in await mcp_server.list_tools()
+        if t.name == "create_reference_plane"
+    )
+
+    angled = await tool({"reference": "Top Plane", "angle": 40, "axis": "Axis1"})
+    on_face = await tool({"face_point": [0, 10, 5]})
+
+    assert angled["plane"]["axis"] == "Axis1"
+    assert angled["plane"]["angle"] == 40
+    assert on_face["plane"]["face_point"] == [0, 10, 5]
+    assert on_face["plane"]["reference"] is None
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"entity_a": "Top Plane", "face_a": [0, 0, 0]}, "entity_a or face_a"),
+        ({"face_b": [0, 0]}, "face_b must be"),
+    ],
+)
+def test_add_mate_input_refusals(kwargs: dict[str, Any], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        AddMateInput(component_a="a-1", component_b="b-1", **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_add_mate_tool_passes_faces_and_defaults_the_planes(
+    mcp_server, mock_adapter
+) -> None:
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "add_mate")
+
+    by_face = await tool(
+        {
+            "component_a": "bracket-1",
+            "component_b": "pin-1",
+            "face_a": [0, 76.2, 38.1],
+            "face_b": [0, 4.7, 0],
+            "mate_type": "concentric",
+        }
+    )
+    by_plane = await tool({"component_a": "bracket-1", "component_b": "pin-1"})
+
+    assert by_face["mate"]["entities"] == [
+        "face at [0.0, 76.2, 38.1] mm",
+        "face at [0.0, 4.7, 0.0] mm",
+    ]
+    assert by_plane["mate"]["entities"] == ["Front Plane", "Front Plane"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"component": " ", "fixed": True}, "component is required"),
+        ({"component": "a-1"}, "give fixed"),
+    ],
+)
+def test_set_component_state_input_refusals(
+    kwargs: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        SetComponentStateInput(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_set_component_state_tool_says_what_changed(
+    mcp_server, mock_adapter
+) -> None:
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "set_component_state"
+    )
+
+    both = await tool({"component": "crank-1", "fixed": False, "flexible": True})
+    fixed = await tool({"component": "crank-1", "fixed": True})
+    rigid = await tool({"component": "crank-1", "flexible": False})
+
+    assert both["message"] == "crank-1 is now floating and flexible"
+    assert both["state"]["before"] == {"fixed": False, "flexible": False}
+    assert fixed["message"] == "crank-1 is now fixed"
+    assert rigid["message"] == "crank-1 is now rigid"
+
+
+@pytest.mark.asyncio
+async def test_the_mock_refuses_an_empty_state_change(mock_adapter) -> None:
+    result = await mock_adapter.set_component_state("crank-1")
+
+    assert result.is_error

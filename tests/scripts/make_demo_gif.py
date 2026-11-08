@@ -116,12 +116,14 @@ def build_recording(
     max_hold: float,
     min_caption: float = 0.6,
     prompt_seconds: float = 4.0,
+    end_seconds: float = 5.0,
 ) -> Path | None:
     """One recording as a GIF; ``None`` when it holds no frames.
 
     A frame where a new caption appears shows for at least ``min_caption``
     seconds, so a tool call can be read however fast the rest plays; the
-    first caption, the prompt, for at least ``prompt_seconds``.
+    first caption, the prompt, for at least ``prompt_seconds``; and the last
+    frame, the result, for at least ``end_seconds`` before the GIF loops.
     """
     frames, captions, end = _timeline(folder)
     if not frames:
@@ -164,6 +166,8 @@ def build_recording(
             # The first caption is the prompt: give it time to be read.
             first = caption_path == captions[0][1]
             seconds = max(seconds, prompt_seconds if first else min_caption)
+        if i == len(events) - 1:
+            seconds = max(seconds, end_seconds)
         images.append(frame.quantize(palette=palette, dither=Image.Dither.NONE))
         durations.append(max(20, int(seconds * 1000)))
     images[0].save(
@@ -203,6 +207,7 @@ def build_recordings(
     max_hold: float,
     min_caption: float = 0.6,
     prompt_seconds: float = 4.0,
+    end_seconds: float = 5.0,
 ) -> list[Path]:
     """``<test>-motion.gif`` for every recording under ``directory/recording``."""
     root = directory / "recording"
@@ -218,6 +223,7 @@ def build_recordings(
             max_hold,
             min_caption,
             prompt_seconds,
+            end_seconds,
         )
         if gif is not None:
             written.append(gif)
@@ -251,6 +257,12 @@ def main() -> None:
         default=4.0,
         help="how long the first frame, the prompt, shows (s)",
     )
+    parser.add_argument(
+        "--end-seconds",
+        type=float,
+        default=5.0,
+        help="how long the last motion frame, the result, shows (s)",
+    )
     args = parser.parse_args()
     paths = build_gifs(args.directory, args.width, args.seconds, args.prompt_seconds)
     if args.recording:
@@ -261,6 +273,7 @@ def main() -> None:
             args.max_hold,
             args.min_caption,
             args.prompt_seconds,
+            args.end_seconds,
         )
     for path in paths:
         print(f"{path} ({path.stat().st_size // 1024} KB)")

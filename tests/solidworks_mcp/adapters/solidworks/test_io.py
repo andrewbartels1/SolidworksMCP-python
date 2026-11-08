@@ -36,6 +36,7 @@ import inspect
 import struct
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock, call
 
 import pytest
@@ -3933,6 +3934,194 @@ class TestAssemblyAndDrawingSuccessPaths:
         assert result.data["mate_type"] == "coincident"
         assert result.data["moved_components"] == ["part-2"]
         assert result.data["geometry_moved"] is True
+
+    @staticmethod
+    def _face_mate(monkeypatch, handle: Any, found: bool = True) -> PyWin32Adapter:
+        """A two-component assembly whose 'pin-1' has one face, at ``handle``."""
+        from solidworks_mcp.adapters.solidworks import face_selection
+
+        adapter = TestAssemblyAndDrawingSuccessPaths._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="bracket-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="pin-1", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(_io_module, "_byref_int", lambda: SimpleNamespace(value=1))
+        monkeypatch.setattr(_io_module, "_component_transforms", lambda _a, _asm: {})
+        face = face_selection.FaceInfo(0, (0.0, 0.0, 0.0), (0.0,) * 6, 1.0, handle)
+
+        class _Selector:
+            def __init__(self, _adapter: Any) -> None:
+                pass
+
+            def component_faces(self, component: Any) -> list[Any]:
+                assert component.Name2 == "pin-1"
+                return [face]
+
+            def face_at_point(self, faces: list[Any], point: list[float]) -> Any:
+                if not found:
+                    raise LookupError(f"No face found at point {point} mm.")
+                return faces[0]
+
+        monkeypatch.setattr(face_selection, "FaceEdgeSelector", _Selector)
+        return adapter
+
+    @pytest.mark.asyncio
+    async def test_add_mate_selects_a_face_of_that_component(self, monkeypatch) -> None:
+        picks: list[bool] = []
+        handle = SimpleNamespace(
+            Select4=lambda append, data: picks.append(append) or True
+        )
+        adapter = self._face_mate(monkeypatch, handle)
+
+        result = await adapter.add_mate(
+            "bracket-1", "pin-1", "Top Plane", mate_type="concentric", face_b=[0, 5, 0]
+        )
+
+        assert result.is_success, result.error
+        assert picks == [True]  # the second side appends to the first
+        assert result.data["entities"] == ["Top Plane", "face at [0.0, 5.0, 0.0] mm"]
+        assert result.data["geometry_moved"] is None
+
+    @pytest.mark.asyncio
+    async def test_add_mate_names_a_missing_face(self, monkeypatch) -> None:
+        adapter = self._face_mate(monkeypatch, None, found=False)
+
+        result = await adapter.add_mate("bracket-1", "pin-1", face_b=[0, 99, 0])
+
+        assert result.is_error
+        assert "Face not found on pin-1 at [0, 99, 0] mm" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_mate_reports_a_face_that_will_not_select(
+        self, monkeypatch
+    ) -> None:
+        handle = SimpleNamespace(Select4=lambda append, data: False)
+        adapter = self._face_mate(monkeypatch, handle)
+
+        result = await adapter.add_mate("bracket-1", "pin-1", face_b=[0, 5, 0])
+
+        assert result.is_error
+        assert "Failed to select the face of pin-1" in (result.error or "")
+
+    @staticmethod
+    def _state_adapter(
+        monkeypatch, *, fixed: bool = True, applied: bool = True, selects: bool = True
+    ) -> tuple[PyWin32Adapter, SimpleNamespace, list[Any]]:
+        """An assembly holding 'crank-1', whose state the fakes track."""
+        adapter = TestAssemblyAndDrawingSuccessPaths._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        calls: list[Any] = []
+        comp = SimpleNamespace(
+            Name2="crank-1",
+            Visible=1,
+            Solving=0,
+            ReferencedConfiguration="Default",
+            ExcludeFromBOM=False,
+            IsEnvelope=lambda: False,
+            GetSuppression2=lambda: 3,
+            Select4=lambda append, data, popup: selects,
+        )
+        state = {"fixed": fixed}
+        comp.IsFixed = lambda: state["fixed"]
+        model = adapter.currentModel
+        model.GetComponents.return_value = [comp]
+
+        def fix() -> None:
+            calls.append("fix")
+            state["fixed"] = True
+
+        def unfix() -> None:
+            calls.append("unfix")
+            state["fixed"] = False
+
+        def config(*args: Any) -> bool:
+            calls.append(("config", args))
+            if applied:
+                comp.Solving = args[1]
+            return applied
+
+        model.FixComponent = fix
+        model.UnfixComponent = unfix
+        model.CompConfigProperties5 = config
+        return adapter, comp, calls
+
+    @pytest.mark.asyncio
+    async def test_set_component_state_floats_and_flexes(self, monkeypatch) -> None:
+        adapter, _comp, calls = self._state_adapter(monkeypatch)
+
+        result = await adapter.set_component_state(
+            "crank-1", fixed=False, flexible=True
+        )
+
+        assert result.is_success, result.error
+        assert calls[0] == "unfix"
+        # Suppression, visibility, configuration, BOM and envelope go back as read.
+        assert calls[1] == ("config", (3, 1, True, True, "Default", False, False))
+        assert result.data["before"]["fixed"] is True
+        assert result.data["after"]["fixed"] is False
+        assert result.data["after"]["flexible"] is True
+        assert result.data["after"]["referenced_configuration"] == "Default"
+
+    @pytest.mark.asyncio
+    async def test_set_component_state_fixes(self, monkeypatch) -> None:
+        adapter, _comp, calls = self._state_adapter(monkeypatch, fixed=False)
+
+        result = await adapter.set_component_state("crank-1", fixed=True)
+
+        assert result.is_success, result.error
+        assert calls == ["fix"]
+        assert result.data["after"]["fixed"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_part_cannot_be_flexible(self, monkeypatch) -> None:
+        adapter, _comp, _calls = self._state_adapter(monkeypatch, applied=False)
+
+        result = await adapter.set_component_state("crank-1", flexible=True)
+
+        assert result.is_error
+        assert "only a sub-assembly can be flexible" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_a_component_that_will_not_select_is_reported(
+        self, monkeypatch
+    ) -> None:
+        adapter, _comp, _calls = self._state_adapter(monkeypatch, selects=False)
+
+        result = await adapter.set_component_state("crank-1", fixed=False)
+
+        assert result.is_error
+        assert "Failed to select crank-1" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_a_fix_that_does_not_take_is_reported(self, monkeypatch) -> None:
+        adapter, _comp, _calls = self._state_adapter(monkeypatch, fixed=False)
+        adapter.currentModel.FixComponent = lambda: None  # SolidWorks ignores it
+
+        result = await adapter.set_component_state("crank-1", fixed=True)
+
+        assert result.is_error
+        assert "crank-1 is still floating" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_set_component_state_refusals(self, monkeypatch) -> None:
+        part = self._document(monkeypatch, 1)
+        adapter, _comp, _calls = self._state_adapter(monkeypatch)
+
+        wrong_doc = await part.set_component_state("crank-1", fixed=True)
+        nothing = await adapter.set_component_state("crank-1")
+        missing = await adapter.set_component_state("ghost-1", fixed=True)
+
+        assert "requires an assembly document" in (wrong_doc.error or "")
+        assert "Nothing to change" in (nothing.error or "")
+        assert "Component(s) not found: ghost-1" in (missing.error or "")
 
     @pytest.mark.asyncio
     async def test_list_components_returns_their_names(self, monkeypatch) -> None:

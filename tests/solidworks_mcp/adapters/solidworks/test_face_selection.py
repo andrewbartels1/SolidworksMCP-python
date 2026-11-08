@@ -450,3 +450,31 @@ async def test_side_without_a_planar_face_is_an_error() -> None:
 
     assert result.is_error
     assert "No planar face faces 'top'" in (result.error or "")
+
+
+# ---- component faces and mate labels (#209) ----------------------------------
+
+
+def test_component_faces_reads_the_components_own_bodies() -> None:
+    faces, _ = _block()
+    body = SimpleNamespace(GetFaces=lambda: faces)
+    asked: list[int] = []
+    component = SimpleNamespace(GetBodies2=lambda t: asked.append(t) or [body])
+    selector = fs.FaceEdgeSelector(_Harness(_model([])))
+
+    found = selector.component_faces(component)
+
+    assert asked == [0]  # swSolidBody
+    assert len(found) == len(faces)
+    assert selector.face_at_point(found, [0.0, 10.0, 0.0]).handle in faces
+
+
+@pytest.mark.parametrize(
+    ("entity", "face", "label"),
+    [
+        ("Front Plane", None, "Front Plane"),
+        ("Front Plane", [0, 5, 1.5], "face at [0.0, 5.0, 1.5] mm"),
+    ],
+)
+def test_mate_entity_label(entity: str, face: list[float] | None, label: str) -> None:
+    assert fs.mate_entity_label(entity, face) == label

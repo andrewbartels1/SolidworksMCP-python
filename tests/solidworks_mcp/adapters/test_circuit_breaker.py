@@ -914,6 +914,7 @@ CAPABILITIES = [
     "insert_component",
     "list_components",
     "add_mate",
+    "set_component_state",
 ]
 
 

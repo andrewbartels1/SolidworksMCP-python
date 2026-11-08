@@ -786,7 +786,13 @@ class TestConnectionPoolAdapterExtras:
                 return None
 
             async def create_reference_plane(
-                self, reference, offset=0.0, angle=0.0, flip=False
+                self,
+                reference,
+                offset=0.0,
+                angle=0.0,
+                flip=False,
+                axis=None,
+                face_point=None,
             ):
                 return _ok("plane")
 
@@ -871,10 +877,15 @@ class TestConnectionPoolAdapterExtras:
                 alignment="aligned",
                 distance=0.0,
                 angle=0.0,
+                face_a=None,
+                face_b=None,
             ):
                 return _ok("mate")
 
-            async def add_chamfer(self, distance, edge_names):
+            async def set_component_state(self, component, fixed=None, flexible=None):
+                return _ok("state")
+
+            async def add_chamfer(self, distance, edge_names, angle=45.0, flip=False):
                 return _ok("chamfer")
 
             async def get_selected_entities(self):
@@ -906,6 +917,7 @@ class TestConnectionPoolAdapterExtras:
             assert (await wrapped.rename_feature("Sketch1", "Sketch2")).is_success
             assert (await wrapped.undo()).is_success
             assert (await wrapped.add_mate("Comp1", "Comp2")).is_success
+            assert (await wrapped.set_component_state("Comp1", fixed=True)).is_success
             assert (await wrapped.add_chamfer(1.0, ["Edge1"])).is_success
             assert (await wrapped.get_selected_entities()).is_success
 

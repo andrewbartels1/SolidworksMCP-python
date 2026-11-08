@@ -439,39 +439,8 @@ async def register_drawing_tools(
         Returns:
             dict[str, Any]: The dimension, or a `not_supported` error.
         """
-        if hasattr(input_data, "model_dump"):
-            payload = input_data.model_dump()
-        else:
-            payload = dict(input_data)
-
-        dimension_type = payload.get("dimension_type")
-        entity1 = payload.get("entity1")
-        entity2 = payload.get("entity2")
-        position_x = payload.get("position_x")
-        position_y = payload.get("position_y")
-
-        if (entity1 is None or entity2 is None) and payload.get("entities"):
-            entities = payload["entities"]
-            if entity1 is None and len(entities) >= 1:
-                entity1 = entities[0]
-            if entity2 is None and len(entities) >= 2:
-                entity2 = entities[1]
-
-        if (position_x is None or position_y is None) and payload.get("position"):
-            position = payload["position"]
-            if len(position) >= 2:
-                if position_x is None:
-                    position_x = position[0]
-                if position_y is None:
-                    position_y = position[1]
-
-        # Feed the alias-normalized values back into the payload so the
-        # adapter call sees entity1/entity2/position_x/position_y even
-        # when the caller only supplied entities/position.
-        payload["entity1"] = entity1
-        payload["entity2"] = entity2
-        payload["position_x"] = position_x
-        payload["position_y"] = position_y
+        payload = input_data.model_dump()
+        dimension_type = payload["dimension_type"]
 
         require_capability(
             adapter,

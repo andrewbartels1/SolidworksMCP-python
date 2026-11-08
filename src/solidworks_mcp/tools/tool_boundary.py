@@ -19,7 +19,10 @@ tool can forget it. It also adds each tool's support level (from
 from __future__ import annotations
 
 import functools
+import inspect
 import time
+import types
+import typing
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, cast
 
@@ -178,6 +181,36 @@ def error_payload(
     return payload
 
 
+def model_parameters(fn: Callable[..., Any]) -> dict[str, type[BaseModel]]:
+    """The parameters of ``fn`` annotated with a pydantic model.
+
+    A parameter counts when its annotation is a model, or a model ``| None``.
+
+    Args:
+        fn: The tool function.
+
+    Returns:
+        dict[str, type[BaseModel]]: Parameter name to its model; empty when
+        the annotations can't be resolved (a model defined inside a function).
+    """
+    try:
+        hints = typing.get_type_hints(fn)
+    except NameError:
+        return {}
+    models: dict[str, type[BaseModel]] = {}
+    for name, hint in hints.items():
+        options = (
+            typing.get_args(hint)
+            if isinstance(hint, types.UnionType)
+            or typing.get_origin(hint) is typing.Union
+            else (hint,)
+        )
+        found = [o for o in options if isinstance(o, type) and issubclass(o, BaseModel)]
+        if name != "return" and len(found) == 1:
+            models[name] = found[0]
+    return models
+
+
 def tool_boundary(
     fn: Callable[..., Awaitable[dict[str, Any]]],
     classifier: ErrorClassifier = _CLASSIFIER,
@@ -195,10 +228,25 @@ def tool_boundary(
             experimental tool's level), after any warning of the tool's own;
             errors carry a ``hint`` instead.
 
+    A dict passed where the tool expects its input model is validated as
+    that model first, so a script can call any tool function with a dict, as
+    an MCP client effectively does.
+
     Returns:
         The wrapped tool.
     """
     tool_name = fn.__name__
+    models = model_parameters(fn)
+    signature = inspect.signature(fn)
+
+    def with_models(
+        args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> inspect.BoundArguments:
+        bound = signature.bind_partial(*args, **kwargs)
+        for name, model in models.items():
+            if isinstance(bound.arguments.get(name), dict):
+                bound.arguments[name] = normalize_input(bound.arguments[name], model)
+        return bound
 
     @functools.wraps(fn)
     async def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -208,7 +256,8 @@ def tool_boundary(
             return time.perf_counter() - started
 
         try:
-            result = await fn(*args, **kwargs)
+            bound = with_models(args, kwargs)
+            result = await fn(*bound.args, **bound.kwargs)
         except InvalidInputError as exc:
             return error_payload(
                 f"Invalid input: {exc}",

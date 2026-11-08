@@ -14,6 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tools the U-joint needed** (#209), each checked on SolidWorks 2026:
+  - `add_mate` takes a face as a point on it (`face_a`, `face_b`) in that
+    part's own coordinates, so a pin mates concentric in its hole;
+  - `set_component_state` (new) fixes or floats a component and makes a
+    sub-assembly rigid or flexible, keeping its other settings;
+  - `create_reference_plane` makes planes at an angle about an `axis`, and
+    from a face (`face_point`), sloped or not; `create_axis` now names the
+    axis it made;
+  - `add_chamfer` takes an `angle` and `flip`;
+  - `create_extrusion` takes `thin_side` for thin walls, and an open
+    outline makes a bent plate.
+- **Every tool accepts a plain dict** (#209). A script calling a tool
+  function with a dict gets the same validation as an MCP client; the
+  export file tools no longer need `format_type`.
+
 - **Support levels for every tool** (#79). Each tool is `stable` (checked
   live, no known fault), `beta` (a known fault or partial COM coverage),
   `experimental` (not yet checked live) or `planned` (not implemented),
@@ -78,6 +93,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carry the new summaries (#82).
 
 ### Fixed
+
+- **`create_extrusion`'s reply says what was built** (#209): the end
+  condition SolidWorks used (`MidPlane` for `both_directions`), and the
+  thin wall. It used to echo `direction: blind`, so an agent concluded
+  `both_directions` was ignored.
 
 - **One failed call could pause a tool for good** (#208). The server's router
   fell back to the VBA adapter, which called back into the router, so one

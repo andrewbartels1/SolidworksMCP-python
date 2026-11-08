@@ -687,13 +687,22 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
         """Add chamfer through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_chamfer",
-            lambda: self.adapter.add_chamfer(distance, edge_names),
-            input_dict={"distance": distance, "edge_names": edge_names},
+            lambda: self.adapter.add_chamfer(distance, edge_names, angle, flip),
+            input_dict={
+                "distance": distance,
+                "edge_names": edge_names,
+                "angle": angle,
+                "flip": flip,
+            },
         )
 
     async def get_selected_entities(self) -> AdapterResult[list[dict[str, Any]]]:
@@ -756,16 +765,22 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Create reference plane through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "create_reference_plane",
-            lambda: self.adapter.create_reference_plane(reference, offset, angle, flip),
+            lambda: self.adapter.create_reference_plane(
+                reference, offset, angle, flip, axis, face_point
+            ),
             input_dict={
                 "reference": reference,
                 "offset": offset,
                 "angle": angle,
                 "flip": flip,
+                "axis": axis,
+                "face_point": face_point,
             },
         )
 
@@ -1625,6 +1640,19 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"count": count},
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set a component's state through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_component_state",
+            lambda: self.adapter.set_component_state(component, fixed, flexible),
+            input_dict={"component": component, "fixed": fixed, "flexible": flexible},
+        )
+
     async def add_mate(
         self,
         component_a: str,
@@ -1635,6 +1663,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add mate through circuit breaker.
 
@@ -1649,6 +1679,9 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             alignment (str): Mate alignment. Defaults to "aligned".
             distance (float): Distance in millimetres. Defaults to 0.0.
             angle (float): Angle in degrees. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component, in its part coordinates (mm), instead of entity_a.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -1664,6 +1697,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 alignment,
                 distance,
                 angle,
+                face_a,
+                face_b,
             ),
             input_dict={
                 "component_a": component_a,
@@ -1674,6 +1709,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "alignment": alignment,
                 "distance": distance,
                 "angle": angle,
+                "face_a": face_a,
+                "face_b": face_b,
             },
         )
 

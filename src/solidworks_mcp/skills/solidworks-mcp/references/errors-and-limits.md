@@ -51,8 +51,8 @@ mostly batch, template, macro-recording and drawing-analysis tools, plus
 | `create_technical_drawing` ignores its template, sheet size, title and output path. | `generate_drawing_package` for a complete drawing. |
 | `delete_feature`'s message may not mention the dependents it also removed. | `list_features` afterwards. |
 | `save_as` replaces an existing file whatever `overwrite` says. | `save_part` or `save_assembly`, which refuse an existing file unless `overwrite` is on. |
-| The `export_*` tools take the format from the file extension, not `format_type`. | Name the file with the right extension. |
+| The `export_*` file tools take the format from the file extension; `format_type` is optional and `options` is ignored. | Name the file with the right extension. |
 | `calculate_mass_properties` labels moments of inertia kg·mm², but they are kg·m². | Read them as kg·m². |
 | `check_interference` ignores `include_hidden`. | Show the components you want checked. |
 | `execute_macro` runs a macro once, whatever `repeat_count` says, and runs only binary `.swp` files. | Call it again for a repeat. |
-| `add_mate` can mate only reference planes and axes, by name. | Model parts so their planes line up with the mates you need. |
+| `add_mate` can't mate edges or vertices, only planes, axes and faces. | Mate the faces that meet at the edge. |

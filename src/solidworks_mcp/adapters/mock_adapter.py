@@ -202,6 +202,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         # Mates added via add_mate, in order, so the geometry summary can
         # report a mate count without real geometry.
         self._mates: list[dict[str, Any]] = []
+        self._component_states: dict[str, dict[str, bool]] = {}
         # Drawing views placed via create_drawing_view / add_drawing_view /
         # create_technical_drawing, in sheet order. See list_drawing_views.
         self._drawing_views: list[str] = []
@@ -856,10 +857,17 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         return await self._mock_edge_feature("Fillet", radius, edge_names)
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[SolidWorksFeature]:
-        """Mock equal-distance chamfer (see :meth:`_mock_edge_feature`)."""
-        return await self._mock_edge_feature("Chamfer", distance, edge_names)
+        """Mock angle-distance chamfer (see :meth:`_mock_edge_feature`)."""
+        result = await self._mock_edge_feature("Chamfer", distance, edge_names)
+        if result.is_success:
+            result.data.parameters.update({"angle": angle, "flip": flip})
+        return result
 
     async def _mock_edge_feature(
         self, kind: str, size: float, edge_names: list[str]
@@ -1160,8 +1168,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "draft_angle": params.draft_angle,
                 "reverse_direction": params.reverse_direction,
                 "both_directions": params.both_directions,
+                "end_condition": "MidPlane"
+                if params.both_directions
+                else params.end_condition,
                 "thin_feature": params.thin_feature,
                 "thin_thickness": params.thin_thickness,
+                "thin_side": params.thin_side if params.thin_feature else None,
             },
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
@@ -3036,6 +3048,42 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["model_operation"],
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock fixing, floating and flexing a component.
+
+        Tracks each component's state on ``self._component_states``.
+
+        Args:
+            component (str): Instance name.
+            fixed (bool | None): True fixes it, False floats it.
+            flexible (bool | None): True flexible, False rigid.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The state before and after.
+        """
+        if fixed is None and flexible is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="Nothing to change: give fixed, flexible or both.",
+            )
+        states = self._component_states
+        before = dict(states.get(component, {"fixed": False, "flexible": False}))
+        after = dict(before)
+        if fixed is not None:
+            after["fixed"] = fixed
+        if flexible is not None:
+            after["flexible"] = flexible
+        states[component] = after
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"component": component, "before": before, "after": after},
+        )
+
     async def add_mate(
         self,
         component_a: str,
@@ -3046,6 +3094,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mock mating two components in the active assembly.
 
@@ -3061,10 +3111,15 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             distance (float): Distance in millimetres, for a distance mate.
                 Defaults to 0.0.
             angle (float): Angle in degrees, for an angle mate. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component (part coordinates, mm), used instead of entity_a.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
+        from .solidworks.face_selection import mate_entity_label
+
         known_mate_types = {
             "coincident",
             "concentric",
@@ -3095,7 +3150,10 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "mate_type": mate_type,
                 "alignment": alignment,
                 "components": [component_a, component_b],
-                "entities": [entity_a, entity_b],
+                "entities": [
+                    mate_entity_label(entity_a, face_a),
+                    mate_entity_label(entity_b, face_b),
+                ],
                 "distance": distance or None,
                 "angle": angle or None,
                 # The real adapter fills these by comparing every component's
@@ -3117,51 +3175,36 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock creating a reference plane offset from an existing plane.
+        """Mock creating a reference plane offset from, angled to, or on a face.
 
-        Mirrors the live adapter's refusals rather than fabricating a
-        result it cannot know: an angled plane needs a second reference this
-        signature cannot supply, and an offset of zero would be coincident
-        with its reference. See ``_create_reference_plane_impl`` in
-        ``solidworks/features.py`` for the live contract this mirrors.
-
-        On success, invents a sequential ``PlaneN`` name tracked on
+        Refuses exactly what the live adapter refuses (the shared
+        ``reference_plane_refusal`` in ``solidworks/features.py``). On
+        success, invents a sequential ``PlaneN`` name tracked on
         ``self._reference_planes`` and advances the shared mock feature-tree
         counter so ``features_before``/``features_after`` differ by exactly
         one, the same signal the live adapter derives from
         ``IFeatureManager::GetFeatureCount``.
 
         Args:
-            reference (str): Name of the reference plane or planar face.
+            reference (str): Name of the reference plane.
             offset (float): Offset distance in millimetres. Defaults to 0.0.
-            angle (float): Angle in degrees; unsupported (non-zero errors).
-                Defaults to 0.0.
+            angle (float): Angle in degrees about ``axis``. Defaults to 0.0.
             flip (bool): Reverse the offset direction. Defaults to False.
+            axis (str | None): Axis to rotate about, for an angle.
+            face_point (list[float] | None): Point on a flat face, in mm.
 
         Returns:
             AdapterResult[dict[str, Any]]: The new plane's name and
             parameters, or error.
         """
-        if angle:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    "create_reference_plane does not support 'angle' yet: an "
-                    "angled plane needs a second reference (an axis or edge "
-                    "to rotate about) which this signature cannot take. Use "
-                    "'offset' for parallel planes."
-                ),
-            )
+        from .solidworks.features import reference_plane_refusal
 
-        if not offset:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=(
-                    "create_reference_plane requires a non-zero offset - a "
-                    "plane coincident with its reference is not useful"
-                ),
-            )
+        refusal = reference_plane_refusal(reference, offset, angle, axis, face_point)
+        if refusal is not None:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=refusal)
 
         await asyncio.sleep(self._delays["feature_operation"])
         self._operation_count += 1
@@ -3176,9 +3219,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data={
                 "name": self._reference_planes[-1],
-                "reference": reference,
-                "offset": offset,
-                "angle": None,
+                "reference": reference if face_point is None else None,
+                "face_point": face_point,
+                "offset": offset or None,
+                "angle": angle or None,
+                "axis": axis if angle else None,
                 "flip": flip,
                 "features_before": before,
                 "features_after": after,
@@ -3223,10 +3268,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         # Invent a sequential "AxisN" name, tracked on self._axes, the same
         # way create_reference_plane invents "PlaneN" names on
-        # self._reference_planes. InsertAxis2 returns only a bool, so the
-        # live adapter cannot report a name either - but pattern_circular
-        # needs some name to validate the axis argument against, and this
-        # keeps the mock's bookkeeping consistent with the plane convention.
+        # self._reference_planes. The live adapter reads the new axis's name
+        # from the end of the feature tree (InsertAxis2 returns only a bool).
         self._axes.append(f"Axis{len(self._axes) + 1}")
 
         return AdapterResult(

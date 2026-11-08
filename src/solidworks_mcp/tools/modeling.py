@@ -4,7 +4,7 @@ Provides tools for creating and manipulating SolidWorks models, including parts,
 assemblies, drawings, and features like extrusions, revolves, etc.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -195,6 +195,7 @@ class CreateExtrusionInput(CompatInput):
         sketch_name (str): The sketch name value.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
+        thin_side (str): The side a thin wall grows on.
     """
 
     sketch_name: str = Field(description="Sketch name to extrude")
@@ -206,11 +207,28 @@ class CreateExtrusionInput(CompatInput):
         default=False, description="Reverse extrusion direction"
     )
     both_directions: bool = Field(
-        default=False, description="Extrude in both directions"
+        default=False,
+        description=(
+            "Extrude symmetrically about the sketch plane (mid-plane): `depth` is "
+            "the total thickness, half on each side"
+        ),
     )
-    thin_feature: bool = Field(default=False, description="Create as thin wall feature")
+    thin_feature: bool = Field(
+        default=False,
+        description=(
+            "Make a thin wall of `thin_thickness` from the sketch's outline; the "
+            "sketch may be an open chain (a bent plate's centreline)"
+        ),
+    )
     thin_thickness: float | None = Field(
-        default=None, description="Thickness for thin wall feature in mm"
+        default=None, description="Wall thickness in mm; required with thin_feature"
+    )
+    thin_side: Literal["one_side", "other_side", "mid_plane"] = Field(
+        default="one_side",
+        description=(
+            "Which side of the sketch line the thin wall grows on: one_side, "
+            "other_side, or mid_plane (half each side)"
+        ),
     )
     end_condition: str = Field(default="Blind", description="End condition type")
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
@@ -233,6 +251,8 @@ class CreateExtrusionInput(CompatInput):
             raise ValueError("sketch_name is required")
         if self.reverse is not None:
             self.reverse_direction = self.reverse
+        if self.thin_feature and not (self.thin_thickness and self.thin_thickness > 0):
+            raise ValueError("thin_feature needs a positive thin_thickness (mm)")
 
 
 class CreateRevolveInput(CompatInput):
@@ -502,14 +522,32 @@ class AddFilletInput(CompatInput):
 
 
 class AddChamferInput(CompatInput):
-    """Input schema for adding an equal-distance chamfer feature.
+    """Input schema for adding a chamfer feature.
 
     Attributes:
         distance (float): Chamfer distance in millimeters.
         edge_names (list[str]): Edge names to chamfer.
+        angle (float): Chamfer angle in degrees.
+        flip (bool): Measure the distance along the other face.
     """
 
-    distance: float = Field(description="Chamfer distance in millimeters")
+    distance: float = Field(
+        description="Chamfer distance in millimeters, along one of the edge's faces"
+    )
+    angle: float = Field(
+        default=45.0,
+        description=(
+            "Chamfer angle in degrees, between 0 and 90; 45 makes both legs "
+            "equal to distance"
+        ),
+    )
+    flip: bool = Field(
+        default=False,
+        description=(
+            "Measure distance along the edge's other face (swaps the long and "
+            "short legs of an angled chamfer)"
+        ),
+    )
     edge_names: list[str] = Field(
         default_factory=list,
         description=(
@@ -533,6 +571,8 @@ class AddChamferInput(CompatInput):
     def model_post_init(self, __context: Any) -> None:
         if self.distance <= 0:
             raise ValueError("distance must be positive")
+        if not 0 < self.angle < 90:
+            raise ValueError("angle must be between 0 and 90 degrees")
 
 
 class CreateAssemblyInput(CompatInput):
@@ -727,15 +767,34 @@ class AddMateInput(CompatInput):
         description="First component instance name, as reported by list_components"
     )
     component_b: str = Field(description="Second component instance name")
-    entity_a: str = Field(
-        default="Front Plane",
+    entity_a: str | None = Field(
+        default=None,
         description=(
-            "Named feature on the first component. Only tree features "
-            "(reference planes and axes) can be selected"
+            "Named reference plane or axis on the first component, e.g. 'Front "
+            "Plane'; defaults to 'Front Plane' when face_a is not given either"
         ),
     )
-    entity_b: str = Field(
-        default="Front Plane", description="Named feature on the second component"
+    entity_b: str | None = Field(
+        default=None,
+        description=(
+            "Named reference plane or axis on the second component; defaults "
+            "to 'Front Plane' when face_b is not given either"
+        ),
+    )
+    face_a: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a face of the first component, in that part's "
+            "own coordinates (as it was modelled), instead of entity_a: e.g. a "
+            "point on a pin's round face for a concentric mate"
+        ),
+    )
+    face_b: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a face of the second component, in its own "
+            "part coordinates, instead of entity_b"
+        ),
     )
     mate_type: str = Field(
         default="coincident",
@@ -755,38 +814,107 @@ class AddMateInput(CompatInput):
     def model_post_init(self, __context: Any) -> None:
         if not self.component_a.strip() or not self.component_b.strip():
             raise ValueError("component_a and component_b are required")
+        for side in ("a", "b"):
+            entity, face = (
+                getattr(self, f"entity_{side}"),
+                getattr(self, f"face_{side}"),
+            )
+            if entity and face is not None:
+                raise ValueError(f"give entity_{side} or face_{side}, not both")
+            if face is not None and len(face) != 3:
+                raise ValueError(f"face_{side} must be [x, y, z] in millimetres")
+
+
+class SetComponentStateInput(CompatInput):
+    """Input schema for fixing, floating and flexing a component.
+
+    Attributes:
+        component (str): Component instance name.
+        fixed (bool | None): True fixes it, False floats it.
+        flexible (bool | None): True flexible, False rigid.
+    """
+
+    component: str = Field(
+        description="Component instance name, as reported by list_components"
+    )
+    fixed: bool | None = Field(
+        default=None,
+        description=(
+            "true fixes the component in place; false floats it so mates can "
+            "move it; leave it out to keep it as it is"
+        ),
+    )
+    flexible: bool | None = Field(
+        default=None,
+        description=(
+            "For a sub-assembly: true lets its own mates move inside this "
+            "assembly (a crank that turns); false makes it rigid; leave it out "
+            "to keep it as it is"
+        ),
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.component.strip():
+            raise ValueError("component is required")
+        if self.fixed is None and self.flexible is None:
+            raise ValueError("give fixed, flexible or both")
 
 
 class CreateReferencePlaneInput(CompatInput):
     """Input schema for creating a reference plane.
 
     Attributes:
-        reference (str): Name of the reference plane or planar face.
+        reference (str): Name of the reference plane.
+        face_point (list[float] | None): A point on a flat face to use instead.
         offset (float): Offset distance in millimetres.
         angle (float): Angle in degrees.
+        axis (str | None): Axis to rotate about, for an angle.
         flip (bool): Reverse the offset or angle direction.
     """
 
     reference: str = Field(
-        description="Name of the reference plane or planar face to offset "
-        "from, e.g. 'Front Plane'"
+        default="",
+        description=(
+            "Name of the reference plane, e.g. 'Front Plane' or 'Plane1'; leave "
+            "it out when giving face_point"
+        ),
+    )
+    face_point: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a flat face of the part (sloped or not), to use "
+            "that face as the reference instead of a named plane"
+        ),
     )
     offset: float = Field(
         default=0.0,
-        description="Offset distance in millimetres. Must be non-zero — a "
-        "plane coincident with its reference is not useful",
+        description=(
+            "Offset distance in millimetres. Non-zero for a named plane; 0 with "
+            "face_point puts the plane on the face"
+        ),
     )
     angle: float = Field(
         default=0.0,
-        description="Angle in degrees. Not yet supported: an angled plane "
-        "needs a second reference this tool cannot take, so a non-zero "
-        "value errors. Use offset for parallel planes",
+        description="Angle in degrees between the new plane and the reference, about axis",
     )
-    flip: bool = Field(default=False, description="Reverse the offset direction")
+    axis: str | None = Field(
+        default=None,
+        description=(
+            "Name of the axis the plane rotates about, e.g. 'Axis1' from "
+            "create_axis; required with angle"
+        ),
+    )
+    flip: bool = Field(
+        default=False, description="Reverse the offset side or the angle direction"
+    )
 
     def model_post_init(self, __context: Any) -> None:
-        if not self.reference.strip():
-            raise ValueError("reference is required")
+        if bool(self.reference.strip()) == (self.face_point is not None):
+            raise ValueError("give exactly one of reference or face_point")
+        if self.face_point is not None and len(self.face_point) != 3:
+            raise ValueError("face_point must be [x, y, z] in millimetres")
+        if self.angle and not self.axis:
+            raise ValueError("an angled plane needs axis, the axis to rotate about")
 
 
 class CreateAxisInput(CompatInput):
@@ -1151,10 +1279,14 @@ async def register_modeling_tools(
 
         Use it after `exit_sketch`; to remove material, use `create_cut_extrude`. It
         extrudes the sketch `exit_sketch` closed, whatever `sketch_name` says. End
-        conditions: Blind (default), MidPlane, ThroughAll, UpToNext. Needs: an open part
-        and a closed profile just exited. Changes: adds a Boss-Extrude feature. Returns:
-        `extrusion` (`name`, `depth`) and `measured_change` (volume, bounding box and
-        solid-body count before and after; left out when the model can't be read).
+        conditions: Blind (default), MidPlane, ThroughAll, UpToNext; `both_directions`
+        means MidPlane. With `thin_feature` and `thin_thickness` it makes a wall from the
+        sketch's outline, and an open chain works (a bent plate from its centreline).
+        Needs: an open part and a profile just exited (closed, unless thin). Changes:
+        adds a Boss-Extrude feature. Returns: `extrusion` (`name`, `depth`, the
+        `end_condition` SolidWorks used, `both_directions`, and `thin` when thin) and
+        `measured_change` (volume, bounding box and solid-body count before and after;
+        left out when the model can't be read).
 
         Args:
             input_data: The extrusion. `sketch_name` and `depth` (mm) are required;
@@ -1174,6 +1306,7 @@ async def register_modeling_tools(
             both_directions=input_data.both_directions,
             thin_feature=input_data.thin_feature,
             thin_thickness=input_data.thin_thickness,
+            thin_side=input_data.thin_side,
             end_condition=input_data.end_condition,
             merge_result=input_data.merge_result,
             feature_scope=False,
@@ -1186,17 +1319,25 @@ async def register_modeling_tools(
         require_success(result, context="Failed to create extrusion")
         after = await _read_summary(adapter) if before is not None else None
         feature = result.data
+        name = _result_value(feature, "feature_name", "name", default="Extrusion")
+        applied = _result_value(feature, "parameters", default=None) or {}
+        extrusion: dict[str, Any] = {
+            "name": name,
+            "sketch": input_data.sketch_name,
+            "depth": input_data.depth,
+            "end_condition": applied.get("end_condition")
+            or ("MidPlane" if input_data.both_directions else input_data.end_condition),
+            "both_directions": input_data.both_directions,
+        }
+        if input_data.thin_feature:
+            extrusion["thin"] = {
+                "thickness": input_data.thin_thickness,
+                "side": input_data.thin_side,
+            }
         reply = {
             "status": "success",
-            "message": f"Created extrusion: {_result_value(feature, 'feature_name', 'name', default='Extrusion')}",
-            "extrusion": {
-                "name": _result_value(
-                    feature, "feature_name", "name", default="Extrusion"
-                ),
-                "sketch": input_data.sketch_name,
-                "depth": input_data.depth,
-                "direction": input_data.direction,
-            },
+            "message": f"Created extrusion: {name}",
+            "extrusion": extrusion,
             "execution_time": result.execution_time,
         }
         return _attach_measured_change(reply, before, after)
@@ -1459,12 +1600,14 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def add_chamfer(input_data: AddChamferInput) -> dict[str, Any]:
-        """Bevel edges of the active part with an equal-distance chamfer at 45 degrees.
+        """Bevel edges of the active part with a chamfer: `distance` along one face at `angle` (45 by default).
 
         Name the edges as "Edge<1>", a point "x,y,z" (metres) or "face:x,y,z" for every
         edge of a face; or leave `edge_names` empty to use the current selection (e.g.
-        from `select_face_edges`). Needs: an open part with a solid body. Changes: adds
-        a Chamfer feature. Returns: `chamfer` with `name`, `distance` and `edges`.
+        from `select_face_edges`). At 45 degrees both legs equal `distance`; at another
+        angle, `flip` swaps which face `distance` is measured on. Needs: an open part
+        with a solid body. Changes: adds a Chamfer feature. Returns: `chamfer` with
+        `name`, `distance`, `angle`, `flip` and `edges`.
 
         Args:
             input_data: The chamfer. `distance` (mm) is required; `edge_names`
@@ -1474,7 +1617,12 @@ async def register_modeling_tools(
             dict[str, Any]: The created chamfer.
         """
         input_data = normalize_input(input_data, AddChamferInput)
-        result = await adapter.add_chamfer(input_data.distance, input_data.edge_names)
+        result = await adapter.add_chamfer(
+            input_data.distance,
+            input_data.edge_names,
+            input_data.angle,
+            input_data.flip,
+        )
         require_success(result, context="Failed to add chamfer")
         feature = result.data
         return {
@@ -1485,6 +1633,8 @@ async def register_modeling_tools(
                     feature, "feature_name", "name", default="Chamfer"
                 ),
                 "distance": input_data.distance,
+                "angle": input_data.angle,
+                "flip": input_data.flip,
                 "edges": input_data.edge_names,
             },
             "execution_time": result.execution_time,
@@ -1602,16 +1752,18 @@ async def register_modeling_tools(
     async def add_mate(input_data: AddMateInput) -> dict[str, Any]:
         """Mate two components of the active assembly: coincident, concentric, parallel, perpendicular, tangent, distance or angle.
 
-        Only reference planes and axes can be mated (by name, e.g. "Front Plane"), not
-        faces or edges. Get instance names from `list_components`. Needs: an open
-        assembly with both components. Changes: adds a mate and may move components.
-        Returns: `mate` with `mate_type`, `components`, `entities`, `geometry_moved` and
-        `moved_components`.
+        Each side is a named reference plane or axis (`entity_a`, e.g. "Front Plane"),
+        or a face given by a point on it (`face_a`, mm, in that part's own coordinates):
+        a pin's round face and a hole's face make a concentric mate. Get instance names
+        from `list_components`. Needs: an open assembly with both components. Changes:
+        adds a mate and may move components. Returns: `mate` with `mate_type`,
+        `components`, `entities`, `geometry_moved` and `moved_components`.
 
         Args:
             input_data: The mate. `component_a` and `component_b` are required;
-                `entity_a`/`entity_b` ("Front Plane"), `mate_type` (coincident),
-                `alignment`, `distance` (mm) and `angle` (degrees) have defaults.
+                each side takes `entity_*` or `face_*` (default "Front Plane");
+                `mate_type` (coincident), `alignment`, `distance` (mm) and `angle`
+                (degrees) have defaults.
 
         Returns:
             dict[str, Any]: The mate added.
@@ -1620,12 +1772,14 @@ async def register_modeling_tools(
         result = await adapter.add_mate(
             input_data.component_a,
             input_data.component_b,
-            input_data.entity_a,
-            input_data.entity_b,
+            input_data.entity_a or "Front Plane",
+            input_data.entity_b or "Front Plane",
             input_data.mate_type,
             input_data.alignment,
             input_data.distance,
             input_data.angle,
+            input_data.face_a,
+            input_data.face_b,
         )
         require_success(result, context="Failed to add mate")
         data = result.data if isinstance(result.data, dict) else {}
@@ -1642,6 +1796,44 @@ async def register_modeling_tools(
             "status": "success",
             "message": message,
             "mate": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def set_component_state(input_data: SetComponentStateInput) -> dict[str, Any]:
+        """Fix or float a component of the active assembly, or make a sub-assembly rigid or flexible.
+
+        Float a part so mates can position it (the first part inserted is fixed); fix
+        one to hold it still. Make a sub-assembly flexible so its own mates move in
+        this assembly (a crank whose knob turns). Only what you pass changes: the
+        component's suppression, visibility and configuration are kept. Needs: an
+        open assembly. Changes: the component's fixed or solving state. Returns:
+        `state` with `component`, `before` and `after` (`fixed`, `flexible` and the
+        properties kept).
+
+        Args:
+            input_data: The component and what to change: `fixed`, `flexible` or
+                both.
+
+        Returns:
+            dict[str, Any]: The state before and after.
+        """
+        input_data = normalize_input(input_data, SetComponentStateInput)
+        result = await adapter.set_component_state(
+            input_data.component, input_data.fixed, input_data.flexible
+        )
+        require_success(result, context="Failed to set the component state")
+        data = result.data if isinstance(result.data, dict) else {}
+        after = data.get("after", {})
+        words = []
+        if input_data.fixed is not None:
+            words.append("fixed" if after.get("fixed") else "floating")
+        if input_data.flexible is not None:
+            words.append("flexible" if after.get("flexible") else "rigid")
+        return {
+            "status": "success",
+            "message": f"{input_data.component} is now {' and '.join(words)}",
+            "state": data,
             "execution_time": result.execution_time,
         }
 
@@ -1908,17 +2100,19 @@ async def register_modeling_tools(
     async def create_reference_plane(
         input_data: CreateReferencePlaneInput,
     ) -> dict[str, Any]:
-        """Add a reference plane parallel to a plane or flat face, offset by a distance in mm.
+        """Add a reference plane offset from, at an angle to, or on a plane or flat face.
 
         Use it to sketch somewhere other than the three default planes: pass the new
-        plane's name to `create_sketch`. Angled planes are not supported (a non-zero
-        `angle` is an error), and a zero offset is refused. Needs: an open part.
-        Changes: adds a plane feature. Returns: `plane` with `name`, `reference`,
-        `offset` and `flip`.
+        plane's name to `create_sketch`. Offset: `reference` and a non-zero `offset`
+        (mm). Angle: `reference`, `angle` (degrees) and `axis`, an axis lying in the
+        reference (make one with `create_axis`). Face: `face_point`, a point on a flat
+        face (sloped or not), with an `offset` or 0 for a plane on the face. Needs: an
+        open part. Changes: adds a plane feature. Returns: `plane` with `name` and the
+        inputs used.
 
         Args:
-            input_data: The plane. `reference` (e.g. "Front Plane") and a non-zero
-                `offset` (mm) are needed; `flip` is off.
+            input_data: The plane. Exactly one of `reference` and `face_point`;
+                then `offset`, or `angle` with `axis`; `flip` is off.
 
         Returns:
             dict[str, Any]: The new plane.
@@ -1929,6 +2123,8 @@ async def register_modeling_tools(
             input_data.offset,
             input_data.angle,
             input_data.flip,
+            input_data.axis,
+            input_data.face_point,
         )
         require_success(result, context="Failed to create reference plane")
         data = result.data if isinstance(result.data, dict) else {}
@@ -1945,7 +2141,8 @@ async def register_modeling_tools(
 
         Use it before `pattern_circular`, which rotates features about an axis. It is
         built where two default planes meet. Needs: an open part. Changes: adds an axis
-        feature. Returns: `axis` with `reference`, `planes` and the feature counts.
+        feature. Returns: `axis` with `name` (e.g. "Axis1", for
+        `create_reference_plane`'s `axis`), `reference`, `planes` and the feature counts.
 
         Args:
             input_data: The axis. `reference` ("x", "y" or "z") is required.

@@ -214,6 +214,8 @@ class ExtrusionParameters(BaseModel):
             than silently falling back to some other sketch.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
+        thin_side (str): Which side of the sketch a thin wall grows on:
+            ``one_side``, ``other_side`` or ``mid_plane``.
         up_to_surface (str | None): The up to surface value.
     """
 
@@ -223,6 +225,7 @@ class ExtrusionParameters(BaseModel):
     both_directions: bool = False
     thin_feature: bool = False
     thin_thickness: float | None = None
+    thin_side: str = "one_side"
     auto_fillet_corners: bool = False
     fillet_corners_radius: float = 0.0
     end_condition: str = "Blind"
@@ -975,16 +978,21 @@ class SolidWorksAdapter(ABC):
         )
 
     async def add_chamfer(
-        self, distance: float, edge_names: list[str]
+        self,
+        distance: float,
+        edge_names: list[str],
+        angle: float = 45.0,
+        flip: bool = False,
     ) -> AdapterResult[Any]:
-        """Add an equal-distance chamfer feature to selected edges.
+        """Add an angle-distance chamfer to the named or selected edges.
 
-        Chamfers the selected edges of the current solid body by the given
-        distance.
+        At the default 45 degrees both legs equal ``distance``.
 
         Args:
-            distance (float): Chamfer distance in millimeters.
+            distance (float): Chamfer distance in millimeters, along one face.
             edge_names (list[str]): List of edge names to chamfer.
+            angle (float): Chamfer angle in degrees. Defaults to 45.
+            flip (bool): Measure ``distance`` along the other face.
 
         Returns:
             AdapterResult: Feature result or error.
@@ -1090,14 +1098,19 @@ class SolidWorksAdapter(ABC):
         offset: float = 0.0,
         angle: float = 0.0,
         flip: bool = False,
+        axis: str | None = None,
+        face_point: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Create a reference plane offset from, or angled to, an existing plane.
+        """Create a reference plane offset from, angled to, or on a plane or face.
 
         Args:
-            reference (str): Name of the reference plane or planar face.
+            reference (str): Name of the reference plane.
             offset (float): Offset distance in millimetres. Defaults to 0.0.
-            angle (float): Angle in degrees. Defaults to 0.0.
+            angle (float): Angle in degrees about ``axis``. Defaults to 0.0.
             flip (bool): Reverse the offset or angle direction. Defaults to False.
+            axis (str | None): Named axis to rotate about; needed with ``angle``.
+            face_point (list[float] | None): ``[x, y, z]`` mm on a flat face to
+                use as the reference instead of ``reference``.
 
         Returns:
             AdapterResult[dict[str, Any]]: The new plane's name and parameters, or error.
@@ -1266,6 +1279,27 @@ class SolidWorksAdapter(ABC):
             error="get_model_geometry_summary is not implemented by this adapter",
         )
 
+    async def set_component_state(
+        self,
+        component: str,
+        fixed: bool | None = None,
+        flexible: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Fix or float a component, and make a sub-assembly rigid or flexible.
+
+        Args:
+            component (str): Instance name, as ``list_components`` reports it.
+            fixed (bool | None): True fixes it, False floats it.
+            flexible (bool | None): True flexible, False rigid.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The state before and after, or error.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_component_state is not implemented by this adapter",
+        )
+
     async def add_mate(
         self,
         component_a: str,
@@ -1276,6 +1310,8 @@ class SolidWorksAdapter(ABC):
         alignment: str = "aligned",
         distance: float = 0.0,
         angle: float = 0.0,
+        face_a: list[float] | None = None,
+        face_b: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mate two components together in the active assembly.
 
@@ -1293,6 +1329,10 @@ class SolidWorksAdapter(ABC):
             distance (float): Distance in millimetres, for a distance mate.
                 Defaults to 0.0.
             angle (float): Angle in degrees, for an angle mate. Defaults to 0.0.
+            face_a (list[float] | None): A point on a face of the first
+                component, in its part coordinates (mm), used instead of
+                ``entity_a``.
+            face_b (list[float] | None): The same for the second component.
 
         Returns:
             AdapterResult[dict[str, Any]]: Mate details, or error.

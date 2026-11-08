@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastmcp import FastMCP
 
+from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 from solidworks_mcp.config import (
     AdapterType,
@@ -491,3 +492,25 @@ def test_capability_name_matches_the_tool_gate() -> None:
         f"no tool in analysis.py gates on adapter.{CAPABILITY}; either the "
         "gate was renamed or this capability is unreachable"
     )
+
+
+@pytest.mark.asyncio
+async def test_check_interference_accepts_a_plain_dict(
+    mcp_server, mock_adapter
+) -> None:
+    """A script can pass a dict, as #209's U-joint session did."""
+    mock_adapter.check_interference = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"interference_count": 0, "interferences": []},
+        )
+    )
+    await register_analysis_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "check_interference"
+    )
+
+    result = await tool({"components": ["a-1", "b-1"]})
+
+    assert result["status"] == "success"
+    assert mock_adapter.check_interference.await_count == 1

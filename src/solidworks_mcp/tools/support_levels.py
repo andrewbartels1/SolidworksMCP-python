@@ -82,9 +82,7 @@ def _beta(reason: str) -> Support:
     return Support(SupportLevel.BETA, reason)
 
 
-_EXPORT_FORMAT = _beta(
-    "the file extension sets the format; `format_type` and `options` are ignored."
-)
+_EXPORT_FORMAT = _beta("`options` is ignored; the file extension sets the format.")
 
 SUPPORT_LEVELS: dict[str, Support] = {
     # analysis
@@ -199,7 +197,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     # modeling
     "add_chamfer": _STABLE,
     "add_fillet": _STABLE,
-    "add_mate": _beta("mates only reference planes and axes, by name, not faces."),
+    "add_mate": _STABLE,
     "close_model": _STABLE,
     "create_assembly": _beta("`components` is ignored; use `insert_component`."),
     "create_axis": _STABLE,
@@ -230,6 +228,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "rename_feature": _STABLE,
     "select_face_edges": _STABLE,
     "select_feature": _STABLE,
+    "set_component_state": _STABLE,
     "set_dimension": _STABLE,
     "set_units": _STABLE,
     "suppress_feature": _STABLE,
