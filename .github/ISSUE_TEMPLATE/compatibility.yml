@@ -1,0 +1,49 @@
+name: Compatibility report
+description: Send the result of `solidworks-mcp-python selftest` on your SolidWorks
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for checking your setup. With SolidWorks running and idle, run:
+
+        ```
+        uvx solidworks-mcp-python selftest
+        ```
+
+        It takes about three minutes, opens and closes a few documents of its own, and leaves yours alone. It prints a link that opens this form with the summary filled in; otherwise paste the summary it printed below. Failing results are just as useful as passing ones.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Selftest summary
+      description: The Markdown summary the selftest printed, from "### Selftest" to the last area.
+      placeholder: "### Selftest: 4 of 4 areas passed"
+    validations:
+      required: true
+
+  - type: input
+    id: solidworks
+    attributes:
+      label: SolidWorks version and service pack
+      placeholder: e.g. 2024 SP5.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: e.g. Windows 11 24H2
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and model, if you use one
+      placeholder: e.g. Claude Desktop + Sonnet, VS Code + Copilot
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: Add-ins, a non-English install, PDM, anything that might matter.

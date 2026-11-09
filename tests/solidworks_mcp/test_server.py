@@ -1062,6 +1062,27 @@ def test_cli_main_routes_skill_to_the_skill_app():
     mock_run.assert_not_called()
 
 
+@pytest.mark.parametrize("spelling", ["selftest", "--selftest"])
+def test_cli_main_routes_selftest_to_the_selftest_app(spelling):
+    """`solidworks-mcp selftest` and `--selftest` both run the selftest."""
+    from solidworks_mcp.server import cli_main
+
+    with (
+        patch(
+            "solidworks_mcp.server.sys.argv",
+            ["solidworks-mcp", spelling, "--year", "2026"],
+        ),
+        patch("solidworks_mcp.selftest.cli.app") as selftest_app,
+        patch("solidworks_mcp.server.typer.run") as mock_run,
+    ):
+        cli_main()
+
+    selftest_app.assert_called_once_with(
+        args=["--year", "2026"], prog_name="solidworks-mcp selftest"
+    )
+    mock_run.assert_not_called()
+
+
 def test_cli_help_lists_each_option_without_internal_text():
     """`--help` shows the summary and one line per option, not the Args section."""
     import click

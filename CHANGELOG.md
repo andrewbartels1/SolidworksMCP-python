@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`solidworks-mcp-python selftest`** (#179; `--selftest` works too).
+  With SolidWorks running, it builds a part, an assembly, a drawing view
+  and a STEP export through the MCP tools, checks each against a hand
+  calculation, and prints a report with a link that opens the new
+  Compatibility report form already filled in. It never touches a
+  document you had open. The docs list the releases checked so far.
 - **Tools the U-joint needed** (#209), each checked on SolidWorks 2026:
   - `add_mate` takes a face as a point on it (`face_a`, `face_b`) in that
     part's own coordinates, so a pin mates concentric in its hole;

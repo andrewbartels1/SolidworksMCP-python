@@ -63,6 +63,14 @@ Open SolidWorks, restart your client as setup told you, and ask *"What model is 
 
 VS Code labels every line the server writes to stderr as `[warning]`. That is where its normal log goes, since stdout carries the MCP messages, so those labels aren't problems.
 
+To check the whole setup without a client, run the selftest with SolidWorks open and idle:
+
+```powershell
+uvx solidworks-mcp-python selftest
+```
+
+It builds a small part, an assembly, a drawing view and a STEP export through the same tools a client calls, checks each against a hand calculation, and prints PASS or FAIL per area. It opens and closes a few documents of its own and leaves yours alone. On a release other than 2026, please send the result with the [compatibility report form](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=compatibility.yml); see [Compatibility](../compatibility.md).
+
 ## Install from source
 
 To work on the server itself, install it from a clone. You need [Python 3.13+](https://www.python.org/downloads/windows/), installed with **Add python.exe to PATH** ticked, and Git.

@@ -7,6 +7,8 @@ body:
       value: |
         Thanks for trying the server. Short answers are fine; skip anything you don't know.
         For a specific crash or wrong result, a Bug Report gets you a faster fix.
+        To report how the server runs on your SolidWorks version, run
+        `uvx solidworks-mcp-python selftest` and use the Compatibility report form.
 
   - type: textarea
     id: tried

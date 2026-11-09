@@ -803,6 +803,11 @@ def cli_main() -> None:
 
         skill_app(args=sys.argv[2:], prog_name="solidworks-mcp skill")
         return
+    if sys.argv[1:2] in (["selftest"], ["--selftest"]):
+        from .selftest.cli import app as selftest_app
+
+        selftest_app(args=sys.argv[2:], prog_name="solidworks-mcp selftest")
+        return
     typer.run(cli)
 
 

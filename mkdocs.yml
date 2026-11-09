@@ -20,6 +20,7 @@ nav:
   - Home: index.md
   - Demos: demos.md
   - Progress: progress.md
+  - Compatibility: compatibility.md
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
