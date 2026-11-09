@@ -186,21 +186,24 @@ class CreateExtrusionInput(CompatInput):
     Attributes:
         both_directions (bool): The both directions value.
         depth (float): The depth value.
-        direction (str): The direction value.
         draft_angle (float): The draft angle value.
         end_condition (str): The end condition value.
         merge_result (bool): The merge result value.
         reverse (bool | None): The reverse value.
         reverse_direction (bool): The reverse direction value.
-        sketch_name (str): The sketch name value.
+        sketch_name (str | None): The sketch to extrude; None for the last closed.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
         thin_side (str): The side a thin wall grows on.
     """
 
-    sketch_name: str = Field(description="Sketch name to extrude")
+    sketch_name: str | None = Field(
+        default=None,
+        description=(
+            'Sketch to use, by its name in the feature tree (e.g. "Sketch2"); omit to use the sketch `exit_sketch` closed last'
+        ),
+    )
     depth: float = Field(description="Extrusion depth in millimeters")
-    direction: str = Field(default="blind", description="Extrusion direction")
     reverse: bool | None = Field(default=None, description="Reverse direction alias")
     draft_angle: float = Field(default=0.0, description="Draft angle in degrees")
     reverse_direction: bool = Field(
@@ -243,12 +246,10 @@ class CreateExtrusionInput(CompatInput):
             None: None.
 
         Raises:
-            ValueError: Sketch_name is required.
+            ValueError: A non-positive depth, or a thin wall without thickness.
         """
         if self.depth <= 0:
             raise ValueError("depth must be positive")
-        if not self.sketch_name.strip():
-            raise ValueError("sketch_name is required")
         if self.reverse is not None:
             self.reverse_direction = self.reverse
         if self.thin_feature and not (self.thin_thickness and self.thin_thickness > 0):
@@ -260,20 +261,30 @@ class CreateRevolveInput(CompatInput):
 
     Attributes:
         angle (float): The angle value.
-        axis_entity (str): The axis entity value.
+        axis_entity (str | None): A reference axis to revolve about.
         both_directions (bool): The both directions value.
-        direction (str): The direction value.
         merge_result (bool): The merge result value.
         reverse_direction (bool): The reverse direction value.
-        sketch_name (str): The sketch name value.
+        sketch_name (str | None): The sketch to revolve; None for the last closed.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
     """
 
-    sketch_name: str = Field(description="Sketch name to revolve")
-    axis_entity: str = Field(description="Axis entity for the revolve")
+    sketch_name: str | None = Field(
+        default=None,
+        description=(
+            'Sketch to use, by its name in the feature tree (e.g. "Sketch2"); omit to use the sketch `exit_sketch` closed last'
+        ),
+    )
+    axis_entity: str | None = Field(
+        default=None,
+        description=(
+            "A reference axis to revolve about, by its name in the feature tree "
+            '(e.g. "Axis1" from `create_axis`); omit to use the centreline '
+            "drawn in the sketch"
+        ),
+    )
     angle: float = Field(description="Revolve angle in degrees")
-    direction: str = Field(default="one_direction", description="Revolve direction")
     reverse_direction: bool = Field(
         default=False, description="Reverse revolve direction"
     )
@@ -579,7 +590,6 @@ class CreateAssemblyInput(CompatInput):
     """Input schema for creating a new assembly.
 
     Attributes:
-        components (list[str]): The components value.
         name (str): The name value.
         template (str | None): The template value.
     """
@@ -591,7 +601,6 @@ class CreateAssemblyInput(CompatInput):
             "Assembly template (.asmdot) path; omit to use the SolidWorks default"
         ),
     )
-    components: list[str] = Field(default_factory=list, description="Component list")
 
 
 class InsertComponentInput(CompatInput):
@@ -1057,9 +1066,7 @@ class CreateDrawingInput(CompatInput):
     """Input schema for creating a new drawing.
 
     Attributes:
-        model_path (str | None): The model path value.
         name (str): The name value.
-        sheet_format (str | None): The sheet format value.
         template (str | None): The template value.
     """
 
@@ -1070,8 +1077,6 @@ class CreateDrawingInput(CompatInput):
             "Drawing template (.drwdot) path; omit to use the SolidWorks default"
         ),
     )
-    model_path: str | None = Field(default=None, description="Source model path")
-    sheet_format: str | None = Field(default=None, description="Sheet format template")
 
 
 async def register_modeling_tools(
@@ -1144,15 +1149,16 @@ async def register_modeling_tools(
         """Create a new, empty part document and make it active, ready for `create_sketch`.
 
         Uses `template` (a .prtdot) or the default part template, then sets `units` if
-        given. The part is not saved until `save_part`. Needs: SolidWorks running.
-        Changes: opens a new part document. Returns: `part` with `name`, `units` and
-        `template`. `material` is not applied; use `set_material` after the first
-        feature.
+        given, and assigns `material` if given. The part is not saved until
+        `save_part`. Needs: SolidWorks running. Changes: opens a new part document.
+        Returns: `part` with `name`, `units`, `template` and `material` (the one
+        assigned, or null), plus a `warning` when the material couldn't be assigned;
+        the part is created either way.
 
         Args:
             input_data: The part. `name` is required (used in the reply; SolidWorks
-                names the document); `template` and `units` (mm, cm, m, in, ft) have
-                defaults, and `material` is not used.
+                names the document); `template`, `units` (mm, cm, m, in, ft) and
+                `material` (a name from `list_available_materials`) are optional.
 
         Returns:
             dict[str, Any]: The new part.
@@ -1166,17 +1172,33 @@ async def register_modeling_tools(
         model = result.data
         part_name = _result_value(model, "name", default=input_data.name)
         units = _result_value(model, "units", default=input_data.units or "mm")
-        return {
+        material = None
+        warning = None
+        if input_data.material:
+            assigned = await adapter.set_material(input_data.material)
+            if assigned.is_success:
+                material = input_data.material
+            else:
+                warning = (
+                    f"The part was created without a material: "
+                    f"'{input_data.material}' could not be assigned "
+                    f"({assigned.error}). Use list_available_materials, then "
+                    "set_material."
+                )
+        reply: dict[str, Any] = {
             "status": "success",
             "message": f"Created new part: {part_name}",
             "part": {
                 "name": part_name,
                 "units": units,
-                "material": input_data.material,
+                "material": material,
                 "template": input_data.template,
             },
             "execution_time": result.execution_time,
         }
+        if warning:
+            reply["warning"] = warning
+        return reply
 
     @mcp.tool()
     async def create_assembly(input_data: CreateAssemblyInput) -> dict[str, Any]:
@@ -1184,12 +1206,11 @@ async def register_modeling_tools(
 
         Uses `template` (an .asmdot) or the default assembly template. It is not saved
         until `save_assembly`. Needs: SolidWorks running. Changes: opens a new assembly
-        document. Returns: `assembly` with `name` and `template`. `components` are not
-        inserted; call `insert_component` for each.
+        document. Returns: `assembly` with `name` and `template`. Then call
+        `insert_component` for each part.
 
         Args:
-            input_data: The assembly. `name` is required; `template` has a default,
-                and `components` is not used.
+            input_data: The assembly. `name` is required; `template` has a default.
 
         Returns:
             dict[str, Any]: The new assembly.
@@ -1205,7 +1226,6 @@ async def register_modeling_tools(
             "message": f"Created new assembly: {assembly_name}",
             "assembly": {
                 "name": assembly_name,
-                "components": input_data.components,
                 "template": input_data.template,
             },
             "execution_time": result.execution_time,
@@ -1221,8 +1241,7 @@ async def register_modeling_tools(
         new drawing document. Returns: `drawing` with `name` and `template`.
 
         Args:
-            input_data: The drawing. `name` is required; `template` has a default,
-                and `model_path` and `sheet_format` are not used.
+            input_data: The drawing. `name` is required; `template` has a default.
 
         Returns:
             dict[str, Any]: The new drawing.
@@ -1233,16 +1252,11 @@ async def register_modeling_tools(
         require_success(result, context="Failed to create drawing")
         model = result.data
         drawing_name = _result_value(model, "name", default=input_data.name)
-        sheet_format = _result_value(
-            model, "sheet_format", default=input_data.sheet_format
-        )
         return {
             "status": "success",
             "message": f"Created new drawing: {drawing_name}",
             "drawing": {
                 "name": drawing_name,
-                "model_path": input_data.model_path,
-                "sheet_format": sheet_format,
                 "template": input_data.template,
             },
             "execution_time": result.execution_time,
@@ -1278,18 +1292,20 @@ async def register_modeling_tools(
         """Extrude the sketch you just closed into a solid boss, added to the active part.
 
         Use it after `exit_sketch`; to remove material, use `create_cut_extrude`. It
-        extrudes the sketch `exit_sketch` closed, whatever `sketch_name` says. End
+        extrudes the sketch `sketch_name` names, or the one `exit_sketch` closed last;
+        a name that isn't in the feature tree fails before anything is built. End
         conditions: Blind (default), MidPlane, ThroughAll, UpToNext; `both_directions`
         means MidPlane. With `thin_feature` and `thin_thickness` it makes a wall from the
         sketch's outline, and an open chain works (a bent plate from its centreline).
-        Needs: an open part and a profile just exited (closed, unless thin). Changes:
-        adds a Boss-Extrude feature. Returns: `extrusion` (`name`, `depth`, the
-        `end_condition` SolidWorks used, `both_directions`, and `thin` when thin) and
+        Needs: an open part and a closed profile (open is fine when thin). Changes:
+        adds a Boss-Extrude feature. Returns: `extrusion` (`name`, `sketch` when one
+        was named, `depth`, the `end_condition` SolidWorks used, `both_directions`,
+        and `thin` when thin) and
         `measured_change` (volume, bounding box and solid-body count before and after;
         left out when the model can't be read).
 
         Args:
-            input_data: The extrusion. `sketch_name` and `depth` (mm) are required;
+            input_data: The extrusion. `depth` (mm) is required; `sketch_name`,
                 `end_condition`, `both_directions`, `reverse_direction`,
                 `draft_angle`, `thin_feature`/`thin_thickness` and `merge_result`
                 have defaults.
@@ -1311,6 +1327,7 @@ async def register_modeling_tools(
             merge_result=input_data.merge_result,
             feature_scope=False,
             auto_select=True,
+            sketch_name=input_data.sketch_name,
         )
 
         before = await _read_summary(adapter)
@@ -1323,7 +1340,7 @@ async def register_modeling_tools(
         applied = _result_value(feature, "parameters", default=None) or {}
         extrusion: dict[str, Any] = {
             "name": name,
-            "sketch": input_data.sketch_name,
+            "sketch": applied.get("sketch_name"),
             "depth": input_data.depth,
             "end_condition": applied.get("end_condition")
             or ("MidPlane" if input_data.both_directions else input_data.end_condition),
@@ -1344,18 +1361,21 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def create_revolve(input_data: CreateRevolveInput) -> dict[str, Any]:
-        """Revolve the sketch you just closed around the centreline drawn in it, adding a solid to the active part.
+        """Revolve a closed sketch around an axis, adding a solid to the active part.
 
-        Use it for turned shapes (shafts, knobs). Draw the axis with `add_centerline` in
-        the same sketch; `sketch_name` and `axis_entity` are not used: the sketch
-        `exit_sketch` closed and its centreline are. Needs: an open part and a closed
-        profile with a centreline. Changes: adds a Revolve feature. Returns: `revolve`
-        (`name`, `angle`) and `measured_change` (volume, bounding box and solid-body
-        count before and after; left out when the model can't be read).
+        Use it for turned shapes (shafts, knobs). It revolves the sketch `sketch_name`
+        names, or the one `exit_sketch` closed last, about the reference axis
+        `axis_entity` names (from `create_axis`), or about the centreline drawn in the
+        sketch with `add_centerline`. A sketch or axis that isn't in the model fails
+        before anything is built. Needs: an open part and a closed profile with a
+        centreline or a reference axis. Changes: adds a Revolve feature. Returns:
+        `revolve` (`name`, `sketch` and `axis_entity` when named, `angle`) and
+        `measured_change` (volume, bounding box and solid-body count before and
+        after; left out when the model can't be read).
 
         Args:
-            input_data: The revolve. `sketch_name`, `axis_entity` and `angle`
-                (degrees, 360 for a full turn) are required; `both_directions`,
+            input_data: The revolve. `angle` (degrees, 360 for a full turn) is
+                required; `sketch_name`, `axis_entity`, `both_directions`,
                 `reverse_direction`, `thin_feature` and `merge_result` have defaults.
 
         Returns:
@@ -1370,6 +1390,8 @@ async def register_modeling_tools(
             thin_feature=input_data.thin_feature,
             thin_thickness=input_data.thin_thickness,
             merge_result=input_data.merge_result,
+            sketch_name=input_data.sketch_name,
+            axis_entity=input_data.axis_entity,
         )
 
         before = await _read_summary(adapter)
@@ -1378,17 +1400,16 @@ async def register_modeling_tools(
         require_success(result, context="Failed to create revolve")
         after = await _read_summary(adapter) if before is not None else None
         feature = result.data
+        name = _result_value(feature, "feature_name", "name", default="Revolve")
+        applied = _result_value(feature, "parameters", default=None) or {}
         reply = {
             "status": "success",
-            "message": f"Created revolve: {_result_value(feature, 'feature_name', 'name', default='Revolve')}",
+            "message": f"Created revolve: {name}",
             "revolve": {
-                "name": _result_value(
-                    feature, "feature_name", "name", default="Revolve"
-                ),
-                "sketch": input_data.sketch_name,
-                "axis_entity": input_data.axis_entity,
+                "name": name,
+                "sketch": applied.get("sketch_name"),
+                "axis_entity": applied.get("axis_entity"),
                 "angle": input_data.angle,
-                "direction": input_data.direction,
             },
             "execution_time": result.execution_time,
         }
@@ -1861,7 +1882,8 @@ async def register_modeling_tools(
         Use `suppress_feature` instead when you might want it back. Find names with
         `list_features`. Needs: an open part or assembly. Changes: removes the feature
         and its dependents (`undo` can restore them). Returns: `data` with `deleted`,
-        `features_before`, `features_after` and `features_removed`.
+        `removed_features` (every feature that went, dependents included),
+        `features_before` and `features_after`; the message names the dependents.
 
         Args:
             input_data: The feature. `name` (e.g. "Fillet1") is required.
@@ -1874,13 +1896,14 @@ async def register_modeling_tools(
         require_success(result, context="Failed to delete feature")
         data = result.data if isinstance(result.data, dict) else {}
         removed = data.get("removed_features") or [input_data.name]
+        dependents = [n for n in removed if n != input_data.name.split("@", 1)[0]]
         return {
             "status": "success",
             "message": (
                 f"Deleted {input_data.name}"
                 + (
-                    f" and {len(removed) - 1} dependent feature(s)"
-                    if len(removed) > 1
+                    f" and its dependents: {', '.join(dependents)}"
+                    if dependents
                     else ""
                 )
             ),
@@ -2213,10 +2236,12 @@ async def register_modeling_tools(
         """Mirror solid bodies or features of the active part about a plane.
 
         Use it for symmetric parts: model one half, then mirror. Body mirroring (the
-        default) is what works for lofts and sweeps. The volume must grow, so mirroring
-        a cut is reported as an error today. Needs: an open part with the named bodies
-        or features. Changes: adds a Mirror feature. Returns: `mirror` with `name`,
-        `mirrored`, `mirror_plane`, `merge` and `mirror_bodies`.
+        default) is what works for lofts and sweeps; to mirror a cut, name the cut and
+        set `mirror_bodies` off. It fails when the volume doesn't change, which means
+        nothing was mirrored. Needs: an open part with the named bodies or features.
+        Changes: adds a Mirror feature. Returns: `mirror` with `name`, `mirrored`,
+        `mirror_plane`, `merge`, `mirror_bodies`, and `volume_before`,
+        `volume_after` and `volume_change` (mm³, negative for a cut).
 
         Args:
             input_data: The mirror. `features` (at least one name) and
@@ -2247,12 +2272,13 @@ async def register_modeling_tools(
     async def pattern_circular(input_data: PatternCircularInput) -> dict[str, Any]:
         """Repeat features of the active part around an axis, e.g. a ring of bosses or ribs.
 
-        Create the axis first with `create_axis`. The volume must grow, so patterning a
-        cut (a ring of holes) is reported as an error today; draw the holes in one
-        sketch with `sketch_circular_pattern` and cut once instead. Needs: an open part
-        with the named features and axis. Changes: adds a circular pattern feature.
-        Returns: `pattern` with `name`, `patterned`, `axis`, `count`, `angle` and
-        `equal_spacing`.
+        Create the axis first with `create_axis`. Bosses and cuts both work (a ring of
+        holes is a patterned cut). It fails when the volume doesn't change, which
+        means no instance landed on the part. Needs: an open part with the named
+        features and axis. Changes: adds a circular pattern feature. Returns:
+        `pattern` with `name`, `patterned`, `axis`, `count`, `angle`,
+        `equal_spacing`, and `volume_before`, `volume_after` and `volume_change`
+        (mm³, negative for cuts).
 
         Args:
             input_data: The pattern. `features` (at least one), `axis` and `count`

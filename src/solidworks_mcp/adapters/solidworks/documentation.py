@@ -151,6 +151,65 @@ def _parse_material_library(path: str) -> list[dict[str, str]]:
     return materials
 
 
+def _library_files(folders: list[str]) -> list[str]:
+    """The ``.sldmat`` files in ``folders``, folder by folder, sorted by name.
+
+    Args:
+        folders: Material library folders; missing ones are skipped.
+
+    Returns:
+        list[str]: Full paths.
+    """
+    files: list[str] = []
+    for folder in folders:
+        if os.path.isdir(folder):
+            files.extend(
+                os.path.join(folder, entry)
+                for entry in sorted(os.listdir(folder))
+                if entry.lower().endswith(".sldmat")
+            )
+    return files
+
+
+def _material_density(files: list[str], name: str, database: str) -> float | None:
+    """A material's mass density in kg/m³, from its ``.sldmat`` entry.
+
+    The library whose file name matches ``database`` is searched first, then
+    the others. The value is the ``DENS`` element's ``value``, which the
+    libraries store in kg/m³.
+
+    Args:
+        files: ``.sldmat`` paths to search.
+        name: The material's name, as ``GetMaterialPropertyName2`` gives it.
+        database: Its library's name, the file name without extension.
+
+    Returns:
+        float | None: The density, or ``None`` when no entry has one.
+    """
+    wanted = database.lower()
+    ordered = sorted(
+        files,
+        key=lambda f: os.path.splitext(os.path.basename(f))[0].lower() != wanted,
+    )
+    for path in ordered:
+        try:
+            root = ET.parse(path).getroot()
+        except (ET.ParseError, OSError, DefusedXmlException):
+            continue
+        for element in root.iter():
+            if element.tag.rsplit("}", 1)[-1] != "material":
+                continue
+            if element.get("name") != name:
+                continue
+            for prop in element.iter():
+                if prop.tag.rsplit("}", 1)[-1].upper() == "DENS":
+                    try:
+                        return float(prop.get("value", ""))
+                    except ValueError:
+                        return None
+    return None
+
+
 def _unpack_custom_property(raw: Any) -> tuple[str, str]:
     """Pull (value, resolved value) out of an ``ICustomPropertyManager::Get6`` result.
 
@@ -509,8 +568,9 @@ class SolidWorksDocumentationMixin:
             configuration: Configuration name; the active one when omitted.
 
         Returns:
-            AdapterResult[dict[str, Any]]: ``material`` (``None`` when unset)
-            and ``database``.
+            AdapterResult[dict[str, Any]]: ``material`` (``None`` when unset),
+            ``database`` and ``density_kg_m3``, read from the material's entry
+            in its ``.sldmat`` library (``None`` when unset or not found).
         """
         guard = self._require_doc_type({1}, "get_material")
         if guard is not None:
@@ -519,9 +579,18 @@ class SolidWorksDocumentationMixin:
         def _get() -> dict[str, Any]:
             part = _sw_type_info.flagged(self.currentModel, "IPartDoc")
             name, database = _read_material(part, configuration)
+            app = getattr(self, "swApp", None)
+            density = (
+                _material_density(
+                    _library_files(self._material_folders(app)), name, database
+                )
+                if name and app is not None
+                else None
+            )
             return {
                 "material": name or None,
                 "database": database or None,
+                "density_kg_m3": density,
                 "configuration": configuration,
             }
 
@@ -584,6 +653,40 @@ class SolidWorksDocumentationMixin:
             self._handle_com_operation("set_material", _set),
         )
 
+    def _material_folders(self, app: Any) -> list[str]:
+        """The material library folders SolidWorks reads, in its order.
+
+        ``swFileLocationsMaterialDatabases`` lists only the folders the user
+        added: "" on a fresh SW 2025 install, just "Custom Materials" on SW
+        2026 (both measured live). SolidWorks always shows its built-in
+        ``sldmaterials`` library under ``<install>/lang/<language>`` as well,
+        so that is added.
+
+        Args:
+            app: The connected ``ISldWorks``.
+
+        Returns:
+            list[str]: Folder paths, which may not all exist.
+        """
+        configured = str(
+            self._attempt(
+                lambda: app.GetUserPreferenceStringValue(_SW_PREF_MATERIAL_DATABASES),
+                default="",
+            )
+            or ""
+        )
+        exe_dir = str(self._attempt(lambda: app.GetExecutablePath(), default="") or "")
+        language = str(
+            self._attempt(lambda: app.GetCurrentLanguage(), default="") or "english"
+        )
+        if exe_dir.lower().endswith(".exe"):
+            exe_dir = os.path.dirname(exe_dir)
+        built_in = os.path.join(exe_dir, "lang", language, "sldmaterials")
+        folder_list = [f.strip() for f in configured.split(";") if f.strip()]
+        if os.path.normcase(built_in) not in map(os.path.normcase, folder_list):
+            folder_list.append(built_in)
+        return folder_list
+
     async def list_available_materials(
         self, search: str | None = None
     ) -> AdapterResult[list[dict[str, str]]]:
@@ -612,42 +715,11 @@ class SolidWorksDocumentationMixin:
         searched: dict[str, Any] = {}
 
         def _list() -> list[dict[str, str]]:
-            configured = str(
-                self._attempt(
-                    lambda: app.GetUserPreferenceStringValue(
-                        _SW_PREF_MATERIAL_DATABASES
-                    ),
-                    default="",
-                )
-                or ""
-            )
-            # swFileLocationsMaterialDatabases lists only the folders the user
-            # added: "" on a fresh SW 2025 install, just "Custom Materials" on
-            # SW 2026 (both measured live). SolidWorks always shows its
-            # built-in <install>\lang\<language>\sldmaterials library as
-            # well, so read that too.
-            exe_dir = str(
-                self._attempt(lambda: app.GetExecutablePath(), default="") or ""
-            )
-            language = str(
-                self._attempt(lambda: app.GetCurrentLanguage(), default="") or "english"
-            )
-            if exe_dir.lower().endswith(".exe"):
-                exe_dir = os.path.dirname(exe_dir)
-            built_in = os.path.join(exe_dir, "lang", language, "sldmaterials")
-            folder_list = [f.strip() for f in configured.split(";") if f.strip()]
-            if os.path.normcase(built_in) not in map(os.path.normcase, folder_list):
-                folder_list.append(built_in)
+            folder_list = self._material_folders(app)
             folders = ";".join(folder_list)
             materials: list[dict[str, str]] = []
-            for folder in folder_list:
-                if not os.path.isdir(folder):
-                    continue
-                for entry in sorted(os.listdir(folder)):
-                    if entry.lower().endswith(".sldmat"):
-                        materials.extend(
-                            _parse_material_library(os.path.join(folder, entry))
-                        )
+            for path in _library_files(folder_list):
+                materials.extend(_parse_material_library(path))
             searched["folders"] = folder_list
             searched["total"] = len(materials)
             if not materials:

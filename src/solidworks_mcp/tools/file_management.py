@@ -35,10 +35,8 @@ class SaveFileInput(CompatInput):
 
     Attributes:
         file_path (str | None): The file path value.
-        force_save (bool): The force save value.
     """
 
-    force_save: bool = Field(default=True, description="Force save even if no changes")
     file_path: str | None = Field(
         default=None,
         description="Optional output path. If omitted, saves the current active document.",
@@ -584,7 +582,7 @@ async def register_file_management_tools(
 
         Args:
             input_data: The save. Nothing is required: give `file_path` to save to a
-                new path, or omit it to save in place; `force_save` is not used.
+                new path, or omit it to save in place.
 
         Returns:
             dict[str, Any]: The save result.
@@ -611,18 +609,23 @@ async def register_file_management_tools(
         For a SolidWorks format (solidworks, sldprt, sldasm, slddrw) it saves a copy
         like File > Save As; any other `format_type` is passed to the exporter. For one
         known format with its options, prefer `export_step`, `export_stl` and the other
-        `export_*` tools. Needs: an open, active document. Changes: writes the file,
-        replacing one already at `file_path` (`overwrite` is not checked). Returns:
-        `file_path` and `format`.
+        `export_*` tools. Needs: an open, active document. Changes: writes the file. A
+        file already at `file_path` is kept and the call refused, unless `overwrite`
+        is on. Returns: `file_path` and `format`.
 
         Args:
             input_data: The target. `file_path` is required; `format_type` defaults
-                to "solidworks", and `overwrite` is not used yet.
+                to "solidworks", and `overwrite` is off.
 
         Returns:
             dict[str, Any]: The path written.
         """
         input_data = _coerce_input(SaveAsInput, input_data)
+        if Path(input_data.file_path).exists() and not input_data.overwrite:
+            raise InvalidInputError(
+                f"A file already exists at {input_data.file_path}; it was left "
+                "untouched. Pass overwrite: true to replace it, or choose another path."
+            )
         if hasattr(adapter, "save_file") and input_data.format_type.lower() in {
             "solidworks",
             "sldprt",

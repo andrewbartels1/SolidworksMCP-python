@@ -4,6 +4,7 @@ Provides tools for recording, managing, and executing SolidWorks macros for auto
 and workflow optimization.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from pydantic import Field
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
 from .tool_boundary import (
+    ToolOperationError,
     UnsupportedOperationError,
     normalize_input,
     require_capability,
@@ -84,16 +86,11 @@ class MacroPlaybackInput(CompatInput):
     """Input schema for macro playback.
 
     Attributes:
-        execution_mode (str | None): The execution mode value.
-        execution_parameters (dict[str, Any] | None): The execution parameters value.
-        log_execution (bool): The log execution value.
         macro_file (str | None): The macro file value.
         macro_path (str | None): The macro path value.
-        parameters (dict[str, Any]): The parameters value.
+        proc_name (str): The procedure to call.
         pause_between_runs (float): The pause between runs value.
-        pause_on_error (bool): The pause on error value.
         repeat_count (int): The repeat count value.
-        target_file (str | None): The target file value.
     """
 
     macro_path: str | None = Field(
@@ -106,19 +103,17 @@ class MacroPlaybackInput(CompatInput):
     macro_file: str | None = Field(
         default=None, description="Alternative to macro_path (.swp or .swb)"
     )
-    parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Macro parameters"
+    proc_name: str = Field(
+        default="main", description="The macro procedure to call; main by default"
     )
-    target_file: str | None = Field(default=None, description="Target file")
-    execution_mode: str | None = Field(default=None, description="Execution mode")
-    pause_on_error: bool = Field(default=False, description="Pause on error")
-    log_execution: bool = Field(default=False, description="Log execution")
-    execution_parameters: dict[str, Any] | None = Field(
-        default=None, description="Execution parameters"
+    repeat_count: int = Field(
+        default=1,
+        ge=1,
+        le=100,
+        description="How many times to run the macro (1-100); it stops at the first failure",
     )
-    repeat_count: int = Field(default=1, description="Number of times to execute")
     pause_between_runs: float = Field(
-        default=0.0, description="Pause between executions in seconds"
+        default=0.0, ge=0.0, description="Seconds to wait between runs"
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -286,15 +281,16 @@ async def register_macro_recording_tools(
         Use it to run an existing macro file. VBA source (.bas, .vb, plain text, or what
         the `generate_vba_*` tools return) is refused as invalid input before SolidWorks
         sees it. The macro must not wait for the user (no MsgBox or forms), or the call
-        hangs. `repeat_count` is not used yet: the macro runs once, although the message
-        counts the repeats. Needs: SolidWorks running and the macro file on disk.
-        Changes: whatever the macro does; it can't be undone from here. Returns: `data`
-        with `macro_path`, `module_name`, `proc_name` and `errors`.
+        hangs. It runs `repeat_count` times, `pause_between_runs` seconds apart, and
+        stops at the first run that fails. Needs: SolidWorks running and the macro file
+        on disk. Changes: whatever the macro does; it can't be undone from here.
+        Returns: `runs_completed` and `data` from the last run, with `macro_path`,
+        `module_name`, `proc_name` and `errors`.
 
         Args:
             input_data: The macro to run. Give `macro_path` (or `macro_file`);
-                `target_file`, `execution_mode` and the logging switches have
-                defaults.
+                `proc_name` (main), `repeat_count` (1) and `pause_between_runs` (0 s)
+                have defaults.
 
         Returns:
             dict[str, Any]: The run's result.
@@ -307,13 +303,29 @@ async def register_macro_recording_tools(
             f"{input_data.macro_path} was not run, and no features "
             "were created.",
         )
-        result = await adapter.execute_macro(input_data.model_dump())
-        require_success(result, "Failed to execute macro")
+        payload = input_data.model_dump()
+        total = input_data.repeat_count
+        execution_time = 0.0
+        result = None
+        for run in range(total):
+            if run and input_data.pause_between_runs:
+                await asyncio.sleep(input_data.pause_between_runs)
+            result = await adapter.execute_macro(payload)
+            if not result.is_success:
+                raise ToolOperationError(
+                    f"Run {run + 1} of {total} failed after {run} completed: "
+                    f"{result.error or 'the macro reported an error'}",
+                    execution_time=execution_time + (result.execution_time or 0.0),
+                    data=result.data,
+                )
+            execution_time += result.execution_time or 0.0
+        runs = "1 run" if total == 1 else f"{total} runs"
         return {
             "status": "success",
-            "message": f"Macro executed {input_data.repeat_count} times successfully",
-            "data": result.data,
-            "execution_time": result.execution_time,
+            "message": f"Macro completed {runs}",
+            "runs_completed": total,
+            "data": result.data if result is not None else None,
+            "execution_time": execution_time,
         }
 
     @mcp.tool()

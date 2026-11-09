@@ -39,6 +39,7 @@ from .error_classifier import (
     Classification,
     ErrorClassifier,
 )
+from .input_compat import removed_inputs
 from .support_levels import SUPPORT_LEVELS, Support
 from .tool_hints import TOOL_HINTS, ToolHints
 
@@ -230,7 +231,9 @@ def tool_boundary(
 
     A dict passed where the tool expects its input model is validated as
     that model first, so a script can call any tool function with a dict, as
-    an MCP client effectively does.
+    an MCP client effectively does. An input the tool no longer takes
+    (``input_compat.REMOVED_INPUTS``) is refused as invalid input before the
+    tool runs.
 
     Returns:
         The wrapped tool.
@@ -246,6 +249,10 @@ def tool_boundary(
         for name, model in models.items():
             if isinstance(bound.arguments.get(name), dict):
                 bound.arguments[name] = normalize_input(bound.arguments[name], model)
+            value = bound.arguments.get(name)
+            removed = removed_inputs(value) if isinstance(value, BaseModel) else []
+            if removed:
+                raise InvalidInputError("; ".join(removed))
         return bound
 
     @functools.wraps(fn)

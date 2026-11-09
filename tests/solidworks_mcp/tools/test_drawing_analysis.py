@@ -1030,7 +1030,7 @@ async def test_drawing_and_analysis_adapter_passthrough_success(
 
     assert (
         await (await _tool(mcp_server, "create_technical_drawing"))(
-            input_data=DrawingCreationInput(output_path="a.slddrw")
+            input_data=DrawingCreationInput()
         )
     )["status"] == "success"
     assert (

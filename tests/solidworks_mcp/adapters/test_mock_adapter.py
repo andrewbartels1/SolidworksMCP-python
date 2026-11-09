@@ -2070,3 +2070,19 @@ def test_mock_orientations_match_the_com_layer() -> None:
     assert set(_NAMED_VIEWS) == set(_MOCK_NAMED_VIEWS), (
         "orientation lists have drifted between io.py and mock_adapter.py"
     )
+
+
+@pytest.mark.asyncio
+async def test_mock_revolve_names_a_sketch_that_is_not_there() -> None:
+    from solidworks_mcp.adapters.base import RevolveParameters
+
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+
+    result = await adapter.create_revolve(
+        RevolveParameters(angle=360.0, sketch_name="Sketch9")
+    )
+
+    assert not result.is_success
+    assert "Sketch9" in result.error and "(none found)" in result.error

@@ -4,7 +4,7 @@ Provides tools for creating drawing views, adding dimensions, annotations, and m
 technical drawings in SolidWorks.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
 from .tool_boundary import (
+    InvalidInputError,
     UnsupportedOperationError,
     normalize_input,
     require_capability,
@@ -187,30 +188,19 @@ class AutoCenterMarksInput(CompatInput):
 
 
 class DrawingCreationInput(CompatInput):
-    """Input schema for creating a new drawing.
+    """Input schema for placing a model's three standard views.
 
     Attributes:
-        auto_populate_views (bool): The auto populate views value.
-        model_file (str | None): The model file value.
-        output_path (str | None): The output path value.
-        scale (str): The scale value.
-        sheet_format (str | None): The sheet format value.
-        sheet_size (str): The sheet size value.
-        template (str | None): The template value.
-        title (str): The title value.
+        model_file (str | None): The model to draw.
+        projection (str): third_angle or first_angle.
     """
 
-    template: str | None = Field(default=None, description="Drawing template file path")
     model_file: str | None = Field(
-        default=None, description="Model file to create drawing from"
+        default=None, description="Model file (.sldprt or .sldasm) to draw"
     )
-    sheet_size: str = Field(default="A3", description="Sheet size")
-    title: str = Field(default="", description="Drawing title")
-    output_path: str | None = Field(default=None, description="Output drawing path")
-    sheet_format: str | None = Field(default=None, description="Sheet format")
-    scale: str = Field(default="1:1", description="Drawing scale")
-    auto_populate_views: bool = Field(
-        default=False, description="Automatically populate standard views"
+    projection: Literal["third_angle", "first_angle"] = Field(
+        default="third_angle",
+        description="Projection the views are laid out in",
     )
 
 
@@ -232,7 +222,8 @@ class DrawingViewInput(CompatInput):
     drawing_path: str | None = Field(default=None, description="Path to drawing file")
     view_name: str | None = Field(default=None, description="Name of the drawing view")
     operation: str = Field(
-        default="add", description="Operation to perform (create, update, delete)"
+        default="add",
+        description='Only "add" is supported; any other value is refused',
     )
     model_file: str | None = Field(default=None, description="Model file path")
     view_type: str | None = Field(default=None, description="Type of view")
@@ -630,15 +621,14 @@ async def register_drawing_tools(
 
         Use it to start a drawing's views quickly; for one view, use
         `create_drawing_view`, and to create and save a complete drawing from a model
-        file, use `generate_drawing_package`. Views are laid out in third-angle
-        projection. The template, sheet size, title and output path fields are not used
-        yet. Needs: an open, active drawing and the model file on disk. Changes: adds
-        three views to the sheet. Returns: `data` with `views` (the names added),
-        `model_path`, `projection` and the view counts.
+        file, use `generate_drawing_package`. Views are laid out in `projection`
+        (third-angle by default). Needs: an open, active drawing and the model file on
+        disk. Changes: adds three views to the sheet. Returns: `data` with `views` (the
+        names added), `model_path`, `projection` and the view counts.
 
         Args:
-            input_data: The model to draw. Give `model_file`; the other fields have
-                defaults and are not used yet.
+            input_data: The model to draw. Give `model_file`; `projection` is
+                third_angle unless you pass first_angle.
 
         Returns:
             dict[str, Any]: The views added.
@@ -663,8 +653,8 @@ async def register_drawing_tools(
         """Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`.
 
         Prefer `create_drawing_view`; this tool reaches the same code and is kept for
-        existing callers. It only adds views: `operation` values to update or remove a
-        view are not acted on. Needs: an open, active drawing and the model file on
+        existing callers. It only adds views: an `operation` other than "add" is
+        refused. Needs: an open, active drawing and the model file on
         disk. Changes: adds a view to the sheet. Returns: `data` with the view's `name`,
         `orientation`, `position`, `scale` and the view counts.
 
@@ -675,6 +665,11 @@ async def register_drawing_tools(
         Returns:
             dict[str, Any]: The placed view.
         """
+        if input_data.operation.strip().lower() != "add":
+            raise InvalidInputError(
+                f"operation '{input_data.operation}' is not supported: "
+                "add_drawing_view only adds views, and the drawing was not changed."
+            )
         require_capability(
             adapter,
             "add_drawing_view",

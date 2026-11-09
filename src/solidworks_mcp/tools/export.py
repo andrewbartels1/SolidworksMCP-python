@@ -31,7 +31,6 @@ class ExportFileInput(CompatInput):
     Attributes:
         file_path (str): The file path value.
         format_type (str): The format type value.
-        options (dict[str, Any] | None): The options value.
     """
 
     file_path: str = Field(description="Full path for the exported file")
@@ -41,9 +40,6 @@ class ExportFileInput(CompatInput):
             "Not needed: the file extension sets the format; defaults to the "
             "tool's own format"
         ),
-    )
-    options: dict[str, Any] | None = Field(
-        default=None, description="Format-specific export options"
     )
 
 
@@ -104,206 +100,6 @@ class ExportImageInput(CompatInput):
             self.height = int(height)
 
 
-class ExportSTEPInput(CompatInput):
-    """Input schema for STEP export.
-
-    Attributes:
-        file_path (str | None): The file path value.
-        model_path (str | None): The model path value.
-        output_path (str | None): The output path value.
-        precision (float): The precision value.
-        step_version (str | None): The step version value.
-        units (str): The units value.
-        version (str): The version value.
-    """
-
-    file_path: str | None = Field(
-        default=None, description="Output file path for STEP file"
-    )
-    model_path: str | None = Field(default=None, description="Path to the model file")
-    output_path: str | None = Field(default=None, description="Alternative output path")
-    precision: float = Field(default=0.01, description="Export precision")
-    units: str = Field(default="mm", description="Units for export")
-    version: str = Field(default="AP214", description="STEP version")
-    step_version: str | None = Field(
-        default=None, description="Alternative STEP version"
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the export stepinput.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.file_path is None:
-            self.file_path = self.output_path
-
-
-class ExportIGESInput(CompatInput):
-    """Input schema for IGES export.
-
-    Attributes:
-        file_path (str | None): The file path value.
-        iges_version (str | None): The iges version value.
-        model_path (str | None): The model path value.
-        output_path (str | None): The output path value.
-        precision (float): The precision value.
-        surface_type (str): The surface type value.
-        units (str): The units value.
-    """
-
-    file_path: str | None = Field(
-        default=None, description="Output file path for IGES file"
-    )
-    model_path: str | None = Field(default=None, description="Path to the model file")
-    output_path: str | None = Field(default=None, description="Alternative output path")
-    precision: float = Field(default=0.01, description="Export precision")
-    units: str = Field(default="mm", description="Units for export")
-    surface_type: str = Field(default="NURBS", description="Surface type")
-    iges_version: str | None = Field(
-        default=None, description="Alternative IGES version"
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the export igesinput.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.file_path is None:
-            self.file_path = self.output_path
-
-
-class ExportSTLInput(CompatInput):
-    """Input schema for STL export.
-
-    Attributes:
-        binary_format (bool): The binary format value.
-        file_format (str | None): The file format value.
-        file_path (str | None): The file path value.
-        format_type (str): The format type value.
-        model_path (str | None): The model path value.
-        output_path (str | None): The output path value.
-        resolution (str): The resolution value.
-        units (str): The units value.
-    """
-
-    file_path: str | None = Field(
-        default=None, description="Output file path for STL file"
-    )
-    model_path: str | None = Field(default=None, description="Path to the model file")
-    output_path: str | None = Field(default=None, description="Alternative output path")
-    resolution: str = Field(
-        default="fine", description="Mesh resolution (coarse, fine, custom)"
-    )
-    binary_format: bool = Field(default=True, description="Use binary STL format")
-    format_type: str = Field(default="Binary", description="STL format type")
-    file_format: str | None = Field(
-        default=None, description="Alternative STL format field"
-    )
-    units: str = Field(default="mm", description="Units for export")
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the export stlinput.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.file_path is None:
-            self.file_path = self.output_path
-
-
-class ExportPDFInput(CompatInput):
-    """Input schema for PDF export.
-
-    Attributes:
-        color_mode (str): The color mode value.
-        drawing_path (str | None): The drawing path value.
-        file_path (str | None): The file path value.
-        include_3d (bool): The include 3d value.
-        output_path (str | None): The output path value.
-        quality (str): The quality value.
-    """
-
-    file_path: str | None = Field(
-        default=None, description="Output file path for PDF file"
-    )
-    drawing_path: str | None = Field(
-        default=None, description="Path to the drawing file"
-    )
-    output_path: str | None = Field(default=None, description="Alternative output path")
-    quality: str = Field(default="high", description="PDF quality (low, medium, high)")
-    include_3d: bool = Field(default=False, description="Include 3D PDF content")
-    color_mode: str = Field(default="Color", description="Color mode")
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the export pdfinput.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.file_path is None:
-            self.file_path = self.output_path
-
-
-class ExportDWGInput(CompatInput):
-    """Input schema for DWG export.
-
-    Attributes:
-        autocad_version (str | None): The autocad version value.
-        drawing_path (str | None): The drawing path value.
-        dwg_version (str): The dwg version value.
-        file_path (str | None): The file path value.
-        layer_mapping (bool): The layer mapping value.
-        output_path (str | None): The output path value.
-        units (str): The units value.
-        version (str): The version value.
-    """
-
-    file_path: str | None = Field(
-        default=None, description="Output file path for DWG file"
-    )
-    drawing_path: str | None = Field(
-        default=None, description="Path to the drawing file"
-    )
-    output_path: str | None = Field(default=None, description="Alternative output path")
-    version: str = Field(
-        default="2018", description="AutoCAD version (2018, 2014, 2010, etc.)"
-    )
-    autocad_version: str | None = Field(
-        default=None, description="AutoCAD version alias"
-    )
-    units: str = Field(default="mm", description="Units for export")
-    dwg_version: str = Field(default="2018", description="DWG version")
-    layer_mapping: bool = Field(default=False, description="Enable layer mapping")
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the export dwginput.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.file_path is None:
-            self.file_path = self.output_path
-        if self.autocad_version is not None:
-            self.version = self.autocad_version
-
-
 class BatchExportInput(CompatInput):
     """Input schema for batch export operations.
 
@@ -357,8 +153,7 @@ def _file_input(input_data: Any, format_type: str) -> Any:
     """Fill ``format_type`` with the tool's own format when it was left out.
 
     The file extension decides the format; the adapter is still told which
-    format the tool exports. The per-format models (``ExportSTEPInput`` and
-    the like) pass through unchanged.
+    format the tool exports.
     """
     if not isinstance(input_data, ExportFileInput) or input_data.format_type:
         return input_data
@@ -406,7 +201,7 @@ async def register_export_tools(
         Args:
             input_data: The export. `file_path` (ending in .step or .stp) is required;
                 `format_type` is not needed: the file extension decides the
-                format, and `options` is not used yet.
+                format.
 
         Returns:
             dict[str, Any]: The file written.
@@ -451,7 +246,7 @@ async def register_export_tools(
         Args:
             input_data: The export. `file_path` (ending in .igs or .iges) is required;
                 `format_type` is not needed: the file extension decides the
-                format, and `options` is not used yet.
+                format.
 
         Returns:
             dict[str, Any]: The file written.
@@ -495,7 +290,7 @@ async def register_export_tools(
         Args:
             input_data: The export. `file_path` (ending in .stl) is required;
                 `format_type` is not needed: the file extension decides the
-                format, and `options` is not used yet.
+                format.
 
         Returns:
             dict[str, Any]: The file written.
@@ -540,7 +335,7 @@ async def register_export_tools(
         Args:
             input_data: The export. `file_path` (ending in .pdf) is required;
                 `format_type` is not needed: the file extension decides the
-                format, and `options` is not used yet.
+                format.
 
         Returns:
             dict[str, Any]: The file written.
@@ -584,7 +379,7 @@ async def register_export_tools(
         Args:
             input_data: The export. `file_path` (ending in .dwg) is required;
                 `format_type` is not needed: the file extension decides the
-                format, and `options` is not used yet.
+                format.
 
         Returns:
             dict[str, Any]: The file written.

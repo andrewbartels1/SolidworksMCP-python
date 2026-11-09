@@ -426,7 +426,7 @@
     "family": "modeling",
     "level": "beta",
     "reason": "`sketch_name` and `axis_entity` are ignored; it revolves the sketch closed last around its centreline.",
-    "summary": "Revolve the sketch you just closed around the centreline drawn in it, adding a solid to the active part."
+    "summary": "Revolve a closed sketch around an axis, adding a solid to the active part."
    },
    {
     "name": "create_section_view",

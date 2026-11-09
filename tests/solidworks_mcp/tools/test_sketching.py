@@ -63,11 +63,16 @@ class TestSketchingTools:
 
         assert tool_func is not None
 
+        mock_adapter.rename_feature = AsyncMock(
+            return_value=Mock(is_success=True, data={"new_name": "TestSketch"})
+        )
         input_data = CreateSketchInput(plane="Front Plane", sketch_name="TestSketch")
         result = await tool_func(input_data)
 
         assert result["status"] == "success"
         assert result["sketch"]["name"] == "TestSketch"
+        mock_adapter.rename_feature.assert_awaited_once_with("Sketch1", "TestSketch")
+        assert "could not be named" not in result.get("warning", "")
         assert result["sketch"]["plane"] == "Front Plane"
         assert result["execution_time"] == 0.3
 
@@ -898,6 +903,10 @@ class _SketchAdapterStub:
         """Test helper for create sketch."""
         return _ok({"sketch_name": "Sketch1"})
 
+    async def rename_feature(self, _old, new):
+        """Test helper for rename feature."""
+        return _ok({"new_name": new})
+
     async def add_sketch_line(self, *_args):
         """Test helper for add sketch line."""
         return _ok({"entity_id": "Line1"})
@@ -1359,3 +1368,41 @@ async def test_add_sketch_constraint_accepts_plain_arguments():
 
     assert result["status"] == "success", result
     assert result["constraint"]["type"] == "equal"
+
+
+@pytest.mark.asyncio
+async def test_create_sketch_keeps_its_own_name_when_the_rename_is_refused(
+    mcp_server, mock_adapter, mock_config
+):
+    """A taken name: the reply gives the tree's name and says why."""
+    await register_sketching_tools(mcp_server, mock_adapter, mock_config)
+    await mock_adapter.create_part()
+    tool = await _tool(mcp_server, "create_sketch")
+
+    first = await tool(input_data={"plane": "Front", "sketch_name": "Profile"})
+    await mock_adapter.exit_sketch()
+    second = await tool(input_data={"plane": "Top", "sketch_name": "Profile"})
+
+    assert first["sketch"]["name"] == "Profile"
+    assert second["sketch"]["name"] == "Sketch2"
+    assert "could not be named 'Profile'" in second["warning"]
+    assert list(mock_adapter._sketches) == ["Profile", "Sketch2"]
+
+
+@pytest.mark.asyncio
+async def test_the_hole_tutorial_points_at_the_cut_tool(
+    mcp_server, mock_adapter, mock_config
+):
+    """Its next step is create_cut_extrude, never a negative-depth extrusion."""
+    await register_sketching_tools(mcp_server, mock_adapter, mock_config)
+    await mock_adapter.create_part()
+    tool = await _tool(mcp_server, "sketch_tutorial_simple_hole")
+
+    result = await tool()
+
+    assert "create_cut_extrude" in result["next_step"]
+    assert "suggested_extrusion" not in result
+    cut = result["suggested_cut"]
+    assert cut["sketch_name"] == "Sketch1"
+    assert cut["end_condition"] == "ThroughAll"
+    assert cut["depth"] > 0

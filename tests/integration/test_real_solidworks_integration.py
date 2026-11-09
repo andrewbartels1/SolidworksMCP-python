@@ -221,7 +221,7 @@ async def test_real_part_create_save_open_close(
     open_result = await open_model(OpenModelInput(file_path=str(part_path)))
     assert open_result["status"] == "success", open_result
 
-    save_result = await save_file(SaveFileInput(force_save=True))
+    save_result = await save_file(SaveFileInput())
     assert save_result["status"] == "success", save_result
 
     final_close = await close_model(CloseModelInput(save=True))
@@ -296,7 +296,7 @@ async def test_real_cross_category_minimal_smoke(
     reopen_result = await open_model(OpenModelInput(file_path=str(smoke_part_path)))
     assert reopen_result["status"] == "success", reopen_result
 
-    save_result = await save_file(SaveFileInput(force_save=True))
+    save_result = await save_file(SaveFileInput())
     assert save_result["status"] == "success", save_result
 
     close_result = await close_model(CloseModelInput(save=True))

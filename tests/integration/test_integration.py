@@ -134,7 +134,7 @@ class TestCompleteWorkflows:
         assert create_extrusion_tool is not None
 
         extrusion_result = await create_extrusion_tool(
-            CreateExtrusionInput(sketch_name="Sketch1", depth=10.0, direction="blind")
+            CreateExtrusionInput(sketch_name="Sketch1", depth=10.0)
         )
         workflow_results.append(("create_extrusion", extrusion_result))
         assert extrusion_result["status"] == "success"

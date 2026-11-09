@@ -34,7 +34,13 @@ class CreateSketchInput(CompatInput):
     plane: str = Field(
         description="Sketch plane name (e.g., 'Top', 'Front', 'Right', 'XY', 'XZ', 'YZ')"
     )
-    sketch_name: str | None = Field(default=None, description="Sketch name alias")
+    sketch_name: str | None = Field(
+        default=None,
+        description=(
+            "Name to give the sketch in the feature tree; omit to keep "
+            "SolidWorks' own (Sketch1, Sketch2, ...)"
+        ),
+    )
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the create sketch input.
@@ -345,12 +351,12 @@ async def register_sketching_tools(
         `create_extrusion` or `create_cut_extrude`. Planes: Front, Top, Right (or XY,
         XZ, YZ), or a plane made by `create_reference_plane`. Coordinates in the sketch
         are mm from the origin. Needs: an open part. Changes: adds a sketch and opens it
-        for editing. Returns: `sketch` with `name` and `plane`; `name` echoes
-        `sketch_name` when you pass one, as SolidWorks names the sketch itself.
+        for editing, named `sketch_name` when you give one. Returns: `sketch` with
+        `name` (the name in the feature tree, which later tools take as `sketch_name`)
+        and `plane`, plus a `warning` when the name you asked for couldn't be given.
 
         Args:
-            input_data: The sketch. `plane` is required; `sketch_name` is not
-                applied to SolidWorks.
+            input_data: The sketch. `plane` is required; `sketch_name` names it.
 
         Returns:
             dict[str, Any]: The new sketch.
@@ -359,12 +365,23 @@ async def register_sketching_tools(
         result = await adapter.create_sketch(input_data.plane)
 
         require_success(result, context="Failed to create sketch")
-        sketch_name = input_data.sketch_name or (
+        sketch_name = (
             result.data.get("sketch_name")
             if isinstance(result.data, dict)
             else result.data
         )
-        return {
+        warning = None
+        wanted = (input_data.sketch_name or "").strip()
+        if wanted and wanted != sketch_name:
+            renamed = await adapter.rename_feature(str(sketch_name), wanted)
+            if renamed.is_success:
+                sketch_name = (renamed.data or {}).get("new_name") or wanted
+            else:
+                warning = (
+                    f"The sketch keeps SolidWorks' name '{sketch_name}': it could "
+                    f"not be named '{wanted}' ({renamed.error})."
+                )
+        reply: dict[str, Any] = {
             "status": "success",
             "message": f"Created sketch '{sketch_name}' on {input_data.plane} plane",
             "sketch": {
@@ -373,6 +390,9 @@ async def register_sketching_tools(
             },
             "execution_time": result.execution_time,
         }
+        if warning:
+            reply["warning"] = warning
+        return reply
 
     @mcp.tool()
     async def add_line(input_data: AddLineInput) -> dict[str, Any]:
@@ -1023,17 +1043,21 @@ async def register_sketching_tools(
         """Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch.
 
         It is a fixed example; for a real hole, use `create_sketch`, `add_circle`,
-        `exit_sketch` and `create_cut_extrude`. Its `next_step` text suggests a
-        negative-depth extrusion: use `create_cut_extrude` instead. Needs: an open part.
-        Changes: adds a sketch with one circle. Returns: `steps_completed`, `next_step`
-        and `suggested_extrusion`.
+        `exit_sketch` and `create_cut_extrude`. Needs: an open part. Changes: adds a
+        sketch with one circle. Returns: `steps_completed`, `next_step` (cut the hole
+        with `create_cut_extrude`) and `suggested_cut`, that call's input.
         """
         steps_completed = []
 
         # Step 1: Create sketch
         sketch_result = await adapter.create_sketch("Top")
         require_success(sketch_result, context="Failed to create sketch")
-        steps_completed.append(f"Created sketch: {sketch_result.data}")
+        sketch_name = (
+            sketch_result.data.get("sketch_name")
+            if isinstance(sketch_result.data, dict)
+            else sketch_result.data
+        )
+        steps_completed.append(f"Created sketch: {sketch_name}")
 
         # Step 2: Add circle
         circle_result = await adapter.add_circle(0, 0, 2.5)
@@ -1049,10 +1073,14 @@ async def register_sketching_tools(
             "status": "success",
             "message": "Tutorial completed: Simple hole sketch created",
             "steps_completed": steps_completed,
-            "next_step": "Use create_extrusion with negative depth to create the hole",
-            "suggested_extrusion": {
-                "depth": -10,  # Negative for cut
-                "reverse_direction": False,
+            "next_step": (
+                "Cut the hole through the part with create_cut_extrude, using "
+                "suggested_cut as its input"
+            ),
+            "suggested_cut": {
+                "sketch_name": sketch_name,
+                "depth": 10.0,
+                "end_condition": "ThroughAll",
             },
         }
 
