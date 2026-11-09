@@ -301,7 +301,7 @@ def save_config(config: dict[str, Any], filepath: str):
     """
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
     print(f"✅ Configuration saved to: {filepath}")
@@ -316,7 +316,7 @@ def load_config(filepath: str) -> dict[str, Any]:
     Returns:
         dict[str, Any]: A dictionary containing the resulting values.
     """
-    with open(filepath, "r") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
