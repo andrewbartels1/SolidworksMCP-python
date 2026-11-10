@@ -20,7 +20,7 @@ angle dimension. `set_units` changes what the document shows, not what the
 tools take.
 
 Mass is in kg, volume in mm³. `calculate_mass_properties` returns moments
-of inertia in kg·m², whatever their `units` label says.
+of inertia in kg·mm², about the centre of mass.
 
 ## Planes and model axes
 

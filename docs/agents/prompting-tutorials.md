@@ -150,7 +150,7 @@ Name it "Cylinder".
   {"tool": "add_centerline","args": {"x1": 0.0, "y1": 0.0, "x2": 80.0, "y2": 0.0}},
   {"tool": "add_rectangle", "args": {"x1": 0.0, "y1": 0.0, "x2": 80.0, "y2": 25.0}},
   {"tool": "exit_sketch",   "args": {}},
-  {"tool": "create_revolve","args": {"sketch_name": "Sketch1", "axis_entity": "Line1", "angle": 360.0}},
+  {"tool": "create_revolve","args": {"sketch_name": "Sketch1", "angle": 360.0}},
   {"tool": "save_as",       "args": {"file_path": "C:\\Temp\\Cylinder.sldprt"}}
 ]
 ```
@@ -203,7 +203,7 @@ Name it "Baseball Bat Recreation".
   {"tool": "add_line",       "args": {"x1": 17.0, "y1": 22.0, "x2": 680.0, "y2": 35.0}},
   {"tool": "add_arc",        "args": {"center_x": 680.0, "center_y": 0.0, "start_x": 680.0, "start_y": 35.0, "end_x": 830.0, "end_y": 0.0}},
   {"tool": "exit_sketch",    "args": {}},
-  {"tool": "create_revolve", "args": {"sketch_name": "Sketch1", "axis_entity": "Line1", "angle": 360.0}},
+  {"tool": "create_revolve", "args": {"sketch_name": "Sketch1", "angle": 360.0}},
   {"tool": "save_as",        "args": {"file_path": "C:\\Temp\\Baseball Bat Recreation.sldprt"}}
 ]
 ```
@@ -240,12 +240,12 @@ Name "Mounting Plate".
   {"tool": "add_circle",     "args": {"center_x": -32.0, "center_y":  22.0, "radius": 3.0}},
   {"tool": "add_circle",     "args": {"center_x":  32.0, "center_y":  22.0, "radius": 3.0}},
   {"tool": "exit_sketch",    "args": {}},
-  {"tool": "create_extrusion","args": {"sketch_name": "Sketch2", "depth": 15.0, "direction": "cut"}}
+  {"tool": "create_cut_extrude","args": {"sketch_name": "Sketch2", "depth": 15.0}}
 ]
 ```
 
 !!! note "Counterbore not yet supported directly"
-    `create_extrusion` with `direction=cut` creates a blind cut. For a true counterbore hole (two-step), run two separate cut extrusions or use `generate_vba_part_modeling`.
+    `create_cut_extrude` with a `depth` makes a blind cut. For a true counterbore hole (two-step), run two separate cut extrusions or use `generate_vba_part_modeling`.
 
 ---
 
@@ -303,7 +303,7 @@ Name "Bolt Circle Disc".
   {"tool": "add_circle",     "args": {"center_x": 0.0, "center_y": 30.0, "radius": 4.0}},
   {"tool": "sketch_circular_pattern","args": {"entity": "Arc1", "count": 6, "angle": 60.0, "center_x": 0.0, "center_y": 0.0}},
   {"tool": "exit_sketch",    "args": {}},
-  {"tool": "create_extrusion","args": {"sketch_name": "Sketch2", "depth": 10.0, "direction": "cut"}}
+  {"tool": "create_cut_extrude","args": {"sketch_name": "Sketch2", "depth": 10.0}}
 ]
 ```
 

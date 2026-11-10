@@ -108,7 +108,34 @@ class SolidWorksFeaturesMixin:
         return _add_chamfer_impl(self, distance, edge_names, angle, flip)
 
     async def delete_feature(self, name: str) -> AdapterResult[dict[str, Any]]:
-        return _delete_feature_impl(self, name)
+        """Delete a feature and report every feature that went with it.
+
+        The tree is listed before and after with ``list_features``, the read
+        path that works on SolidWorks, and the names that disappeared become
+        ``removed_features``: the named feature and its dependents.
+
+        Args:
+            name: The feature or sketch to delete.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The delete's data plus
+            ``removed_features`` in tree order (just ``name`` when the tree
+            can't be listed).
+        """
+        before = await self.list_features(include_suppressed=True)
+        result = _delete_feature_impl(self, name)
+        if not result.is_success:
+            return result
+        after = await self.list_features(include_suppressed=True)
+        data = dict(result.data or {})
+        data["removed_features"] = _removed_names(before, after) or [
+            name.split("@", 1)[0]
+        ]
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=data,
+            execution_time=result.execution_time,
+        )
 
     async def suppress_feature(
         self, name: str, suppress: bool = True
@@ -191,9 +218,10 @@ class SolidWorksFeaturesMixin:
         returns ``None`` while a selection is active.
 
         Note that instances landing off the parent body are silently dropped
-        by SolidWorks, so the volume rises by less than ``count - 1`` times the
-        seed. That is correct behaviour, not a failure - only *no* growth at
-        all means the pattern did nothing.
+        by SolidWorks, so the volume changes by less than ``count - 1`` times
+        the seed. That is correct behaviour, not a failure - only *no* change
+        at all means the pattern did nothing. A pattern of a cut lowers the
+        volume, a pattern of a boss raises it; both count.
 
         Args:
             features: Names of the features to pattern.
@@ -206,8 +234,8 @@ class SolidWorksFeaturesMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: What was patterned and the volume
-            before and after. ``ERROR`` when nothing could be selected or the
-            volume did not grow.
+            before, after and its change. ``ERROR`` when nothing could be
+            selected or the volume did not change.
         """
         adapter = self._adapter(self)
         if not adapter.currentModel:
@@ -238,7 +266,7 @@ class SolidWorksFeaturesMixin:
                     "were created is unknown."
                 ),
             )
-        if volume_after <= volume_before * 1.0001:
+        if abs(volume_after - volume_before) <= volume_before * 0.0001:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=(
@@ -250,15 +278,7 @@ class SolidWorksFeaturesMixin:
                 ),
             )
 
-        data = dict(result.data or {})
-        data["volume_before"] = volume_before
-        data["volume_after"] = volume_after
-        data["volume_ratio"] = round(volume_after / volume_before, 6)
-        return AdapterResult(
-            status=AdapterResultStatus.SUCCESS,
-            data=data,
-            execution_time=result.execution_time,
-        )
+        return _with_volume_change(result, volume_before, volume_after)
 
     async def mirror_feature(
         self,
@@ -271,7 +291,8 @@ class SolidWorksFeaturesMixin:
 
         ``InsertMirrorFeature`` returns a Feature object even when it mirrored
         nothing, so the model's volume is measured before and after and the
-        call is reported as failed if the volume did not grow. That check runs
+        call is reported as failed if the volume did not change (a mirrored
+        cut lowers it, a mirrored boss or body raises it). That check runs
         here rather than inside the COM closure because ``get_mass_properties``
         is the read path known to work - reading ``CreateMassProperty().Volume``
         inline returns ``None`` when a plane is still in the selection set,
@@ -293,8 +314,8 @@ class SolidWorksFeaturesMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: What was mirrored, and the volume
-            before and after. ``ERROR`` when nothing was selected, the call
-            failed, or the volume did not grow.
+            before, after and its change. ``ERROR`` when nothing was selected,
+            the call failed, or the volume did not change.
         """
         adapter = self._adapter(self)
         if not adapter.currentModel:
@@ -325,7 +346,7 @@ class SolidWorksFeaturesMixin:
                     "produced is unknown."
                 ),
             )
-        if volume_after <= volume_before * 1.001:
+        if abs(volume_after - volume_before) <= volume_before * 0.001:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=(
@@ -338,15 +359,34 @@ class SolidWorksFeaturesMixin:
                 ),
             )
 
-        data = dict(result.data or {})
-        data["volume_before"] = volume_before
-        data["volume_after"] = volume_after
-        data["volume_ratio"] = round(volume_after / volume_before, 6)
-        return AdapterResult(
-            status=AdapterResultStatus.SUCCESS,
-            data=data,
-            execution_time=result.execution_time,
-        )
+        return _with_volume_change(result, volume_before, volume_after)
+
+
+def _with_volume_change(
+    result: AdapterResult[dict[str, Any]], before: float, after: float
+) -> AdapterResult[dict[str, Any]]:
+    """A pattern or mirror's result, with the volume it changed.
+
+    Args:
+        result: The feature call's successful result.
+        before: The part's volume before, in mm³.
+        after: The part's volume after, in mm³.
+
+    Returns:
+        AdapterResult[dict[str, Any]]: ``result``'s data plus
+        ``volume_before``, ``volume_after``, ``volume_change`` (negative for a
+        cut) and ``volume_ratio``.
+    """
+    data = dict(result.data or {})
+    data["volume_before"] = before
+    data["volume_after"] = after
+    data["volume_change"] = after - before
+    data["volume_ratio"] = round(after / before, 6)
+    return AdapterResult(
+        status=AdapterResultStatus.SUCCESS,
+        data=data,
+        execution_time=result.execution_time,
+    )
 
 
 #: ``end_condition`` spellings accepted by ``create_extrusion``, keyed by the
@@ -484,6 +524,14 @@ def _create_extrusion_impl(
                 f"Unsupported thin_side {normalized.thin_side!r}; use one of: "
                 + ", ".join(_THIN_SIDES)
             )
+        # A named sketch is found and selected first; without a name the
+        # sketch exit_sketch just closed is still selected, as before.
+        requested = getattr(params, "sketch_name", None) or None
+        sketch_used = (
+            _resolve_profile_sketch(adapter, requested, purpose="extrude")
+            if requested
+            else None
+        )
         feature_manager = adapter.currentModel.FeatureManager
         t0 = adapter.constants.get("swStartSketchPlane", 0)
         end_name, t1 = _extrusion_end_condition(
@@ -616,6 +664,7 @@ def _create_extrusion_impl(
                 "thin_side": normalized.thin_side if normalized.thin_feature else None,
                 "both_directions": normalized.both_directions,
                 "end_condition": end_name,
+                "sketch_name": sketch_used,
             },
             properties={"created": datetime.now().isoformat()},
         )
@@ -624,6 +673,45 @@ def _create_extrusion_impl(
         AdapterResult[SolidWorksFeature],
         adapter._handle_com_operation("create_extrusion", _extrusion_operation),
     )
+
+
+def _select_revolve_inputs(adapter: Any, params: RevolveParameters) -> str | None:
+    """Select a revolve's sketch and axis when they are named.
+
+    With neither named, nothing is selected: the sketch ``exit_sketch`` just
+    closed and its centreline are used, as before. A named axis needs the
+    sketch selected first (mark 0), then the axis appended with mark 4, the
+    mark ``FeatureRevolve2`` reads the axis from.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        params: The revolve's parameters.
+
+    Returns:
+        str | None: The sketch's tree name, or ``None`` when none was named.
+
+    Raises:
+        Exception: The sketch or the axis isn't in the model.
+    """
+    sketch_name = getattr(params, "sketch_name", None)
+    axis = getattr(params, "axis_entity", None)
+    if not sketch_name and not axis:
+        return None
+    sketch = _resolve_profile_sketch(adapter, sketch_name, purpose="revolve")
+    if axis:
+        selected = adapter._attempt(
+            lambda: adapter.currentModel.Extension.SelectByID2(
+                axis, "AXIS", 0.0, 0.0, 0.0, True, 4, _null_callout(), 0
+            ),
+            default=False,
+        )
+        if not selected:
+            raise Exception(
+                f"Axis '{axis}' is not a reference axis in the model. Create one "
+                "with create_axis, or draw the axis in the sketch with "
+                "add_centerline and leave axis_entity out."
+            )
+    return sketch
 
 
 def _create_revolve_impl(
@@ -679,6 +767,8 @@ def _create_revolve_impl(
         Raises:
             Exception: If ``FeatureRevolve2`` returns ``None``.
         """
+        sketch_used = _select_revolve_inputs(adapter, params)
+
         # Detect SW major version for FeatureRevolve2 API choice
         revolve_sw_major = 0
         if getattr(adapter, "swApp", None):
@@ -770,6 +860,8 @@ def _create_revolve_impl(
                 "both_directions": params.both_directions,
                 "thin_feature": params.thin_feature,
                 "thin_thickness": params.thin_thickness,
+                "sketch_name": sketch_used,
+                "axis_entity": getattr(params, "axis_entity", None),
             },
             properties={"created": datetime.now().isoformat()},
         )
@@ -1206,6 +1298,108 @@ def _create_loft_impl(
     )
 
 
+def _resolve_profile_sketch(
+    adapter: Any, sketch_name: str | None, *, purpose: str
+) -> str:
+    """Find the sketch a feature is built from, and select it.
+
+    Sketch resolution never guesses: ``sketch_name`` is matched against the
+    live feature tree without regard to case; without it, the sketch the
+    session closed last is used only if that name is really in the tree.
+    Anything else raises, listing the sketches that exist. The sketch is then
+    selected with ``SelectByID2`` so the feature call never relies on
+    SolidWorks' implicit active-sketch state. Runs inside the caller's
+    ``_handle_com_operation`` closure.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        sketch_name: The sketch to use, or ``None`` for the last closed.
+        purpose: How the error messages name the use, e.g. ``"cut from"``.
+
+    Returns:
+        str: The sketch's name as the tree spells it.
+
+    Raises:
+        Exception: The sketch isn't in the tree, or can't be selected.
+    """
+    # --- Sketch resolution: explicit > tracked-and-verified > clear
+    # error. Never a silent guess — see the docstring above. Resolving
+    # this up front (before any FeatureCut attempt) also lets every
+    # failure below name the sketch it was actually targeting.
+    tree_names = _profile_feature_names(adapter)
+
+    def _match_tree_name(name: str) -> str | None:
+        for real in tree_names:
+            if real.lower() == name.lower():
+                return real
+        return None
+
+    available = ", ".join(tree_names) if tree_names else "(none found)"
+    if sketch_name:
+        target_sketch = _match_tree_name(sketch_name)
+        if target_sketch is None:
+            raise Exception(
+                f"Sketch '{sketch_name}' not found in the "
+                f"feature tree. Sketches available to {purpose}: {available}"
+            )
+    else:
+        last_tracked = getattr(adapter, "_last_sketch_name", None)
+        target_sketch = _match_tree_name(last_tracked) if last_tracked else None
+        if target_sketch is None:
+            hint = (
+                f" (the last create_sketch call returned '{last_tracked}', "
+                "which does not match any real sketch in the model — "
+                "SolidWorks likely didn't hand back a usable sketch "
+                "object synchronously)"
+                if last_tracked
+                else " (no create_sketch/exit_sketch call has run this session)"
+            )
+            raise Exception(
+                "No sketch_name given, and no reliably-tracked sketch to "
+                f"{purpose}{hint}. Pass sketch_name explicitly. Sketches "
+                f"available to {purpose}: {available}"
+            )
+
+    # Explicit selection before any FeatureCut attempt. SolidWorks' own
+    # "implicit" active-sketch state (whatever was last open) is never
+    # relied upon — that is exactly the race that made this feature
+    # intermittently cut nothing while reporting no error at all.
+    adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+    # Callout must be an explicit VT_DISPATCH null, not plain None — a
+    # bare None marshals as VT_NULL and SolidWorks rejects the whole call
+    # with DISP_E_TYPEMISMATCH (runbook item 11). Using
+    # _attempt_with_error (not _attempt) here means that error surfaces
+    # in the failure message below instead of being swallowed into a
+    # generic "selection failed" guess.
+    select_result, select_error = adapter._attempt_with_error(
+        lambda: adapter.currentModel.Extension.SelectByID2(
+            target_sketch,
+            "SKETCH",
+            0.0,
+            0.0,
+            0.0,
+            False,
+            0,
+            _null_callout(),
+            0,
+        )
+    )
+    sketch_selected = bool(select_result)
+    if not sketch_selected:
+        reason = (
+            f" COM error: {select_error}"
+            if select_error is not None
+            else " SelectByID2 returned False with no COM error — the "
+            "sketch may already be consumed by another feature, be "
+            "suppressed, or not be a valid selectable profile."
+        )
+        raise Exception(
+            f"Failed to select sketch '{target_sketch}' via SelectByID2." + reason
+        )
+    adapter._last_sketch_name = target_sketch
+    return target_sketch
+
+
 def _create_cut_extrude_impl(
     adapter: Any, params: ExtrusionParameters
 ) -> AdapterResult[SolidWorksFeature]:
@@ -1320,83 +1514,9 @@ def _create_cut_extrude_impl(
         )
         feature_manager = adapter.currentModel.FeatureManager
 
-        # --- Sketch resolution: explicit > tracked-and-verified > clear
-        # error. Never a silent guess — see the docstring above. Resolving
-        # this up front (before any FeatureCut attempt) also lets every
-        # failure below name the sketch it was actually targeting.
-        tree_names = _profile_feature_names(adapter)
-
-        def _match_tree_name(name: str) -> str | None:
-            for real in tree_names:
-                if real.lower() == name.lower():
-                    return real
-            return None
-
-        available = ", ".join(tree_names) if tree_names else "(none found)"
-        if normalized.sketch_name:
-            target_sketch = _match_tree_name(normalized.sketch_name)
-            if target_sketch is None:
-                raise Exception(
-                    f"Sketch '{normalized.sketch_name}' not found in the "
-                    f"feature tree. Sketches available to cut from: {available}"
-                )
-        else:
-            last_tracked = getattr(adapter, "_last_sketch_name", None)
-            target_sketch = _match_tree_name(last_tracked) if last_tracked else None
-            if target_sketch is None:
-                hint = (
-                    f" (the last create_sketch call returned '{last_tracked}', "
-                    "which does not match any real sketch in the model — "
-                    "SolidWorks likely didn't hand back a usable sketch "
-                    "object synchronously)"
-                    if last_tracked
-                    else " (no create_sketch/exit_sketch call has run this session)"
-                )
-                raise Exception(
-                    "No sketch_name given, and no reliably-tracked sketch to "
-                    f"cut from{hint}. Pass sketch_name explicitly. Sketches "
-                    f"available to cut from: {available}"
-                )
-
-        # Explicit selection before any FeatureCut attempt. SolidWorks' own
-        # "implicit" active-sketch state (whatever was last open) is never
-        # relied upon — that is exactly the race that made this feature
-        # intermittently cut nothing while reporting no error at all.
-        adapter._attempt(
-            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        target_sketch = _resolve_profile_sketch(
+            adapter, normalized.sketch_name, purpose="cut from"
         )
-        # Callout must be an explicit VT_DISPATCH null, not plain None — a
-        # bare None marshals as VT_NULL and SolidWorks rejects the whole call
-        # with DISP_E_TYPEMISMATCH (runbook item 11). Using
-        # _attempt_with_error (not _attempt) here means that error surfaces
-        # in the failure message below instead of being swallowed into a
-        # generic "selection failed" guess.
-        select_result, select_error = adapter._attempt_with_error(
-            lambda: adapter.currentModel.Extension.SelectByID2(
-                target_sketch,
-                "SKETCH",
-                0.0,
-                0.0,
-                0.0,
-                False,
-                0,
-                _null_callout(),
-                0,
-            )
-        )
-        sketch_selected = bool(select_result)
-        if not sketch_selected:
-            reason = (
-                f" COM error: {select_error}"
-                if select_error is not None
-                else " SelectByID2 returned False with no COM error — the "
-                "sketch may already be consumed by another feature, be "
-                "suppressed, or not be a valid selectable profile."
-            )
-            raise Exception(
-                f"Failed to select sketch '{target_sketch}' via SelectByID2." + reason
-            )
-        adapter._last_sketch_name = target_sketch
 
         end_condition = (normalized.end_condition or "Blind").strip().lower()
         blind = adapter.constants["swEndCondBlind"]
@@ -2322,16 +2442,91 @@ def _is_suppressed(adapter: Any, feature: Any) -> bool | None:
     return None
 
 
+def _removed_names(
+    before: AdapterResult[list[dict[str, Any]]],
+    after: AdapterResult[list[dict[str, Any]]],
+) -> list[str]:
+    """The feature names listed before a delete and missing after it.
+
+    Args:
+        before: ``list_features`` before the delete.
+        after: ``list_features`` after it.
+
+    Returns:
+        list[str]: The names that went, in tree order; empty when either
+        listing failed.
+    """
+    if not (before.is_success and after.is_success):
+        return []
+    remaining = {str(f.get("name")) for f in after.data or []}
+    return [
+        str(f.get("name"))
+        for f in before.data or []
+        if f.get("name") and str(f.get("name")) not in remaining
+    ]
+
+
+#: ``swDeleteSelectionOptions_e`` (read from swconst.tlb, 2026):
+#: ``swDelete_Children`` deletes the features built on the selection too,
+#: ``swDelete_Absorbed`` a feature's own sketch with it.
+_DELETE_CHILDREN = 1
+_DELETE_ABSORBED = 2
+
+
+def _delete_users_of(adapter: Any, feature: Any) -> tuple[Any, Exception | None]:
+    """Delete the features built from ``feature``, with their absorbed sketch.
+
+    SolidWorks won't delete a sketch a feature still uses: ``DeleteSelection2``
+    returns False even with ``swDelete_Children`` (measured on 2026). Deleting
+    the features that use it (``IFeature::GetChildren``) with
+    ``swDelete_Absorbed`` takes the sketch with them.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        feature: The ``IFeature`` that could not be deleted on its own.
+
+    Returns:
+        tuple[Any, Exception | None]: ``DeleteSelection2``'s return value and
+        what it raised; ``(False, None)`` when nothing uses ``feature``.
+    """
+    children = adapter._attempt(
+        lambda: adapter._get_attr_or_call(feature, "GetChildren"), default=None
+    )
+    names = [
+        str(name)
+        for child in children or ()
+        if (name := adapter._attempt(lambda c=child: c.Name, default=None))
+    ]
+    if not names:
+        return False, None
+    adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+    for child_name in names:
+        _select_feature_by_name(adapter, child_name, append=True)
+    return cast(
+        tuple[Any, Exception | None],
+        adapter._attempt_with_error(
+            lambda: adapter.currentModel.Extension.DeleteSelection2(
+                _DELETE_CHILDREN | _DELETE_ABSORBED
+            )
+        ),
+    )
+
+
 def _delete_feature_impl(adapter: Any, name: str) -> AdapterResult[dict[str, Any]]:
     """Delete a named feature or sketch from the active model.
 
-    Selects the feature, then removes it with ``IModelDoc2::EditDelete``.
-    Deleting a parent also removes its children, which is SolidWorks' normal
-    cascade and the intended "erase this and what depends on it" behaviour -
-    so the number of features removed is reported, not assumed to be one.
+    Selects the feature, then removes it with
+    ``IModelDocExtension::DeleteSelection2(swDelete_Children)``, which takes
+    the features built on it too ("erase this and what depends on it"), so
+    the number of features removed is reported, not assumed to be one.
+    ``IModelDoc2::EditDelete`` left a sketch in place when a cut used it
+    (measured on SolidWorks 2026). A feature's own sketch is "absorbed", not
+    a child, so deleting a cut leaves its sketch. A sketch a feature uses
+    can't be deleted on its own at all, so its users are deleted instead,
+    taking it with them (:func:`_delete_users_of`).
 
-    ``EditDelete`` returns nothing useful, so success is confirmed by the
-    feature being absent from the tree afterwards.
+    Success is confirmed by the feature being absent from the tree
+    afterwards, not by the call's return value.
 
     Args:
         adapter: A connected adapter with a valid ``currentModel``.
@@ -2349,23 +2544,34 @@ def _delete_feature_impl(adapter: Any, name: str) -> AdapterResult[dict[str, Any
 
     def _delete_operation() -> dict[str, Any]:
         before = _feature_count(adapter)
-        if _select_feature_by_name(adapter, name) is None:
+        feature = _select_feature_by_name(adapter, name)
+        if feature is None:
             raise Exception(f"Feature not found: {name}")
 
-        adapter._attempt(
-            lambda: adapter._get_attr_or_call(adapter.currentModel, "EditDelete"),
+        selected = adapter._attempt(
+            lambda: adapter.currentModel.SelectionManager.GetSelectedObjectCount2(-1),
             default=None,
         )
+        deleted, error = adapter._attempt_with_error(
+            lambda: adapter.currentModel.Extension.DeleteSelection2(_DELETE_CHILDREN)
+        )
+        if not deleted and error is None:
+            deleted, error = _delete_users_of(adapter, feature)
         adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
 
-        # EditDelete reports nothing useful, so confirm by lookup: the
-        # feature must no longer resolve by name.
+        # Confirm by lookup: the feature must no longer resolve by name.
         bare = name.split("@", 1)[0]
         still_there = adapter._attempt(
             lambda: adapter.currentModel.FeatureByName(bare), default=None
         )
         if still_there:
-            raise Exception(f"EditDelete did not remove feature: {name}")
+            outcome = (
+                f"raised {error}" if error is not None else f"returned {deleted!r}"
+            )
+            raise Exception(
+                f"SolidWorks did not delete feature: {name} (DeleteSelection2 "
+                f"{outcome} with {selected} item(s) selected)"
+            )
 
         after = _feature_count(adapter)
         return {
@@ -2543,6 +2749,11 @@ def _rename_feature_impl(
         actual = adapter._attempt(
             lambda: adapter._get_attr_or_call(refreshed, "Name"), default=None
         )
+        renamed_to = actual if isinstance(actual, str) and actual else new
+        # A sketch renamed while it is the session's latest keeps being the
+        # one a feature without a sketch_name uses.
+        if getattr(adapter, "_last_sketch_name", None) == bare:
+            adapter._last_sketch_name = renamed_to
         return {
             "renamed": True,
             "old_name": bare,

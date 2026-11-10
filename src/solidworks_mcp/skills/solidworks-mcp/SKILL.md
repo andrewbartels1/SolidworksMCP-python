@@ -25,17 +25,17 @@ A solid feature always comes from a closed sketch:
 
 1. `create_part` (or `open_model` for an existing file).
 2. `create_sketch` on a plane: "Front", "Top", "Right", or a plane from
-   `create_reference_plane`. Don't pass `sketch_name`; the reply gives
-   SolidWorks' own name for the sketch.
+   `create_reference_plane`. Pass `sketch_name` to name it; the name is
+   given when `exit_sketch` closes it, and that reply has the final name.
 3. Draw: `add_rectangle`, `add_circle`, `add_line`, `add_arc`, `add_polygon`,
    and so on. For a revolve, add the axis with `add_centerline` in this
-   sketch.
+   sketch, or make a reference axis with `create_axis`.
 4. `exit_sketch`.
 5. The feature: `create_extrusion` (add material), `create_cut_extrude`
    (remove it), `create_revolve`, `create_sweep`, `create_loft`.
-   `create_extrusion` and `create_revolve` use the sketch you just closed,
-   whatever name you pass, so call them straight after `exit_sketch`.
-   `create_cut_extrude` takes `sketch_name`; pass it.
+   Each takes `sketch_name`; without it, the sketch you closed last is
+   used. `create_revolve` turns about the sketch's centreline, or about
+   the reference axis `axis_entity` names.
 6. Then edge treatments: `select_face_edges`, then `add_fillet` or
    `add_chamfer` with empty `edge_names`.
 7. Finish with `verify_model` (see "Check the result").

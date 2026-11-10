@@ -268,7 +268,9 @@ async def register_engineering_data_tools(
         Use it before `calculate_mass_properties` or `verify_model` with a mass: without
         a material SolidWorks uses a default density. Needs: an open, active part (any
         other document is `wrong_document_type`). Read-only. Returns: `data` with
-        `material` (null when none is assigned) and `database`.
+        `material` (null when none is assigned), `database` and `density_kg_m3` (from
+        the material's library entry; null when unknown). For the other properties
+        (modulus, strength), open the material in SolidWorks.
 
         Args:
             input_data: Nothing is required: `configuration` defaults to the active

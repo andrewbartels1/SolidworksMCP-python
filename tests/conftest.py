@@ -396,7 +396,6 @@ class TestDataFactory:
         return {
             "sketch_name": "test_sketch",
             "depth": 10.0,
-            "direction": "blind",
             "reverse": False,
         }
 

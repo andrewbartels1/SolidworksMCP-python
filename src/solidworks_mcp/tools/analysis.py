@@ -25,38 +25,21 @@ from .tool_boundary import (
 # Input schemas using Python 3.14 built-in types
 
 
+#: kg·m² (SolidWorks' SI) to kg·mm².
+_KG_M2_TO_KG_MM2 = 1_000_000.0
+
+
+def _kg_mm2(value: float | None) -> float | None:
+    """A moment or product of inertia from kg·m² to kg·mm²."""
+    return None if value is None else value * _KG_M2_TO_KG_MM2
+
+
 class MassPropertiesInput(CompatInput):
     """Input schema for mass properties analysis.
 
-    Attributes:
-        include_hidden (bool): The include hidden value.
-        model_path (str | None): The model path value.
-        reference_coordinate_system (str | None): The reference coordinate system value.
-        units (str): The units value.
+    It has no fields: the tool always measures the active model. Inputs it
+    used to take are refused (``input_compat.REMOVED_INPUTS``).
     """
-
-    model_path: str | None = Field(default=None, description="Path to the model file")
-    units: str = Field(default="metric", description="Units for mass properties")
-    include_hidden: bool = Field(default=False, description="Include hidden components")
-    reference_coordinate_system: str | None = Field(
-        default=None, description="Reference coordinate system alias"
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the mass properties input.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-
-        Raises:
-            ValueError: If the operation cannot be completed.
-        """
-        valid_units = {"metric", "kg", "g", "lb"}
-        if self.units not in valid_units:
-            raise ValueError(f"units must be one of {sorted(valid_units)}")
 
 
 class InterferenceCheckInput(CompatInput):
@@ -64,23 +47,21 @@ class InterferenceCheckInput(CompatInput):
 
     Attributes:
         assembly_path (str | None): The assembly path value.
-        check_all_components (bool): The check all components value.
         components (list[str]): The components value.
         include_hidden (bool): The include hidden value.
-        tolerance (float): The tolerance value.
     """
 
     assembly_path: str | None = Field(default=None, description="Assembly path alias")
-    check_all_components: bool = Field(
-        default=False, description="Check all components alias"
+    include_hidden: bool = Field(
+        default=False,
+        description=(
+            "Check hidden components too; by default they are left out, as in "
+            "SolidWorks' own Interference Detection"
+        ),
     )
-    include_hidden: bool = Field(default=False, description="Include hidden components")
     components: list[str] = Field(
         default_factory=list,
         description="List of component names to check for interference",
-    )
-    tolerance: float = Field(
-        default=0.001, description="Interference detection tolerance in mm"
     )
 
 
@@ -340,25 +321,15 @@ async def register_analysis_tools(
         Mass depends on the assigned material (`set_material`). Needs: an open part or
         assembly. Read-only. It rebuilds first. Returns: `mass_properties` with `volume`
         (mm³), `surface_area` (mm²), `mass` (kg), `center_of_mass` (mm),
-        `moments_of_inertia` (in kg·m², whatever its `units` label says) and
+        `moments_of_inertia` (kg·mm², about the centre of mass) and
         `principal_axes`.
 
         Args:
-            input_data: Nothing is required; the fields (`model_path`, `units`, `include_hidden`, `reference_coordinate_system`) are not used yet: it always measures the active model.
+            input_data: Nothing: it always measures the active model.
 
         Returns:
             dict[str, Any]: The mass properties.
         """
-        if hasattr(adapter, "calculate_mass_properties"):
-            result = await adapter.calculate_mass_properties(input_data.model_dump())
-            require_success(result, context="Failed to calculate mass properties")
-            return {
-                "status": "success",
-                "message": "Mass properties calculated successfully",
-                "data": result.data,
-                "execution_time": result.execution_time,
-            }
-
         result = await adapter.get_mass_properties()
 
         require_success(result, context="Failed to calculate mass properties")
@@ -378,12 +349,10 @@ async def register_analysis_tools(
                     "units": "mm",
                 },
                 "moments_of_inertia": {
-                    "Ixx": props.moments_of_inertia["Ixx"],
-                    "Iyy": props.moments_of_inertia["Iyy"],
-                    "Izz": props.moments_of_inertia["Izz"],
-                    "Ixy": props.moments_of_inertia["Ixy"],
-                    "Ixz": props.moments_of_inertia["Ixz"],
-                    "Iyz": props.moments_of_inertia["Iyz"],
+                    **{
+                        key: _kg_mm2(props.moments_of_inertia[key])
+                        for key in ("Ixx", "Iyy", "Izz", "Ixy", "Ixz", "Iyz")
+                    },
                     "units": "kg·mm²",
                 },
                 "principal_axes": props.principal_axes,
@@ -401,11 +370,11 @@ async def register_analysis_tools(
         the values you expect, use `verify_model`. Mass depends on the assigned material
         (`set_material`). Needs: an open part or assembly. Read-only. It rebuilds first.
         Returns: `mass_properties` with `volume` (mm³), `surface_area` (mm²), `mass`
-        (kg), `center_of_mass` (mm), `moments_of_inertia` (in kg·m², whatever its
-        `units` label says) and `principal_axes`.
+        (kg), `center_of_mass` (mm), `moments_of_inertia` (kg·mm², about the centre
+        of mass) and `principal_axes`.
 
         Args:
-            input_data: Optional, and not used yet: it always measures the active model.
+            input_data: Optional, and empty: it always measures the active model.
 
         Returns:
             dict[str, Any]: The mass properties.
@@ -424,8 +393,8 @@ async def register_analysis_tools(
 
         Args:
             input_data: Nothing is required. `components` limits the report to
-                interferences involving those components; `tolerance`,
-                `include_hidden` and `check_all_components` are not used.
+                interferences involving those components; `include_hidden` also
+                checks hidden components, which are left out by default.
 
         Returns:
             dict[str, Any]: The interferences found.
@@ -438,7 +407,9 @@ async def register_analysis_tools(
             "directly (Tools > Interference Detection) to check this "
             "assembly.",
         )
-        result = await adapter.check_interference(input_data.model_dump())
+        options = input_data.model_dump()
+        options["ignore_hidden"] = not input_data.include_hidden
+        result = await adapter.check_interference(options)
         require_success(result, "Interference check failed")
         return {
             "status": "success",

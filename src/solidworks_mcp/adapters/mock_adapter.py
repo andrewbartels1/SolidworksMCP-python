@@ -1179,6 +1179,11 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         if isinstance(params, str):
             params = ExtrusionParameters(depth=depth or 0.0)
+        sketch = self._mock_named_sketch(
+            getattr(params, "sketch_name", None), "extrude"
+        )
+        if isinstance(sketch, AdapterResult):
+            return sketch
 
         await asyncio.sleep(self._delays["feature_operation"])
         self._operation_count += 1
@@ -1200,6 +1205,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "thin_feature": params.thin_feature,
                 "thin_thickness": params.thin_thickness,
                 "thin_side": params.thin_side if params.thin_feature else None,
+                "sketch_name": sketch,
             },
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
@@ -1229,6 +1235,19 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
+        sketch = self._mock_named_sketch(
+            getattr(params, "sketch_name", None), "revolve"
+        )
+        if isinstance(sketch, AdapterResult):
+            return sketch
+        axis = getattr(params, "axis_entity", None)
+        if axis and axis not in self._axes:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Axis '{axis}' is not a reference axis in the "
+                "model. Create one with create_axis.",
+            )
+
         await asyncio.sleep(self._delays["feature_operation"])
         self._operation_count += 1
 
@@ -1243,6 +1262,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "both_directions": params.both_directions,
                 "thin_feature": params.thin_feature,
                 "thin_thickness": params.thin_thickness,
+                "sketch_name": sketch,
+                "axis_entity": axis,
             },
             properties={"created": datetime.now().isoformat(), "mock": True},
         )
@@ -1254,6 +1275,66 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             status=AdapterResultStatus.SUCCESS,
             data=feature,
             execution_time=self._delays["feature_operation"],
+        )
+
+    def _mock_rename_sketch(self, old: str, new: str) -> AdapterResult[dict[str, Any]]:
+        """Rename a mock sketch, refusing a name already in use.
+
+        Args:
+            old: The sketch's current name.
+            new: The name to give it.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: As ``rename_feature`` reports it.
+            The open sketch is refused, as SolidWorks refuses it (it accepts
+            the new name but the tree keeps the old one).
+        """
+        if self._current_sketch == old:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Cannot rename '{old}' while it is open for editing",
+            )
+        taken = new in self._sketches or any(
+            f.name == new for f in self._features.values()
+        )
+        if taken:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Cannot rename to '{new}': a feature with that name already exists",
+            )
+        self._sketches = {
+            (new if name == old else name): plane
+            for name, plane in self._sketches.items()
+        }
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"renamed": True, "old_name": old, "new_name": new},
+            execution_time=self._delays["model_operation"],
+        )
+
+    def _mock_named_sketch(
+        self, name: str | None, purpose: str
+    ) -> str | None | AdapterResult[SolidWorksFeature]:
+        """The mock sketch ``name`` matches, without regard to case.
+
+        Args:
+            name: The sketch asked for, or ``None`` for the last closed.
+            purpose: How the error names the use, e.g. ``"extrude"``.
+
+        Returns:
+            The sketch's name, ``None`` when none was asked for, or an error
+            result listing the sketches when ``name`` matches none.
+        """
+        if not name:
+            return None
+        for real in self._sketches:
+            if real.lower() == name.lower():
+                return real
+        available = ", ".join(self._sketches) or "(none found)"
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=f"Sketch '{name}' not found in the feature tree. Sketches "
+            f"available to {purpose}: {available}",
         )
 
     async def create_sweep(
@@ -2998,6 +3079,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="new_name must not be empty"
             )
 
+        if old_name in self._sketches and new != old_name:
+            return self._mock_rename_sketch(old_name, new)
         key = next((k for k, f in self._features.items() if f.name == old_name), None)
         if key is None:
             return AdapterResult(
@@ -3471,6 +3554,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "mirror_bodies": bool(mirror_bodies),
                 "volume_before": volume_before,
                 "volume_after": volume_after,
+                "volume_change": volume_after - volume_before,
                 "volume_ratio": round(volume_after / volume_before, 6),
             },
             execution_time=self._delays["feature_operation"],
@@ -3573,6 +3657,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "equal_spacing": bool(equal_spacing),
                 "volume_before": volume_before,
                 "volume_after": volume_after,
+                "volume_change": volume_after - volume_before,
                 "volume_ratio": round(volume_after / volume_before, 6),
             },
             execution_time=self._delays["feature_operation"],
@@ -3606,6 +3691,13 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         },
     )
     _MOCK_MATERIAL_FOLDER = "mock://sldmaterials"
+    #: Densities in kg/m³, as SolidWorks 2026's library holds them.
+    _MOCK_DENSITIES: dict[str, float] = {
+        "AISI 1020": 7900.0,
+        "AISI 304": 8000.0,
+        "6061-T6 (SS)": 2700.0,
+        "ABS": 1020.0,
+    }
 
     def _mock_doc_error(
         self, allowed: set[str], operation: str
@@ -3692,6 +3784,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             data={
                 "material": assigned["name"] if assigned else None,
                 "database": assigned["database"] if assigned else None,
+                "density_kg_m3": (
+                    self._MOCK_DENSITIES.get(assigned["name"]) if assigned else None
+                ),
                 "configuration": configuration,
             },
         )

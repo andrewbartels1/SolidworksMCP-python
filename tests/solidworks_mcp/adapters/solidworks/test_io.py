@@ -79,6 +79,28 @@ async def test_get_mass_properties_uses_callable_gmp() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_mass_properties_reads_products_in_the_documented_order() -> None:
+    """GetMassProperties ends Lxy, Lzx, Lyz: index 10 is Ixz, 11 is Iyz."""
+    raw = [0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 11.0, 22.0, 33.0, 12.0, 13.0, 23.0]
+    current_model = SimpleNamespace(
+        ForceRebuild3=lambda _flag: None,
+        Extension=SimpleNamespace(CreateMassProperty=lambda: None),
+        GetMassProperties=raw,
+    )
+
+    result = await _IOHarness(current_model).get_mass_properties()
+
+    assert result.data.moments_of_inertia == {
+        "Ixx": 11.0,
+        "Iyy": 22.0,
+        "Izz": 33.0,
+        "Ixy": 12.0,
+        "Ixz": 13.0,
+        "Iyz": 23.0,
+    }
+
+
+@pytest.mark.asyncio
 async def test_get_mass_properties_missing_gmp_fails() -> None:
     """Missing GetMassProperties should surface a failure."""
     # Use a non-callable/non-list attribute to hit raw=None.

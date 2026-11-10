@@ -1526,10 +1526,50 @@ class TestDeleteFeatureImplMoreErrors:
         feature = SimpleNamespace(Select2=lambda append, mark: True)
         adapter.currentModel.FeatureByName.return_value = feature
 
+        adapter.currentModel.Extension.DeleteSelection2.return_value = False
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 1
+
         result = _delete_feature_impl(adapter, "Boss-Extrude1")
 
         assert result.is_error
-        assert "EditDelete did not remove feature" in (result.error or "")
+        assert "SolidWorks did not delete feature" in (result.error or "")
+        assert "returned False with 1 item(s) selected" in (result.error or "")
+
+    def test_a_used_sketch_goes_with_the_features_built_from_it(
+        self, monkeypatch
+    ) -> None:
+        """SolidWorks refuses the sketch alone; its cut goes, absorbing it."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        cut = SimpleNamespace(Name="Cut-Extrude1")
+        nameless = SimpleNamespace(Name=None)
+        sketch = _selectable_feature(GetChildren=lambda: (cut, nameless))
+        adapter.currentModel.FeatureByName.side_effect = [
+            sketch,
+            _selectable_feature(),  # the cut, selected to delete
+            None,  # the sketch is gone afterwards
+        ]
+        delete = adapter.currentModel.Extension.DeleteSelection2
+        delete.side_effect = [False, True]
+
+        result = _delete_feature_impl(adapter, "Sketch2")
+
+        assert result.is_success, result.error
+        assert [c.args for c in delete.call_args_list] == [(1,), (3,)]
+        adapter.currentModel.FeatureByName.assert_any_call("Cut-Extrude1")
+
+    def test_a_raising_delete_says_what_it_raised(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.FeatureByName.return_value = feature
+        adapter.currentModel.Extension.DeleteSelection2.side_effect = RuntimeError(
+            "Member not found"
+        )
+
+        result = _delete_feature_impl(adapter, "Sketch2")
+
+        assert "raised Member not found" in (result.error or "")
 
 
 class TestSuppressFeatureImplMoreErrors:
@@ -2297,7 +2337,6 @@ async def test_mock_create_axis_plane_pairs_match_the_com_layer() -> None:
 @pytest.mark.parametrize(
     ("method", "impl", "args"),
     [
-        ("delete_feature", "_delete_feature_impl", ("Fillet1",)),
         ("suppress_feature", "_suppress_feature_impl", ("Fillet1", False)),
         ("rename_feature", "_rename_feature_impl", ("Fillet1", "EdgeRound")),
         ("undo", "_undo_impl", (2,)),
@@ -2389,9 +2428,38 @@ class TestMirrorAndPatternVolumeOutcomes:
             "name": "Feature9",
             "volume_before": 100.0,
             "volume_after": 250.0,
+            "volume_change": 150.0,
             "volume_ratio": 2.5,
         }
         assert result.execution_time == 0.5
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method", "impl", "args"),
+        [
+            ("pattern_circular", "_pattern_circular_impl", (["Cut1"], "Axis1", 6)),
+            ("mirror_feature", "_mirror_feature_impl", (["Cut1"], "Right Plane")),
+        ],
+    )
+    async def test_a_cut_lowers_the_volume_and_succeeds(
+        self, monkeypatch, method, impl, args
+    ) -> None:
+        """A ring of holes or a mirrored cut removes material: that counts."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.get_mass_properties = self._volumes(1000.0, 900.0)
+        monkeypatch.setattr(
+            features,
+            impl,
+            lambda *_a: AdapterResult(
+                status=AdapterResultStatus.SUCCESS, data={"name": "Feature9"}
+            ),
+        )
+
+        result = await getattr(adapter, method)(*args)
+
+        assert result.is_success
+        assert result.data["volume_change"] == -100.0
 
 
 def test_sweep_prefers_the_last_created_sketch_as_profile() -> None:
@@ -2543,6 +2611,8 @@ class TestFeatureTreeEditOutcomes:
 
         result = _delete_feature_impl(adapter, "Boss-Extrude1@Part1")
 
+        # Children too: EditDelete left a sketch a cut used in place.
+        adapter.currentModel.Extension.DeleteSelection2.assert_called_once_with(1)
         assert result.data == {
             "deleted": "Boss-Extrude1@Part1",
             "features_before": 7,
@@ -3427,3 +3497,127 @@ class TestAddFilletVolumeCheck:
 
         assert await adapter.add_fillet(1.0, ["0,0,0"]) is failed
         adapter.get_mass_properties.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_feature_names_every_feature_it_removed(monkeypatch) -> None:
+    """The tree is listed before and after; the names that went are reported."""
+    adapter = _build_adapter(monkeypatch)
+    listed = [
+        [{"name": "Sketch1"}, {"name": "Sketch2"}, {"name": "Cut-Extrude1"}],
+        [{"name": "Sketch1"}],
+    ]
+    adapter.list_features = AsyncMock(
+        side_effect=[
+            AdapterResult(status=AdapterResultStatus.SUCCESS, data=d) for d in listed
+        ]
+    )
+    monkeypatch.setattr(
+        features,
+        "_delete_feature_impl",
+        lambda *_a: AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"deleted": "Sketch2", "features_removed": 2},
+            execution_time=0.2,
+        ),
+    )
+
+    result = await adapter.delete_feature("Sketch2")
+
+    assert result.data["removed_features"] == ["Sketch2", "Cut-Extrude1"]
+    assert result.execution_time == 0.2
+
+
+@pytest.mark.asyncio
+async def test_delete_feature_falls_back_to_the_name_without_a_listing(
+    monkeypatch,
+) -> None:
+    adapter = _build_adapter(monkeypatch)
+    adapter.list_features = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.ERROR, error="no tree")
+    )
+    monkeypatch.setattr(
+        features,
+        "_delete_feature_impl",
+        lambda *_a: AdapterResult(status=AdapterResultStatus.SUCCESS, data=None),
+    )
+
+    result = await adapter.delete_feature("Fillet1@Part1")
+
+    assert result.data == {"removed_features": ["Fillet1"]}
+
+
+@pytest.mark.asyncio
+async def test_a_failed_delete_is_returned_unchanged(monkeypatch) -> None:
+    adapter = _build_adapter(monkeypatch)
+    adapter.list_features = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data=[])
+    )
+    failed = AdapterResult(status=AdapterResultStatus.ERROR, error="Feature not found")
+    monkeypatch.setattr(features, "_delete_feature_impl", lambda *_a: failed)
+
+    assert await adapter.delete_feature("Nope") is failed
+    adapter.list_features.assert_awaited_once()
+
+
+def test_renaming_the_latest_sketch_keeps_it_tracked() -> None:
+    """A later feature without sketch_name still finds the renamed sketch."""
+    sketch = _Feature("Sketch3")
+    adapter = _rename_adapter({"Sketch3": sketch, "Profile": sketch})
+    adapter.currentModel.FeatureByName = lambda name: (
+        sketch if name in {"Sketch3", sketch.Name} else None
+    )
+    adapter._last_sketch_name = "Sketch3"
+
+    result = features._rename_feature_impl(adapter, "Sketch3", "Profile")
+
+    assert result.data["new_name"] == "Profile"
+    assert adapter._last_sketch_name == "Profile"
+
+
+# ---- revolve sketch and axis ------------------------------------------------
+
+
+def _revolve_adapter(axis_selects: bool) -> _FakeFeatureAdapter:
+    adapter = _FakeFeatureAdapter()
+    picks: list[tuple] = []
+
+    def select(name, kind, *_rest):
+        picks.append((name, kind, _rest[3], _rest[4]))  # append, mark
+        return kind != "AXIS" or axis_selects
+
+    adapter.currentModel = SimpleNamespace(
+        Extension=SimpleNamespace(SelectByID2=select)
+    )
+    adapter.picks = picks  # type: ignore[attr-defined]
+    return adapter
+
+
+def test_select_revolve_inputs_does_nothing_without_names() -> None:
+    adapter = _revolve_adapter(axis_selects=True)
+    params = SimpleNamespace(sketch_name=None, axis_entity=None)
+
+    assert features._select_revolve_inputs(adapter, params) is None
+    assert adapter.picks == []
+
+
+def test_select_revolve_inputs_appends_the_axis_with_mark_4(monkeypatch) -> None:
+    adapter = _revolve_adapter(axis_selects=True)
+    monkeypatch.setattr(
+        features, "_resolve_profile_sketch", lambda _a, name, purpose: name or "Sketch1"
+    )
+    params = SimpleNamespace(sketch_name="Sketch2", axis_entity="Axis1")
+
+    assert features._select_revolve_inputs(adapter, params) == "Sketch2"
+    assert adapter.picks == [("Axis1", "AXIS", True, 4)]
+
+
+def test_select_revolve_inputs_names_an_axis_that_is_not_there(monkeypatch) -> None:
+    adapter = _revolve_adapter(axis_selects=False)
+    monkeypatch.setattr(
+        features, "_resolve_profile_sketch", lambda _a, name, purpose: "Sketch1"
+    )
+    params = SimpleNamespace(sketch_name=None, axis_entity="Line1")
+
+    with pytest.raises(Exception, match="Axis 'Line1' is not a reference axis"):
+        features._select_revolve_inputs(adapter, params)

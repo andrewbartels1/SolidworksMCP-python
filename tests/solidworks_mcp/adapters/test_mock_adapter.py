@@ -1300,6 +1300,25 @@ async def test_mock_rename_onto_an_existing_name_is_an_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_rename_of_the_open_sketch_is_refused() -> None:
+    """SolidWorks keeps an open sketch's name; once closed it can be renamed."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    name = next(iter(adapter._sketches))
+
+    refused = await adapter.rename_feature(name, "Profile")
+    await adapter.exit_sketch()
+    renamed = await adapter.rename_feature(name, "Profile")
+
+    assert not refused.is_success
+    assert "open for editing" in (refused.error or "")
+    assert renamed.is_success
+    assert list(adapter._sketches) == ["Profile"]
+
+
+@pytest.mark.asyncio
 async def test_mock_rename_to_same_name_is_a_noop_success() -> None:
     """Renaming a feature to its current name changes nothing but does not fail."""
     adapter = MockSolidWorksAdapter({})
@@ -2070,3 +2089,19 @@ def test_mock_orientations_match_the_com_layer() -> None:
     assert set(_NAMED_VIEWS) == set(_MOCK_NAMED_VIEWS), (
         "orientation lists have drifted between io.py and mock_adapter.py"
     )
+
+
+@pytest.mark.asyncio
+async def test_mock_revolve_names_a_sketch_that_is_not_there() -> None:
+    from solidworks_mcp.adapters.base import RevolveParameters
+
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+
+    result = await adapter.create_revolve(
+        RevolveParameters(angle=360.0, sketch_name="Sketch9")
+    )
+
+    assert not result.is_success
+    assert "Sketch9" in result.error and "(none found)" in result.error

@@ -41,24 +41,30 @@ class TestAnalysisTools:
         """Test successful mass properties calculation."""
         await register_analysis_tools(mcp_server, mock_adapter, mock_config)
 
-        mock_adapter.calculate_mass_properties = AsyncMock(
+        # SolidWorks reports inertia in kg·m²; the tool reports kg·mm².
+        mock_adapter.get_mass_properties = AsyncMock(
             return_value=Mock(
                 is_success=True,
-                data={
-                    "mass": 0.125,
-                    "volume": 1.5e-5,
-                    "center_of_mass": [0.0, 0.0, 10.0],
-                    "moments_of_inertia": {"Ixx": 1.2e-6, "Iyy": 1.2e-6, "Izz": 2.4e-6},
-                },
+                data=SimpleNamespace(
+                    volume=15000.0,
+                    surface_area=4000.0,
+                    mass=0.125,
+                    center_of_mass=[0.0, 0.0, 10.0],
+                    moments_of_inertia={
+                        "Ixx": 1.2e-6,
+                        "Iyy": 1.2e-6,
+                        "Izz": 2.4e-6,
+                        "Ixy": 0.0,
+                        "Ixz": 0.0,
+                        "Iyz": -3.0e-7,
+                    },
+                    principal_axes=None,
+                ),
                 execution_time=0.3,
             )
         )
 
-        input_data = MassPropertiesInput(
-            model_path="test_part.sldprt",
-            units="kg",
-            reference_coordinate_system="default",
-        )
+        input_data = MassPropertiesInput()
 
         # Find and call the tool
         tool_func = None
@@ -71,9 +77,15 @@ class TestAnalysisTools:
         result = await tool_func(input_data=input_data)
 
         assert result["status"] == "success"
-        assert result["data"]["mass"] == 0.125
-        assert result["data"]["volume"] == 1.5e-5
-        mock_adapter.calculate_mass_properties.assert_called_once()
+        props = result["mass_properties"]
+        assert props["mass"]["value"] == 0.125
+        assert props["volume"]["value"] == 15000.0
+        inertia = props["moments_of_inertia"]
+        assert inertia["units"] == "kg·mm²"
+        assert inertia["Ixx"] == pytest.approx(1.2)
+        assert inertia["Izz"] == pytest.approx(2.4)
+        assert inertia["Iyz"] == pytest.approx(-0.3)
+        mock_adapter.get_mass_properties.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_check_interference_success(
@@ -96,9 +108,7 @@ class TestAnalysisTools:
         )
 
         input_data = InterferenceCheckInput(
-            assembly_path="test_assembly.sldasm",
-            check_all_components=True,
-            include_hidden=False,
+            assembly_path="test_assembly.sldasm", include_hidden=False
         )
 
         tool_func = None
@@ -114,6 +124,18 @@ class TestAnalysisTools:
         assert result["data"]["interference_count"] == 1
         assert "Component1" in result["data"]["interfering_bodies"]
         mock_adapter.check_interference.assert_called_once()
+        # Hidden components are left out unless include_hidden is on.
+        assert (
+            mock_adapter.check_interference.call_args.args[0]["ignore_hidden"] is True
+        )
+        await tool_func(input_data={"include_hidden": True})
+        assert (
+            mock_adapter.check_interference.call_args.args[0]["ignore_hidden"] is False
+        )
+
+        refused = await tool_func(input_data={"tolerance": 0.01})
+        assert refused["error_type"] == "invalid_input"
+        assert "`tolerance`" in refused["message"]
 
     @pytest.mark.asyncio
     async def test_mass_properties_adapter_error(
@@ -122,13 +144,13 @@ class TestAnalysisTools:
         """Test handling of adapter errors in mass properties."""
         await register_analysis_tools(mcp_server, mock_adapter, mock_config)
 
-        mock_adapter.calculate_mass_properties = AsyncMock(
+        mock_adapter.get_mass_properties = AsyncMock(
             return_value=Mock(
                 is_success=False, error="Model file not found", execution_time=0.1
             )
         )
 
-        input_data = MassPropertiesInput(model_path="missing_part.sldprt", units="kg")
+        input_data = MassPropertiesInput()
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -166,30 +188,17 @@ class TestAnalysisTools:
         assert "Assembly failed to load" in result["message"]
 
     @pytest.mark.unit
-    def test_mass_properties_input_validation(self):
-        """Test input validation for mass properties."""
-        # Valid input
-        valid_input = MassPropertiesInput(model_path="test.sldprt", units="kg")
-        assert valid_input.model_path == "test.sldprt"
-        assert valid_input.units == "kg"
-
-        # Invalid units should be handled by Pydantic validation
-        with pytest.raises(ValueError):  # Pydantic validation error
-            MassPropertiesInput(model_path="test.sldprt", units="invalid_unit")
+    def test_mass_properties_input_has_no_fields(self):
+        """It always measures the active model, so it takes nothing."""
+        assert MassPropertiesInput.model_fields == {}
 
     @pytest.mark.unit
     def test_interference_check_input_validation(self):
         """Test input validation for interference check."""
         # Valid input
-        valid_input = InterferenceCheckInput(
-            assembly_path="test.sldasm", check_all_components=True
-        )
+        valid_input = InterferenceCheckInput(assembly_path="test.sldasm")
         assert valid_input.assembly_path == "test.sldasm"
-        assert valid_input.check_all_components is True
-
-        # Test optional parameters
-        minimal_input = InterferenceCheckInput(assembly_path="test.sldasm")
-        assert minimal_input.check_all_components is False  # Default value
+        assert valid_input.include_hidden is False  # hidden components left out
 
     @pytest.mark.asyncio
     async def test_mass_properties_fallback_and_alias_inputs(
@@ -197,10 +206,6 @@ class TestAnalysisTools:
     ):
         """Cover fallback mass-property path plus alias normalization branches."""
         await register_analysis_tools(mcp_server, mock_adapter, mock_config)
-
-        # Remove calculate_mass_properties so the tool uses adapter.get_mass_properties().
-        if hasattr(mock_adapter, "calculate_mass_properties"):
-            delattr(mock_adapter, "calculate_mass_properties")
 
         mock_adapter.get_mass_properties = AsyncMock(
             return_value=Mock(
@@ -245,7 +250,10 @@ class TestAnalysisTools:
         alias_dict = await alias_tool(
             input_data={"units": "lb", "include_hidden": True}
         )
-        assert alias_dict["status"] == "success"
+        assert alias_dict["status"] == "error"
+        assert alias_dict["error_type"] == "invalid_input"
+        assert "`units`" in alias_dict["message"]
+        assert "`include_hidden`" in alias_dict["message"]
 
         alias_model = await alias_tool(input_data=MassPropertiesInput())
         assert alias_model["status"] == "success"

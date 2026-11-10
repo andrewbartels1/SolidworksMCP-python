@@ -63,11 +63,15 @@ class TestSketchingTools:
 
         assert tool_func is not None
 
+        mock_adapter.rename_feature = AsyncMock()
         input_data = CreateSketchInput(plane="Front Plane", sketch_name="TestSketch")
         result = await tool_func(input_data)
 
         assert result["status"] == "success"
-        assert result["sketch"]["name"] == "TestSketch"
+        # SolidWorks won't rename an open sketch: exit_sketch names it.
+        assert result["sketch"]["name"] == "Sketch1"
+        assert result["sketch"]["name_on_exit"] == "TestSketch"
+        mock_adapter.rename_feature.assert_not_awaited()
         assert result["sketch"]["plane"] == "Front Plane"
         assert result["execution_time"] == 0.3
 
@@ -898,6 +902,10 @@ class _SketchAdapterStub:
         """Test helper for create sketch."""
         return _ok({"sketch_name": "Sketch1"})
 
+    async def rename_feature(self, _old, new):
+        """Test helper for rename feature."""
+        return _ok({"new_name": new})
+
     async def add_sketch_line(self, *_args):
         """Test helper for add sketch line."""
         return _ok({"entity_id": "Line1"})
@@ -1359,3 +1367,65 @@ async def test_add_sketch_constraint_accepts_plain_arguments():
 
     assert result["status"] == "success", result
     assert result["constraint"]["type"] == "equal"
+
+
+@pytest.mark.asyncio
+async def test_exit_sketch_gives_the_name_create_sketch_was_asked_for(
+    mcp_server, mock_adapter, mock_config
+):
+    """Named on close; a taken name keeps the tree's name and says why."""
+    await register_sketching_tools(mcp_server, mock_adapter, mock_config)
+    await mock_adapter.create_part()
+    create = await _tool(mcp_server, "create_sketch")
+    exit_ = await _tool(mcp_server, "exit_sketch")
+
+    await create(input_data={"plane": "Front", "sketch_name": "Profile"})
+    first = await exit_()
+    await create(input_data={"plane": "Top", "sketch_name": "Profile"})
+    second = await exit_()
+    await create(input_data={"plane": "Right"})
+    unnamed = await exit_()
+
+    assert first["sketch"] == {"name": "Profile"}
+    assert "warning" not in first
+    assert second["sketch"] == {"name": "Sketch2"}
+    assert "could not be named 'Profile'" in second["warning"]
+    assert "sketch" not in unnamed
+    assert list(mock_adapter._sketches) == ["Profile", "Sketch2", "Sketch3"]
+
+
+@pytest.mark.asyncio
+async def test_a_sketch_left_open_does_not_pass_its_name_on(
+    mcp_server, mock_adapter, mock_config
+):
+    """A new sketch drops the name an abandoned open sketch was waiting for."""
+    await register_sketching_tools(mcp_server, mock_adapter, mock_config)
+    await mock_adapter.create_part()
+    create = await _tool(mcp_server, "create_sketch")
+
+    await create(input_data={"plane": "Front", "sketch_name": "Profile"})
+    await mock_adapter.exit_sketch()  # closed outside the tool: no rename
+    await create(input_data={"plane": "Top"})
+    closed = await (await _tool(mcp_server, "exit_sketch"))()
+
+    assert "sketch" not in closed
+    assert list(mock_adapter._sketches) == ["Sketch1", "Sketch2"]
+
+
+@pytest.mark.asyncio
+async def test_the_hole_tutorial_points_at_the_cut_tool(
+    mcp_server, mock_adapter, mock_config
+):
+    """Its next step is create_cut_extrude, never a negative-depth extrusion."""
+    await register_sketching_tools(mcp_server, mock_adapter, mock_config)
+    await mock_adapter.create_part()
+    tool = await _tool(mcp_server, "sketch_tutorial_simple_hole")
+
+    result = await tool()
+
+    assert "create_cut_extrude" in result["next_step"]
+    assert "suggested_extrusion" not in result
+    cut = result["suggested_cut"]
+    assert cut["sketch_name"] == "Sketch1"
+    assert cut["end_condition"] == "ThroughAll"
+    assert cut["depth"] > 0

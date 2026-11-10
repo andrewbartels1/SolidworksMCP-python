@@ -6,7 +6,7 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-07.
+Last updated 2026-11-09.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
@@ -14,19 +14,20 @@ Last updated 2026-11-07.
 | 1 | Tool descriptions agents can act on: one description standard, MCP hints and family tags, and a check that keeps them | #82 (docstring half) | `tool-descriptions-for-agents` (archived) | Done 2026-11-05 (#202, #203, #204). Left: after the next release, ask Glama for a rescan and record the score in the internal assessment |
 | 2 | Guidance through MCP and an installable skill: the server's `instructions`, the skill served as `skill://` resources with FastMCP 3.4.9's `SkillProvider`, and the same skill installable into an agent | #175 | `agent-skill-and-instructions` (archived) | Done 2026-11-06 (#205, #211; #147 closed as superseded) |
 | 3 | The circuit breaker locks a tool out after a success and never reopens; a reset tool | #208 | `circuit-breaker-recovery` (archived) | Done 2026-11-06 (#213) |
-| 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` (archived) | Done 2026-11-06 (#214). #79's licence-tier half is item 8 |
+| 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` (archived) | Done 2026-11-06 (#214). #79's licence-tier half is item 13 |
 | 5 | Tool gaps found building the U-joint: face mates, fixed parts and flexible sub-assemblies, angled planes, angled chamfers, `both_directions`, a stale interference result, thin extrudes | #209 | `ujoint-tool-gaps` (archived) | Done 2026-11-07 (#216), signed off live |
-| 6 | `--selftest` command and a compatibility-report issue template | #179 | `selftest-and-compatibility-report` | In progress 2026-11-07 on `feat/selftest` |
-| 7 | Skills that improve the agent's results, measured on the U-joint prompt (Opus 5.5 at medium effort: the first skill changed how the agent worked, not what it built) | #207 | not yet written | |
-| 8 | README: licence-tier tags | #79 (other half) | not yet written | |
-| 9 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
-| 10 | Monitor stand demo follow-ups | #206 | not yet written | |
-| 11 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | Bottom of the queue, by request 2026-11-04 |
+| 6 | `--selftest` command and a compatibility-report issue template | #179 | `selftest-and-compatibility-report` (archived) | Done 2026-11-09 (#217), signed off live |
+| 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` | Next, by request 2026-11-09: reliability before new features, moving up the support levels one at a time |
+| 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | not yet written | |
+| 9 | Monitor stand demo follow-ups | #206 | not yet written | |
+| 10 | The 40 planned tools: implement each one or take it out of the tool list (listed below). A registered tool that can't run is a promise the server doesn't keep | not filed yet | not yet written | Check against #174 first, which may retire some as duplicates |
+| 11 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | |
 | 12 | Optional toolsets or a discovery mode, to cut the tool list's size | #176 | not yet written | After #174, which decides which families are core |
-| 13 | Make the "not available yet" tools work, or retire them: each is registered but no adapter implements it, so every call returns `not_supported` (listed below) | not filed yet | not yet written | After #174, which may retire some of them as duplicates |
-| 14 | Small faults found while describing the tools (listed below) | not filed yet | not yet written | Fixing one moves its tool up a support level (item 4) |
+| 13 | README: licence-tier tags | #79 (other half) | not yet written | |
+| 14 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
+| 15 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
 
-## Tools that can't run yet (item 13)
+## Tools that can't run yet (item 10)
 
 Each one's description says "Not available yet ... planned for a future
 release" (the wording is in `docs/agents/tool-description-standard.md`).
@@ -57,7 +58,7 @@ Found while rewriting the descriptions (39), plus `tutorial_simple_hole`
 - **Sketching (1):** `tutorial_simple_hole`: its cut step fails on
   SolidWorks (it calls the adapter's `create_cut`, which only the mock has).
 
-## Small faults (item 14)
+## Small faults (item 7)
 
 When one is fixed, remove it from the agent skill's
 `src/solidworks_mcp/skills/solidworks-mcp/references/errors-and-limits.md`
@@ -65,35 +66,14 @@ in the same change, and move its tool up a level in
 `src/solidworks_mcp/tools/support_levels.py` (beta tools list the fault as
 their reason), then run `python -m solidworks_mcp.progress.generate`.
 
-- `execute_macro` ignores `repeat_count`: it runs the macro once, but its
-  message says "executed N times".
-- `create_technical_drawing` ignores `template`, `sheet_size`, `title` and
-  `output_path`; it only places three views on the active drawing.
-- `add_drawing_view` takes an `operation` (add, update, remove) but only
-  ever adds a view; it is the same code as `create_drawing_view`.
-- `create_extrusion` ignores `sketch_name` and `direction`, and
-  `create_revolve` ignores `sketch_name` and `axis_entity`: both use the
-  sketch `exit_sketch` closed (the revolve its centreline). `create_cut_extrude`
-  does honour `sketch_name`.
-- `create_part` ignores `material`, `create_assembly` ignores `components`,
-  `create_drawing` ignores `model_path` and `sheet_format`, and
-  `create_sketch` echoes `sketch_name` back as the sketch's name without
-  applying it, so the reply can name a sketch that doesn't exist.
-- `pattern_circular` and `mirror_feature` fail unless the volume grows, so
-  patterning or mirroring a cut (a ring of holes) is reported as an error.
-- `calculate_mass_properties` labels the moments of inertia kg·mm², but they
-  are SolidWorks' kg·m² (a factor of a million); its input fields are unused.
-- `delete_feature` reads `removed_features`, but the real adapter returns
-  `features_removed` (a count), so on SolidWorks its message never mentions
-  the dependent features that went too.
-- `sketch_tutorial_simple_hole` suggests a negative-depth extrusion for the
-  hole instead of `create_cut_extrude`.
-- `save_as` ignores `overwrite` (an existing file is replaced) and
-  `save_file` ignores `force_save`; the `export_*` file tools ignore
-  `options` (`format_type` is optional since #209: the extension decides);
-  `ExportSTEPInput`, `ExportIGESInput` and `ExportSTLInput` are unused.
-- `check_interference` passes `include_hidden` where the adapter reads
-  `ignore_hidden`, so it has no effect.
+- `create_drawing_view` and `add_drawing_view` place a view wherever
+  `position` says, even off the sheet, and report success (seen in the beta
+  live tests, 2026-11-09). They could read the sheet size (`_sheet_bounds`
+  in `adapters/solidworks/documentation.py`) and refuse or warn.
+- `export_stl` logs `Extension.SaveAs2 failed: Type mismatch` on its first
+  attempt, then writes the file through its fallback (seen on SolidWorks
+  2026, 2026-11-09). The export works; the first attempt's arguments need
+  checking.
 
 ## Notes
 

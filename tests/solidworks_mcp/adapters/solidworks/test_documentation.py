@@ -453,6 +453,7 @@ async def test_get_material_reads_the_assignment(raw, material, database) -> Non
     assert result.data == {
         "material": material,
         "database": database,
+        "density_kg_m3": None,  # no SolidWorks app to find the library through
         "configuration": "Default",
     }
 
@@ -775,3 +776,57 @@ class TestHelpers:
         )
         assert _unpack_custom_property(("P-001", "P-001", False)) == ("P-001", "P-001")
         assert _unpack_custom_property(None) == ("", "")
+
+
+_DENSITIES = """<?xml version="1.0" encoding="UTF-16"?>
+<mstns:materials xmlns:mstns="http://www.solidworks.com/sldmaterials">
+  <classification name="Steel">
+    <material name="AISI 304">
+      <physicalproperties><DENS displayname="Mass density" value="8000"/></physicalproperties>
+    </material>
+    <material name="Odd"><physicalproperties><DENS value="n/a"/></physicalproperties></material>
+    <material name="Bare"/>
+  </classification>
+</mstns:materials>
+"""
+
+
+def test_material_density_reads_the_dens_value(tmp_path) -> None:
+    """Libraries are UTF-16 XML; DENS holds kg/m³."""
+    other = tmp_path / "custom.sldmat"
+    other.write_text(_DENSITIES.replace("8000", "1"), encoding="utf-16")
+    library = tmp_path / "solidworks materials.sldmat"
+    library.write_text(_DENSITIES, encoding="utf-16")
+    broken = tmp_path / "broken.sldmat"
+    broken.write_text("<not xml", encoding="utf-8")
+    files = [str(broken), str(other), str(library)]
+
+    # The library the part names is searched first, whatever the order.
+    assert doc._material_density(files, "AISI 304", "SOLIDWORKS Materials") == 8000.0
+    assert doc._material_density(files, "AISI 304", "custom") == 1.0
+    assert doc._material_density(files, "Odd", "custom") is None
+    assert doc._material_density(files, "Bare", "custom") is None
+    assert doc._material_density(files, "Missing", "custom") is None
+
+
+def test_library_files_lists_sldmat_files_in_each_folder(tmp_path) -> None:
+    folder = _library_folder(tmp_path)
+
+    files = doc._library_files([str(tmp_path / "missing"), str(folder)])
+
+    assert files == [str(folder / "solidworks materials.sldmat")]
+
+
+@pytest.mark.asyncio
+async def test_get_material_reports_the_density_from_the_library(tmp_path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "solidworks materials.sldmat").write_text(_DENSITIES, encoding="utf-16")
+    harness = _Harness(
+        _part(("AISI 304", "SOLIDWORKS Materials", "byref")), _app(str(folder))
+    )
+
+    result = await harness.get_material()
+
+    assert result.data["material"] == "AISI 304"
+    assert result.data["density_kg_m3"] == 8000.0

@@ -2374,14 +2374,17 @@ class SolidWorksIOMixin:
                 surface_area = raw[4] * 1e6
                 mass = raw[5]
 
+                # GetMassProperties gives Lxx, Lyy, Lzz, Lxy, Lzx, Lyz at
+                # 6-11 (API docs); moi is the row-major 3 x 3 tensor that
+                # IMassProperty.GetMomentOfInertia returns.
                 moi = [0.0] * 9
                 if len(raw) >= 12:
                     moi[0] = raw[6]
                     moi[4] = raw[7]
                     moi[8] = raw[8]
-                    moi[1] = raw[9]
-                    moi[5] = raw[10]
-                    moi[2] = raw[11]
+                    moi[1] = raw[9]  # Lxy
+                    moi[2] = raw[10]  # Lzx = Ixz
+                    moi[5] = raw[11]  # Lyz
 
             return MassProperties(
                 volume=volume,

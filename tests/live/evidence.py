@@ -113,23 +113,40 @@ def starting(label: str, call: str | None = None) -> None:
 
 
 def _print(label: str, payload: Any, call: str | None) -> None:
-    """Print the proof in colour; plain text when ``rich`` is missing."""
+    """Print the proof in colour; plain text when ``rich`` is missing.
+
+    A console on a legacy code page (cp1252) can't encode ``π`` or ``²``;
+    the line is then printed plain with those characters replaced, so a
+    printed proof never fails the test it belongs to.
+    """
     try:
         from rich.console import Console
         from rich.markup import escape
         from rich.pretty import Pretty
         from rich.text import Text
     except ImportError:
-        call_text = f" {call} ->" if call else ""
-        print(f"\n[evidence] {label}:{call_text} {payload}", flush=True)
+        _print_plain(label, payload, call)
         return
     console = Console(force_terminal=True, highlight=True, width=_CAPTION_WIDTH_CHARS)
-    console.print()
-    console.print(f"[bold green]\\[evidence][/] [bold]{escape(label)}[/]")
-    if call:
-        console.print(Text("call   ", style="bold cyan"), call, sep="")
-        console.print(Text("result", style="bold cyan"))
-    console.print(Pretty(payload))
+    try:
+        console.print()
+        console.print(f"[bold green]\\[evidence][/] [bold]{escape(label)}[/]")
+        if call:
+            console.print(Text("call   ", style="bold cyan"), call, sep="")
+            console.print(Text("result", style="bold cyan"))
+        console.print(Pretty(payload))
+    except UnicodeEncodeError:
+        _print_plain(label, payload, call)
+
+
+def _print_plain(label: str, payload: Any, call: str | None) -> None:
+    """Print the proof uncoloured, replacing what the console can't encode."""
+    import sys
+
+    call_text = f"\ncall   {call}\nresult" if call else ""
+    text = f"\n[evidence] {label}{call_text}\n{pprint.pformat(payload, sort_dicts=False)}\n"
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    print(text.encode(encoding, "replace").decode(encoding), flush=True)
 
 
 def _test_name() -> str:

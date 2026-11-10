@@ -54,14 +54,7 @@ class TestDrawingTools:
             )
         )
 
-        input_data = DrawingCreationInput(
-            model_file="test_part.sldprt",
-            template="A_size_template.drwdot",
-            output_path="drawings/part_drawing.slddrw",
-            sheet_format="A (ANSI) Landscape",
-            scale="1:1",
-            auto_populate_views=True,
-        )
+        input_data = DrawingCreationInput(model_file="test_part.sldprt")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -261,9 +254,7 @@ class TestDrawingTools:
             )
         )
 
-        input_data = DrawingCreationInput(
-            model_file="test_part.sldprt", template="missing_template.drwdot"
-        )
+        input_data = DrawingCreationInput(model_file="test_part.sldprt")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -386,21 +377,53 @@ class TestDrawingTools:
     def test_drawing_creation_input_validation(self):
         """Test input validation for drawing creation."""
         # Valid input
-        valid_input = DrawingCreationInput(
-            model_file="test.sldprt", template="template.drwdot"
-        )
+        valid_input = DrawingCreationInput(model_file="test.sldprt")
         assert valid_input.model_file == "test.sldprt"
-        assert valid_input.template == "template.drwdot"
+        assert valid_input.projection == "third_angle"
 
-        # Test optional parameters
-        full_input = DrawingCreationInput(
-            model_file="test.sldprt",
-            template="template.drwdot",
-            scale="1:2",
-            auto_populate_views=True,
+        first = DrawingCreationInput(model_file="test.sldprt", projection="first_angle")
+        assert first.projection == "first_angle"
+        with pytest.raises(ValueError):
+            DrawingCreationInput(model_file="test.sldprt", projection="isometric")
+
+    @pytest.mark.asyncio
+    async def test_technical_drawing_refuses_removed_inputs(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A removed input is refused with a pointer, before the adapter runs."""
+        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.create_technical_drawing = AsyncMock()
+        tool = next(
+            t.fn
+            for t in await mcp_server.list_tools()
+            if t.name == "create_technical_drawing"
         )
-        assert full_input.scale == "1:2"
-        assert full_input.auto_populate_views is True
+
+        result = await tool(
+            input_data={"model_file": "p.sldprt", "template": "a.drwdot", "title": "T"}
+        )
+
+        assert result["error_type"] == "invalid_input"
+        assert "`template`" in result["message"] and "`title`" in result["message"]
+        assert "generate_drawing_package" in result["message"]
+        mock_adapter.create_technical_drawing.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_add_drawing_view_refuses_other_operations(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """It only adds views; update or remove is refused, not ignored."""
+        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.add_drawing_view = AsyncMock()
+        tool = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "add_drawing_view"
+        )
+
+        result = await tool(input_data={"operation": "remove", "view_name": "Front"})
+
+        assert result["error_type"] == "invalid_input"
+        assert "only adds views" in result["message"]
+        mock_adapter.add_drawing_view.assert_not_awaited()
 
     @pytest.mark.unit
     def test_dimension_input_validation(self):
@@ -538,11 +561,7 @@ class TestDrawingToolsBranchCoverage:
             type(mock_adapter), "create_technical_drawing", raising=False
         )
 
-        input_data = DrawingCreationInput(
-            model_file="part.sldprt",
-            template="template.drwdot",
-            auto_populate_views=False,
-        )
+        input_data = DrawingCreationInput(model_file="part.sldprt")
         tool_func = next(
             (
                 t.fn
@@ -568,9 +587,7 @@ class TestDrawingToolsBranchCoverage:
                 execution_time=1.0,
             )
         )
-        input_data = DrawingCreationInput(
-            model_file="part.sldprt", auto_populate_views=True
-        )
+        input_data = DrawingCreationInput(model_file="part.sldprt")
         tool_func = next(
             (
                 t.fn
@@ -1082,9 +1099,7 @@ async def test_drawing_tools_refuse_without_adapter_support(mcp_server, mock_con
 
     assert (
         await (await _tool(mcp_server, "create_technical_drawing"))(
-            input_data=DrawingCreationInput(
-                output_path="o.slddrw", auto_populate_views=True
-            )
+            input_data=DrawingCreationInput()
         )
     )["status"] == "error"
     assert (

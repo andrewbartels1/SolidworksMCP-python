@@ -250,14 +250,14 @@ The plan should include:
 2. `add_centerline(...)` — the revolve axis
 3. Multiple `add_line` and `add_arc` calls tracing the half-profile
 4. `exit_sketch()`
-5. `create_revolve(sketch_name="Sketch1", axis_entity="Line1", angle=360.0)`
+5. `create_revolve(sketch_name="Sketch1", angle=360.0)` (it turns about the centreline)
 
 If the LLM skips `add_centerline` or tries to use a construction line as the axis without naming it, correct before running:
 
 ```text
 Step 3 is missing the centerline. Add:
 add_centerline(start_x=0, start_y=0, end_x=830, end_y=0)
-before the profile lines, and use that as the axis_entity in create_revolve.
+before the profile lines; create_revolve turns about it.
 ```
 
 ---

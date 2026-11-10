@@ -8,13 +8,8 @@ from fastmcp import FastMCP
 
 from solidworks_mcp.tools.export import (
     BatchExportInput,
-    ExportDWGInput,
     ExportFileInput,
-    ExportIGESInput,
     ExportImageInput,
-    ExportPDFInput,
-    ExportSTEPInput,
-    ExportSTLInput,
     register_export_tools,
 )
 
@@ -47,12 +42,7 @@ class TestExportTools:
             )
         )
 
-        input_data = ExportSTEPInput(
-            model_path="test_part.sldprt",
-            output_path="exports/test_part.step",
-            step_version="AP214",
-            units="mm",
-        )
+        input_data = ExportFileInput(file_path="exports/test_part.step")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -87,12 +77,7 @@ class TestExportTools:
             )
         )
 
-        input_data = ExportIGESInput(
-            model_path="test_part.sldprt",
-            output_path="exports/test_part.iges",
-            iges_version="2014",
-            surface_type="NURBS",
-        )
+        input_data = ExportFileInput(file_path="exports/test_part.iges")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -127,13 +112,7 @@ class TestExportTools:
             )
         )
 
-        input_data = ExportSTLInput(
-            model_path="test_part.sldprt",
-            output_path="exports/test_part.stl",
-            resolution="High",
-            file_format="Binary",
-            units="mm",
-        )
+        input_data = ExportFileInput(file_path="exports/test_part.stl")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -168,12 +147,7 @@ class TestExportTools:
             )
         )
 
-        input_data = ExportPDFInput(
-            drawing_path="test_drawing.slddrw",
-            output_path="exports/test_drawing.pdf",
-            quality="High",
-            color_mode="Color",
-        )
+        input_data = ExportFileInput(file_path="exports/test_drawing.pdf")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -208,12 +182,7 @@ class TestExportTools:
             )
         )
 
-        input_data = ExportDWGInput(
-            drawing_path="test_drawing.slddrw",
-            output_path="exports/test_drawing.dwg",
-            autocad_version="2020",
-            layer_mapping=True,
-        )
+        input_data = ExportFileInput(file_path="exports/test_drawing.dwg")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -352,9 +321,7 @@ class TestExportTools:
             )
         )
 
-        input_data = ExportSTEPInput(
-            model_path="test_part.sldprt", output_path="/invalid_path/test_part.step"
-        )
+        input_data = ExportFileInput(file_path="/invalid_path/test_part.step")
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -365,24 +332,6 @@ class TestExportTools:
         result = await tool_func(input_data=input_data)
         assert result["status"] == "error"
         assert "Output directory does not exist" in result["message"]
-
-    @pytest.mark.unit
-    def test_export_step_input_validation(self):
-        """Test input validation for STEP export."""
-        # Valid input
-        valid_input = ExportSTEPInput(model_path="test.sldprt", output_path="test.step")
-        assert valid_input.model_path == "test.sldprt"
-        assert valid_input.output_path == "test.step"
-
-        # Test optional parameters
-        full_input = ExportSTEPInput(
-            model_path="test.sldprt",
-            output_path="test.step",
-            step_version="AP214",
-            units="mm",
-        )
-        assert full_input.step_version == "AP214"
-        assert full_input.units == "mm"
 
     @pytest.mark.unit
     def test_batch_export_input_validation(self):
@@ -441,17 +390,11 @@ class TestExportToolsBranchCoverage:
         by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         r1 = await by_name["export_iges"](
-            input_data=ExportIGESInput(model_path="a.sldprt", output_path="a.iges")
+            input_data=ExportFileInput(file_path="a.iges")
         )
-        r2 = await by_name["export_stl"](
-            input_data=ExportSTLInput(model_path="a.sldprt", output_path="a.stl")
-        )
-        r3 = await by_name["export_pdf"](
-            input_data=ExportPDFInput(model_path="a.slddrw", output_path="a.pdf")
-        )
-        r4 = await by_name["export_dwg"](
-            input_data=ExportDWGInput(model_path="a.slddrw", output_path="a.dwg")
-        )
+        r2 = await by_name["export_stl"](input_data=ExportFileInput(file_path="a.stl"))
+        r3 = await by_name["export_pdf"](input_data=ExportFileInput(file_path="a.pdf"))
+        r4 = await by_name["export_dwg"](input_data=ExportFileInput(file_path="a.dwg"))
         r5 = await by_name["export_image"](
             input_data=ExportImageInput(model_path="a.sldprt", output_path="a.png")
         )
@@ -492,18 +435,10 @@ class TestExportToolsBranchCoverage:
         by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
 
         results = [
-            await by_name["export_iges"](
-                ExportIGESInput(model_path="a.sldprt", output_path="a.iges")
-            ),
-            await by_name["export_stl"](
-                ExportSTLInput(model_path="a.sldprt", output_path="a.stl")
-            ),
-            await by_name["export_pdf"](
-                ExportPDFInput(model_path="a.slddrw", output_path="a.pdf")
-            ),
-            await by_name["export_dwg"](
-                ExportDWGInput(model_path="a.slddrw", output_path="a.dwg")
-            ),
+            await by_name["export_iges"](ExportFileInput(file_path="a.iges")),
+            await by_name["export_stl"](ExportFileInput(file_path="a.stl")),
+            await by_name["export_pdf"](ExportFileInput(file_path="a.pdf")),
+            await by_name["export_dwg"](ExportFileInput(file_path="a.dwg")),
             await by_name["export_image"](
                 ExportImageInput(model_path="a.sldprt", output_path="a.png")
             ),
@@ -531,9 +466,7 @@ class TestExportToolsBranchCoverage:
         tool = next(
             t.fn for t in await mcp_server.list_tools() if t.name == "export_step"
         )
-        result = await tool(
-            ExportSTEPInput(model_path="test_part.sldprt", output_path="out.step")
-        )
+        result = await tool(ExportFileInput(file_path="out.step"))
 
         assert result["status"] == "error"
         assert result["error_type"] == "internal"

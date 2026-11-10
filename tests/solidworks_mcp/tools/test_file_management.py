@@ -450,7 +450,7 @@ class TestFileManagementTools:
                 break
 
         assert save_tool is not None
-        result = await save_tool(input_data={"force_save": True})
+        result = await save_tool(input_data={})
 
         assert result["status"] == "error"
         assert result["error_type"] == "internal"
@@ -477,7 +477,7 @@ class TestFileManagementTools:
                 break
 
         assert save_tool is not None
-        result = await save_tool(input_data={"force_save": True})
+        result = await save_tool(input_data={})
         assert result["status"] == "success"
         assert result["data"]["saved"] is True
 
@@ -495,7 +495,7 @@ class TestFileManagementTools:
                 save_tool = tool.fn
                 break
 
-        fallback_result = await save_tool(input_data={"force_save": False})
+        fallback_result = await save_tool(input_data={})
         assert fallback_result["status"] == "error"
         assert "does not support save_file" in fallback_result["message"]
 
@@ -516,7 +516,7 @@ class TestFileManagementTools:
                 save_tool = tool.fn
                 break
 
-        result = await save_tool(input_data={"force_save": True})
+        result = await save_tool(input_data={})
         assert result["status"] == "error"
         assert "write failed" in result["message"]
 
@@ -2278,3 +2278,38 @@ async def test_reference_copy_treats_an_unresolvable_target_as_a_new_file(
     )
 
     assert str(target_dir / "bracket_1.sldprt") in result["copied_files"]
+
+
+@pytest.mark.asyncio
+async def test_save_as_keeps_an_existing_file_unless_overwrite(
+    mcp_server, mock_adapter, mock_config, tmp_path: Path
+) -> None:
+    save_as = await _tool(mcp_server, mock_adapter, mock_config, "save_as")
+    mock_adapter.save_file = AsyncMock(
+        return_value=Mock(is_success=True, data=None, execution_time=0.1)
+    )
+    target = tmp_path / "part.sldprt"
+    target.write_bytes(b"original")
+
+    kept = await save_as(input_data={"file_path": str(target)})
+    replaced = await save_as(input_data={"file_path": str(target), "overwrite": True})
+
+    assert kept["error_type"] == "invalid_input"
+    assert "left untouched" in kept["message"] and "overwrite" in kept["message"]
+    assert target.read_bytes() == b"original"
+    assert replaced["status"] == "success"
+    mock_adapter.save_file.assert_awaited_once_with(str(target))
+
+
+@pytest.mark.asyncio
+async def test_save_file_refuses_force_save(
+    mcp_server, mock_adapter, mock_config
+) -> None:
+    save_file = await _tool(mcp_server, mock_adapter, mock_config, "save_file")
+    mock_adapter.save_file = AsyncMock()
+
+    result = await save_file(input_data={"force_save": True})
+
+    assert result["error_type"] == "invalid_input"
+    assert "the tool always saves" in result["message"]
+    mock_adapter.save_file.assert_not_awaited()

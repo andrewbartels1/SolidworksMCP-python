@@ -140,6 +140,9 @@ class TestModelingTools:
                 execution_time=1.2,
             )
         )
+        mock_adapter.set_material = AsyncMock(
+            return_value=Mock(is_success=True, data={"material": "Steel"})
+        )
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -156,6 +159,8 @@ class TestModelingTools:
         assert result["part"]["name"] == "new_part"
         assert result["part"]["units"] == "mm"
         assert result["part"]["material"] == "Steel"
+        assert "could not be assigned" not in result.get("warning", "")
+        mock_adapter.set_material.assert_awaited_once_with("Steel")
         # The template must reach the adapter, not just be echoed back.
         mock_adapter.create_part.assert_awaited_once_with(
             "new_part", "mm", "standard_part"
@@ -181,18 +186,27 @@ class TestModelingTools:
                 break
 
         input_data = CreateAssemblyInput(
-            name="test_assembly",
-            template="standard_assembly",
-            components=["part1.sldprt", "part2.sldprt"],
+            name="test_assembly", template="standard_assembly"
         )
         result = await tool_func(input_data)
 
         assert result["status"] == "success"
-        assert result["assembly"]["name"] == "test_assembly"
-        assert len(result["assembly"]["components"]) == 2
+        assert result["assembly"] == {
+            "name": "test_assembly",
+            "template": "standard_assembly",
+        }
         mock_adapter.create_assembly.assert_awaited_once_with(
             "test_assembly", "standard_assembly"
         )
+
+        refused = await tool_func(
+            {"name": "x", "components": ["part1.sldprt", "part2.sldprt"]}
+        )
+        assert refused["status"] == "error"
+        assert refused["error_type"] == "invalid_input"
+        assert "`components`" in refused["message"]
+        assert "insert_component" in refused["message"]
+        assert mock_adapter.create_assembly.await_count == 1
 
     @pytest.mark.asyncio
     async def test_create_drawing_from_model(
@@ -216,20 +230,25 @@ class TestModelingTools:
                 break
 
         input_data = CreateDrawingInput(
-            name="test_drawing",
-            model_path="test_part.sldprt",
-            sheet_format="A3",
-            template="standard_drawing",
+            name="test_drawing", template="standard_drawing"
         )
         result = await tool_func(input_data)
 
         assert result["status"] == "success"
-        assert result["drawing"]["name"] == "test_drawing"
-        assert result["drawing"]["model_path"] == "test_part.sldprt"
-        assert result["drawing"]["sheet_format"] == "A3"
+        assert result["drawing"] == {
+            "name": "test_drawing",
+            "template": "standard_drawing",
+        }
         mock_adapter.create_drawing.assert_awaited_once_with(
             "test_drawing", "standard_drawing"
         )
+
+        refused = await tool_func(
+            {"name": "x", "model_path": "part.sldprt", "sheet_format": "A3"}
+        )
+        assert refused["error_type"] == "invalid_input"
+        assert "`model_path`" in refused["message"]
+        assert "`sheet_format`" in refused["message"]
 
     @pytest.mark.asyncio
     async def test_create_extrusion_blind(self, mcp_server, mock_adapter, mock_config):
@@ -251,12 +270,14 @@ class TestModelingTools:
                 break
 
         input_data = CreateExtrusionInput(
-            sketch_name="Sketch1", depth=25.0, direction="blind", reverse=False
+            sketch_name="Sketch1", depth=25.0, reverse=False
         )
         result = await tool_func(input_data)
 
         assert result["status"] == "success"
-        assert result["extrusion"]["sketch"] == "Sketch1"
+        # The adapter is told which sketch; the reply names the one it used.
+        assert mock_adapter.create_extrusion.call_args.args[0].sketch_name == "Sketch1"
+        assert result["extrusion"]["sketch"] is None
         assert result["extrusion"]["depth"] == 25.0
         assert result["extrusion"]["end_condition"] == "Blind"
         assert "direction" not in result["extrusion"]
@@ -279,16 +300,19 @@ class TestModelingTools:
                 break
 
         input_data = CreateRevolveInput(
-            sketch_name="Sketch1",
-            axis_entity="centerline",
-            angle=360.0,
-            direction="one_direction",
+            sketch_name="Sketch1", axis_entity="Axis1", angle=360.0
         )
         result = await tool_func(input_data)
 
         assert result["status"] == "success"
         assert result["revolve"]["angle"] == 360.0
-        assert result["revolve"]["direction"] == "one_direction"
+        assert "direction" not in result["revolve"]
+        params = mock_adapter.create_revolve.call_args.args[0]
+        assert (params.sketch_name, params.axis_entity) == ("Sketch1", "Axis1")
+
+        refused = await tool_func({"angle": 360.0, "direction": "one_direction"})
+        assert refused["error_type"] == "invalid_input"
+        assert "both_directions" in refused["message"]
 
     @pytest.mark.asyncio
     async def test_create_sweep_success(self, mcp_server, mock_adapter, mock_config):
@@ -1038,6 +1062,35 @@ class TestFeatureEditingTools:
         assert name in result["message"]
         assert result["data"]["deleted"] == name
         assert "execution_time" in result
+        assert "warning" not in result  # nothing else went
+
+    @pytest.mark.asyncio
+    async def test_deleting_a_sketch_warns_that_its_cut_went_too(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """More than the named feature went: the reply warns, naming them."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.delete_feature = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={
+                    "deleted": "Sketch2",
+                    "removed_features": ["Cut-Extrude1", "Sketch2"],
+                },
+                execution_time=0.1,
+            )
+        )
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "delete_feature"
+        )
+
+        result = await tool_func(DeleteFeatureInput(name="Sketch2"))
+
+        assert result["message"] == "Deleted Sketch2 and its dependents: Cut-Extrude1"
+        assert result["warning"] == (
+            "Deleting Sketch2 also deleted Cut-Extrude1. Tell the user; `undo` "
+            "restores them."
+        )
 
     @pytest.mark.asyncio
     async def test_delete_feature_error_when_adapter_lacks_capability(
@@ -1892,12 +1945,11 @@ class TestModelingCoverage:
         with pytest.raises(ValueError, match="depth must be positive"):
             CreateExtrusionInput(sketch_name="Sketch1", depth=-1.0)
 
-    def test_create_extrusion_input_empty_sketch_name_raises(self):
-        """Line 136 — empty sketch_name raises ValueError."""
+    def test_create_extrusion_input_sketch_name_is_optional(self):
+        """No sketch_name means the sketch exit_sketch closed last."""
         from solidworks_mcp.tools.modeling import CreateExtrusionInput
 
-        with pytest.raises(ValueError, match="sketch_name is required"):
-            CreateExtrusionInput(sketch_name="   ", depth=5.0)
+        assert CreateExtrusionInput(depth=5.0).sketch_name is None
 
     @pytest.mark.asyncio
     async def test_close_model_exception(self):
@@ -2076,9 +2128,7 @@ async def test_extrusion_reply_says_mid_plane_for_both_directions(
         t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
     )
 
-    result = await tool(
-        {"sketch_name": "Sketch1", "depth": 38.1, "both_directions": True}
-    )
+    result = await tool({"depth": 38.1, "both_directions": True})
 
     assert result["extrusion"]["end_condition"] == "MidPlane"
     assert result["extrusion"]["both_directions"] is True
@@ -2095,7 +2145,6 @@ async def test_a_thin_extrusion_reports_its_wall(mcp_server, mock_adapter) -> No
 
     result = await tool(
         {
-            "sketch_name": "Sketch1",
             "depth": 38.1,
             "thin_feature": True,
             "thin_thickness": 6.35,
@@ -2260,3 +2309,70 @@ async def test_the_mock_refuses_an_empty_state_change(mock_adapter) -> None:
     result = await mock_adapter.set_component_state("crank-1")
 
     assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_create_part_with_an_unknown_material_still_creates_the_part(
+    mcp_server, mock_adapter
+) -> None:
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "create_part")
+
+    result = await tool({"name": "p", "material": "Unobtainium"})
+
+    assert result["status"] == "success"
+    assert result["part"]["material"] is None
+    assert "'Unobtainium' could not be assigned" in result["warning"]
+    assert (await mock_adapter.get_material()).data["material"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_part_assigns_a_known_material(mcp_server, mock_adapter) -> None:
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(t.fn for t in await mcp_server.list_tools() if t.name == "create_part")
+
+    result = await tool({"name": "p", "material": "AISI 304"})
+
+    assert result["part"]["material"] == "AISI 304"
+    material = (await mock_adapter.get_material()).data
+    assert (material["material"], material["density_kg_m3"]) == ("AISI 304", 8000.0)
+
+
+@pytest.mark.asyncio
+async def test_extrusion_names_the_sketch_it_used(mcp_server, mock_adapter) -> None:
+    await mock_adapter.create_part()
+    await mock_adapter.create_sketch("Front")
+    await mock_adapter.exit_sketch()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_extrusion"
+    )
+
+    used = await tool({"sketch_name": "sketch1", "depth": 5.0})
+    missing = await tool({"sketch_name": "Sketch9", "depth": 5.0})
+
+    assert used["extrusion"]["sketch"] == "Sketch1"
+    assert missing["status"] == "error"
+    assert "Sketch9" in missing["message"] and "Sketch1" in missing["message"]
+
+
+@pytest.mark.asyncio
+async def test_revolve_about_a_named_axis(mcp_server, mock_adapter) -> None:
+    await mock_adapter.create_part()
+    await mock_adapter.create_sketch("Front")
+    await mock_adapter.exit_sketch()
+    axis = (await mock_adapter.create_axis("y")).data["name"]
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_revolve"
+    )
+
+    used = await tool({"sketch_name": "Sketch1", "axis_entity": axis, "angle": 360})
+    missing = await tool({"axis_entity": "Axis9", "angle": 360})
+
+    assert (used["revolve"]["sketch"], used["revolve"]["axis_entity"]) == (
+        "Sketch1",
+        axis,
+    )
+    assert missing["status"] == "error"
+    assert "create_axis" in missing["message"]

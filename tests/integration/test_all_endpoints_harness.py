@@ -782,7 +782,7 @@ class TestLevelCRealCOM:
         assert result["status"] == "success"
 
         save_file = await _find_tool(real_server, "save_file")
-        result = await save_file({"force_save": True})
+        result = await save_file({})
         assert result["status"] == "success"
 
     @pytest.mark.asyncio

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.tools.error_classifier import RPC_S_SERVER_UNAVAILABLE
+from solidworks_mcp.tools.modeling import CreateAssemblyInput
 from solidworks_mcp.tools.support_levels import Support, SupportLevel
 from solidworks_mcp.tools.tool_boundary import (
     InvalidInputError,
@@ -543,3 +544,26 @@ def test_model_parameters_is_empty_when_annotations_cannot_resolve() -> None:
         return {}
 
     assert model_parameters(body) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_removed_input_is_refused_before_the_tool_runs() -> None:
+    """Model or dict, a removed field is invalid input and the body never runs."""
+    ran: list[Any] = []
+
+    async def body(input_data: CreateAssemblyInput) -> dict[str, Any]:
+        ran.append(input_data)
+        return {"status": "success"}
+
+    wrapped = tool_boundary(body)
+    from_dict = await wrapped({"name": "a", "components": ["p.sldprt"]})
+    from_model = await wrapped(
+        input_data=CreateAssemblyInput(name="a", components=["p.sldprt"])
+    )
+    kept = await wrapped({"name": "a", "colour": "red"})  # unknown extras pass
+
+    for result in (from_dict, from_model):
+        assert result["error_type"] == "invalid_input"
+        assert "`components` is no longer an input" in result["message"]
+    assert kept == {"status": "success"}
+    assert len(ran) == 1

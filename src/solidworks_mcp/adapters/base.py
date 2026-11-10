@@ -246,6 +246,10 @@ class RevolveParameters(BaseModel):
         reverse_direction (bool): The reverse direction value.
         thin_feature (bool): The thin feature value.
         thin_thickness (float | None): The thin thickness value.
+        sketch_name (str | None): The sketch to revolve, by its tree name;
+            ``None`` for the sketch closed last.
+        axis_entity (str | None): A reference axis to revolve about, by its
+            tree name; ``None`` for the sketch's own centreline.
     """
 
     angle: float
@@ -254,6 +258,8 @@ class RevolveParameters(BaseModel):
     thin_feature: bool = False
     thin_thickness: float | None = None
     merge_result: bool = True
+    sketch_name: str | None = None
+    axis_entity: str | None = None
 
 
 class SweepParameters(BaseModel):
