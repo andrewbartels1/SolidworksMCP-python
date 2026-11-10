@@ -21,7 +21,6 @@ from .input_compat import CompatInput
 from .tool_boundary import (
     InvalidInputError,
     ToolOperationError,
-    UnsupportedOperationError,
     require_capability,
     require_success,
     with_tool_boundary,
@@ -188,12 +187,15 @@ class PackAndGoInput(CompatInput):
         description="Directory where the assembly and all referenced parts will be copied"
     )
     export_preview: bool = Field(
-        default=True,
+        default=False,
         description="Export an isometric PNG preview next to the copied files",
     )
     overwrite: bool = Field(
         default=False,
-        description="Overwrite files that already exist in target_dir",
+        description=(
+            "Pack into a target_dir that already holds files, replacing the ones "
+            "Pack and Go writes; other files there are kept"
+        ),
     )
 
 
@@ -829,31 +831,35 @@ async def register_file_management_tools(
         features = input_data.features
         execution_time = 0.0
 
-        if model_info is None and hasattr(adapter, "get_model_info"):
+        # Reading the model can fail (nothing open); classifying an empty
+        # model instead would give a confident wrong answer.
+        if model_info is None:
+            require_capability(
+                adapter,
+                "get_model_info",
+                "Active adapter does not support get_model_info",
+            )
             model_result = await adapter.get_model_info()
-            if model_result.is_success:
-                model_info = model_result.data
-                execution_time = max(execution_time, model_result.execution_time or 0.0)
+            require_success(
+                model_result, context="Failed to read the model to classify"
+            )
+            model_info = model_result.data
+            execution_time = max(execution_time, model_result.execution_time or 0.0)
 
         if features is None:
-            if hasattr(adapter, "list_features"):
-                feature_result = await adapter.list_features(
-                    include_suppressed=input_data.include_suppressed
-                )
-                if feature_result.is_success:
-                    features = feature_result.data or []
-                    execution_time = max(
-                        execution_time, feature_result.execution_time or 0.0
-                    )
-                else:
-                    raise ToolOperationError(
-                        feature_result.error
-                        or "Failed to list features for classification"
-                    )
-            else:
-                raise UnsupportedOperationError(
-                    "Active adapter does not support list_features"
-                )
+            require_capability(
+                adapter,
+                "list_features",
+                "Active adapter does not support list_features",
+            )
+            feature_result = await adapter.list_features(
+                include_suppressed=input_data.include_suppressed
+            )
+            require_success(
+                feature_result, context="Failed to list features to classify"
+            )
+            features = feature_result.data or []
+            execution_time = max(execution_time, feature_result.execution_time or 0.0)
 
         classification = classify_feature_tree_snapshot(model_info, features or [])  # type: ignore[arg-type]
         return {
@@ -994,7 +1000,8 @@ async def register_file_management_tools(
         `open_model`, and to switch to a document that is already open, use
         `activate_document`. A path that isn't a .sldprt is refused. Needs: the file on
         disk. Changes: opens the part (no file is written). Returns: `model` with
-        `name`, `type`, `path` and `configuration`.
+        `name`, `type`, `path` and `configuration` (the one SolidWorks opened, or
+        null when it can't be read).
 
         Args:
             input_data: The part. `file_path` (a .sldprt) is required.
@@ -1013,7 +1020,7 @@ async def register_file_management_tools(
         model = result.data
         title = _result_value(model, "title", "name", default=file_path)
         path = _result_value(model, "path", "file_path", default=file_path)
-        configuration = _result_value(model, "configuration", default="Default")
+        configuration = _result_value(model, "configuration")
         return {
             "status": "success",
             "message": f"Loaded part: {title}",
@@ -1034,7 +1041,8 @@ async def register_file_management_tools(
         `open_model`, and to switch to a document that is already open, use
         `activate_document`. A path that isn't a .sldasm is refused. Needs: the file on
         disk. Changes: opens the assembly (no file is written). Returns: `model` with
-        `name`, `type`, `path` and `configuration`.
+        `name`, `type`, `path` and `configuration` (the one SolidWorks opened, or
+        null when it can't be read).
 
         Args:
             input_data: The assembly. `file_path` (a .sldasm) is required.
@@ -1055,7 +1063,7 @@ async def register_file_management_tools(
         model = result.data
         title = _result_value(model, "title", "name", default=file_path)
         path = _result_value(model, "path", "file_path", default=file_path)
-        configuration = _result_value(model, "configuration", default="Default")
+        configuration = _result_value(model, "configuration")
         return {
             "status": "success",
             "message": f"Loaded assembly: {title}",
@@ -1175,17 +1183,18 @@ async def register_file_management_tools(
             }
 
     @mcp.tool()
-    async def pack_and_go_assembly(
-        input_data: PackAndGoInput | None = None,
-    ) -> dict[str, Any]:
+    async def pack_and_go_assembly(input_data: PackAndGoInput) -> dict[str, Any]:
         """Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go).
 
         Use it to hand over or archive an assembly as a self-contained folder. It
-        refuses a folder that already has files unless `overwrite` is on, and can add an
+        refuses a folder that already has files unless `overwrite` is on, and then
+        replaces only the files it writes. If the assembly is open, the copy holds
+        what is open, saved or not; it never closes a document. It can add an
         isometric PNG preview. Needs: the .sldasm on disk. Changes: writes the copies
         into `target_dir`, creating it if needed. Returns: `source_assembly`,
-        `target_dir`, `copied_files`, `source_files`, `all_files_saved` and, with a
-        preview, `preview_image`.
+        `target_dir`, `copied_files` (the files it wrote), `source_files`,
+        `all_files_saved` and, with a preview, `preview_image`, plus a `warning` when
+        the preview couldn't be written.
 
         Args:
             input_data: The copy. `source_path` (a .sldasm) and `target_dir` are
@@ -1194,10 +1203,7 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: The files copied.
         """
-        if input_data is None:
-            input_data = PackAndGoInput(source_path="", target_dir="")
-        else:
-            input_data = _coerce_input(PackAndGoInput, input_data)
+        input_data = _coerce_input(PackAndGoInput, input_data)
 
         from pathlib import Path as _Path
 
@@ -1246,6 +1252,11 @@ async def register_file_management_tools(
             report["preview_image"] = (
                 str(preview_path) if img_result.is_success else None
             )
+            if not img_result.is_success:
+                report["warning"] = (
+                    f"The copy is complete, but the preview couldn't be written: "
+                    f"{img_result.error}"
+                )
 
         return report
 

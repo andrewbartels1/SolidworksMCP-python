@@ -1245,14 +1245,14 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Dimension operations
 
-    async def get_dimension(self, name: str) -> AdapterResult[float]:
+    async def get_dimension(self, name: str) -> AdapterResult[dict[str, Any]]:
         """Get dimension using pool.
 
         Args:
             name (str): The name value.
 
         Returns:
-            AdapterResult[float]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``value`` and ``units`` (mm, deg or None).
         """
         return await self._execute_with_pool(
             "get_dimension", lambda adapter: adapter.get_dimension(name)

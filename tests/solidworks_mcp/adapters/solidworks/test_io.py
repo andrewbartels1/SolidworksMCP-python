@@ -549,19 +549,26 @@ class _PackAndGo:
 
 
 class _PackApp:
-    """swApp stand-in: OpenDoc6 answers from a scripted list of (model, err)."""
+    """swApp stand-in: OpenDoc6 answers from a scripted list of (model, err).
 
-    def __init__(self, opens) -> None:
+    ``open_docs`` maps a path to a document already open. Closing documents
+    is never allowed: ``CloseAllDocuments`` fails the test.
+    """
+
+    def __init__(self, opens, open_docs=None) -> None:
         self.opens = list(opens)
-        self.closed_all = False
+        self.open_docs = dict(open_docs or {})
 
     def OpenDoc6(self, _path, _type, _opts, _cfg, err, _warn):
         model, code = self.opens.pop(0)
         err.value = code
         return model
 
+    def GetOpenDocumentByName(self, path):
+        return self.open_docs.get(path)
+
     def CloseAllDocuments(self, _include_unsaved) -> None:
-        self.closed_all = True
+        raise AssertionError("Pack and Go must never close the user's documents")
 
 
 class _PackHarness(_IOHarness):
@@ -574,7 +581,7 @@ class _PackHarness(_IOHarness):
 
 
 def _pack_env(monkeypatch, out_dir, *, names, statuses):
-    """Fake the comtypes layer; SavePackAndGo writes the packed files."""
+    """Fake the comtypes layer; SavePackAndGo writes each packed file."""
     pg = _PackAndGo(names)
 
     class _Ext:
@@ -582,8 +589,8 @@ def _pack_env(monkeypatch, out_dir, *, names, statuses):
             return pg
 
         def SavePackAndGo(self, _pg):
-            for name in ("asm.SLDASM", "part.sldprt", "notes.txt"):
-                (out_dir / name).write_text("x")
+            for name in names or ():
+                (out_dir / Path(name).name).write_text("packed")
             return statuses
 
     monkeypatch.setattr(
@@ -601,14 +608,15 @@ def _pack_env(monkeypatch, out_dir, *, names, statuses):
     return pg
 
 
+_PACKED = ["C:/src/a.SLDASM", "C:/src/b.sldprt"]
+
+
 @pytest.mark.asyncio
 async def test_pack_and_go_assembly_packs_into_a_fresh_folder(
     tmp_path, monkeypatch
 ) -> None:
     out_dir = tmp_path / "pkg"
-    pg = _pack_env(
-        monkeypatch, out_dir, names=["a.sldasm", "b.sldprt"], statuses=(0, 0)
-    )
+    pg = _pack_env(monkeypatch, out_dir, names=_PACKED, statuses=(0, 0))
     model = SimpleNamespace(Extension=object())
     harness = _PackHarness(_PackApp([(model, 0)]))
 
@@ -620,41 +628,62 @@ async def test_pack_and_go_assembly_packs_into_a_fresh_folder(
     assert harness.currentModel is model
     assert pg.FlattenToSingleFolder is True
     assert pg.save_to == (True, str(out_dir) + "\\")
-    assert result.data["source_files"] == ["a.sldasm", "b.sldprt"]
-    assert result.data["copied_files"] == sorted(
-        [str(out_dir / "asm.SLDASM"), str(out_dir / "part.sldprt")]
-    )
+    assert result.data["source_files"] == _PACKED
+    assert result.data["copied_files"] == [
+        str(out_dir / "a.SLDASM"),
+        str(out_dir / "b.sldprt"),
+    ]
     assert result.data["save_statuses"] == [0, 0]
     assert result.data["all_files_saved"] is True
 
 
 @pytest.mark.asyncio
-async def test_pack_and_go_assembly_retries_after_closing_documents(
+async def test_pack_and_go_assembly_packs_the_copy_already_open(
     tmp_path, monkeypatch
 ) -> None:
-    """err 65536 (file already open elsewhere) closes everything and retries once."""
+    """OpenDoc6 gives nothing for an open assembly: use the open one, close nothing."""
     out_dir = tmp_path / "pkg"
     _pack_env(monkeypatch, out_dir, names=None, statuses=(0, 2))
-    app = _PackApp([(None, 65536), (SimpleNamespace(Extension=object()), 0)])
-    harness = _PackHarness(app)
+    source = str(tmp_path / "a.sldasm")
+    open_model = SimpleNamespace(Extension=object())
+    harness = _PackHarness(_PackApp([(None, 0)], open_docs={source: open_model}))
 
-    result = await harness.pack_and_go_assembly(
-        str(tmp_path / "a.sldasm"), str(out_dir)
-    )
+    result = await harness.pack_and_go_assembly(source, str(out_dir))
 
-    assert app.closed_all is True
+    assert result.is_success
+    assert harness.currentModel is open_model
     assert result.data["source_files"] == []
     assert result.data["all_files_saved"] is False
 
 
 @pytest.mark.asyncio
-async def test_pack_and_go_assembly_moves_an_existing_folder_aside(
+async def test_pack_and_go_assembly_names_a_same_name_clash(
     tmp_path, monkeypatch
 ) -> None:
+    """err 65536: another document with the file's name is open; nothing is closed."""
+    out_dir = tmp_path / "pkg"
+    _pack_env(monkeypatch, out_dir, names=[], statuses=())
+    harness = _PackHarness(_PackApp([(None, 65536)]))
+
+    result = await harness.pack_and_go_assembly(
+        str(tmp_path / "a.sldasm"), str(out_dir)
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "another document named a.sldasm is already open" in (result.error or "")
+    assert "nothing was closed" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_pack_and_go_assembly_keeps_other_files_in_the_folder(
+    tmp_path, monkeypatch
+) -> None:
+    """The folder is never emptied: files Pack and Go doesn't write stay."""
     out_dir = tmp_path / "pkg"
     out_dir.mkdir()
-    (out_dir / "stale.sldprt").write_text("old")
-    _pack_env(monkeypatch, out_dir, names=[], statuses=None)
+    (out_dir / "notes.txt").write_text("mine")
+    (out_dir / "other.sldprt").write_text("mine too")
+    _pack_env(monkeypatch, out_dir, names=_PACKED, statuses=None)
     harness = _PackHarness(_PackApp([(SimpleNamespace(Extension=object()), 0)]))
 
     result = await harness.pack_and_go_assembly(
@@ -663,34 +692,10 @@ async def test_pack_and_go_assembly_moves_an_existing_folder_aside(
 
     assert result.is_success
     assert result.data["save_statuses"] == []
-    assert str(out_dir / "stale.sldprt") not in result.data["copied_files"]
-    assert [p.name for p in tmp_path.iterdir()] == ["pkg"]
-
-
-@pytest.mark.asyncio
-async def test_pack_and_go_assembly_keeps_going_when_the_old_folder_is_locked(
-    tmp_path, monkeypatch
-) -> None:
-    """SolidWorks file locks: a failed rename or delete must not stop the pack."""
-    out_dir = tmp_path / "pkg"
-    out_dir.mkdir()
-    _pack_env(monkeypatch, out_dir, names=[], statuses=(0,))
-    harness = _PackHarness(_PackApp([(SimpleNamespace(Extension=object()), 0)] * 2))
-
-    def locked(*_args, **_kwargs):
-        raise OSError("[WinError 32] file in use")
-
-    monkeypatch.setattr(_io_module.shutil, "rmtree", locked)
-    first = await harness.pack_and_go_assembly(str(tmp_path / "a.sldasm"), str(out_dir))
-    backups = [p for p in tmp_path.iterdir() if p.name.startswith("pkg_bak_")]
-
-    monkeypatch.setattr(_io_module.os, "rename", locked)
-    second = await harness.pack_and_go_assembly(
-        str(tmp_path / "a.sldasm"), str(out_dir)
-    )
-
-    assert first.is_success and second.is_success
-    assert len(backups) == 1
+    assert (out_dir / "notes.txt").read_text() == "mine"
+    assert (out_dir / "other.sldprt").read_text() == "mine too"
+    assert str(out_dir / "other.sldprt") not in result.data["copied_files"]
+    assert [p.name for p in tmp_path.iterdir()] == ["pkg"]  # no backup folder
 
 
 @pytest.mark.asyncio
@@ -828,13 +833,13 @@ class TestSolidWorksIOMixinNotConnected:
         self, monkeypatch
     ) -> None:
         """open_model should pass integer error/warning refs when VARIANT is unavailable."""
+        # The paths are made up; open_model now checks the file exists.
+        monkeypatch.setattr(_io_module.os.path, "isfile", lambda _p: True)
         adapter = _build_adapter(monkeypatch)
         monkeypatch.setattr(adapter, "is_connected", lambda: True)
 
         class _Cfg:
-            @staticmethod
-            def GetName() -> str:
-                return "Default"
+            Name = "Default"  # IConfiguration.Name is a property
 
         model = MagicMock()
         model.GetActiveConfiguration.return_value = _Cfg()
@@ -1994,14 +1999,17 @@ class TestPyWin32AdapterBranches:
         model.ForceRebuild3 = Mock(return_value=True)
         model.Parameter = Mock(
             return_value=SimpleNamespace(
-                GetValue3=Mock(return_value=0.015), SetValue3=Mock(return_value=True)
+                SystemValue=0.015,
+                GetType=Mock(return_value=0),  # a length
+                SetValue3=Mock(return_value=True),
             )
         )
 
         assert (await adapter.save_file()).is_success
         assert (await adapter.save_file("C:/tmp/new.sldprt")).is_success
         assert (await adapter.export_file("C:/tmp/out.step", "step")).is_success
-        assert (await adapter.get_dimension("D1@Sketch1")).data == pytest.approx(15.0)
+        reading = (await adapter.get_dimension("D1@Sketch1")).data
+        assert reading == {"value": pytest.approx(15.0), "units": "mm"}
         assert (await adapter.set_dimension("D1@Sketch1", 20.0)).is_success
         assert (await adapter.rebuild_model()).is_success
 
@@ -2030,9 +2038,7 @@ class TestPyWin32AdapterBranches:
 
         adapter.currentModel = SimpleNamespace(
             GetConfigurationNames=Mock(return_value=None),
-            GetActiveConfiguration=Mock(
-                return_value=SimpleNamespace(GetName=Mock(return_value="Default"))
-            ),
+            GetActiveConfiguration=Mock(return_value=SimpleNamespace(Name="Default")),
         )
 
         result = await adapter.list_configurations()
@@ -2047,6 +2053,8 @@ class TestPyWin32AdapterBranches:
     )
     async def test_connect_disconnect_and_document_creation_paths(self, monkeypatch):
         """Test COM connect lifecycle plus model creation/open branches with mocks."""
+        # The paths are made up; open_model now checks the file exists.
+        monkeypatch.setattr(_io_module.os.path, "isfile", lambda _p: True)
         adapter = self._build_adapter(monkeypatch)
 
         co_initialize = Mock()
@@ -2118,7 +2126,20 @@ class TestPyWin32AdapterBranches:
         opened = await adapter.open_model("C:/Models/sample.sldasm")
         assert opened.is_success
         assert opened.data.type == "Assembly"
-        assert opened.data.configuration == "Default"
+        # No active configuration reported: None, never an assumed "Default".
+        assert opened.data.configuration is None
+
+        monkeypatch.setattr(_io_module.os.path, "isfile", lambda _p: False)
+        missing = await adapter.open_model("C:/Models/gone.sldasm")
+        assert "File not found" in (missing.error or "")
+        fake_app.OpenDoc6.assert_called_once()  # not called for the missing file
+        monkeypatch.setattr(_io_module.os.path, "isfile", lambda _p: True)
+
+        # The file exists but SolidWorks opens nothing.
+        fake_app.OpenDoc6.return_value = None
+        refused = await adapter.open_model("C:/Models/broken.sldasm")
+        assert "Failed to open model" in (refused.error or "")
+        fake_app.OpenDoc6.return_value = fake_open_model
 
         unsupported = await adapter.open_model("C:/Models/sample.txt")
         assert unsupported.is_error
@@ -2592,6 +2613,8 @@ class TestPyWin32AdapterBranches:
         opened document. OpenDoc6 with swOpenDocOptions_Silent opens the file
         but leaves the previously focused document active, so without this
         every later tool call targets the wrong document."""
+        # The paths are made up; open_model now checks the file exists.
+        monkeypatch.setattr(_io_module.os.path, "isfile", lambda _p: True)
         adapter = self._build_adapter(monkeypatch)
 
         opened_doc = SimpleNamespace(
@@ -4379,3 +4402,45 @@ async def test_export_image_with_an_unreadable_size(monkeypatch, tmp_path) -> No
 
     assert result.is_success, result.error
     assert result.data["dimensions"] == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("kind", "system_value", "expected"),
+    [
+        (0, 0.01, {"value": 10.0, "units": "mm"}),
+        (1, 4.71238898038469, {"value": 270.0, "units": "deg"}),
+        (2, 6.0, {"value": 6.0, "units": None}),  # a count
+        (-1, 0.5, {"value": 0.5, "units": None}),  # unknown: never guessed
+        (None, 0.5, {"value": 0.5, "units": None}),  # type unreadable
+    ],
+)
+def test_a_dimension_takes_the_unit_its_type_gives_it(kind, system_value, expected):
+    from solidworks_mcp.adapters.solidworks.io import _dimension_reading
+
+    reading = _dimension_reading(kind, system_value)
+
+    assert reading["units"] == expected["units"]
+    assert reading["value"] == pytest.approx(expected["value"])
+
+
+@pytest.mark.asyncio
+async def test_a_dimension_whose_value_cant_be_read_fails() -> None:
+    """No guessed number: an unreadable SystemValue is an error."""
+    model = SimpleNamespace(Parameter=lambda _name: SimpleNamespace(GetType=lambda: 0))
+    harness = _IOHarness(model)
+
+    result = await harness.get_dimension("D1@Sketch1")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to read dimension 'D1@Sketch1'" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_missing_dimension_points_at_the_lister() -> None:
+    harness = _IOHarness(SimpleNamespace(Parameter=lambda _name: None))
+
+    result = await harness.get_dimension("D9@Sketch1")
+
+    assert "not found; list the names with list_model_dimensions" in (
+        result.error or ""
+    )

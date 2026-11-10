@@ -88,29 +88,16 @@ class TemplateBatchInput(BaseModel):
 class TemplateComparisonInput(CompatInput):
     """Input schema for comparing templates.
 
+    The six comparison switches it used to take are refused
+    (``input_compat.REMOVED_INPUTS``): it compares the files only.
+
     Attributes:
-        comparison_depth (str): The comparison depth value.
-        comparison_type (str): The comparison type value.
-        generate_report (bool): The generate report value.
-        include_dimensions (bool): The include dimensions value.
-        include_materials (bool): The include materials value.
-        include_properties (bool): The include properties value.
-        template1_path (str): The template1 path value.
-        template2_path (str): The template2 path value.
+        template1_path (str): The first template file.
+        template2_path (str): The second template file.
     """
 
     template1_path: str = Field(description="Path to first template")
     template2_path: str = Field(description="Path to second template")
-    comparison_type: str = Field(
-        default="full", description="Comparison type (full, properties, dimensions)"
-    )
-    comparison_depth: str = Field(default="full", description="Comparison depth alias")
-    include_properties: bool = Field(default=True, description="Include properties")
-    include_dimensions: bool = Field(default=True, description="Include dimensions")
-    include_materials: bool = Field(default=True, description="Include materials")
-    generate_report: bool = Field(
-        default=True, description="Generate comparison report"
-    )
 
 
 async def register_template_management_tools(
@@ -239,23 +226,12 @@ async def register_template_management_tools(
         `file_2` (size, modified time, SHA-256), `identical` and `size_delta_bytes`.
 
         Args:
-            input_data: The two templates. `template1_path` and `template2_path`
-                are required; the comparison switches have defaults and are not used
-                yet.
+            input_data: The two templates: `template1_path` and `template2_path`,
+                both required.
 
         Returns:
             dict[str, Any]: The comparison.
         """
-        if hasattr(adapter, "compare_templates"):
-            result = await adapter.compare_templates(input_data.model_dump())
-            require_success(result, "Failed to compare templates")
-            return {
-                "status": "success",
-                "message": "Template comparison completed",
-                "data": result.data,
-                "execution_time": result.execution_time,
-            }
-
         file_1 = file_fact_snapshot(input_data.template1_path)
         file_2 = file_fact_snapshot(input_data.template2_path)
 

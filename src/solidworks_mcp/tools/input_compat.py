@@ -20,6 +20,11 @@ class CompatInput(BaseModel):
 _DRAWING_PACKAGE = "use `generate_drawing_package` for a complete drawing"
 _FILE_EXTENSION = "the file extension sets the format and its options"
 _ACTIVE_MODEL = "it measures the active model; open and activate the one you want"
+_FILES_ONLY = "the tool compares the two files on disk, not their settings"
+_WHOLE_MACROS = (
+    "it writes a skeleton; for a complete macro use a `generate_vba_*` tool "
+    "such as `generate_vba_extrusion`"
+)
 
 #: Inputs a tool used to advertise but never applied, by input model name.
 #: Each maps to what to use instead. A call that still sends one is refused
@@ -56,6 +61,21 @@ REMOVED_INPUTS: dict[str, dict[str, str]] = {
         "execution_mode": "the macro runs in the running SolidWorks session",
         "pause_on_error": "it stops at the first run that fails",
         "log_execution": "the reply reports every run",
+    },
+    "TemplateComparisonInput": dict.fromkeys(
+        (
+            "comparison_type",
+            "comparison_depth",
+            "include_properties",
+            "include_dimensions",
+            "include_materials",
+            "generate_report",
+        ),
+        _FILES_ONLY,
+    ),
+    "GenerateVBAInput": {
+        "parameters": _WHOLE_MACROS,
+        "code_style": _WHOLE_MACROS,
     },
     "MassPropertiesInput": {
         "model_path": _ACTIVE_MODEL,

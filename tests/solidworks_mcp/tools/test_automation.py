@@ -43,58 +43,28 @@ class TestAutomationTools:
     async def test_generate_vba_code_success(
         self, mcp_server, mock_adapter, mock_config
     ):
-        """Test successful VBA code generation."""
+        """The skeleton names its Sub, checks the document type, never blocks."""
         await register_automation_tools(mcp_server, mock_adapter, mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "generate_vba_code"
+        )
 
-        mock_adapter.generate_vba_code = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={
-                    "vba_code": "Sub CreateExtrusion()\n    ' Generated VBA code\n    swModel.FeatureManager.FeatureExtrusion2(...)\nEnd Sub",
-                    "operation_type": "Extrusion",
-                    "parameter_count": 15,
-                    "estimated_execution_time": 2.1,
-                    "complexity_level": "High",
-                },
-                execution_time=0.8,
+        result = await tool_func(
+            input_data=VBAGenerationInput(
+                operation_type="Add 3 holes (M6), then save", target_document="part"
             )
         )
 
-        input_data = VBAGenerationInput(
-            operation_type="Extrusion",
-            parameters={
-                "sketch_name": "Sketch1",
-                "depth": 25.0,
-                "direction": "Blind",
-                "reverse_direction": False,
-                "draft_angle": 0.0,
-                "draft_outward": True,
-                "thin_feature": False,
-                "merge_result": True,
-                "start_condition": "SketchPlane",
-                "end_condition": "Blind",
-                "end_condition_reference": None,
-                "offset_parameters": {},
-                "feature_scope": "All bodies",
-                "auto_select": True,
-                "assembly_feature_scope": "All components",
-            },
-        )
-
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "generate_vba_code":
-                tool_func = tool.fn
-                break
-
-        assert tool_func is not None
-        result = await tool_func(input_data=input_data)
-
+        vba = result["vba_code"]
         assert result["status"] == "success"
-        assert "CreateExtrusion" in result["data"]["vba_code"]
-        assert result["data"]["parameter_count"] == 15
-        assert result["data"]["complexity_level"] == "High"
-        mock_adapter.generate_vba_code.assert_called_once()
+        assert vba["sub_name"] == "Add_3_holes_M6_then_save"
+        assert "Sub Add_3_holes_M6_then_save()" in vba["code"]
+        assert "If swModel.GetType <> 1 Then" in vba["code"]
+        assert "MsgBox" not in vba["code"]
+        assert "On Error GoTo ErrorHandler" in vba["code"]
+        assert vba["target_document"] == "Part"
+        assert vba["lines_of_code"] == len(vba["code"].split("\n"))
+        assert "style" not in vba
 
     @pytest.mark.asyncio
     async def test_start_macro_recording_success(
@@ -396,27 +366,17 @@ class TestAutomationTools:
         """Test error handling in automation operations."""
         await register_automation_tools(mcp_server, mock_adapter, mock_config)
 
-        mock_adapter.generate_vba_code = AsyncMock(
-            return_value=Mock(
-                is_success=False,
-                error="Invalid operation parameters",
-                execution_time=0.1,
-            )
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "generate_vba_code"
         )
 
-        input_data = VBAGenerationInput(
-            operation_type="Invalid Operation", parameters={}
+        result = await tool_func(
+            input_data={"operation_type": "Invalid Operation", "parameters": {}}
         )
 
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "generate_vba_code":
-                tool_func = tool.fn
-                break
-
-        result = await tool_func(input_data=input_data)
         assert result["status"] == "error"
-        assert "Invalid operation parameters" in result["message"]
+        assert result["error_type"] == "invalid_input"
+        assert "`parameters` is no longer an input" in result["message"]
 
     @pytest.mark.asyncio
     async def test_automation_fallback_paths_without_adapter_methods(
@@ -489,7 +449,6 @@ class TestAutomationTools:
         """Test exception handlers across automation tools that call adapter methods."""
         await register_automation_tools(mcp_server, mock_adapter, mock_config)
 
-        mock_adapter.generate_vba_code = AsyncMock(side_effect=RuntimeError("vba boom"))
         mock_adapter.start_macro_recording = AsyncMock(
             side_effect=RuntimeError("record boom")
         )
@@ -534,8 +493,7 @@ class TestAutomationTools:
             input_data={"optimization_type": "general"}
         )
 
-        assert vba["status"] == "error"
-        assert vba["error_type"] == "internal"
+        assert vba["status"] == "success"  # it never calls the adapter
         assert start["status"] == "error"
         assert start["error_type"] == "internal"
         assert batch["status"] == "error"
@@ -773,3 +731,42 @@ class TestAutomationExceptionPaths:
         fn = await _get_tool(mcp, "manage_design_table")
         result = await fn(DesignTableInput(table_type="create", excel_file="test.xlsx"))
         assert result["status"] == "error"
+
+
+@pytest.mark.parametrize(
+    ("description", "expected"),
+    [
+        ("Add 3 holes (M6), then save", "Add_3_holes_M6_then_save"),
+        ("3D export", "Macro_3D_export"),
+        ("___", "Macro"),
+        ("x" * 300, "x" * 255),
+    ],
+)
+def test_the_sub_name_is_a_valid_vba_name(description: str, expected: str) -> None:
+    from solidworks_mcp.tools.automation import _vba_sub_name
+
+    assert _vba_sub_name(description) == expected
+
+
+@pytest.mark.parametrize(
+    ("document", "doc_type"), [("Part", 1), ("Assembly", 2), ("Drawing", 3)]
+)
+def test_the_macro_checks_its_document_type(document: str, doc_type: int) -> None:
+    from solidworks_mcp.tools.automation import _vba_skeleton
+
+    code = _vba_skeleton("Go", "two\nlines", document, error_handling=False)
+
+    assert f"If swModel.GetType <> {doc_type} Then" in code
+    assert f"not a {document}" in code
+    assert "' Generated VBA code for: two lines" in code  # one comment line
+    assert "ErrorHandler" not in code
+
+
+def test_an_unknown_document_type_is_refused() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        VBAGenerationInput(target_document="Sketch")
+    with pytest.raises(ValidationError):
+        VBAGenerationInput(target_document=3)
+    assert VBAGenerationInput(target_document=" drawing ").target_document == "Drawing"

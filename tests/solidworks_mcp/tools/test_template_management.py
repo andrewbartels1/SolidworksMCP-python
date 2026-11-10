@@ -193,65 +193,56 @@ class TestTemplateManagementTools:
 
     @pytest.mark.asyncio
     async def test_compare_templates_success(
-        self, mcp_server, mock_adapter, mock_config
+        self, mcp_server, mock_adapter, mock_config, tmp_path
     ):
-        """Test successful template comparison."""
+        """Two files on disk are compared by content and size."""
         await register_template_management_tools(mcp_server, mock_adapter, mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "compare_templates"
+        )
+        part = tmp_path / "part.prtdot"
+        part.write_bytes(b"part template")
+        copy = tmp_path / "copy.prtdot"
+        copy.write_bytes(b"part template")
+        assembly = tmp_path / "assembly.asmdot"
+        assembly.write_bytes(b"assembly template, longer")
 
-        mock_adapter.compare_templates = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={
-                    "template1": "old_template.prtdot",
-                    "template2": "new_template.prtdot",
-                    "differences_found": 8,
-                    "similarity_percentage": 75.5,
-                    "added_properties": ["MaterialDensity", "CostCenter"],
-                    "removed_properties": ["OldRevision"],
-                    "modified_properties": ["Description", "PartNumber", "Author"],
-                    "identical_properties": [
-                        "Title",
-                        "Subject",
-                        "Keywords",
-                        "Comments",
-                    ],
-                    "comparison_details": {
-                        "units_different": False,
-                        "dimensions_different": True,
-                        "materials_different": False,
-                        "custom_properties_different": True,
-                    },
-                },
-                execution_time=0.9,
+        same = await tool_func(
+            input_data=TemplateComparisonInput(
+                template1_path=str(part), template2_path=str(copy)
+            )
+        )
+        other = await tool_func(
+            input_data=TemplateComparisonInput(
+                template1_path=str(part), template2_path=str(assembly)
             )
         )
 
-        input_data = TemplateComparisonInput(
-            template1_path="templates/old_template.prtdot",
-            template2_path="templates/new_template.prtdot",
-            comparison_depth="Detailed",
-            include_properties=True,
-            include_dimensions=True,
-            include_materials=True,
+        assert same["comparison"]["identical"] is True
+        assert same["comparison"]["size_delta_bytes"] == 0
+        assert other["comparison"]["identical"] is False
+        assert other["comparison"]["size_delta_bytes"] == 12
+        assert "only" in other["note"]
+
+    @pytest.mark.asyncio
+    async def test_compare_templates_refuses_its_old_switches(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        await register_template_management_tools(mcp_server, mock_adapter, mock_config)
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "compare_templates"
         )
 
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "compare_templates":
-                tool_func = tool.fn
-                break
-
-        assert tool_func is not None
-        result = await tool_func(input_data=input_data)
-
-        assert result["status"] == "success"
-        assert result["data"]["differences_found"] == 8
-        assert result["data"]["similarity_percentage"] == 75.5
-        assert "MaterialDensity" in result["data"]["added_properties"]
-        assert (
-            result["data"]["comparison_details"]["custom_properties_different"] is True
+        result = await tool_func(
+            input_data={
+                "template1_path": "a.prtdot",
+                "template2_path": "b.prtdot",
+                "include_properties": True,
+            }
         )
-        mock_adapter.compare_templates.assert_called_once()
+
+        assert result["error_type"] == "invalid_input"
+        assert "compares the two files on disk" in result["message"]
 
     @pytest.mark.asyncio
     async def test_save_to_template_library_success(
@@ -484,7 +475,6 @@ class TestTemplateManagementTools:
             input_data=TemplateComparisonInput(
                 template1_path="templates/a.prtdot",
                 template2_path="templates/b.prtdot",
-                comparison_type="full",
             )
         )
         assert compare_result["status"] == "error"
@@ -552,9 +542,6 @@ class TestTemplateManagementTools:
         mock_adapter.apply_template = AsyncMock(
             return_value=Mock(is_success=False, error="template apply failed")
         )
-        mock_adapter.compare_templates = AsyncMock(
-            return_value=Mock(is_success=False, error="template compare failed")
-        )
         mock_adapter.save_to_template_library = AsyncMock(
             side_effect=RuntimeError("library storage down")
         )
@@ -588,14 +575,6 @@ class TestTemplateManagementTools:
         )
         assert apply_error["status"] == "error"
         assert "template apply failed" in apply_error["message"]
-
-        compare_error = await compare_tool(
-            input_data=TemplateComparisonInput(
-                template1_path="templates/a.prtdot", template2_path="templates/b.prtdot"
-            )
-        )
-        assert compare_error["status"] == "error"
-        assert "template compare failed" in compare_error["message"]
 
         save_exception = await save_tool(input_data={"template_name": "bad"})
         assert save_exception["status"] == "error"

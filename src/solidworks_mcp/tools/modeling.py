@@ -1442,8 +1442,9 @@ async def register_modeling_tools(
         """Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
         Find names with `list_model_dimensions`. Needs: an open part or assembly.
-        Read-only. Returns: `dimension` with `name`, `value` and `units` (mm for a
-        length).
+        Read-only. Returns: `dimension` with `name`, `value` and `units`: "mm" for a
+        length, "deg" for an angle, and null for a count (such as a pattern's
+        instance count).
 
         Args:
             input_data: The dimension. Give `name` (or `dimension_name`), e.g.
@@ -1456,12 +1457,13 @@ async def register_modeling_tools(
         result = await adapter.get_dimension(input_data.name)
 
         require_success(result, context="Failed to get dimension")
-        value = result.data
-        dimension_value = _result_value(value, "value", default=value)
-        dimension_units = _result_value(value, "units", default="mm")
+        reading = result.data or {}
+        dimension_value = reading.get("value")
+        dimension_units = reading.get("units")
+        unit_text = f" {dimension_units}" if dimension_units else ""
         return {
             "status": "success",
-            "message": f"Dimension {input_data.name} = {dimension_value} {dimension_units}",
+            "message": f"Dimension {input_data.name} = {dimension_value}{unit_text}",
             "dimension": {
                 "name": input_data.name,
                 "value": dimension_value,

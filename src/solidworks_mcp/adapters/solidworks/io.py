@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import math
 import os
 import re
-import shutil
-import uuid
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -237,6 +236,71 @@ def _component_transforms(adapter: Any, assembly: Any) -> dict[str, tuple[float,
         except (TypeError, ValueError):
             continue
     return snapshot
+
+
+#: ``swFileLoadError_e.swFileWithSameTitleAlreadyOpen``: a document with the
+#: same file name, from another folder, is already open.
+_SAME_TITLE_ALREADY_OPEN = 65536
+
+
+def _open_or_find_assembly(adapter: Any, source: Path) -> Any:
+    """Open the assembly, or use it when it is already open; never close anything.
+
+    ``OpenDoc6`` returns nothing for a file that can't be opened, including
+    when a document with the same file name is already open. The assembly
+    itself, if open, is found by its path (``ISldWorks.GetOpenDocumentByName``)
+    and used as it is, unsaved changes included.
+
+    Args:
+        adapter: A connected adapter.
+        source: The assembly file.
+
+    Returns:
+        Any: The assembly's ``IModelDoc2``.
+
+    Raises:
+        RuntimeError: When it can neither be opened nor found open.
+    """
+    err, warn = _byref_int(), _byref_int()
+    model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
+    if model is not None:
+        return model
+    model = adapter._attempt(
+        lambda: adapter.swApp.GetOpenDocumentByName(str(source)), default=None
+    )
+    if model is not None:
+        return model
+    if err.value == _SAME_TITLE_ALREADY_OPEN:
+        raise RuntimeError(
+            f"another document named {source.name} is already open; close it, "
+            "then pack again (nothing was closed)"
+        )
+    raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
+
+
+#: ``swDimensionParamType_e`` (read from swconst.tlb, 2026): what
+#: ``IDimension.GetType`` returns for a length and an angle. 2 is an integer
+#: (a count); -1 unknown.
+_DIMENSION_LINEAR = 0
+_DIMENSION_ANGULAR = 1
+
+
+def _dimension_reading(kind: Any, system_value: float) -> dict[str, Any]:
+    """A dimension's value in the unit its type gives it.
+
+    Args:
+        kind: ``IDimension.GetType``'s value, or ``None`` when unreadable.
+        system_value: ``IDimension.SystemValue``: metres, radians or a count.
+
+    Returns:
+        dict[str, Any]: ``value`` and ``units``: mm for a length, degrees for
+        an angle, and the number with ``units: None`` for anything else.
+    """
+    if kind == _DIMENSION_LINEAR:
+        return {"value": system_value * 1000.0, "units": "mm"}
+    if kind == _DIMENSION_ANGULAR:
+        return {"value": math.degrees(system_value), "units": "deg"}
+    return {"value": system_value, "units": None}
 
 
 class _ByrefFallback:
@@ -1391,6 +1455,8 @@ class SolidWorksIOMixin:
                 model_type = "Drawing"
             else:
                 raise ValueError(f"Unsupported file type: {resolved_path}")
+            if not os.path.isfile(resolved_path):
+                raise FileNotFoundError(f"File not found: {resolved_path}")
 
             app = adapter.swApp
             variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
@@ -1428,11 +1494,16 @@ class SolidWorksIOMixin:
                         default=0,
                     )
                     adapter.currentModel = activated
+            # The configuration SolidWorks opened, or None: never an assumed
+            # "Default". IConfiguration.Name is a property, not a method.
             active_config = adapter._attempt(lambda: model.GetActiveConfiguration())
             config = (
-                adapter._attempt(lambda: active_config.GetName(), default="Default")
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(active_config, "Name"),
+                    default=None,
+                )
                 if active_config
-                else "Default"
+                else None
             )
 
             return SolidWorksModel(
@@ -1747,14 +1818,21 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("create_drawing", _create),
         )
 
-    async def get_dimension(self, name: str) -> AdapterResult[float]:
-        """Read a named model dimension in millimetres.
+    async def get_dimension(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Read a named model dimension in the unit its type gives it.
+
+        ``IDimension.SystemValue`` is metres for a length, radians for an
+        angle and the number itself for a count; ``IDimension.GetType`` says
+        which (:func:`_dimension_reading`). ``GetValue3`` is not used: it is
+        in the document's units, which this can't convert without reading
+        the document's unit system.
 
         Args:
-            name: Fully-qualified dimension name.
+            name: Fully-qualified dimension name, e.g. ``"D1@Boss-Extrude1"``.
 
         Returns:
-            AdapterResult[float]: Dimension value in millimetres.
+            AdapterResult[dict[str, Any]]: ``value`` and ``units`` ("mm",
+            "deg", or ``None`` for a count or a dimension of unknown type).
         """
         adapter = self._adapter(self)
         if not adapter.currentModel:
@@ -1762,24 +1840,23 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _get() -> float:
-            """Get the dimension value."""
+        def _get() -> dict[str, Any]:
+            """Get the dimension value and its unit."""
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
-                raise Exception(f"Dimension '{name}' not found")
-            # SystemValue is reliable on SW 2025 (in meters, convert to mm)
+                raise Exception(
+                    f"Dimension '{name}' not found; list the names with "
+                    "list_model_dimensions"
+                )
+            dimension = _sw_type_info.flagged(dimension, "IDimension")
             value = adapter._attempt(lambda: dimension.SystemValue, default=None)
             if value is None:
-                # Fall back to GetValue3 for older SW versions
-                value = adapter._attempt(
-                    lambda: dimension.GetValue3(0, 0), default=None
-                )
-            if value is None:
                 raise Exception(f"Failed to read dimension '{name}'")
-            return float(value) * 1000
+            kind = adapter._attempt(lambda: dimension.GetType(), default=None)
+            return _dimension_reading(kind, float(value))
 
         return cast(
-            AdapterResult[float],
+            AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("get_dimension", _get),
         )
 
@@ -2301,8 +2378,9 @@ class SolidWorksIOMixin:
             active_config = adapter._attempt(
                 lambda: adapter.currentModel.GetActiveConfiguration(), default=None
             )
+            # IConfiguration.Name is a property; it has no GetName method.
             active_name = adapter._attempt(
-                lambda: active_config.GetName(), default=None
+                lambda: adapter._get_attr_or_call(active_config, "Name"), default=None
             )
             if active_name:
                 return [str(active_name)]
@@ -2553,32 +2631,12 @@ class SolidWorksIOMixin:
                     "Ensure comtypes is installed and SolidWorks is registered."
                 )
 
-            # Prepare a clean target directory. SW holds file locks on previously
-            # opened assemblies so rmtree raises WinError 32. We rename the old
-            # dir aside (Windows allows rename with open handles) and delete the
-            # backup afterwards; if rename also fails we just proceed and let SW
-            # overwrite existing files.
-            if out_dir.exists():
-                backup = out_dir.parent / f"{out_dir.name}_bak_{uuid.uuid4().hex[:8]}"
-                try:
-                    os.rename(out_dir, backup)
-                    try:
-                        shutil.rmtree(backup)
-                    except Exception:
-                        pass  # best-effort cleanup; stale backup is harmless
-                except OSError:
-                    pass  # rename also failed — proceed; SW will overwrite files
+            # Files already in the folder stay: Pack and Go replaces only the
+            # files it writes. (The tool refuses a non-empty folder unless the
+            # caller passed overwrite.)
             out_dir.mkdir(parents=True, exist_ok=True)
 
-            # Open the source assembly
-            err, warn = _byref_int(), _byref_int()
-            model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
-            if model is None and err.value == 65536:
-                adapter.swApp.CloseAllDocuments(False)
-                err, warn = _byref_int(), _byref_int()
-                model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
-            if model is None:
-                raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
+            model = _open_or_find_assembly(adapter, source)
             _sw_type_info.flag_doc(model, 2)
             adapter.currentModel = model
 
@@ -2603,10 +2661,11 @@ class SolidWorksIOMixin:
             status_arr = ext_ct2.SavePackAndGo(pg)
             save_statuses: list[int] = list(status_arr) if status_arr else []
 
+            # Only the files Pack and Go wrote, not others already in the folder.
             copied_files = sorted(
-                str(p)
-                for p in out_dir.rglob("*")
-                if p.is_file() and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
+                str(out_dir / Path(name).name)
+                for name in source_files
+                if (out_dir / Path(name).name).is_file()
             )
             return {
                 "source_assembly": str(source),

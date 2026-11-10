@@ -601,7 +601,7 @@
     "family": "automation",
     "level": "experimental",
     "reason": "not yet checked by a live test on real SolidWorks.",
-    "summary": "Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, the active document and optional error handling, with the operation itself left as a TODO."
+    "summary": "Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, a check of the active document's type and optional error handling, with the operation itself left as a TODO."
    },
    {
     "name": "generate_vba_drawing_dimensions",
@@ -1105,11 +1105,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 215,
+   "covered": 214,
    "total": 2838
   },
   "api": {
-   "covered": 238,
+   "covered": 236,
    "total": 5985
   },
   "interfaces": [
@@ -1117,7 +1117,6 @@
     "name": "ISldWorks",
     "covered": [
      "ActivateDoc3",
-     "CloseAllDocuments",
      "CloseDoc",
      "Frame",
      "GetConfigurationNames",

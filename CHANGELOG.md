@@ -136,6 +136,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     reply carries a `warning` naming everything else it deleted (a
     sketch takes the features built from it).
 
+- **The experimental tools' faults** (item 8 in the work queue):
+  - `pack_and_go_assembly` no longer closes every open document without
+    saving when the assembly can't be opened (it packs the open copy, or
+    fails and closes nothing), and no longer deletes everything already
+    in `target_dir`: with `overwrite` it replaces only the files it
+    writes, and `copied_files` lists only those. A preview that can't be
+    written gives a `warning`.
+  - `get_dimension` reports an angle in degrees (`units: "deg"`) and a
+    count with no unit; it used to multiply every value by 1000 and call
+    it mm.
+  - `open_model`, `load_part`, `load_assembly` and `list_configurations`
+    read the configuration's `Name`; they called a `GetName` method
+    SolidWorks doesn't have, so they always reported an assumed
+    "Default". A missing file is `not_found` before SolidWorks is asked.
+  - `generate_vba_code` writes a valid Sub name (returned as `sub_name`),
+    checks the active document's type, and prints with `Debug.Print`
+    instead of a `MsgBox` that blocked SolidWorks when the macro ran.
+  - `classify_feature_tree` fails when it can't read the model, instead
+    of classifying an empty one.
+
 - **`create_extrusion`'s reply says what was built** (#209): the end
   condition SolidWorks used (`MidPlane` for `both_directions`), and the
   thin wall. It used to echo `direction: blind`, so an agent concluded
@@ -195,6 +215,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `add_drawing_view` refuses an `operation` other than `add`. Moments of
   inertia from `calculate_mass_properties` are a million times larger
   than before, because they are now in the kg·mm² their label always said.
+
+- **BREAKING: more inputs that did nothing are refused** (item 8):
+  `compare_templates`' `comparison_type`, `comparison_depth`,
+  `include_properties`, `include_dimensions`, `include_materials` and
+  `generate_report` (it compares the two files only), and
+  `generate_vba_code`'s `parameters` and `code_style` (its reply loses
+  `style`). `pack_and_go_assembly` requires `source_path` and
+  `target_dir`, and `export_preview` is off by default, as its
+  description always said. `compare_drawing_versions` takes a typed
+  input. `get_dimension`'s angles and counts change value (see Fixed),
+  and `load_part` / `load_assembly` report `configuration: null` when
+  SolidWorks doesn't say.
 
 - **Building the API index needs SolidWorks installed, not running**, and
   never starts or calls SolidWorks. The lookups build the index themselves,

@@ -1124,6 +1124,15 @@ class TestFileManagementTools:
         exception_result = await classify_tool(input_data={})
         assert exception_result["status"] == "error"
 
+        # Nothing open: fail, never classify an empty model.
+        mock_adapter.get_model_info = AsyncMock(
+            return_value=Mock(is_success=False, error="No active model")
+        )
+        nothing_open = await classify_tool(input_data={})
+        assert nothing_open["status"] == "error"
+        assert nothing_open["error_type"] == "no_active_document"
+        assert "Failed to read the model to classify" in nothing_open["message"]
+
     @pytest.mark.asyncio
     async def test_load_part_and_load_assembly_paths(
         self, mcp_server, mock_adapter, mock_config
@@ -1563,7 +1572,12 @@ class TestFileManagementTools:
         assert configs_result["status"] == "error"
         assert "does not support list_configurations" in configs_result["message"]
         assert classify_result["status"] == "error"
-        assert "does not support list_features" in classify_result["message"]
+        assert "does not support get_model_info" in classify_result["message"]
+        # With model_info passed, it still needs the feature tree.
+        classify_features = await classify_tool(
+            input_data={"model_info": {"type": "Part"}}
+        )
+        assert "does not support list_features" in classify_features["message"]
 
     @pytest.mark.asyncio
     async def test_load_tools_result_value_defaults_with_sparse_payloads(
@@ -1593,7 +1607,7 @@ class TestFileManagementTools:
         assert part_none_data["status"] == "success"
         assert part_none_data["model"]["name"] == "C:/tmp/a.sldprt"
         assert part_none_data["model"]["path"] == "C:/tmp/a.sldprt"
-        assert part_none_data["model"]["configuration"] == "Default"
+        assert part_none_data["model"]["configuration"] is None  # never assumed
 
         # Sparse object payload with None values -> _result_value falls through keys/default.
         sparse_model = Mock()
@@ -1612,7 +1626,7 @@ class TestFileManagementTools:
         assert asm_sparse["status"] == "success"
         assert asm_sparse["model"]["name"] == "C:/tmp/a.sldasm"
         assert asm_sparse["model"]["path"] == "C:/tmp/a.sldasm"
-        assert asm_sparse["model"]["configuration"] == "Default"
+        assert asm_sparse["model"]["configuration"] is None
 
         # Dict payload with only None fields exercises dict fallback return-default path.
         mock_adapter.open_model = AsyncMock(
@@ -1804,10 +1818,10 @@ class TestFileManagementTools:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_pack_and_go_none_input_creates_empty_and_errors(
+    async def test_pack_and_go_requires_both_paths(
         self, mcp_server, mock_adapter, mock_config, tmp_path
     ):
-        """pack_and_go_assembly with None input falls through to source-not-found error."""
+        """No input, or an empty one: invalid_input naming what is missing."""
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
 
         pack_tool = None
@@ -1817,15 +1831,13 @@ class TestFileManagementTools:
 
         assert pack_tool is not None
 
-        # None input → PackAndGoInput(source_path="", target_dir="").
-        # Path("") resolves to the current directory on Windows (exists=True),
-        # so the .sldasm extension check fires before the source-not-found check.
-        result = await pack_tool(input_data=None)
-        assert result["status"] == "error"
-        assert (
-            "sldasm" in result["message"].lower()
-            or "not found" in result["message"].lower()
-        )
+        nothing = await pack_tool(input_data=None)
+        assert nothing["error_type"] == "invalid_input"
+
+        empty = await pack_tool(input_data={})
+        assert empty["error_type"] == "invalid_input"
+        assert "source_path" in empty["message"]
+        assert "target_dir" in empty["message"]
 
     @pytest.mark.asyncio
     async def test_pack_and_go_source_not_found(
@@ -2038,7 +2050,9 @@ class TestFileManagementTools:
                 execution_time=0.5,
             )
         )
-        mock_adapter.export_image = AsyncMock(return_value=Mock(is_success=False))
+        mock_adapter.export_image = AsyncMock(
+            return_value=Mock(is_success=False, error="no graphics window")
+        )
 
         result = await pack_tool(
             input_data={
@@ -2050,6 +2064,10 @@ class TestFileManagementTools:
         )
         assert result["status"] == "success"
         assert result["preview_image"] is None
+        assert result["warning"].startswith(
+            "The copy is complete, but the preview couldn't be written: "
+            "no graphics window"
+        )
 
     @pytest.mark.asyncio
     async def test_pack_and_go_exception(

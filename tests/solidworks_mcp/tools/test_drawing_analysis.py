@@ -660,7 +660,9 @@ class TestDrawingAnalysisTools:
         # Missing paths refuse outright.
         missing_paths = await compare_tool(input_data={})
         assert missing_paths["status"] == "error"
-        assert "requires both" in missing_paths["message"]
+        assert missing_paths["error_type"] == "invalid_input"
+        assert "drawing_version_1" in missing_paths["message"]
+        assert "drawing_version_2" in missing_paths["message"]
 
         # Non-existent files refuse with a clear message naming them.
         rev_a = tmp_path / "rev_a.slddrw"
@@ -834,9 +836,10 @@ class TestDrawingAnalysisTools:
         assert report_exception["status"] == "error"
         assert report_exception["error_type"] == "internal"
 
+        # A typed input: a list is refused as bad input, not a crash.
         compare_exception = await compare_tool(input_data=[])
         assert compare_exception["status"] == "error"
-        assert compare_exception["error_type"] == "internal"
+        assert compare_exception["error_type"] == "invalid_input"
 
         completeness_exception = await completeness_tool(input_data=[])
         assert completeness_exception["status"] == "error"
