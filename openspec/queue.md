@@ -17,8 +17,8 @@ Last updated 2026-11-09.
 | 4 | Support levels for every tool, and COM coverage progress bars at the top of the README with an interactive docs page | #79 (coverage half) | `tool-support-levels-and-progress` (archived) | Done 2026-11-06 (#214). #79's licence-tier half is item 13 |
 | 5 | Tool gaps found building the U-joint: face mates, fixed parts and flexible sub-assemblies, angled planes, angled chamfers, `both_directions`, a stale interference result, thin extrudes | #209 | `ujoint-tool-gaps` (archived) | Done 2026-11-07 (#216), signed off live |
 | 6 | `--selftest` command and a compatibility-report issue template | #179 | `selftest-and-compatibility-report` (archived) | Done 2026-11-09 (#217), signed off live |
-| 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` | Next, by request 2026-11-09: reliability before new features, moving up the support levels one at a time |
-| 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | not yet written | |
+| 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` (archived) | Done 2026-11-09 (#219, 2.0.0): 23 tools promoted, signed off live |
+| 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | not yet written | Next: reliability before new features |
 | 9 | Monitor stand demo follow-ups | #206 | not yet written | |
 | 10 | The 40 planned tools: implement each one or take it out of the tool list (listed below). A registered tool that can't run is a promise the server doesn't keep | not filed yet | not yet written | Check against #174 first, which may retire some as duplicates |
 | 11 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | |
