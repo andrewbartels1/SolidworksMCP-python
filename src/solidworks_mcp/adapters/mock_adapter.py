@@ -1179,7 +1179,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         if isinstance(params, str):
             params = ExtrusionParameters(depth=depth or 0.0)
-        sketch = self._mock_named_sketch(getattr(params, "sketch_name", None), "extrude")
+        sketch = self._mock_named_sketch(
+            getattr(params, "sketch_name", None), "extrude"
+        )
         if isinstance(sketch, AdapterResult):
             return sketch
 
@@ -1233,7 +1235,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        sketch = self._mock_named_sketch(getattr(params, "sketch_name", None), "revolve")
+        sketch = self._mock_named_sketch(
+            getattr(params, "sketch_name", None), "revolve"
+        )
         if isinstance(sketch, AdapterResult):
             return sketch
         axis = getattr(params, "axis_entity", None)
@@ -1282,7 +1286,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
 
         Returns:
             AdapterResult[dict[str, Any]]: As ``rename_feature`` reports it.
+            The open sketch is refused, as SolidWorks refuses it (it accepts
+            the new name but the tree keeps the old one).
         """
+        if self._current_sketch == old:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"Cannot rename '{old}' while it is open for editing",
+            )
         taken = new in self._sketches or any(
             f.name == new for f in self._features.values()
         )
@@ -1295,8 +1306,6 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             (new if name == old else name): plane
             for name, plane in self._sketches.items()
         }
-        if self._current_sketch == old:
-            self._current_sketch = new
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={"renamed": True, "old_name": old, "new_name": new},

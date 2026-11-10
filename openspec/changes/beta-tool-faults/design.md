@@ -134,6 +134,13 @@ refused, the rename moves to `exit_sketch`, and `create_sketch` remembers the
 wanted name. The spec allows either route, because both give the name in the
 tree.
 
+**Settled by live batch 1 (2026-11-09):** SolidWorks 2026 accepts the new
+`Name` on an open sketch but the tree keeps the old one, so the rename is done
+by `exit_sketch`. `create_sketch` replies with SolidWorks' name plus
+`name_on_exit`; `exit_sketch` replies with the final name, or a `warning`
+when the name is taken. A new `create_sketch` drops a name still waiting on
+a sketch left open. The mock refuses to rename an open sketch the same way.
+
 ### 6. Pattern and mirror: any volume change counts
 
 Replace the growth test with `abs(after - before) > before * tolerance`.

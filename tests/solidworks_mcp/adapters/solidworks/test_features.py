@@ -1526,10 +1526,50 @@ class TestDeleteFeatureImplMoreErrors:
         feature = SimpleNamespace(Select2=lambda append, mark: True)
         adapter.currentModel.FeatureByName.return_value = feature
 
+        adapter.currentModel.Extension.DeleteSelection2.return_value = False
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 1
+
         result = _delete_feature_impl(adapter, "Boss-Extrude1")
 
         assert result.is_error
-        assert "EditDelete did not remove feature" in (result.error or "")
+        assert "SolidWorks did not delete feature" in (result.error or "")
+        assert "returned False with 1 item(s) selected" in (result.error or "")
+
+    def test_a_used_sketch_goes_with_the_features_built_from_it(
+        self, monkeypatch
+    ) -> None:
+        """SolidWorks refuses the sketch alone; its cut goes, absorbing it."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        cut = SimpleNamespace(Name="Cut-Extrude1")
+        nameless = SimpleNamespace(Name=None)
+        sketch = _selectable_feature(GetChildren=lambda: (cut, nameless))
+        adapter.currentModel.FeatureByName.side_effect = [
+            sketch,
+            _selectable_feature(),  # the cut, selected to delete
+            None,  # the sketch is gone afterwards
+        ]
+        delete = adapter.currentModel.Extension.DeleteSelection2
+        delete.side_effect = [False, True]
+
+        result = _delete_feature_impl(adapter, "Sketch2")
+
+        assert result.is_success, result.error
+        assert [c.args for c in delete.call_args_list] == [(1,), (3,)]
+        adapter.currentModel.FeatureByName.assert_any_call("Cut-Extrude1")
+
+    def test_a_raising_delete_says_what_it_raised(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.FeatureByName.return_value = feature
+        adapter.currentModel.Extension.DeleteSelection2.side_effect = RuntimeError(
+            "Member not found"
+        )
+
+        result = _delete_feature_impl(adapter, "Sketch2")
+
+        assert "raised Member not found" in (result.error or "")
 
 
 class TestSuppressFeatureImplMoreErrors:
@@ -2571,6 +2611,8 @@ class TestFeatureTreeEditOutcomes:
 
         result = _delete_feature_impl(adapter, "Boss-Extrude1@Part1")
 
+        # Children too: EditDelete left a sketch a cut used in place.
+        adapter.currentModel.Extension.DeleteSelection2.assert_called_once_with(1)
         assert result.data == {
             "deleted": "Boss-Extrude1@Part1",
             "features_before": 7,
@@ -3544,7 +3586,9 @@ def _revolve_adapter(axis_selects: bool) -> _FakeFeatureAdapter:
         picks.append((name, kind, _rest[3], _rest[4]))  # append, mark
         return kind != "AXIS" or axis_selects
 
-    adapter.currentModel = SimpleNamespace(Extension=SimpleNamespace(SelectByID2=select))
+    adapter.currentModel = SimpleNamespace(
+        Extension=SimpleNamespace(SelectByID2=select)
+    )
     adapter.picks = picks  # type: ignore[attr-defined]
     return adapter
 

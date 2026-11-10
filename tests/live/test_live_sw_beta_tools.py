@@ -82,7 +82,11 @@ async def _feature_names(adapter: Any) -> list[str]:
 async def _sketch(
     tools: dict[str, Any], plane: str, draw: dict[str, Any], name: str | None = None
 ) -> str:
-    """A closed sketch with one rectangle or circle; its tree name."""
+    """A closed sketch with one rectangle or circle; its tree name.
+
+    A ``name`` is given when ``exit_sketch`` closes the sketch, so that reply
+    holds the final name.
+    """
     args: dict[str, Any] = {"plane": plane}
     if name:
         args["sketch_name"] = name
@@ -90,8 +94,9 @@ async def _sketch(
     assert made["status"] == "success", made
     shape = "add_circle" if "radius" in draw else "add_rectangle"
     assert (await tools[shape](draw))["status"] == "success"
-    assert (await tools["exit_sketch"]())["status"] == "success"
-    return str(made["sketch"]["name"])
+    closed = await tools["exit_sketch"]()
+    assert closed["status"] == "success", closed
+    return str(closed.get("sketch", made["sketch"])["name"])
 
 
 async def _plate(tools: dict[str, Any], adapter: Any) -> None:
@@ -166,15 +171,18 @@ async def test_revolve_about_a_named_axis(scratch) -> None:
 
 
 async def test_a_named_sketch_is_used_by_a_cut(scratch) -> None:
-    """create_sketch names the sketch; create_cut_extrude finds it by that name."""
+    """exit_sketch gives the name create_sketch was asked for; a cut finds it."""
     tools = await _tools(scratch.adapter)
     await _plate(tools, scratch.adapter)
     before = await _volume(scratch.adapter)
     named = await _sketch(
         tools, "Top", {"center_x": 0, "center_y": 0, "radius": 5}, name="HoleProfile"
     )
-    taken = await tools["create_sketch"]({"plane": "Top", "sketch_name": "HoleProfile"})
-    assert (await tools["exit_sketch"]())["status"] == "success"
+    # The same name again: the second sketch keeps SolidWorks' name.
+    await tools["create_sketch"]({"plane": "Top", "sketch_name": "HoleProfile"})
+    circle = {"center_x": 30, "center_y": 0, "radius": 2}
+    assert (await tools["add_circle"](circle))["status"] == "success"
+    taken = await tools["exit_sketch"]()
 
     cut = await tools["create_cut_extrude"](
         {"sketch_name": "HoleProfile", "depth": 10.0, "end_condition": "ThroughAll"}
@@ -395,19 +403,21 @@ async def test_save_as_keeps_an_existing_file(scratch, tmp_path) -> None:
     stamp = (copy.stat().st_size, copy.stat().st_mtime_ns)
 
     kept = await tools["save_as"]({"file_path": str(copy)})
+    untouched = (copy.stat().st_size, copy.stat().st_mtime_ns) == stamp
     replaced = await tools["save_as"]({"file_path": str(copy), "overwrite": True})
     force = await tools["save_file"]({"force_save": True})
     evidence(
         "save_as onto an existing file, without and with overwrite",
         {
             "without": kept.get("message"),
+            "file_untouched": untouched,
             "with": replaced.get("status"),
             "force_save": force.get("message"),
         },
         call=f'save_as({{"file_path": "{copy.name}"}})',
     )
     assert kept["error_type"] == "invalid_input"
-    assert stamp[0] > 0 and (copy.stat().st_size, kept["status"]) == (stamp[0], "error")
+    assert stamp[0] > 0 and kept["status"] == "error" and untouched
     assert replaced["status"] == "success", replaced
     assert force["error_type"] == "invalid_input"
 
@@ -418,23 +428,28 @@ async def test_every_export_writes_its_file(scratch, tmp_path) -> None:
     part = tmp_path / "export.SLDPRT"
     await _saved_block(scratch, tools, part)
     sizes: dict[str, int] = {}
-    for kind, ext in (("step", "step"), ("iges", "igs"), ("stl", "stl")):
+    # Each tool named in full, so the support-level check finds it.
+    for tool, ext in (
+        ("export_step", "step"),
+        ("export_iges", "igs"),
+        ("export_stl", "stl"),
+    ):
         target = tmp_path / f"export.{ext}"
         scratch.written_files.append(str(target))
-        done = await tools[f"export_{kind}"]({"file_path": str(target)})
+        done = await tools[tool]({"file_path": str(target)})
         assert done["status"] == "success", done
-        sizes[kind] = target.stat().st_size
+        sizes[ext] = target.stat().st_size
     assert (await tools["create_drawing"]({"name": "export_drawing"}))[
         "status"
     ] == "success"
     views = await tools["create_technical_drawing"]({"model_file": str(part)})
     assert views["status"] == "success", views
-    for kind in ("pdf", "dwg"):
-        target = tmp_path / f"export.{kind}"
+    for tool, ext in (("export_pdf", "pdf"), ("export_dwg", "dwg")):
+        target = tmp_path / f"export.{ext}"
         scratch.written_files.append(str(target))
-        done = await tools[f"export_{kind}"]({"file_path": str(target)})
+        done = await tools[tool]({"file_path": str(target)})
         assert done["status"] == "success", done
-        sizes[kind] = target.stat().st_size
+        sizes[ext] = target.stat().st_size
     refused = await tools["export_step"](
         {"file_path": str(tmp_path / "x.step"), "options": {"a": 1}}
     )
@@ -527,7 +542,8 @@ async def test_three_views_and_one_more(scratch, tmp_path) -> None:
         {"model_file": str(part), "projection": "first_angle"}
     )
     iso = await tools["add_drawing_view"](
-        {"model_file": str(part), "view_type": "isometric", "position": [300, 200]}
+        # The sheet's free lower right, clear of the three standard views.
+        {"model_file": str(part), "view_type": "isometric", "position": [230, 100]}
     )
     remove = await tools["add_drawing_view"](
         {"operation": "remove", "view_name": "Drawing View1"}

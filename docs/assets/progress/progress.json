@@ -2,8 +2,8 @@
  "tools": {
   "total": 156,
   "by_level": {
-   "stable": 83,
-   "beta": 23,
+   "stable": 106,
+   "beta": 0,
    "experimental": 10,
    "planned": 40
   },
@@ -67,8 +67,8 @@
    {
     "name": "add_drawing_view",
     "family": "drawing",
-    "level": "beta",
-    "reason": "only ever adds a view, whatever `operation` says; use `create_drawing_view`.",
+    "level": "stable",
+    "reason": "",
     "summary": "Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`."
    },
    {
@@ -270,8 +270,8 @@
    {
     "name": "calculate_mass_properties",
     "family": "analysis",
-    "level": "beta",
-    "reason": "moments of inertia are labelled kg·mm² but are kg·m²; its input fields are unused.",
+    "level": "stable",
+    "reason": "",
     "summary": "Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia."
    },
    {
@@ -291,8 +291,8 @@
    {
     "name": "check_interference",
     "family": "analysis",
-    "level": "beta",
-    "reason": "`include_hidden` has no effect.",
+    "level": "stable",
+    "reason": "",
     "summary": "Find where the components of the active assembly overlap (Tools > Interference Detection)."
    },
    {
@@ -340,8 +340,8 @@
    {
     "name": "create_assembly",
     "family": "modeling",
-    "level": "beta",
-    "reason": "`components` is ignored; use `insert_component`.",
+    "level": "stable",
+    "reason": "",
     "summary": "Create a new, empty assembly document and make it active, ready for `insert_component`."
    },
    {
@@ -368,8 +368,8 @@
    {
     "name": "create_drawing",
     "family": "modeling",
-    "level": "beta",
-    "reason": "`model_path` and `sheet_format` are ignored.",
+    "level": "stable",
+    "reason": "",
     "summary": "Create a new, empty drawing document and make it active."
    },
    {
@@ -382,8 +382,8 @@
    {
     "name": "create_extrusion",
     "family": "modeling",
-    "level": "beta",
-    "reason": "`sketch_name` and `direction` are ignored; it extrudes the sketch closed last.",
+    "level": "stable",
+    "reason": "",
     "summary": "Extrude the sketch you just closed into a solid boss, added to the active part."
    },
    {
@@ -403,8 +403,8 @@
    {
     "name": "create_part",
     "family": "modeling",
-    "level": "beta",
-    "reason": "`material` is ignored; use `set_material`.",
+    "level": "stable",
+    "reason": "",
     "summary": "Create a new, empty part document and make it active, ready for `create_sketch`."
    },
    {
@@ -424,8 +424,8 @@
    {
     "name": "create_revolve",
     "family": "modeling",
-    "level": "beta",
-    "reason": "`sketch_name` and `axis_entity` are ignored; it revolves the sketch closed last around its centreline.",
+    "level": "stable",
+    "reason": "",
     "summary": "Revolve a closed sketch around an axis, adding a solid to the active part."
    },
    {
@@ -438,8 +438,8 @@
    {
     "name": "create_sketch",
     "family": "sketching",
-    "level": "beta",
-    "reason": "echoes a `sketch_name` you pass instead of SolidWorks' own name.",
+    "level": "stable",
+    "reason": "",
     "summary": "Open a new sketch on a plane of the active part, ready for lines, circles and other sketch entities."
    },
    {
@@ -452,8 +452,8 @@
    {
     "name": "create_technical_drawing",
     "family": "drawing",
-    "level": "beta",
-    "reason": "ignores `template`, `sheet_size`, `title` and `output_path`; it only places three views.",
+    "level": "stable",
+    "reason": "",
     "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
    },
    {
@@ -466,8 +466,8 @@
    {
     "name": "delete_feature",
     "family": "modeling",
-    "level": "beta",
-    "reason": "on SolidWorks its message doesn't name the dependent features it removed.",
+    "level": "stable",
+    "reason": "",
     "summary": "Delete a feature or sketch from the active model, along with the features that depend on it."
    },
    {
@@ -480,8 +480,8 @@
    {
     "name": "execute_macro",
     "family": "macro_recording",
-    "level": "beta",
-    "reason": "runs the macro once whatever `repeat_count` says, and only binary .swp files.",
+    "level": "stable",
+    "reason": "",
     "summary": "Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once."
    },
    {
@@ -501,8 +501,8 @@
    {
     "name": "export_dwg",
     "family": "export",
-    "level": "beta",
-    "reason": "`options` is ignored; the file extension sets the format.",
+    "level": "stable",
+    "reason": "",
     "summary": "Export the active document to DWG, like File > Save As with the DWG type."
    },
    {
@@ -515,8 +515,8 @@
    {
     "name": "export_iges",
     "family": "export",
-    "level": "beta",
-    "reason": "`options` is ignored; the file extension sets the format.",
+    "level": "stable",
+    "reason": "",
     "summary": "Export the active document to IGES, like File > Save As with the IGES type."
    },
    {
@@ -529,22 +529,22 @@
    {
     "name": "export_pdf",
     "family": "export",
-    "level": "beta",
-    "reason": "`options` is ignored; the file extension sets the format.",
+    "level": "stable",
+    "reason": "",
     "summary": "Export the active document to PDF, like File > Save As with the PDF type."
    },
    {
     "name": "export_step",
     "family": "export",
-    "level": "beta",
-    "reason": "`options` is ignored; the file extension sets the format.",
+    "level": "stable",
+    "reason": "",
     "summary": "Export the active document to STEP, like File > Save As with the STEP type."
    },
    {
     "name": "export_stl",
     "family": "export",
-    "level": "beta",
-    "reason": "`options` is ignored; the file extension sets the format.",
+    "level": "stable",
+    "reason": "",
     "summary": "Export the active document to STL, like File > Save As with the STL type."
    },
    {
@@ -683,8 +683,8 @@
    {
     "name": "get_material",
     "family": "engineering_data",
-    "level": "beta",
-    "reason": "reads the material's name and library, not its properties.",
+    "level": "stable",
+    "reason": "",
     "summary": "Report the material assigned to the active part."
    },
    {
@@ -837,8 +837,8 @@
    {
     "name": "mirror_feature",
     "family": "modeling",
-    "level": "beta",
-    "reason": "mirroring a cut is reported as an error.",
+    "level": "stable",
+    "reason": "",
     "summary": "Mirror solid bodies or features of the active part about a plane."
    },
    {
@@ -872,8 +872,8 @@
    {
     "name": "pattern_circular",
     "family": "modeling",
-    "level": "beta",
-    "reason": "patterning a cut is reported as an error.",
+    "level": "stable",
+    "reason": "",
     "summary": "Repeat features of the active part around an axis, e.g. a ring of bosses or ribs."
    },
    {
@@ -900,8 +900,8 @@
    {
     "name": "save_as",
     "family": "file_management",
-    "level": "beta",
-    "reason": "replaces an existing file whatever `overwrite` says.",
+    "level": "stable",
+    "reason": "",
     "summary": "Save the active document under a new path, as a SolidWorks file or in an exchange format such as STEP or IGES."
    },
    {
@@ -921,8 +921,8 @@
    {
     "name": "save_file",
     "family": "file_management",
-    "level": "beta",
-    "reason": "`force_save` is ignored.",
+    "level": "stable",
+    "reason": "",
     "summary": "Save the active document, to its own path or to a new path in its own format."
    },
    {
@@ -1033,8 +1033,8 @@
    {
     "name": "sketch_tutorial_simple_hole",
     "family": "sketching",
-    "level": "beta",
-    "reason": "suggests a negative-depth extrusion for the hole instead of `create_cut_extrude`.",
+    "level": "stable",
+    "reason": "",
     "summary": "Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch."
    },
    {
@@ -1105,7 +1105,7 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 214,
+   "covered": 215,
    "total": 2838
   },
   "api": {
@@ -1157,7 +1157,6 @@
      "CreateEllipse",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
-     "EditDelete",
      "EditRebuild3",
      "EditSuppress2",
      "EditUndo",
@@ -1351,6 +1350,7 @@
      "FirstFeature",
      "GetBodies2",
      "GetBox",
+     "GetChildren",
      "GetConfigurationNames",
      "GetID",
      "GetModelDoc2",
@@ -1370,6 +1370,7 @@
     "name": "IFeature",
     "covered": [
      "GetBox",
+     "GetChildren",
      "GetErrorCode2",
      "GetFaces",
      "GetFirstDisplayDimension",

@@ -66,35 +66,14 @@ in the same change, and move its tool up a level in
 `src/solidworks_mcp/tools/support_levels.py` (beta tools list the fault as
 their reason), then run `python -m solidworks_mcp.progress.generate`.
 
-- `execute_macro` ignores `repeat_count`: it runs the macro once, but its
-  message says "executed N times".
-- `create_technical_drawing` ignores `template`, `sheet_size`, `title` and
-  `output_path`; it only places three views on the active drawing.
-- `add_drawing_view` takes an `operation` (add, update, remove) but only
-  ever adds a view; it is the same code as `create_drawing_view`.
-- `create_extrusion` ignores `sketch_name` and `direction`, and
-  `create_revolve` ignores `sketch_name` and `axis_entity`: both use the
-  sketch `exit_sketch` closed (the revolve its centreline). `create_cut_extrude`
-  does honour `sketch_name`.
-- `create_part` ignores `material`, `create_assembly` ignores `components`,
-  `create_drawing` ignores `model_path` and `sheet_format`, and
-  `create_sketch` echoes `sketch_name` back as the sketch's name without
-  applying it, so the reply can name a sketch that doesn't exist.
-- `pattern_circular` and `mirror_feature` fail unless the volume grows, so
-  patterning or mirroring a cut (a ring of holes) is reported as an error.
-- `calculate_mass_properties` labels the moments of inertia kg·mm², but they
-  are SolidWorks' kg·m² (a factor of a million); its input fields are unused.
-- `delete_feature` reads `removed_features`, but the real adapter returns
-  `features_removed` (a count), so on SolidWorks its message never mentions
-  the dependent features that went too.
-- `sketch_tutorial_simple_hole` suggests a negative-depth extrusion for the
-  hole instead of `create_cut_extrude`.
-- `save_as` ignores `overwrite` (an existing file is replaced) and
-  `save_file` ignores `force_save`; the `export_*` file tools ignore
-  `options` (`format_type` is optional since #209: the extension decides);
-  `ExportSTEPInput`, `ExportIGESInput` and `ExportSTLInput` are unused.
-- `check_interference` passes `include_hidden` where the adapter reads
-  `ignore_hidden`, so it has no effect.
+- `create_drawing_view` and `add_drawing_view` place a view wherever
+  `position` says, even off the sheet, and report success (seen in the beta
+  live tests, 2026-11-09). They could read the sheet size (`_sheet_bounds`
+  in `adapters/solidworks/documentation.py`) and refuse or warn.
+- `export_stl` logs `Extension.SaveAs2 failed: Type mismatch` on its first
+  attempt, then writes the file through its fallback (seen on SolidWorks
+  2026, 2026-11-09). The export works; the first attempt's arguments need
+  checking.
 
 ## Notes
 

@@ -80,7 +80,7 @@ Create a baseball bat model:
    - Barrel top: add_arc center at (680,0) from (680,35) to (680,-35) (semicircle)
    - Return to origin on the axis
 5. exit_sketch
-6. create_revolve with sketch_name="Sketch1", axis_entity="Line1", angle=360.0
+6. create_revolve with sketch_name="Sketch1", angle=360.0 (about the centreline)
 ```
 
 !!! tip "Why revolve first?"

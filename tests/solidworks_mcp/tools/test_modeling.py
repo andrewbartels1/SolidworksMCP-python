@@ -1062,6 +1062,35 @@ class TestFeatureEditingTools:
         assert name in result["message"]
         assert result["data"]["deleted"] == name
         assert "execution_time" in result
+        assert "warning" not in result  # nothing else went
+
+    @pytest.mark.asyncio
+    async def test_deleting_a_sketch_warns_that_its_cut_went_too(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """More than the named feature went: the reply warns, naming them."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.delete_feature = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={
+                    "deleted": "Sketch2",
+                    "removed_features": ["Cut-Extrude1", "Sketch2"],
+                },
+                execution_time=0.1,
+            )
+        )
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "delete_feature"
+        )
+
+        result = await tool_func(DeleteFeatureInput(name="Sketch2"))
+
+        assert result["message"] == "Deleted Sketch2 and its dependents: Cut-Extrude1"
+        assert result["warning"] == (
+            "Deleting Sketch2 also deleted Cut-Extrude1. Tell the user; `undo` "
+            "restores them."
+        )
 
     @pytest.mark.asyncio
     async def test_delete_feature_error_when_adapter_lacks_capability(

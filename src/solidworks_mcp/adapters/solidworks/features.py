@@ -2466,16 +2466,67 @@ def _removed_names(
     ]
 
 
+#: ``swDeleteSelectionOptions_e`` (read from swconst.tlb, 2026):
+#: ``swDelete_Children`` deletes the features built on the selection too,
+#: ``swDelete_Absorbed`` a feature's own sketch with it.
+_DELETE_CHILDREN = 1
+_DELETE_ABSORBED = 2
+
+
+def _delete_users_of(adapter: Any, feature: Any) -> tuple[Any, Exception | None]:
+    """Delete the features built from ``feature``, with their absorbed sketch.
+
+    SolidWorks won't delete a sketch a feature still uses: ``DeleteSelection2``
+    returns False even with ``swDelete_Children`` (measured on 2026). Deleting
+    the features that use it (``IFeature::GetChildren``) with
+    ``swDelete_Absorbed`` takes the sketch with them.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+        feature: The ``IFeature`` that could not be deleted on its own.
+
+    Returns:
+        tuple[Any, Exception | None]: ``DeleteSelection2``'s return value and
+        what it raised; ``(False, None)`` when nothing uses ``feature``.
+    """
+    children = adapter._attempt(
+        lambda: adapter._get_attr_or_call(feature, "GetChildren"), default=None
+    )
+    names = [
+        str(name)
+        for child in children or ()
+        if (name := adapter._attempt(lambda c=child: c.Name, default=None))
+    ]
+    if not names:
+        return False, None
+    adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+    for child_name in names:
+        _select_feature_by_name(adapter, child_name, append=True)
+    return cast(
+        tuple[Any, Exception | None],
+        adapter._attempt_with_error(
+            lambda: adapter.currentModel.Extension.DeleteSelection2(
+                _DELETE_CHILDREN | _DELETE_ABSORBED
+            )
+        ),
+    )
+
+
 def _delete_feature_impl(adapter: Any, name: str) -> AdapterResult[dict[str, Any]]:
     """Delete a named feature or sketch from the active model.
 
-    Selects the feature, then removes it with ``IModelDoc2::EditDelete``.
-    Deleting a parent also removes its children, which is SolidWorks' normal
-    cascade and the intended "erase this and what depends on it" behaviour -
-    so the number of features removed is reported, not assumed to be one.
+    Selects the feature, then removes it with
+    ``IModelDocExtension::DeleteSelection2(swDelete_Children)``, which takes
+    the features built on it too ("erase this and what depends on it"), so
+    the number of features removed is reported, not assumed to be one.
+    ``IModelDoc2::EditDelete`` left a sketch in place when a cut used it
+    (measured on SolidWorks 2026). A feature's own sketch is "absorbed", not
+    a child, so deleting a cut leaves its sketch. A sketch a feature uses
+    can't be deleted on its own at all, so its users are deleted instead,
+    taking it with them (:func:`_delete_users_of`).
 
-    ``EditDelete`` returns nothing useful, so success is confirmed by the
-    feature being absent from the tree afterwards.
+    Success is confirmed by the feature being absent from the tree
+    afterwards, not by the call's return value.
 
     Args:
         adapter: A connected adapter with a valid ``currentModel``.
@@ -2493,23 +2544,34 @@ def _delete_feature_impl(adapter: Any, name: str) -> AdapterResult[dict[str, Any
 
     def _delete_operation() -> dict[str, Any]:
         before = _feature_count(adapter)
-        if _select_feature_by_name(adapter, name) is None:
+        feature = _select_feature_by_name(adapter, name)
+        if feature is None:
             raise Exception(f"Feature not found: {name}")
 
-        adapter._attempt(
-            lambda: adapter._get_attr_or_call(adapter.currentModel, "EditDelete"),
+        selected = adapter._attempt(
+            lambda: adapter.currentModel.SelectionManager.GetSelectedObjectCount2(-1),
             default=None,
         )
+        deleted, error = adapter._attempt_with_error(
+            lambda: adapter.currentModel.Extension.DeleteSelection2(_DELETE_CHILDREN)
+        )
+        if not deleted and error is None:
+            deleted, error = _delete_users_of(adapter, feature)
         adapter._attempt(lambda: adapter.currentModel.EditRebuild3(), default=None)
 
-        # EditDelete reports nothing useful, so confirm by lookup: the
-        # feature must no longer resolve by name.
+        # Confirm by lookup: the feature must no longer resolve by name.
         bare = name.split("@", 1)[0]
         still_there = adapter._attempt(
             lambda: adapter.currentModel.FeatureByName(bare), default=None
         )
         if still_there:
-            raise Exception(f"EditDelete did not remove feature: {name}")
+            outcome = (
+                f"raised {error}" if error is not None else f"returned {deleted!r}"
+            )
+            raise Exception(
+                f"SolidWorks did not delete feature: {name} (DeleteSelection2 "
+                f"{outcome} with {selected} item(s) selected)"
+            )
 
         after = _feature_count(adapter)
         return {

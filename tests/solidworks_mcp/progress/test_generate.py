@@ -52,7 +52,7 @@ async def test_every_registered_tool_gets_a_row() -> None:
     assert [r.name for r in rows] == sorted(SUPPORT_LEVELS)
     extrude = next(r for r in rows if r.name == "create_extrusion")
     assert extrude.family == "modeling"
-    assert extrude.level is SupportLevel.BETA
+    assert extrude.level is SupportLevel.STABLE
     assert extrude.summary.startswith("Extrude the sketch you just closed")
     assert "\n" not in extrude.summary
 

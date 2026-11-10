@@ -21,14 +21,16 @@ say the material wasn't applied and which library was searched.
 
 ### Requirement: A new sketch has the name asked for
 
-`create_sketch` with `sketch_name` SHALL name the new sketch that in the
-feature tree. The reply's sketch name SHALL always be the name the feature tree
-shows.
+`create_sketch` with `sketch_name` SHALL give the new sketch that name in the
+feature tree when `exit_sketch` closes it, because SolidWorks won't rename an
+open sketch. Every reply's sketch name SHALL be the name the feature tree shows
+at that moment: `create_sketch` gives SolidWorks' name and the wanted one as
+`name_on_exit`, and `exit_sketch` gives the final name.
 
 #### Scenario: A named sketch
-- **WHEN** an agent creates a sketch with `sketch_name: "HoleProfile"`
-- **THEN** the feature tree shows `HoleProfile`, and `create_cut_extrude` with `sketch_name: "HoleProfile"` uses it
+- **WHEN** an agent creates a sketch with `sketch_name: "HoleProfile"`, draws in it and closes it with `exit_sketch`
+- **THEN** the feature tree shows `HoleProfile`, `exit_sketch` replies with that name, and `create_cut_extrude` with `sketch_name: "HoleProfile"` uses it
 
 #### Scenario: A name already taken
 - **WHEN** the requested name is already in the tree
-- **THEN** the sketch keeps SolidWorks' own name, and the reply gives that name with a `warning` saying why
+- **THEN** the sketch keeps SolidWorks' own name, and `exit_sketch` replies with that name and a `warning` saying why

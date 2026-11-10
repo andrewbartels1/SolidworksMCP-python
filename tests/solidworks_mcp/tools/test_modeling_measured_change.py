@@ -96,14 +96,7 @@ async def test_adapter_without_the_read_leaves_reply_unchanged(mcp_server):
         _CALLS["create_extrusion"]
     )
 
-    # create_extrusion is beta, so the boundary adds its level warning.
-    assert set(result) == {
-        "status",
-        "message",
-        "extrusion",
-        "execution_time",
-        "warning",
-    }
+    assert set(result) == {"status", "message", "extrusion", "execution_time"}
 
 
 @pytest.mark.asyncio

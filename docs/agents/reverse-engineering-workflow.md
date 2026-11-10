@@ -237,7 +237,7 @@ Likely plan:
 5.  add_line(start_x=0, start_y=6, end_x=180, end_y=6)       # shaft body
 6.  add_line(start_x=180, start_y=6, end_x=200, end_y=10)    # crank end taper
 7.  exit_sketch()
-8.  create_revolve(sketch_name="Sketch1", axis_entity="Line1", angle=360.0)
+8.  create_revolve(sketch_name="Sketch1", angle=360.0)
 ```
 
 ### Step 3 — Screenshot the assembled view

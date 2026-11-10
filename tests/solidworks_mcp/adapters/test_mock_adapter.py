@@ -1300,6 +1300,25 @@ async def test_mock_rename_onto_an_existing_name_is_an_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mock_rename_of_the_open_sketch_is_refused() -> None:
+    """SolidWorks keeps an open sketch's name; once closed it can be renamed."""
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    await adapter.create_sketch("Front")
+    name = next(iter(adapter._sketches))
+
+    refused = await adapter.rename_feature(name, "Profile")
+    await adapter.exit_sketch()
+    renamed = await adapter.rename_feature(name, "Profile")
+
+    assert not refused.is_success
+    assert "open for editing" in (refused.error or "")
+    assert renamed.is_success
+    assert list(adapter._sketches) == ["Profile"]
+
+
+@pytest.mark.asyncio
 async def test_mock_rename_to_same_name_is_a_noop_success() -> None:
     """Renaming a feature to its current name changes nothing but does not fail."""
     adapter = MockSolidWorksAdapter({})

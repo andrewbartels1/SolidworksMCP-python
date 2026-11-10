@@ -154,7 +154,13 @@ class CreatePartInput(CompatInput):
         units (str | None): The units value.
     """
 
-    name: str = Field(description="Name for the new part")
+    name: str = Field(
+        description=(
+            "A label for your own reference; SolidWorks names the new part "
+            "itself (Part1, ...) and the file takes the name of the path "
+            "you save it to with save_part"
+        )
+    )
     template: str | None = Field(
         default=None,
         description=(
@@ -594,7 +600,13 @@ class CreateAssemblyInput(CompatInput):
         template (str | None): The template value.
     """
 
-    name: str = Field(description="Name for the new assembly")
+    name: str = Field(
+        description=(
+            "A label for your own reference; SolidWorks names the new assembly "
+            "itself (Assem1, ...) and the file takes the name of the path "
+            "you save it to with save_assembly"
+        )
+    )
     template: str | None = Field(
         default=None,
         description=(
@@ -1070,7 +1082,13 @@ class CreateDrawingInput(CompatInput):
         template (str | None): The template value.
     """
 
-    name: str = Field(description="Name for the new drawing")
+    name: str = Field(
+        description=(
+            "A label for your own reference; SolidWorks names the new drawing "
+            "itself (Draw1, ...) and the file takes the name of the path "
+            "you save it to with save_file"
+        )
+    )
     template: str | None = Field(
         default=None,
         description=(
@@ -1156,8 +1174,8 @@ async def register_modeling_tools(
         the part is created either way.
 
         Args:
-            input_data: The part. `name` is required (used in the reply; SolidWorks
-                names the document); `template`, `units` (mm, cm, m, in, ft) and
+            input_data: The part. `name` is required but only a label: the reply
+                gives SolidWorks' own name (Part1, ...); `template`, `units` (mm, cm, m, in, ft) and
                 `material` (a name from `list_available_materials`) are optional.
 
         Returns:
@@ -1210,7 +1228,9 @@ async def register_modeling_tools(
         `insert_component` for each part.
 
         Args:
-            input_data: The assembly. `name` is required; `template` has a default.
+            input_data: The assembly. `name` is required but only a label: the
+                reply gives SolidWorks' own name (Assem1, ...); `template` has a
+                default.
 
         Returns:
             dict[str, Any]: The new assembly.
@@ -1241,7 +1261,9 @@ async def register_modeling_tools(
         new drawing document. Returns: `drawing` with `name` and `template`.
 
         Args:
-            input_data: The drawing. `name` is required; `template` has a default.
+            input_data: The drawing. `name` is required but only a label: the
+                reply gives SolidWorks' own name (Draw1, ...); `template` has a
+                default.
 
         Returns:
             dict[str, Any]: The new drawing.
@@ -1879,11 +1901,15 @@ async def register_modeling_tools(
     async def delete_feature(input_data: DeleteFeatureInput) -> dict[str, Any]:
         """Delete a feature or sketch from the active model, along with the features that depend on it.
 
-        Use `suppress_feature` instead when you might want it back. Find names with
-        `list_features`. Needs: an open part or assembly. Changes: removes the feature
-        and its dependents (`undo` can restore them). Returns: `data` with `deleted`,
-        `removed_features` (every feature that went, dependents included),
-        `features_before` and `features_after`; the message names the dependents.
+        Ask the user before you call it: deleting a sketch also deletes every feature
+        built from it (a cut, a boss), and deleting a feature deletes everything that
+        depends on it. Use `suppress_feature` instead when you might want it back. Find
+        names and dependents with `list_features`. Needs: an open part or assembly.
+        Changes: removes the feature and its dependents (`undo` can restore them).
+        Returns: `data` with `deleted`, `removed_features` (every feature that went,
+        dependents included), `features_before` and `features_after`; the message names
+        the dependents, and a `warning` says so whenever more than the named feature
+        went: tell the user.
 
         Args:
             input_data: The feature. `name` (e.g. "Fillet1") is required.
@@ -1897,7 +1923,7 @@ async def register_modeling_tools(
         data = result.data if isinstance(result.data, dict) else {}
         removed = data.get("removed_features") or [input_data.name]
         dependents = [n for n in removed if n != input_data.name.split("@", 1)[0]]
-        return {
+        reply: dict[str, Any] = {
             "status": "success",
             "message": (
                 f"Deleted {input_data.name}"
@@ -1910,6 +1936,12 @@ async def register_modeling_tools(
             "data": data,
             "execution_time": result.execution_time,
         }
+        if dependents:
+            reply["warning"] = (
+                f"Deleting {input_data.name} also deleted {', '.join(dependents)}. "
+                "Tell the user; `undo` restores them."
+            )
+        return reply
 
     @mcp.tool()
     async def suppress_feature(input_data: SuppressFeatureInput) -> dict[str, Any]:

@@ -37,8 +37,9 @@ class CreateSketchInput(CompatInput):
     sketch_name: str | None = Field(
         default=None,
         description=(
-            "Name to give the sketch in the feature tree; omit to keep "
-            "SolidWorks' own (Sketch1, Sketch2, ...)"
+            "Name to give the sketch in the feature tree, applied when "
+            "exit_sketch closes it; omit to keep SolidWorks' own (Sketch1, "
+            "Sketch2, ...)"
         ),
     )
 
@@ -342,6 +343,11 @@ async def register_sketching_tools(
     """
     mcp = with_tool_boundary(mcp)
     tool_count = 0
+    # SolidWorks won't rename a sketch while it is open for editing (it
+    # accepts the name, but the tree keeps the old one), so the name
+    # create_sketch was asked for is given when exit_sketch closes it:
+    # SolidWorks' name -> the name asked for.
+    names_on_exit: dict[str, str] = {}
 
     @mcp.tool()
     async def create_sketch(input_data: CreateSketchInput) -> dict[str, Any]:
@@ -351,9 +357,10 @@ async def register_sketching_tools(
         `create_extrusion` or `create_cut_extrude`. Planes: Front, Top, Right (or XY,
         XZ, YZ), or a plane made by `create_reference_plane`. Coordinates in the sketch
         are mm from the origin. Needs: an open part. Changes: adds a sketch and opens it
-        for editing, named `sketch_name` when you give one. Returns: `sketch` with
-        `name` (the name in the feature tree, which later tools take as `sketch_name`)
-        and `plane`, plus a `warning` when the name you asked for couldn't be given.
+        for editing; give `sketch_name` and `exit_sketch` names it that when it closes
+        it (SolidWorks won't rename an open sketch). Returns: `sketch` with `name` (the
+        name in the feature tree now) and `plane`, plus `name_on_exit` when you gave
+        `sketch_name`.
 
         Args:
             input_data: The sketch. `plane` is required; `sketch_name` names it.
@@ -370,17 +377,6 @@ async def register_sketching_tools(
             if isinstance(result.data, dict)
             else result.data
         )
-        warning = None
-        wanted = (input_data.sketch_name or "").strip()
-        if wanted and wanted != sketch_name:
-            renamed = await adapter.rename_feature(str(sketch_name), wanted)
-            if renamed.is_success:
-                sketch_name = (renamed.data or {}).get("new_name") or wanted
-            else:
-                warning = (
-                    f"The sketch keeps SolidWorks' name '{sketch_name}': it could "
-                    f"not be named '{wanted}' ({renamed.error})."
-                )
         reply: dict[str, Any] = {
             "status": "success",
             "message": f"Created sketch '{sketch_name}' on {input_data.plane} plane",
@@ -390,8 +386,12 @@ async def register_sketching_tools(
             },
             "execution_time": result.execution_time,
         }
-        if warning:
-            reply["warning"] = warning
+        names_on_exit.clear()  # a sketch left open is abandoned with its name
+        wanted = (input_data.sketch_name or "").strip()
+        if wanted and wanted != sketch_name:
+            names_on_exit[str(sketch_name)] = wanted
+            reply["sketch"]["name_on_exit"] = wanted
+            reply["message"] += f"; exit_sketch names it '{wanted}'"
         return reply
 
     @mcp.tool()
@@ -562,17 +562,33 @@ async def register_sketching_tools(
 
         Call it after drawing and before `create_extrusion`, `create_revolve` or
         `create_cut_extrude`; those use the sketch closed last. Needs: an open sketch.
-        Changes: leaves sketch editing; the sketch stays in the feature tree. Returns: a
-        message only.
+        Changes: leaves sketch editing; the sketch stays in the feature tree, renamed
+        to the `sketch_name` `create_sketch` was given. Returns: a message, plus, after
+        a `sketch_name`, `sketch` with `name` (the name in the feature tree, which later
+        tools take as `sketch_name`) and a `warning` when the name couldn't be given
+        (another feature has it).
         """
         result = await adapter.exit_sketch()
 
         require_success(result, context="Failed to exit sketch")
-        return {
+        reply: dict[str, Any] = {
             "status": "success",
             "message": "Exited sketch editing mode",
             "execution_time": result.execution_time,
         }
+        if names_on_exit:
+            current, wanted = names_on_exit.popitem()
+            renamed = await adapter.rename_feature(current, wanted)
+            name = current
+            if renamed.is_success:
+                name = (renamed.data or {}).get("new_name") or wanted
+            else:
+                reply["warning"] = (
+                    f"The sketch keeps SolidWorks' name '{current}': it could "
+                    f"not be named '{wanted}' ({renamed.error})."
+                )
+            reply["sketch"] = {"name": name}
+        return reply
 
     @mcp.tool()
     async def check_sketch_fully_defined(

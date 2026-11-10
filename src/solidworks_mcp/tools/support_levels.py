@@ -78,20 +78,11 @@ _UNCHECKED = Support(
 _PLANNED = Support(SupportLevel.PLANNED, "no adapter implements it yet.")
 
 
-def _beta(reason: str) -> Support:
-    return Support(SupportLevel.BETA, reason)
-
-
-_EXPORT_FORMAT = _beta("`options` is ignored; the file extension sets the format.")
-
 SUPPORT_LEVELS: dict[str, Support] = {
     # analysis
     "analyze_geometry": _PLANNED,
-    "calculate_mass_properties": _beta(
-        "moments of inertia are labelled kg·mm² but are kg·m²; its input fields "
-        "are unused."
-    ),
-    "check_interference": _beta("`include_hidden` has no effect."),
+    "calculate_mass_properties": _STABLE,
+    "check_interference": _STABLE,
     "get_mass_properties": _STABLE,
     "get_material_properties": _PLANNED,
     "verify_model": _STABLE,
@@ -113,9 +104,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     # drawing
     "add_annotation": _PLANNED,
     "add_dimension": _PLANNED,
-    "add_drawing_view": _beta(
-        "only ever adds a view, whatever `operation` says; use `create_drawing_view`."
-    ),
+    "add_drawing_view": _STABLE,
     "add_note": _STABLE,
     "auto_center_marks": _STABLE,
     "auto_dimension_view": _PLANNED,
@@ -123,10 +112,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_detail_view": _PLANNED,
     "create_drawing_view": _STABLE,
     "create_section_view": _PLANNED,
-    "create_technical_drawing": _beta(
-        "ignores `template`, `sheet_size`, `title` and `output_path`; it only "
-        "places three views."
-    ),
+    "create_technical_drawing": _STABLE,
     "list_drawing_views": _STABLE,
     "update_sheet_format": _PLANNED,
     "update_title_block": _PLANNED,
@@ -150,7 +136,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     # engineering_data
     "export_flat_pattern": _STABLE,
     "get_custom_properties": _STABLE,
-    "get_material": _beta("reads the material's name and library, not its properties."),
+    "get_material": _STABLE,
     "list_available_materials": _STABLE,
     "list_model_dimensions": _STABLE,
     "measure_entities": _STABLE,
@@ -158,12 +144,12 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "set_material": _STABLE,
     # export
     "batch_export": _PLANNED,
-    "export_dwg": _EXPORT_FORMAT,
-    "export_iges": _EXPORT_FORMAT,
+    "export_dwg": _STABLE,
+    "export_iges": _STABLE,
     "export_image": _STABLE,
-    "export_pdf": _EXPORT_FORMAT,
-    "export_step": _EXPORT_FORMAT,
-    "export_stl": _EXPORT_FORMAT,
+    "export_pdf": _STABLE,
+    "export_step": _STABLE,
+    "export_stl": _STABLE,
     # file_management
     "activate_document": _STABLE,
     "batch_file_operations": _PLANNED,
@@ -179,18 +165,16 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "load_part": _UNCHECKED,
     "manage_file_properties": _PLANNED,
     "pack_and_go_assembly": _UNCHECKED,
-    "save_as": _beta("replaces an existing file whatever `overwrite` says."),
+    "save_as": _STABLE,
     "save_assembly": _STABLE,
     "save_body_as_part": _STABLE,
-    "save_file": _beta("`force_save` is ignored."),
+    "save_file": _STABLE,
     "save_part": _STABLE,
     # macro_recording
     "analyze_macro": _PLANNED,
     "batch_execute_macros": _PLANNED,
     "create_macro_library": _PLANNED,
-    "execute_macro": _beta(
-        "runs the macro once whatever `repeat_count` says, and only binary .swp files."
-    ),
+    "execute_macro": _STABLE,
     "optimize_macro": _PLANNED,
     "start_macro_recording": _PLANNED,
     "stop_macro_recording": _PLANNED,
@@ -199,31 +183,24 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "add_fillet": _STABLE,
     "add_mate": _STABLE,
     "close_model": _STABLE,
-    "create_assembly": _beta("`components` is ignored; use `insert_component`."),
+    "create_assembly": _STABLE,
     "create_axis": _STABLE,
     "create_cut_extrude": _STABLE,
-    "create_drawing": _beta("`model_path` and `sheet_format` are ignored."),
-    "create_extrusion": _beta(
-        "`sketch_name` and `direction` are ignored; it extrudes the sketch closed last."
-    ),
+    "create_drawing": _STABLE,
+    "create_extrusion": _STABLE,
     "create_loft": _STABLE,
-    "create_part": _beta("`material` is ignored; use `set_material`."),
+    "create_part": _STABLE,
     "create_reference_plane": _STABLE,
     "create_reference_point": _STABLE,
-    "create_revolve": _beta(
-        "`sketch_name` and `axis_entity` are ignored; it revolves the sketch "
-        "closed last around its centreline."
-    ),
+    "create_revolve": _STABLE,
     "create_sweep": _STABLE,
-    "delete_feature": _beta(
-        "on SolidWorks its message doesn't name the dependent features it removed."
-    ),
+    "delete_feature": _STABLE,
     "get_dimension": _UNCHECKED,
     "insert_component": _STABLE,
     "list_components": _STABLE,
-    "mirror_feature": _beta("mirroring a cut is reported as an error."),
+    "mirror_feature": _STABLE,
     "open_model": _STABLE,
-    "pattern_circular": _beta("patterning a cut is reported as an error."),
+    "pattern_circular": _STABLE,
     "rebuild_model": _STABLE,
     "rename_feature": _STABLE,
     "select_face_edges": _STABLE,
@@ -247,18 +224,13 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "add_sketch_dimension": _STABLE,
     "add_spline": _STABLE,
     "check_sketch_fully_defined": _STABLE,
-    "create_sketch": _beta(
-        "echoes a `sketch_name` you pass instead of SolidWorks' own name."
-    ),
+    "create_sketch": _STABLE,
     "exit_sketch": _STABLE,
     "sketch_circular_pattern": _STABLE,
     "sketch_linear_pattern": _STABLE,
     "sketch_mirror": _STABLE,
     "sketch_offset": _STABLE,
-    "sketch_tutorial_simple_hole": _beta(
-        "suggests a negative-depth extrusion for the hole instead of "
-        "`create_cut_extrude`."
-    ),
+    "sketch_tutorial_simple_hole": _STABLE,
     "tutorial_simple_hole": _PLANNED,  # its cut step fails on real SolidWorks
     # template_management
     "apply_template": _PLANNED,

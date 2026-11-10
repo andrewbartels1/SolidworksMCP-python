@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > Version history splits in two: the `3.x` entries at the bottom are the
 > original TypeScript/winax implementation. The project is now a Python +
-> pywin32 MCP server and restarted its own versioning at `1.0.0`; `1.x`
-> entries are the current line.
+> pywin32 MCP server and restarted its own versioning at `1.0.0`; the `1.x`
+> and `2.x` entries are the current line.
 
 ## [Unreleased]
+
+## [2.0.0] - 2026-11-09
 
 ### Added
 
@@ -106,17 +108,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `pattern_circular` and `mirror_feature` reported a pattern or mirror
     of a cut (a ring of holes) as an error; any change in volume now
     counts, and the reply gives `volume_change`.
-  - `delete_feature` names every feature it removed, dependents included.
+  - `delete_feature` names every feature it removed, dependents included,
+    and can delete a sketch a feature uses: the features built from it go
+    with it. SolidWorks refused that delete before.
   - `create_extrusion` and `create_revolve` use the sketch `sketch_name`
     names (a missing name fails, listing the sketches), and
     `create_revolve` turns about the reference axis `axis_entity` names.
-  - `create_sketch` gives the sketch the `sketch_name` you ask for, and
-    always replies with the name in the feature tree.
+  - `create_sketch` gives the sketch the `sketch_name` you ask for. SolidWorks
+    won't rename an open sketch, so `exit_sketch` names it and replies with
+    the final name; `create_sketch` replies with SolidWorks' name and
+    `name_on_exit`.
   - `create_part` assigns its `material`; `get_material` also reports the
     density; `check_interference` honours `include_hidden`; `save_as`
     keeps an existing file unless `overwrite` is on; `execute_macro` runs
     `repeat_count` times; `sketch_tutorial_simple_hole` points at
     `create_cut_extrude`.
+  - On SolidWorks versions without `IMassProperty`, the products of
+    inertia Ixz and Iyz were swapped.
+  - The agent guides' examples no longer send `direction: "cut"` to
+    `create_extrusion` (use `create_cut_extrude`) or a sketch line as
+    `create_revolve`'s `axis_entity`, which takes a reference axis.
+  - `create_part`, `create_assembly` and `create_drawing` say that `name`
+    is only a label: SolidWorks names a new document itself.
+  - The 23 tools these fixes cover are now `stable`, each checked by a
+    live test (`tests/live/test_live_sw_beta_tools.py`).
+  - `delete_feature` asks the agent to check with the user first, and its
+    reply carries a `warning` naming everything else it deleted (a
+    sketch takes the features built from it).
 
 - **`create_extrusion`'s reply says what was built** (#209): the end
   condition SolidWorks used (`MidPlane` for `both_directions`), and the
