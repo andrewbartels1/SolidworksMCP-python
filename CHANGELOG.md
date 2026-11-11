@@ -154,7 +154,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     checks the active document's type, and prints with `Debug.Print`
     instead of a `MsgBox` that blocked SolidWorks when the macro ran.
   - `classify_feature_tree` fails when it can't read the model, instead
-    of classifying an empty one.
+    of classifying an empty one. On a part it no longer answers
+    "assembly" ("Material" contains "mate") or "sheet metal" (the tree's
+    folders contain "fold"); a known document type decides, and folders
+    aren't counted as features.
+  - `close_model` closes the document SolidWorks made active after the
+    last close; a second close in a row used to fail with "No active
+    model to close" while documents were still open.
 
 - **`create_extrusion`'s reply says what was built** (#209): the end
   condition SolidWorks used (`MidPlane` for `both_directions`), and the

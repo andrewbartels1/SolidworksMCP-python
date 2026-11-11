@@ -8,7 +8,7 @@
 - [x] 2.1 `get_dimension`: adapter returns `{value, units}` from `IDimension.GetType` (mm, deg, or `None` for a count or unknown type); remove the `GetValue3` fallback; `base.py` and the mock match; tests for a length, an angle, a count, an unknown type and an unreadable value
 - [x] 2.2 `classify_feature_tree`: raise when `get_model_info` fails and the model must be read; delete the `hasattr` branches; tests
 - [x] 2.3 `get_file_properties` and `list_configurations`: no code change expected; tests stay as they are
-- [ ] 2.4 Live batch 1: file properties (saved, then edited), two configurations, a length and a 270° revolve angle, a part and an assembly classified; run with the user's permission
+- [x] 2.4 Live batch 1: file properties (saved, then edited), two configurations, a length and a 270° revolve angle, a part and an assembly classified; run with the user's permission
 
 ## 3. Files (live batch 2)
 
@@ -61,3 +61,7 @@
   folders ("HistoryFolder", "SensorFolder", ...), and the sheet-metal word
   "fold" is inside "folder". The classifier now skips rows whose type ends
   in "Folder", and the live test expects `extrude`.
+- Live batch 2: `close_model` (stable) only closed the document the
+  adapter tracked, and forgot it after closing. SolidWorks makes another
+  open document active, so a second close in a row failed with "No active
+  model to close". It now reads `ActiveDoc` first, as `list_features` does.

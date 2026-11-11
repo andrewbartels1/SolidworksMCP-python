@@ -1536,6 +1536,11 @@ class SolidWorksIOMixin:
             AdapterResult[None]: Result of the close operation.
         """
         adapter = self._adapter(self)
+        # After a close, SolidWorks activates another open document; close that
+        # one, as the tool promises, rather than the document already closed.
+        active = getattr(adapter.swApp, "ActiveDoc", None) if adapter.swApp else None
+        if active is not None:
+            adapter.currentModel = active
         if not adapter.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.WARNING, error="No active model to close"

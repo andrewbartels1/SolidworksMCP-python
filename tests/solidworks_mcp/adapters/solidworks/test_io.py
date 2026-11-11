@@ -2593,6 +2593,31 @@ class TestPyWin32AdapterBranches:
         assert adapter.currentModel is None
 
     @pytest.mark.asyncio
+    async def test_close_model_twice_closes_the_document_solidworks_activated(
+        self, monkeypatch
+    ) -> None:
+        """Seen on SolidWorks 2026: after one close, SolidWorks makes another
+        open document active. The next close closes that one, instead of
+        failing with "No active model to close"."""
+        adapter = self._build_adapter(monkeypatch)
+        app = SimpleNamespace(CloseDoc=Mock(), ActiveDoc=None)
+        adapter.swApp = app
+        adapter.currentModel = SimpleNamespace(GetTitle="asm.SLDASM")
+
+        first = await adapter.close_model(save=False)
+        app.ActiveDoc = SimpleNamespace(GetTitle="plate.SLDPRT")
+        second = await adapter.close_model(save=False)
+        app.ActiveDoc = None
+        third = await adapter.close_model(save=False)
+
+        assert first.is_success and second.is_success
+        assert [c.args[0] for c in app.CloseDoc.call_args_list] == [
+            "asm.SLDASM",
+            "plate.SLDPRT",
+        ]
+        assert third.status.name == "WARNING"
+
+    @pytest.mark.asyncio
     async def test_close_model_save_reads_save_property_style(
         self, monkeypatch
     ) -> None:
