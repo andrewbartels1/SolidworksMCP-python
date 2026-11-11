@@ -66,10 +66,37 @@ def test_classify_assembly_by_document_type() -> None:
 
 
 def test_classify_assembly_by_feature_tokens() -> None:
+    """With no document type, a mate in the tree says assembly."""
     features = [{"name": "mate1", "type": ""}]
-    result = classify_feature_tree_snapshot({"type": "part"}, features)
+    result = classify_feature_tree_snapshot({}, features)
     assert result["family"] == "assembly"
     assert result["confidence"] == "medium"
+
+
+def test_a_part_is_never_an_assembly_because_of_its_material() -> None:
+    """Every real part's tree has "Material <not specified>": not a mate.
+
+    Seen on SolidWorks 2026: a plain extruded part was classified as an
+    assembly, because "material" contains "mate".
+    """
+    features = [
+        {"name": "Material <not specified>", "type": "MaterialFolder"},
+        {"name": "Boss-Extrude1", "type": "Extrusion"},
+    ]
+
+    as_part = classify_feature_tree_snapshot({"type": "Part"}, features)
+    untyped = classify_feature_tree_snapshot({}, features)
+
+    assert as_part["family"] != "assembly"
+    assert untyped["family"] != "assembly"
+
+
+def test_a_known_part_type_wins_over_drawing_like_names() -> None:
+    features = [{"name": "Drawing View1 sketch", "type": "ProfileFeature"}]
+
+    result = classify_feature_tree_snapshot({"type": "Part"}, features)
+
+    assert result["family"] != "drawing"
 
 
 def test_classify_drawing_by_document_type() -> None:
@@ -81,7 +108,7 @@ def test_classify_drawing_by_document_type() -> None:
 
 def test_classify_drawing_by_feature_tokens() -> None:
     features = [{"name": "drawing view 1", "type": ""}]
-    result = classify_feature_tree_snapshot({"type": "part"}, features)
+    result = classify_feature_tree_snapshot({"type": ""}, features)  # unknown
     assert result["family"] == "drawing"
     assert result["confidence"] == "medium"
 
@@ -360,7 +387,7 @@ def test_classify_assembly_from_feature_tokens() -> None:
     """Test classify assembly from feature tokens."""
 
     result = classify_feature_tree_snapshot(
-        {"type": "Part"},
+        None,  # no document type: the tree's mates and components decide
         [
             {"name": "Coincident Mate1", "type": "Mate", "suppressed": False},
             {"name": "Component1", "type": "Component", "suppressed": False},

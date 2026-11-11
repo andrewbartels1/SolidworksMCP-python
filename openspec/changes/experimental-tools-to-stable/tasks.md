@@ -51,3 +51,9 @@
 - `generate_vba_code`'s macro is late-bound (`As Object`), so it runs as a
   `.swb` text macro without a type-library reference; its reply gains
   `sub_name`, to pass to `execute_macro` as `proc_name`.
+- Live batch 1: `classify_feature_tree` called a plain extruded part an
+  assembly. Its assembly check matched "mate" anywhere in a feature name,
+  and every real part's tree has "Material <not specified>". The mock's
+  parts have no Material entry, so no unit test saw it. Now a known
+  document type (part, assembly, drawing) decides, feature names only
+  count when the type is unknown, and the mate check skips "material".
