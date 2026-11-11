@@ -57,3 +57,7 @@
   parts have no Material entry, so no unit test saw it. Now a known
   document type (part, assembly, drawing) decides, feature names only
   count when the type is unknown, and the mate check skips "material".
+- The rerun then called the same part sheet metal: every real tree has
+  folders ("HistoryFolder", "SensorFolder", ...), and the sheet-metal word
+  "fold" is inside "folder". The classifier now skips rows whose type ends
+  in "Folder", and the live test expects `extrude`.

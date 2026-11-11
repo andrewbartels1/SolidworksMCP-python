@@ -206,7 +206,7 @@ async def test_a_part_and_an_assembly_are_classified(scratch, tmp_path) -> None:
         call="classify_feature_tree({})",
     )
     assert assembly["classification"]["family"] == "assembly"
-    assert part["classification"]["family"] not in {"assembly", "drawing", "unknown"}
+    assert part["classification"]["family"] == "extrude"
 
 
 # ---- batch 2: files ------------------------------------------------------------

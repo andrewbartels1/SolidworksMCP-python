@@ -91,6 +91,30 @@ def test_a_part_is_never_an_assembly_because_of_its_material() -> None:
     assert untyped["family"] != "assembly"
 
 
+def test_a_real_part_tree_with_its_folders_is_an_extrude() -> None:
+    """The folders of a real tree don't count as features.
+
+    Seen on SolidWorks 2026: a plain extruded block was classified as sheet
+    metal, because "fold" is inside "HistoryFolder", and "Surface Bodies"
+    would look like an advanced solid.
+    """
+    features = [
+        {"name": "History", "type": "HistoryFolder"},
+        {"name": "Sensors", "type": "SensorFolder"},
+        {"name": "Annotations", "type": "DetailCabinet"},
+        {"name": "Surface Bodies", "type": "SurfaceBodyFolder"},
+        {"name": "Solid Bodies", "type": "SolidBodyFolder"},
+        {"name": "Material <not specified>", "type": "MaterialFolder"},
+        {"name": "Front Plane", "type": "RefPlane"},
+        {"name": "Origin", "type": "OriginProfileFeature"},
+        {"name": "Boss-Extrude1", "type": "Extrusion"},
+    ]
+
+    result = classify_feature_tree_snapshot({"type": "Part"}, features)
+
+    assert result["family"] == "extrude"
+
+
 def test_a_known_part_type_wins_over_drawing_like_names() -> None:
     features = [{"name": "Drawing View1 sketch", "type": "ProfileFeature"}]
 

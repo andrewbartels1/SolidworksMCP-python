@@ -93,6 +93,24 @@ def _feature_text(feature: Mapping[str, Any]) -> str:
     return f"{name} {feature_type}".strip()
 
 
+def _is_tree_folder(feature: Mapping[str, Any]) -> bool:
+    """Tell whether a tree row is a folder, not a feature.
+
+    Every real tree has folders ("HistoryFolder", "SensorFolder",
+    "SurfaceBodyFolder", "MaterialFolder", ...). Their names and types would
+    match feature words: "fold" (sheet metal) is inside "folder", "surface"
+    (advanced solid) inside "Surface Bodies".
+
+    Args:
+        feature (Mapping[str, Any]): A ``list_features`` row.
+
+    Returns:
+        bool: True when the row's type ends with "folder".
+    """
+
+    return _as_lower_text(feature.get("type")).endswith("folder")
+
+
 def _has_any(texts: list[str], tokens: tuple[str, ...]) -> bool:
     """Build internal has any.
 
@@ -148,7 +166,11 @@ def classify_feature_tree_snapshot(
     """
 
     feature_list = list(features or [])
-    feature_texts = [_feature_text(feature) for feature in feature_list]
+    feature_texts = [
+        _feature_text(feature)
+        for feature in feature_list
+        if not _is_tree_folder(feature)
+    ]
     document_type = _as_lower_text((model_info or {}).get("type")) or "unknown"
 
     evidence: list[str] = []
