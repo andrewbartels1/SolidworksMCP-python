@@ -272,6 +272,11 @@ async def test_pack_and_go_keeps_the_folder_and_the_open_documents(
         {
             "without_overwrite": refused.get("message"),
             "first": first.get("message"),
+            "first_source_files": [
+                Path(f).name for f in first.get("source_files") or []
+            ],
+            "first_save_statuses": first.get("save_statuses"),
+            "folder_after": sorted(p.name for p in target.iterdir()),
             "copied": [Path(f).name for f in first.get("copied_files") or []],
             "second": second.get("message"),
             "second_saved_all": second.get("all_files_saved"),
