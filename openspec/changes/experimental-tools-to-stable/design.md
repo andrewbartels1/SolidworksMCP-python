@@ -63,6 +63,27 @@ refuse to replace a file SolidWorks still holds open from an earlier pack;
 the per-file save statuses already in the reply show it, and the live test
 packs twice into one folder to find out.
 
+### 2a. Pack and Go copies the dependencies; SolidWorks' Pack and Go is dropped
+
+Live batch 2 on SolidWorks 2026: `IPackAndGo.GetDocumentNames` listed only
+the assembly, not its two parts, and `SavePackAndGo` wrote only the
+assembly while reporting every file saved; on a second pack it refused the
+file already there (`swPackAndGoSaveStatus_FileAlreadyExist`). The project
+had already removed `save_assembly`'s native Pack and Go for never working
+on 2026 (dead-code item 13); its dependency copy is proven live. So the
+adapter asks the open assembly for `GetDependencies2(True, True, False)`
+and copies the assembly and each listed file into `target_dir` under its
+own name. SolidWorks looks for a referenced file in the assembly's own
+folder before the stored path, so the copy opens with its own parts (demo
+7 proves it). The copy is of the saved files: an open dependency with
+unsaved changes is named in a `warning`. A file-name clash between two
+dependencies fails the call, since renaming one would break the reference.
+The comtypes vtable bridge, used only by Pack and Go, goes. The dependency
+parsing moves to `utils/sw_dependencies.py`, shared with `save_assembly`.
+Alternative considered: probe why `GetDocumentNames` misses the parts.
+Rejected: the outcome was unknown, and overwrite would still need us to
+delete the old copies.
+
 ### 3. A dimension's unit comes from its type
 
 The adapter reads `IDimension.GetType()` (`swDimensionParamType_e`, read
@@ -131,13 +152,12 @@ one test per process with the user's permission:
 
 ## Risks / Trade-offs
 
-- [**`SavePackAndGo` may not replace a file still open from an earlier
-  pack.**] Batch 2 packs twice into one folder. If it fails, the second pack
-  is refused with a message naming the open file, rather than deleting the
-  folder as today.
-- [**Packing an open assembly with unsaved changes writes those changes into
-  the copy.**] That is Pack and Go's normal behaviour in the SolidWorks UI
-  too; the description will say the copy holds what is open, saved or not.
+- [**The copy holds the saved files, not unsaved changes.**] Unlike
+  Pack and Go in the SolidWorks UI. The reply's `warning` names each open
+  dependency with unsaved changes, and the description says to save first.
+- [**The copy's references still store the original paths.**] SolidWorks
+  finds the same-named file in the assembly's folder first, so it opens
+  from the copy (demo 7); a file-name clash fails instead of renaming.
 - [**A saved drawing may differ byte-for-byte even when nothing changed**]
   (SolidWorks stamps save times). The compare tools would then call two
   equal drawings different. The live test records whether an unchanged

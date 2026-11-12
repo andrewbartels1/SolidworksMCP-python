@@ -11,6 +11,24 @@ changes.
 - **WHEN** an assembly is open, a part it uses has unsaved changes, and an agent packs the assembly
 - **THEN** the call succeeds, the part is still open and still shows unsaved changes, and every document open before the call is open after it
 
+### Requirement: Pack and Go copies the saved files SolidWorks lists
+
+`pack_and_go_assembly` SHALL copy the assembly and every file SolidWorks
+lists as its dependency (`GetDependencies2`) into `target_dir`, each under
+its own file name. It copies the files as saved on disk: when an open
+document among them has unsaved changes, the reply SHALL carry a `warning`
+naming it. Two dependencies with the same file name from different folders,
+or a dependency missing on disk, SHALL fail the call before anything is
+copied, naming the files.
+
+#### Scenario: A part has unsaved changes
+- **WHEN** a part of the assembly has unsaved changes and an agent packs the assembly
+- **THEN** the saved part is copied and the reply's `warning` names the part, saying its unsaved changes are not in the copy
+
+#### Scenario: A dependency is missing
+- **WHEN** a file the assembly uses is not on disk
+- **THEN** the call fails naming the file, and nothing is copied
+
 ### Requirement: Pack and Go leaves other files in the target folder alone
 
 Without `overwrite`, a `target_dir` that already holds files SHALL be refused
@@ -21,6 +39,10 @@ was.
 #### Scenario: A folder with an unrelated file
 - **WHEN** `target_dir` holds `notes.txt` and an agent packs an assembly into it with `overwrite: true`
 - **THEN** the assembly and its parts are written, and `notes.txt` is unchanged
+
+#### Scenario: Packing twice into one folder
+- **WHEN** an agent packs the same assembly into the same folder again, with `overwrite: true`
+- **THEN** the call succeeds and replaces the files it wrote the first time
 
 #### Scenario: A folder with files, without overwrite
 - **WHEN** `target_dir` holds any file and `overwrite` is off

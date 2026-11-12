@@ -142,8 +142,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     fails and closes nothing), and no longer deletes everything already
     in `target_dir`: with `overwrite` it replaces only the files it
     writes, and `copied_files` lists only those. A preview that can't be
-    written gives a `warning`. When SolidWorks doesn't write a file, the tool
-    fails and names each one with the reason; it used to report success.
+    written gives a `warning`. On SolidWorks 2026, SolidWorks' own Pack and
+    Go listed and copied only the assembly, not its parts, and reported
+    success; the tool now copies the saved files `GetDependencies2` lists,
+    under their own names, and its `warning` names open files whose unsaved
+    changes aren't in the copy. The reply's `save_statuses` and
+    `all_files_saved` are replaced by `unsaved_changes`.
   - `get_dimension` reports an angle in degrees (`units: "deg"`) and a
     count with no unit; it used to multiply every value by 1000 and call
     it mm.

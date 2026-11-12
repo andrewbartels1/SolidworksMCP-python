@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import ctypes
 import math
 import os
-import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
 from .face_selection import mate_entity_label
@@ -23,59 +23,6 @@ except ImportError:
     pythoncom = SimpleNamespace()
     win32com = SimpleNamespace(client=SimpleNamespace())
     _dynamic = SimpleNamespace(Dispatch=lambda *_a, **_kw: None)
-
-try:
-    import comtypes  # type: ignore[import-untyped]
-    import comtypes.client as _comtypes_client  # type: ignore[import-untyped]
-
-    _COMTYPES_AVAILABLE = True
-except ImportError:
-    _COMTYPES_AVAILABLE = False
-
-# SolidWorks type library GUID (stable across SW versions)
-_SW_TLB_GUID = "{83A33D31-27C5-11CE-BFD4-00400513BB57}"
-# Cached comtypes wrapper module (loaded once per process)
-_sw_comtypes_lib: Any = None
-
-
-def _get_sw_comtypes_lib() -> Any:
-    """Return the comtypes wrapper for the SolidWorks type library.
-
-    Tries SW version numbers 35..30 (newest to oldest). Returns ``None`` when
-    comtypes is unavailable or the TLB cannot be found in the registry.
-    """
-    global _sw_comtypes_lib
-    if _sw_comtypes_lib is not None:
-        return _sw_comtypes_lib
-    if not _COMTYPES_AVAILABLE:
-        return None
-    for major in (35, 34, 33, 32, 31, 30):
-        try:
-            _sw_comtypes_lib = _comtypes_client.GetModule(
-                (comtypes.GUID(_SW_TLB_GUID), major, 0)
-            )
-            return _sw_comtypes_lib
-        except Exception:
-            continue
-    return None
-
-
-def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:
-    """Bridge a pywin32 CDispatch/COM object to a comtypes interface pointer.
-
-    Extracts the raw IUnknown pointer from pywin32's repr string, then
-    QueryInterface-es for *iface* via comtypes.  The AddRef keeps the object
-    alive through the Python reference.
-    """
-    unk = pywin32_obj._oleobj_.QueryInterface(pythoncom.IID_IUnknown)
-    m = re.search(r"obj at (0x[0-9a-fA-F]+)", repr(unk))
-    if not m:
-        raise RuntimeError(f"Could not extract COM pointer from {repr(unk)!r}")
-    ptr_int = int(m.group(1), 16)
-    ct_unk = ctypes.cast(ptr_int, ctypes.POINTER(comtypes.IUnknown))
-    ct_unk.AddRef()
-    return ct_unk.QueryInterface(iface)
-
 
 _MATE_TYPES: dict[str, int] = {
     "coincident": 0,
@@ -243,40 +190,50 @@ def _component_transforms(adapter: Any, assembly: Any) -> dict[str, tuple[float,
 _SAME_TITLE_ALREADY_OPEN = 65536
 
 
-#: ``swPackAndGoSaveStatus_e``: why ``SavePackAndGo`` didn't write a file.
-_PACK_AND_GO_STATUS = {
-    1: "the input was not correct",
-    2: "the file already exists",
-    3: "no folder to save to",
-    4: "it couldn't be saved",
-}
-
-
-def _unsaved_pack_files(
-    source_files: list[str], statuses: list[int]
-) -> list[dict[str, str]]:
-    """The files ``SavePackAndGo`` didn't write, each with the reason.
+def _files_to_pack(source: Path, dependencies: list[Path], out_dir: Path) -> list[Path]:
+    """The assembly and each file it uses, checked before anything is copied.
 
     Args:
-        source_files: ``GetDocumentNames``, in the order of ``statuses``.
-        statuses: ``SavePackAndGo``'s ``swPackAndGoSaveStatus_e`` per file.
+        source: The assembly.
+        dependencies: The files ``GetDependencies2`` listed.
+        out_dir: The folder they are copied into, under their own names.
 
     Returns:
-        list[dict[str, str]]: ``file`` (its name, or its position when
-        SolidWorks gave fewer names than statuses) and ``reason``.
+        list[Path]: The assembly first, then each dependency once.
+
+    Raises:
+        FileNotFoundError: A file is not on disk.
+        ValueError: Two files share a name (renaming one would break the
+            reference to it), or ``out_dir`` is a folder they are in.
     """
-    unsaved: list[dict[str, str]] = []
-    for index, status in enumerate(statuses):
-        if status == 0:
-            continue
-        name = (
-            Path(source_files[index]).name
-            if index < len(source_files)
-            else f"file {index + 1}"
+    files = [source]
+    keys = {os.path.normcase(str(source))}
+    for path in dependencies:
+        if os.path.normcase(str(path)) not in keys:
+            keys.add(os.path.normcase(str(path)))
+            files.append(path)
+    missing = [str(f) for f in files if not f.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"Files the assembly uses were not found on disk: {', '.join(missing)}. "
+            "Nothing was copied."
         )
-        reason = _PACK_AND_GO_STATUS.get(status, f"status {status}")
-        unsaved.append({"file": name, "reason": reason})
-    return unsaved
+    by_name: dict[str, list[str]] = {}
+    for f in files:
+        by_name.setdefault(f.name.casefold(), []).append(str(f))
+    clashes = [path for group in by_name.values() if len(group) > 1 for path in group]
+    if clashes:
+        raise ValueError(
+            f"These files share a name and can't go in one folder: {', '.join(clashes)}. "
+            "Nothing was copied."
+        )
+    target = os.path.normcase(str(out_dir.resolve()))
+    if any(os.path.normcase(str(f.parent.resolve())) == target for f in files):
+        raise ValueError(
+            "target_dir holds the files being packed; choose another folder. "
+            "Nothing was copied."
+        )
+    return files
 
 
 def _open_or_find_assembly(adapter: Any, source: Path) -> Any:
@@ -2640,85 +2597,59 @@ class SolidWorksIOMixin:
         source_path: str,
         target_dir: str,
     ) -> AdapterResult[dict[str, Any]]:
-        """Copy an assembly and all its referenced components to a self-contained folder.
+        """Copy an assembly and every file it uses into one folder.
 
-        Uses ``IModelDocExtension.GetPackAndGo()`` → ``IPackAndGo`` via the
-        comtypes vtable interface (bypassing the broken IDispatch path present
-        in SolidWorks 2026's late-binding layer), then calls
-        ``IModelDocExtension.SavePackAndGo()`` to execute the copy.  All file
-        paths inside the copied assembly are automatically updated by
-        SolidWorks — this is the native Pack-and-Go mechanism.
+        SolidWorks lists the files (``IModelDoc2.GetDependencies2``) and each
+        is copied, as saved on disk, into ``target_dir`` under its own name.
+        The copy opens with its own parts: SolidWorks looks for a referenced
+        file in the assembly's folder before the stored path. (SolidWorks'
+        own Pack and Go, ``IPackAndGo``, listed only the assembly on
+        SolidWorks 2026.) No document is closed or changed.
 
         Args:
-            source_path: Absolute path to the source ``.sldasm`` file.
-            target_dir: Directory where the assembly and parts will be copied.
-                        Created if it does not exist.
+            source_path: The ``.sldasm`` file.
+            target_dir: The folder to copy into; created if needed. A file
+                already there with a copied file's name is replaced.
 
         Returns:
-            AdapterResult[dict]: On success, ``data`` is a dict with keys:
-            ``source_assembly``, ``target_dir``, ``copied_files``,
-            ``source_files``, ``save_statuses``, and ``all_files_saved``.
+            AdapterResult[dict]: ``source_assembly``, ``target_dir``,
+            ``copied_files``, ``source_files`` and ``unsaved_changes`` (the
+            files open with changes the copy doesn't have).
         """
         adapter = self._adapter(self)
         source = Path(source_path)
         out_dir = Path(target_dir)
 
-        def _do_pack_and_go() -> dict[str, Any]:
-            # Load comtypes TLB (cached after first call)
-            sw_lib = _get_sw_comtypes_lib()
-            if sw_lib is None:
-                raise RuntimeError(
-                    "comtypes SolidWorks type library not available. "
-                    "Ensure comtypes is installed and SolidWorks is registered."
-                )
-
-            # Files already in the folder stay: Pack and Go replaces only the
-            # files it writes. (The tool refuses a non-empty folder unless the
-            # caller passed overwrite.)
-            out_dir.mkdir(parents=True, exist_ok=True)
-
+        def _pack() -> dict[str, Any]:
             model = _open_or_find_assembly(adapter, source)
             _sw_type_info.flag_doc(model, 2)
             adapter.currentModel = model
-
-            # Bridge model.Extension → IModelDocExtension via comtypes vtable
-            ext_ct = _bridge_com_to_comtypes(model.Extension, sw_lib.IModelDocExtension)
-
-            # GetPackAndGo() via vtable (IDispatch path broken in SW 2026)
-            pg = ext_ct.GetPackAndGo()
-
-            # Configure: flatten all files to root of target directory
-            pg.FlattenToSingleFolder = True
-            pg.SetSaveToName(True, str(out_dir) + "\\")
-
-            # Record what files will be packed
-            names_result = pg.GetDocumentNames()
-            source_files: list[str] = list(names_result[0]) if names_result[0] else []
-
-            # Execute Pack and Go — SavePackAndGo returns a tuple of per-file status codes
-            ext_ct2 = _bridge_com_to_comtypes(
-                model.Extension, sw_lib.IModelDocExtension
-            )
-            status_arr = ext_ct2.SavePackAndGo(pg)
-            save_statuses: list[int] = list(status_arr) if status_arr else []
-
-            # Only the files Pack and Go wrote, not others already in the folder.
-            copied_files = sorted(
-                str(out_dir / Path(name).name)
-                for name in source_files
-                if (out_dir / Path(name).name).is_file()
-            )
+            listed = dependency_paths(model.GetDependencies2(True, True, False))
+            files = _files_to_pack(source, listed, out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            copied = [str(shutil.copy2(f, out_dir / f.name)) for f in files]
+            unsaved = [
+                f.name
+                for f in files
+                if adapter._attempt(
+                    lambda f=f: bool(
+                        adapter._get_attr_or_call(
+                            adapter.swApp.GetOpenDocumentByName(str(f)),
+                            "GetSaveFlag",
+                        )
+                    ),
+                    default=False,
+                )
+            ]
             return {
                 "source_assembly": str(source),
                 "target_dir": str(out_dir),
-                "copied_files": copied_files,
-                "source_files": source_files,
-                "save_statuses": save_statuses,
-                "all_files_saved": all(s == 0 for s in save_statuses),
-                "unsaved_files": _unsaved_pack_files(source_files, save_statuses),
+                "copied_files": sorted(copied),
+                "source_files": [str(f) for f in files],
+                "unsaved_changes": unsaved,
             }
 
-        result = adapter._handle_com_operation("pack_and_go_assembly", _do_pack_and_go)
+        result = adapter._handle_com_operation("pack_and_go_assembly", _pack)
         if not result.is_success:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,

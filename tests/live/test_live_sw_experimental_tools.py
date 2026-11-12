@@ -271,15 +271,10 @@ async def test_pack_and_go_keeps_the_folder_and_the_open_documents(
         "pack_and_go_assembly into a folder holding notes.txt, twice",
         {
             "without_overwrite": refused.get("message"),
-            "first": first.get("message"),
-            "first_source_files": [
-                Path(f).name for f in first.get("source_files") or []
-            ],
-            "first_save_statuses": first.get("save_statuses"),
+            "first_copied": [Path(f).name for f in first.get("copied_files") or []],
+            "first_warning": first.get("warning"),
+            "second": second.get("status"),
             "folder_after": sorted(p.name for p in target.iterdir()),
-            "copied": [Path(f).name for f in first.get("copied_files") or []],
-            "second": second.get("message"),
-            "second_saved_all": second.get("all_files_saved"),
             "notes_kept": (target / "notes.txt").read_text(encoding="utf-8"),
             "open_documents": [open_before, open_after],
             "plate_still_unsaved": plate_dirty,
@@ -293,8 +288,10 @@ async def test_pack_and_go_keeps_the_folder_and_the_open_documents(
         "pack_pin.sldprt",
         "pack_plate.sldprt",
     ]
+    # The plate is named (the assembly may be too, once a part has changed).
+    assert Path(plate).name.lower() in [n.lower() for n in first["unsaved_changes"]]
+    assert Path(plate).name.lower() in first["warning"].lower()
     assert second["status"] == "success", second
-    assert second["all_files_saved"] is True
     assert (target / "notes.txt").read_text(encoding="utf-8") == "keep me"
     assert open_after >= open_before
     assert plate_dirty is True

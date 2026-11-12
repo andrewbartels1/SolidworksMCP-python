@@ -15,6 +15,7 @@
 - [x] 3.1 `load_part` and `load_assembly`: report the adapter's configuration or `null`; a missing file is `not_found`; tests
 - [x] 3.2 `pack_and_go_assembly` adapter: use the open document when `OpenDoc6` returns none, never `CloseAllDocuments`; no rename-and-delete of `target_dir`; tests with a stubbed comtypes path
 - [x] 3.3 `pack_and_go_assembly` tool: `PackAndGoInput` required; missing source `not_found`; a failed preview gives a `warning`; description says the copy holds what is open, saved or not; tests
+- [x] 3.5 `pack_and_go_assembly` copies the saved files `GetDependencies2` lists (design 2a): shared parsing in `utils/sw_dependencies.py`, a `warning` for unsaved changes, a name clash or missing file fails; the comtypes bridge goes; tests
 - [ ] 3.4 Live batch 2: save, close and reload a part and an assembly, wrong types refused; pack a two-part assembly into a folder holding `notes.txt` (kept), pack again into the same folder, and pack while a part is dirty (still dirty after)
 
 ## 4. Off-line tools on SolidWorks files (live batch 3)

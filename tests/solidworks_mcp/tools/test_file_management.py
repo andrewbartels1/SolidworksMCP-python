@@ -1951,11 +1951,11 @@ class TestFileManagementTools:
         assert "pack failed" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_pack_and_go_fails_when_a_file_was_not_written(
+    async def test_pack_and_go_warns_about_unsaved_changes(
         self, mcp_server, mock_adapter, mock_config, tmp_path
     ):
-        """Seen on SolidWorks 2026: only the assembly was written, yet the
-        reply said success. Each unwritten file is named, with its reason."""
+        """The copy is of the saved files: open files with changes are named,
+        alongside a preview that couldn't be written."""
         await register_file_management_tools(mcp_server, mock_adapter, mock_config)
         tools = {t.name: t.fn for t in await mcp_server.list_tools()}
         source = tmp_path / "box.sldasm"
@@ -1963,14 +1963,12 @@ class TestFileManagementTools:
         mock_adapter.pack_and_go_assembly = AsyncMock(
             return_value=Mock(
                 is_success=True,
-                data={
-                    "copied_files": [str(tmp_path / "out" / "box.sldasm")],
-                    "unsaved_files": [
-                        {"file": "plate.sldprt", "reason": "it couldn't be saved"}
-                    ],
-                },
+                data={"copied_files": [], "unsaved_changes": ["plate.sldprt"]},
                 execution_time=0.5,
             )
+        )
+        mock_adapter.export_image = AsyncMock(
+            return_value=Mock(is_success=False, error="no graphics window")
         )
 
         result = await tools["pack_and_go_assembly"](
@@ -1978,12 +1976,17 @@ class TestFileManagementTools:
                 "source_path": str(source),
                 "target_dir": str(tmp_path / "out"),
                 "overwrite": True,
+                "export_preview": True,
             }
         )
 
-        assert result["status"] == "error"
-        assert "plate.sldprt: it couldn't be saved" in result["message"]
-        assert "Files written: 1." in result["message"]
+        assert result["status"] == "success"
+        assert result["method"] == "dependency_copy"
+        assert result["warning"].startswith(
+            "plate.sldprt had unsaved changes, which are not in the copy; save, "
+            "then pack again to include them. The copy is complete, but the "
+            "preview couldn't be written: no graphics window"
+        )
 
     @pytest.mark.asyncio
     async def test_pack_and_go_success_without_preview(
@@ -2019,7 +2022,7 @@ class TestFileManagementTools:
             }
         )
         assert result["status"] == "success"
-        assert result["method"] == "native_pack_and_go"
+        assert result["method"] == "dependency_copy"
         assert "preview_image" not in result
 
     @pytest.mark.asyncio

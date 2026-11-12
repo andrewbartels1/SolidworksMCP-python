@@ -21,7 +21,10 @@ The ten tools fall into four groups.
   assembly is already open, Pack and Go uses the open copy instead of
   `CloseAllDocuments(False)`, which discarded unsaved work. With
   `overwrite`, it replaces only the files Pack and Go writes; it no longer
-  deletes everything already in `target_dir`. `source_path` and
+  deletes everything already in `target_dir`. On SolidWorks 2026 the native
+  Pack and Go copied only the assembly (live batch 2), so the tool copies
+  the saved files `GetDependencies2` lists instead, and warns about unsaved
+  changes it can't copy. `source_path` and
   `target_dir` become required (the input could be omitted, which turned
   into a "not found: ." error). A preview that can't be written gives a
   `warning` instead of a silent `null`.
@@ -88,8 +91,8 @@ are reused unchanged.
   `input_compat.REMOVED_INPUTS`.
 - **COM and adapter code:** `adapters/solidworks/io.py` (Pack and Go and
   `get_dimension`), `adapters/base.py` (the `get_dimension` return shape),
-  and `mock_adapter.py`. Pack and Go keeps its comtypes vtable path and stays
-  on the connect thread; `get_dimension` adds one late-bound call
+  and `mock_adapter.py`. Pack and Go drops its comtypes vtable path for
+  `GetDependencies2` and a file copy, on the connect thread; `get_dimension` adds one late-bound call
   (`IDimension.GetType`, flagged as a method).
 - **Clients:** two breaking input removals (above). `get_dimension` replies
   gain a real `units`, which is "deg" for an angle.

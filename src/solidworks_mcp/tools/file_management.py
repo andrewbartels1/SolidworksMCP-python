@@ -17,6 +17,7 @@ from ..utils.feature_tree_classifier import (
     build_component_tree,
     classify_feature_tree_snapshot,
 )
+from ..utils.sw_dependencies import dependency_paths
 from .input_compat import CompatInput
 from .tool_boundary import (
     InvalidInputError,
@@ -463,22 +464,6 @@ async def register_file_management_tools(
             return default if value is None else value
         return candidate
 
-    def _extract_dependency_paths(
-        raw_dependencies: Any,
-    ) -> list[Path]:
-        """Extract model file paths from SolidWorks GetDependencies2 payloads."""
-        if not isinstance(raw_dependencies, (list, tuple)):
-            return []
-
-        dependency_paths: list[Path] = []
-        for item in raw_dependencies:
-            if not isinstance(item, str):
-                continue
-            lower_item = item.lower()
-            if lower_item.endswith((".sldprt", ".sldasm", ".slddrw")):
-                dependency_paths.append(Path(item))
-        return dependency_paths
-
     def _copy_with_collision_handling(source_path: Path, target_dir: Path) -> Path:
         """Copy a source file into target_dir, suffixing when name collisions occur."""
         destination = target_dir / source_path.name
@@ -539,9 +524,8 @@ async def register_file_management_tools(
                 f"Failed to enumerate assembly dependencies: {exc}"
             ) from exc
 
-        dependency_paths = _extract_dependency_paths(raw_dependencies)
         unique_sources: list[Path] = [source_assembly]
-        for dep in dependency_paths:
+        for dep in dependency_paths(raw_dependencies):
             if dep not in unique_sources:
                 unique_sources.append(dep)
 
@@ -1184,18 +1168,20 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def pack_and_go_assembly(input_data: PackAndGoInput) -> dict[str, Any]:
-        """Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go).
+        """Copy an assembly and every file it uses into one folder that opens on its own.
 
-        Use it to hand over or archive an assembly as a self-contained folder. It
-        refuses a folder that already has files unless `overwrite` is on, and then
-        replaces only the files it writes. If the assembly is open, the copy holds
-        what is open, saved or not; it never closes a document. It can add an
+        Use it to hand over or archive an assembly. SolidWorks lists the files the
+        assembly uses; each is copied under its own name, as saved on disk, so save
+        first: a `warning` names any open file whose unsaved changes the copy doesn't
+        have. The copy opens with its own parts, since SolidWorks looks in the
+        assembly's folder first. It fails, copying nothing, when a file is missing,
+        two files share a name, or `target_dir` holds the originals. It refuses a
+        folder that already has files unless `overwrite` is on, and then replaces only
+        the files it copies. It never closes or changes a document. It can add an
         isometric PNG preview. Needs: the .sldasm on disk. Changes: writes the copies
         into `target_dir`, creating it if needed. Returns: `source_assembly`,
-        `target_dir`, `copied_files` (the files it wrote), `source_files`,
-        `all_files_saved` and, with a preview, `preview_image`, plus a `warning` when
-        the preview couldn't be written. If SolidWorks doesn't write a file, it fails
-        and names each one with the reason.
+        `target_dir`, `copied_files`, `source_files`, `unsaved_changes` and, with a
+        preview, `preview_image`.
 
         Args:
             input_data: The copy. `source_path` (a .sldasm) and `target_dir` are
@@ -1231,20 +1217,20 @@ async def register_file_management_tools(
         )
 
         require_success(result)
-        unsaved = result.data.get("unsaved_files") or []
-        if unsaved:
-            reasons = "; ".join(f"{u['file']}: {u['reason']}" for u in unsaved)
-            raise ToolOperationError(
-                f"Pack and Go didn't write every file ({reasons}). "
-                f"Files written: {len(result.data.get('copied_files') or [])}."
-            )
 
         report: dict[str, Any] = {
             "status": "success",
-            "method": "native_pack_and_go",
+            "method": "dependency_copy",
             "execution_time": result.execution_time,
             **result.data,
         }
+        warnings: list[str] = []
+        unsaved = result.data.get("unsaved_changes") or []
+        if unsaved:
+            warnings.append(
+                f"{', '.join(unsaved)} had unsaved changes, which are not in the "
+                "copy; save, then pack again to include them."
+            )
 
         if input_data.export_preview:
             preview_path = out_dir / "assembly_preview.png"
@@ -1261,11 +1247,13 @@ async def register_file_management_tools(
                 str(preview_path) if img_result.is_success else None
             )
             if not img_result.is_success:
-                report["warning"] = (
+                warnings.append(
                     f"The copy is complete, but the preview couldn't be written: "
                     f"{img_result.error}"
                 )
 
+        if warnings:
+            report["warning"] = " ".join(warnings)
         return report
 
     @mcp.tool()
