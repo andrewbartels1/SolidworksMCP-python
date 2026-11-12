@@ -432,17 +432,13 @@ async def test_a_generated_macro_runs(scratch, tmp_path) -> None:
     part = tmp_path / "macro_part.SLDPRT"
     await _saved_block(scratch, tools, part)
 
-    on_part = await tools["execute_macro"](
-        {"macro_path": str(macro), "proc_name": vba["sub_name"]}
-    )
+    on_part = await tools["execute_macro"]({"macro_path": str(macro)})
     assert (await tools["create_drawing"]({"name": "macro_drawing"}))[
         "status"
     ] == "success"
     drawing = sw_type_info.flagged(adapter.currentModel, "IModelDoc2")
     dirty_before = bool(drawing.GetSaveFlag())
-    on_drawing = await tools["execute_macro"](
-        {"macro_path": str(macro), "proc_name": vba["sub_name"]}
-    )
+    on_drawing = await tools["execute_macro"]({"macro_path": str(macro)})
     dirty_after = bool(drawing.GetSaveFlag())
     evidence(
         "a generated macro run on a part, then on a drawing (it stops there)",
@@ -452,7 +448,7 @@ async def test_a_generated_macro_runs(scratch, tmp_path) -> None:
             "on_drawing": on_drawing.get("message"),
             "drawing_changed": dirty_before != dirty_after,
         },
-        call=f'execute_macro({{"macro_path": "skeleton.swb", "proc_name": "{vba["sub_name"]}"}})',
+        call='execute_macro({"macro_path": "skeleton.swb"})',
     )
     assert vba["sub_name"] == "Add_3_holes_M6_then_save"
     assert on_part["status"] == "success", on_part

@@ -315,7 +315,9 @@ def _vba_skeleton(
 
     Late-bound (``As Object``), so it needs no type-library reference when
     run as a text macro; ``Debug.Print`` instead of ``MsgBox``, so a run never
-    waits on a dialog.
+    waits on a dialog. A ``Sub main()`` calls the named Sub: SolidWorks runs
+    a ``.swb`` macro only through ``main`` (live batch 3), and ``main`` is
+    ``execute_macro``'s default procedure.
 
     Args:
         sub_name: The Sub's name, from :func:`_vba_sub_name`.
@@ -335,6 +337,10 @@ def _vba_skeleton(
         "",
         "Option Explicit",
         "",
+    ]
+    if sub_name.lower() != "main":  # VBA names ignore case
+        lines += ["Sub main()", f"    {sub_name}", "End Sub", ""]
+    lines += [
         f"Sub {sub_name}()",
         "    Dim swApp As Object",
         "    Dim swModel As Object",
@@ -396,7 +402,8 @@ async def register_automation_tools(
         specific feature, use a `generate_vba_*` tool (extrusion, revolve, mates,
         drawing views, batch export). The macro reports through `Debug.Print`, never a
         dialog, so it runs without waiting on anyone: save it as a .swb file and run it
-        with `execute_macro`, giving `sub_name` as `proc_name`. It stops, printing why,
+        with `execute_macro` (its `Sub main()` calls the Sub named `sub_name`; SolidWorks
+        runs a .swb macro only through `main`). It stops, printing why,
         when the active document isn't `target_document`. Read-only. Nothing runs in
         SolidWorks. Returns: `vba_code` with `code`, `sub_name`, `operation`,
         `target_document`, `lines_of_code` and `includes_error_handling`.

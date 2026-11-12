@@ -12,6 +12,10 @@ waiting on the user.
 - **WHEN** an agent asks for a macro described as "Add 3 holes (M6), then save"
 - **THEN** the Sub name contains only letters, digits and underscores and starts with a letter, and saved as a `.swb` file, `execute_macro` runs it on an open part and returns success
 
+#### Scenario: Run with execute_macro's default procedure
+- **WHEN** the macro is saved as a `.swb` file and `execute_macro` is called with no `proc_name`
+- **THEN** its `Sub main()` calls the named Sub, because SolidWorks runs a `.swb` macro only through `main`, and the run returns success
+
 ### Requirement: The macro checks the document type it was written for
 
 The macro SHALL stop, printing why, when the active document is not the type

@@ -59,6 +59,8 @@ class TestAutomationTools:
         assert result["status"] == "success"
         assert vba["sub_name"] == "Add_3_holes_M6_then_save"
         assert "Sub Add_3_holes_M6_then_save()" in vba["code"]
+        # SolidWorks runs a .swb macro only through main, which calls the Sub.
+        assert "Sub main()\n    Add_3_holes_M6_then_save\nEnd Sub" in vba["code"]
         assert "If swModel.GetType <> 1 Then" in vba["code"]
         assert "MsgBox" not in vba["code"]
         assert "On Error GoTo ErrorHandler" in vba["code"]
@@ -770,3 +772,13 @@ def test_an_unknown_document_type_is_refused() -> None:
     with pytest.raises(ValidationError):
         VBAGenerationInput(target_document=3)
     assert VBAGenerationInput(target_document=" drawing ").target_document == "Drawing"
+
+
+@pytest.mark.parametrize("name", ["main", "Main"])
+def test_a_sub_named_main_is_not_wrapped(name: str) -> None:
+    """A second main would be a duplicate definition; VBA names ignore case."""
+    from solidworks_mcp.tools.automation import _vba_skeleton
+
+    code = _vba_skeleton(name, name, "Part", error_handling=False)
+
+    assert code.lower().count("sub main()") == 1

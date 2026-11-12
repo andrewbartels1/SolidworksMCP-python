@@ -51,7 +51,7 @@
   `hasattr` branches.
 - `generate_vba_code`'s macro is late-bound (`As Object`), so it runs as a
   `.swb` text macro without a type-library reference; its reply gains
-  `sub_name`, to pass to `execute_macro` as `proc_name`.
+  `sub_name`, the Sub that `Sub main()` calls.
 - Live batch 1: `classify_feature_tree` called a plain extruded part an
   assembly. Its assembly check matched "mate" anywhere in a feature name,
   and every real part's tree has "Material <not specified>". The mock's
@@ -76,3 +76,8 @@
   rejects. Until that passes, `generate_vba_code` stays experimental; the
   other nine tools are stable (5.1), and the skill's limits page has rows
   for Pack and Go's saved files and drawing re-saves (5.2).
+- The diagnostic answered it: every construct ran, but a `.swb` runs only
+  through a Sub named `main` (a lone `Sub Add_3_holes` failed; the generated
+  macro ran once its Sub was renamed `main`). The macro now opens with
+  `Sub main()` calling the named Sub, so `execute_macro` runs it with no
+  `proc_name`.

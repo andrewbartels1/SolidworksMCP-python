@@ -111,7 +111,9 @@ the text. The live test saves the macro as a `.swb` file and runs it with
 `execute_macro` (which runs text macros since 2.0.0): the run completing
 proves the VBA parses and that nothing blocks. The Sub name keeps letters,
 digits and underscores, starts with a letter (prefix `Macro_` otherwise)
-and is cut to VBA's 255-character limit. `MsgBox` becomes `Debug.Print`.
+and is cut to VBA's 255-character limit. A `Sub main()` calls it: on
+SolidWorks 2026 a `.swb` macro runs only through `main` (live batch 3), and
+`main` is `execute_macro`'s default. `MsgBox` becomes `Debug.Print`.
 The type check compares `swModel.GetType` with `swDocPART` (1),
 `swDocASSEMBLY` (2) or `swDocDRAWING` (3) as literal numbers, so the macro
 needs no type-library reference.
