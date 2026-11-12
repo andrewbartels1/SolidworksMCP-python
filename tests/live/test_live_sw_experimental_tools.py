@@ -271,7 +271,9 @@ async def test_pack_and_go_keeps_the_folder_and_the_open_documents(
         "pack_and_go_assembly into a folder holding notes.txt, twice",
         {
             "without_overwrite": refused.get("message"),
+            "first": first.get("message"),
             "copied": [Path(f).name for f in first.get("copied_files") or []],
+            "second": second.get("message"),
             "second_saved_all": second.get("all_files_saved"),
             "notes_kept": (target / "notes.txt").read_text(encoding="utf-8"),
             "open_documents": [open_before, open_after],

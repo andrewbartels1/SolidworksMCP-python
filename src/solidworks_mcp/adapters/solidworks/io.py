@@ -243,6 +243,42 @@ def _component_transforms(adapter: Any, assembly: Any) -> dict[str, tuple[float,
 _SAME_TITLE_ALREADY_OPEN = 65536
 
 
+#: ``swPackAndGoSaveStatus_e``: why ``SavePackAndGo`` didn't write a file.
+_PACK_AND_GO_STATUS = {
+    1: "the input was not correct",
+    2: "the file already exists",
+    3: "no folder to save to",
+    4: "it couldn't be saved",
+}
+
+
+def _unsaved_pack_files(
+    source_files: list[str], statuses: list[int]
+) -> list[dict[str, str]]:
+    """The files ``SavePackAndGo`` didn't write, each with the reason.
+
+    Args:
+        source_files: ``GetDocumentNames``, in the order of ``statuses``.
+        statuses: ``SavePackAndGo``'s ``swPackAndGoSaveStatus_e`` per file.
+
+    Returns:
+        list[dict[str, str]]: ``file`` (its name, or its position when
+        SolidWorks gave fewer names than statuses) and ``reason``.
+    """
+    unsaved: list[dict[str, str]] = []
+    for index, status in enumerate(statuses):
+        if status == 0:
+            continue
+        name = (
+            Path(source_files[index]).name
+            if index < len(source_files)
+            else f"file {index + 1}"
+        )
+        reason = _PACK_AND_GO_STATUS.get(status, f"status {status}")
+        unsaved.append({"file": name, "reason": reason})
+    return unsaved
+
+
 def _open_or_find_assembly(adapter: Any, source: Path) -> Any:
     """Open the assembly, or use it when it is already open; never close anything.
 
@@ -2679,6 +2715,7 @@ class SolidWorksIOMixin:
                 "source_files": source_files,
                 "save_statuses": save_statuses,
                 "all_files_saved": all(s == 0 for s in save_statuses),
+                "unsaved_files": _unsaved_pack_files(source_files, save_statuses),
             }
 
         result = adapter._handle_com_operation("pack_and_go_assembly", _do_pack_and_go)

@@ -142,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     fails and closes nothing), and no longer deletes everything already
     in `target_dir`: with `overwrite` it replaces only the files it
     writes, and `copied_files` lists only those. A preview that can't be
-    written gives a `warning`.
+    written gives a `warning`. When SolidWorks doesn't write a file, the tool
+    fails and names each one with the reason; it used to report success.
   - `get_dimension` reports an angle in degrees (`units: "deg"`) and a
     count with no unit; it used to multiply every value by 1000 and call
     it mm.

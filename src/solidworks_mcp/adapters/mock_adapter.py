@@ -2303,6 +2303,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "source_files": source_files,
                 "save_statuses": [0] * (len(mock_parts) + 1),
                 "all_files_saved": True,
+                "unsaved_files": [],
             },
             execution_time=0.05,
             metadata={"mock": True},

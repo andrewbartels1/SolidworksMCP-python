@@ -1951,6 +1951,41 @@ class TestFileManagementTools:
         assert "pack failed" in result["message"]
 
     @pytest.mark.asyncio
+    async def test_pack_and_go_fails_when_a_file_was_not_written(
+        self, mcp_server, mock_adapter, mock_config, tmp_path
+    ):
+        """Seen on SolidWorks 2026: only the assembly was written, yet the
+        reply said success. Each unwritten file is named, with its reason."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        tools = {t.name: t.fn for t in await mcp_server.list_tools()}
+        source = tmp_path / "box.sldasm"
+        source.write_text("asm", encoding="utf-8")
+        mock_adapter.pack_and_go_assembly = AsyncMock(
+            return_value=Mock(
+                is_success=True,
+                data={
+                    "copied_files": [str(tmp_path / "out" / "box.sldasm")],
+                    "unsaved_files": [
+                        {"file": "plate.sldprt", "reason": "it couldn't be saved"}
+                    ],
+                },
+                execution_time=0.5,
+            )
+        )
+
+        result = await tools["pack_and_go_assembly"](
+            input_data={
+                "source_path": str(source),
+                "target_dir": str(tmp_path / "out"),
+                "overwrite": True,
+            }
+        )
+
+        assert result["status"] == "error"
+        assert "plate.sldprt: it couldn't be saved" in result["message"]
+        assert "Files written: 1." in result["message"]
+
+    @pytest.mark.asyncio
     async def test_pack_and_go_success_without_preview(
         self, mcp_server, mock_adapter, mock_config, tmp_path
     ):

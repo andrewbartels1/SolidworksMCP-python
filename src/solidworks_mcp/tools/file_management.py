@@ -1194,7 +1194,8 @@ async def register_file_management_tools(
         into `target_dir`, creating it if needed. Returns: `source_assembly`,
         `target_dir`, `copied_files` (the files it wrote), `source_files`,
         `all_files_saved` and, with a preview, `preview_image`, plus a `warning` when
-        the preview couldn't be written.
+        the preview couldn't be written. If SolidWorks doesn't write a file, it fails
+        and names each one with the reason.
 
         Args:
             input_data: The copy. `source_path` (a .sldasm) and `target_dir` are
@@ -1230,6 +1231,13 @@ async def register_file_management_tools(
         )
 
         require_success(result)
+        unsaved = result.data.get("unsaved_files") or []
+        if unsaved:
+            reasons = "; ".join(f"{u['file']}: {u['reason']}" for u in unsaved)
+            raise ToolOperationError(
+                f"Pack and Go didn't write every file ({reasons}). "
+                f"Files written: {len(result.data.get('copied_files') or [])}."
+            )
 
         report: dict[str, Any] = {
             "status": "success",

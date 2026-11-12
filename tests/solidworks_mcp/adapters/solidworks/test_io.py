@@ -635,6 +635,7 @@ async def test_pack_and_go_assembly_packs_into_a_fresh_folder(
     ]
     assert result.data["save_statuses"] == [0, 0]
     assert result.data["all_files_saved"] is True
+    assert result.data["unsaved_files"] == []
 
 
 @pytest.mark.asyncio
@@ -654,6 +655,22 @@ async def test_pack_and_go_assembly_packs_the_copy_already_open(
     assert harness.currentModel is open_model
     assert result.data["source_files"] == []
     assert result.data["all_files_saved"] is False
+    # No names from GetDocumentNames: the file is named by its position.
+    assert result.data["unsaved_files"] == [
+        {"file": "file 2", "reason": "the file already exists"}
+    ]
+
+
+def test_unsaved_pack_files_names_each_file_and_its_reason() -> None:
+    """swPackAndGoSaveStatus_e: 0 saved; 1-4 named; anything else by number."""
+    names = ["C:/src/a.SLDASM", "C:/src/b.sldprt", "C:/src/c.sldprt"]
+
+    unsaved = _io_module._unsaved_pack_files(names, [0, 4, 9])
+
+    assert unsaved == [
+        {"file": "b.sldprt", "reason": "it couldn't be saved"},
+        {"file": "c.sldprt", "reason": "status 9"},
+    ]
 
 
 @pytest.mark.asyncio
