@@ -361,7 +361,9 @@ async def register_drawing_analysis_tools(
         """Compare two drawing files on disk: whether they are byte-identical, and how their sizes differ.
 
         Use it to tell whether a drawing changed between two saved versions. It does not
-        open SolidWorks, so it can't say which views, dimensions or notes differ. Needs:
+        open SolidWorks, so it can't say which views, dimensions or notes differ.
+        Identical files mean nothing changed, but different files may not: SolidWorks
+        writes a different file each time it saves, even with no change. Needs:
         both files on disk. Read-only. Returns: `comparison` with `file_1` and `file_2`
         (size, modified time, SHA-256), `identical` and `size_delta_bytes`.
 

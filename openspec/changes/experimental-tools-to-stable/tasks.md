@@ -66,3 +66,6 @@
   adapter tracked, and forgot it after closing. SolidWorks makes another
   open document active, so a second close in a row failed with "No active
   model to close". It now reads `ActiveDoc` first, as `list_features` does.
+- Live batch 3: a drawing saved again with no change is not byte-identical
+  to the earlier save (SolidWorks 2026). `compare_drawing_versions` now says
+  that identical files mean nothing changed, but different files may not.
