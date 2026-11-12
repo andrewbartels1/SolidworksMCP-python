@@ -2,9 +2,9 @@
  "tools": {
   "total": 156,
   "by_level": {
-   "stable": 106,
+   "stable": 115,
    "beta": 0,
-   "experimental": 10,
+   "experimental": 1,
    "planned": 40
   },
   "list": [
@@ -305,8 +305,8 @@
    {
     "name": "classify_feature_tree",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Classify the active model's kind (part, sheet metal, assembly, drawing and so on) from its feature tree, and suggest how to work on it."
    },
    {
@@ -319,15 +319,15 @@
    {
     "name": "compare_drawing_versions",
     "family": "drawing_analysis",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Compare two drawing files on disk: whether they are byte-identical, and how their sizes differ."
    },
    {
     "name": "compare_templates",
     "family": "template_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Compare two template files on disk: whether they are byte-identical, and how their sizes differ."
    },
    {
@@ -662,15 +662,15 @@
    {
     "name": "get_dimension",
     "family": "modeling",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Read one dimension of the active model by its full name, e.g. \"D1@Sketch1\"."
    },
    {
     "name": "get_file_properties",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes."
    },
    {
@@ -746,8 +746,8 @@
    {
     "name": "list_configurations",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "List the names of the active model's configurations."
    },
    {
@@ -788,15 +788,15 @@
    {
     "name": "load_assembly",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Open an assembly (.sldasm) from disk and make it the active document."
    },
    {
     "name": "load_part",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Open a part (.sldprt) from disk and make it the active document."
    },
    {
@@ -865,8 +865,8 @@
    {
     "name": "pack_and_go_assembly",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Copy an assembly and every file it uses into one folder that opens on its own."
    },
    {

@@ -46,6 +46,7 @@ async def _tools(adapter: Any) -> dict[str, Any]:
     from solidworks_mcp.tools.file_management import register_file_management_tools
     from solidworks_mcp.tools.macro_recording import register_macro_recording_tools
     from solidworks_mcp.tools.modeling import register_modeling_tools
+    from solidworks_mcp.tools.server_admin import register_server_admin_tools
     from solidworks_mcp.tools.sketching import register_sketching_tools
     from solidworks_mcp.tools.template_management import (
         register_template_management_tools,
@@ -62,6 +63,7 @@ async def _tools(adapter: Any) -> dict[str, Any]:
         register_macro_recording_tools,
         register_automation_tools,
         register_template_management_tools,
+        register_server_admin_tools,
     ):
         await register(mcp, adapter, {})
     return {t.name: t.fn for t in await mcp.list_tools()}
@@ -456,3 +458,86 @@ async def test_a_generated_macro_runs(scratch, tmp_path) -> None:
     assert on_part["status"] == "success", on_part
     assert on_drawing["status"] == "success", on_drawing
     assert dirty_before == dirty_after
+
+
+#: A macro that ran from a .swb in the beta batch, cut to its first lines.
+_CONTROL = (
+    "Dim swApp As Object\nSub main()\n    Set swApp = Application.SldWorks\nEnd Sub\n"
+)
+
+
+def _macro_variants(generated: str, sub_name: str) -> dict[str, tuple[str, str]]:
+    """Each variant changes one thing from the control; name -> (text, proc).
+
+    The generated macro failed with ``errors=0`` and no reason, so these
+    find which of its constructs the .swb runner rejects.
+    """
+    body = "    Set swApp = Application.SldWorks\n"
+
+    def sub(name: str, inner: str = "", head: str = "") -> str:
+        return f"{head}Dim swApp As Object\nSub {name}()\n{body}{inner}End Sub\n"
+
+    return {
+        "control": (_CONTROL, "main"),
+        "sub_not_named_main": (sub("Add_3_holes"), "Add_3_holes"),
+        "option_explicit": (sub("main", head="Option Explicit\n\n"), "main"),
+        "comment_header": (sub("main", head="' a comment\n\n"), "main"),
+        "dim_inside_sub": (
+            "Sub main()\n    Dim swApp As Object\n" + body + "End Sub\n",
+            "main",
+        ),
+        "debug_print": (sub("main", '    Debug.Print "Done"\n'), "main"),
+        "exit_sub": (sub("main", "    Exit Sub\n"), "main"),
+        "get_type_check": (
+            sub(
+                "main",
+                "    Dim swModel As Object\n"
+                "    Set swModel = swApp.ActiveDoc\n"
+                "    If swModel.GetType <> 1 Then\n"
+                "        Exit Sub\n"
+                "    End If\n",
+            ),
+            "main",
+        ),
+        "generated_sub_renamed_main": (
+            generated.replace(f"Sub {sub_name}()", "Sub main()"),
+            "main",
+        ),
+        "generated_as_is": (generated, sub_name),
+    }
+
+
+async def test_which_macro_text_runs_from_a_swb(scratch, tmp_path) -> None:
+    """Diagnostic: run each variant on a part and record which run.
+
+    Every variant only reads; none changes the part. The circuit breaker is
+    reset after each run, so the expected failures can't pause execute_macro.
+    """
+    tools = await _tools(scratch.adapter)
+    generated = (
+        await tools["generate_vba_code"](
+            {
+                "operation_description": "Add 3 holes (M6), then save",
+                "target_document": "Part",
+            }
+        )
+    )["vba_code"]
+    assert (await tools["create_part"]({"name": "macro_probe"}))["status"] == "success"
+
+    ran: dict[str, str] = {}
+    for name, (text, proc) in _macro_variants(
+        generated["code"], generated["sub_name"]
+    ).items():
+        macro = tmp_path / f"{name}.swb"
+        macro.write_text(text, encoding="ascii")
+        result = await tools["execute_macro"](
+            {"macro_path": str(macro), "proc_name": proc}
+        )
+        ran[name] = "ran" if result["status"] == "success" else "failed"
+        await tools["reset_circuit_breaker"]({})
+    evidence(
+        "each macro variant run from a .swb on a part",
+        ran,
+        call='execute_macro({"macro_path": "<variant>.swb", "proc_name": ...})',
+    )
+    assert ran["control"] == "ran", ran

@@ -30,7 +30,7 @@
 - [ ] 5.1 `support_levels.py`: each tool whose batch passed moves to `stable`; any that can't be fixed here goes to `beta` with its fault as the reason; `python -m solidworks_mcp.progress.generate`
 - [ ] 5.2 Each tool's description matches what it now does; the skill's `errors-and-limits.md` gains a row for any fault recorded
 - [x] 5.3 CHANGELOG: **Fixed** (Pack and Go, angles), **Changed** (the removed inputs; `get_dimension` units)
-- [ ] 5.4 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
+- [x] 5.4 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
 - [ ] 5.5 Live-demo sign-off with the user before the PR; settle the version question in design.md
 
 ## Notes from the implementation
@@ -69,3 +69,10 @@
 - Live batch 3: a drawing saved again with no change is not byte-identical
   to the earlier save (SolidWorks 2026). `compare_drawing_versions` now says
   that identical files mean nothing changed, but different files may not.
+- Live batch 3: the generated macro failed on SolidWorks: `RunMacro2`
+  returned false with error 0 (no reason), on the part and the drawing. A
+  `.swb` macro ran in the beta batch, so `test_which_macro_text_runs_from_a_swb`
+  runs one-change variants of it to find the construct the `.swb` runner
+  rejects. Until that passes, `generate_vba_code` stays experimental; the
+  other nine tools are stable (5.1), and the skill's limits page has rows
+  for Pack and Go's saved files and drawing re-saves (5.2).

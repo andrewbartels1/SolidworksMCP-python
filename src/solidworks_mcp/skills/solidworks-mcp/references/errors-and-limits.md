@@ -48,3 +48,5 @@ mostly batch, template, macro-recording and drawing-analysis tools, plus
 | Fault | Workaround |
 | --- | --- |
 | `add_mate` can't mate edges or vertices, only planes, axes and faces. | Mate the faces that meet at the edge. |
+| `pack_and_go_assembly` copies the files as saved on disk; unsaved changes in open parts are left out, and its `warning` names those parts. | Save the assembly and its parts first, then pack. |
+| `compare_drawing_versions`: SolidWorks writes a different file every time it saves, so two saves of an unchanged drawing still differ. | Treat "identical" as proof nothing changed; treat "different" as "may have changed", and check with `list_drawing_views`. |
