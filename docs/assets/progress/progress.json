@@ -2,9 +2,9 @@
  "tools": {
   "total": 156,
   "by_level": {
-   "stable": 115,
+   "stable": 116,
    "beta": 0,
-   "experimental": 1,
+   "experimental": 0,
    "planned": 40
   },
   "list": [
@@ -599,8 +599,8 @@
    {
     "name": "generate_vba_code",
     "family": "automation",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, a check of the active document's type and optional error handling, with the operation itself left as a TODO."
    },
    {

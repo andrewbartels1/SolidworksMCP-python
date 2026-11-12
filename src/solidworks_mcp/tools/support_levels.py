@@ -72,9 +72,6 @@ class Support:
 OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"})
 
 _STABLE = Support(SupportLevel.STABLE)
-_UNCHECKED = Support(
-    SupportLevel.EXPERIMENTAL, "not yet checked by a live test on real SolidWorks."
-)
 _PLANNED = Support(SupportLevel.PLANNED, "no adapter implements it yet.")
 
 
@@ -92,7 +89,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "batch_process_files": _PLANNED,
     "create_template": _PLANNED,
     "execute_workflow": _PLANNED,
-    "generate_vba_code": _UNCHECKED,
+    "generate_vba_code": _STABLE,
     "manage_design_table": _PLANNED,
     "optimize_performance": _PLANNED,
     # docs_discovery

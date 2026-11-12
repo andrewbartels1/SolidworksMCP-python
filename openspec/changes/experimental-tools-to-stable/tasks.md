@@ -23,12 +23,12 @@
 - [x] 4.1 `compare_templates`: delete the `adapter.compare_templates` branch; missing path `not_found`; description; tests
 - [x] 4.2 `compare_drawing_versions`: a typed input model with both paths required; missing path `not_found`; tests
 - [x] 4.3 `generate_vba_code`: valid Sub name, `Debug.Print` for `MsgBox`, the `target_document` type check, delete the adapter branch, fix the `.swp`-only sentence; tests for the name rules and each document type
-- [ ] 4.4 Live batch 3: the installed part template against itself and against the assembly template; a drawing saved before and after adding a view, and an unchanged re-save (record whether it is byte-identical); a generated macro run on a part, then on a drawing
+- [x] 4.4 Live batch 3: the installed part template against itself and against the assembly template; a drawing saved before and after adding a view, and an unchanged re-save (record whether it is byte-identical); a generated macro run on a part, then on a drawing
 
 ## 5. Promote and document
 
-- [ ] 5.1 `support_levels.py`: each tool whose batch passed moves to `stable`; any that can't be fixed here goes to `beta` with its fault as the reason; `python -m solidworks_mcp.progress.generate`
-- [ ] 5.2 Each tool's description matches what it now does; the skill's `errors-and-limits.md` gains a row for any fault recorded
+- [x] 5.1 `support_levels.py`: each tool whose batch passed moves to `stable`; any that can't be fixed here goes to `beta` with its fault as the reason; `python -m solidworks_mcp.progress.generate`
+- [x] 5.2 Each tool's description matches what it now does; the skill's `errors-and-limits.md` gains a row for any fault recorded
 - [x] 5.3 CHANGELOG: **Fixed** (Pack and Go, angles), **Changed** (the removed inputs; `get_dimension` units)
 - [x] 5.4 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
 - [ ] 5.5 Live-demo sign-off with the user before the PR; settle the version question in design.md
@@ -81,3 +81,5 @@
   macro ran once its Sub was renamed `main`). The macro now opens with
   `Sub main()` calling the named Sub, so `execute_macro` runs it with no
   `proc_name`.
+- Demo 10 rerun passed: the macro ran on the part and on the drawing,
+  which it left unchanged. `generate_vba_code` is stable.
