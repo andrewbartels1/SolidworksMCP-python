@@ -1,0 +1,80 @@
+# SolidworksMCP-python
+
+> A Python MCP server and scripting interface that lets AI agents and Python scripts build SolidWorks parts, assemblies and drawings through 156 tools wrapping the SolidWorks COM API.
+
+Written in Python; the adapters wrap SolidWorks' COM API in async Python calls, exposed both for direct scripting and as 156 MCP tools with support levels (stable, beta, experimental, planned). A generated reference lists every tool with its level and family. An optional agent/prompt-testing layer supports AI-assisted workflows.
+
+## Docs
+
+- [SolidworksMCP-python README](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/README.md): Python MCP server wrapping the SolidWorks COM API as 156 tools, with demos and support levels.
+- [SolidWorks MCP Server](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/index.md): Project overview, motivation, and the describe-plan-execute-iterate workflow for AI-assisted SolidWorks automation and design.
+- [Demos](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/demos.md): Recorded demo runs with prompts, tool calls and results, including the U-joint built by Claude Code.
+- [Progress](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/progress.md): Per-tool support levels and approximate COM API coverage, generated from code with command-line tools.
+- [Compatibility](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/compatibility.md): SolidWorks releases checked via the selftest, with instructions to run it and report results.
+
+## Getting started
+
+- [Installation Guide](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/installation.md): Windows and SolidWorks requirements, installing uv, and connecting MCP clients via the setup command.
+- [Quick Start Guide](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/quickstart.md): Installing with uv via setup, connecting clients, verifying the server, and troubleshooting failures.
+- [Tutorial Tracks](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/tutorial-tracks.md): Script-based part generation versus SolidWorks-as-Code export, plus available walkthrough tutorials.
+- [SolidWorks as Code (SoC)](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/solidworks-as-code.md): Recording MCP sessions to SQLite, exporting Python scripts, creating checkpoints, rewinding, and picking up manual changes.
+- [Getting Started: Building SolidWorks Parts with Python](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/tutorials/u-joint-assembly-build.md): Beginner tutorial building three parts, covering adapter basics, await usage, connection checks, and the checkpoint-restore workflow.
+- [U-Joint Rebuild Prompts](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/tutorial-parts/u_joint_rebuild_prompt.md): Prompts for rebuilding reference U-Joint parts and the assembly with exact parity and QA verification.
+- [Heat-Insert Coupon Recording Prompt](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/tutorial-parts/heat_insert_recording_prompt.md): Prompt reproducing a pauses-between-steps script for screen-recording an MCP modeling session.
+- [Prompt-Driven Walkthrough: Smart Dimensions, Reference Points, Save Bodies & Center Marks](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/tutorials/wave3-reference-geometry-and-drawings.md): Live SolidWorks session with plain-language prompts for smart dimensions, reference points, save bodies and center marks.
+- [VS Code MCP Setup](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/vscode-mcp-setup.md): Connecting VS Code to the MCP server via setup or manual mcp.json, mock mode, verification and troubleshooting.
+- [Claude Code MCP Setup](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/claude-code-setup.md): Beginner steps for connecting Claude Code to the SolidWorks MCP server, including prerequisites and project-scoped configuration.
+- [Local LLM with Ollama (Gemma 4)](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/getting-started/local-llm.md): Routing UI LLM calls to a local Ollama Gemma 4 instance, with auto-detection, setup and pulling model tiers.
+
+## User guide
+
+- [Architecture Overview](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/architecture.md): The layered server architecture: intelligent router, complexity analyzer, VBA decision criteria and dual COM adapters.
+- [Tools Overview](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tools-overview.md): Navigation map of the 156 CAD automation tools, grouped by modeling, sketching, drawing and analysis categories.
+- [Platform and Connectivity](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/platform-connectivity.md): Running the MCP server on Windows while developing from Linux/WSL, remote HTTP connections, COM reachability checks, and mock mode.
+- [Prompting Best Practices for SolidWorks MCP](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/prompting-best-practices.md): Prompt structure, UI rules, and deterministic patterns for reliable LLM tool calls, plus anti-patterns that cause failures.
+- [Integration Testing (Real SolidWorks)](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/integration-testing.md): Running default mock tests versus full real SolidWorks integration tests, what each mode executes, cleanup, and smoke test coverage.
+- [Real SolidWorks Tool Validation Matrix](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/real-tool-validation-matrix.md): Which tools are validated with real SolidWorks versus simulated, including live regression test files and their safety gating.
+- [SolidWorks UI + LLM Tutorial](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/solidworks-ui-llm-tutorial.md): Step-by-step tutorial preparing the SolidWorks UI, writing effective prompts, and running an end-to-end part creation workflow.
+- [Screenshot Equivalence Workflow](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/screenshot-equivalence.md): Validating LLM-generated models against references via screenshot export, SSIM pixel comparison, and the screenshot_compare.py utility.
+- [Tool Catalog — All 152 Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/index.md): Reference for all 152 MCP tools, grouped by category, with the standard response envelope, error shape, and calling conventions.
+- [Modeling Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/modeling.md): The 12 tools for opening files, creating extrude, revolve and cut features, and setting driven dimensions, with measured change reporting.
+- [Sketching Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/sketching.md): The 18 tools for building 2-D sketch geometry: lines, circles, arcs, rectangles, constraints, and driven dimensions, with parameters and sample calls.
+- [Drawing Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/drawing.md): The 14 tools for creating drawing views, dimensions, notes, section and detail views, and updating sheet formats and title blocks.
+- [Drawing Analysis Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/drawing-analysis.md): The 8 QA tools that check drawing dimensions, annotations, view coverage, and GD&T compliance against drafting standards, and generate reports.
+- [Drawing Automation Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/drawing-automation.md): The 5 automation tools for inserting model dimensions, arranging them, adding BOM tables, setting sheet scale, and generating complete A3 drawing packages.
+- [Engineering Data Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/engineering-data.md): Reading and editing model dimensions, measurements, materials, custom properties and sheet-metal flat patterns, with prerequisites.
+- [Analysis Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/analysis.md): Six verification and analysis tools: mass properties, interference checking, geometry analysis, material properties, and their limits.
+- [Export Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/export.md): Exporting models to STEP, IGES, STL, PDF, DWG and images, including batch directory export.
+- [File Management Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/file-management.md): Opening and saving SolidWorks documents, file properties, model info and feature tree listing and classification.
+- [Automation Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/automation.md): Repeatable-work tools: VBA generation, macro recording, batch processing, design tables, workflows, templates, performance tuning.
+- [VBA Generation Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/vba-generation.md): Generating VBA macros for extrusions, revolves, assembly inserts, drawing views and batch exports beyond the COM parameter limit.
+- [Template Management Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/template-management.md): Six tools to create, extract, apply, compare and library-manage SolidWorks document templates and sheet formats, with parameters and sample calls.
+- [Macro Recording Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/macro-recording.md): Seven tools to record, replay, analyse, batch-execute and optimise SolidWorks VBA macros, with parameters and sample calls.
+- [Docs Discovery Tools](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/user-guide/tool-catalog/docs-discovery.md): Five tools to search and look up SolidWorks API interfaces, methods and properties from the locally installed type library.
+
+## Agents
+
+- [Agents and Prompt Testing](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/agents-and-testing.md): Plain-language agent overview plus the three specialist agents in .github/agents/ for 3D printing, workflow building and fact-checking.
+- [Family-Gated Tool Routing for Interactive CAD Reconstruction](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/family-gated-tool-routing.md): Orchestration loop that shortlists tools by feature family, with checkpoint policy, prompt templates and human-edit handoff.
+- [PydanticAI and Pydantic in This Project](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/pydantic-ai-and-schemas.md): Where Pydantic validates tool inputs, outputs and config, where PydanticAI runs agents, and which docs to consult.
+- [Agent Memory and Recovery (SQLite MVP)](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/agent-memory-and-recovery.md): SQLite-based agent memory: error catalog, recovery loop, rollback-first tooling pattern, and troubleshooting prompts.
+- [Agent UI Workflows (Planning)](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/agent-ui-workflows.md): UI options for guiding agent decisions: choice cards, VS Code webview wizard, and hybrid wizard-plus-prompt-console modes.
+- [Logging Configuration and Agent Invocation Guide](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/logging-and-agent-invocation.md): Enabling and configuring two-layer logging, environment variables, tool telemetry phases, and querying what happened.
+- [From Screenshot to SolidWorks: The Image-First Reconstruction Workflow](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/reverse-engineering-workflow.md): Tutorial for recreating parts from screenshots using a three-prompt pattern and capturing reference images.
+- [Sample Models Guide](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/sample-models-guide.md): SolidWorks 2026 learn sample paths, sample path detection order, complexity tiers, and per-part MCP tool strategies.
+- [Worked Examples: SolidWorks MCP + Agent Workflow](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/worked-examples.md): Three reconstruction examples following the inspect, classify, delegate loop with read, plan, build, compare, reflect stages.
+- [Prompt-Driven Design with SolidWorks MCP](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/prompt-driven-design.md): How to run the describe, plan, execute, review, check loop for building parts from plain-language prompts.
+- [Tool Description Standard](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/tool-description-standard.md): Rules for writing MCP tool docstrings: what it does, when to use it, needs, changes, returns, length limits.
+- [Agent Skill](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/agent-skill.md): The packaged solidworks-mcp skill: build order, units, plane selection, verification, error recovery, and installing it.
+- [Prompting Tutorials](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/prompting-tutorials.md): Best-performing prompts and tool-call sequences for part creation, with principles like exact plane names and dependency order.
+- [COM API Pitfalls for LLM Agents](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/agents/com-api-pitfalls.md): Real COM bridge failures and fixes for LLM agents, like SelectByID2's VT_DISPATCH null Callout parameter.
+
+## Planning
+
+- [Roadmap](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/planning/roadmap.md): Prioritized backlog tiers P0 to P3, issue sizes, OpenSpec change workflow, and links to API coverage.
+- [SolidWorks API Coverage Map](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/docs/planning/solidworks-api-coverage.md): Planning reference mapping major SolidWorks API categories against implemented tools, with ~75 MCP tools summarized.
+
+## Optional
+
+- [Changelog](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/CHANGELOG.md): Version history in Keep a Changelog format, covering the Python 1.x–2.x line and earlier TypeScript 3.x releases.
+- [Contributing to SolidWorks MCP Server](https://raw.githubusercontent.com/andrewbartels1/SolidworksMCP-python/main/CONTRIBUTING.md): Development workflow and contribution steps: branching, Docker-based local CI check, and dev-commands.ps1 helper scripts for test, lint, format, and docs builds.
