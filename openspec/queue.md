@@ -19,20 +19,26 @@ Last updated 2026-11-12.
 | 6 | `--selftest` command and a compatibility-report issue template | #179 | `selftest-and-compatibility-report` (archived) | Done 2026-11-09 (#217), signed off live |
 | 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` (archived) | Done 2026-11-09 (#219, 2.0.0): 23 tools promoted, signed off live |
 | 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | `experimental-tools-to-stable` (archived) | Done 2026-11-12 (2.0.0, tagged `v2.0.0`): all 10 promoted, signed off live. Pack and Go now copies the files `GetDependencies2` lists (SolidWorks 2026's own Pack and Go copied only the assembly); `comtypes` dropped |
-| 9 | Monitor stand demo follow-ups | #206 | not yet written | |
-| 10 | The 40 planned tools: implement each one or take it out of the tool list (listed below). A registered tool that can't run is a promise the server doesn't keep | not filed yet | not yet written | Check against #174 first, which may retire some as duplicates |
-| 11 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | |
-| 12 | Optional toolsets or a discovery mode, to cut the tool list's size | #176 | not yet written | After #174, which decides which families are core |
-| 13 | README: licence-tier tags | #79 (other half) | not yet written | |
-| 14 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
-| 15 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
-
-## Tools that can't run yet (item 10)
+| 9 | Monitor stand demo follow-ups: feature order, `verify_model`'s planes, dimension listing, STL export, `create_sketch` on a face, the demo's camera | #206 | `monitor-stand-follow-ups` | Planned 2026-11-12 |
+| 10 | An honest tool list: remove the 33 planned tools no item will build, deprecate the stable duplicates for one release, settle a verb list. Replaces the old items "the 40 planned tools" and "duplicate tools" | #174 | `honest-tool-list` | Planned 2026-11-12 |
+| 11 | Part features the peers lead with: Hole Wizard holes, cosmetic threads, a linear feature pattern, shell, draft, rib, and sketch convert-entities | #105 | `part-feature-depth` | Planned 2026-11-12 |
+| 12 | The drawing pack, where no peer goes: section and detail views, the title block and sheet format, drawing dimensions, and one drawing check | #102, #158 | `drawing-pack` | Planned 2026-11-12. Builds the 7 planned drawing tools item 10 leaves |
+| 13 | Configurations: create, activate and delete one, and suppress a feature or set a dimension in one configuration only | none | `configuration-tools` | Planned 2026-11-12 |
+| 14 | Optional toolsets and a discovery mode, to cut the tool list's size | #176 | `tool-discovery-mode` | Planned 2026-11-12. After item 10, which decides the families |
+| 15 | Sheet metal: base flange, edge flange, sketched bend, flat pattern | #57 | not yet written | After item 11 |
+| 16 | README: licence-tier tags | #79 (other half) | not yet written | |
+| 17 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
+| 18 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
+## Tools that can't run yet (items 10 and 12)
 
 Each one's description says "Not available yet ... planned for a future
 release" (the wording is in `docs/agents/tool-description-standard.md`).
 Found while rewriting the descriptions (39), plus `tutorial_simple_hole`
-(40 in all). Their support level is `planned`.
+(40 in all). Their support level is `planned`. Item 10 removes 33 of them;
+item 12 builds the seven drawing tools that are left (`add_dimension`,
+`auto_dimension_view`, `create_section_view`, `create_detail_view`,
+`update_title_block`, `update_sheet_format`, and `check_drawing_standards`
+renamed `check_drawing`).
 
 - **Drawing analysis (7):** `analyze_drawing_comprehensive`,
   `analyze_drawing_dimensions`, `analyze_drawing_annotations`,
@@ -77,10 +83,12 @@ their reason), then run `python -m solidworks_mcp.progress.generate`.
 
 ## Notes
 
+- Items 11 and 12 come from the internal assessment: match the closest
+  peer on part depth, and lead on drawings, which it leaves out.
 - Until #174 lands, item 1's descriptions say which of two overlapping
   tools to use ("For ..., use `other_tool`."), so agents can pick
   correctly before any tool is removed.
-- Item 1's family tags are what item 12's toolsets filter on.
+- Item 1's family tags are what item 14's toolsets filter on.
 - Parked: the intermittent SolidWorks error sound during
   `create_cut_extrude` in the chamfer live tests (#199, #201). Revisit if it
   causes failures; run `live_demo.ps1 -Trace` and read the "The hole cut"
