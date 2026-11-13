@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-11-09
+## [2.0.0] - 2026-11-12
 
 ### Added
 
@@ -238,6 +238,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   input. `get_dimension`'s angles and counts change value (see Fixed),
   and `load_part` / `load_assembly` report `configuration: null` when
   SolidWorks doesn't say.
+
+- **`generate_vba_code`'s macro opens with a `Sub main()`** that calls the
+  named Sub (`sub_name`). SolidWorks runs a `.swb` macro only through
+  `main`, so `execute_macro` runs it with no `proc_name`.
+- **`comtypes` is no longer a dependency.** Pack and Go was its only user,
+  and it now copies the files `GetDependencies2` lists.
+- **No tool is experimental any more**: the ten from item 8 passed live
+  tests on SolidWorks 2026 and are stable.
 
 - **Building the API index needs SolidWorks installed, not running**, and
   never starts or calls SolidWorks. The lookups build the index themselves,
