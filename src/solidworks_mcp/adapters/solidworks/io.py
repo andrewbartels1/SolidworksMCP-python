@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import ctypes
+import math
 import os
-import re
 import shutil
-import uuid
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
 from .face_selection import mate_entity_label
@@ -24,59 +23,6 @@ except ImportError:
     pythoncom = SimpleNamespace()
     win32com = SimpleNamespace(client=SimpleNamespace())
     _dynamic = SimpleNamespace(Dispatch=lambda *_a, **_kw: None)
-
-try:
-    import comtypes  # type: ignore[import-untyped]
-    import comtypes.client as _comtypes_client  # type: ignore[import-untyped]
-
-    _COMTYPES_AVAILABLE = True
-except ImportError:
-    _COMTYPES_AVAILABLE = False
-
-# SolidWorks type library GUID (stable across SW versions)
-_SW_TLB_GUID = "{83A33D31-27C5-11CE-BFD4-00400513BB57}"
-# Cached comtypes wrapper module (loaded once per process)
-_sw_comtypes_lib: Any = None
-
-
-def _get_sw_comtypes_lib() -> Any:
-    """Return the comtypes wrapper for the SolidWorks type library.
-
-    Tries SW version numbers 35..30 (newest to oldest). Returns ``None`` when
-    comtypes is unavailable or the TLB cannot be found in the registry.
-    """
-    global _sw_comtypes_lib
-    if _sw_comtypes_lib is not None:
-        return _sw_comtypes_lib
-    if not _COMTYPES_AVAILABLE:
-        return None
-    for major in (35, 34, 33, 32, 31, 30):
-        try:
-            _sw_comtypes_lib = _comtypes_client.GetModule(
-                (comtypes.GUID(_SW_TLB_GUID), major, 0)
-            )
-            return _sw_comtypes_lib
-        except Exception:
-            continue
-    return None
-
-
-def _bridge_com_to_comtypes(pywin32_obj: Any, iface: Any) -> Any:
-    """Bridge a pywin32 CDispatch/COM object to a comtypes interface pointer.
-
-    Extracts the raw IUnknown pointer from pywin32's repr string, then
-    QueryInterface-es for *iface* via comtypes.  The AddRef keeps the object
-    alive through the Python reference.
-    """
-    unk = pywin32_obj._oleobj_.QueryInterface(pythoncom.IID_IUnknown)
-    m = re.search(r"obj at (0x[0-9a-fA-F]+)", repr(unk))
-    if not m:
-        raise RuntimeError(f"Could not extract COM pointer from {repr(unk)!r}")
-    ptr_int = int(m.group(1), 16)
-    ct_unk = ctypes.cast(ptr_int, ctypes.POINTER(comtypes.IUnknown))
-    ct_unk.AddRef()
-    return ct_unk.QueryInterface(iface)
-
 
 _MATE_TYPES: dict[str, int] = {
     "coincident": 0,
@@ -237,6 +183,117 @@ def _component_transforms(adapter: Any, assembly: Any) -> dict[str, tuple[float,
         except (TypeError, ValueError):
             continue
     return snapshot
+
+
+#: ``swFileLoadError_e.swFileWithSameTitleAlreadyOpen``: a document with the
+#: same file name, from another folder, is already open.
+_SAME_TITLE_ALREADY_OPEN = 65536
+
+
+def _files_to_pack(source: Path, dependencies: list[Path], out_dir: Path) -> list[Path]:
+    """The assembly and each file it uses, checked before anything is copied.
+
+    Args:
+        source: The assembly.
+        dependencies: The files ``GetDependencies2`` listed.
+        out_dir: The folder they are copied into, under their own names.
+
+    Returns:
+        list[Path]: The assembly first, then each dependency once.
+
+    Raises:
+        FileNotFoundError: A file is not on disk.
+        ValueError: Two files share a name (renaming one would break the
+            reference to it), or ``out_dir`` is a folder they are in.
+    """
+    files = [source]
+    keys = {os.path.normcase(str(source))}
+    for path in dependencies:
+        if os.path.normcase(str(path)) not in keys:
+            keys.add(os.path.normcase(str(path)))
+            files.append(path)
+    missing = [str(f) for f in files if not f.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"Files the assembly uses were not found on disk: {', '.join(missing)}. "
+            "Nothing was copied."
+        )
+    by_name: dict[str, list[str]] = {}
+    for f in files:
+        by_name.setdefault(f.name.casefold(), []).append(str(f))
+    clashes = [path for group in by_name.values() if len(group) > 1 for path in group]
+    if clashes:
+        raise ValueError(
+            f"These files share a name and can't go in one folder: {', '.join(clashes)}. "
+            "Nothing was copied."
+        )
+    target = os.path.normcase(str(out_dir.resolve()))
+    if any(os.path.normcase(str(f.parent.resolve())) == target for f in files):
+        raise ValueError(
+            "target_dir holds the files being packed; choose another folder. "
+            "Nothing was copied."
+        )
+    return files
+
+
+def _open_or_find_assembly(adapter: Any, source: Path) -> Any:
+    """Open the assembly, or use it when it is already open; never close anything.
+
+    ``OpenDoc6`` returns nothing for a file that can't be opened, including
+    when a document with the same file name is already open. The assembly
+    itself, if open, is found by its path (``ISldWorks.GetOpenDocumentByName``)
+    and used as it is, unsaved changes included.
+
+    Args:
+        adapter: A connected adapter.
+        source: The assembly file.
+
+    Returns:
+        Any: The assembly's ``IModelDoc2``.
+
+    Raises:
+        RuntimeError: When it can neither be opened nor found open.
+    """
+    err, warn = _byref_int(), _byref_int()
+    model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
+    if model is not None:
+        return model
+    model = adapter._attempt(
+        lambda: adapter.swApp.GetOpenDocumentByName(str(source)), default=None
+    )
+    if model is not None:
+        return model
+    if err.value == _SAME_TITLE_ALREADY_OPEN:
+        raise RuntimeError(
+            f"another document named {source.name} is already open; close it, "
+            "then pack again (nothing was closed)"
+        )
+    raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
+
+
+#: ``swDimensionParamType_e`` (read from swconst.tlb, 2026): what
+#: ``IDimension.GetType`` returns for a length and an angle. 2 is an integer
+#: (a count); -1 unknown.
+_DIMENSION_LINEAR = 0
+_DIMENSION_ANGULAR = 1
+
+
+def _dimension_reading(kind: Any, system_value: float) -> dict[str, Any]:
+    """A dimension's value in the unit its type gives it.
+
+    Args:
+        kind: ``IDimension.GetType``'s value, or ``None`` when unreadable.
+        system_value: ``IDimension.SystemValue``: metres, radians or a count.
+
+    Returns:
+        dict[str, Any]: ``value`` and ``units``: mm for a length, degrees for
+        an angle, and the number with ``units: None`` for anything else.
+    """
+    if kind == _DIMENSION_LINEAR:
+        return {"value": system_value * 1000.0, "units": "mm"}
+    if kind == _DIMENSION_ANGULAR:
+        return {"value": math.degrees(system_value), "units": "deg"}
+    return {"value": system_value, "units": None}
 
 
 class _ByrefFallback:
@@ -1391,6 +1448,8 @@ class SolidWorksIOMixin:
                 model_type = "Drawing"
             else:
                 raise ValueError(f"Unsupported file type: {resolved_path}")
+            if not os.path.isfile(resolved_path):
+                raise FileNotFoundError(f"File not found: {resolved_path}")
 
             app = adapter.swApp
             variant_ctor = getattr(getattr(win32com, "client", None), "VARIANT", None)
@@ -1428,11 +1487,16 @@ class SolidWorksIOMixin:
                         default=0,
                     )
                     adapter.currentModel = activated
+            # The configuration SolidWorks opened, or None: never an assumed
+            # "Default". IConfiguration.Name is a property, not a method.
             active_config = adapter._attempt(lambda: model.GetActiveConfiguration())
             config = (
-                adapter._attempt(lambda: active_config.GetName(), default="Default")
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(active_config, "Name"),
+                    default=None,
+                )
                 if active_config
-                else "Default"
+                else None
             )
 
             return SolidWorksModel(
@@ -1465,6 +1529,11 @@ class SolidWorksIOMixin:
             AdapterResult[None]: Result of the close operation.
         """
         adapter = self._adapter(self)
+        # After a close, SolidWorks activates another open document; close that
+        # one, as the tool promises, rather than the document already closed.
+        active = getattr(adapter.swApp, "ActiveDoc", None) if adapter.swApp else None
+        if active is not None:
+            adapter.currentModel = active
         if not adapter.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.WARNING, error="No active model to close"
@@ -1747,14 +1816,21 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("create_drawing", _create),
         )
 
-    async def get_dimension(self, name: str) -> AdapterResult[float]:
-        """Read a named model dimension in millimetres.
+    async def get_dimension(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Read a named model dimension in the unit its type gives it.
+
+        ``IDimension.SystemValue`` is metres for a length, radians for an
+        angle and the number itself for a count; ``IDimension.GetType`` says
+        which (:func:`_dimension_reading`). ``GetValue3`` is not used: it is
+        in the document's units, which this can't convert without reading
+        the document's unit system.
 
         Args:
-            name: Fully-qualified dimension name.
+            name: Fully-qualified dimension name, e.g. ``"D1@Boss-Extrude1"``.
 
         Returns:
-            AdapterResult[float]: Dimension value in millimetres.
+            AdapterResult[dict[str, Any]]: ``value`` and ``units`` ("mm",
+            "deg", or ``None`` for a count or a dimension of unknown type).
         """
         adapter = self._adapter(self)
         if not adapter.currentModel:
@@ -1762,24 +1838,23 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _get() -> float:
-            """Get the dimension value."""
+        def _get() -> dict[str, Any]:
+            """Get the dimension value and its unit."""
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
-                raise Exception(f"Dimension '{name}' not found")
-            # SystemValue is reliable on SW 2025 (in meters, convert to mm)
+                raise Exception(
+                    f"Dimension '{name}' not found; list the names with "
+                    "list_model_dimensions"
+                )
+            dimension = _sw_type_info.flagged(dimension, "IDimension")
             value = adapter._attempt(lambda: dimension.SystemValue, default=None)
             if value is None:
-                # Fall back to GetValue3 for older SW versions
-                value = adapter._attempt(
-                    lambda: dimension.GetValue3(0, 0), default=None
-                )
-            if value is None:
                 raise Exception(f"Failed to read dimension '{name}'")
-            return float(value) * 1000
+            kind = adapter._attempt(lambda: dimension.GetType(), default=None)
+            return _dimension_reading(kind, float(value))
 
         return cast(
-            AdapterResult[float],
+            AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("get_dimension", _get),
         )
 
@@ -2301,8 +2376,9 @@ class SolidWorksIOMixin:
             active_config = adapter._attempt(
                 lambda: adapter.currentModel.GetActiveConfiguration(), default=None
             )
+            # IConfiguration.Name is a property; it has no GetName method.
             active_name = adapter._attempt(
-                lambda: active_config.GetName(), default=None
+                lambda: adapter._get_attr_or_call(active_config, "Name"), default=None
             )
             if active_name:
                 return [str(active_name)]
@@ -2521,103 +2597,59 @@ class SolidWorksIOMixin:
         source_path: str,
         target_dir: str,
     ) -> AdapterResult[dict[str, Any]]:
-        """Copy an assembly and all its referenced components to a self-contained folder.
+        """Copy an assembly and every file it uses into one folder.
 
-        Uses ``IModelDocExtension.GetPackAndGo()`` → ``IPackAndGo`` via the
-        comtypes vtable interface (bypassing the broken IDispatch path present
-        in SolidWorks 2026's late-binding layer), then calls
-        ``IModelDocExtension.SavePackAndGo()`` to execute the copy.  All file
-        paths inside the copied assembly are automatically updated by
-        SolidWorks — this is the native Pack-and-Go mechanism.
+        SolidWorks lists the files (``IModelDoc2.GetDependencies2``) and each
+        is copied, as saved on disk, into ``target_dir`` under its own name.
+        The copy opens with its own parts: SolidWorks looks for a referenced
+        file in the assembly's folder before the stored path. (SolidWorks'
+        own Pack and Go, ``IPackAndGo``, listed only the assembly on
+        SolidWorks 2026.) No document is closed or changed.
 
         Args:
-            source_path: Absolute path to the source ``.sldasm`` file.
-            target_dir: Directory where the assembly and parts will be copied.
-                        Created if it does not exist.
+            source_path: The ``.sldasm`` file.
+            target_dir: The folder to copy into; created if needed. A file
+                already there with a copied file's name is replaced.
 
         Returns:
-            AdapterResult[dict]: On success, ``data`` is a dict with keys:
-            ``source_assembly``, ``target_dir``, ``copied_files``,
-            ``source_files``, ``save_statuses``, and ``all_files_saved``.
+            AdapterResult[dict]: ``source_assembly``, ``target_dir``,
+            ``copied_files``, ``source_files`` and ``unsaved_changes`` (the
+            files open with changes the copy doesn't have).
         """
         adapter = self._adapter(self)
         source = Path(source_path)
         out_dir = Path(target_dir)
 
-        def _do_pack_and_go() -> dict[str, Any]:
-            # Load comtypes TLB (cached after first call)
-            sw_lib = _get_sw_comtypes_lib()
-            if sw_lib is None:
-                raise RuntimeError(
-                    "comtypes SolidWorks type library not available. "
-                    "Ensure comtypes is installed and SolidWorks is registered."
-                )
-
-            # Prepare a clean target directory. SW holds file locks on previously
-            # opened assemblies so rmtree raises WinError 32. We rename the old
-            # dir aside (Windows allows rename with open handles) and delete the
-            # backup afterwards; if rename also fails we just proceed and let SW
-            # overwrite existing files.
-            if out_dir.exists():
-                backup = out_dir.parent / f"{out_dir.name}_bak_{uuid.uuid4().hex[:8]}"
-                try:
-                    os.rename(out_dir, backup)
-                    try:
-                        shutil.rmtree(backup)
-                    except Exception:
-                        pass  # best-effort cleanup; stale backup is harmless
-                except OSError:
-                    pass  # rename also failed — proceed; SW will overwrite files
-            out_dir.mkdir(parents=True, exist_ok=True)
-
-            # Open the source assembly
-            err, warn = _byref_int(), _byref_int()
-            model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
-            if model is None and err.value == 65536:
-                adapter.swApp.CloseAllDocuments(False)
-                err, warn = _byref_int(), _byref_int()
-                model = adapter.swApp.OpenDoc6(str(source), 2, 1, "", err, warn)
-            if model is None:
-                raise RuntimeError(f"OpenDoc6 failed err={err.value} warn={warn.value}")
+        def _pack() -> dict[str, Any]:
+            model = _open_or_find_assembly(adapter, source)
             _sw_type_info.flag_doc(model, 2)
             adapter.currentModel = model
-
-            # Bridge model.Extension → IModelDocExtension via comtypes vtable
-            ext_ct = _bridge_com_to_comtypes(model.Extension, sw_lib.IModelDocExtension)
-
-            # GetPackAndGo() via vtable (IDispatch path broken in SW 2026)
-            pg = ext_ct.GetPackAndGo()
-
-            # Configure: flatten all files to root of target directory
-            pg.FlattenToSingleFolder = True
-            pg.SetSaveToName(True, str(out_dir) + "\\")
-
-            # Record what files will be packed
-            names_result = pg.GetDocumentNames()
-            source_files: list[str] = list(names_result[0]) if names_result[0] else []
-
-            # Execute Pack and Go — SavePackAndGo returns a tuple of per-file status codes
-            ext_ct2 = _bridge_com_to_comtypes(
-                model.Extension, sw_lib.IModelDocExtension
-            )
-            status_arr = ext_ct2.SavePackAndGo(pg)
-            save_statuses: list[int] = list(status_arr) if status_arr else []
-
-            copied_files = sorted(
-                str(p)
-                for p in out_dir.rglob("*")
-                if p.is_file() and p.suffix.lower() in {".sldasm", ".sldprt", ".slddrw"}
-            )
+            listed = dependency_paths(model.GetDependencies2(True, True, False))
+            files = _files_to_pack(source, listed, out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            copied = [str(shutil.copy2(f, out_dir / f.name)) for f in files]
+            unsaved = [
+                f.name
+                for f in files
+                if adapter._attempt(
+                    lambda f=f: bool(
+                        adapter._get_attr_or_call(
+                            adapter.swApp.GetOpenDocumentByName(str(f)),
+                            "GetSaveFlag",
+                        )
+                    ),
+                    default=False,
+                )
+            ]
             return {
                 "source_assembly": str(source),
                 "target_dir": str(out_dir),
-                "copied_files": copied_files,
-                "source_files": source_files,
-                "save_statuses": save_statuses,
-                "all_files_saved": all(s == 0 for s in save_statuses),
+                "copied_files": sorted(copied),
+                "source_files": [str(f) for f in files],
+                "unsaved_changes": unsaved,
             }
 
-        result = adapter._handle_com_operation("pack_and_go_assembly", _do_pack_and_go)
+        result = adapter._handle_com_operation("pack_and_go_assembly", _pack)
         if not result.is_success:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -49,6 +50,12 @@ _EXTRUDE_TOKENS = (
 )
 
 _ASSEMBLY_TOKENS = ("mate", "component", "subassembly")
+#: A mate or the Mates folder (MateGroup), never "Material <not specified>",
+#: which every real part's tree has.
+_ASSEMBLY_PATTERN = re.compile(r"\bmate(?!rial)|\bcomponent|\bsubassembly")
+#: Document types get_model_info reports; when one is known, it decides the
+#: family, and feature names can't turn a part into an assembly.
+_KNOWN_DOCUMENT_TYPES = frozenset({"part", "assembly", "drawing"})
 _DRAWING_TOKENS = (
     "sheet format",
     "drawing view",
@@ -84,6 +91,24 @@ def _feature_text(feature: Mapping[str, Any]) -> str:
     name = _as_lower_text(feature.get("name"))
     feature_type = _as_lower_text(feature.get("type"))
     return f"{name} {feature_type}".strip()
+
+
+def _is_tree_folder(feature: Mapping[str, Any]) -> bool:
+    """Tell whether a tree row is a folder, not a feature.
+
+    Every real tree has folders ("HistoryFolder", "SensorFolder",
+    "SurfaceBodyFolder", "MaterialFolder", ...). Their names and types would
+    match feature words: "fold" (sheet metal) is inside "folder", "surface"
+    (advanced solid) inside "Surface Bodies".
+
+    Args:
+        feature (Mapping[str, Any]): A ``list_features`` row.
+
+    Returns:
+        bool: True when the row's type ends with "folder".
+    """
+
+    return _as_lower_text(feature.get("type")).endswith("folder")
 
 
 def _has_any(texts: list[str], tokens: tuple[str, ...]) -> bool:
@@ -141,7 +166,11 @@ def classify_feature_tree_snapshot(
     """
 
     feature_list = list(features or [])
-    feature_texts = [_feature_text(feature) for feature in feature_list]
+    feature_texts = [
+        _feature_text(feature)
+        for feature in feature_list
+        if not _is_tree_folder(feature)
+    ]
     document_type = _as_lower_text((model_info or {}).get("type")) or "unknown"
 
     evidence: list[str] = []
@@ -153,7 +182,10 @@ def classify_feature_tree_snapshot(
     confidence = "low"
     needs_vba = False
 
-    if document_type == "assembly" or _has_any(feature_texts, _ASSEMBLY_TOKENS):
+    unknown_type = document_type not in _KNOWN_DOCUMENT_TYPES
+    if document_type == "assembly" or (
+        unknown_type and any(_ASSEMBLY_PATTERN.search(t) for t in feature_texts)
+    ):
         family = "assembly"
         workflow = "assembly-planning"
         confidence = "high" if document_type == "assembly" else "medium"
@@ -164,7 +196,9 @@ def classify_feature_tree_snapshot(
                 "Delegate part-level reconstruction for each component separately",
             ]
         )
-    elif document_type == "drawing" or _has_any(feature_texts, _DRAWING_TOKENS):
+    elif document_type == "drawing" or (
+        unknown_type and _has_any(feature_texts, _DRAWING_TOKENS)
+    ):
         family = "drawing"
         workflow = "drawing-review"
         confidence = "high" if document_type == "drawing" else "medium"

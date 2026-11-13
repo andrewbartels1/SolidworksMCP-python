@@ -301,28 +301,39 @@ Save the active assembly in place, or as a new .sldasm, optionally copying the p
 
 ### `pack_and_go_assembly`
 
-Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go).
+Copy an assembly and every file it uses into one folder that opens on its own.
 
-The active assembly (or `source_path`) is opened, every referenced component is enumerated via the native SolidWorks IPackAndGo COM API, and all files are written into `target_dir` with internal paths rewritten so the copy opens without any dependency on the original file locations.
+SolidWorks lists the files the assembly uses (`GetDependencies2`), and each is
+copied into `target_dir` under its own name. The copy opens with its own parts,
+because SolidWorks looks for a referenced file in the assembly's folder before
+the path stored in the assembly. The files are copied as saved on disk: save
+first, or the reply's `warning` names each open file whose unsaved changes the
+copy doesn't have. No document is closed or changed.
 
-**Prerequisite:** SolidWorks running with the assembly loaded (or openable). `target_dir` must be writable.
+The call fails, and copies nothing, when a file the assembly uses is missing,
+when two files share a name (renaming one would break the reference), or when
+`target_dir` holds the originals.
+
+(SolidWorks' own Pack and Go, `IPackAndGo`, listed only the assembly on
+SolidWorks 2026, so the tool no longer uses it.)
+
+**Prerequisite:** SolidWorks running, and the `.sldasm` on disk.
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `source_path` | `str` | ✅ | | Absolute path to the source `.sldasm` file |
-| `target_dir` | `str` | ✅ | | Directory where the assembly and all referenced parts will be copied |
-| `export_preview` | `bool` | — | `True` | Export an isometric PNG preview next to the copied files |
-| `overwrite` | `bool` | — | `False` | Overwrite files that already exist in `target_dir` |
+| `source_path` | `str` | ✅ | | The source `.sldasm` file |
+| `target_dir` | `str` | ✅ | | The folder to copy into; created if needed |
+| `export_preview` | `bool` | — | `False` | Write an isometric PNG preview next to the copies |
+| `overwrite` | `bool` | — | `False` | Allow a folder that already has files; only the copied files are replaced |
 
 **Sample call:**
 
 ```json
 {
   "source_path": "C:\\Projects\\robot_arm.sldasm",
-  "target_dir": "C:\\Exports\\robot_arm_pkg",
-  "export_preview": true
+  "target_dir": "C:\\Exports\\robot_arm_pkg"
 }
 ```
 
@@ -331,22 +342,14 @@ The active assembly (or `source_path`) is opened, every referenced component is 
 | Field | Type | Description |
 |-------|------|-------------|
 | `status` | `str` | `"success"` or `"error"` |
-| `file_path` | `str` | Path to the copied root assembly file |
-| `copied_file_count` | `int` | Total number of files written |
-| `copied_files` | `list[str]` | Absolute paths of every copied file |
-| `all_files_saved` | `bool` | `true` when every per-file save status is `swPackAndGoSaveStatus_Ok` (0) |
-| `save_status_warnings` | `list[str]` | Human-readable description of any non-zero per-file statuses (empty list on full success) |
-| `preview_image` | `str?` | Path to the isometric PNG preview, or `null` if export was skipped or failed |
-
-**`swPackAndGoSaveStatus_e` reference** (values reported in `save_status_warnings`):
-
-| Code | Name | Meaning |
-|------|------|---------|
-| `0` | `Ok` | File was written successfully |
-| `2` | `FileAlreadyExist` | Target file already existed and was not overwritten |
-| `3` | `MissingSource` | Source reference file could not be found |
-
-All zeros in the per-file status array (`all_files_saved: true`) means SolidWorks confirmed every file was written successfully via its native Pack-and-Go engine.
+| `method` | `str` | `"dependency_copy"` |
+| `source_assembly` | `str` | The assembly packed |
+| `target_dir` | `str` | The folder written |
+| `copied_files` | `list[str]` | The files copied |
+| `source_files` | `list[str]` | The assembly, then each file it uses |
+| `unsaved_changes` | `list[str]` | Open files whose unsaved changes are not in the copy |
+| `preview_image` | `str?` | The PNG preview, or `null` if it couldn't be written |
+| `warning` | `str?` | Unsaved changes left out, or a preview that couldn't be written |
 
 ---
 

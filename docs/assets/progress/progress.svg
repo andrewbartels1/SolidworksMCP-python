@@ -22,32 +22,32 @@
 </defs>
 <rect x=".5" y=".5" width="839" height="235" rx="14" fill="url(#panel)" stroke="#30363d"/>
 <text x="28" y="40" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="16" fill="#e6edf3" font-weight="600" text-anchor="start">MCP tools: 156</text>
-<text x="812" y="40" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" fill="#8b949e" font-weight="400" text-anchor="end">68% work on SolidWorks today</text>
+<text x="812" y="40" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" fill="#8b949e" font-weight="400" text-anchor="end">74% work on SolidWorks today</text>
 <rect x="28" y="54" width="784" height="24" rx="12.0" fill="#21262d" stroke="#30363d"/>
 <g clip-path="url(#track-tools)">
-<rect x="28.0" y="54" width="532.7" height="24" fill="#2ea043"/>
-<rect x="560.7" y="54" width="0.0" height="24" fill="#d29922"/>
-<rect x="560.7" y="54" width="50.3" height="24" fill="#db6d28"/>
+<rect x="28.0" y="54" width="583.0" height="24" fill="#2ea043"/>
+<rect x="611.0" y="54" width="0.0" height="24" fill="#d29922"/>
+<rect x="611.0" y="54" width="0.0" height="24" fill="#db6d28"/>
 <rect x="28" y="54" width="583.0" height="24" fill="url(#stripes)"/>
 <rect x="28" y="54" width="583.0" height="24" fill="url(#gloss)"/>
 </g>
 <rect x="28.5" y="54.5" width="783" height="23" rx="12.0" fill="none" stroke="#fff" stroke-opacity=".08"/>
 <rect x="28" y="92" width="10" height="10" rx="2" fill="#2ea043"/>
-<text x="44" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">stable 106</text>
+<text x="44" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">stable 116</text>
 <rect x="124" y="92" width="10" height="10" rx="2" fill="#d29922"/>
 <text x="140" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">beta 0</text>
 <rect x="191.2" y="92" width="10" height="10" rx="2" fill="#db6d28"/>
-<text x="207.2" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">experimental 10</text>
-<rect x="323.2" y="92" width="10" height="10" rx="2" fill="#484f58"/>
-<text x="339.2" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">planned 40</text>
+<text x="207.2" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">experimental 0</text>
+<rect x="316" y="92" width="10" height="10" rx="2" fill="#484f58"/>
+<text x="332" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">planned 40</text>
 <text x="28" y="142" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="16" fill="#e6edf3" font-weight="600" text-anchor="start">Core SolidWorks COM API (12 interfaces)</text>
-<text x="812" y="142" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" fill="#8b949e" font-weight="400" text-anchor="end">215 of 2,838 methods · 7.6%</text>
+<text x="812" y="142" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" fill="#8b949e" font-weight="400" text-anchor="end">213 of 2,838 methods · 7.5%</text>
 <rect x="28" y="156" width="784" height="24" rx="12.0" fill="#21262d" stroke="#30363d"/>
 <g clip-path="url(#track-com)">
-<rect x="28.0" y="156" width="59.4" height="24" fill="url(#heat)"/>
-<rect x="28" y="156" width="59.4" height="24" fill="url(#stripes)"/>
-<rect x="28" y="156" width="59.4" height="24" fill="url(#gloss)"/>
+<rect x="28.0" y="156" width="58.8" height="24" fill="url(#heat)"/>
+<rect x="28" y="156" width="58.8" height="24" fill="url(#stripes)"/>
+<rect x="28" y="156" width="58.8" height="24" fill="url(#gloss)"/>
 </g>
 <rect x="28.5" y="156.5" width="783" height="23" rx="12.0" fill="none" stroke="#fff" stroke-opacity=".08"/>
-<text x="28" y="206" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" fill="#6e7681" font-weight="400" text-anchor="start">Whole API: 238 of 5,985 method names (4.0%), counted by a text scan of the adapters.</text>
+<text x="28" y="206" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" fill="#6e7681" font-weight="400" text-anchor="start">Whole API: 233 of 5,985 method names (3.9%), counted by a text scan of the adapters.</text>
 </svg>

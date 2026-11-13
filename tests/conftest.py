@@ -464,7 +464,7 @@ def perf_monitor() -> PerformanceMonitor:
 def import_without():
     """Import a module in a child interpreter with some dependencies blocked.
 
-    Used to test the "dependency not installed" fallbacks (pywin32, comtypes,
+    Used to test the "dependency not installed" fallbacks (pywin32,
     pydantic-ai, ...). A child process keeps the blocked import out of this
     test session; coverage measures it via ``patch = subprocess``.
 

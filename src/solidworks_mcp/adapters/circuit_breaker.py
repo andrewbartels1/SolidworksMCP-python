@@ -1325,14 +1325,14 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
     # Dimension operations
 
-    async def get_dimension(self, name: str) -> AdapterResult[float]:
+    async def get_dimension(self, name: str) -> AdapterResult[dict[str, Any]]:
         """Get dimension through circuit breaker.
 
         Args:
             name (str): The name value.
 
         Returns:
-            AdapterResult[float]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``value`` and ``units`` (mm, deg or None).
         """
         return await self._execute_with_circuit_breaker(
             "get_dimension",

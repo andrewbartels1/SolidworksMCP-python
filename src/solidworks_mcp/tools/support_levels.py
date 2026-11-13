@@ -72,9 +72,6 @@ class Support:
 OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"})
 
 _STABLE = Support(SupportLevel.STABLE)
-_UNCHECKED = Support(
-    SupportLevel.EXPERIMENTAL, "not yet checked by a live test on real SolidWorks."
-)
 _PLANNED = Support(SupportLevel.PLANNED, "no adapter implements it yet.")
 
 
@@ -92,7 +89,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "batch_process_files": _PLANNED,
     "create_template": _PLANNED,
     "execute_workflow": _PLANNED,
-    "generate_vba_code": _UNCHECKED,
+    "generate_vba_code": _STABLE,
     "manage_design_table": _PLANNED,
     "optimize_performance": _PLANNED,
     # docs_discovery
@@ -122,7 +119,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "analyze_drawing_dimensions": _PLANNED,
     "analyze_drawing_views": _PLANNED,
     "check_drawing_compliance": _PLANNED,
-    "compare_drawing_versions": _UNCHECKED,
+    "compare_drawing_versions": _STABLE,
     "generate_drawing_report": _PLANNED,
     "validate_drawing_completeness": _PLANNED,
     # drawing_automation
@@ -153,18 +150,18 @@ SUPPORT_LEVELS: dict[str, Support] = {
     # file_management
     "activate_document": _STABLE,
     "batch_file_operations": _PLANNED,
-    "classify_feature_tree": _UNCHECKED,
+    "classify_feature_tree": _STABLE,
     "convert_file_format": _PLANNED,
-    "get_file_properties": _UNCHECKED,
+    "get_file_properties": _STABLE,
     "get_model_info": _STABLE,
     "get_selected_entities": _STABLE,
-    "list_configurations": _UNCHECKED,
+    "list_configurations": _STABLE,
     "list_features": _STABLE,
     "list_open_documents": _STABLE,
-    "load_assembly": _UNCHECKED,
-    "load_part": _UNCHECKED,
+    "load_assembly": _STABLE,
+    "load_part": _STABLE,
     "manage_file_properties": _PLANNED,
-    "pack_and_go_assembly": _UNCHECKED,
+    "pack_and_go_assembly": _STABLE,
     "save_as": _STABLE,
     "save_assembly": _STABLE,
     "save_body_as_part": _STABLE,
@@ -195,7 +192,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_revolve": _STABLE,
     "create_sweep": _STABLE,
     "delete_feature": _STABLE,
-    "get_dimension": _UNCHECKED,
+    "get_dimension": _STABLE,
     "insert_component": _STABLE,
     "list_components": _STABLE,
     "mirror_feature": _STABLE,
@@ -235,7 +232,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     # template_management
     "apply_template": _PLANNED,
     "batch_apply_template": _PLANNED,
-    "compare_templates": _UNCHECKED,
+    "compare_templates": _STABLE,
     "extract_template": _PLANNED,
     "list_template_library": _PLANNED,
     "save_to_template_library": _PLANNED,

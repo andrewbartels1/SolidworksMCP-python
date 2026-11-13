@@ -2,9 +2,9 @@
  "tools": {
   "total": 156,
   "by_level": {
-   "stable": 106,
+   "stable": 116,
    "beta": 0,
-   "experimental": 10,
+   "experimental": 0,
    "planned": 40
   },
   "list": [
@@ -305,8 +305,8 @@
    {
     "name": "classify_feature_tree",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Classify the active model's kind (part, sheet metal, assembly, drawing and so on) from its feature tree, and suggest how to work on it."
    },
    {
@@ -319,15 +319,15 @@
    {
     "name": "compare_drawing_versions",
     "family": "drawing_analysis",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Compare two drawing files on disk: whether they are byte-identical, and how their sizes differ."
    },
    {
     "name": "compare_templates",
     "family": "template_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Compare two template files on disk: whether they are byte-identical, and how their sizes differ."
    },
    {
@@ -599,9 +599,9 @@
    {
     "name": "generate_vba_code",
     "family": "automation",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
-    "summary": "Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, the active document and optional error handling, with the operation itself left as a TODO."
+    "level": "stable",
+    "reason": "",
+    "summary": "Write a VBA macro skeleton for an operation you describe: the SolidWorks connection, a check of the active document's type and optional error handling, with the operation itself left as a TODO."
    },
    {
     "name": "generate_vba_drawing_dimensions",
@@ -662,15 +662,15 @@
    {
     "name": "get_dimension",
     "family": "modeling",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Read one dimension of the active model by its full name, e.g. \"D1@Sketch1\"."
    },
    {
     "name": "get_file_properties",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes."
    },
    {
@@ -746,8 +746,8 @@
    {
     "name": "list_configurations",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "List the names of the active model's configurations."
    },
    {
@@ -788,15 +788,15 @@
    {
     "name": "load_assembly",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Open an assembly (.sldasm) from disk and make it the active document."
    },
    {
     "name": "load_part",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
+    "level": "stable",
+    "reason": "",
     "summary": "Open a part (.sldprt) from disk and make it the active document."
    },
    {
@@ -865,9 +865,9 @@
    {
     "name": "pack_and_go_assembly",
     "family": "file_management",
-    "level": "experimental",
-    "reason": "not yet checked by a live test on real SolidWorks.",
-    "summary": "Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go)."
+    "level": "stable",
+    "reason": "",
+    "summary": "Copy an assembly and every file it uses into one folder that opens on its own."
    },
    {
     "name": "pattern_circular",
@@ -1105,11 +1105,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 215,
+   "covered": 213,
    "total": 2838
   },
   "api": {
-   "covered": 238,
+   "covered": 233,
    "total": 5985
   },
   "interfaces": [
@@ -1117,7 +1117,6 @@
     "name": "ISldWorks",
     "covered": [
      "ActivateDoc3",
-     "CloseAllDocuments",
      "CloseDoc",
      "Frame",
      "GetConfigurationNames",
@@ -1173,6 +1172,7 @@
      "GetActiveConfiguration",
      "GetActiveSketch2",
      "GetConfigurationNames",
+     "GetDependencies2",
      "GetFeatureCount",
      "GetLineCount",
      "GetMassProperties",
@@ -1222,7 +1222,6 @@
      "DeleteSelection2",
      "GetAnnotations",
      "GetMassProperties",
-     "GetPackAndGo",
      "GetUserPreferenceInteger",
      "GetUserPreferenceToggle",
      "GetWhatsWrong",
@@ -1231,7 +1230,6 @@
      "SaveAs",
      "SaveAs2",
      "SaveAs3",
-     "SavePackAndGo",
      "SelectByID2",
      "SetUserPreferenceInteger",
      "SetUserPreferenceToggle"

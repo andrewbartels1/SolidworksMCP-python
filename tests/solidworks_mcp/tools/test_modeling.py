@@ -440,6 +440,31 @@ class TestModelingTools:
         assert result["status"] == "success"
         assert result["dimension"]["value"] == 15.5
         assert result["dimension"]["units"] == "mm"
+        assert result["message"] == "Dimension D1@Sketch1 = 15.5 mm"
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_of_a_count_has_no_unit(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """A pattern's instance count: the number, no unit in the reply."""
+        await register_modeling_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter.get_dimension = AsyncMock(
+            return_value=Mock(
+                is_success=True, data={"value": 6.0, "units": None}, execution_time=0.1
+            )
+        )
+        tool_func = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "get_dimension"
+        )
+
+        result = await tool_func(GetDimensionInput(name="D1@CirPattern1"))
+
+        assert result["dimension"] == {
+            "name": "D1@CirPattern1",
+            "value": 6.0,
+            "units": None,
+        }
+        assert result["message"] == "Dimension D1@CirPattern1 = 6.0"
 
     @pytest.mark.asyncio
     async def test_set_dimension_value(self, mcp_server, mock_adapter, mock_config):

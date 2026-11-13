@@ -123,7 +123,7 @@ class TestMockAdapterCoveragePush:
             source_path=str(source), target_dir=str(out_dir)
         )
         assert result.is_success
-        assert result.data["all_files_saved"] is True
+        assert result.data["unsaved_changes"] == []
         assert len(result.data["copied_files"]) >= 1
 
     @pytest.mark.asyncio

@@ -2301,8 +2301,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "target_dir": str(out_dir),
                 "copied_files": copied_files,
                 "source_files": source_files,
-                "save_statuses": [0] * (len(mock_parts) + 1),
-                "all_files_saved": True,
+                "unsaved_changes": [],
             },
             execution_time=0.05,
             metadata={"mock": True},
@@ -2376,14 +2375,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             metadata={"exported_format": format_type, "file_path": file_path},
         )
 
-    async def get_dimension(self, name: str) -> AdapterResult[float]:
-        """Mock getting a dimension value.
+    async def get_dimension(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock getting a dimension value; the mock's dimensions are lengths.
 
         Args:
             name (str): The name value.
 
         Returns:
-            AdapterResult[float]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``value`` in mm and ``units: "mm"``.
         """
         await asyncio.sleep(0.05)  # Very fast operation
         self._operation_count += 1
@@ -2391,12 +2390,16 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         if name in self._dimensions:
             return AdapterResult(
                 status=AdapterResultStatus.SUCCESS,
-                data=self._dimensions[name],
+                data={"value": self._dimensions[name], "units": "mm"},
                 execution_time=0.05,
             )
         else:
             return AdapterResult(
-                status=AdapterResultStatus.ERROR, error=f"Dimension '{name}' not found"
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Dimension '{name}' not found; list the names with "
+                    "list_model_dimensions"
+                ),
             )
 
     async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:

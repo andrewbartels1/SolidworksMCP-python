@@ -17,11 +17,11 @@ from ..utils.feature_tree_classifier import (
     build_component_tree,
     classify_feature_tree_snapshot,
 )
+from ..utils.sw_dependencies import dependency_paths
 from .input_compat import CompatInput
 from .tool_boundary import (
     InvalidInputError,
     ToolOperationError,
-    UnsupportedOperationError,
     require_capability,
     require_success,
     with_tool_boundary,
@@ -188,12 +188,15 @@ class PackAndGoInput(CompatInput):
         description="Directory where the assembly and all referenced parts will be copied"
     )
     export_preview: bool = Field(
-        default=True,
+        default=False,
         description="Export an isometric PNG preview next to the copied files",
     )
     overwrite: bool = Field(
         default=False,
-        description="Overwrite files that already exist in target_dir",
+        description=(
+            "Pack into a target_dir that already holds files, replacing the ones "
+            "Pack and Go writes; other files there are kept"
+        ),
     )
 
 
@@ -461,22 +464,6 @@ async def register_file_management_tools(
             return default if value is None else value
         return candidate
 
-    def _extract_dependency_paths(
-        raw_dependencies: Any,
-    ) -> list[Path]:
-        """Extract model file paths from SolidWorks GetDependencies2 payloads."""
-        if not isinstance(raw_dependencies, (list, tuple)):
-            return []
-
-        dependency_paths: list[Path] = []
-        for item in raw_dependencies:
-            if not isinstance(item, str):
-                continue
-            lower_item = item.lower()
-            if lower_item.endswith((".sldprt", ".sldasm", ".slddrw")):
-                dependency_paths.append(Path(item))
-        return dependency_paths
-
     def _copy_with_collision_handling(source_path: Path, target_dir: Path) -> Path:
         """Copy a source file into target_dir, suffixing when name collisions occur."""
         destination = target_dir / source_path.name
@@ -537,9 +524,8 @@ async def register_file_management_tools(
                 f"Failed to enumerate assembly dependencies: {exc}"
             ) from exc
 
-        dependency_paths = _extract_dependency_paths(raw_dependencies)
         unique_sources: list[Path] = [source_assembly]
-        for dep in dependency_paths:
+        for dep in dependency_paths(raw_dependencies):
             if dep not in unique_sources:
                 unique_sources.append(dep)
 
@@ -829,31 +815,35 @@ async def register_file_management_tools(
         features = input_data.features
         execution_time = 0.0
 
-        if model_info is None and hasattr(adapter, "get_model_info"):
+        # Reading the model can fail (nothing open); classifying an empty
+        # model instead would give a confident wrong answer.
+        if model_info is None:
+            require_capability(
+                adapter,
+                "get_model_info",
+                "Active adapter does not support get_model_info",
+            )
             model_result = await adapter.get_model_info()
-            if model_result.is_success:
-                model_info = model_result.data
-                execution_time = max(execution_time, model_result.execution_time or 0.0)
+            require_success(
+                model_result, context="Failed to read the model to classify"
+            )
+            model_info = model_result.data
+            execution_time = max(execution_time, model_result.execution_time or 0.0)
 
         if features is None:
-            if hasattr(adapter, "list_features"):
-                feature_result = await adapter.list_features(
-                    include_suppressed=input_data.include_suppressed
-                )
-                if feature_result.is_success:
-                    features = feature_result.data or []
-                    execution_time = max(
-                        execution_time, feature_result.execution_time or 0.0
-                    )
-                else:
-                    raise ToolOperationError(
-                        feature_result.error
-                        or "Failed to list features for classification"
-                    )
-            else:
-                raise UnsupportedOperationError(
-                    "Active adapter does not support list_features"
-                )
+            require_capability(
+                adapter,
+                "list_features",
+                "Active adapter does not support list_features",
+            )
+            feature_result = await adapter.list_features(
+                include_suppressed=input_data.include_suppressed
+            )
+            require_success(
+                feature_result, context="Failed to list features to classify"
+            )
+            features = feature_result.data or []
+            execution_time = max(execution_time, feature_result.execution_time or 0.0)
 
         classification = classify_feature_tree_snapshot(model_info, features or [])  # type: ignore[arg-type]
         return {
@@ -994,7 +984,8 @@ async def register_file_management_tools(
         `open_model`, and to switch to a document that is already open, use
         `activate_document`. A path that isn't a .sldprt is refused. Needs: the file on
         disk. Changes: opens the part (no file is written). Returns: `model` with
-        `name`, `type`, `path` and `configuration`.
+        `name`, `type`, `path` and `configuration` (the one SolidWorks opened, or
+        null when it can't be read).
 
         Args:
             input_data: The part. `file_path` (a .sldprt) is required.
@@ -1013,7 +1004,7 @@ async def register_file_management_tools(
         model = result.data
         title = _result_value(model, "title", "name", default=file_path)
         path = _result_value(model, "path", "file_path", default=file_path)
-        configuration = _result_value(model, "configuration", default="Default")
+        configuration = _result_value(model, "configuration")
         return {
             "status": "success",
             "message": f"Loaded part: {title}",
@@ -1034,7 +1025,8 @@ async def register_file_management_tools(
         `open_model`, and to switch to a document that is already open, use
         `activate_document`. A path that isn't a .sldasm is refused. Needs: the file on
         disk. Changes: opens the assembly (no file is written). Returns: `model` with
-        `name`, `type`, `path` and `configuration`.
+        `name`, `type`, `path` and `configuration` (the one SolidWorks opened, or
+        null when it can't be read).
 
         Args:
             input_data: The assembly. `file_path` (a .sldasm) is required.
@@ -1055,7 +1047,7 @@ async def register_file_management_tools(
         model = result.data
         title = _result_value(model, "title", "name", default=file_path)
         path = _result_value(model, "path", "file_path", default=file_path)
-        configuration = _result_value(model, "configuration", default="Default")
+        configuration = _result_value(model, "configuration")
         return {
             "status": "success",
             "message": f"Loaded assembly: {title}",
@@ -1175,16 +1167,20 @@ async def register_file_management_tools(
             }
 
     @mcp.tool()
-    async def pack_and_go_assembly(
-        input_data: PackAndGoInput | None = None,
-    ) -> dict[str, Any]:
-        """Copy an assembly and every part it references into one folder, with the references updated (SolidWorks Pack and Go).
+    async def pack_and_go_assembly(input_data: PackAndGoInput) -> dict[str, Any]:
+        """Copy an assembly and every file it uses into one folder that opens on its own.
 
-        Use it to hand over or archive an assembly as a self-contained folder. It
-        refuses a folder that already has files unless `overwrite` is on, and can add an
+        Use it to hand over or archive an assembly. SolidWorks lists the files the
+        assembly uses; each is copied under its own name, as saved on disk, so save
+        first: a `warning` names any open file whose unsaved changes the copy doesn't
+        have. The copy opens with its own parts, since SolidWorks looks in the
+        assembly's folder first. It fails, copying nothing, when a file is missing,
+        two files share a name, or `target_dir` holds the originals. It refuses a
+        folder that already has files unless `overwrite` is on, and then replaces only
+        the files it copies. It never closes or changes a document. It can add an
         isometric PNG preview. Needs: the .sldasm on disk. Changes: writes the copies
         into `target_dir`, creating it if needed. Returns: `source_assembly`,
-        `target_dir`, `copied_files`, `source_files`, `all_files_saved` and, with a
+        `target_dir`, `copied_files`, `source_files`, `unsaved_changes` and, with a
         preview, `preview_image`.
 
         Args:
@@ -1194,10 +1190,7 @@ async def register_file_management_tools(
         Returns:
             dict[str, Any]: The files copied.
         """
-        if input_data is None:
-            input_data = PackAndGoInput(source_path="", target_dir="")
-        else:
-            input_data = _coerce_input(PackAndGoInput, input_data)
+        input_data = _coerce_input(PackAndGoInput, input_data)
 
         from pathlib import Path as _Path
 
@@ -1227,10 +1220,17 @@ async def register_file_management_tools(
 
         report: dict[str, Any] = {
             "status": "success",
-            "method": "native_pack_and_go",
+            "method": "dependency_copy",
             "execution_time": result.execution_time,
             **result.data,
         }
+        warnings: list[str] = []
+        unsaved = result.data.get("unsaved_changes") or []
+        if unsaved:
+            warnings.append(
+                f"{', '.join(unsaved)} had unsaved changes, which are not in the "
+                "copy; save, then pack again to include them."
+            )
 
         if input_data.export_preview:
             preview_path = out_dir / "assembly_preview.png"
@@ -1246,7 +1246,14 @@ async def register_file_management_tools(
             report["preview_image"] = (
                 str(preview_path) if img_result.is_success else None
             )
+            if not img_result.is_success:
+                warnings.append(
+                    f"The copy is complete, but the preview couldn't be written: "
+                    f"{img_result.error}"
+                )
 
+        if warnings:
+            report["warning"] = " ".join(warnings)
         return report
 
     @mcp.tool()
