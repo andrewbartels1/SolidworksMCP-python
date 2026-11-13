@@ -31,7 +31,7 @@
 - [x] 5.2 Each tool's description matches what it now does; the skill's `errors-and-limits.md` gains a row for any fault recorded
 - [x] 5.3 CHANGELOG: **Fixed** (Pack and Go, angles), **Changed** (the removed inputs; `get_dimension` units)
 - [x] 5.4 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
-- [ ] 5.5 Live-demo sign-off with the user before the PR; settle the version question in design.md
+- [x] 5.5 Live-demo sign-off with the user before the PR; settle the version question in design.md
 
 ## Notes from the implementation
 

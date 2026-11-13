@@ -6,7 +6,7 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-09.
+Last updated 2026-11-12.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ Last updated 2026-11-09.
 | 5 | Tool gaps found building the U-joint: face mates, fixed parts and flexible sub-assemblies, angled planes, angled chamfers, `both_directions`, a stale interference result, thin extrudes | #209 | `ujoint-tool-gaps` (archived) | Done 2026-11-07 (#216), signed off live |
 | 6 | `--selftest` command and a compatibility-report issue template | #179 | `selftest-and-compatibility-report` (archived) | Done 2026-11-09 (#217), signed off live |
 | 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` (archived) | Done 2026-11-09 (#219, 2.0.0): 23 tools promoted, signed off live |
-| 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | not yet written | Next: reliability before new features |
+| 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | `experimental-tools-to-stable` (archived) | Done 2026-11-12 (2.0.0, tagged `v2.0.0`): all 10 promoted, signed off live. Pack and Go now copies the files `GetDependencies2` lists (SolidWorks 2026's own Pack and Go copied only the assembly); `comtypes` dropped |
 | 9 | Monitor stand demo follow-ups | #206 | not yet written | |
 | 10 | The 40 planned tools: implement each one or take it out of the tool list (listed below). A registered tool that can't run is a promise the server doesn't keep | not filed yet | not yet written | Check against #174 first, which may retire some as duplicates |
 | 11 | Clear out duplicate and overlapping tools: compare each cluster, keep one, settle a verb list, deprecate old names for one release | #174 | not yet written | |
