@@ -92,13 +92,20 @@ is required, so it becomes optional with the one-of check, and the error
 names both. The adapter method gains `face_point: tuple[float, float, float]
 | None`, through every adapter layer. The real adapter:
 
-1. calls `ForceRebuild3(True)` (runbook #13);
-2. selects `"FACE"` at the point in metres with `SelectByID2` and a
-   `VT_DISPATCH` null callout (runbook #11);
-3. reads the selected object and checks its surface `IsPlane()`; if the
-   selection fails or the face is curved, it raises `InvalidInputError`
-   naming the point, with the selection cleared;
-4. calls `InsertSketch(True)`, and reads the new sketch's name as the
+1. finds and selects the face with `_select_face_at_point`, the helper
+   `create_reference_plane`'s `face_point` already uses live: it reads the
+   body's faces, takes the one whose closest point is within 0.01 mm,
+   refuses a face with no normal (curved), and selects it with
+   `IFace2.Select4`. It works from the body's geometry, so it needs neither
+   `SelectByID2` nor a rebuild first (decided at implementation, replacing
+   the `SelectByID2` + `IsPlane()` route first planned here);
+2. on no face, a curved face or a refused selection, clears the selection
+   and raises `LookupError("face_point [x, y, z] mm is not on a flat face
+   of the active part (<reason>)")`. One rule in `error_classifier.py`
+   matches exactly that message and classifies it `invalid_input`; the
+   shared "No face found at point" message stays `not_found` for
+   `select_face_edges`;
+3. calls `InsertSketch(True)`, and reads the new sketch's name as the
    plane path does.
 
 The mock records the point and answers a point inside its block's top face

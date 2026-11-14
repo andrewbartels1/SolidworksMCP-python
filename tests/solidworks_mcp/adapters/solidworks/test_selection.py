@@ -407,7 +407,65 @@ class TestPyWin32AdapterBranches:
         result = await adapter.list_features(include_suppressed=False)
 
         assert result.is_success
-        assert [row["name"] for row in result.data] == ["Boss-Extrude1", "Sketch1"]
+        # The reverse pass finds them newest first; the rows come in tree order.
+        assert [row["name"] for row in result.data] == ["Sketch1", "Boss-Extrude1"]
+        assert [row["position"] for row in result.data] == [0, 1]
+
+    @pytest.mark.asyncio
+    async def test_list_features_sorts_when_the_forward_walk_stops_early(
+        self, monkeypatch
+    ):
+        """A forward walk that stops at the folders still yields tree order."""
+        adapter = self._build_adapter(monkeypatch)
+
+        class _Feature:
+            """A feature whose forward link can be cut short."""
+
+            def __init__(self, name, feature_type, next_feature=None):
+                """Store the name, type and next feature."""
+                self.Name = name
+                self._feature_type = feature_type
+                self._next = next_feature
+
+            def GetTypeName2(self):
+                """Return the feature's type."""
+                return self._feature_type
+
+            def IsSuppressed(self):
+                """Never suppressed."""
+                return False
+
+            def GetNextFeature(self):
+                """Return the next feature, or None where the walk stops."""
+                return self._next
+
+        tree = [
+            ("Front Plane", "RefPlane"),
+            ("Top Plane", "RefPlane"),
+            ("Right Plane", "RefPlane"),
+            ("Sketch1", "ProfileFeature"),
+            ("Boss-Extrude1", "Extrusion"),
+            ("Plane1", "RefPlane"),
+            ("Sketch2", "ProfileFeature"),
+            ("Cut-Extrude1", "Cut"),
+        ]
+        objects = [_Feature(name, kind) for name, kind in tree]
+        # The forward walk reaches the default planes, then stops.
+        objects[0]._next = objects[1]
+        objects[1]._next = objects[2]
+        count = len(objects)
+
+        adapter.currentModel = SimpleNamespace(
+            FirstFeature=lambda: objects[0],
+            FeatureByPositionReverse=lambda pos: objects[count - pos - 1],
+            FeatureManager=SimpleNamespace(GetFeatureCount=lambda _all: count),
+        )
+
+        result = await adapter.list_features(include_suppressed=False)
+
+        assert result.is_success
+        assert [row["name"] for row in result.data] == [name for name, _ in tree]
+        assert [row["position"] for row in result.data] == list(range(count))
 
     @pytest.mark.asyncio
     async def test_list_features_suppressed_fallback_uses_is_suppressed2(

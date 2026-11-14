@@ -164,6 +164,15 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(r"built no feature",),
     ),
     ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "face_point must lie on a flat face of the active part's body, in "
+            "mm. Read the faces' centres with select_face_edges, or sketch on "
+            "a plane instead."
+        ),
+        patterns=(r"face_point \[[^\]]*\] mm is not on a flat face",),
+    ),
+    ErrorRule(
         error_type="not_found",
         hint=(
             "Check the name or path - list what exists first (list_features, "

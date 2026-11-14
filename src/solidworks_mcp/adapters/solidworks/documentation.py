@@ -19,6 +19,7 @@ from defusedxml import DefusedXmlException
 
 from ..base import AdapterResult, AdapterResultStatus
 from . import dimension_layout as _layout
+from .feature_walk import walk_feature_tree
 from .features import _null_callout, _parse_edge_spec, _select_edge_by_coord
 from .io import (
     _as_com,
@@ -311,6 +312,34 @@ def _strip_document_suffix(full_name: Any) -> str | None:
     return full_name
 
 
+def _owning_feature(full_name: str | None) -> str | None:
+    """The feature a dimension's full name says owns it.
+
+    Args:
+        full_name: A short full name such as ``"D1@Plane1"``.
+
+    Returns:
+        str | None: The part after the first ``@`` (``"Plane1"``); ``None``
+        when there is no name or no ``@``.
+    """
+    if not full_name or "@" not in full_name:
+        return None
+    return full_name.split("@", 1)[1]
+
+
+def _is_folder(type_name: str) -> bool:
+    """Whether a feature-tree row is a folder, which owns no dimensions.
+
+    Args:
+        type_name: The row's ``GetTypeName2`` type.
+
+    Returns:
+        bool: True for folder types (``CommentsFolder``, ``MaterialFolder``,
+        ...) and the annotations folder (``DetailCabinet``).
+    """
+    return type_name.endswith("Folder") or type_name == "DetailCabinet"
+
+
 def _sequence(raw: Any) -> list[Any]:
     """Normalise a COM array return (``None``, scalar or tuple) into a list.
 
@@ -383,20 +412,24 @@ class SolidWorksDocumentationMixin:
     async def list_model_dimensions(
         self, feature_name: str | None = None
     ) -> AdapterResult[list[dict[str, Any]]]:
-        """List every dimension in the active part or assembly.
+        """List every dimension in the active part or assembly, once each.
 
-        Walks ``IModelDoc2::FirstFeature`` / ``IFeature::GetNextFeature`` and
-        each feature's ``GetFirstDisplayDimension`` chain. ``full_name`` (e.g.
-        ``"D1@Sketch1"``) is the name ``set_dimension`` accepts, so the pair
-        gives edit-by-name access to every driving parameter in the model.
+        Reads the features with the same two-pass walk as ``list_features``
+        (:func:`~.feature_walk.walk_feature_tree`), skips folder rows, and
+        reads each feature's ``GetFirstDisplayDimension`` chain. SolidWorks
+        can show one dimension under several features (a plane's offset under
+        the cut sketched on it), so each ``full_name`` (e.g. ``"D1@Sketch1"``,
+        the name ``set_dimension`` accepts) is kept once, with ``feature`` set
+        from the part after the ``@``.
 
         Args:
-            feature_name: Only list dimensions of this feature (case-insensitive).
+            feature_name: Only list dimensions owned by this feature
+                (case-insensitive), by the ``@`` suffix of their full name.
 
         Returns:
             AdapterResult[list[dict[str, Any]]]: ``full_name``, ``feature``,
             ``value`` (document units), ``system_value`` (metres / radians)
-            and ``read_only`` per dimension.
+            and ``read_only`` per dimension, in tree order.
         """
         guard = self._require_doc_type({1, 2}, "list_model_dimensions")
         if guard is not None:
@@ -404,62 +437,75 @@ class SolidWorksDocumentationMixin:
         target = (feature_name or "").strip().lower()
 
         def _list() -> list[dict[str, Any]]:
-            model = self.currentModel
             dims: list[dict[str, Any]] = []
-            feature = self._attempt(lambda: model.FirstFeature(), default=None)
-            guard_count = 0
-            while feature is not None and guard_count < 20000:
-                guard_count += 1
-                feat = _sw_type_info.flagged(feature, "IFeature")
-                name = str(self._attempt(lambda f=feat: f.Name, default="") or "")
-                if not target or name.lower() == target:
-                    display = self._attempt(
-                        lambda f=feat: f.GetFirstDisplayDimension(), default=None
+            seen: set[str] = set()
+            for item in walk_feature_tree(self, self.currentModel):
+                if _is_folder(item.type_name):
+                    continue
+                for row in self._read_display_dimensions(item.feature, item.name):
+                    full_name = row["full_name"]
+                    if full_name is not None:
+                        if full_name in seen:
+                            continue
+                        seen.add(full_name)
+                    dims.append(row)
+            if target:
+                dims = [d for d in dims if d["feature"].lower() == target]
+                if not dims:
+                    raise LookupError(
+                        f"No dimensions found on feature {feature_name!r}; list "
+                        "the feature tree with list_features for exact names"
                     )
-                    while display is not None:
-                        disp = _sw_type_info.flagged(display, "IDisplayDimension")
-                        dim = self._attempt(
-                            lambda d=disp: d.GetDimension2(0), default=None
-                        )
-                        if dim is not None:
-                            dim = _sw_type_info.flagged(dim, "IDimension")
-                            dims.append(
-                                {
-                                    "full_name": _strip_document_suffix(
-                                        self._attempt(
-                                            lambda d=dim: d.FullName, default=None
-                                        )
-                                    ),
-                                    "feature": name,
-                                    "value": self._attempt(
-                                        lambda d=dim: d.Value, default=None
-                                    ),
-                                    "system_value": self._attempt(
-                                        lambda d=dim: d.SystemValue, default=None
-                                    ),
-                                    "read_only": bool(
-                                        self._attempt(
-                                            lambda d=dim: d.ReadOnly, default=False
-                                        )
-                                    ),
-                                }
-                            )
-                        display = self._attempt(
-                            lambda f=feat, d=display: f.GetNextDisplayDimension(d),
-                            default=None,
-                        )
-                feature = self._attempt(lambda f=feat: f.GetNextFeature(), default=None)
-            if target and not dims:
-                raise LookupError(
-                    f"No dimensions found on feature {feature_name!r}; list "
-                    "the feature tree with list_features for exact names"
-                )
             return dims
 
         return cast(
             "AdapterResult[list[dict[str, Any]]]",
             self._handle_com_operation("list_model_dimensions", _list),
         )
+
+    def _read_display_dimensions(
+        self, feature: Any, feature_name: str
+    ) -> list[dict[str, Any]]:
+        """Read one feature's display dimensions.
+
+        Args:
+            feature: The ``IFeature`` dispatch.
+            feature_name: Its name, used as ``feature`` when a dimension's
+                full name can't be read.
+
+        Returns:
+            list[dict[str, Any]]: One row per dimension SolidWorks lists under
+            the feature, with ``feature`` taken from the full name's ``@``
+            suffix.
+        """
+        feat = _sw_type_info.flagged(feature, "IFeature")
+        rows: list[dict[str, Any]] = []
+        display = self._attempt(lambda: feat.GetFirstDisplayDimension(), default=None)
+        while display is not None:
+            disp = _sw_type_info.flagged(display, "IDisplayDimension")
+            dim = self._attempt(lambda d=disp: d.GetDimension2(0), default=None)
+            if dim is not None:
+                dim = _sw_type_info.flagged(dim, "IDimension")
+                full_name = _strip_document_suffix(
+                    self._attempt(lambda d=dim: d.FullName, default=None)
+                )
+                rows.append(
+                    {
+                        "full_name": full_name,
+                        "feature": _owning_feature(full_name) or feature_name,
+                        "value": self._attempt(lambda d=dim: d.Value, default=None),
+                        "system_value": self._attempt(
+                            lambda d=dim: d.SystemValue, default=None
+                        ),
+                        "read_only": bool(
+                            self._attempt(lambda d=dim: d.ReadOnly, default=False)
+                        ),
+                    }
+                )
+            display = self._attempt(
+                lambda d=display: feat.GetNextDisplayDimension(d), default=None
+            )
+        return rows
 
     async def measure_entities(
         self, entities: list[str]

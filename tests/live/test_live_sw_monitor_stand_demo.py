@@ -7,13 +7,17 @@ demo and the script cannot drift apart) through the registered MCP tools,
 each call a captioned frame. The stand is built at the script's defaults,
 the part as the user finished it: 66 mm tall, a 26 mm top, R25 arches and an
 11.46 mm pocket. ``build()`` checks it with ``verify_model`` against a hand
-calculation before saving and exporting an STL. The last frame is the part
-in an isometric view.
+calculation before saving and exporting an STL. The camera turns to the
+isometric view after the extrusion, each cut and the fillet, and the last
+frame is the finished part.
+
+A second test (not recorded) builds the stand again, raises its height in
+the extrusion's dimension, and checks the pocket followed the top face.
 
 Record it with::
 
     powershell -ExecutionPolicy Bypass -File tests\\scripts\\live_demo.ps1 `
-        -Test tests/live/test_live_sw_monitor_stand_demo.py `
+        -Test tests/live/test_live_sw_monitor_stand_demo.py::test_monitor_stand_from_prompt_to_part `
         -CaptureDir docs/assets/demos/monitor-stand -Record -PromptSeconds 12
 
 Collected only with ``SOLIDWORKS_MCP_RUN_REAL_INTEGRATION=1`` on Windows (see
@@ -65,11 +69,12 @@ FINISHED_BY_HAND = (
 _PROMPT_MAX_LINES = 26
 _PROMPT_WRAP_CHARS = 70
 
-#: swStandardViews_e (swconst.tlb, SW 2026): the isometric view.
-_ISO_VIEW = 7
-#: Calls after which the camera turns to the isometric view: from the first
-#: solid on, the cuts, arches and pocket are seen in 3D.
-_LOOK_AFTER = {"create_extrusion"}
+#: The stand's volume at the script's defaults, measured on SolidWorks 2026
+#: in the session that built it (issue #206). The script's hand calculation
+#: leaves out a small blend and reads about 0.3 % low.
+_MEASURED_VOLUME_MM3 = 901_769.0
+#: How much the height is raised in the follow-the-height test, in mm.
+_RAISE_MM = 4.0
 
 
 def _load_script() -> Any:
@@ -88,16 +93,6 @@ def _prompt_lines() -> list[str]:
     lines += [""] + textwrap.wrap("Then: " + FOLLOW_UP, _PROMPT_WRAP_CHARS)
     lines += [""] + textwrap.wrap(FINISHED_BY_HAND, _PROMPT_WRAP_CHARS)
     return lines
-
-
-def _look(adapter: Any, view: int) -> None:
-    """Point the camera for the demo: a standard view, zoomed to fit.
-
-    Staging for the recording, not a tool call: an agent does not need it.
-    """
-    model = adapter.currentModel
-    adapter._attempt(lambda: model.ShowNamedView2("", view), default=None)
-    adapter._zoom_to_fit(model)
 
 
 def _brief(result: dict[str, Any]) -> dict[str, Any]:
@@ -145,8 +140,6 @@ class _Session:
         self.calls.append({"tool": name, "args": args or {}})
         self.results[name] = result
         assert result.get("status") == "success", f"{name}: {result.get('message')}"
-        if name in _LOOK_AFTER:
-            _look(self.adapter, _ISO_VIEW)
         brief = _brief(result)
         brief["message"] = str(brief["message"]).replace(self.prefix, "")
         evidence(label, brief, call=shown)
@@ -166,14 +159,25 @@ async def test_monitor_stand_from_prompt_to_part(scratch: Any, tmp_path: Path) -
 
     evidence("the prompt", _prompt_lines(), max_lines=_PROMPT_MAX_LINES)
 
-    await script.build(stand, out, replace=False, stl=True, call=call)
+    await script.build(
+        stand,
+        out,
+        replace=False,
+        stl=True,
+        call=call,
+        look=lambda: script.look_isometric(adapter),
+    )
 
     assert out.is_file(), out
     assert out.with_suffix(".stl").is_file()
     check = call.results["verify_model"]
     assert check["verdict"] == "pass", check
+    assert check["measured"]["volume_mm3"] == pytest.approx(
+        _MEASURED_VOLUME_MM3, rel=1e-3
+    )
+    assert "create_reference_plane" not in [c["tool"] for c in call.calls]
 
-    _look(adapter, _ISO_VIEW)
+    script.look_isometric(adapter)
     evidence(
         f"the finished stand, isometric: {len(call.calls)} tool calls, all successful",
         {
@@ -182,3 +186,54 @@ async def test_monitor_stand_from_prompt_to_part(scratch: Any, tmp_path: Path) -
             "saved": [out.name, out.with_suffix(".stl").name],
         },
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(900)
+async def test_the_pocket_follows_a_raised_height(scratch: Any, tmp_path: Path) -> None:
+    """Raise the stand by editing its extrusion; the pocket moves with the top.
+
+    The pocket is sketched on the top face, so after the block's depth goes
+    from 66 to 70 mm the part grows by exactly the plate's footprint times
+    4 mm, and the pocket is still 11.46 mm deep from the new top. A pocket on
+    a plane fixed at 66 mm would leave the volume short by the pocket's
+    footprint times 4 mm.
+    """
+    script = _load_script()
+    stand = script.Stand()
+    adapter = scratch.adapter
+    call = script.Session(await script._tools(adapter))
+    out = tmp_path / "MonitorStandRaised.SLDPRT"
+    scratch.written_files.append(str(out))
+
+    # build() ends with verify_model, so the stand is right before the edit.
+    await script.build(stand, out, replace=False, stl=False, call=call)
+
+    raised = stand.height + _RAISE_MM
+    await call("set_dimension", {"name": "D1@Boss-Extrude1", "value": raised})
+    await call("rebuild_model")
+    check = await call(
+        "verify_model",
+        {
+            "bounding_box_mm": [
+                round(stand.width, 4),
+                round(raised, 4),
+                round(stand.depth, 4),
+            ],
+            "volume_mm3": round(
+                _MEASURED_VOLUME_MM3 + stand.width * stand.depth * _RAISE_MM, 1
+            ),
+            "solid_body_count": 1,
+            "relative_tolerance": 0.002,
+        },
+    )
+
+    evidence(
+        "the pocket followed the top face",
+        {
+            "height_mm": raised,
+            "volume_after_mm3": round(check["measured"]["volume_mm3"], 1),
+            "verdict": check["verdict"],
+        },
+    )
+    assert check["verdict"] == "pass", check

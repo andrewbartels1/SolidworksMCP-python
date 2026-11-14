@@ -1830,3 +1830,27 @@ async def test_reset_circuit_breakers_resets_a_shared_breaker_once() -> None:
 
     assert result.data == {"reset": ["create_extrusion"]}
     assert breaker._get_bucket("create_extrusion").state == CircuitState.CLOSED
+
+
+@pytest.mark.asyncio
+async def test_connection_pool_create_sketch_forwards_face_point(monkeypatch):
+    """The pool passes face_point through to the adapter it borrows."""
+    pool = ConnectionPoolAdapter(
+        adapter_factory=lambda: _PoolAdapterStub(), pool_size=1
+    )
+    seen: list[tuple] = []
+
+    class _Borrowed:
+        async def create_sketch(self, plane, face_point=None):
+            seen.append((plane, face_point))
+            return AdapterResult(status=AdapterResultStatus.SUCCESS, data="Sketch1")
+
+    async def _fake_execute(name, operation):
+        return await operation(_Borrowed())
+
+    monkeypatch.setattr(pool, "_execute_with_pool", _fake_execute)
+
+    result = await pool.create_sketch(None, (1.0, 2.0, 3.0))
+
+    assert result.is_success
+    assert seen == [(None, (1.0, 2.0, 3.0))]

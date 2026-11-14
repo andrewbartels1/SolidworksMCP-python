@@ -32,6 +32,7 @@ from .solidworks import (
     SolidWorksSketchMixin,
     bitmap,
 )
+from .solidworks.feature_walk import walk_feature_tree
 from .solidworks.features import _null_callout, _select_feature_by_name
 from .solidworks.io import _byref_int
 
@@ -90,6 +91,12 @@ def _byref_long(initial: int = 0) -> Any:
         initial,
     )
 
+
+#: The note an STL export carries when SaveAs3 had to write it.
+STL_OPTIONS_NOT_APPLIED = (
+    "The STL was written by SaveAs3 because SaveAs2 wrote nothing, so its STL "
+    "options (bodies merged into one file) were not applied."
+)
 
 # OLE2 / Compound File Binary Format magic. A real (SW-authored) ``.swp`` is a
 # compound file; a hand-written text macro is not.
@@ -1059,15 +1066,6 @@ class _DocumentRoutingService:
         return self._adapter.currentModel
 
 
-#: Members the ``list_features`` tree walk actually reads on each feature
-#: dispatch. Flagging just these instead of the whole ``IFeature`` interface
-#: (~100 names, ~27 ms per object) is what keeps the walk cheap: the flag
-#: cache in ``sw_type_info`` is keyed by ``id(obj)``, and every feature here
-#: is a freshly returned dispatch, so a full-interface flag never hits that
-#: cache and pays its full cost on every single feature.
-_WALK_MEMBERS = ("GetNextFeature", "GetTypeName2", "IsSuppressed", "IsSuppressed2")
-
-
 class _FeatureSelectionService:
     """Encapsulate feature-selection strategies and name-candidate expansion.
 
@@ -1539,74 +1537,23 @@ class _FeatureSelectionService:
             list[dict[str, Any]]: Ordered feature descriptors.
         """
         features: list[dict[str, Any]] = []
-        seen: set[tuple[str, str]] = set()
-
-        feature = self._adapter._attempt(lambda: document.FirstFeature())
-        # Flag only the members this walk reads (see ``_WALK_MEMBERS``) so
-        # methods like GetNextFeature work, without paying the cost of
-        # flagging the entire IFeature interface on every fresh dispatch.
-        if feature is not None:
-            self._adapter._attempt(
-                lambda f=feature: sw_type_info.flag_members(f, *_WALK_MEMBERS),  # type: ignore[misc]
-                default=0,
-            )
-        pos = 0
-        guard = 0
-        while feature and guard < 10000:
-            self._append_feature_to(
-                features,
-                seen,
-                feature,
-                pos,
-                include_suppressed,
-                component=component,
-                component_path=component_path,
-                component_parent=component_parent,
-            )
-            pos += 1
-            guard += 1
-            next_feature = self._adapter._attempt(
-                lambda current_feature=feature: current_feature.GetNextFeature()  # type: ignore[misc]
-            )
-            if next_feature is None:
-                break
-            feature = next_feature
-            # Flag each new feature dispatch
-            if feature is not None:
-                self._adapter._attempt(
-                    lambda f=feature: sw_type_info.flag_members(f, *_WALK_MEMBERS),  # type: ignore[misc]
-                    default=0,
-                )
-
-        # Always augment the forward traversal with FeatureByPositionReverse.
-        # Some SolidWorks COM/type-library combinations stop GetNextFeature at
-        # the system folders even though later sketches and body features
-        # exist. The dedupe set keeps this fallback safe when both traversals
-        # return the same entries.
-        feature_manager = getattr(document, "FeatureManager", None)
-        count = self._adapter._attempt(
-            lambda: int(feature_manager.GetFeatureCount(True) or 0),  # type: ignore[union-attr]
-            default=0,
-        )
-        # FeatureByPositionReverse is zero-based. Starting at one silently
-        # skipped the newest feature (typically the just-created extrusion).
-        for reverse_pos in range(0, count or 0):
-            feature = self._adapter._attempt(
-                lambda pos=reverse_pos: document.FeatureByPositionReverse(pos)
-            )
-            if feature is None:
+        # One walk, shared with list_model_dimensions: both passes, each
+        # feature once, in tree order (see ``feature_walk``).
+        for item in walk_feature_tree(self._adapter, document):
+            suppressed = self._is_feature_suppressed(item.feature)
+            if suppressed and not include_suppressed:
                 continue
-            self._append_feature_to(
-                features,
-                seen,
-                feature,
-                (count or 0) - reverse_pos - 1,
-                include_suppressed,
-                component=component,
-                component_path=component_path,
-                component_parent=component_parent,
+            features.append(
+                {
+                    "name": item.name,
+                    "type": item.type_name,
+                    "suppressed": suppressed,
+                    "position": item.position,
+                    "component": component,
+                    "component_path": component_path,
+                    "component_parent": component_parent,
+                }
             )
-
         return features
 
     def _list_assembly_component_features(
@@ -1736,61 +1683,6 @@ class _FeatureSelectionService:
                 )
 
         return results
-
-    def _append_feature_to(
-        self,
-        features: list[dict[str, Any]],
-        seen: set[tuple[str, str]],
-        feature: Any,
-        position: int,
-        include_suppressed: bool,
-        component: str | None = None,
-        component_path: str | None = None,
-        component_parent: str | None = None,
-    ) -> None:
-        """Append one feature descriptor when dedupe and suppression rules allow.
-
-        Args:
-            features: Output list being populated.
-            seen: Dedupe set of ``(name, type)`` keys.
-            feature: Feature COM object.
-            position: Display position index.
-            include_suppressed: Include suppressed entries when ``True``.
-            component: Owning component name, or ``None`` for a document's
-                own (non-component) feature.
-            component_path: Owning component's resolved document path, or
-                ``None`` to match ``component``.
-            component_parent: Immediate parent component's name, or
-                ``None`` for a top-level component or a document's own
-                feature.
-        """
-        name = str(getattr(feature, "Name", ""))
-        feature_type = str(
-            self._adapter._attempt(
-                lambda: self._adapter._get_attr_or_call(feature, "GetTypeName2"),
-                default="Unknown",
-            )
-        )
-        dedupe_key = (name, feature_type)
-        if dedupe_key in seen:
-            return
-        seen.add(dedupe_key)
-
-        suppressed = self._is_feature_suppressed(feature)
-        if not include_suppressed and suppressed:
-            return
-
-        features.append(
-            {
-                "name": name,
-                "type": feature_type,
-                "suppressed": suppressed,
-                "position": position,
-                "component": component,
-                "component_path": component_path,
-                "component_parent": component_parent,
-            }
-        )
 
     def _is_feature_suppressed(self, feature: Any) -> bool:
         """Determine feature suppression state across COM API variants.
@@ -2560,37 +2452,34 @@ class PyWin32Adapter(
     def _save_stl_with_extension(
         self, ext: Any, stl_data: Any | None, resolved_path: str
     ) -> bool:
-        """Attempt STL export using Extension.SaveAs2 with optional ISTLExportData.
+        """Export STL with ``IModelDocExtension.SaveAs2`` and the STL options.
 
-        Tries SaveAs2 with stl_data first (enables body merging); falls back to
-        SaveAs2(None) if type mismatch occurs (late-bound IDispatch can't marshal
-        ISTLExportData* through IDispatch::Invoke).
+        ``SaveAs2`` takes seven arguments: ``Name``, ``Version``, ``Options``,
+        ``ExportData``, ``ReferencePrefixOrSuffixText`` (String),
+        ``AddTextAsPrefix`` (Boolean) and ``Errors`` (by-reference Long).
+        ``ExportData`` is the ``ISTLExportData`` that merges the bodies, or a
+        ``VT_DISPATCH`` null when SolidWorks gave none (runbook #11: a bare
+        ``None`` marshals as ``VT_NULL`` and is rejected).
 
         Args:
-            ext: Extension object from target document
-            stl_data: Optional ISTLExportData configuration
-            resolved_path: Full path where to save STL file
+            ext: The document's ``IModelDocExtension``.
+            stl_data: The ``ISTLExportData``, or None.
+            resolved_path: Full path of the STL file to write.
 
         Returns:
-            True if file was created, False otherwise.
+            bool: True when the file exists afterwards.
         """
+        export_data = stl_data if stl_data is not None else _null_callout()
+        errors = _byref_long(0)
         try:
-            # Try with stl_data first
-            try:
-                # swSaveAsVersion_e.swSaveAsCurrentVersion = 0
-                # swSaveAsOptions_e.swSaveAsOptions_Silent = 2
-                ext.SaveAs2(resolved_path, 0, 2, stl_data, None, "")
-            except Exception:
-                # Fallback: try without stl_data (type mismatch on IDispatch)
-                ext.SaveAs2(resolved_path, 0, 2, None, None, "")
-
-            return os.path.exists(resolved_path)
+            # swSaveAsCurrentVersion = 0, swSaveAsOptions_Silent = 2
+            ext.SaveAs2(resolved_path, 0, 2, export_data, "", False, errors)
         except Exception as exc:
             logger.warning(
-                "[pywin32.export_file] Extension.SaveAs2 failed: {}",
-                str(exc),
+                "[pywin32.export_file] Extension.SaveAs2 failed: {}", str(exc)
             )
             return False
+        return os.path.exists(resolved_path)
 
     def _save_stl_with_fallback(self, target_doc: Any, resolved_path: str) -> None:
         """Fallback STL export using SaveAs3 if SaveAs2 didn't create file.
@@ -2624,9 +2513,7 @@ class PyWin32Adapter(
                 "(tried Extension.SaveAs2 and SaveAs3)"
             )
 
-    async def export_file(
-        self, file_path: str, format_type: str
-    ) -> AdapterResult[None]:
+    async def export_file(self, file_path: str, format_type: str) -> AdapterResult[Any]:
         """Export the current model to a file.
 
         Args:
@@ -2634,7 +2521,8 @@ class PyWin32Adapter(
             format_type (str): The format type value.
 
         Returns:
-            AdapterResult[None]: The result produced by the operation.
+            AdapterResult[Any]: No data, except an STL written by the SaveAs3
+            fallback, whose data is ``{"warning": ...}``.
 
         Raises:
             Exception: If the operation cannot be completed.
@@ -2645,11 +2533,11 @@ class PyWin32Adapter(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _export_operation() -> None:
+        def _export_operation() -> dict[str, str] | None:
             """Build internal export operation.
 
             Returns:
-                None: None.
+                dict[str, str] | None: The fallback warning for an STL, else None.
 
             Raises:
                 Exception: If the operation cannot be completed.
@@ -2698,11 +2586,12 @@ class PyWin32Adapter(
                     raise RuntimeError("No Extension object available for STL export")
 
                 stl_data = self._prepare_stl_export_data()
-                if not self._save_stl_with_extension(ext, stl_data, resolved_path):
-                    # SaveAs2 didn't produce file — try SaveAs3 fallback
-                    self._save_stl_with_fallback(target_doc, resolved_path)
-
-                return None
+                if self._save_stl_with_extension(ext, stl_data, resolved_path):
+                    return None
+                # SaveAs2 wrote nothing: SaveAs3 writes the file without the
+                # STL options, so the reply says they weren't applied.
+                self._save_stl_with_fallback(target_doc, resolved_path)
+                return {"warning": STL_OPTIONS_NOT_APPLIED}
 
             # ----------------------------------------------------------------
             # All other formats — classic SaveAs3 path.

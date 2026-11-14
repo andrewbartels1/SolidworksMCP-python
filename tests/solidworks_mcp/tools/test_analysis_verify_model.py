@@ -405,6 +405,30 @@ def test_feature_filter_skips_furniture_and_default_planes() -> None:
     ]
 
 
+def test_feature_filter_uses_tree_order_when_rows_arrive_newest_first() -> None:
+    # The monitor stand: rows found newest first by the reverse pass.
+    in_tree_order = [
+        ("Front Plane", "RefPlane"),
+        ("Top Plane", "RefPlane"),
+        ("Right Plane", "RefPlane"),
+        ("Origin", "OriginProfileFeature"),
+        ("Sketch1", "ProfileFeature"),
+        ("Boss-Extrude1", "Extrusion"),
+        ("Plane1", "RefPlane"),
+        ("Sketch2", "ProfileFeature"),
+        ("Cut-Extrude1", "Cut"),
+    ]
+    rows = [
+        {**_feature(name, kind), "position": position}
+        for position, (name, kind) in enumerate(in_tree_order)
+    ]
+
+    counted = _count_modelling_features(list(reversed(rows)))
+
+    assert counted == ["Boss-Extrude1", "Plane1", "Cut-Extrude1"]
+    assert "Front Plane" not in counted
+
+
 def test_verdict_order() -> None:
     assert _verdict([]) == "report_only"
     assert _verdict([{"passed": True}, {"passed": None}]) == "inconclusive"

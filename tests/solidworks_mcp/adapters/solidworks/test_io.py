@@ -39,7 +39,10 @@ import pytest
 
 import solidworks_mcp.adapters.pywin32_adapter as pywin32_mod
 from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
-from solidworks_mcp.adapters.pywin32_adapter import PyWin32Adapter
+from solidworks_mcp.adapters.pywin32_adapter import (
+    STL_OPTIONS_NOT_APPLIED,
+    PyWin32Adapter,
+)
 from solidworks_mcp.adapters.solidworks import bitmap as _io_bitmap
 from solidworks_mcp.adapters.solidworks.io import (
     SolidWorksIOMixin,
@@ -2642,26 +2645,40 @@ class TestPyWin32AdapterBranches:
         assert stl_data.Merge is True
         assert stl_data.ExportBodiesAs == 0
 
-    def test_save_stl_with_extension_fallback_to_no_export_data(
+    def test_save_stl_with_extension_passes_seven_arguments(
         self, monkeypatch, tmp_path
     ) -> None:
-        """_save_stl_with_extension should retry SaveAs2 with None export data."""
+        """SaveAs2 gets its seven arguments, the export data included, once."""
         adapter = self._build_adapter(monkeypatch)
         out_file = tmp_path / "out.stl"
-
-        call_counter = {"count": 0}
+        stl_data = object()
 
         def _saveas2(path, *_args):
-            call_counter["count"] += 1
-            if call_counter["count"] == 1:
-                raise RuntimeError("type mismatch")
             out_file.write_text("solid", encoding="utf-8")
+            return True
 
         extension = SimpleNamespace(SaveAs2=Mock(side_effect=_saveas2))
-        saved = adapter._save_stl_with_extension(extension, object(), str(out_file))
+        saved = adapter._save_stl_with_extension(extension, stl_data, str(out_file))
 
         assert saved is True
-        assert extension.SaveAs2.call_count == 2
+        extension.SaveAs2.assert_called_once()
+        args = extension.SaveAs2.call_args.args
+        assert len(args) == 7
+        assert args[:6] == (str(out_file), 0, 2, stl_data, "", False)
+
+    def test_save_stl_with_extension_without_export_data_passes_a_null(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """No ISTLExportData: ExportData is the VT_DISPATCH null, never None."""
+        adapter = self._build_adapter(monkeypatch)
+        extension = SimpleNamespace(SaveAs2=Mock(return_value=True))
+
+        saved = adapter._save_stl_with_extension(
+            extension, None, str(tmp_path / "never.stl")
+        )
+
+        assert saved is False  # SaveAs2 said True but wrote nothing
+        assert extension.SaveAs2.call_args.args[3] is not None
 
     def test_save_stl_with_extension_returns_false_on_failure(
         self, monkeypatch
@@ -2783,6 +2800,7 @@ class TestPyWin32AdapterBranches:
         result = await adapter.export_file(str(out_file), "stl")
 
         assert result.is_success
+        assert result.data is None
         target_doc.ResolveAllLightweightComponents.assert_called_once_with(True)
         adapter._save_stl_with_extension.assert_called_once()
         adapter._save_stl_with_fallback.assert_not_called()
@@ -2817,6 +2835,7 @@ class TestPyWin32AdapterBranches:
         result = await adapter.export_file(str(out_file), "stl")
 
         assert result.is_success
+        assert result.data == {"warning": STL_OPTIONS_NOT_APPLIED}
         adapter._save_stl_with_extension.assert_called_once()
         adapter._save_stl_with_fallback.assert_called_once_with(
             target_doc, str(out_file)

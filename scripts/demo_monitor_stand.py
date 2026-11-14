@@ -9,11 +9,9 @@ tall with a 26 mm top, so the legs stay 40 mm, and an 11.46 mm pocket that
 leaves a 14.54 mm floor under the monitor. The session built it 55 mm tall
 with a 3 mm pocket (``--height 55 --top 15 --pocket-depth 3``).
 
-The one difference from the hand-finished part: there, the pocket's plane
-sits on the top face, so it follows the height if the height is edited in
-SolidWorks. The tools can only offset a plane from a named plane, so here
-it is Top Plane offset by the height. The solid is the same; to change the
-height, rerun the script rather than editing the extrusion by hand.
+The pocket is sketched on the top face itself (``create_sketch`` with
+``face_point``), as in the hand-finished part, so it follows the height when
+the extrusion's depth is edited later in SolidWorks.
 
 The stand is a top plate on four square legs. The openings at the front,
 left and right are arched (large fillets where the legs meet the top); the
@@ -31,9 +29,9 @@ Build sequence (SolidWorks axes: X wide, Y up, Z deep, front = +Z)
    underside, picked by each edge's midpoint (metres): two for the front
    arch, four for the side arches. The back legs' edges facing the back
    opening are left sharp.
-6. The pocket: ``create_reference_plane`` on the top face (Top Plane
-   offset by the height), a rectangle the base's size plus the clearance
-   on each side, and a blind cut down into the top.
+6. The pocket: ``create_sketch`` on the top face (``face_point`` at its
+   centre), a rectangle the base's size plus the clearance on each side,
+   and a blind cut down into the top.
 7. ``rebuild_model``, then ``verify_model`` against a hand calculation.
 8. ``save_part`` and, with ``--stl``, ``export_stl``.
 
@@ -49,8 +47,10 @@ Change a dimension and rebuild over the saved part::
     .\.venv\Scripts\python.exe scripts\demo_monitor_stand.py --out "C:\path\to\MonitorStand.SLDPRT" --height 70 --fillet 30 --pocket-depth 8 --replace --stl
 
 ``--replace`` closes the part if it is open in SolidWorks (unsaved changes
-to it are lost) and overwrites the file. ``--mock`` runs every call against
-the mock adapter instead, without SolidWorks.
+to it are lost) and overwrites the file. ``--look`` turns the camera to the
+isometric view after the extrusion, each cut and the fillet, for a
+recording. ``--mock`` runs every call against the mock adapter instead,
+without SolidWorks.
 """
 
 from __future__ import annotations
@@ -60,12 +60,16 @@ import asyncio
 import json
 import math
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
+
+#: swStandardViews_e (swconst.tlb, SW 2026): the isometric view.
+ISO_VIEW = 7
 
 
 @dataclass(frozen=True)
@@ -219,14 +223,31 @@ async def _close_if_open(call: Session, out: Path) -> None:
             await call("close_model", {"save": False})
 
 
+def look_isometric(adapter: Any) -> None:
+    """Turn the camera to the isometric view, zoomed to fit.
+
+    Staging for a recording, not a tool call: an agent does not need it, so
+    it reaches the adapter directly.
+    """
+    model = adapter.currentModel
+    adapter._attempt(lambda: model.ShowNamedView2("", ISO_VIEW), default=None)
+    adapter._zoom_to_fit(model)
+
+
 def _mm(value: float) -> float:
     """Round a length to 0.0001 mm so the calls read cleanly."""
     return round(value, 4)
 
 
-async def _centred_rectangle(call: Session, plane: str, width: float, length: float) -> None:
-    """Sketch a rectangle centred on the origin of ``plane`` and exit the sketch."""
-    await call("create_sketch", {"plane": plane})
+async def _centred_rectangle(
+    call: Session, where: dict[str, Any], width: float, length: float
+) -> None:
+    """Sketch a rectangle centred on the origin and exit the sketch.
+
+    ``where`` is ``create_sketch``'s place: ``{"plane": ...}`` or
+    ``{"face_point": [...]}``.
+    """
+    await call("create_sketch", where)
     await call(
         "add_rectangle",
         {"x1": -_mm(width / 2), "y1": -_mm(length / 2), "x2": _mm(width / 2), "y2": _mm(length / 2)},
@@ -234,8 +255,24 @@ async def _centred_rectangle(call: Session, plane: str, width: float, length: fl
     await call("exit_sketch")
 
 
-async def build(stand: Stand, out: Path, replace: bool, stl: bool, call: Session) -> None:
-    """Run the build's tool calls in order."""
+async def build(
+    stand: Stand,
+    out: Path,
+    replace: bool,
+    stl: bool,
+    call: Session,
+    look: Callable[[], None] | None = None,
+) -> None:
+    """Run the build's tool calls in order.
+
+    ``look``, when given, runs after the extrusion, each cut and the fillet,
+    so a recording shows each feature as it is made.
+    """
+
+    def _show() -> None:
+        if look is not None:
+            look()
+
     if replace:
         await _close_if_open(call, out)
 
@@ -243,8 +280,9 @@ async def build(stand: Stand, out: Path, replace: bool, stl: bool, call: Session
     await call("set_units", {"unit_system": "mm"})
 
     # Block: the full footprint, extruded to the full height.
-    await _centred_rectangle(call, "Top", stand.width, stand.depth)
+    await _centred_rectangle(call, {"plane": "Top"}, stand.width, stand.depth)
     await call("create_extrusion", {"sketch_name": "Sketch1", "depth": stand.height})
+    _show()
 
     # Front/back opening, between the legs along X.
     inner_x = _mm(stand.width / 2 - stand.leg)
@@ -259,6 +297,7 @@ async def build(stand: Stand, out: Path, replace: bool, stl: bool, call: Session
         "create_cut_extrude",
         {"sketch_name": "Sketch2", "depth": cut_depth, "end_condition": "ThroughAllBoth"},
     )
+    _show()
 
     # Left/right opening, between the legs along Z.
     inner_z = _mm(stand.depth / 2 - stand.leg)
@@ -272,18 +311,25 @@ async def build(stand: Stand, out: Path, replace: bool, stl: bool, call: Session
         "create_cut_extrude",
         {"sketch_name": "Sketch3", "depth": cut_depth, "end_condition": "ThroughAllBoth"},
     )
+    _show()
 
     # Arches: front, left and right. The back stays square.
     await call("add_fillet", {"radius": stand.fillet, "edge_names": stand.arch_edges_m()})
+    _show()
 
-    # Pocket: a plane on the top face, the base's outline plus clearance,
-    # cut down into the top. The cut finds the material itself.
-    plane = await call("create_reference_plane", {"reference": "Top Plane", "offset": stand.height})
-    await _centred_rectangle(call, plane["plane"]["name"], stand.pocket_width, stand.pocket_length)
+    # Pocket: sketched on the top face itself, so it follows the height, the
+    # base's outline plus clearance, cut down into the top.
+    await _centred_rectangle(
+        call,
+        {"face_point": [0, _mm(stand.height), 0]},
+        stand.pocket_width,
+        stand.pocket_length,
+    )
     await call(
         "create_cut_extrude",
         {"sketch_name": "Sketch4", "depth": stand.pocket_depth, "end_condition": "Blind"},
     )
+    _show()
 
     await call("rebuild_model")
     verdict = await call(
@@ -292,7 +338,7 @@ async def build(stand: Stand, out: Path, replace: bool, stl: bool, call: Session
             "bounding_box_mm": [_mm(stand.width), _mm(stand.height), _mm(stand.depth)],
             "volume_mm3": round(stand.expected_volume_mm3(), 1),
             "solid_body_count": 1,
-            "feature_count": 6,  # extrude, two cuts, fillet, plane, pocket
+            "feature_count": 5,  # extrude, two cuts, fillet, pocket
             "relative_tolerance": 0.01,
         },
     )
@@ -327,6 +373,10 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--replace", action="store_true", help="close the open part and overwrite the file")
     p.add_argument("--stl", action="store_true", help="also export an STL beside the part")
     p.add_argument("--calls-json", type=Path, help="write the tool calls made to this file")
+    p.add_argument(
+        "--look", action="store_true",
+        help="turn the camera to isometric after each feature, for a recording",
+    )
     p.add_argument("--mock", action="store_true", help="use the mock adapter, not SolidWorks")
     return p.parse_args(argv)
 
@@ -343,7 +393,8 @@ async def _run(args: argparse.Namespace, stand: Stand) -> list[dict[str, Any]]:
     await adapter.connect()
     try:
         call = Session(await _tools(adapter))
-        await build(stand, args.out, args.replace, args.stl, call)
+        look = (lambda: look_isometric(adapter)) if args.look else None
+        await build(stand, args.out, args.replace, args.stl, call, look)
         return call.calls
     finally:
         await adapter.disconnect()

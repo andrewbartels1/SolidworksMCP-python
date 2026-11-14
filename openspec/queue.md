@@ -76,10 +76,6 @@ their reason), then run `python -m solidworks_mcp.progress.generate`.
   `position` says, even off the sheet, and report success (seen in the beta
   live tests, 2026-11-09). They could read the sheet size (`_sheet_bounds`
   in `adapters/solidworks/documentation.py`) and refuse or warn.
-- `export_stl` logs `Extension.SaveAs2 failed: Type mismatch` on its first
-  attempt, then writes the file through its fallback (seen on SolidWorks
-  2026, 2026-11-09). The export works; the first attempt's arguments need
-  checking.
 
 ## Notes
 

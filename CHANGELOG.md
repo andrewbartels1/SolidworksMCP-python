@@ -12,6 +12,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`create_sketch` takes `face_point`** (#206): a point in mm on a flat
+  face of the body, in place of `plane`. The sketch opens on that face and
+  moves with it when the model changes, so a pocket cut from it follows a
+  height edited later. Give exactly one of `plane` and `face_point`; a point
+  in the air or on a curved face fails with `invalid_input`.
+
+### Fixed
+
+Found building the monitor stand demo (#206):
+
+- **`list_features` returns rows in tree order.** When SolidWorks stopped
+  the forward walk at the system folders, the rest came newest first.
+- **`verify_model` counts a plane the agent made.** It skipped the first
+  three reference planes in row order, so with rows newest first it counted
+  `Front Plane` and skipped `Plane1`.
+- **`list_model_dimensions` lists each dimension once, under its own
+  feature.** It walks the tree the way `list_features` does, and takes each
+  dimension's feature from its full name: `D1@Plane1` is listed under
+  `Plane1`, never also under a cut sketched on that plane.
+- **`export_stl` keeps its STL options.** `SaveAs2` was called with six
+  arguments of the wrong types, so it always failed with a type mismatch
+  and `SaveAs3` wrote the file without merging the bodies. It now gets its
+  seven arguments; if it still writes nothing, `SaveAs3` writes the file and
+  the reply's `warning` says the options weren't applied.
+
+### Changed
+
+- **The monitor stand demo** sketches its pocket on the stand's top face,
+  with no reference plane, and its camera turns to an isometric view after
+  each feature (`--look` in the script).
+
 ## [2.0.0] - 2026-11-12
 
 ### Added

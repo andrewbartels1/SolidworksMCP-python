@@ -20,7 +20,7 @@ def flag(adapter: Any, obj: Any, *names: str) -> None:
     """Flag just ``names`` as methods on ``obj`` (no-op for ``None``/fakes).
 
     Flagging a whole interface costs ~27 ms per fresh dispatch (see
-    ``_WALK_MEMBERS`` in pywin32_adapter); SolidWorks hands back a fresh
+    ``WALK_MEMBERS`` in feature_walk); SolidWorks hands back a fresh
     dispatch on most calls, so flag only what is about to be read.
     """
     attempt(adapter, lambda: _sw_type_info.flag_members(obj, *names), 0)

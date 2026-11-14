@@ -25,6 +25,20 @@ async def test_list_model_dimensions_filters_by_feature(part) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_model_dimensions_lists_each_once_under_its_owner(part) -> None:
+    part._dimensions = {"D1@Plane1": 20.0, "D1@Cut-Extrude3": 3.0}
+
+    everything = await part.list_model_dimensions()
+    cut = await part.list_model_dimensions("Cut-Extrude3")
+
+    assert [(d["full_name"], d["feature"]) for d in everything.data] == [
+        ("D1@Plane1", "Plane1"),
+        ("D1@Cut-Extrude3", "Cut-Extrude3"),
+    ]
+    assert [d["full_name"] for d in cut.data] == ["D1@Cut-Extrude3"]
+
+
+@pytest.mark.asyncio
 async def test_list_model_dimensions_unknown_feature(part) -> None:
     result = await part.list_model_dimensions("Fillet9")
     assert result.error == "No dimensions found on feature 'Fillet9'"

@@ -155,7 +155,10 @@ def _count_modelling_features(descriptors: list[dict[str, Any]]) -> list[str]:
 
     Skips component features, sketches, the origin, folders, the mate group
     and the first three reference planes (the default ones, matched by
-    position so it works in any SolidWorks language).
+    position so it works in any SolidWorks language). The rows are put in
+    tree order by their ``position`` first, so the default planes are found
+    whatever order an adapter returned them in; a row without a position
+    keeps its place.
 
     Args:
         descriptors: ``list_features`` rows.
@@ -163,9 +166,13 @@ def _count_modelling_features(descriptors: list[dict[str, Any]]) -> list[str]:
     Returns:
         list[str]: Counted feature names, in tree order.
     """
+    ordered = sorted(
+        enumerate(descriptors),
+        key=lambda item: (item[1].get("position", item[0]), item[0]),
+    )
     names: list[str] = []
     planes_seen = 0
-    for row in descriptors:
+    for _, row in ordered:
         if row.get("component") is not None:
             continue
         kind = str(row.get("type") or "")

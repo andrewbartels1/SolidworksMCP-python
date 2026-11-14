@@ -74,6 +74,11 @@ def classifier() -> ErrorClassifier:
         ),
         ("The selected face has no edges", "not_found"),
         ("No face found at point [1000, 1000, 1000] mm.", "not_found"),
+        (
+            "Error in create_sketch: face_point [5.0, 60.0, 5.0] mm is not on a "
+            "flat face of the active part (No face found at point [5, 60, 5] mm.)",
+            "invalid_input",
+        ),
         ("The active part has no solid body faces.", "not_found"),
         ("No view named 'Side'. Views: Front, Top", "not_found"),
         ("No drawing views found to dimension (pictorial ...)", "not_found"),

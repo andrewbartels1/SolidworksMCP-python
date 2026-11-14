@@ -208,7 +208,7 @@ def edge_matches(kind: str, edge_type: str) -> bool:
 
 
 #: Exactly the members read below. Flagging a whole interface costs ~27 ms
-#: per fresh dispatch (see ``_WALK_MEMBERS`` in pywin32_adapter); a face can
+#: per fresh dispatch (see ``WALK_MEMBERS`` in feature_walk); a face can
 #: hand back dozens of edges/curves/vertices, so flag just what is used.
 _EDGE_MEMBERS = ("GetCurve", "GetStartVertex", "GetEndVertex", "Select4")
 _FACE_MEMBERS = ("GetBox", "GetArea", "GetEdges", "GetClosestPointOn")

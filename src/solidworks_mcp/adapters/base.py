@@ -594,11 +594,17 @@ class SolidWorksAdapter(ABC):
 
     # Sketch Operations
     @abstractmethod
-    async def create_sketch(self, plane: str) -> AdapterResult[str]:
-        """Create a new sketch on the specified plane.
+    async def create_sketch(
+        self,
+        plane: str | None,
+        face_point: tuple[float, float, float] | None = None,
+    ) -> AdapterResult[str]:
+        """Create a new sketch on a plane, or on the flat face at a point.
 
         Args:
-            plane (str): The plane value.
+            plane (str | None): The plane's name; None when ``face_point`` is given.
+            face_point (tuple[float, float, float] | None): ``(x, y, z)`` in mm on
+                a flat face of the active part, in place of ``plane``.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

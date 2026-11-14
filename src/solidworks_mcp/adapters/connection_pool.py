@@ -826,17 +826,23 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
 
     # Sketch operations
 
-    async def create_sketch(self, plane: str) -> AdapterResult[str]:
+    async def create_sketch(
+        self,
+        plane: str | None,
+        face_point: tuple[float, float, float] | None = None,
+    ) -> AdapterResult[str]:
         """Create sketch using pool.
 
         Args:
-            plane (str): The plane value.
+            plane (str | None): The plane's name; None with ``face_point``.
+            face_point (tuple[float, float, float] | None): A point in mm on a
+                flat face, in place of ``plane``.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_pool(
-            "create_sketch", lambda adapter: adapter.create_sketch(plane)
+            "create_sketch", lambda adapter: adapter.create_sketch(plane, face_point)
         )
 
     async def add_line(
