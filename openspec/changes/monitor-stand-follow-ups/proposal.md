@@ -25,9 +25,9 @@ misses the cuts and fillet because the camera never turns.
   (`D1@Plane1` under `Plane1`, never also under the cut on that plane). Why
   the old walk found none is not proven, so a live diagnostic records
   where it went wrong.
-- **STL export calls `IModelDocExtension.SaveAs2` with its seven arguments**
+- **STL export calls `IModelDocExtension.SaveAs2` with its eight arguments**
   (`Name, Version, Options, ExportData, ReferencePrefixOrSuffixText,
-  AddTextAsPrefix, Errors`). The adapter passed six, with the wrong types,
+  AddTextAsPrefix, Errors, Warnings`). The adapter passed six, with the wrong types,
   so the call always failed with a type mismatch and `SaveAs3` wrote a file
   without the merged-bodies option. The warning goes, and `SaveAs3` stays
   only as the fallback for a `SaveAs2` that writes nothing.

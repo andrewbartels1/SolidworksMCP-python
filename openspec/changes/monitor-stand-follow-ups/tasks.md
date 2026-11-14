@@ -12,7 +12,7 @@
 
 ## 3. STL export
 
-- [x] 3.1 Real adapter: `SaveAs2` with its seven arguments (by-reference `Errors`, `VT_DISPATCH` null when there is no export data); remove the second wrong call; `SaveAs3` fallback reports that the options weren't applied; tests for each path
+- [x] 3.1 Real adapter: `SaveAs2` with its eight arguments (by-reference `Errors` and `Warnings`, `VT_DISPATCH` null when there is no export data); remove the second wrong call; `SaveAs3` fallback reports that the options weren't applied; tests for each path
 - [x] 3.2 Mock adapter and tool: the fallback's note reaches the reply's `warning`; tests
 
 ## 4. Sketch on a face

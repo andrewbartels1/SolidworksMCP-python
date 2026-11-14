@@ -2645,10 +2645,14 @@ class TestPyWin32AdapterBranches:
         assert stl_data.Merge is True
         assert stl_data.ExportBodiesAs == 0
 
-    def test_save_stl_with_extension_passes_seven_arguments(
+    def test_save_stl_with_extension_passes_eight_arguments(
         self, monkeypatch, tmp_path
     ) -> None:
-        """SaveAs2 gets its seven arguments, the export data included, once."""
+        """SaveAs2 gets its eight arguments, the export data included, once.
+
+        The last two are the by-reference ``Errors`` and ``Warnings``; leaving
+        ``Warnings`` out failed live with "Parameter not optional".
+        """
         adapter = self._build_adapter(monkeypatch)
         out_file = tmp_path / "out.stl"
         stl_data = object()
@@ -2663,8 +2667,9 @@ class TestPyWin32AdapterBranches:
         assert saved is True
         extension.SaveAs2.assert_called_once()
         args = extension.SaveAs2.call_args.args
-        assert len(args) == 7
+        assert len(args) == 8
         assert args[:6] == (str(out_file), 0, 2, stl_data, "", False)
+        assert args[6] is not args[7]  # Errors and Warnings are separate
 
     def test_save_stl_with_extension_without_export_data_passes_a_null(
         self, monkeypatch, tmp_path

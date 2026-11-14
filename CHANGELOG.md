@@ -36,7 +36,7 @@ Found building the monitor stand demo (#206):
 - **`export_stl` keeps its STL options.** `SaveAs2` was called with six
   arguments of the wrong types, so it always failed with a type mismatch
   and `SaveAs3` wrote the file without merging the bodies. It now gets its
-  seven arguments; if it still writes nothing, `SaveAs3` writes the file and
+  eight arguments; if it still writes nothing, `SaveAs3` writes the file and
   the reply's `warning` says the options weren't applied.
 
 ### Changed

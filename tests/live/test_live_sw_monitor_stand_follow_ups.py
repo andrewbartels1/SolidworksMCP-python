@@ -211,8 +211,9 @@ async def test_create_sketch_on_a_face(scratch: Any) -> None:
         "status"
     ] == "success"
     closed = await tools["exit_sketch"]()
+    assert closed["status"] == "success", closed
     cut = await tools["create_cut_extrude"](
-        {"sketch_name": closed["sketch"]["name"], "depth": 3, "end_condition": "Blind"}
+        {"sketch_name": on_top["sketch"]["name"], "depth": 3, "end_condition": "Blind"}
     )
     in_air = await tools["create_sketch"]({"face_point": [0, _HEIGHT + 50, 0]})
 

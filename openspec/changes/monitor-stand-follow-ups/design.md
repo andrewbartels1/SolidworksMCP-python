@@ -20,7 +20,9 @@ See proposal.md for the six faults. Where each one comes from:
   (`test_dimensions_list_and_measure`).
 - **`SaveAs2`:** the installed type library gives `IModelDocExtension.SaveAs2(Name,
   Version, Options, ExportData, ReferencePrefixOrSuffixText As String,
-  AddTextAsPrefix As Boolean, Errors As Long by reference)`. The adapter
+  AddTextAsPrefix As Boolean, Errors As Long by reference, Warnings As Long by
+  reference)` (eight arguments; a first live run with seven, leaving out
+  `Warnings`, failed with "Parameter not optional"). The adapter
   calls it with `(path, 0, 2, stl_data, None, "")`.
 - **`create_sketch`:** it selects a plane by name (with locale aliases),
   then calls `InsertSketch`. Faces are already selected by coordinates
@@ -75,10 +77,10 @@ as their feature, so asking for the cut no longer returns the plane's offset.
 records, for the old and new walks, how many features each finds and how
 many dimensions each lists. This proves the fix and explains the 0.
 
-### 4. `SaveAs2` with its seven arguments
+### 4. `SaveAs2` with its eight arguments
 
-`ext.SaveAs2(path, 0, swSaveAsOptions_Silent, stl_data, "", False, errors)`
-with `errors` a by-reference Long (`_byref_long`, as `RunMacro2` uses). When
+`ext.SaveAs2(path, 0, swSaveAsOptions_Silent, stl_data, "", False, errors, warnings)`
+with `errors` and `warnings` by-reference Longs (`_byref_long`, as `RunMacro2` uses). When
 `GetExportFileData` gives nothing, `ExportData` is a `VT_DISPATCH` null.
 Success is the file existing. If `SaveAs2` writes nothing, `SaveAs3` runs
 as now, and the tool's reply carries a `warning` that the STL options

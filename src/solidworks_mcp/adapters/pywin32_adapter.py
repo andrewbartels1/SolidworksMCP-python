@@ -2454,9 +2454,11 @@ class PyWin32Adapter(
     ) -> bool:
         """Export STL with ``IModelDocExtension.SaveAs2`` and the STL options.
 
-        ``SaveAs2`` takes seven arguments: ``Name``, ``Version``, ``Options``,
+        ``SaveAs2`` takes eight arguments: ``Name``, ``Version``, ``Options``,
         ``ExportData``, ``ReferencePrefixOrSuffixText`` (String),
-        ``AddTextAsPrefix`` (Boolean) and ``Errors`` (by-reference Long).
+        ``AddTextAsPrefix`` (Boolean), ``Errors`` and ``Warnings`` (both
+        by-reference Longs). Leaving ``Warnings`` out fails with
+        "Parameter not optional".
         ``ExportData`` is the ``ISTLExportData`` that merges the bodies, or a
         ``VT_DISPATCH`` null when SolidWorks gave none (runbook #11: a bare
         ``None`` marshals as ``VT_NULL`` and is rejected).
@@ -2471,9 +2473,10 @@ class PyWin32Adapter(
         """
         export_data = stl_data if stl_data is not None else _null_callout()
         errors = _byref_long(0)
+        warnings = _byref_long(0)
         try:
             # swSaveAsCurrentVersion = 0, swSaveAsOptions_Silent = 2
-            ext.SaveAs2(resolved_path, 0, 2, export_data, "", False, errors)
+            ext.SaveAs2(resolved_path, 0, 2, export_data, "", False, errors, warnings)
         except Exception as exc:
             logger.warning(
                 "[pywin32.export_file] Extension.SaveAs2 failed: {}", str(exc)
