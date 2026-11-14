@@ -60,3 +60,7 @@ without it.
 - **Docs:** catalog pages, the agent skill's note on configurations,
   CHANGELOG, progress bars.
 - No issue is filed; this is queue item 13.
+- **Depends on the honest-tool-list change (queue item 10)**, merged
+  first: it sets the verb list and runs the design-table probe. If that
+  probe shows design tables work without trouble, `manage_design_table`
+  stays planned and is added to this change's tasks before it starts.

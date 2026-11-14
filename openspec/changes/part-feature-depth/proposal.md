@@ -74,3 +74,5 @@ sketch on an existing edge and cut in the wrong place.
 - **Live tests:** one bundle at the end; `HoleWizard5`'s 27 arguments are
   checked live before the tool's inputs are fixed (design decision 2).
 - Closes #105. Sheet metal (#57) is queue item 15, not this change.
+- **Depends on the honest-tool-list change (queue item 10)**, merged
+  first: the tool names follow its verb list.

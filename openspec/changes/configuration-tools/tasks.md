@@ -1,3 +1,7 @@
+## 0. Before starting
+
+- [ ] 0.1 Confirm the honest-tool-list change is merged; read its design-table finding (its design decision 8). If `manage_design_table` was kept, add its tasks here (insert, read, update rows) before section 1
+
 ## 1. Create, activate, delete
 
 - [ ] 1.1 Inputs and tools `create_configuration`, `activate_configuration`, `delete_configuration`, with the name checks (existing, unknown, active, only); tests

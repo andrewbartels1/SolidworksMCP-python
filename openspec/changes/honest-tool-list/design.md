@@ -97,6 +97,22 @@ Removing tools that never worked is not a break for a working client, so
 the release is 2.1.0. The CHANGELOG lists the removed names under
 "Removed" and the deprecated ones under "Deprecated".
 
+### 8. `manage_design_table` is checked before it goes
+
+It is in the removal list because a design table needs Excel on the
+machine, and item 13's configuration tools give agents the same variants
+without it. That reason is not yet proven on the user's SolidWorks, so a
+live probe (task 2.0) inserts a design table on a scratch part and reads it
+back. If it works, the tool stays `planned` for item 13 and the planned
+count is eight; if not, it is removed and the finding is recorded here.
+
+### 9. Items 11 to 14 depend on this change
+
+`part-feature-depth`, `drawing-pack`, `configuration-tools` and
+`tool-discovery-mode` use the verb list, the `deprecated` level, the
+planned-reason rule and the final family list from this change. None of
+them starts until this change is merged.
+
 ## Risks / Trade-offs
 
 - [A client scripted a planned tool's name] → it only ever got

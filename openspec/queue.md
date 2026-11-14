@@ -6,7 +6,7 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-12.
+Last updated 2026-11-14.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ Last updated 2026-11-12.
 | 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` (archived) | Done 2026-11-09 (#219, 2.0.0): 23 tools promoted, signed off live |
 | 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | `experimental-tools-to-stable` (archived) | Done 2026-11-12 (2.0.0, tagged `v2.0.0`): all 10 promoted, signed off live. Pack and Go now copies the files `GetDependencies2` lists (SolidWorks 2026's own Pack and Go copied only the assembly); `comtypes` dropped |
 | 9 | Monitor stand demo follow-ups: feature order, `verify_model`'s planes, dimension listing, STL export, `create_sketch` on a face, the demo's camera | #206 | `monitor-stand-follow-ups` | Planned 2026-11-12 |
-| 10 | An honest tool list: remove the 33 planned tools no item will build, deprecate the stable duplicates for one release, settle a verb list. Replaces the old items "the 40 planned tools" and "duplicate tools" | #174 | `honest-tool-list` | Planned 2026-11-12 |
+| 10 | An honest tool list: remove the 33 planned tools no item will build, deprecate the stable duplicates for one release, settle a verb list. Replaces the old items "the 40 planned tools" and "duplicate tools" | #174 | `honest-tool-list` | Planned 2026-11-12. Items 11-14 depend on it. It probes `manage_design_table` live before removing it (kept for item 13 if design tables work) |
 | 11 | Part features the peers lead with: Hole Wizard holes, cosmetic threads, a linear feature pattern, shell, draft, rib, and sketch convert-entities | #105 | `part-feature-depth` | Planned 2026-11-12 |
 | 12 | The drawing pack, where no peer goes: section and detail views, the title block and sheet format, drawing dimensions, and one drawing check | #102, #158 | `drawing-pack` | Planned 2026-11-12. Builds the 7 planned drawing tools item 10 leaves |
 | 13 | Configurations: create, activate and delete one, and suppress a feature or set a dimension in one configuration only | none | `configuration-tools` | Planned 2026-11-12 |
