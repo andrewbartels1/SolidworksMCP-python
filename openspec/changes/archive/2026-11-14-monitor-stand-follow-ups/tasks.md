@@ -31,12 +31,12 @@
 
 ## 6. Live bundle (one set, run together, then fixes one by one)
 
-- [x] 6.1 Live tests (written in `test_live_sw_monitor_stand_follow_ups.py` and `test_live_sw_monitor_stand_demo.py`; not yet run): feature order and `verify_model` on a part with `Plane1`; the dimension diagnostic (old walk vs new, counts) and the full listing on the stand; STL export path and file size; `create_sketch` on a face, the follow-the-height rebuild, a point in the air and a point on a fillet
-- [ ] 6.2 Hand the user the bundle; fix each failure afterwards, one at a time
-- [ ] 6.3 Re-record the monitor stand GIF with `SW_DEMO_RECORD`
+- [x] 6.1 Live tests (written in `test_live_sw_monitor_stand_follow_ups.py` and `test_live_sw_monitor_stand_demo.py`; run live 2026-11-14, all five pass): feature order and `verify_model` on a part with `Plane1`; the dimension diagnostic (old walk vs new, counts) and the full listing on the stand; STL export path and file size; `create_sketch` on a face, the follow-the-height rebuild, a point in the air and a point on a fillet
+- [x] 6.2 Hand the user the bundle; fix each failure afterwards, one at a time (two failed: `SaveAs2` takes eight arguments, `Warnings` too; the face test read a name `exit_sketch` doesn't return. Both fixed and passed on the re-run)
+- [x] 6.3 Re-record the monitor stand GIF with `SW_DEMO_RECORD`
 
 ## 7. Finish
 
 - [x] 7.1 CHANGELOG (Unreleased): Fixed (feature order, `verify_model`, dimension listing, STL), Added (`create_sketch` `face_point`)
 - [x] 7.2 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`, progress files regenerated
-- [ ] 7.3 Sign-off, PR (no attribution), archive, and the queue updated
+- [x] 7.3 Sign-off, PR (no attribution), archive, and the queue updated
