@@ -57,3 +57,15 @@ def test_an_empty_project_draws_empty_bars() -> None:
 
     assert "MCP tools: 0" in svg
     assert "0 of 0 methods · 0.0%" in svg
+
+
+def test_deprecated_tools_are_left_out_of_the_count_and_the_bar() -> None:
+    svg = render({**_LEVELS, SupportLevel.DEPRECATED: 5}, _COVERAGE)
+
+    # Still 10 tools and 80%: the five deprecated ones only show in the legend.
+    assert "MCP tools: 10" in svg
+    assert "80% work on SolidWorks today" in svg
+    assert "deprecated 5" in svg
+    assert (
+        f'width="470.4" height="24" fill="{LEVEL_COLOURS[SupportLevel.STABLE]}"' in svg
+    )

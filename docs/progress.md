@@ -9,8 +9,8 @@ of date, so it moves with every tool added or fixed.
 
 ## Support levels
 
-Every tool has one level. It's in the tool's tags (`level:beta`). A beta or
-experimental tool's description opens with it, and its successful results
+Every tool has one level. It's in the tool's tags (`level:beta`). A beta,
+experimental or deprecated tool's description opens with it, and its successful results
 carry it as `warning`.
 
 | Level | Meaning |
@@ -18,7 +18,8 @@ carry it as `warning`.
 | <span class="level level-stable">stable</span> | Checked by a live test on real SolidWorks; every input used; no known fault. |
 | <span class="level level-beta">beta</span> | Works on SolidWorks, but has a known fault or covers only part of its COM call. The reason is shown with it. |
 | <span class="level level-experimental">experimental</span> | Implemented, but not yet checked on real SolidWorks. |
-| <span class="level level-planned">planned</span> | Registered, but nothing implements it yet; every call returns `not_supported`. |
+| <span class="level level-planned">planned</span> | Registered, but nothing implements it yet; every call returns `not_supported`. The reason names the queue item that builds it. |
+| <span class="level level-deprecated">deprecated</span> | Works, but another tool replaces it. Its description and successful results say which; it is removed at the next major release. Not counted in the bar. |
 
 A fixed fault, or a new live test, moves a tool up a level: the table is
 `src/solidworks_mcp/tools/support_levels.py`.

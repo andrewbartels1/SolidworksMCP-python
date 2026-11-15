@@ -267,7 +267,7 @@ async def register_engineering_data_tools(
     ) -> dict[str, Any]:
         """Report the material assigned to the active part.
 
-        Use it before `calculate_mass_properties` or `verify_model` with a mass: without
+        Use it before `get_mass_properties` or `verify_model` with a mass: without
         a material SolidWorks uses a default density. Needs: an open, active part (any
         other document is `wrong_document_type`). Read-only. Returns: `data` with
         `material` (null when none is assigned), `database` and `density_kg_m3` (from

@@ -293,63 +293,6 @@ class DimensionInput(CompatInput):
                 self.position_y = float(self.position[1])
 
 
-class AnnotationInput(CompatInput):
-    """Input schema for annotation operations.
-
-    Attributes:
-        annotation_type (str): The annotation type value.
-        approved_by (str): The approved by value.
-        checked_by (str): The checked by value.
-        drawing_number (str): The drawing number value.
-        drawing_path (str | None): The drawing path value.
-        drawn_by (str): The drawn by value.
-        font_size (float): The font size value.
-        leader_attachment (str | None): The leader attachment value.
-        position (list[float] | None): The position value.
-        position_x (float | None): The position x value.
-        position_y (float | None): The position y value.
-        text (str): The text value.
-    """
-
-    drawing_path: str | None = Field(default=None, description="Path to drawing file")
-    annotation_type: str = Field(
-        description="Type of annotation (note, balloon, surface_finish, etc.)"
-    )
-    text: str = Field(description="Annotation text content")
-    position_x: float | None = Field(
-        default=None, description="X position for annotation"
-    )
-    position_y: float | None = Field(
-        default=None, description="Y position for annotation"
-    )
-    position: list[float] | None = Field(
-        default=None, description="Annotation position"
-    )
-    font_size: float = Field(default=12.0, description="Font size in points")
-    leader_attachment: str | None = Field(
-        default=None, description="Entity to attach leader line to"
-    )
-    drawn_by: str = Field(default="", description="Drawn by field")
-    checked_by: str = Field(default="", description="Checked by field")
-    approved_by: str = Field(default="", description="Approved by field")
-    drawing_number: str = Field(default="", description="Drawing number")
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the annotation input.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.position is not None and len(self.position) >= 2:
-            if self.position_x is None:
-                self.position_x = float(self.position[0])
-            if self.position_y is None:
-                self.position_y = float(self.position[1])
-
-
 async def register_drawing_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -384,7 +327,7 @@ async def register_drawing_tools(
 
         Use it to add views one at a time; for the three standard views in one call, use
         `create_technical_drawing`, and for a whole drawing from a model, use
-        `generate_drawing_package`. `add_drawing_view` does the same as this tool.
+        `generate_drawing_package`.
         Needs: an open, active drawing and the model file on disk. Changes: adds a view
         to the sheet. Returns: `data` with the view's `name`, `orientation`, `position`,
         `scale` and the view counts before and after.
@@ -685,37 +628,6 @@ async def register_drawing_tools(
         }
 
     @mcp.tool()
-    async def add_annotation(input_data: AnnotationInput) -> dict[str, Any]:
-        """Add an annotation (a note, balloon or surface-finish symbol) to the active drawing.
-
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. For a text
-        note today, use `add_note`; for GD&T, use `add_gtol` and `add_datum_tag`.
-        Changes: once available, adds the annotation. Returns: once available, the
-        annotation under `data`.
-
-        Args:
-            input_data: The annotation. `annotation_type` and `text` are required;
-                the position and font fields have defaults.
-
-        Returns:
-            dict[str, Any]: The annotation, or a `not_supported` error.
-        """
-        require_capability(
-            adapter,
-            "add_annotation",
-            "Active adapter does not support add_annotation; no annotation was added.",
-        )
-        result = await adapter.add_annotation(input_data.model_dump())
-        require_success(result, "Failed to add annotation")
-        return {
-            "status": "success",
-            "message": "Annotation added successfully",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-
-    @mcp.tool()
     async def update_title_block(input_data: dict[str, Any]) -> dict[str, Any]:
         """Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on).
 
@@ -816,5 +728,5 @@ async def register_drawing_tools(
             "execution_time": result.execution_time,
         }
 
-    tool_count = 14  # Number of tools registered
+    tool_count = 13  # Number of tools registered
     return tool_count

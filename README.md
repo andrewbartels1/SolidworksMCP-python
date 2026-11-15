@@ -10,9 +10,9 @@
 [![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 156 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 124 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
-[![155 MCP tools by support level, and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.github.io/SolidworksMCP-python/progress/)
+[![116 MCP tools by support level (the 8 deprecated ones not counted), and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.github.io/SolidworksMCP-python/progress/)
 
 <sub>Generated from the code; click it for every tool, its level and why, filterable by level and family.</sub>
 
@@ -33,7 +33,7 @@ Python MCP server for SolidWorks automation with 156 tools, plus an optional age
   await adapter.create_extrusion(ExtrusionParameters(depth=10))
   ```
 
-- **An MCP tool server on top of it.** The same calls, exposed as 156 MCP tools, so an agent such as Claude Code can build parts, assemblies and drawings from a description. Each tool carries a support level (stable, beta, experimental or planned), so the agent knows how far to trust it.
+- **An MCP tool server on top of it.** The same calls, exposed as 124 MCP tools, so an agent such as Claude Code can build parts, assemblies and drawings from a description. Each tool carries a support level (stable, beta, experimental, planned or deprecated), so the agent knows how far to trust it.
 
 ## See it work
 
@@ -197,7 +197,7 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
 - Tested on SolidWorks 2026. Earlier versions may work but are untested. To check yours, run `uvx solidworks-mcp-python selftest` with SolidWorks open, then send the result with the [compatibility report form](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=compatibility.yml). The [compatibility page](https://andrewbartels1.github.io/SolidworksMCP-python/compatibility/) lists the releases checked so far.
-- Modeling, sketching, drawing, analysis, export, automation, templates, and macro tools.
+- Modeling, sketching, drawing, analysis, export, file and engineering-data tools, plus VBA generation and running macros.
 - Every tool's support level, and the reason a tool isn't stable yet, is on the [progress page](https://andrewbartels1.github.io/SolidworksMCP-python/progress/).
 
 ## Not Yet / Simulated
@@ -302,7 +302,7 @@ Add this to `%APPDATA%\Code\User\mcp.json`:
 }
 ```
 
-Run **MCP: List Servers** from the Command Palette and start `solidworks`. Its output should end with `Discovered 156 tools` (the count grows as tools are added).
+Run **MCP: List Servers** from the Command Palette and start `solidworks`. Its output should end with `Discovered 124 tools` (the count grows as tools are added).
 
 </details>
 

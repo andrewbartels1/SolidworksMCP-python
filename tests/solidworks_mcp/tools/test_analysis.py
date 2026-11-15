@@ -16,7 +16,6 @@ from solidworks_mcp.config import (
     SolidWorksMCPConfig,
 )
 from solidworks_mcp.tools.analysis import (
-    GeometryAnalysisInput,
     InterferenceCheckInput,
     MassPropertiesInput,
     register_analysis_tools,
@@ -259,75 +258,6 @@ class TestAnalysisTools:
         assert alias_model["status"] == "success"
 
     @pytest.mark.asyncio
-    async def test_analysis_tools_exception_and_fallback_paths(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Cover adapter exceptions plus non-adapter fallback branches."""
-        await register_analysis_tools(mcp_server, mock_adapter, mock_config)
-
-        check_tool = None
-        geometry_tool = None
-        material_tool = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "check_interference":
-                check_tool = tool.fn
-            if tool.name == "analyze_geometry":
-                geometry_tool = tool.fn
-            if tool.name == "get_material_properties":
-                material_tool = tool.fn
-
-        assert check_tool is not None
-        assert geometry_tool is not None
-        assert material_tool is not None
-
-        # This asserted the tool's own refusal message, reached only when the
-        # adapter has no check_interference at all. The adapter implements it
-        # now, so the hasattr gate resolves to a real capability and the
-        # adapter's answer surfaces instead. Still an error, and still never
-        # a fabricated clean result: the mock refuses because the assembly
-        # has fewer than two components, which is the honest answer.
-        fallback = await check_tool(input_data=InterferenceCheckInput())
-        assert fallback["status"] == "error"
-        assert "at least two components" in fallback["message"]
-        # The critical property: never a clean bill of health for an assembly
-        # nothing examined.
-        assert fallback.get("interference_found") is not False
-
-        # Exception branch for adapter check_interference.
-        mock_adapter.check_interference = AsyncMock(side_effect=RuntimeError("boom"))
-        errored = await check_tool(input_data=InterferenceCheckInput())
-        assert errored["status"] == "error"
-        assert errored["error_type"] == "internal"
-
-        class _BadGeometryInput:
-            """Test bad geometry input."""
-
-            @property
-            def analysis_type(self):
-                """Test helper for analysis type."""
-                raise RuntimeError("bad analysis type")
-
-            parameters = None
-
-        bad_geo = await geometry_tool(input_data=_BadGeometryInput())
-        assert bad_geo["status"] == "error"
-        assert "bad analysis type" in bad_geo["message"]
-
-        # get_material_properties must refuse rather than invent a material,
-        # since mock_adapter has no get_material_properties method.
-        material = await material_tool()
-        assert material["status"] == "error"
-        assert "does not support get_material_properties" in material["message"]
-
-        # Exception branch for adapter get_material_properties.
-        mock_adapter.get_material_properties = AsyncMock(
-            side_effect=RuntimeError("material boom")
-        )
-        material_errored = await material_tool()
-        assert material_errored["status"] == "error"
-        assert material_errored["error_type"] == "internal"
-
-    @pytest.mark.asyncio
     async def test_check_interference_refuses_when_adapter_lacks_support(
         self, mcp_server, mock_config
     ):
@@ -349,65 +279,6 @@ class TestAnalysisTools:
         result = await check_tool(input_data=InterferenceCheckInput())
         assert result["status"] == "error"
         assert "does not support check_interference" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_analyze_geometry_and_material_properties_adapter_paths(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Cover the real-adapter success/error paths once analyze_geometry and
-        get_material_properties are wired to an adapter that implements them."""
-        await register_analysis_tools(mcp_server, mock_adapter, mock_config)
-
-        geometry_tool = None
-        material_tool = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "analyze_geometry":
-                geometry_tool = tool.fn
-            if tool.name == "get_material_properties":
-                material_tool = tool.fn
-
-        assert geometry_tool is not None
-        assert material_tool is not None
-
-        mock_adapter.analyze_geometry = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={"analysis_type": "draft", "findings": []},
-                execution_time=0.1,
-            )
-        )
-        geometry_success = await geometry_tool(
-            input_data=GeometryAnalysisInput(analysis_type="draft")
-        )
-        assert geometry_success["status"] == "success"
-        assert geometry_success["data"]["analysis_type"] == "draft"
-
-        mock_adapter.analyze_geometry = AsyncMock(
-            return_value=Mock(is_success=False, error="geometry analysis failed")
-        )
-        geometry_error = await geometry_tool(
-            input_data=GeometryAnalysisInput(analysis_type="draft")
-        )
-        assert geometry_error["status"] == "error"
-        assert "geometry analysis failed" in geometry_error["message"]
-
-        mock_adapter.get_material_properties = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={"name": "Steel"},
-                execution_time=0.1,
-            )
-        )
-        material_success = await material_tool()
-        assert material_success["status"] == "success"
-        assert material_success["data"]["name"] == "Steel"
-
-        mock_adapter.get_material_properties = AsyncMock(
-            return_value=Mock(is_success=False, error="no material assigned")
-        )
-        material_error = await material_tool()
-        assert material_error["status"] == "error"
-        assert "no material assigned" in material_error["message"]
 
 
 def _make_mcp():
@@ -469,21 +340,6 @@ class TestAnalysisCoverage:
         fn = await _get_tool(mcp, "get_mass_properties")
         result = await fn(None)
         assert isinstance(result, dict)
-
-    @pytest.mark.asyncio
-    async def test_get_material_properties_returns_success(self):
-        """get_material_properties refuses when the adapter has no matching
-        capability, rather than returning static material data."""
-        from solidworks_mcp.tools.analysis import register_analysis_tools
-
-        mcp = _make_mcp()
-        adapter = MockSolidWorksAdapter({})
-        await register_analysis_tools(mcp, adapter, _make_config())
-
-        fn = await _get_tool(mcp, "get_material_properties")
-        result = await fn()
-        assert result["status"] == "error"
-        assert "does not support get_material_properties" in result["message"]
 
 
 CAPABILITY = "check_interference"

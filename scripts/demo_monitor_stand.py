@@ -33,7 +33,7 @@ Build sequence (SolidWorks axes: X wide, Y up, Z deep, front = +Z)
    centre), a rectangle the base's size plus the clearance on each side,
    and a blind cut down into the top.
 7. ``rebuild_model``, then ``verify_model`` against a hand calculation.
-8. ``save_part`` and, with ``--stl``, ``export_stl``.
+8. ``save_file`` and, with ``--stl``, ``export_stl``.
 
 Every sketch is symmetric about the origin, so the Top and Right planes'
 sketch axes (which run along -Z) cannot mirror anything.
@@ -346,7 +346,7 @@ async def build(
         failed = [c["name"] for c in verdict.get("checks", []) if c.get("passed") is not True]
         raise RuntimeError(f"verify_model did not pass: {failed}")
 
-    await call("save_part", {"file_path": str(out), "overwrite": replace})
+    await call("save_file", {"file_path": str(out), "overwrite": replace})
     if stl:
         await call(
             "export_stl",

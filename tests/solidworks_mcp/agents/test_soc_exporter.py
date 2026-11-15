@@ -373,7 +373,6 @@ def test_generate_script_skips_read_only_ops():
         _rec("get_model_info"),
         _rec("list_features"),
         _rec("check_sketch_fully_defined"),
-        _rec("analyze_geometry"),
         _rec("get_dimension"),
         _rec("check_interference"),
         _rec("calculate_mass_properties"),

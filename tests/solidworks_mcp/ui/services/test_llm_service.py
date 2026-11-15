@@ -76,7 +76,11 @@ def test_feature_helpers_and_coerce_plan() -> None:
     assert llm_service._tools_for_feature_name("Cut", 1) == ["create_cut"]
     assert llm_service._tools_for_feature_name("Revolve", 1) == ["create_revolve"]
     assert llm_service._tools_for_feature_name("Extrude", 1) == ["create_extrusion"]
-    assert llm_service._tools_for_feature_name("Unknown", 1) == ["analyze_geometry"]
+    assert llm_service._tools_for_feature_name("Unknown", 1) == [
+        "get_model_info",
+        "list_features",
+        "get_mass_properties",
+    ]
 
     assert llm_service._family_for_feature_order(["assembly"], "extrude") == "assembly"
     assert llm_service._family_for_feature_order(["revolve"], "extrude") == "revolve"

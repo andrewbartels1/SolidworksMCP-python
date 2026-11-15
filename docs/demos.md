@@ -220,11 +220,11 @@ what it can't decide alone: the back of the stand and where to save.
    `add_rectangle`, `exit_sketch` and `create_cut_extrude`
    `ThroughAllBoth`.
 4. **Arches**: one `add_fillet` R25 on six edges.
-5. **Check and save**: `rebuild_model`, `verify_model`, `save_part`.
+5. **Check and save**: `rebuild_model`, `verify_model`, `save_file`.
 6. **Pocket** (the follow-up): `list_open_documents` (the stand is still
    the active part), `create_reference_plane`, then `create_sketch`,
    `add_rectangle`, `exit_sketch`, `create_cut_extrude` 3 mm, and
-   `rebuild_model`, `verify_model`, `save_part` again.
+   `rebuild_model`, `verify_model`, `save_file` again.
 
 ??? info "All 28 calls with their arguments"
 
@@ -247,7 +247,7 @@ what it can't decide alone: the back of the stand and where to save.
     | 15 | `add_fillet` | `{"radius": 25, "edge_names": ["0.056855,0.040,0.075", "-0.056855,0.040,0.075", "0.076855,0.040,0.055", "-0.076855,0.040,0.055", "0.076855,0.040,-0.055", "-0.076855,0.040,-0.055"]}` |
     | 16 | `rebuild_model` | `{}` |
     | 17 | `verify_model` | `{"bounding_box_mm": [193.71, 55, 190], "volume_mm3": 840264, "solid_body_count": 1, "feature_count": 4, "relative_tolerance": 0.005}` |
-    | 18 | `save_part` | `{"file_path": "MonitorStand.SLDPRT"}` |
+    | 18 | `save_file` | `{"file_path": "MonitorStand.SLDPRT"}` |
     | 19 | `list_open_documents` | `{}` |
     | 20 | `create_reference_plane` | `{"reference": "Top Plane", "offset": 55}` |
     | 21 | `create_sketch` | `{"plane": "Plane1"}` |
@@ -256,7 +256,7 @@ what it can't decide alone: the back of the stand and where to save.
     | 24 | `create_cut_extrude` | `{"sketch_name": "Sketch4", "depth": 3, "end_condition": "Blind"}` |
     | 25 | `rebuild_model` | `{}` |
     | 26 | `verify_model` | `{"bounding_box_mm": [193.71, 55, 190], "volume_mm3": 752592.9, "solid_body_count": 1, "relative_tolerance": 0.001}` |
-    | 27 | `save_part` | `{}` |
+    | 27 | `save_file` | `{}` |
     | 28 | `verify_model` | `{"feature_count": 6}` |
 
     The fillet's edges are midpoints in metres; the other lengths are mm.

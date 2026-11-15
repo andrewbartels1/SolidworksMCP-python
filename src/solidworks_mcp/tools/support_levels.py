@@ -8,26 +8,33 @@ Every tool has exactly one support level:
   of its COM call;
 - **experimental**: implemented, never checked on real SolidWorks;
 - **planned**: registered, but no adapter implements it yet (its
-  description says "Not available yet").
+  description says "Not available yet"); its reason names the queue item
+  that builds it;
+- **deprecated**: works, but another tool replaces it; it keeps working
+  until the next major release after ``since``, when it is removed.
 
-``ToolRegistrar`` adds the level to each tool's tags and, for a beta or
-experimental tool, a ``warning`` to its successful results. Fixing a fault
+``ToolRegistrar`` adds the level to each tool's tags and, for a beta,
+experimental or deprecated tool, a ``warning`` to its successful results and
+the same sentence at the start of its description. Fixing a fault
 in the queue's small-faults list moves its tool up a level here.
 """
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping, Set
 from dataclasses import dataclass
 from enum import StrEnum
 
 
 class SupportLevel(StrEnum):
-    """The four support levels, most trusted first."""
+    """The five support levels: four by trust, then the replaced tools."""
 
     STABLE = "stable"
     BETA = "beta"
     EXPERIMENTAL = "experimental"
     PLANNED = "planned"
+    DEPRECATED = "deprecated"
 
 
 @dataclass(frozen=True)
@@ -36,62 +43,162 @@ class Support:
 
     Attributes:
         level: The tool's support level.
-        reason: One line on the gap; empty only for a stable tool.
+        reason: One line on the gap; empty only for a stable tool. A
+            deprecated tool's reason is ``"use `<tool>`."`` or
+            ``"no replacement."``.
+        since: The version a deprecated tool was deprecated in; empty for
+            every other level.
     """
 
     level: SupportLevel
     reason: str = ""
+    since: str = ""
 
     def __post_init__(self) -> None:
-        """Require a reason for every level below stable.
+        """Require a reason below stable, and a version for a deprecated tool.
 
         Raises:
-            ValueError: If a level below stable has no reason, or a stable
-                tool has one.
+            ValueError: If a level below stable has no reason, a stable tool
+                has one, or ``since`` is given for any level but deprecated
+                (or missing for a deprecated tool).
         """
         if (self.level is SupportLevel.STABLE) == bool(self.reason):
             raise ValueError(
                 "a reason is required below stable, and only there: "
                 f"{self.level.value!r} with reason {self.reason!r}"
             )
+        if (self.level is SupportLevel.DEPRECATED) != bool(self.since):
+            raise ValueError(
+                "a deprecated tool needs `since`, and only it: "
+                f"{self.level.value!r} with since {self.since!r}"
+            )
 
     def warning(self) -> str | None:
-        """The sentence a successful beta or experimental result carries.
+        """The sentence a successful beta, experimental or deprecated result carries.
 
         Returns:
-            str | None: ``"Beta: <reason>"`` or ``"Experimental: <reason>"``;
-            None for stable and planned tools (a planned tool never succeeds).
+            str | None: ``"Beta: <reason>"``, ``"Experimental: <reason>"`` or
+            ``"Deprecated: <reason>"``; None for stable and planned tools (a
+            planned tool never succeeds).
         """
-        if self.level in (SupportLevel.BETA, SupportLevel.EXPERIMENTAL):
+        if self.level in (
+            SupportLevel.BETA,
+            SupportLevel.EXPERIMENTAL,
+            SupportLevel.DEPRECATED,
+        ):
             return f"{self.level.value.capitalize()}: {self.reason}"
         return None
+
+    def replacement(self) -> str | None:
+        """The tool a deprecated tool's reason names.
+
+        Returns:
+            str | None: The name in backticks in ``"use `<tool>`."``; None for
+            ``"no replacement."`` and for every other level.
+        """
+        if self.level is not SupportLevel.DEPRECATED:
+            return None
+        match = re.fullmatch(r"use `(\w+)`\.", self.reason)
+        return match.group(1) if match else None
+
+
+def _major(version: str) -> int:
+    """The major number of a ``X.Y.Z`` version."""
+    return int(version.split(".", 1)[0])
+
+
+def deprecation_problems(
+    levels: Mapping[str, Support], registered: Set[str], version: str
+) -> list[str]:
+    """What is wrong with the table's deprecated entries.
+
+    A deprecated tool names a registered replacement (or says there is
+    none), and is gone once the package's major version passes the one it
+    was deprecated in.
+
+    Args:
+        levels: The support table.
+        registered: The names of the registered tools.
+        version: The package version, ``X.Y.Z``.
+
+    Returns:
+        list[str]: One line per problem; empty when there is none.
+    """
+    problems = []
+    for name, support in sorted(levels.items()):
+        if support.level is not SupportLevel.DEPRECATED:
+            continue
+        replacement = support.replacement()
+        if replacement is None and support.reason != "no replacement.":
+            problems.append(
+                f"{name}: the reason must be 'use `<tool>`.' or 'no replacement.'"
+            )
+        elif replacement is not None and replacement not in registered:
+            problems.append(f"{name}: its replacement {replacement!r} is not a tool")
+        if name in registered and _major(version) > _major(support.since):
+            problems.append(
+                f"{name}: deprecated in {support.since}, so remove it before {version}"
+            )
+    return problems
+
+
+def planned_problems(levels: Mapping[str, Support]) -> list[str]:
+    """Planned tools whose reason does not name the queue item that builds them.
+
+    Args:
+        levels: The support table.
+
+    Returns:
+        list[str]: One line per problem; empty when there is none.
+    """
+    return [
+        f"{name}: a planned tool's reason names its queue item"
+        for name, support in sorted(levels.items())
+        if support.level is SupportLevel.PLANNED
+        and not re.search(r"\bqueue item \d+\b", support.reason)
+    ]
 
 
 #: Tool families that never call SolidWorks; their tools are stable on unit
 #: tests alone.
 OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"})
 
+#: The release the eight duplicates of issue #174 were deprecated in.
+_DEPRECATED_IN = "2.1.0"
+
 _STABLE = Support(SupportLevel.STABLE)
-_PLANNED = Support(SupportLevel.PLANNED, "no adapter implements it yet.")
+_PLANNED_DRAWING = Support(
+    SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
+)
+# Kept until its live probe (honest-tool-list task 2.0) decides: built in
+# item 13 if SolidWorks' design tables work here, removed otherwise.
+_PLANNED_DESIGN_TABLE = Support(
+    SupportLevel.PLANNED, "planned in queue item 13 (the configuration tools)."
+)
+
+
+def _deprecated(replacement: str | None) -> Support:
+    """A tool deprecated in 2.1.0 in favour of ``replacement`` (or none).
+
+    Args:
+        replacement: The registered tool that replaces it, or None.
+
+    Returns:
+        Support: The deprecated entry.
+    """
+    reason = f"use `{replacement}`." if replacement else "no replacement."
+    return Support(SupportLevel.DEPRECATED, reason, since=_DEPRECATED_IN)
 
 
 SUPPORT_LEVELS: dict[str, Support] = {
     # analysis
-    "analyze_geometry": _PLANNED,
-    "calculate_mass_properties": _STABLE,
+    "calculate_mass_properties": _deprecated("get_mass_properties"),
     "check_interference": _STABLE,
     "get_mass_properties": _STABLE,
-    "get_material_properties": _PLANNED,
     "verify_model": _STABLE,
     # automation
-    "automation_start_macro_recording": _PLANNED,
-    "automation_stop_macro_recording": _PLANNED,
-    "batch_process_files": _PLANNED,
-    "create_template": _PLANNED,
-    "execute_workflow": _PLANNED,
     "generate_vba_code": _STABLE,
-    "manage_design_table": _PLANNED,
-    "optimize_performance": _PLANNED,
+    "manage_design_table": _PLANNED_DESIGN_TABLE,
     # docs_discovery
     "discover_solidworks_docs": _STABLE,
     "find_related_api_members": _STABLE,
@@ -99,29 +206,21 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "lookup_api_method": _STABLE,
     "search_solidworks_api_help": _STABLE,
     # drawing
-    "add_annotation": _PLANNED,
-    "add_dimension": _PLANNED,
-    "add_drawing_view": _STABLE,
+    "add_dimension": _PLANNED_DRAWING,
+    "add_drawing_view": _deprecated("create_drawing_view"),
     "add_note": _STABLE,
     "auto_center_marks": _STABLE,
-    "auto_dimension_view": _PLANNED,
-    "check_drawing_standards": _PLANNED,
-    "create_detail_view": _PLANNED,
+    "auto_dimension_view": _PLANNED_DRAWING,
+    "check_drawing_standards": _PLANNED_DRAWING,
+    "create_detail_view": _PLANNED_DRAWING,
     "create_drawing_view": _STABLE,
-    "create_section_view": _PLANNED,
+    "create_section_view": _PLANNED_DRAWING,
     "create_technical_drawing": _STABLE,
     "list_drawing_views": _STABLE,
-    "update_sheet_format": _PLANNED,
-    "update_title_block": _PLANNED,
+    "update_sheet_format": _PLANNED_DRAWING,
+    "update_title_block": _PLANNED_DRAWING,
     # drawing_analysis
-    "analyze_drawing_annotations": _PLANNED,
-    "analyze_drawing_comprehensive": _PLANNED,
-    "analyze_drawing_dimensions": _PLANNED,
-    "analyze_drawing_views": _PLANNED,
-    "check_drawing_compliance": _PLANNED,
     "compare_drawing_versions": _STABLE,
-    "generate_drawing_report": _PLANNED,
-    "validate_drawing_completeness": _PLANNED,
     # drawing_automation
     "add_datum_tag": _STABLE,
     "add_gtol": _STABLE,
@@ -140,7 +239,6 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "set_custom_property": _STABLE,
     "set_material": _STABLE,
     # export
-    "batch_export": _PLANNED,
     "export_dwg": _STABLE,
     "export_iges": _STABLE,
     "export_image": _STABLE,
@@ -149,32 +247,23 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "export_stl": _STABLE,
     # file_management
     "activate_document": _STABLE,
-    "batch_file_operations": _PLANNED,
     "classify_feature_tree": _STABLE,
-    "convert_file_format": _PLANNED,
-    "get_file_properties": _STABLE,
+    "get_file_properties": _deprecated("get_model_info"),
     "get_model_info": _STABLE,
     "get_selected_entities": _STABLE,
     "list_configurations": _STABLE,
     "list_features": _STABLE,
     "list_open_documents": _STABLE,
-    "load_assembly": _STABLE,
-    "load_part": _STABLE,
-    "manage_file_properties": _PLANNED,
+    "load_assembly": _deprecated("open_model"),
+    "load_part": _deprecated("open_model"),
     "pack_and_go_assembly": _STABLE,
     "save_as": _STABLE,
-    "save_assembly": _STABLE,
+    "save_assembly": _deprecated("save_file"),
     "save_body_as_part": _STABLE,
     "save_file": _STABLE,
-    "save_part": _STABLE,
+    "save_part": _deprecated("save_file"),
     # macro_recording
-    "analyze_macro": _PLANNED,
-    "batch_execute_macros": _PLANNED,
-    "create_macro_library": _PLANNED,
     "execute_macro": _STABLE,
-    "optimize_macro": _PLANNED,
-    "start_macro_recording": _PLANNED,
-    "stop_macro_recording": _PLANNED,
     # modeling
     "add_chamfer": _STABLE,
     "add_fillet": _STABLE,
@@ -227,15 +316,9 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "sketch_linear_pattern": _STABLE,
     "sketch_mirror": _STABLE,
     "sketch_offset": _STABLE,
-    "sketch_tutorial_simple_hole": _STABLE,
-    "tutorial_simple_hole": _PLANNED,  # its cut step fails on real SolidWorks
+    "sketch_tutorial_simple_hole": _deprecated(None),
     # template_management
-    "apply_template": _PLANNED,
-    "batch_apply_template": _PLANNED,
     "compare_templates": _STABLE,
-    "extract_template": _PLANNED,
-    "list_template_library": _PLANNED,
-    "save_to_template_library": _PLANNED,
     # vba_generation
     "generate_vba_assembly_insert": _STABLE,
     "generate_vba_assembly_mates": _STABLE,

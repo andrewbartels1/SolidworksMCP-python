@@ -1,8 +1,7 @@
 """Analysis tools for SolidWorks MCP Server.
 
 Use these after a model or assembly already exists. Recommended order:
-calculate_mass_properties or get_mass_properties, then check_interference, then
-analyze_geometry, then get_material_properties. These tools are for validation and
+get_mass_properties, then check_interference. These tools are for validation and
 inspection, not for creating geometry. verify_model checks the finished model
 against expected values in one call.
 """
@@ -62,22 +61,6 @@ class InterferenceCheckInput(CompatInput):
     components: list[str] = Field(
         default_factory=list,
         description="List of component names to check for interference",
-    )
-
-
-class GeometryAnalysisInput(BaseModel):
-    """Input schema for geometry analysis.
-
-    Attributes:
-        analysis_type (str): The analysis type value.
-        parameters (dict[str, Any] | None): The parameters value.
-    """
-
-    analysis_type: str = Field(
-        description="Type of analysis (curvature, draft, thickness, etc.)"
-    )
-    parameters: dict[str, Any] | None = Field(
-        default=None, description="Analysis-specific parameters"
     )
 
 
@@ -317,25 +300,14 @@ async def register_analysis_tools(
     mcp = with_tool_boundary(mcp)
     tool_count = 0
 
-    @mcp.tool()
-    async def calculate_mass_properties(
-        input_data: MassPropertiesInput,
-    ) -> dict[str, Any]:
-        """Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
+    async def _measure_mass() -> dict[str, Any]:
+        """The active model's mass properties, as both mass tools return them.
 
-        Use it to check weight or balance. To compare a model with the values you
-        expect, use `verify_model`; `get_mass_properties` does the same as this tool.
-        Mass depends on the assigned material (`set_material`). Needs: an open part or
-        assembly. Read-only. It rebuilds first. Returns: `mass_properties` with `volume`
-        (mm³), `surface_area` (mm²), `mass` (kg), `center_of_mass` (mm),
-        `moments_of_inertia` (kg·mm², about the centre of mass) and
-        `principal_axes`.
-
-        Args:
-            input_data: Nothing: it always measures the active model.
+        A plain function, not a tool, so ``get_mass_properties`` doesn't carry
+        the deprecated ``calculate_mass_properties``'s warning.
 
         Returns:
-            dict[str, Any]: The mass properties.
+            dict[str, Any]: The success reply.
         """
         result = await adapter.get_mass_properties()
 
@@ -373,8 +345,8 @@ async def register_analysis_tools(
     ) -> dict[str, Any]:
         """Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
 
-        The same as `calculate_mass_properties`, which it calls. To compare a model with
-        the values you expect, use `verify_model`. Mass depends on the assigned material
+        Use it to check weight or balance. To compare a model with the values you
+        expect, use `verify_model`. Mass depends on the assigned material
         (`set_material`). Needs: an open part or assembly. Read-only. It rebuilds first.
         Returns: `mass_properties` with `volume` (mm³), `surface_area` (mm²), `mass`
         (kg), `center_of_mass` (mm), `moments_of_inertia` (kg·mm², about the centre
@@ -386,7 +358,26 @@ async def register_analysis_tools(
         Returns:
             dict[str, Any]: The mass properties.
         """
-        return await calculate_mass_properties(input_data or MassPropertiesInput())
+        return await _measure_mass()
+
+    @mcp.tool()
+    async def calculate_mass_properties(
+        input_data: MassPropertiesInput,
+    ) -> dict[str, Any]:
+        """Measure the active part or assembly's mass properties (the old name of `get_mass_properties`).
+
+        It returns exactly what `get_mass_properties` returns; use that instead. Needs:
+        an open part or assembly. Read-only. It rebuilds first. Returns:
+        `mass_properties` with `volume` (mm³), `surface_area` (mm²), `mass` (kg),
+        `center_of_mass` (mm), `moments_of_inertia` (kg·mm²) and `principal_axes`.
+
+        Args:
+            input_data: Nothing: it always measures the active model.
+
+        Returns:
+            dict[str, Any]: The mass properties.
+        """
+        return await _measure_mass()
 
     @mcp.tool()
     async def check_interference(input_data: InterferenceCheckInput) -> dict[str, Any]:
@@ -421,62 +412,6 @@ async def register_analysis_tools(
         return {
             "status": "success",
             "message": "Interference check completed",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-
-    @mcp.tool()
-    async def analyze_geometry(input_data: GeometryAnalysisInput) -> dict[str, Any]:
-        """Run a geometry analysis on the active model, such as curvature, draft or wall thickness.
-
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. For distances
-        and angles today, use `measure_entities`; for size and volume, use
-        `verify_model` or `calculate_mass_properties`. Read-only. Returns: once
-        available, the analysis under `data`.
-
-        Args:
-            input_data: The analysis. `analysis_type` (e.g. curvature, draft,
-                thickness) is required; `parameters` has a default.
-
-        Returns:
-            dict[str, Any]: The analysis, or a `not_supported` error.
-        """
-        require_capability(
-            adapter,
-            "analyze_geometry",
-            f"Active adapter does not support analyze_geometry; no "
-            f"{input_data.analysis_type} analysis was performed.",
-        )
-        result = await adapter.analyze_geometry(input_data.model_dump())
-        require_success(result, "Failed to analyze geometry")
-        return {
-            "status": "success",
-            "message": f"Geometry analysis ({input_data.analysis_type}) completed",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-
-    @mcp.tool()
-    async def get_material_properties() -> dict[str, Any]:
-        """Report the physical properties of the active part's material: density, modulus, Poisson's ratio, strength.
-
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. For the
-        material's name today, use `get_material`; for the materials you can assign, use
-        `list_available_materials`. Read-only. Returns: once available, the properties
-        under `data`.
-        """
-        require_capability(
-            adapter,
-            "get_material_properties",
-            "Active adapter does not support get_material_properties",
-        )
-        result = await adapter.get_material_properties()
-        require_success(result, "Failed to get material properties")
-        return {
-            "status": "success",
-            "message": "Material properties retrieved successfully",
             "data": result.data,
             "execution_time": result.execution_time,
         }
@@ -643,5 +578,5 @@ async def register_analysis_tools(
     # - vibration_analysis
     # - stress_concentration_analysis
 
-    tool_count = 4  # Keep legacy reported count expected by tests
+    tool_count = 4
     return tool_count

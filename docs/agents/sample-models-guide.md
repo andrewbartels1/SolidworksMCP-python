@@ -45,7 +45,7 @@ flowchart LR
 | **1 – Simple** | Single sketch + one feature | `create_sketch`, `add_rectangle/circle`, `create_extrusion/revolve` |
 | **2 – Intermediate** | 2–4 sketches, multiple features, fillets | + `set_dimension`, `add_sketch_constraint`, `create_extrusion` (multi-step) |
 | **3 – Advanced** | Lofts, sweeps, multi-body, sheet metal | + `generate_vba_part_modeling`, `execute_macro` |
-| **4 – Assembly** | Multiple parts mated together | `create_assembly`, `load_part`, `generate_vba_assembly_insert` |
+| **4 – Assembly** | Multiple parts mated together | `create_assembly`, `insert_component`, `add_mate` |
 
 ---
 
@@ -244,12 +244,12 @@ Create a simple sheet metal bracket:
 
 **Files**: 20+ parts in `Sprinkler/`  
 
-The sprinkler is the most complex assembly in the sample set. Use `batch_file_operations` to collect all part paths, then `load_assembly`.
+The sprinkler is the most complex assembly in the sample set. Open it with `open_model`; `list_components` lists its parts.
 
 ```
-1. load_assembly file_path="Sprinkler\Sprinkler.SLDASM"
-2. get_file_properties   ← read material, revision, descriptions
-3. calculate_mass_properties  ← total assembly mass
+1. open_model file_path="Sprinkler\Sprinkler.SLDASM"
+2. get_custom_properties ← read material, revision, descriptions
+3. get_mass_properties   ← total assembly mass
 4. check_interference   ← verify no clashes between components
 5. export_step file_path="Sprinkler_export.step"
 ```

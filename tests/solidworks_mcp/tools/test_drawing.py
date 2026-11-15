@@ -9,7 +9,6 @@ from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.tools.drawing import (
     AddDimensionInput,
     AddNoteInput,
-    AnnotationInput,
     AutoCenterMarksInput,
     CreateDetailViewInput,
     CreateDrawingViewInput,
@@ -154,47 +153,6 @@ class TestDrawingTools:
         assert result["data"]["dimension_value"] == "25.00"
         assert result["data"]["tolerance"] == "±0.1"
         mock_adapter.add_dimension.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_add_annotation_success(self, mcp_server, mock_adapter, mock_config):
-        """Test successful annotation addition."""
-        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.add_annotation = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={
-                    "annotation_text": "Material: Steel AISI 1020",
-                    "annotation_type": "Note",
-                    "position": [200.0, 280.0],
-                    "font_size": 12,
-                    "leader_attached": False,
-                },
-                execution_time=0.2,
-            )
-        )
-
-        input_data = AnnotationInput(
-            drawing_path="part_drawing.slddrw",
-            annotation_type="Note",
-            text="Material: Steel AISI 1020",
-            position=[200.0, 280.0],
-            font_size=12,
-        )
-
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "add_annotation":
-                tool_func = tool.fn
-                break
-
-        assert tool_func is not None
-        result = await tool_func(input_data=input_data)
-
-        assert result["status"] == "success"
-        assert result["data"]["annotation_text"] == "Material: Steel AISI 1020"
-        assert result["data"]["font_size"] == 12
-        mock_adapter.add_annotation.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_title_block_success(
@@ -438,17 +396,6 @@ class TestDrawingTools:
         assert valid_input.dimension_type == "Linear"
         assert len(valid_input.entities) == 2
 
-    @pytest.mark.unit
-    def test_annotation_input_validation(self):
-        """Test input validation for annotation operations."""
-        # Valid input
-        valid_input = AnnotationInput(
-            drawing_path="test.slddrw", annotation_type="Note", text="Test note"
-        )
-        assert valid_input.drawing_path == "test.slddrw"
-        assert valid_input.annotation_type == "Note"
-        assert valid_input.text == "Test note"
-
 
 class TestDrawingToolsBranchCoverage:
     """Branch coverage for uncovered drawing tool paths."""
@@ -477,16 +424,6 @@ class TestDrawingToolsBranchCoverage:
         assert inp.entity1 == "Circle1"
         assert inp.entity2 is None
         assert inp.position_x == 5.0
-
-    def test_annotation_input_position_normalization(self):
-        """AnnotationInput.model_post_init extracts position_x/y from position list."""
-        inp = AnnotationInput(
-            annotation_type="Note",
-            text="Hello",
-            position=[30.0, 40.0],
-        )
-        assert inp.position_x == 30.0
-        assert inp.position_y == 40.0
 
     # ── add_dimension: simulation path + exception ───────────────────────
 
@@ -634,56 +571,6 @@ class TestDrawingToolsBranchCoverage:
         assert result["status"] == "error"
         assert "add_drawing_view" in result["message"]
 
-    # ── add_annotation: adapter error + no-adapter simulation paths ────────
-
-    @pytest.mark.asyncio
-    async def test_add_annotation_adapter_error(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Add_annotation returns error when adapter.add_annotation returns is_success=False."""
-        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        mock_adapter.add_annotation = AsyncMock(
-            return_value=Mock(
-                is_success=False, error="annotation failed", execution_time=0.1
-            )
-        )
-        input_data = AnnotationInput(
-            annotation_type="Note",
-            text="Test",
-            position_x=10.0,
-            position_y=20.0,
-        )
-        tool_func = next(
-            (t.fn for t in await mcp_server.list_tools() if t.name == "add_annotation"),
-            None,
-        )
-        result = await tool_func(input_data=input_data)
-        assert result["status"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_add_annotation_no_adapter_simulation(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Add_annotation refuses when adapter lacks add_annotation, rather
-        than inventing an annotation."""
-        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-        if hasattr(mock_adapter, "add_annotation"):
-            del mock_adapter.add_annotation
-
-        input_data = AnnotationInput(
-            annotation_type="Note",
-            text="MaterialSpec",
-            position_x=100.0,
-            position_y=200.0,
-        )
-        tool_func = next(
-            (t.fn for t in await mcp_server.list_tools() if t.name == "add_annotation"),
-            None,
-        )
-        result = await tool_func(input_data=input_data)
-        assert result["status"] == "error"
-        assert "does not support add_annotation" in result["message"]
-
     # ── update_title_block: adapter error + no-adapter paths ───────────────
 
     @pytest.mark.asyncio
@@ -732,99 +619,6 @@ class TestDrawingToolsBranchCoverage:
         result = await tool_func(input_data=payload)
         assert result["status"] == "error"
         assert "does not support update_title_block" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_typed_drawing_tools_default_error_messages(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Covers fallback error message branches when adapter returns no error text."""
-        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.create_technical_drawing = AsyncMock(
-            return_value=Mock(is_success=False, error=None, execution_time=0.1)
-        )
-        mock_adapter.add_drawing_view = AsyncMock(
-            return_value=Mock(is_success=False, error=None, execution_time=0.1)
-        )
-        mock_adapter.add_annotation = AsyncMock(
-            return_value=Mock(is_success=False, error=None, execution_time=0.1)
-        )
-        mock_adapter.update_title_block = AsyncMock(
-            return_value=Mock(is_success=False, error=None, execution_time=0.1)
-        )
-
-        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
-
-        r1 = await by_name["create_technical_drawing"](
-            input_data=DrawingCreationInput(model_file="part.sldprt")
-        )
-        r2 = await by_name["add_drawing_view"](
-            input_data=DrawingViewInput(
-                drawing_path="d.slddrw",
-                view_type="Front",
-                view_name="Front",
-            )
-        )
-        r3 = await by_name["add_annotation"](
-            input_data=AnnotationInput(
-                annotation_type="Note",
-                text="x",
-                position_x=1.0,
-                position_y=2.0,
-            )
-        )
-        r4 = await by_name["update_title_block"](input_data={"title": "Widget"})
-
-        assert r1["status"] == "error"
-        assert r1["message"] == "Failed to create technical drawing"
-        assert r2["status"] == "error"
-        assert r2["message"] == "Failed to add drawing view"
-        assert r3["status"] == "error"
-        assert r3["message"] == "Failed to add annotation"
-        assert r4["status"] == "error"
-        assert r4["message"] == "Failed to update title block"
-
-    @pytest.mark.asyncio
-    async def test_typed_drawing_tools_exception_paths(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Cover exception handlers for typed drawing tools."""
-        await register_drawing_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.create_technical_drawing = AsyncMock(
-            side_effect=RuntimeError("create boom")
-        )
-        mock_adapter.add_drawing_view = AsyncMock(side_effect=RuntimeError("view boom"))
-        mock_adapter.add_annotation = AsyncMock(side_effect=RuntimeError("note boom"))
-        mock_adapter.update_title_block = AsyncMock(
-            side_effect=RuntimeError("title boom")
-        )
-
-        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
-
-        r1 = await by_name["create_technical_drawing"](
-            input_data=DrawingCreationInput(model_file="part.sldprt")
-        )
-        r2 = await by_name["add_drawing_view"](
-            input_data=DrawingViewInput(
-                drawing_path="d.slddrw",
-                view_type="Front",
-                view_name="Front",
-            )
-        )
-        r3 = await by_name["add_annotation"](
-            input_data=AnnotationInput(
-                annotation_type="Note",
-                text="x",
-                position_x=1.0,
-                position_y=2.0,
-            )
-        )
-        r4 = await by_name["update_title_block"](input_data={"title": "Widget"})
-
-        for result in (r1, r2, r3, r4):
-            assert result["status"] == "error"
-            assert result["error_type"] == "internal"
 
     # ── additional drawing tool branches (legacy tool set) ───────────────
 

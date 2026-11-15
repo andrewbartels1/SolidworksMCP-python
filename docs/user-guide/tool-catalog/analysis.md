@@ -1,24 +1,22 @@
 # Analysis Tools
 
 Use these after a model or assembly already exists. To check a finished build in one
-call, use `verify_model`. For individual readings, start with mass properties, then
-interference checking, then geometry analysis, then material properties.
+call, use `verify_model`. For individual readings, use `get_mass_properties` and
+`check_interference`.
 
 > **Prerequisite:** An active model or assembly with solid geometry.
 
-**Total tools in this category: 6**
+**Total tools in this category: 4**
 
 ## Recommended order
 
 1. `verify_model`: one call that checks the model against what you expected
-2. `calculate_mass_properties` or `get_mass_properties`
+2. `get_mass_properties`
 3. `check_interference`
-4. `analyze_geometry`
-5. `get_material_properties`
 
 ## Known limits
 
-- `get_mass_properties` is a compatibility alias for `calculate_mass_properties`.
+- `calculate_mass_properties` is deprecated: it returns what `get_mass_properties` returns.
 - These tools do not create or modify geometry.
 - In tests and local development, the mock adapter stands in for SolidWorks COM and
   returns canned success/error payloads so the suite can run without a live SolidWorks
@@ -28,6 +26,8 @@ interference checking, then geometry analysis, then material properties.
 ---
 
 ### `calculate_mass_properties`
+
+> **Deprecated:** use `get_mass_properties`. It keeps working until 3.0.0, when it is removed.
 
 Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia.
 
@@ -86,43 +86,6 @@ Find where the components of the active assembly overlap (Tools > Interference D
 {
   "components": []
 }
-```
-
----
-
-### `analyze_geometry`
-
-Run a geometry analysis on the active model, such as curvature, draft or wall thickness.
-
-**Prerequisite:** Active model with geometry
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `analysis_type` | `str` | ✅ | `` | Type of analysis (curvature, draft, thickness, etc.) |
-| `parameters` | `Dict[str, Any]?` | — | `None` | Analysis-specific parameters |
-
-**Sample call:**
-
-```json
-{
-  "analysis_type": "curvature"
-}
-```
-
----
-
-### `get_material_properties`
-
-Report the physical properties of the active part's material: density, modulus, Poisson's ratio, strength.
-
-**Prerequisite:** Active part with assigned material
-
-**Sample call:**
-
-```json
-{}
 ```
 
 ---

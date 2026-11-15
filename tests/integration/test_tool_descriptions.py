@@ -8,6 +8,7 @@ sibling to use instead) is reviewed in the PR.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -206,3 +207,136 @@ def test_the_field_check_follows_refs_and_nesting() -> None:
     )
 
     assert undescribed_fields(tool) == ["input_data.inner.bare"]
+
+
+#: Verbs a tool name starts with (the verb list, plus those of removed tools),
+#: so a backticked ``analyze_geometry`` reads as a tool name and a backticked
+#: ``volume_after`` (a reply field) does not. ``mirror`` and ``rebuild`` are
+#: left out: ``mirror_line`` and ``rebuild_status`` are reply fields.
+_TOOL_VERBS = (
+    "add|analyze|apply|batch|check|close|compare|convert|create|delete|execute|"
+    "export|extract|generate|get|insert|list|load|manage|measure|open|optimize|"
+    "pattern|rename|save|select|set|sketch|suppress|validate|verify"
+)
+_TOOL_LIKE = re.compile(rf"`((?:{_TOOL_VERBS})_[a-z0-9_]+)`")
+
+
+def unknown_tool_names(text: str, tools: set[str], fields: set[str]) -> list[str]:
+    """Backticked tool-like names in ``text`` that are neither tools nor fields.
+
+    Args:
+        text: A tool description.
+        tools: Registered tool names.
+        fields: Every input field name of every tool.
+
+    Returns:
+        list[str]: The unknown names, in order of appearance.
+    """
+    return [n for n in _TOOL_LIKE.findall(text) if n not in tools | fields]
+
+
+def _field_names(schema: Any) -> set[str]:
+    """Every property name at any depth of a JSON schema."""
+    names: set[str] = set()
+    if isinstance(schema, dict):
+        names.update(schema.get("properties", {}))
+        for value in schema.values():
+            names |= _field_names(value)
+    elif isinstance(schema, list):
+        for value in schema:
+            names |= _field_names(value)
+    return names
+
+
+@pytest.mark.asyncio
+async def test_no_description_names_a_tool_that_does_not_exist(mock_adapter) -> None:
+    tools = await _tools(mock_adapter)
+    names = {t.name for t in tools}
+    fields = set().union(*(_field_names(t.parameters) for t in tools))
+
+    unknown = {
+        t.name: found
+        for t in tools
+        if (found := unknown_tool_names(t.description or "", names, fields))
+    }
+
+    assert unknown == {}, "descriptions name tools that are not registered"
+
+
+def test_the_unknown_name_check_ignores_tools_and_fields() -> None:
+    text = "Use `analyze_geometry`, then `get_model_info`; reads `set_value`."
+
+    assert unknown_tool_names(text, {"get_model_info"}, {"set_value"}) == [
+        "analyze_geometry"
+    ]
+
+
+_STANDARD = Path(__file__).resolve().parents[2] / (
+    "docs/agents/tool-description-standard.md"
+)
+
+
+def _verbs_and_exceptions(text: str) -> tuple[tuple[str, ...], set[str]]:
+    """The verb list and the named exceptions, read from the standard.
+
+    Args:
+        text: The standard's Markdown.
+
+    Returns:
+        tuple[tuple[str, ...], set[str]]: The verb prefixes (``create_``, ...)
+        and the exception names.
+    """
+    section = text.split("## Tool names", 1)[1].split("\n## ", 1)[0]
+    table, rest = section.split("<!-- tool-name-exceptions:start -->", 1)
+    verbs = tuple(re.findall(r"`([a-z]+_)`", table))
+    block = rest.split("<!-- tool-name-exceptions:end -->", 1)[0]
+    return verbs, set(re.findall(r"`([a-z0-9_]+)`", block))
+
+
+def naming_faults(
+    names: set[str], verbs: tuple[str, ...], exceptions: set[str]
+) -> list[str]:
+    """Tool names that break the verb list, and exceptions that are no tool.
+
+    Args:
+        names: The registered tool names.
+        verbs: The verb prefixes.
+        exceptions: The names allowed to break the list.
+
+    Returns:
+        list[str]: One line per fault.
+    """
+    faults = [
+        f"{name}: starts with none of {', '.join(verbs)}"
+        for name in sorted(names - exceptions)
+        if not name.startswith(verbs)
+    ]
+    faults += [
+        f"{name}: listed as an exception but not registered"
+        for name in sorted(exceptions - names)
+    ]
+    return faults
+
+
+@pytest.mark.asyncio
+async def test_every_tool_name_starts_with_a_listed_verb(mock_adapter) -> None:
+    verbs, exceptions = _verbs_and_exceptions(_STANDARD.read_text(encoding="utf-8"))
+    names = {t.name for t in await _tools(mock_adapter)}
+
+    assert "create_" in verbs and "insert_component" in exceptions
+    assert naming_faults(names, verbs, exceptions) == []
+
+
+def test_an_unlisted_verb_fails_and_an_exception_passes() -> None:
+    verbs = ("create_", "get_")
+
+    assert naming_faults({"make_hole"}, verbs, set()) == [
+        "make_hole: starts with none of create_, get_"
+    ]
+    assert naming_faults({"insert_component"}, verbs, {"insert_component"}) == []
+
+
+def test_a_stale_exception_fails() -> None:
+    assert naming_faults(set(), ("get_",), {"load_part"}) == [
+        "load_part: listed as an exception but not registered"
+    ]

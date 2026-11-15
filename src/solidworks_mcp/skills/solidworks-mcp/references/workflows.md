@@ -24,7 +24,7 @@ step. Values are examples; sizes are millimetres.
    `solid_body_count: 1`, `feature_count: 3`, and a `volume_mm3` with a
    `relative_tolerance` wide enough for the fillets.
 10. `set_material` (find the exact name with `list_available_materials`),
-    then `save_part` with a `file_path` ending in `.sldprt`.
+    then `save_file` with a `file_path` ending in `.sldprt`.
 
 ## Sketching somewhere other than the three planes
 
@@ -82,7 +82,7 @@ To turn a feature off without deleting it, `suppress_feature`. After
 
 ## An assembly
 
-1. Save each part first (`save_part`): `insert_component` takes a file path.
+1. Save each part first (`save_file`): `insert_component` takes a file path.
 2. `create_assembly`, then `insert_component` for each part, with a
    position in mm.
 3. `list_components` for the instance names (e.g. "plate-1").
@@ -96,7 +96,7 @@ To turn a feature off without deleting it, `suppress_feature`. After
    mates move in the main assembly (a crank that turns), `flexible: true`.
 5. `check_interference`, then `verify_model` with `component_count`,
    `mate_count` and `no_interference: true`.
-6. `save_assembly`, or `pack_and_go_assembly` for a self-contained folder.
+6. `save_file`, or `pack_and_go_assembly` for a self-contained folder.
 
 ## A drawing
 

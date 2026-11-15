@@ -69,8 +69,8 @@ Some tools have no adapter implementation, so every call returns
 sentence: "Not available yet: no adapter implements it, so every call
 returns an error with `error_type: "not_supported"`. It is planned for a
 future release." Then point to the tool to use instead, if there is one, and
-phrase what it would change or return as "once available". The list of these
-tools is in `openspec/queue.md`.
+phrase what it would change or return as "once available". Its support-level
+reason names the queue item in `openspec/queue.md` that builds it.
 
 ## Support levels
 
@@ -78,17 +78,69 @@ Add one line to `SUPPORT_LEVELS` in `tools/support_levels.py` for every new
 tool; registration fails without it. A tool is `stable` once a live test
 calls it and it has no known fault, `beta` when it works on SolidWorks but
 has a known fault or covers only part of its COM call, `experimental` when
-no live test has checked it, and `planned` when nothing implements it (its
-description says "Not available yet"). Below stable, give a one-sentence
-reason.
+no live test has checked it, `planned` when nothing implements it (its
+description says "Not available yet"), and `deprecated` when another tool
+replaces it. Below stable, give a one-sentence reason.
 
-Don't write the level into the docstring: the server opens a beta or
-experimental tool's description with "Beta: <reason>" or "Experimental:
-<reason>" from the table, adds the same sentence to its successful results as
-`warning`, and tags every tool `level:<level>`. After changing a level, run
+A tool is deprecated, not removed, when it works and a client may call it.
+Its entry is `_deprecated("<replacement>")` (or `_deprecated(None)` when
+there is none), which records the version; it keeps working until the next
+major release, when `tests/integration/test_support_levels.py` fails until
+it is removed. Before deprecating a tool, make sure its replacement accepts
+everything it did, or that its description names the tool that does the
+rest.
+
+Don't write the level into the docstring: the server opens a beta,
+experimental or deprecated tool's description with "Beta: <reason>",
+"Experimental: <reason>" or "Deprecated: use `<tool>`." from the table, adds
+the same sentence to its successful results as `warning`, and tags every tool
+`level:<level>`. After changing a level, run
 `python -m solidworks_mcp.progress.generate` so the README image and the
 [progress page](../progress.md) follow; `tests/integration/test_support_levels.py`
 and `test_progress_up_to_date.py` check both.
+
+## Tool names
+
+A tool's name starts with one verb from this list, so an agent can guess a
+name and tell two tools apart by name alone. Pick the verb by meaning:
+
+| Verb | Meaning |
+| --- | --- |
+| `create_` | makes a new document, or a new feature built from a sketch or acting on the whole body (extrusion, rib, hole, shell) |
+| `add_` | adds an entity to an open sketch or a drawing, or treats edges or faces of an existing body (fillet, chamfer, draft, thread) |
+| `pattern_`, `mirror_` | repeats existing features |
+| `sketch_` | an operation on the open sketch's entities (offset, mirror, pattern, convert) |
+| `get_` | reads one thing |
+| `list_` | reads a collection |
+| `set_` | changes one value |
+| `open_`, `save_`, `close_`, `export_` | file operations |
+| `check_`, `verify_`, `measure_`, `compare_` | read-only checks |
+
+`tests/integration/test_tool_descriptions.py` fails on any other name, except
+these, which were registered before the list and are kept so that clients
+don't break:
+
+<!-- tool-name-exceptions:start -->
+- `activate_document`, `arrange_dimensions`, `auto_center_marks`,
+  `auto_dimension_view`, `calculate_mass_properties`, `classify_feature_tree`,
+  `delete_feature`, `discover_solidworks_docs`, `execute_macro`, `exit_sketch`,
+  `find_related_api_members`
+- `generate_drawing_package`, `generate_vba_assembly_insert`,
+  `generate_vba_assembly_mates`, `generate_vba_batch_export`,
+  `generate_vba_code`, `generate_vba_drawing_dimensions`,
+  `generate_vba_drawing_views`, `generate_vba_extrusion`,
+  `generate_vba_file_operations`, `generate_vba_macro_recorder`,
+  `generate_vba_part_modeling`, `generate_vba_revolve`
+- `insert_bom_table`, `insert_component`, `insert_model_dimensions`,
+  `load_assembly`, `load_part`, `lookup_api_interface`, `lookup_api_method`,
+  `manage_design_table`, `pack_and_go_assembly`, `rebuild_model`,
+  `rename_feature`, `reset_circuit_breaker`
+- `search_solidworks_api_help`, `select_face_edges`, `select_feature`,
+  `suppress_feature`, `undo`, `update_sheet_format`, `update_title_block`
+<!-- tool-name-exceptions:end -->
+
+Don't add to the exceptions; name a new tool with a listed verb. When a
+deprecated exception is removed, take it off the list too.
 
 ## Behaviour hints
 

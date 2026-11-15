@@ -39,7 +39,7 @@ A solid feature always comes from a closed sketch:
 6. Then edge treatments: `select_face_edges`, then `add_fillet` or
    `add_chamfer` with empty `edge_names`.
 7. Finish with `verify_model` (see "Check the result").
-8. `set_material`, then `save_part` with a `file_path`.
+8. `set_material`, then `save_file` with a `file_path`.
 
 Repeat 2-5 for each feature. For holes in a ring or a row, draw every
 circle in one sketch (`sketch_circular_pattern`, `sketch_linear_pattern`)
@@ -61,7 +61,7 @@ Details and the model axes: [references/selection-and-units.md](references/selec
 - To treat the edges of one face, use `select_face_edges` (by `side`, a
   `point` in mm, or a `plane`), then `add_fillet` or `add_chamfer` with empty
   `edge_names`. Do it right before the fillet: anything that rebuilds or
-  selects in between (including `calculate_mass_properties`) clears the
+  selects in between (including `get_mass_properties`) clears the
   selection.
 - If the user says "this face" or "these edges", call
   `get_selected_entities` to read what they clicked rather than guessing.

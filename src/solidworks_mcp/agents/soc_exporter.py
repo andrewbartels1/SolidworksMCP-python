@@ -428,7 +428,6 @@ class _CodeGen:
             "get_mass_properties",
             "get_dimension",
             "check_sketch_fully_defined",
-            "analyze_geometry",
             "check_interference",
             "calculate_mass_properties",
         }

@@ -34,8 +34,9 @@ TOOLS_DIR = (
 #: search local documentation, delegate to a sibling tool, or compare files on
 #: disk. Anything NOT on this list that skips the adapter is fabricating.
 ADAPTER_FREE_TOOLS = {
-    "get_mass_properties",  # delegates to calculate_mass_properties
-    "stop_macro_recording",
+    # Both share one plain helper that calls the adapter.
+    "get_mass_properties",
+    "calculate_mass_properties",
     "discover_solidworks_docs",
     "search_solidworks_api_help",
     # Same local-index reads as search_solidworks_api_help, narrower queries.
@@ -57,25 +58,13 @@ ADAPTER_FREE_TOOLS = {
     "create_section_view",
     "create_detail_view",
     "check_drawing_standards",
-    "execute_workflow",
     "manage_design_table",
-    "optimize_performance",
-    "analyze_macro",
-    "batch_execute_macros",
-    "optimize_macro",
-    "create_macro_library",
-    "apply_template",
-    "batch_apply_template",
     # File-level work that needs no SolidWorks session: comparisons read the
     # files, and the template tools copy a model to a template file.
     "compare_drawing_versions",
     "compare_templates",
-    "create_template",
-    "extract_template",
     # The template library is a JSON file on disk: these read and write it, and
     # stat the referenced template files. No SolidWorks session involved.
-    "list_template_library",
-    "save_to_template_library",
 }
 
 

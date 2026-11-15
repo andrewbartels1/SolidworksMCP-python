@@ -66,6 +66,7 @@ def test_the_data_counts_levels_and_lists_tools() -> None:
         "beta": 1,
         "experimental": 0,
         "planned": 0,
+        "deprecated": 0,
     }
     assert data["tools"]["list"][0]["reason"] == "x <y>."
     assert data["com"]["core"] == {"covered": 1, "total": 4}

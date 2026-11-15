@@ -1,6 +1,6 @@
 """Main SolidWorks MCP Server implementation using FastMCP and PydanticAI.
 
-This server provides 156 tools for comprehensive SolidWorks automation with configurable
+This server provides 124 tools for comprehensive SolidWorks automation with configurable
 deployment (local/remote) and security options.
 """
 
@@ -208,15 +208,8 @@ class SolidWorksMCPServer:
             "get_mass_properties",
             # Additional analysis operations
             "calculate_mass_properties",
-            "get_material_properties",
-            "analyze_geometry",
             "check_interference",
             # Drawing analysis operations
-            "analyze_drawing_comprehensive",
-            "analyze_drawing_dimensions",
-            "analyze_drawing_views",
-            "analyze_drawing_annotations",
-            "check_drawing_compliance",
             "check_drawing_standards",
             "compare_drawing_versions",
             # Modeling operations that benefit from routing
@@ -536,15 +529,12 @@ async def list_capabilities() -> dict[str, list[str]]:
             "add_section_view",
             "add_detail_view",
             "add_dimension_to_view",
-            "add_annotation",
             "create_drawing_template",
         ],
         "analysis": [
             "get_mass_properties",
             "perform_fea_analysis",
             "check_interference",
-            "analyze_geometry",
-            "get_material_properties",
         ],
         "export": [
             "export_step",
@@ -553,7 +543,6 @@ async def list_capabilities() -> dict[str, list[str]]:
             "export_pdf",
             "export_dwg",
             "export_images",
-            "batch_export",
         ],
         "automation": [
             "generate_vba_macro",

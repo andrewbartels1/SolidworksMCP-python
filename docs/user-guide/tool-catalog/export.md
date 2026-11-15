@@ -1,10 +1,10 @@
 # Export Tools
 
-Convert SolidWorks models to industry-standard interchange and manufacturing formats: STEP, IGES, STL, PDF, DWG, and raster images. Includes a batch-export tool for processing whole directories.
+Convert SolidWorks models to industry-standard interchange and manufacturing formats: STEP, IGES, STL, PDF, DWG, and raster images. To export many files, call the export tool once per file.
 
 > **Prerequisite:** An active document or a valid file path to an existing model.
 
-**Total tools in this category: 7**
+**Total tools in this category: 6**
 
 ---
 
@@ -163,32 +163,3 @@ Save a picture of the active model in a standard view, as PNG or JPG, at a chose
 
 ---
 
-### `batch_export`
-
-Export every matching SolidWorks file in a folder to one format.
-
-**Prerequisite:** Writable source and output directories
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `source_directory` | `str` | ✅ | `` | Directory containing SolidWorks files |
-| `output_directory` | `str` | ✅ | `` | Directory for exported files |
-| `format_type` | `str?` | — | `None` | Target export format |
-| `export_format` | `str?` | — | `None` | Alternative export format |
-| `file_pattern` | `str?` | — | `None` | File pattern alias |
-| `recursive` | `bool` | — | `False` | Search subdirectories recursively |
-| `include_subdirectories` | `bool` | — | `False` | Include subdirectories in search |
-| `file_patterns` | `List[str]` | — | `['*.sldprt', '*.sldasm', '*.slddrw']` | File patterns to include |
-
-**Sample call:**
-
-```json
-{
-  "source_directory": "C:\\Temp\\mcp_demo",
-  "output_directory": "C:\\Temp\\mcp_demo\\exports"
-}
-```
-
----

@@ -14,7 +14,6 @@ from .input_compat import CompatInput
 from .tool_boundary import (
     UnsupportedOperationError,
     normalize_input,
-    require_capability,
     require_success,
     with_tool_boundary,
 )
@@ -98,55 +97,6 @@ class ExportImageInput(CompatInput):
             width, height = self.resolution.lower().split("x", 1)
             self.width = int(width)
             self.height = int(height)
-
-
-class BatchExportInput(CompatInput):
-    """Input schema for batch export operations.
-
-    Attributes:
-        export_format (str | None): The export format value.
-        file_pattern (str | None): The file pattern value.
-        file_patterns (list[str]): The file patterns value.
-        format_type (str | None): The format type value.
-        include_subdirectories (bool): The include subdirectories value.
-        output_directory (str): The output directory value.
-        recursive (bool): The recursive value.
-        source_directory (str): The source directory value.
-    """
-
-    source_directory: str = Field(description="Directory containing SolidWorks files")
-    output_directory: str = Field(description="Directory for exported files")
-    format_type: str | None = Field(default=None, description="Target export format")
-    export_format: str | None = Field(
-        default=None, description="Alternative export format"
-    )
-    file_pattern: str | None = Field(default=None, description="File pattern alias")
-    recursive: bool = Field(
-        default=False, description="Search subdirectories recursively"
-    )
-    include_subdirectories: bool = Field(
-        default=False, description="Include subdirectories in search"
-    )
-    file_patterns: list[str] = Field(
-        default=["*.sldprt", "*.sldasm", "*.slddrw"],
-        description="File patterns to include",
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the batch export input.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.format_type is None:
-            self.format_type = self.export_format
-        if self.file_pattern:
-            self.file_patterns = [self.file_pattern]
-        if self.include_subdirectories:
-            self.recursive = True
 
 
 def _file_input(input_data: Any, format_type: str) -> Any:
@@ -469,37 +419,5 @@ async def register_export_tools(
             "export_file; no image was exported."
         )
 
-    @mcp.tool()
-    async def batch_export(input_data: BatchExportInput) -> dict[str, Any]:
-        """Export every matching SolidWorks file in a folder to one format.
-
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. Today, open
-        each file with `open_model` and use an `export_*` tool. Changes: once available,
-        writes one exported file per source file. Returns: once available, a per-file
-        result under `data`.
-
-        Args:
-            input_data: The batch. `source_directory` and `output_directory` are
-                required; `format_type`, `file_pattern` and `recursive` have
-                defaults.
-
-        Returns:
-            dict[str, Any]: The results, or a `not_supported` error.
-        """
-        require_capability(
-            adapter,
-            "batch_export",
-            "Active adapter does not support batch_export; no files were exported.",
-        )
-        result = await adapter.batch_export(input_data.model_dump())
-        require_success(result, "Batch export failed")
-        return {
-            "status": "success",
-            "message": f"Batch export completed to {input_data.format_type} format",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-
-    tool_count = 7  # Number of tools registered
+    tool_count = 6  # Number of tools registered
     return tool_count

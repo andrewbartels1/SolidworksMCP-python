@@ -1095,7 +1095,7 @@ time to release memory and finish background work between documents. Heavy parts
 **What to do in a batch loop:**
 
 - **Throttle.** Put a real pause (~10 s worked here) between parts — after `close_model`,
-  before the next `load_part`. Small parts don't need it; you won't know which are heavy
+  before the next `open_model`. Small parts don't need it; you won't know which are heavy
   up front, so pace the whole loop.
 - **Do the heavy files last** and don't retry-storm — if a big part fails its export,
   record it and move on rather than reopening it immediately.

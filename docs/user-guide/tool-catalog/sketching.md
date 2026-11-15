@@ -449,6 +449,8 @@ Offset sketch entities by a distance in mm, outward or inward, e.g. for a wall o
 
 ### `sketch_tutorial_simple_hole`
 
+> **Deprecated:** no replacement; build the hole with the sketching and feature tools. It keeps working until 3.0.0, when it is removed.
+
 Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch.
 
 **Prerequisite:** SolidWorks running
@@ -461,31 +463,3 @@ Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane 
 
 ---
 
-### `tutorial_simple_hole`
-
-Draw a circle on a plane and cut it as a hole, as one worked example.
-
-**Prerequisite:** SolidWorks running
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `plane` | `str` | ✅ | `` | Sketch plane for the hole |
-| `center_x` | `float` | ✅ | `` | Hole center X coordinate in mm |
-| `center_y` | `float` | ✅ | `` | Hole center Y coordinate in mm |
-| `diameter` | `float` | ✅ | `` | Hole diameter in mm |
-| `depth` | `float?` | — | `None` | Hole depth in mm (None for through hole) |
-
-**Sample call:**
-
-```json
-{
-  "plane": "Front",
-  "center_x": 0.0,
-  "center_y": 0.0,
-  "diameter": 10.0
-}
-```
-
----

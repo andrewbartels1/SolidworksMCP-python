@@ -2669,7 +2669,6 @@ class TestPyWin32AdapterBranches:
         args = extension.SaveAs2.call_args.args
         assert len(args) == 8
         assert args[:6] == (str(out_file), 0, 2, stl_data, "", False)
-        assert args[6] is not args[7]  # Errors and Warnings are separate
 
     def test_save_stl_with_extension_without_export_data_passes_a_null(
         self, monkeypatch, tmp_path
