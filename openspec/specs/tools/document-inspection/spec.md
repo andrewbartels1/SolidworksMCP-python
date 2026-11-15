@@ -2,7 +2,6 @@
 
 ## Purpose
 The tools that read the active document (`get_file_properties`, `list_configurations`, `classify_feature_tree`, `load_part`, `load_assembly`) report what SolidWorks says, and fail plainly when they can't read it.
-
 ## Requirements
 ### Requirement: File properties describe the active document's file
 
@@ -52,4 +51,20 @@ SolidWorks opened, or `null` when it can't be read, never an assumed
 #### Scenario: The wrong file type
 - **WHEN** an agent calls `load_assembly` with a `.sldprt` path
 - **THEN** the call fails with `invalid_input`, and nothing is opened
+
+### Requirement: Model info includes the file's details
+`get_model_info` SHALL report, besides what it reports today, the active
+document's file size in bytes and its created and modified times, read
+from the file on disk. For a document never saved, they SHALL be `null`.
+
+#### Scenario: A saved part
+- **WHEN** a part saved to disk is active and an agent calls
+  `get_model_info`
+- **THEN** the reply has `size_bytes` above 0 and `created` and `modified`
+  times, as `get_file_properties` reports them
+
+#### Scenario: A new, unsaved part
+- **WHEN** a part never saved is active
+- **THEN** `size_bytes`, `created` and `modified` are `null`, and the call
+  succeeds
 
