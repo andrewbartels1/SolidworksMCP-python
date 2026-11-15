@@ -1,6 +1,6 @@
 ## 0. Before starting
 
-- [ ] 0.1 Confirm the honest-tool-list change is merged; read its design-table finding (its design decision 8). If `manage_design_table` was kept, add its tasks here (insert, read, update rows) before section 1
+- [ ] 0.1 Confirm the honest-tool-list change is merged; read its design-table finding (its design decision 8). If `manage_design_table` was kept, add its tasks here (insert, read, update rows) before section 1 (Known 2026-11-14: design tables don't work through COM here, so `manage_design_table` was removed; build configurations without Excel.)
 
 ## 1. Create, activate, delete
 

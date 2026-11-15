@@ -12,8 +12,8 @@ Tools contain business logic only. They:
 adapter's timing, else the tool's own wall time) - using :class:`ErrorClassifier` to name the failure.
 :class:`ToolRegistrar` applies the boundary to every tool at registration, so no
 tool can forget it. It also adds each tool's support level (from
-``support_levels.py``) to its tags and, for a beta or experimental tool, a
-``warning`` to its successful results.
+``support_levels.py``) to its tags and, for a beta, experimental or deprecated
+tool, a ``warning`` to its successful results.
 """
 
 from __future__ import annotations
@@ -358,7 +358,7 @@ class ToolRegistrar:
         if support is None:
             raise KeyError(
                 f"Tool {name!r} has no entry in tools/support_levels.py; add its "
-                "support level (stable, beta, experimental or planned) there."
+                "support level (stable, beta, experimental, planned or deprecated) there."
             )
         return support
 
@@ -368,8 +368,8 @@ class ToolRegistrar:
         """The registration kwargs with the tool's title, hints and tag added.
 
         Explicit ``title``/``annotations``/``description`` kwargs win over
-        the tables; tags are merged. A beta or experimental tool's
-        description opens with its level sentence, the same as its
+        the tables; tags are merged. A beta, experimental or deprecated
+        tool's description opens with its level sentence, the same as its
         ``warning``.
 
         Args:

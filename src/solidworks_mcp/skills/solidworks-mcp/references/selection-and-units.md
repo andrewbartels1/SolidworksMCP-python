@@ -19,7 +19,7 @@ the sketch tools. `get_selected_entities` reports in mm (`center_mm`,
 angle dimension. `set_units` changes what the document shows, not what the
 tools take.
 
-Mass is in kg, volume in mm³. `calculate_mass_properties` returns moments
+Mass is in kg, volume in mm³. `get_mass_properties` returns moments
 of inertia in kg·mm², about the centre of mass.
 
 ## Planes and model axes
@@ -53,7 +53,7 @@ In order of reliability:
    pick a different edge.
 
 Selection is fragile: anything that selects or rebuilds in between clears
-it, including `calculate_mass_properties`, `rebuild_model`,
+it, including `get_mass_properties`, `rebuild_model`,
 `measure_entities`, and `verify_model` when it checks `mass_kg`. Select immediately before the tool that uses it.
 
 `select_feature` selects a feature, sketch, plane or component by name, for

@@ -172,7 +172,7 @@ def _tools_for_feature_name(feature_name: str, position: int) -> list[str]:
         return ["create_revolve"]
     if "extrude" in lower:
         return ["create_extrusion"]
-    return ["analyze_geometry"]
+    return ["get_model_info", "list_features", "get_mass_properties"]
 
 
 def _family_for_feature_order(ordered_features: list[str], current_family: str) -> str:
@@ -421,7 +421,7 @@ async def _run_structured_agent(
         "  classify_feature_tree, create_sketch, add_line, add_arc, add_circle, add_rectangle,\n"
         "  create_extrusion, create_revolve, create_cut_extrude, export_image, export_step,\n"
         "  export_stl, select_feature, select_face_edges, add_fillet, add_chamfer,\n"
-        "  rebuild_model, check_interference, analyze_geometry,\n"
+        "  rebuild_model, check_interference,\n"
         "  generate_vba_code, execute_macro\n"
         "Prefer tools in the order listed above (inspect → classify → plan → execute → verify).\n"
         "Do not invent tools not in this list.\n"

@@ -61,6 +61,7 @@ without it.
   CHANGELOG, progress bars.
 - No issue is filed; this is queue item 13.
 - **Depends on the honest-tool-list change (queue item 10)**, merged
-  first: it sets the verb list and runs the design-table probe. If that
-  probe shows design tables work without trouble, `manage_design_table`
-  stays planned and is added to this change's tasks before it starts.
+  first: it sets the verb list and ran the design-table probe. The probe
+  (2026-11-14) showed design tables don't work through COM on this
+  install, so `manage_design_table` was removed; this change builds
+  configurations without Excel.

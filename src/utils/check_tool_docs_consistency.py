@@ -57,6 +57,9 @@ CATEGORY_LABELS: dict[str, str] = {
     "macro_recording.py": "Macro Recording",
     "docs_discovery.py": "Docs Discovery",
     "drawing_analysis.py": "Drawing Analysis",
+    "drawing_automation.py": "Drawing Automation",
+    "engineering_data.py": "Engineering Data",
+    "server_admin.py": "Server Admin",
 }
 
 

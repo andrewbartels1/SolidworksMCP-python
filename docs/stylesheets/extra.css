@@ -98,6 +98,7 @@
 .level-beta { background: #d29922; }
 .level-experimental { background: #db6d28; }
 .level-planned { background: #484f58; }
+.level-deprecated { background: #8957e5; }
 .progress-filters { margin: 0.5em 0 1em; }
 .progress-filter-group { margin: 0.3em 0; }
 .progress-chip {

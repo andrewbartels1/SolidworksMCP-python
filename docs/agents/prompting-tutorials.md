@@ -400,8 +400,8 @@ Check the mass, volume, and centre of gravity for the currently open model.
 
 ```json
 [
-  {"tool": "calculate_mass_properties", "args": {}},
-  {"tool": "get_material_properties",   "args": {}}
+  {"tool": "get_mass_properties", "args": {}},
+  {"tool": "get_material",        "args": {}}
 ]
 ```
 
@@ -444,4 +444,4 @@ You are an expert SolidWorks drafter operating a SolidWorks MCP server.
 | Revolve fails | No axis / wrong axis name | Add centerline in same sketch, name = `"Line1"` |
 | Dimension not found | Name mismatch | Check `"D1@FeatureName"` format |
 | Export writes 0-byte file | No active document | Open or create a part first |
-| Mass = 0 | No material assigned | Call `get_material_properties` to check |
+| Mass = 0 | No material assigned | Call `get_material` to check, then `set_material` |

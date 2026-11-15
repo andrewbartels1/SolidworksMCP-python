@@ -1168,7 +1168,7 @@ async def register_modeling_tools(
 
         Uses `template` (a .prtdot) or the default part template, then sets `units` if
         given, and assigns `material` if given. The part is not saved until
-        `save_part`. Needs: SolidWorks running. Changes: opens a new part document.
+        `save_file`. Needs: SolidWorks running. Changes: opens a new part document.
         Returns: `part` with `name`, `units`, `template` and `material` (the one
         assigned, or null), plus a `warning` when the material couldn't be assigned;
         the part is created either way.
@@ -1223,7 +1223,7 @@ async def register_modeling_tools(
         """Create a new, empty assembly document and make it active, ready for `insert_component`.
 
         Uses `template` (an .asmdot) or the default assembly template. It is not saved
-        until `save_assembly`. Needs: SolidWorks running. Changes: opens a new assembly
+        until `save_file`. Needs: SolidWorks running. Changes: opens a new assembly
         document. Returns: `assembly` with `name` and `template`. Then call
         `insert_component` for each part.
 

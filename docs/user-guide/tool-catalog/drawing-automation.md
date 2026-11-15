@@ -4,7 +4,7 @@ Put the model's dimensions on a drawing and lay them out so nothing overlaps, ad
 
 > **Prerequisite:** An active Drawing document with views of a model; generate_drawing_package only needs a saved part or assembly.
 
-**Total tools in this category: 5**
+**Total tools in this category: 7**
 
 ---
 

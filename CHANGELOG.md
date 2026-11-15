@@ -20,6 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   height edited later. Give exactly one of `plane` and `face_point`; a point
   in the air or on a curved face fails with `invalid_input`.
 
+- **A `deprecated` support level** (#174). A deprecated tool still works;
+  its description and successful results open "Deprecated: use `<tool>`.",
+  it is tagged `level:deprecated`, and it is removed at the next major
+  release. The progress image leaves deprecated tools out of its count.
+- **A verb list for tool names**, in the tool description standard: new
+  tools start with `create_`, `add_`, `get_`, `list_`, `set_` and the rest;
+  the names registered before it are listed as exceptions.
+- **`get_model_info` reports the file's details**: `size_bytes`, `created`
+  and `modified`, read from the file on disk (null for a document never
+  saved).
+- **`save_file` takes `overwrite`**, and checks a new `file_path` before
+  SolidWorks is asked: the folder exists and is writable, the extension
+  matches the document (.sldprt, .sldasm, .slddrw), and no file is there.
+
 ### Fixed
 
 Found building the monitor stand demo (#206):
@@ -44,6 +58,54 @@ Found building the monitor stand demo (#206):
 - **The monitor stand demo** sketches its pocket on the stand's top face,
   with no reference plane, and its camera turns to an isometric view after
   each feature (`--look` in the script).
+
+- **`save_file` keeps a file already at `file_path`** unless `overwrite`
+  is on, and refuses a path with another document type's extension. Before,
+  it replaced the file. Saving in place (no `file_path`) is unchanged.
+
+### Deprecated
+
+Each still works until 3.0.0; use the tool named instead (#174):
+
+- `load_part`, `load_assembly`: use `open_model`.
+- `save_part`, `save_assembly`: use `save_file` (`pack_and_go_assembly` to
+  copy an assembly with its referenced parts).
+- `calculate_mass_properties`: use `get_mass_properties`.
+- `get_file_properties`: use `get_model_info`.
+- `add_drawing_view`: use `create_drawing_view`.
+- `sketch_tutorial_simple_hole`: no replacement; build the hole with the
+  sketching and feature tools.
+
+### Removed
+
+33 tools that were registered but never implemented: every call returned
+`not_supported` (#174). Clients that listed them only ever got an error.
+Why each one went, and what does its job now, is in `openspec/queue.md`
+("Removed tools").
+
+- Analysis: `analyze_geometry`, `get_material_properties`.
+- Automation: `automation_start_macro_recording`,
+  `automation_stop_macro_recording`, `batch_process_files`,
+  `create_template`, `execute_workflow`, `manage_design_table`,
+  `optimize_performance`. `manage_design_table` was checked live first: on
+  SolidWorks 2026 the design table is inserted, but SolidWorks can't open it
+  in Excel to read it and makes no configurations from it.
+- Drawing: `add_annotation`.
+- Drawing analysis: `analyze_drawing_annotations`,
+  `analyze_drawing_comprehensive`, `analyze_drawing_dimensions`,
+  `analyze_drawing_views`, `check_drawing_compliance`,
+  `generate_drawing_report`, `validate_drawing_completeness`.
+- Export: `batch_export`.
+- File management: `batch_file_operations`, `convert_file_format`,
+  `manage_file_properties`.
+- Macros: `analyze_macro`, `batch_execute_macros`, `create_macro_library`,
+  `optimize_macro`, `start_macro_recording`, `stop_macro_recording`.
+- Sketching: `tutorial_simple_hole`.
+- Templates: `apply_template`, `batch_apply_template`, `extract_template`,
+  `list_template_library`, `save_to_template_library`.
+
+The seven planned tools left are drawing tools; each names the queue item
+that builds them (the drawing pack).
 
 ## [2.0.0] - 2026-11-12
 

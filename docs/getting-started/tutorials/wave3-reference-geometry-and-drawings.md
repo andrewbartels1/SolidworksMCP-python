@@ -170,7 +170,7 @@ through hole. Then save it to C:\Temp\wave3_demo\plate.sldprt.
 | 6 | `add_sketch_dimension` | `Line_2, linear, 40` | `Dimension_7` |
 | 7 | `add_sketch_dimension` | `entity1="Circle_5", dimension_type="diameter", value=12` | `Dimension_8` — *"Added diameter dimension of 12.0mm to Circle_5"* |
 | 8 | `exit_sketch` → `create_extrusion` | `depth=8` | `Boss-Extrude1` |
-| 9 | `save_part` | `file_path="C:\Temp\wave3_demo\plate.sldprt"` | saved |
+| 9 | `save_file` | `file_path="C:\Temp\wave3_demo\plate.sldprt"` | saved |
 
 Putting the rectangle **and** the circle in one profile means a single
 `create_extrusion` leaves a clean through hole — no cut feature needed.
@@ -265,7 +265,7 @@ work — the only files created are under your scratch folder.
 | `save_body_as_part` | ✅ (also opens a linked assembly) |
 | `auto_center_marks` — insertion | ✅ (count read-back unreliable on R2026x) |
 | `add_dimension` / `auto_dimension_view` — **drawing** dimensions | ❌ not wired to COM — sketch dimensions only |
-| `create_cut` / `tutorial_simple_hole` | ❌ not wired to COM on this build |
+| `create_cut` | ❌ not wired to COM on this build; use `create_cut_extrude` |
 
 ---
 

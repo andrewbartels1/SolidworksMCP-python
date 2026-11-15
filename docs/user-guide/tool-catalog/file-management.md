@@ -1,10 +1,14 @@
 # File Management Tools
 
-Open, save, and manage SolidWorks documents. Load parts and assemblies, save-as with new names or paths, manage custom file properties, and convert between file formats.
+Open, save, switch and inspect SolidWorks documents: `open_model`, `save_file`
+and `save_as`, the open documents, the feature tree, configurations, the current
+selection and Pack and Go. `load_part`, `load_assembly`, `save_part`,
+`save_assembly` and `get_file_properties` are deprecated; each section names its
+replacement.
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 19**
+**Total tools in this category: 16**
 
 ---
 
@@ -54,6 +58,8 @@ Save the active document under a new path, as a SolidWorks file or in an exchang
 ---
 
 ### `get_file_properties`
+
+> **Deprecated:** use `get_model_info`. It keeps working until 3.0.0, when it is removed.
 
 Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes.
 
@@ -140,94 +146,9 @@ List the names of the active model's configurations.
 
 ---
 
-### `manage_file_properties`
-
-Read or change the file-level properties of a SolidWorks file on disk.
-
-**Prerequisite:** Active document
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `operation` | `str` | ✅ | `` | Operation to perform (copy, move, delete, rename) |
-| `source_path` | `str?` | — | `None` | Source file path |
-| `file_path` | `str?` | — | `None` | Alternative file path |
-| `target_path` | `str?` | — | `None` | Target file path (for copy/move/rename) |
-| `properties` | `Dict[str, Any]?` | — | `None` | File properties to set |
-| `parameters` | `Dict[str, Any]?` | — | `None` | Operation parameters |
-| `include_system` | `bool` | — | `False` | Include system properties |
-
-**Sample call:**
-
-```json
-{
-  "operation": "example"
-}
-```
-
----
-
-### `convert_file_format`
-
-Convert a SolidWorks file on disk to another format without opening it first.
-
-**Prerequisite:** Valid source file path
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `source_file` | `str` | ✅ | `` | Source file path |
-| `target_file` | `str?` | — | `None` | Target file path |
-| `source_format` | `str?` | — | `None` | Source file format |
-| `target_format` | `str` | ✅ | `` | Target file format |
-| `output_path` | `str?` | — | `None` | Alternative output path |
-| `conversion_options` | `Dict[str, Any]?` | — | `None` | Conversion options |
-| `quality` | `str` | — | `high` | Conversion quality |
-| `units` | `str` | — | `mm` | Units |
-| `invalid_format` | `str?` | — | `None` | Invalid format for testing |
-
-**Sample call:**
-
-```json
-{
-  "source_file": "example",
-  "target_format": "example"
-}
-```
-
----
-
-### `batch_file_operations`
-
-Copy, move, rename or delete SolidWorks files on disk in one call.
-
-**Prerequisite:** Writable directories
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `operation` | `str` | ✅ | `` | Operation to perform (copy, move, delete, rename) |
-| `source_path` | `str?` | — | `None` | Source file path |
-| `file_path` | `str?` | — | `None` | Alternative file path |
-| `target_path` | `str?` | — | `None` | Target file path (for copy/move/rename) |
-| `properties` | `Dict[str, Any]?` | — | `None` | File properties to set |
-| `parameters` | `Dict[str, Any]?` | — | `None` | Operation parameters |
-| `include_system` | `bool` | — | `False` | Include system properties |
-
-**Sample call:**
-
-```json
-{
-  "operation": "example"
-}
-```
-
----
-
 ### `load_part`
+
+> **Deprecated:** use `open_model`. It keeps working until 3.0.0, when it is removed.
 
 Open a part (.sldprt) from disk and make it the active document.
 
@@ -251,6 +172,8 @@ Open a part (.sldprt) from disk and make it the active document.
 
 ### `load_assembly`
 
+> **Deprecated:** use `open_model`. It keeps working until 3.0.0, when it is removed.
+
 Open an assembly (.sldasm) from disk and make it the active document.
 
 **Prerequisite:** SolidWorks running, valid .sldasm path
@@ -273,6 +196,8 @@ Open an assembly (.sldasm) from disk and make it the active document.
 
 ### `save_part`
 
+> **Deprecated:** use `save_file`. It keeps working until 3.0.0, when it is removed.
+
 Save the active part in place, or as a new .sldprt with the target path checked first.
 
 **Prerequisite:** Active Part document
@@ -286,6 +211,8 @@ Save the active part in place, or as a new .sldprt with the target path checked 
 ---
 
 ### `save_assembly`
+
+> **Deprecated:** use `save_file`. It keeps working until 3.0.0, when it is removed.
 
 Save the active assembly in place, or as a new .sldasm, optionally copying the parts it uses alongside.
 

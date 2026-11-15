@@ -1,10 +1,12 @@
 # Drawing Tools
 
-Create and edit 2-D technical drawings: add projected/section/detail views, place dimensions, notes, and annotations, update title blocks and sheet formats, and run drafting standards checks.
+Create and edit 2-D technical drawings: views, notes and centre marks. Section and
+detail views, drawing dimensions, the title block, the sheet format and a drawing
+check are planned in the drawing pack; until then they return `not_supported`.
 
 > **Prerequisite:** An active SolidWorks Drawing (.slddrw) document.
 
-**Total tools in this category: 14**
+**Total tools in this category: 13**
 
 ---
 
@@ -241,6 +243,8 @@ Place a model's three standard views (front, top and side) on the active drawing
 
 ### `add_drawing_view`
 
+> **Deprecated:** use `create_drawing_view`. It keeps working until 3.0.0, when it is removed.
+
 Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`.
 
 **Prerequisite:** SolidWorks running
@@ -263,40 +267,6 @@ Place one named view of a part or assembly on the active drawing sheet; the same
 
 ```json
 {}
-```
-
----
-
-### `add_annotation`
-
-Add an annotation (a note, balloon or surface-finish symbol) to the active drawing.
-
-**Prerequisite:** SolidWorks running
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `drawing_path` | `str?` | — | `None` | Path to drawing file |
-| `annotation_type` | `str` | ✅ | `` | Type of annotation (note, balloon, surface_finish, etc.) |
-| `text` | `str` | ✅ | `` | Annotation text content |
-| `position_x` | `float?` | — | `None` | X position for annotation |
-| `position_y` | `float?` | — | `None` | Y position for annotation |
-| `position` | `List[float]?` | — | `None` | Annotation position |
-| `font_size` | `float` | — | `12.0` | Font size in points |
-| `leader_attachment` | `str?` | — | `None` | Entity to attach leader line to |
-| `drawn_by` | `str` | — | `` | Drawn by field |
-| `checked_by` | `str` | — | `` | Checked by field |
-| `approved_by` | `str` | — | `` | Approved by field |
-| `drawing_number` | `str` | — | `` | Drawing number |
-
-**Sample call:**
-
-```json
-{
-  "annotation_type": "example",
-  "text": "example"
-}
 ```
 
 ---

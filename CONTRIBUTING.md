@@ -78,6 +78,7 @@ When needed (credentials/SolidWorks environment available):
 
 ## Adding or Changing a Tool
 
+- Name it with a verb from the [verb list](docs/agents/tool-description-standard.md#tool-names) (`create_`, `add_`, `get_`, `list_`, `set_`, ...).
 - Write its docstring to the [tool description standard](docs/agents/tool-description-standard.md): what it does, when to use it, what it needs, what it changes (or "Read-only."), and what it returns.
 - Describe `input_data` specifically in `Args:`, and give every input field a `Field(description=...)`.
 - Add its title and behaviour hints to `src/solidworks_mcp/tools/tool_hints.py`; registration fails without them.

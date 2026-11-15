@@ -281,43 +281,6 @@ class AddRelationInput(BaseModel):
     )
 
 
-class TutorialSimpleHoleInput(CompatInput):
-    """Input schema for creating a simple hole (tutorial example).
-
-    Attributes:
-        center_x (float): The center x value.
-        center_y (float): The center y value.
-        depth (float | None): The depth value.
-        diameter (float): The diameter value.
-        plane (str): The plane value.
-    """
-
-    plane: str = Field(description="Sketch plane for the hole")
-    center_x: float = Field(description="Hole center X coordinate in mm")
-    center_y: float = Field(description="Hole center Y coordinate in mm")
-    diameter: float = Field(description="Hole diameter in mm")
-    depth: float | None = Field(
-        default=None, description="Hole depth in mm (None for through hole)"
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the tutorial simple hole input.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-
-        Raises:
-            ValueError: Depth must be positive.
-        """
-        if self.diameter <= 0:
-            raise ValueError("diameter must be positive")
-        if self.depth is not None and self.depth <= 0:
-            raise ValueError("depth must be positive")
-
-
 class CheckSketchDefinitionInput(CompatInput):
     """Input schema for checking sketch definition status.
 
@@ -1129,63 +1092,6 @@ async def register_sketching_tools(
                 "sketch_name": sketch_name,
                 "depth": 10.0,
                 "end_condition": "ThroughAll",
-            },
-        }
-
-    @mcp.tool()
-    async def tutorial_simple_hole(
-        input_data: TutorialSimpleHoleInput,
-    ) -> dict[str, Any]:
-        """Draw a circle on a plane and cut it as a hole, as one worked example.
-
-        Not available yet on real SolidWorks: its cut step has no COM implementation,
-        so the call draws and closes the sketch, then fails. It is planned for a future
-        release. Use `create_sketch`, `add_circle`, `exit_sketch` and
-        `create_cut_extrude` instead. Needs: an open part with a solid body.
-        Changes: adds a sketch (and, with the mock adapter, a cut). Returns: `tutorial`
-        with `plane`, `diameter`, `depth` and `steps`.
-
-        Args:
-            input_data: The hole. `plane`, `center_x`, `center_y` and `diameter`
-                (mm) are required; `depth` defaults to the diameter.
-
-        Returns:
-            dict[str, Any]: The steps run.
-        """
-        steps: list[dict[str, Any]] = []
-
-        sketch_result = await adapter.create_sketch(input_data.plane)
-        require_success(sketch_result, context="Failed to create sketch")
-        steps.append({"step": "Create sketch", "status": "success"})
-
-        circle_result = await adapter.add_sketch_circle(
-            input_data.center_x,
-            input_data.center_y,
-            input_data.diameter / 2,
-            False,
-        )
-        require_success(circle_result, context="Failed to add circle")
-        steps.append({"step": "Add circle", "status": "success"})
-
-        exit_result = await adapter.exit_sketch()
-        require_success(exit_result, context="Failed to exit sketch")
-        steps.append({"step": "Exit sketch", "status": "success"})
-
-        cut_depth = (
-            input_data.depth if input_data.depth is not None else input_data.diameter
-        )
-        cut_result = await adapter.create_cut("HoleSketch", cut_depth)
-        require_success(cut_result, context="Failed to create cut extrude")
-        steps.append({"step": "Create cut extrude", "status": "success"})
-
-        return {
-            "status": "success",
-            "message": "Completed simple hole tutorial",
-            "tutorial": {
-                "plane": input_data.plane,
-                "diameter": input_data.diameter,
-                "depth": input_data.depth,
-                "steps": steps,
             },
         }
 

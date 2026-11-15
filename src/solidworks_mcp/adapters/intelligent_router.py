@@ -76,16 +76,9 @@ class IntelligentRouter:
             # volumes mid-build.
             # "get_mass_properties",
             # "calculate_mass_properties",
-            "get_material_properties",
-            "analyze_geometry",
             # "check_interference": changes as components are mated or moved;
             # a cached answer ignored the changes (#209).
             # Drawing analysis operations
-            "analyze_drawing_comprehensive",
-            "analyze_drawing_dimensions",
-            "analyze_drawing_views",
-            "analyze_drawing_annotations",
-            "check_drawing_compliance",
             "check_drawing_standards",
             "compare_drawing_versions",
             # Classification and indexing

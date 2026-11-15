@@ -13,12 +13,14 @@ from html import escape
 from ..tools.support_levels import SupportLevel
 from .com_coverage import CORE_INTERFACES, ComCoverage
 
-#: Fill colour per level; planned is left as the empty track.
+#: Fill colour per level; planned is left as the empty track, and
+#: deprecated tools are counted in the legend only, outside the bar.
 LEVEL_COLOURS: dict[SupportLevel, str] = {
     SupportLevel.STABLE: "#2ea043",
     SupportLevel.BETA: "#d29922",
     SupportLevel.EXPERIMENTAL: "#db6d28",
     SupportLevel.PLANNED: "#484f58",
+    SupportLevel.DEPRECATED: "#8957e5",
 }
 
 _WIDTH, _HEIGHT = 840, 236
@@ -95,6 +97,9 @@ def _track(y: float, clip: str, fills: list[tuple[float, float, str]]) -> list[s
 def render(levels: Mapping[SupportLevel, int], coverage: ComCoverage) -> str:
     """The progress image.
 
+    Deprecated tools are left out of the headline count and the bar (each
+    has a replacement in the bar already) and shown in the legend.
+
     Args:
         levels: How many tools have each support level.
         coverage: COM coverage of the core interfaces and the whole API.
@@ -102,7 +107,7 @@ def render(levels: Mapping[SupportLevel, int], coverage: ComCoverage) -> str:
     Returns:
         str: The SVG document.
     """
-    total = sum(levels.values())
+    total = sum(levels.values()) - levels.get(SupportLevel.DEPRECATED, 0)
     y_tools, y_com = 54, 156
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{_WIDTH}" height="{_HEIGHT}" '

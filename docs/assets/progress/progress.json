@@ -1,11 +1,12 @@
 {
  "tools": {
-  "total": 156,
+  "total": 123,
   "by_level": {
-   "stable": 116,
+   "stable": 108,
    "beta": 0,
    "experimental": 0,
-   "planned": 40
+   "planned": 7,
+   "deprecated": 8
   },
   "list": [
    {
@@ -14,13 +15,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Make an already-open document the active one, so the next tools act on it."
-   },
-   {
-    "name": "add_annotation",
-    "family": "drawing",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Add an annotation (a note, balloon or surface-finish symbol) to the active drawing."
    },
    {
     "name": "add_arc",
@@ -61,14 +55,14 @@
     "name": "add_dimension",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Add one dimension between drawing entities at a position on the sheet."
    },
    {
     "name": "add_drawing_view",
     "family": "drawing",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "use `create_drawing_view`.",
     "summary": "Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`."
    },
    {
@@ -149,55 +143,6 @@
     "summary": "Draw a smooth spline through a list of points in the open sketch, in mm."
    },
    {
-    "name": "analyze_drawing_annotations",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Check a drawing's notes, symbols and text styles for consistency."
-   },
-   {
-    "name": "analyze_drawing_comprehensive",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Run every drawing check (dimensions, views, annotations, standards) on a drawing file in one call."
-   },
-   {
-    "name": "analyze_drawing_dimensions",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Check a drawing's dimensions for consistent precision, tolerance formatting and completeness."
-   },
-   {
-    "name": "analyze_drawing_views",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Check how a drawing's views are chosen and laid out."
-   },
-   {
-    "name": "analyze_geometry",
-    "family": "analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Run a geometry analysis on the active model, such as curvature, draft or wall thickness."
-   },
-   {
-    "name": "analyze_macro",
-    "family": "macro_recording",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Analyse a macro's structure, dependencies and complexity, and suggest optimisations."
-   },
-   {
-    "name": "apply_template",
-    "family": "template_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Apply a saved template's properties, dimensions and materials to a model."
-   },
-   {
     "name": "arrange_dimensions",
     "family": "drawing_automation",
     "level": "stable",
@@ -215,77 +160,21 @@
     "name": "auto_dimension_view",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Dimension a drawing view automatically with SolidWorks' auto-dimension scheme."
-   },
-   {
-    "name": "automation_start_macro_recording",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Start SolidWorks' macro recorder (the automation family's copy of `start_macro_recording`)."
-   },
-   {
-    "name": "automation_stop_macro_recording",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Stop a macro recording and save it (the automation family's copy of `stop_macro_recording`)."
-   },
-   {
-    "name": "batch_apply_template",
-    "family": "template_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Apply one template to every matching model in a folder."
-   },
-   {
-    "name": "batch_execute_macros",
-    "family": "macro_recording",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Run several macros in sequence against the files in a folder."
-   },
-   {
-    "name": "batch_export",
-    "family": "export",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Export every matching SolidWorks file in a folder to one format."
-   },
-   {
-    "name": "batch_file_operations",
-    "family": "file_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Copy, move, rename or delete SolidWorks files on disk in one call."
-   },
-   {
-    "name": "batch_process_files",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Run one operation (rebuild, save as, export or property update) on every matching file in a folder."
    },
    {
     "name": "calculate_mass_properties",
     "family": "analysis",
-    "level": "stable",
-    "reason": "",
-    "summary": "Measure the active part or assembly's mass properties: volume, surface area, mass, centre of mass and moments of inertia."
-   },
-   {
-    "name": "check_drawing_compliance",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Check a drawing's title block and sheet format against a drafting standard (ISO, ANSI or DIN)."
+    "level": "deprecated",
+    "reason": "use `get_mass_properties`.",
+    "summary": "Measure the active part or assembly's mass properties (the old name of `get_mass_properties`)."
    },
    {
     "name": "check_drawing_standards",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Check the active drawing against a drafting standard and score it."
    },
    {
@@ -331,13 +220,6 @@
     "summary": "Compare two template files on disk: whether they are byte-identical, and how their sizes differ."
    },
    {
-    "name": "convert_file_format",
-    "family": "file_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Convert a SolidWorks file on disk to another format without opening it first."
-   },
-   {
     "name": "create_assembly",
     "family": "modeling",
     "level": "stable",
@@ -362,7 +244,7 @@
     "name": "create_detail_view",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Magnify a circular area of a drawing view as a detail view."
    },
    {
@@ -392,13 +274,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Loft a solid through two or more closed profile sketches, in order (Insert > Boss/Base > Loft)."
-   },
-   {
-    "name": "create_macro_library",
-    "family": "macro_recording",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Set up a shared folder of categorised, documented macros."
    },
    {
     "name": "create_part",
@@ -432,7 +307,7 @@
     "name": "create_section_view",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Cut a section view along a line across a drawing view."
    },
    {
@@ -457,13 +332,6 @@
     "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
    },
    {
-    "name": "create_template",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Create a part, assembly or drawing template file (.prtdot, .asmdot, .drwdot) with standard settings."
-   },
-   {
     "name": "delete_feature",
     "family": "modeling",
     "level": "stable",
@@ -483,13 +351,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once."
-   },
-   {
-    "name": "execute_workflow",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Run a named sequence of tool steps, in order or in parallel, with an error policy."
    },
    {
     "name": "exit_sketch",
@@ -548,13 +409,6 @@
     "summary": "Export the active document to STL, like File > Save As with the STL type."
    },
    {
-    "name": "extract_template",
-    "family": "template_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Capture a model's settings (custom properties, dimensions, units) as a reusable template file."
-   },
-   {
     "name": "find_related_api_members",
     "family": "docs_discovery",
     "level": "stable",
@@ -567,13 +421,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Create a complete A3 drawing of a part or assembly in one call, and save it with a PDF."
-   },
-   {
-    "name": "generate_drawing_report",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Write a quality report that combines every drawing check."
    },
    {
     "name": "generate_vba_assembly_insert",
@@ -669,8 +516,8 @@
    {
     "name": "get_file_properties",
     "family": "file_management",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "use `get_model_info`.",
     "summary": "Report the active document's file details: name, path, size, dates, type, configuration and unsaved changes."
    },
    {
@@ -688,18 +535,11 @@
     "summary": "Report the material assigned to the active part."
    },
    {
-    "name": "get_material_properties",
-    "family": "analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Report the physical properties of the active part's material: density, modulus, Poisson's ratio, strength."
-   },
-   {
     "name": "get_model_info",
     "family": "file_management",
     "level": "stable",
     "reason": "",
-    "summary": "Report the active document's title, path, type, active configuration, unsaved changes, feature count and rebuild status."
+    "summary": "Report the active document's title, path, type, configuration, unsaved changes, feature count, rebuild status and file details."
    },
    {
     "name": "get_selected_entities",
@@ -779,24 +619,17 @@
     "summary": "List every document open in SolidWorks and say which one is active."
    },
    {
-    "name": "list_template_library",
-    "family": "template_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "List the templates in the shared template library."
-   },
-   {
     "name": "load_assembly",
     "family": "file_management",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "use `open_model`.",
     "summary": "Open an assembly (.sldasm) from disk and make it the active document."
    },
    {
     "name": "load_part",
     "family": "file_management",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "use `open_model`.",
     "summary": "Open a part (.sldprt) from disk and make it the active document."
    },
    {
@@ -812,20 +645,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Look up one SolidWorks API method or property: parameters, return type, description."
-   },
-   {
-    "name": "manage_design_table",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Create, read or update a design table (an Excel sheet that drives a model's configurations)."
-   },
-   {
-    "name": "manage_file_properties",
-    "family": "file_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Read or change the file-level properties of a SolidWorks file on disk."
    },
    {
     "name": "measure_entities",
@@ -847,20 +666,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Open a part, assembly or drawing from disk and make it the active document."
-   },
-   {
-    "name": "optimize_macro",
-    "family": "macro_recording",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Suggest improvements to a macro's code for speed and reliability."
-   },
-   {
-    "name": "optimize_performance",
-    "family": "automation",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Review SolidWorks' performance settings and apply faster ones."
    },
    {
     "name": "pack_and_go_assembly",
@@ -907,8 +712,8 @@
    {
     "name": "save_assembly",
     "family": "file_management",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "use `save_file`.",
     "summary": "Save the active assembly in place, or as a new .sldasm, optionally copying the parts it uses alongside."
    },
    {
@@ -923,21 +728,14 @@
     "family": "file_management",
     "level": "stable",
     "reason": "",
-    "summary": "Save the active document, to its own path or to a new path in its own format."
+    "summary": "Save the active part, assembly or drawing, to its own path or to a new path in its own format."
    },
    {
     "name": "save_part",
     "family": "file_management",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "use `save_file`.",
     "summary": "Save the active part in place, or as a new .sldprt with the target path checked first."
-   },
-   {
-    "name": "save_to_template_library",
-    "family": "template_management",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Add a template to a shared, categorised template library."
    },
    {
     "name": "search_solidworks_api_help",
@@ -1033,23 +831,9 @@
    {
     "name": "sketch_tutorial_simple_hole",
     "family": "sketching",
-    "level": "stable",
-    "reason": "",
+    "level": "deprecated",
+    "reason": "no replacement.",
     "summary": "Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch."
-   },
-   {
-    "name": "start_macro_recording",
-    "family": "macro_recording",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Start SolidWorks' macro recorder, to capture what the user does as a macro."
-   },
-   {
-    "name": "stop_macro_recording",
-    "family": "macro_recording",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Stop the macro recorder and save the recorded macro."
    },
    {
     "name": "suppress_feature",
@@ -1057,13 +841,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Suppress or unsuppress a feature of the active model; suppressed features stay in the tree but are not built."
-   },
-   {
-    "name": "tutorial_simple_hole",
-    "family": "sketching",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Draw a circle on a plane and cut it as a hole, as one worked example."
    },
    {
     "name": "undo",
@@ -1076,22 +853,15 @@
     "name": "update_sheet_format",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Change the active drawing's sheet format file and title-block fields."
    },
    {
     "name": "update_title_block",
     "family": "drawing",
     "level": "planned",
-    "reason": "no adapter implements it yet.",
+    "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on)."
-   },
-   {
-    "name": "validate_drawing_completeness",
-    "family": "drawing_analysis",
-    "level": "planned",
-    "reason": "no adapter implements it yet.",
-    "summary": "Check that a drawing carries everything needed to manufacture the part."
    },
    {
     "name": "verify_model",

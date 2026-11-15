@@ -7,7 +7,6 @@ import pytest
 from fastmcp import FastMCP
 
 from solidworks_mcp.tools.export import (
-    BatchExportInput,
     ExportFileInput,
     ExportImageInput,
     register_export_tools,
@@ -21,7 +20,7 @@ class TestExportTools:
     async def test_register_export_tools(self, mcp_server, mock_adapter, mock_config):
         """Test that export tools register correctly."""
         tool_count = await register_export_tools(mcp_server, mock_adapter, mock_config)
-        assert tool_count == 7
+        assert tool_count == 6
 
     @pytest.mark.asyncio
     async def test_export_step_success(self, mcp_server, mock_adapter, mock_config):
@@ -240,75 +239,6 @@ class TestExportTools:
         mock_adapter.export_image.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_batch_export_success(self, mcp_server, mock_adapter, mock_config):
-        """Test successful batch export operation."""
-        await register_export_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.batch_export = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={
-                    "total_files": 5,
-                    "exported_files": 5,
-                    "failed_files": 0,
-                    "export_format": "STEP",
-                    "total_time": 3.8,
-                    "results": [
-                        {
-                            "file": "part1.sldprt",
-                            "status": "success",
-                            "output": "part1.step",
-                        },
-                        {
-                            "file": "part2.sldprt",
-                            "status": "success",
-                            "output": "part2.step",
-                        },
-                        {
-                            "file": "part3.sldprt",
-                            "status": "success",
-                            "output": "part3.step",
-                        },
-                        {
-                            "file": "part4.sldprt",
-                            "status": "success",
-                            "output": "part4.step",
-                        },
-                        {
-                            "file": "part5.sldprt",
-                            "status": "success",
-                            "output": "part5.step",
-                        },
-                    ],
-                },
-                execution_time=3.8,
-            )
-        )
-
-        input_data = BatchExportInput(
-            source_directory="./parts/",
-            output_directory="./exports/",
-            export_format="STEP",
-            file_pattern="*.sldprt",
-            include_subdirectories=True,
-        )
-
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "batch_export":
-                tool_func = tool.fn
-                break
-
-        assert tool_func is not None
-        result = await tool_func(input_data=input_data)
-
-        assert result["status"] == "success"
-        assert result["data"]["total_files"] == 5
-        assert result["data"]["failed_files"] == 0
-        assert result["data"]["export_format"] == "STEP"
-        mock_adapter.batch_export.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_export_error_handling(self, mcp_server, mock_adapter, mock_config):
         """Test error handling in export operations."""
         await register_export_tools(mcp_server, mock_adapter, mock_config)
@@ -333,127 +263,9 @@ class TestExportTools:
         assert result["status"] == "error"
         assert "Output directory does not exist" in result["message"]
 
-    @pytest.mark.unit
-    def test_batch_export_input_validation(self):
-        """Test input validation for batch export."""
-        # Valid input
-        valid_input = BatchExportInput(
-            source_directory="./parts/",
-            output_directory="./exports/",
-            export_format="STEP",
-        )
-        assert valid_input.source_directory == "./parts/"
-        assert valid_input.export_format == "STEP"
-
-        # Test with optional parameters
-        full_input = BatchExportInput(
-            source_directory="./parts/",
-            output_directory="./exports/",
-            export_format="IGES",
-            file_pattern="*.sld*",
-            include_subdirectories=True,
-        )
-        assert full_input.file_pattern == "*.sld*"
-        assert full_input.include_subdirectories is True
-
 
 class TestExportToolsBranchCoverage:
     """Additional branch coverage for export error and exception paths."""
-
-    @pytest.mark.asyncio
-    async def test_remaining_export_error_paths(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Cover non-success adapter branches across remaining export tools."""
-        await register_export_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.export_iges = AsyncMock(
-            return_value=Mock(is_success=False, error="iges failed", execution_time=0.1)
-        )
-        mock_adapter.export_stl = AsyncMock(
-            return_value=Mock(is_success=False, error="stl failed", execution_time=0.1)
-        )
-        mock_adapter.export_pdf = AsyncMock(
-            return_value=Mock(is_success=False, error="pdf failed", execution_time=0.1)
-        )
-        mock_adapter.export_dwg = AsyncMock(
-            return_value=Mock(is_success=False, error="dwg failed", execution_time=0.1)
-        )
-        # exercise default fallback message branches where error is missing
-        mock_adapter.export_image = AsyncMock(
-            return_value=Mock(is_success=False, error=None, execution_time=0.1)
-        )
-        mock_adapter.batch_export = AsyncMock(
-            return_value=Mock(is_success=False, error=None, execution_time=0.1)
-        )
-
-        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
-
-        r1 = await by_name["export_iges"](
-            input_data=ExportFileInput(file_path="a.iges")
-        )
-        r2 = await by_name["export_stl"](input_data=ExportFileInput(file_path="a.stl"))
-        r3 = await by_name["export_pdf"](input_data=ExportFileInput(file_path="a.pdf"))
-        r4 = await by_name["export_dwg"](input_data=ExportFileInput(file_path="a.dwg"))
-        r5 = await by_name["export_image"](
-            input_data=ExportImageInput(model_path="a.sldprt", output_path="a.png")
-        )
-        r6 = await by_name["batch_export"](
-            input_data=BatchExportInput(
-                source_directory="./in",
-                output_directory="./out",
-                export_format="STEP",
-            )
-        )
-
-        assert r1["status"] == "error" and "iges failed" in r1["message"].lower()
-        assert r2["status"] == "error" and "stl failed" in r2["message"].lower()
-        assert r3["status"] == "error" and "pdf failed" in r3["message"].lower()
-        assert r4["status"] == "error" and "dwg failed" in r4["message"].lower()
-        assert (
-            r5["status"] == "error"
-            and "failed to export image" in r5["message"].lower()
-        )
-        assert (
-            r6["status"] == "error" and "batch export failed" in r6["message"].lower()
-        )
-
-    @pytest.mark.asyncio
-    async def test_remaining_export_exception_paths(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Cover exception handlers for IGES/STL/PDF/DWG/image/batch export tools."""
-        await register_export_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.export_iges = AsyncMock(side_effect=RuntimeError("boom iges"))
-        mock_adapter.export_stl = AsyncMock(side_effect=RuntimeError("boom stl"))
-        mock_adapter.export_pdf = AsyncMock(side_effect=RuntimeError("boom pdf"))
-        mock_adapter.export_dwg = AsyncMock(side_effect=RuntimeError("boom dwg"))
-        mock_adapter.export_image = AsyncMock(side_effect=RuntimeError("boom image"))
-        mock_adapter.batch_export = AsyncMock(side_effect=RuntimeError("boom batch"))
-
-        by_name = {t.name: t.fn for t in await mcp_server.list_tools()}
-
-        results = [
-            await by_name["export_iges"](ExportFileInput(file_path="a.iges")),
-            await by_name["export_stl"](ExportFileInput(file_path="a.stl")),
-            await by_name["export_pdf"](ExportFileInput(file_path="a.pdf")),
-            await by_name["export_dwg"](ExportFileInput(file_path="a.dwg")),
-            await by_name["export_image"](
-                ExportImageInput(model_path="a.sldprt", output_path="a.png")
-            ),
-            await by_name["batch_export"](
-                BatchExportInput(
-                    source_directory="./in",
-                    output_directory="./out",
-                    export_format="STEP",
-                )
-            ),
-        ]
-
-        for result in results:
-            assert result["status"] == "error"
-            assert result["error_type"] == "internal"
 
     @pytest.mark.asyncio
     async def test_export_step_exception_path(
@@ -608,67 +420,6 @@ class _ExportNativeAdapter:
         """Test helper for export image."""
         return _ok({"fmt": "image"})
 
-    async def batch_export(self, *_args, **_kwargs):
-        """Test helper for batch export."""
-        return _ok({"count": 2})
-
-
-@pytest.mark.asyncio
-async def test_export_tools_fallback_and_aliases(mcp_server, mock_config):
-    """Test export tools fallback and aliases."""
-    await register_export_tools(mcp_server, _ExportFallbackAdapter(), mock_config)
-
-    assert (
-        await (await _tool(mcp_server, "export_step"))(
-            input_data={"file_path": "a.step", "format_type": "step"}
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_iges"))(
-            input_data=ExportFileInput(file_path="a.igs", format_type="iges")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_stl"))(
-            input_data=ExportFileInput(file_path="a.stl", format_type="stl")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_pdf"))(
-            input_data=ExportFileInput(file_path="a.pdf", format_type="pdf")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_dwg"))(
-            input_data=ExportFileInput(file_path="a.dwg", format_type="dwg")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_image"))(
-            input_data=ExportImageInput(
-                output_path="a.png", image_format="png", resolution="800x600"
-            )
-        )
-    )["status"] == "success"
-    # _ExportFallbackAdapter has no batch_export capability (unlike
-    # export_file, which the single-file export tools fall back to), so
-    # batch_export must refuse rather than inventing a batch result.
-    assert (
-        await (await _tool(mcp_server, "batch_export"))(
-            input_data=BatchExportInput(
-                source_directory="src",
-                output_directory="out",
-                export_format="step",
-                file_pattern="*.sldprt",
-            )
-        )
-    )["status"] == "error"
-
-    error_result = await (await _tool(mcp_server, "export_step"))(
-        input_data={"file_path": None, "format_type": "step"}
-    )
-    assert error_result["status"] == "error"
-
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("adapter_cls", [_ExportFallbackAdapter, _ExportNativeAdapter])
@@ -689,50 +440,6 @@ async def test_export_tools_accept_a_plain_dict(
 
     assert result["status"] == "success"
     assert f"a.{fmt}" in result["message"]
-
-
-@pytest.mark.asyncio
-async def test_export_tools_native_adapter_methods(mcp_server, mock_config):
-    """Test export tools native adapter methods."""
-    await register_export_tools(mcp_server, _ExportNativeAdapter(), mock_config)
-
-    assert (
-        await (await _tool(mcp_server, "export_step"))(
-            input_data=ExportFileInput(file_path="a.step", format_type="step")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_iges"))(
-            input_data=ExportFileInput(file_path="a.igs", format_type="iges")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_stl"))(
-            input_data=ExportFileInput(file_path="a.stl", format_type="stl")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_pdf"))(
-            input_data=ExportFileInput(file_path="a.pdf", format_type="pdf")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_dwg"))(
-            input_data=ExportFileInput(file_path="a.dwg", format_type="dwg")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "export_image"))(
-            input_data=ExportImageInput(file_path="a.png", format_type="png")
-        )
-    )["status"] == "success"
-    assert (
-        await (await _tool(mcp_server, "batch_export"))(
-            input_data=BatchExportInput(
-                source_directory="src", output_directory="out", format_type="step"
-            )
-        )
-    )["status"] == "success"
 
 
 @pytest.mark.asyncio

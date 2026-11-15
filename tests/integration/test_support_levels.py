@@ -19,8 +19,11 @@ from solidworks_mcp.tools.support_levels import (
     OFFLINE_FAMILIES,
     SUPPORT_LEVELS,
     SupportLevel,
+    deprecation_problems,
+    planned_problems,
 )
 from solidworks_mcp.tools.tool_boundary import tool_family
+from solidworks_mcp.version import __version__
 
 _ROOT = Path(__file__).resolve().parents[2]
 _NOT_AVAILABLE = "Not available yet"
@@ -87,7 +90,9 @@ async def test_a_description_opens_with_its_level(mock_adapter) -> None:
         warning = SUPPORT_LEVELS[tool.name].warning()
         if warning is not None and not text.startswith(warning):
             wrong.append(tool.name)
-        if warning is None and text.startswith(("Beta:", "Experimental:")):
+        if warning is None and text.startswith(
+            ("Beta:", "Experimental:", "Deprecated:")
+        ):
             wrong.append(tool.name)
 
     assert wrong == []
@@ -102,3 +107,16 @@ async def test_every_tool_is_tagged_with_its_level(mock_adapter) -> None:
     )
 
     assert wrong == []
+
+
+@pytest.mark.asyncio
+async def test_deprecated_tools_name_a_replacement_and_go_at_the_next_major(
+    mock_adapter,
+) -> None:
+    registered = {t.name for t in await _tools(mock_adapter)}
+
+    assert deprecation_problems(SUPPORT_LEVELS, registered, __version__) == []
+
+
+def test_every_planned_tool_names_the_queue_item_that_builds_it() -> None:
+    assert planned_problems(SUPPORT_LEVELS) == []

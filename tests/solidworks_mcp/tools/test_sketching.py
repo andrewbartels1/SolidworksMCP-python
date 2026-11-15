@@ -23,10 +23,8 @@ from solidworks_mcp.tools.sketching import (
     AddRelationInput,
     AddSplineInput,
     CreateSketchInput,
-    TutorialSimpleHoleInput,
     register_sketching_tools,
 )
-from solidworks_mcp.tools.sketching import AddDimensionInput as SketchAddDimensionInput
 
 
 class TestSketchingTools:
@@ -238,60 +236,6 @@ class TestSketchingTools:
         assert "Exited sketch editing mode" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_tutorial_simple_hole(self, mcp_server, mock_adapter, mock_config):
-        """Test the complete tutorial for creating a simple hole."""
-        await register_sketching_tools(mcp_server, mock_adapter, mock_config)
-
-        # Mock all the operations in sequence
-        mock_adapter.create_sketch = AsyncMock(
-            return_value=Mock(
-                is_success=True, data={"sketch_name": "HoleSketch"}, execution_time=0.3
-            )
-        )
-        mock_adapter.add_sketch_circle = AsyncMock(
-            return_value=Mock(
-                is_success=True, data={"entity_id": "HoleCircle"}, execution_time=0.2
-            )
-        )
-        mock_adapter.exit_sketch = AsyncMock(
-            return_value=Mock(
-                is_success=True, data={"sketch_name": "HoleSketch"}, execution_time=0.1
-            )
-        )
-        mock_adapter.create_cut = AsyncMock(
-            return_value=Mock(
-                is_success=True, data={"cut_name": "Cut-Extrude1"}, execution_time=0.8
-            )
-        )
-
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "tutorial_simple_hole":
-                tool_func = tool.fn
-                break
-
-        input_data = TutorialSimpleHoleInput(
-            plane="Front Plane", center_x=0.0, center_y=0.0, diameter=8.0, depth=15.0
-        )
-        result = await tool_func(input_data)
-
-        assert result["status"] == "success"
-        assert result["tutorial"]["plane"] == "Front Plane"
-        assert result["tutorial"]["diameter"] == 8.0
-        assert result["tutorial"]["depth"] == 15.0
-        assert len(result["tutorial"]["steps"]) == 4
-
-        # Check that all steps were completed
-        step_names = [step["step"] for step in result["tutorial"]["steps"]]
-        expected_steps = [
-            "Create sketch",
-            "Add circle",
-            "Exit sketch",
-            "Create cut extrude",
-        ]
-        assert step_names == expected_steps
-
-    @pytest.mark.asyncio
     async def test_sketch_failure_handling(self, mcp_server, mock_adapter, mock_config):
         """Test error handling when sketch operations fail."""
         await register_sketching_tools(mcp_server, mock_adapter, mock_config)
@@ -396,17 +340,6 @@ class TestSketchingToolsBranchCoverage:
             corner1_x=0.0, corner1_y=0.0, corner2_x=5.0, corner2_y=6.0
         )
         assert inp.x1 == 0.0 and inp.y1 == 0.0 and inp.x2 == 5.0 and inp.y2 == 6.0
-
-    def test_tutorial_hole_input_validation_errors(self):
-        """Test tutorial hole input validation errors."""
-        with pytest.raises(ValueError):
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=0, depth=5
-            )
-        with pytest.raises(ValueError):
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=5, depth=0
-            )
 
     # ── Fallback adapter paths ────────────────────────────────────────────
 
@@ -662,29 +595,6 @@ class TestSketchingToolsBranchCoverage:
         assert failure["error_type"] == "internal"
 
     @pytest.mark.asyncio
-    async def test_tutorial_simple_hole_create_sketch_failure(
-        self, mcp_server, mock_config
-    ):
-        """tutorial_simple_hole should fail early when sketch creation fails."""
-        stub = SimpleNamespace()
-        stub.create_sketch = AsyncMock(
-            return_value=Mock(is_success=False, error="sketch failed")
-        )
-        await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "tutorial_simple_hole"
-        )
-        result = await tool_func(
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=8, depth=10
-            )
-        )
-        assert result["status"] == "error"
-        assert "sketch failed" in result["message"]
-
-    @pytest.mark.asyncio
     async def test_sketch_tutorial_hole_add_circle_failure(
         self, mcp_server, mock_config
     ):
@@ -741,139 +651,6 @@ class TestSketchingToolsBranchCoverage:
             if t.name == "sketch_tutorial_simple_hole"
         )
         result = await tool_func()
-        assert result["status"] == "error"
-
-    # ── tutorial_simple_hole failure paths ────────────────────────────────
-
-    @pytest.mark.asyncio
-    async def test_tutorial_hole_circle_failure(self, mcp_server, mock_config):
-        """Test tutorial hole circle failure."""
-        stub = SimpleNamespace()
-        stub.create_sketch = AsyncMock(
-            return_value=Mock(is_success=True, data="S1", execution_time=0.1)
-        )
-        stub.add_sketch_circle = AsyncMock(
-            return_value=Mock(is_success=False, error="circle failed")
-        )
-        await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "tutorial_simple_hole"
-        )
-        result = await tool_func(
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=8, depth=10
-            )
-        )
-        assert result["status"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_tutorial_hole_exit_failure(self, mcp_server, mock_config):
-        """Test tutorial hole exit failure."""
-        stub = SimpleNamespace()
-        stub.create_sketch = AsyncMock(
-            return_value=Mock(is_success=True, data="S1", execution_time=0.1)
-        )
-        stub.add_sketch_circle = AsyncMock(
-            return_value=Mock(is_success=True, data="C1", execution_time=0.1)
-        )
-        stub.exit_sketch = AsyncMock(
-            return_value=Mock(is_success=False, error="exit failed")
-        )
-        await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "tutorial_simple_hole"
-        )
-        result = await tool_func(
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=8, depth=10
-            )
-        )
-        assert result["status"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_tutorial_hole_cut_failure(self, mcp_server, mock_config):
-        """Test tutorial hole cut failure."""
-        stub = SimpleNamespace()
-        stub.create_sketch = AsyncMock(
-            return_value=Mock(is_success=True, data="S1", execution_time=0.1)
-        )
-        stub.add_sketch_circle = AsyncMock(
-            return_value=Mock(is_success=True, data="C1", execution_time=0.1)
-        )
-        stub.exit_sketch = AsyncMock(
-            return_value=Mock(is_success=True, data=None, execution_time=0.1)
-        )
-        stub.create_cut = AsyncMock(
-            return_value=Mock(is_success=False, error="cut failed")
-        )
-        await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "tutorial_simple_hole"
-        )
-        result = await tool_func(
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=8, depth=10
-            )
-        )
-        assert result["status"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_tutorial_hole_depth_none_uses_diameter(
-        self, mcp_server, mock_config
-    ):
-        """When depth is None, cut_depth equals diameter."""
-        stub = SimpleNamespace()
-        stub.create_sketch = AsyncMock(
-            return_value=Mock(is_success=True, data="S1", execution_time=0.1)
-        )
-        stub.add_sketch_circle = AsyncMock(
-            return_value=Mock(is_success=True, data="C1", execution_time=0.1)
-        )
-        stub.exit_sketch = AsyncMock(
-            return_value=Mock(is_success=True, data=None, execution_time=0.1)
-        )
-        stub.create_cut = AsyncMock(
-            return_value=Mock(
-                is_success=True, data={"cut_name": "Cut1"}, execution_time=0.5
-            )
-        )
-        await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "tutorial_simple_hole"
-        )
-        result = await tool_func(
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=8, depth=None
-            )
-        )
-        assert result["status"] == "success"
-        assert result["tutorial"]["depth"] is None
-        stub.create_cut.assert_called_once_with("HoleSketch", 8.0)
-
-    @pytest.mark.asyncio
-    async def test_tutorial_hole_exception_path(self, mcp_server, mock_config):
-        """Test tutorial hole exception path."""
-        stub = SimpleNamespace()
-        stub.create_sketch = AsyncMock(side_effect=RuntimeError("boom"))
-        await register_sketching_tools(mcp_server, stub, mock_config)
-        tool_func = next(
-            t.fn
-            for t in await mcp_server.list_tools()
-            if t.name == "tutorial_simple_hole"
-        )
-        result = await tool_func(
-            TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=5, depth=10
-            )
-        )
         assert result["status"] == "error"
 
 
@@ -1049,7 +826,7 @@ async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
     )["status"] == "success"
     assert (
         await (await _tool(mcp_server, "add_sketch_dimension"))(
-            input_data=SketchAddDimensionInput(
+            input_data=AddDimensionInput(
                 entity1="L1", dimension_type="linear", value=10
             )
         )
@@ -1077,13 +854,6 @@ async def test_sketching_tools_uncovered_paths(mcp_server, mock_config):
     assert (await (await _tool(mcp_server, "sketch_tutorial_simple_hole"))())[
         "status"
     ] == "success"
-    assert (
-        await (await _tool(mcp_server, "tutorial_simple_hole"))(
-            input_data=TutorialSimpleHoleInput(
-                plane="Top", center_x=0, center_y=0, diameter=5, depth=3
-            )
-        )
-    )["status"] == "success"
 
 
 @pytest.mark.asyncio

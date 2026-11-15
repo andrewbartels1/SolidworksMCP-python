@@ -13,7 +13,7 @@
 
 **AI-Assisted SolidWorks Automation with MCP**
 
-🚀 **152 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
+🚀 **123 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
 
 ## Overview
 
@@ -43,7 +43,7 @@ The project emphasizes an inspect -> classify -> delegate loop instead of blind 
 
 ### 2) Broad Tool Surface with Practical Coverage
 
-- 152 tools across modeling, sketching, drawing, engineering data, analysis, export, automation, templates, macros, and docs discovery
+- 123 tools across modeling, sketching, drawing, engineering data, analysis, export, automation, templates, macros, and docs discovery
 - one server API surface for both simple operations and advanced workflows
 
 ### 3) Reliable Execution Path for Complex Operations
@@ -190,7 +190,7 @@ Ready to automate your SolidWorks workflows? Check out our comprehensive guides:
 - [**VS Code MCP Setup**](getting-started/vscode-mcp-setup.md) - Connect VS Code and GitHub Copilot to this server
 - [**Claude Code MCP Setup**](getting-started/claude-code-setup.md) - Connect Claude Code to this server
 - [**Architecture Overview**](user-guide/architecture.md) - Understand the system design
-- [**Tools Overview**](user-guide/tools-overview.md) - Explore all 109 available tools
+- [**Tools Overview**](user-guide/tools-overview.md) - Explore all 123 tools
 - [**Agent UI Workflows**](agents/agent-ui-workflows.md) - Plan visual decision workflows for hinges, sourcing, and printability
 - [**Agent Memory and Recovery**](agents/agent-memory-and-recovery.md) - Use local SQLite history to troubleshoot and recover from failure states
 

@@ -1,6 +1,6 @@
-# Tool Catalog — All 152 Tools
+# Tool Catalog — All 123 Tools
 
-This reference documents all **152 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **123 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -9,20 +9,24 @@ Each section covers one functional category with parameter tables and copy-paste
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Modeling Tools](modeling.md) | 30 | Create and manipulate SolidWorks parts, assemblies, and drawings — sketches, extrusions, revolves, dimensions, feature renaming, chamfers/fillets, and the document unit system. |
-| [Sketching Tools](sketching.md) | 19 | Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply geometric constraints and dimensions. |
-| [Drawing Tools](drawing.md) | 14 | Create and edit 2-D technical drawings: add projected, section, and detail views, place annotations, and auto-dimension layouts. |
-| [Drawing Analysis Tools](drawing-analysis.md) | 8 | Quality-gate your drawings by analyzing dimensions, annotations, view coverage, standards compliance, and completeness. |
-| [Drawing Automation Tools](drawing-automation.md) | 5 | Model dimensions laid out without overlaps, BOM tables, sheet scale and complete A3 drawings. |
+| [Modeling Tools](modeling.md) | 31 | Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
+| [Sketching Tools](sketching.md) | 18 | Sketches on a plane or a flat face: lines, circles, arcs, splines, polygons, relations, dimensions, offsets, mirrors and patterns. |
+| [Drawing Tools](drawing.md) | 13 | Drawings from a model: views, notes and centre marks. Section and detail views, dimensions, the title block and a drawing check are planned. |
+| [Drawing Analysis Tools](drawing-analysis.md) | 1 | Compare two versions of a drawing file. |
+| [Drawing Automation Tools](drawing-automation.md) | 7 | Model dimensions laid out without overlaps, datum tags, tolerances, BOM tables, sheet scale and complete A3 drawings. |
 | [Engineering Data Tools](engineering-data.md) | 8 | Read and edit the data drawings and BOMs are built from: model dimensions by name, measurements, materials, custom properties and sheet-metal flat patterns. |
-| [Analysis Tools](analysis.md) | 6 | Check a finished part or assembly against expected values, and extract mass, volume, center of mass, inertia, interference and material metadata. |
-| [Export Tools](export.md) | 7 | Convert SolidWorks models to industry-standard interchange and manufacturing formats such as STEP, IGES, STL, DWG, PDF, and images. |
-| [File Management Tools](file-management.md) | 19 | Open, save, and manage SolidWorks documents; load parts and assemblies, switch the active document, enumerate what's open, inspect model metadata, classify model families, and read the live UI selection. |
-| [Automation Tools](automation.md) | 8 | Orchestrate multi-step workflows, run batch file processing, manage design tables, and tune performance settings. |
-| [VBA Generation Tools](vba-generation.md) | 10 | Generate and execute VBA macro code for operations that exceed direct COM call complexity or require procedural automation. |
-| [Template Management Tools](template-management.md) | 6 | Create, extract, apply, compare, and manage SolidWorks document templates in a reusable library workflow. |
-| [Macro Recording Tools](macro-recording.md) | 7 | Record, replay, analyze, and optimize SolidWorks VBA macros, including macro libraries and batch execution workflows. |
+| [Analysis Tools](analysis.md) | 4 | Check a finished part or assembly against expected values; mass, volume, centre of mass, inertia and interference. |
+| [Export Tools](export.md) | 6 | STEP, IGES, STL, DWG, PDF and images. |
+| [File Management Tools](file-management.md) | 16 | Open, save, switch and inspect documents; the feature tree, configurations and the live selection; Pack and Go. |
+| [Automation Tools](automation.md) | 1 | A VBA macro skeleton for a described task. |
+| [VBA Generation Tools](vba-generation.md) | 10 | VBA macro text for steps the tools don't cover. |
+| [Template Management Tools](template-management.md) | 1 | Compare two template files. |
+| [Macro Recording Tools](macro-recording.md) | 1 | Run a binary SolidWorks macro (`.swp`). |
 | [Docs Discovery Tools](docs-discovery.md) | 5 | Look up SolidWorks API interfaces and member signatures, read from the installed SolidWorks type library. |
+
+`reset_circuit_breaker` (server admin) has no page of its own; see the
+[progress page](../../progress.md). Eight tools are deprecated: each one's
+section opens with "Deprecated" and names its replacement.
 
 ## Standard Response Envelope
 
