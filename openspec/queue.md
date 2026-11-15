@@ -25,6 +25,8 @@ Last updated 2026-11-14.
 | 11 | Part features the peers lead with: Hole Wizard holes, cosmetic threads, a linear feature pattern, shell, draft, rib, and sketch convert-entities | #105 | `part-feature-depth` | Planned 2026-11-12 |
 | 12 | The drawing pack, where no peer goes: section and detail views, the title block and sheet format, drawing dimensions, and one drawing check | #102, #158 | `drawing-pack` | Planned 2026-11-12. Builds the 7 planned drawing tools item 10 leaves |
 | 13 | Configurations: create, activate and delete one, and suppress a feature or set a dimension in one configuration only | none | `configuration-tools` | Planned 2026-11-12 |
+| 20 | Elastic material properties: `get_material` (or a sibling) also reads the assigned material's elastic modulus, Poisson's ratio, yield and tensile strength, with units, so an agent can size a part without leaving the server. Found by item 10's ledger: `get_material_properties` was removed and only name and density are read today | none | not yet written | Added 2026-11-14 at the user's request. Small; after item 13 |
+| 21 | Save the active document as a template (.prtdot, .asmdot, .drwdot), so a part set up once (units, material, properties) can start the next one through `create_part`'s `template`. Found by item 10's ledger: `create_template` and `save_to_template_library` were removed and nothing saves a template today | none | not yet written | Added 2026-11-14 at the user's request. Small; after item 20 |
 | 14 | Optional toolsets and a discovery mode, to cut the tool list's size | #176 | `tool-discovery-mode` | Planned 2026-11-12. After item 10, which decides the families |
 | 15 | Sheet metal: base flange, edge flange, sketched bend, flat pattern | #57 | not yet written | After item 11 |
 | 16 | README: licence-tier tags | #79 (other half) | not yet written | |
@@ -49,7 +51,7 @@ Why, in short:
 | Tool | Why | Done today by, or comes back as |
 | --- | --- | --- |
 | `analyze_geometry` | no API (curvature, draft and thickness in one call) | `measure_entities`, `verify_model`; a draft check could come with item 11's `add_draft` |
-| `get_material_properties` | duplicate, in part | `get_material` (name, database, density). **Gap:** elastic properties (modulus, Poisson's ratio) aren't read anywhere |
+| `get_material_properties` | duplicate, in part | `get_material` (name, database, density). **Gap:** elastic properties; queue item 20 |
 | `automation_start_macro_recording` | no API (no recorder start member) | SolidWorks' own Tools > Macro > Record; `generate_vba_code` |
 | `automation_stop_macro_recording` | no API | as above |
 | `start_macro_recording` | no API | as above |
@@ -61,7 +63,7 @@ Why, in short:
 | `batch_apply_template` | loop | per file (see templates) |
 | `execute_workflow` | loop | the agent's own sequence of calls |
 | `optimize_performance` | no API (not defined) | none needed |
-| `create_template` | no API, as specified | `create_part` / `create_assembly` take `template`. **Gap:** saving a document *as* a template (.prtdot) is not a tool |
+| `create_template` | no API, as specified | `create_part` / `create_assembly` take `template`. **Gap:** saving a document as a template; queue item 21 |
 | `extract_template` | no API, as specified | as above |
 | `apply_template` | duplicate | `set_custom_property`, `set_material`, `set_units` |
 | `list_template_library` | no API (a folder listing, not SolidWorks) | none needed |
@@ -81,8 +83,8 @@ Why, in short:
 | `create_macro_library` | no API (a folder of files) | none needed |
 | `tutorial_simple_hole` | never worked | the sketching and feature tools; item 11's `create_hole` (Hole Wizard) |
 
-The two gaps marked above (elastic material properties, saving a template)
-are not queued yet; they are listed under "Not yet queued" below.
+The two gaps marked above are queued: elastic material properties as item
+20, saving a template as item 21.
 
 Still planned (8): the seven drawing tools item 12 builds (`add_dimension`,
 `auto_dimension_view`, `create_section_view`, `create_detail_view`,
@@ -101,12 +103,6 @@ How the list is kept honest: the support-level table
 when a planned tool names no queue item, a deprecated tool outlives its
 major version, or a stable tool has no live test. The counts are on the
 [progress page](../docs/progress.md), regenerated from the code.
-
-### Not yet queued
-
-- Elastic material properties (modulus, Poisson's ratio, yield strength):
-  `get_material` reads only the name and density.
-- Save the active document as a template (.prtdot, .asmdot, .drwdot).
 
 ## Small faults (item 7)
 
