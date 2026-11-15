@@ -20,7 +20,7 @@ Last updated 2026-11-14.
 | 7 | Beta tools to stable: fix each beta tool's known fault (the small faults listed below), prove it live, and move it up a level | not filed yet | `beta-tool-faults` (archived) | Done 2026-11-09 (#219, 2.0.0): 23 tools promoted, signed off live |
 | 8 | Experimental tools to stable: a live test for each of the 10, then promote it or record its fault | not filed yet | `experimental-tools-to-stable` (archived) | Done 2026-11-12 (2.0.0, tagged `v2.0.0`): all 10 promoted, signed off live. Pack and Go now copies the files `GetDependencies2` lists (SolidWorks 2026's own Pack and Go copied only the assembly); `comtypes` dropped |
 | 9 | Monitor stand demo follow-ups: feature order, `verify_model`'s planes, dimension listing, STL export, `create_sketch` on a face, the demo's camera | #206 | `monitor-stand-follow-ups` (archived) | Done 2026-11-14: all five live tests pass, GIF re-recorded; PR open |
-| 10 | An honest tool list: remove the 33 planned tools no item will build, deprecate the stable duplicates for one release, settle a verb list. Replaces the old items "the 40 planned tools" and "duplicate tools" | #174 | `honest-tool-list` | Planned 2026-11-12. Items 11-14 depend on it. It probes `manage_design_table` live before removing it (kept for item 13 if design tables work) |
+| 10 | An honest tool list: remove the 33 planned tools no item will build (the design table among them, after its live check), deprecate the stable duplicates for one release, settle a verb list. Replaces the old items "the 40 planned tools" and "duplicate tools" | #174 | `honest-tool-list` | Planned 2026-11-12. Items 11-14 depend on it. It probes `manage_design_table` live before removing it (kept for item 13 if design tables work) |
 | 19 | Our own `llms.txt`, and every link checked. A script builds `llms.txt` from the mkdocs nav: each entry's title and summary are copied word for word from the page they link to, and nothing is written by hand. A check follows EVERY link in `llms.txt`, the README and the docs (internal pages, anchors and external URLs), and fails on a dead link, a redirect off this repo, or an `llms.txt` line that doesn't match its page. Security review of the result: only this repo's own pages, no third-party links, no hidden text or instructions. PR #225's file is not used as a starting point; the user is closing that PR | #225 (closed, not merged) | not yet written | Added 2026-11-14 at the user's request. Next after item 10, so the file lists only working tools |
 | 11 | Part features the peers lead with: Hole Wizard holes, cosmetic threads, a linear feature pattern, shell, draft, rib, and sketch convert-entities | #105 | `part-feature-depth` | Planned 2026-11-12 |
 | 12 | The drawing pack, where no peer goes: section and detail views, the title block and sheet format, drawing dimensions, and one drawing check | #102, #158 | `drawing-pack` | Planned 2026-11-12. Builds the 7 planned drawing tools item 10 leaves |
@@ -34,7 +34,7 @@ Last updated 2026-11-14.
 | 18 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
 ## Removed tools (item 10, release 2.1.0)
 
-32 tools were registered but never implemented: every call returned
+33 tools were registered but never implemented: every call returned
 `not_supported`. Item 10 removed them (#174). Each row says why, and whether
 the job is done elsewhere or is a real gap that should come back as a queue
 item. Re-adding a name needs a working implementation and a live test, not a
@@ -62,6 +62,7 @@ Why, in short:
 | `batch_execute_macros` | loop | `execute_macro` per macro |
 | `batch_apply_template` | loop | per file (see templates) |
 | `execute_workflow` | loop | the agent's own sequence of calls |
+| `manage_design_table` | no API that works here: checked live 2026-11-14 on SolidWorks 2026, `InsertFamilyTableOpen` adds the table but SolidWorks can't open it in Excel (`Attach` false, counts -2) and makes no configurations | configurations, queue item 13 |
 | `optimize_performance` | no API (not defined) | none needed |
 | `create_template` | no API, as specified | `create_part` / `create_assembly` take `template`. **Gap:** saving a document as a template; queue item 21 |
 | `extract_template` | no API, as specified | as above |
@@ -86,11 +87,10 @@ Why, in short:
 The two gaps marked above are queued: elastic material properties as item
 20, saving a template as item 21.
 
-Still planned (8): the seven drawing tools item 12 builds (`add_dimension`,
+Still planned (7): the drawing tools item 12 builds (`add_dimension`,
 `auto_dimension_view`, `create_section_view`, `create_detail_view`,
 `update_title_block`, `update_sheet_format`, `check_drawing_standards`
-renamed `check_drawing`), and `manage_design_table`, which item 10's live
-probe keeps for item 13 or removes.
+renamed `check_drawing`).
 
 Deprecated (8, removed in 3.0.0): `load_part`, `load_assembly` (use
 `open_model`); `save_part`, `save_assembly` (use `save_file`);

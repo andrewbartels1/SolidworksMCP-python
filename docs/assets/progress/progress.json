@@ -1,11 +1,11 @@
 {
  "tools": {
-  "total": 124,
+  "total": 123,
   "by_level": {
    "stable": 108,
    "beta": 0,
    "experimental": 0,
-   "planned": 8,
+   "planned": 7,
    "deprecated": 8
   },
   "list": [
@@ -645,13 +645,6 @@
     "level": "stable",
     "reason": "",
     "summary": "Look up one SolidWorks API method or property: parameters, return type, description."
-   },
-   {
-    "name": "manage_design_table",
-    "family": "automation",
-    "level": "planned",
-    "reason": "planned in queue item 13 (the configuration tools).",
-    "summary": "Create, read or update a design table (an Excel sheet that drives a model's configurations)."
    },
    {
     "name": "measure_entities",

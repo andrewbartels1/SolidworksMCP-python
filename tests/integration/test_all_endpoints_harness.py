@@ -456,7 +456,6 @@ _SMOKE_PAYLOADS: dict[str, dict[str, Any]] = {
         "operation": "export",
         "output_directory": "C:\\Temp\\out",
     },
-    "manage_design_table": {"action": "list"},
     "execute_workflow": {"steps": []},
     "create_template": {"template_name": "smoke_template", "template_type": "part"},
     "optimize_performance": {},

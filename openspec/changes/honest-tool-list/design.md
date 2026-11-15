@@ -97,7 +97,7 @@ Removing tools that never worked is not a break for a working client, so
 the release is 2.1.0. The CHANGELOG lists the removed names under
 "Removed" and the deprecated ones under "Deprecated".
 
-### 8. `manage_design_table` is checked before it goes
+### 8. `manage_design_table` is checked before it goes (removed)
 
 It is in the removal list because a design table needs Excel on the
 machine, and item 13's configuration tools give agents the same variants
@@ -105,6 +105,16 @@ without it. That reason is not yet proven on the user's SolidWorks, so a
 live probe (task 2.0) inserts a design table on a scratch part and reads it
 back. If it works, the tool stays `planned` for item 13 and the planned
 count is eight; if not, it is removed and the finding is recorded here.
+
+**Finding (live, 2026-11-14, SolidWorks 2026, Excel installed):** a
+two-row spreadsheet (`Default` 20 mm, `Tall` 30 mm on `D1@Boss-Extrude1`)
+was written by Excel and inserted with `IModelDoc2.InsertFamilyTableOpen`.
+`GetDesignTable` then returns a table, but `IDesignTable.Attach` returns
+false, `GetTotalRowCount` and `GetTotalColumnCount` return -2, every cell
+reads empty, and no `Tall` configuration is made. The insert call itself
+raised in late binding. Design tables don't work through COM here, so the
+tool is removed with the rest (33 in all) and the planned count is seven.
+Item 13's configuration tools give agents variants without Excel.
 
 ### 9. Items 11 to 14 depend on this change
 

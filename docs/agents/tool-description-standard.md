@@ -133,7 +133,7 @@ don't break:
   `generate_vba_part_modeling`, `generate_vba_revolve`
 - `insert_bom_table`, `insert_component`, `insert_model_dimensions`,
   `load_assembly`, `load_part`, `lookup_api_interface`, `lookup_api_method`,
-  `manage_design_table`, `pack_and_go_assembly`, `rebuild_model`,
+  `pack_and_go_assembly`, `rebuild_model`,
   `rename_feature`, `reset_circuit_breaker`
 - `search_solidworks_api_help`, `select_face_edges`, `select_feature`,
   `suppress_feature`, `undo`, `update_sheet_format`, `update_title_block`

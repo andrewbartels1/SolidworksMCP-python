@@ -58,7 +58,6 @@ ADAPTER_FREE_TOOLS = {
     "create_section_view",
     "create_detail_view",
     "check_drawing_standards",
-    "manage_design_table",
     # File-level work that needs no SolidWorks session: comparisons read the
     # files, and the template tools copy a model to a template file.
     "compare_drawing_versions",

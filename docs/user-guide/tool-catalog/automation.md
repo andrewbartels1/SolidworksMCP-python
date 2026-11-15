@@ -1,12 +1,11 @@
 # Automation Tools
 
 `generate_vba_code` writes a VBA macro skeleton for a step the other tools don't
-cover. `manage_design_table` is planned: whether it is built depends on a live check
-of SolidWorks' design tables (it needs Excel).
+cover. For variants of a part, use configurations (planned in queue item 13).
 
 > **Prerequisite:** None for `generate_vba_code`; it only writes text.
 
-**Total tools in this category: 2**
+**Total tools in this category: 1**
 
 ## Known limits
 
@@ -40,35 +39,3 @@ Write a VBA macro skeleton for an operation you describe: the SolidWorks connect
   "parameters": {}
 }
 ```
-
----
-
-### `manage_design_table`
-
-Create, read or update a design table (an Excel sheet that drives a model's configurations).
-
-**Prerequisite:** SolidWorks running
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `table_type` | `str?` | — | `None` | Type of design table (create, update, import) |
-| `model_path` | `str?` | — | `None` | Model path alias |
-| `table_file` | `str?` | — | `None` | Design table file alias |
-| `operation` | `str?` | — | `None` | Operation alias |
-| `auto_update` | `bool` | — | `False` | Auto update alias |
-| `create_configurations` | `bool` | — | `False` | Create configurations alias |
-| `auto_create_configurations` | `bool` | — | `False` | Auto-create alias |
-| `excel_file` | `str?` | — | `None` | Excel file path for import/export |
-| `parameters` | `List[str]` | — | `[]` | Parameters to include in design table |
-| `configurations` | `List[str]` | — | `[]` | Configuration names |
-
-**Sample call:**
-
-```json
-{}
-```
-
----
-

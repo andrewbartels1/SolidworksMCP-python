@@ -170,11 +170,6 @@ _STABLE = Support(SupportLevel.STABLE)
 _PLANNED_DRAWING = Support(
     SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
 )
-# Kept until its live probe (honest-tool-list task 2.0) decides: built in
-# item 13 if SolidWorks' design tables work here, removed otherwise.
-_PLANNED_DESIGN_TABLE = Support(
-    SupportLevel.PLANNED, "planned in queue item 13 (the configuration tools)."
-)
 
 
 def _deprecated(replacement: str | None) -> Support:
@@ -198,7 +193,6 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "verify_model": _STABLE,
     # automation
     "generate_vba_code": _STABLE,
-    "manage_design_table": _PLANNED_DESIGN_TABLE,
     # docs_discovery
     "discover_solidworks_docs": _STABLE,
     "find_related_api_members": _STABLE,

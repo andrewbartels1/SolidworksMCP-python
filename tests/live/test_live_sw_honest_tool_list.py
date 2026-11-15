@@ -6,11 +6,7 @@ One bundle, run together, then failures are fixed one at a time:
    extension and an existing file (and allowed with ``overwrite``);
 2. ``get_model_info`` reports the file's size and dates for a saved part, and
    nulls for a new one;
-3. a deprecated tool still works and its result names the replacement;
-4. the design-table probe that decides ``manage_design_table``: insert a
-   design table on a scratch part from a two-row spreadsheet and read it back.
-   It starts Excel (hidden) to write the spreadsheet, and SolidWorks opens it
-   to read the table. Run it last.
+3. a deprecated tool still works and its result names the replacement.
 
 Run one with::
 
@@ -143,78 +139,3 @@ async def test_a_deprecated_tool_names_its_replacement(
     )
     assert loaded["status"] == "success", loaded
     assert loaded["warning"] == "Deprecated: use `open_model`."
-
-
-def _write_design_table_sheet(path: Path) -> None:
-    """A two-row design table for the block, written by Excel (hidden)."""
-    from win32com.client import dynamic
-
-    excel = dynamic.Dispatch("Excel.Application")
-    excel.Visible = False
-    excel.DisplayAlerts = False
-    try:
-        book = excel.Workbooks.Add()
-        sheet = book.Worksheets(1)
-        sheet.Cells(1, 2).Value = "D1@Boss-Extrude1"
-        sheet.Cells(2, 1).Value = "Default"
-        sheet.Cells(2, 2).Value = 20
-        sheet.Cells(3, 1).Value = "Tall"
-        sheet.Cells(3, 2).Value = 30
-        book.SaveAs(str(path), 51)  # 51 = xlOpenXMLWorkbook (.xlsx)
-        book.Close(False)
-    finally:
-        excel.Quit()
-
-
-async def test_design_table_probe(scratch: Any, tmp_path: Path) -> None:
-    """Insert a design table from a spreadsheet, then read it back.
-
-    Decides ``manage_design_table`` (honest-tool-list task 2.0): if this
-    works, the tool stays planned for queue item 13; if not, it is removed.
-    """
-    from solidworks_mcp.adapters import sw_type_info
-
-    adapter = scratch.adapter
-    tools = await _tools(adapter)
-    await _block(tools, "design_table_probe")
-    sheet = tmp_path / "block_table.xlsx"
-    _write_design_table_sheet(sheet)
-
-    model = sw_type_info.flagged(adapter.currentModel, "IModelDoc2")
-    inserted = adapter._attempt(lambda: model.InsertFamilyTableOpen(str(sheet)))
-    table = adapter._attempt(lambda: model.GetDesignTable(), default=None)
-    read: dict[str, Any] = {"found": table is not None}
-    if table is not None:
-        flagged = sw_type_info.flagged(table, "IDesignTable")
-        read["attached"] = adapter._attempt(lambda: flagged.Attach(), default=None)
-        read["rows"] = adapter._attempt(
-            lambda: flagged.GetTotalRowCount(), default=None
-        )
-        read["columns"] = adapter._attempt(
-            lambda: flagged.GetTotalColumnCount(), default=None
-        )
-        read["cells"] = [
-            [
-                adapter._attempt(
-                    lambda r=r, c=c: flagged.GetEntryText(r, c), default=None
-                )
-                for c in range(0, 2)
-            ]
-            for r in range(0, 3)
-        ]
-        adapter._attempt(lambda: flagged.Detach(), default=None)
-    configurations = adapter._attempt(
-        lambda: model.GetConfigurationNames(), default=None
-    )
-
-    evidence(
-        "design table probe (decides manage_design_table)",
-        {
-            "inserted": inserted,
-            "read_back": read,
-            "configurations": list(configurations or []),
-        },
-    )
-    assert inserted, "InsertFamilyTableOpen refused the spreadsheet"
-    assert read["found"], "no design table after the insert"
-    assert "Tall" in list(configurations or [])

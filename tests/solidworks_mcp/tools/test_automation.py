@@ -1,11 +1,8 @@
 """Tests for SolidWorks automation tools."""
 
-from unittest.mock import AsyncMock, Mock
-
 import pytest
 from fastmcp import FastMCP
 
-from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 from solidworks_mcp.config import (
     AdapterType,
     DeploymentMode,
@@ -13,7 +10,6 @@ from solidworks_mcp.config import (
     SolidWorksMCPConfig,
 )
 from solidworks_mcp.tools.automation import (
-    DesignTableInput,
     GenerateVBAInput,
     VBAGenerationInput,
     register_automation_tools,
@@ -31,7 +27,7 @@ class TestAutomationTools:
         tool_count = await register_automation_tools(
             mcp_server, mock_adapter, mock_config
         )
-        assert tool_count == 2
+        assert tool_count == 1
 
     @pytest.mark.asyncio
     async def test_generate_vba_code_success(
@@ -61,50 +57,6 @@ class TestAutomationTools:
         assert vba["target_document"] == "Part"
         assert vba["lines_of_code"] == len(vba["code"].split("\n"))
         assert "style" not in vba
-
-    @pytest.mark.asyncio
-    async def test_manage_design_table_success(
-        self, mcp_server, mock_adapter, mock_config
-    ):
-        """Test successful design table management."""
-        await register_automation_tools(mcp_server, mock_adapter, mock_config)
-
-        mock_adapter.manage_design_table = AsyncMock(
-            return_value=Mock(
-                is_success=True,
-                data={
-                    "design_table_file": "part_configurations.xls",
-                    "configurations_created": 5,
-                    "parameters_linked": 12,
-                    "operation": "Link Excel table",
-                    "table_rows": 6,  # Including header
-                    "table_columns": 8,
-                },
-                execution_time=1.5,
-            )
-        )
-
-        input_data = DesignTableInput(
-            model_path="configurable_part.sldprt",
-            table_file="part_configurations.xls",
-            operation="Link Excel table",
-            auto_update=True,
-            create_configurations=True,
-        )
-
-        tool_func = None
-        for tool in await mcp_server.list_tools():
-            if tool.name == "manage_design_table":
-                tool_func = tool.fn
-                break
-
-        assert tool_func is not None
-        result = await tool_func(input_data=input_data)
-
-        assert result["status"] == "success"
-        assert result["data"]["configurations_created"] == 5
-        assert result["data"]["parameters_linked"] == 12
-        mock_adapter.manage_design_table.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_automation_error_handling(
@@ -164,23 +116,6 @@ async def _get_tool(mcp, name: str):
 
 class TestAutomationExceptionPaths:
     """Test automation exception paths."""
-
-    @pytest.mark.asyncio
-    async def test_manage_design_table_exception(self):
-        """Line 506 — exception in manage_design_table."""
-        from solidworks_mcp.tools.automation import (
-            DesignTableInput,
-            register_automation_tools,
-        )
-
-        mcp = _make_mcp()
-        adapter = MockSolidWorksAdapter({})
-        adapter.manage_design_table = AsyncMock(side_effect=RuntimeError("dt boom"))
-        await register_automation_tools(mcp, adapter, _make_config())
-
-        fn = await _get_tool(mcp, "manage_design_table")
-        result = await fn(DesignTableInput(table_type="create", excel_file="test.xlsx"))
-        assert result["status"] == "error"
 
 
 @pytest.mark.parametrize(

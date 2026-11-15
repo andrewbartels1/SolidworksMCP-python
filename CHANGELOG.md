@@ -78,7 +78,7 @@ Each still works until 3.0.0; use the tool named instead (#174):
 
 ### Removed
 
-32 tools that were registered but never implemented: every call returned
+33 tools that were registered but never implemented: every call returned
 `not_supported` (#174). Clients that listed them only ever got an error.
 Why each one went, and what does its job now, is in `openspec/queue.md`
 ("Removed tools").
@@ -86,7 +86,10 @@ Why each one went, and what does its job now, is in `openspec/queue.md`
 - Analysis: `analyze_geometry`, `get_material_properties`.
 - Automation: `automation_start_macro_recording`,
   `automation_stop_macro_recording`, `batch_process_files`,
-  `create_template`, `execute_workflow`, `optimize_performance`.
+  `create_template`, `execute_workflow`, `manage_design_table`,
+  `optimize_performance`. `manage_design_table` was checked live first: on
+  SolidWorks 2026 the design table is inserted, but SolidWorks can't open it
+  in Excel to read it and makes no configurations from it.
 - Drawing: `add_annotation`.
 - Drawing analysis: `analyze_drawing_annotations`,
   `analyze_drawing_comprehensive`, `analyze_drawing_dimensions`,
@@ -101,8 +104,8 @@ Why each one went, and what does its job now, is in `openspec/queue.md`
 - Templates: `apply_template`, `batch_apply_template`, `extract_template`,
   `list_template_library`, `save_to_template_library`.
 
-The eight planned tools left each name the queue item that builds them:
-seven drawing tools (the drawing pack) and `manage_design_table`.
+The seven planned tools left are drawing tools; each names the queue item
+that builds them (the drawing pack).
 
 ## [2.0.0] - 2026-11-12
 

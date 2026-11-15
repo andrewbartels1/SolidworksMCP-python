@@ -1,11 +1,11 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 124 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
+The SolidWorks MCP Server provides 123 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
 
 ## Read this first
 
 - Every tool has a support level, shown on the [progress page](../progress.md).
-  Eight are `planned` (registered so the name is kept, but every call returns
+  Seven are `planned` (registered so the name is kept, but every call returns
   `not_supported`) and eight are `deprecated` (they work, but another tool
   replaces them; see [below](#deprecated-tools)).
 - A tool's name starts with a verb that says what it does: `create_` makes a
@@ -104,9 +104,9 @@ The SolidWorks MCP Server provides 124 specialized tools for CAD automation. Thi
 
     ---
 
-    A VBA macro skeleton for a described task; design tables are planned.
+    A VBA macro skeleton for a described task.
 
-    [**2 tools available** :octicons-arrow-right-24:](tool-catalog/automation.md)
+    [**1 tool available** :octicons-arrow-right-24:](tool-catalog/automation.md)
 
 - :material-record:{ .lg .middle } **Macro Recording**
 
@@ -142,7 +142,7 @@ The SolidWorks MCP Server provides 124 specialized tools for CAD automation. Thi
 
 </div>
 
-**Total: 124 Tools**
+**Total: 123 Tools**
 
 ## Deprecated tools
 

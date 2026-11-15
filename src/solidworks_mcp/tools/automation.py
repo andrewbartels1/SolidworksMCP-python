@@ -1,8 +1,7 @@
 """Automation tools for SolidWorks MCP Server.
 
 ``generate_vba_code`` writes a VBA macro skeleton for a step the tools don't
-cover. ``manage_design_table`` is planned: whether it is built (in queue item 13,
-the configuration tools) depends on a live check of SolidWorks' design tables.
+cover.
 """
 
 import re
@@ -14,8 +13,6 @@ from pydantic import Field, field_validator
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
 from .tool_boundary import (
-    require_capability,
-    require_success,
     with_tool_boundary,
 )
 
@@ -78,58 +75,6 @@ class GenerateVBAInput(CompatInput):
 
 
 VBAGenerationInput = GenerateVBAInput
-
-
-class DesignTableInput(CompatInput):
-    """Input schema for design table operations.
-
-    Attributes:
-        auto_create_configurations (bool): The auto create configurations value.
-        auto_update (bool): The auto update value.
-        configurations (list[str]): The configurations value.
-        create_configurations (bool): The create configurations value.
-        excel_file (str | None): The excel file value.
-        model_path (str | None): The model path value.
-        operation (str | None): The operation value.
-        parameters (list[str]): The parameters value.
-        table_file (str | None): The table file value.
-        table_type (str | None): The table type value.
-    """
-
-    table_type: str | None = Field(
-        default=None, description="Type of design table (create, update, import)"
-    )
-    model_path: str | None = Field(default=None, description="Model path alias")
-    table_file: str | None = Field(default=None, description="Design table file alias")
-    operation: str | None = Field(default=None, description="Operation alias")
-    auto_update: bool = Field(default=False, description="Auto update alias")
-    create_configurations: bool = Field(
-        default=False, description="Create configurations alias"
-    )
-    auto_create_configurations: bool = Field(
-        default=False, description="Auto-create alias"
-    )
-    excel_file: str | None = Field(
-        default=None, description="Excel file path for import/export"
-    )
-    parameters: list[str] = Field(
-        default=[], description="Parameters to include in design table"
-    )
-    configurations: list[str] = Field(default=[], description="Configuration names")
-
-    def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the design table input.
-
-        Args:
-            __context (Any): The context value.
-
-        Returns:
-            None: None.
-        """
-        if self.table_type is None:
-            self.table_type = self.operation or "create"
-        if self.create_configurations:
-            self.auto_create_configurations = True
 
 
 #: ``swDocumentTypes_e``: the value ``IModelDoc2.GetType`` returns for each
@@ -288,38 +233,5 @@ async def register_automation_tools(
             },
         }
 
-    @mcp.tool()
-    async def manage_design_table(input_data: DesignTableInput) -> dict[str, Any]:
-        """Create, read or update a design table (an Excel sheet that drives a model's configurations).
-
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. To list a
-        model's configurations today, use `list_configurations`. Changes: once
-        available, inserts or edits the design table and its configurations. Returns:
-        once available, the table's state under `data`.
-
-        Args:
-            input_data: The design table. Nothing is required: give `model_path`,
-                `operation` and `excel_file`; `parameters`, `configurations` and the
-                auto-update switches have defaults.
-
-        Returns:
-            dict[str, Any]: The result, or a `not_supported` error.
-        """
-        require_capability(
-            adapter,
-            "manage_design_table",
-            "Active adapter does not support manage_design_table; no "
-            f"{input_data.table_type} operation was performed.",
-        )
-        result = await adapter.manage_design_table(input_data.model_dump())
-        require_success(result, "Design table management failed")
-        return {
-            "status": "success",
-            "message": f"Design table {input_data.table_type} completed",
-            "data": result.data,
-            "execution_time": result.execution_time,
-        }
-
-    tool_count = 2  # generate_vba_code, manage_design_table
+    tool_count = 1  # generate_vba_code
     return tool_count

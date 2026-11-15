@@ -103,7 +103,6 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "verify_model": _reads("Verify Model Against Expectations"),
     # automation
     "generate_vba_code": _reads("Generate VBA Code"),
-    "manage_design_table": _adds("Manage Design Table"),
     # docs_discovery
     "discover_solidworks_docs": _sets("Rebuild SolidWorks API Index"),
     "search_solidworks_api_help": _reads("Search SolidWorks API"),

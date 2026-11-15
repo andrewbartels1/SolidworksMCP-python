@@ -7,7 +7,7 @@
 
 ## 2. Remove the 33 planned tools
 
-- [ ] 2.0 Check `manage_design_table` before removing it: does `IModelDoc2.InsertFamilyTableNew` work on the user's machine (it needs Excel), and is there a read path (`IDesignTable`) without Excel? Record the finding in design.md. If design tables work, keep the tool `planned` for queue item 13 (`configuration-tools`) and add it there; otherwise remove it with the rest. Its live probe joins this change's live bundle (7.1), not a separate run
+- [x] 2.0 Check `manage_design_table` before removing it: does `IModelDoc2.InsertFamilyTableNew` work on the user's machine (it needs Excel), and is there a read path (`IDesignTable`) without Excel? Record the finding in design.md. If design tables work, keep the tool `planned` for queue item 13 (`configuration-tools`) and add it there; otherwise remove it with the rest. Its live probe joins this change's live bundle (7.1), not a separate run
 - [x] 2.1 Analysis, automation, drawing (`add_annotation`) and export: remove the tools, input models, hints, levels and tests
 - [x] 2.2 Drawing analysis (six), file management (three), macros (six), sketching (`tutorial_simple_hole`), templates (five): the same
 - [x] 2.3 Remove every "use `<removed tool>`" sentence from other descriptions; a test that no description names an unregistered tool
@@ -40,7 +40,7 @@
 ## 7. Live bundle (one set, run together, then fixes one by one)
 
 - [x] 7.1 Live tests: `save_file` to a new path, a missing folder and an existing file; `get_model_info` on a saved and a new part; one deprecated tool's `warning`; the design-table probe (task 2.0): insert one on a scratch part and read it back
-- [ ] 7.2 Hand the user the bundle; fix each failure afterwards, one at a time
+- [x] 7.2 Hand the user the bundle; fix each failure afterwards, one at a time
 
 ## 8. Finish
 

@@ -35,12 +35,12 @@ it will again.
 
 ## Tools that can't run yet
 
-Eight tools are registered but nothing implements them yet (support level
+Seven tools are registered but nothing implements them yet (support level
 `planned`). Their description says "Not available yet"; every call returns
-`not_supported`. Seven are drawing tools coming in the drawing pack:
+`not_supported`. All seven are drawing tools coming in the drawing pack:
 `add_dimension`, `auto_dimension_view`, `create_section_view`,
 `create_detail_view`, `update_title_block`, `update_sheet_format` and
-`check_drawing_standards`. The eighth is `manage_design_table`. Each
+`check_drawing_standards`. Each
 description names what to use today.
 
 ## Deprecated tools
