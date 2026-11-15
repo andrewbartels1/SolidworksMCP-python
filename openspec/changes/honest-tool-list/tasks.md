@@ -39,7 +39,7 @@
 
 ## 7. Live bundle (one set, run together, then fixes one by one)
 
-- [ ] 7.1 Live tests: `save_file` to a new path, a missing folder and an existing file; `get_model_info` on a saved and a new part; one deprecated tool's `warning`; the design-table probe (task 2.0): insert one on a scratch part and read it back
+- [x] 7.1 Live tests: `save_file` to a new path, a missing folder and an existing file; `get_model_info` on a saved and a new part; one deprecated tool's `warning`; the design-table probe (task 2.0): insert one on a scratch part and read it back
 - [ ] 7.2 Hand the user the bundle; fix each failure afterwards, one at a time
 
 ## 8. Finish
