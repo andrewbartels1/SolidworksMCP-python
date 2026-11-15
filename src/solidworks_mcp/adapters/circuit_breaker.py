@@ -914,19 +914,25 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
 
     # Sketch operations
 
-    async def create_sketch(self, plane: str) -> AdapterResult[str]:
+    async def create_sketch(
+        self,
+        plane: str | None,
+        face_point: tuple[float, float, float] | None = None,
+    ) -> AdapterResult[str]:
         """Create sketch through circuit breaker.
 
         Args:
-            plane (str): The plane value.
+            plane (str | None): The plane's name; None with ``face_point``.
+            face_point (tuple[float, float, float] | None): A point in mm on a
+                flat face, in place of ``plane``.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
             "create_sketch",
-            lambda: self.adapter.create_sketch(plane),
-            input_dict={"plane": plane},
+            lambda: self.adapter.create_sketch(plane, face_point),
+            input_dict={"plane": plane, "face_point": face_point},
         )
 
     async def add_line(

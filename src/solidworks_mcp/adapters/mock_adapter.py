@@ -551,6 +551,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     "component_parent": None,
                 },
             ]
+            # Every row carries its tree place, as the real adapter's do.
+            for position, row in enumerate(seeded):
+                row["position"] = position
             if is_assembly:
                 components = self._assembly_components or _DEFAULT_ASSEMBLY_COMPONENTS
                 seeded.extend(
@@ -1420,11 +1423,21 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             execution_time=self._delays["feature_operation"],
         )
 
-    async def create_sketch(self, plane: str) -> AdapterResult[dict[str, Any]]:  # type: ignore[override]
-        """Mock creating a sketch.
+    async def create_sketch(  # type: ignore[override]
+        self,
+        plane: str | None,
+        face_point: tuple[float, float, float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock creating a sketch on a plane, or on a face of the canned block.
+
+        With ``face_point``, the point must lie on a face of the 10 mm block
+        ``select_face_edges`` models (every face of it is flat); any other
+        point is refused with the real adapter's message.
 
         Args:
-            plane (str): The plane value.
+            plane (str | None): The plane value; None with ``face_point``.
+            face_point (tuple[float, float, float] | None): A point in mm on a
+                face of the block.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -1433,11 +1446,23 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             # Legacy tests start sketching immediately after connect.
             await self.create_part()
 
+        if face_point is not None and self._mock_face_at(list(face_point)) is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"face_point {[float(c) for c in face_point]} mm is not on a "
+                    "flat face of the active part (No face found at point "
+                    f"{list(face_point)} mm.)"
+                ),
+            )
+
         await asyncio.sleep(self._delays["sketch_operation"])
         self._operation_count += 1
 
         sketch_id = f"Sketch{len(self._sketches) + 1}"
-        self._sketches[sketch_id] = plane
+        self._sketches[sketch_id] = (
+            plane if face_point is None else f"face at {list(face_point)} mm"
+        )
         self._current_sketch = sketch_id
 
         return AdapterResult(

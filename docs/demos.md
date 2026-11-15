@@ -146,8 +146,9 @@ powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 `
 
 The recording opens on the prompts, then replays the build as the script
 below runs it, at the sizes the stand was finished at by hand (see
-"Finished by hand"): 24 tool calls, each captioned with its result, and the
-finished part in an isometric view. It is sped up five times.
+"Finished by hand"): 23 tool calls, each captioned with its result. The
+camera turns to an isometric view after the block, each cut, the arches and
+the pocket, so each feature shows as it is made. It is sped up five times.
 
 **Printed.** The finished stand on the printer, in PETG, printed on its side
 with tree supports (sped up):
@@ -281,16 +282,16 @@ the same legs, arches and pocket outline, cut 11.46 mm deep, comes to
 901 762 mm³ by hand. SolidWorks measures 901 769 mm³.
 
 The script below was then updated to reproduce this part: 66 mm, a 26 mm
-top and an 11.46 mm pocket are its defaults. One thing can't be matched:
-the tools can only offset a plane from a named plane, so the script puts
-the pocket's plane at Top Plane offset by the height. The solid is the
-same, but the plane doesn't follow a height edited by hand. To change the
-height, rerun the script.
+top and an 11.46 mm pocket are its defaults. It sketches the pocket on the
+stand's top face (`create_sketch` with `face_point`), as the user did by
+hand, so the pocket follows the height when `D1@Boss-Extrude1` is edited
+later, and no reference plane is needed.
 
 **Rebuild it, or at another size.** The script replays the
 calls with every dimension an option, and checks the result the same way.
-At its defaults it makes the 24 calls in the recording; the session's own
-28 calls are listed above.
+At its defaults it makes 22 calls, and 23 with `--stl` as in the recording;
+the session's own 28 calls are listed above. `--look` turns the camera to
+an isometric view after each feature, as the recording does.
 
 ```powershell
 # The finished stand
@@ -312,7 +313,7 @@ To record the demo again:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 `
-    -Test tests/live/test_live_sw_monitor_stand_demo.py `
+    -Test tests/live/test_live_sw_monitor_stand_demo.py::test_monitor_stand_from_prompt_to_part `
     -CaptureDir docs/assets/demos/monitor-stand -Record -PromptSeconds 12
 ```
 

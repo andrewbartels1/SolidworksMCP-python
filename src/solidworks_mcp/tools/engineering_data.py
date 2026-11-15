@@ -216,13 +216,15 @@ async def register_engineering_data_tools(
 
         Use it to find a dimension in an existing model before changing it: each
         `full_name` (e.g. "D1@Sketch1") is the name `get_dimension` and `set_dimension`
-        take. Needs: an open part or assembly. Read-only. Returns: `data`, one entry per
-        dimension with `full_name`, `feature`, `value` (document units), `system_value`
-        (metres or radians) and `read_only`.
+        take. Each dimension is listed once, under the feature its full name names
+        after the `@` (`D1@Plane1` under `Plane1`, never also under a cut sketched on
+        that plane). Needs: an open part or assembly. Read-only. Returns: `data`, one
+        entry per dimension with `full_name`, `feature`, `value` (document units),
+        `system_value` (metres or radians) and `read_only`.
 
         Args:
-            input_data: Nothing is required: give `feature_name` to list one
-                feature's dimensions, or omit it for every dimension.
+            input_data: Nothing is required: give `feature_name` to list the
+                dimensions that feature owns, or omit it for every dimension.
 
         Returns:
             dict[str, Any]: The dimensions.

@@ -28,8 +28,14 @@ step. Values are examples; sizes are millimetres.
 
 ## Sketching somewhere other than the three planes
 
-`create_reference_plane` with `reference: "Top Plane"` and `offset: 10` makes
-a plane 10 mm up; its name (e.g. "Plane1") goes into `create_sketch`.
+On a flat face of the body: `create_sketch` with `face_point`, a point on the
+face in mm (e.g. `[0, 20, 0]` on the top of a 20 mm tall block). The sketch
+sits on the face, so a cut made from it follows the face when a dimension
+changes later. Prefer this to a plane at the same height.
+
+Away from the body: `create_reference_plane` with `reference: "Top Plane"`
+and `offset: 10` makes a plane 10 mm up; its name (e.g. "Plane1") goes into
+`create_sketch`.
 
 - At an angle: `create_axis` first (its reply names the axis, e.g. "Axis1"),
   then `reference`, `angle` (degrees) and `axis`.

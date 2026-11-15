@@ -27,12 +27,25 @@ class CreateSketchInput(CompatInput):
     """Input schema for creating a sketch.
 
     Attributes:
-        plane (str): The plane value.
+        plane (str | None): The plane to sketch on.
+        face_point (list[float] | None): A point on a flat face to sketch on
+            instead.
         sketch_name (str | None): The sketch name value.
     """
 
-    plane: str = Field(
-        description="Sketch plane name (e.g., 'Top', 'Front', 'Right', 'XY', 'XZ', 'YZ')"
+    plane: str | None = Field(
+        default=None,
+        description=(
+            "Sketch plane name (e.g., 'Top', 'Front', 'Right', 'XY', 'XZ', 'YZ', "
+            "or a plane made by create_reference_plane). Give this or face_point"
+        ),
+    )
+    face_point: list[float] | None = Field(
+        default=None,
+        description=(
+            "[x, y, z] in mm on a flat face of the part's body; the sketch opens "
+            "on that face and follows it when the model changes. Give this or plane"
+        ),
     )
     sketch_name: str | None = Field(
         default=None,
@@ -44,19 +57,20 @@ class CreateSketchInput(CompatInput):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        """Provide model post init support for the create sketch input.
+        """Require exactly one of ``plane`` and ``face_point``.
 
         Args:
             __context (Any): The context value.
 
-        Returns:
-            None: None.
-
         Raises:
-            ValueError: Plane is required.
+            ValueError: When both or neither are given, or ``face_point`` is not
+                three numbers.
         """
-        if not self.plane.strip():
-            raise ValueError("plane is required")
+        has_plane = bool((self.plane or "").strip())
+        if has_plane == (self.face_point is not None):
+            raise ValueError("give exactly one of plane and face_point")
+        if self.face_point is not None and len(self.face_point) != 3:
+            raise ValueError("face_point must be [x, y, z] in millimetres")
 
 
 class AddLineInput(CompatInput):
@@ -351,25 +365,43 @@ async def register_sketching_tools(
 
     @mcp.tool()
     async def create_sketch(input_data: CreateSketchInput) -> dict[str, Any]:
-        """Open a new sketch on a plane of the active part, ready for lines, circles and other sketch entities.
+        """Open a new sketch on a plane or a flat face of the active part, ready for lines, circles and other sketch entities.
 
         Use it first in every feature: sketch, draw, `exit_sketch`, then
         `create_extrusion` or `create_cut_extrude`. Planes: Front, Top, Right (or XY,
-        XZ, YZ), or a plane made by `create_reference_plane`. Coordinates in the sketch
-        are mm from the origin. Needs: an open part. Changes: adds a sketch and opens it
-        for editing; give `sketch_name` and `exit_sketch` names it that when it closes
-        it (SolidWorks won't rename an open sketch). Returns: `sketch` with `name` (the
-        name in the feature tree now) and `plane`, plus `name_on_exit` when you gave
-        `sketch_name`.
+        XZ, YZ), or a plane made by `create_reference_plane`. Or give `face_point`, a
+        point in mm on a flat face of the body: the sketch opens on that face and moves
+        with it when the model changes. Coordinates in the sketch are mm from the
+        origin. Needs: an open part. Changes: adds a sketch and opens it for editing;
+        give `sketch_name` and `exit_sketch` names it that when it closes it (SolidWorks
+        won't rename an open sketch). Returns: `sketch` with `name` (the name in the
+        feature tree now) and `plane` (or `face_point`), plus `name_on_exit` when you
+        gave `sketch_name`. A `face_point` not on a flat face fails with
+        `invalid_input`.
 
         Args:
-            input_data: The sketch. `plane` is required; `sketch_name` names it.
+            input_data: The sketch. Exactly one of `plane` and `face_point`;
+                `sketch_name` names it.
 
         Returns:
             dict[str, Any]: The new sketch.
         """
         input_data = normalize_input(input_data, CreateSketchInput)
-        result = await adapter.create_sketch(input_data.plane)
+        face_point = (
+            (
+                float(input_data.face_point[0]),
+                float(input_data.face_point[1]),
+                float(input_data.face_point[2]),
+            )
+            if input_data.face_point is not None
+            else None
+        )
+        if face_point is None:
+            result = await adapter.create_sketch(input_data.plane)
+            where = f"{input_data.plane} plane"
+        else:
+            result = await adapter.create_sketch(None, face_point)
+            where = f"the face at {list(face_point)} mm"
 
         require_success(result, context="Failed to create sketch")
         sketch_name = (
@@ -377,13 +409,13 @@ async def register_sketching_tools(
             if isinstance(result.data, dict)
             else result.data
         )
+        sketch: dict[str, Any] = {"name": sketch_name, "plane": input_data.plane}
+        if face_point is not None:
+            sketch["face_point"] = list(face_point)
         reply: dict[str, Any] = {
             "status": "success",
-            "message": f"Created sketch '{sketch_name}' on {input_data.plane} plane",
-            "sketch": {
-                "name": sketch_name,
-                "plane": input_data.plane,
-            },
+            "message": f"Created sketch '{sketch_name}' on {where}",
+            "sketch": sketch,
             "execution_time": result.execution_time,
         }
         names_on_exit.clear()  # a sketch left open is abandoned with its name

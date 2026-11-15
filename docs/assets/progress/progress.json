@@ -440,7 +440,7 @@
     "family": "sketching",
     "level": "stable",
     "reason": "",
-    "summary": "Open a new sketch on a plane of the active part, ready for lines, circles and other sketch entities."
+    "summary": "Open a new sketch on a plane or a flat face of the active part, ready for lines, circles and other sketch entities."
    },
    {
     "name": "create_sweep",

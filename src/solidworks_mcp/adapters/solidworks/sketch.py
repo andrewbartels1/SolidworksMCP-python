@@ -100,8 +100,12 @@ class SolidWorksSketchMixin:
             adapter._sketch_geometry.angular_dimension_placement(entity1, entity2),
         )
 
-    async def create_sketch(self, plane: str) -> AdapterResult[str]:
-        return _create_sketch_impl(self, plane)
+    async def create_sketch(
+        self,
+        plane: str | None,
+        face_point: tuple[float, float, float] | None = None,
+    ) -> AdapterResult[str]:
+        return _create_sketch_impl(self, plane, face_point)
 
     async def add_line(
         self, x1: float, y1: float, x2: float, y2: float
@@ -202,8 +206,146 @@ class SolidWorksSketchMixin:
         return _check_sketch_fully_defined_impl(self, sketch_name)
 
 
-def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
-    """Open a new sketch on a named reference plane.
+def _select_sketch_plane(adapter: Any, plane: str) -> None:
+    """Select the reference plane a new sketch opens on.
+
+    Tries the plane's locale aliases by name (``FeatureByName`` then
+    ``Select2``), then ``Extension.SelectByID2`` with type ``"PLANE"``.
+
+    Args:
+        adapter: A connected adapter with a part open.
+        plane: The plane's short or full name.
+
+    Raises:
+        Exception: If no plane candidate could be selected.
+    """
+    plane_name_map = {
+        "Top": "Top Plane",
+        "Front": "Front Plane",
+        "Right": "Right Plane",
+        "XY": "Top Plane",
+        "XZ": "Front Plane",
+        "YZ": "Right Plane",
+    }
+
+    semantic_plane_aliases = {
+        "Top": ["Top Plane", "Planta", "上视基准面", "上視基準面"],
+        "Front": ["Front Plane", "Alzado", "前视基准面", "前視基準面"],
+        "Right": ["Right Plane", "Vista lateral", "右视基准面", "右視基準面"],
+        "XY": ["Top Plane", "Planta", "上视基准面"],
+        "XZ": ["Front Plane", "Alzado", "前视基准面"],
+        "YZ": ["Right Plane", "Vista lateral", "右视基准面"],
+    }
+
+    actual_plane = plane_name_map.get(plane, plane)
+    selected = False
+    selection_error = None
+
+    plane_candidates = [
+        *semantic_plane_aliases.get(plane, []),
+        actual_plane,
+        plane,
+        "Top Plane",
+        "Front Plane",
+        "Right Plane",
+        "Planta",
+        "Alzado",
+        "Vista lateral",
+        "上视基准面",
+        "前视基准面",
+        "右视基准面",
+        "上視基準面",
+        "前視基準面",
+        "右視基準面",
+    ]
+    for candidate in plane_candidates:
+        if not candidate:
+            continue
+        plane_feature, selection_error_candidate = adapter._attempt_with_error(
+            lambda c=candidate: adapter.currentModel.FeatureByName(c)
+        )
+        if selection_error_candidate:
+            selection_error = selection_error_candidate
+            continue
+        selected = bool(
+            plane_feature
+            and adapter._attempt(
+                lambda pf=plane_feature: pf.Select2(False, 0), default=False
+            )
+        )
+        if selected:
+            break
+
+    if not selected:
+        # SW 2022: callout must be None (empty string causes type mismatch)
+        selected, selection_error_candidate = adapter._attempt_with_error(
+            lambda: adapter.currentModel.Extension.SelectByID2(
+                actual_plane,
+                "PLANE",
+                0,
+                0,
+                0,
+                False,
+                0,
+                None,
+                0,
+            )
+        )
+        if selection_error_candidate:
+            selection_error = selection_error_candidate
+        elif selected:
+            pass
+
+    if not selected:
+        if selection_error:
+            raise Exception(
+                f"Failed to select plane: {actual_plane} ({selection_error})"
+            )
+        raise Exception(f"Failed to select plane: {actual_plane}")
+
+
+def _select_sketch_face(adapter: Any, face_point: tuple[float, float, float]) -> None:
+    """Select the flat face of the active part at ``face_point`` for a sketch.
+
+    Uses the same face lookup as ``create_reference_plane``'s ``face_point``
+    (the body face whose closest point is within 0.01 mm, which must be
+    flat). On any failure the selection is cleared, so no sketch opens on a
+    stale selection.
+
+    Args:
+        adapter: A connected adapter with a part open.
+        face_point: ``(x, y, z)`` in mm on the face.
+
+    Raises:
+        LookupError: When no flat face lies at the point.
+    """
+    from .features import _select_face_at_point
+
+    point = [float(c) for c in face_point]
+    adapter._attempt(lambda: adapter.currentModel.ClearSelection2(True), default=None)
+    try:
+        selected = _select_face_at_point(adapter, point, 0)
+        reason = "SolidWorks would not select it"
+    except LookupError as exc:
+        selected, reason = False, str(exc)
+    if not selected:
+        adapter._attempt(
+            lambda: adapter.currentModel.ClearSelection2(True), default=None
+        )
+        raise LookupError(
+            f"face_point {point} mm is not on a flat face of the active part ({reason})"
+        )
+
+
+def _create_sketch_impl(
+    adapter: Any,
+    plane: str | None,
+    face_point: tuple[float, float, float] | None = None,
+) -> AdapterResult[str]:
+    """Open a new sketch on a named reference plane, or on a flat face.
+
+    With ``face_point``, the flat face of the active part at that point is
+    selected (see :func:`_select_sketch_face`) in place of a plane.
 
     The function resolves English short-hand names (``"Top"``, ``"Front"``,
     ``"Right"``, ``"XY"``, ``"XZ"``, ``"YZ"``) to their full SolidWorks plane
@@ -224,7 +366,8 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
         plane: Reference-plane identifier.  Accepts short English names
             (``"Top"``, ``"Front"``, ``"Right"``, ``"XY"``, ``"XZ"``,
             ``"YZ"``) or the exact SolidWorks plane name as it appears in
-            the FeatureManager tree.
+            the FeatureManager tree.  Ignored when ``face_point`` is given.
+        face_point: ``(x, y, z)`` in mm on a flat face of the active part.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the sketch name string
@@ -232,7 +375,8 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
 
     Raises:
         Exception: Propagated through ``_handle_com_operation`` when no plane
-            candidate can be selected.
+            candidate can be selected, or (as ``LookupError``) when
+            ``face_point`` is not on a flat face.
 
     Example::
 
@@ -245,100 +389,19 @@ def _create_sketch_impl(adapter: Any, plane: str) -> AdapterResult[str]:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
 
     def _sketch_operation() -> str:
-        """Inner COM closure that selects the plane and opens the sketch.
-
-        Iterates through all locale aliases and ``SelectByID2`` fallbacks.
-        Updates adapter sketch state on success.
+        """Inner COM closure that selects the plane or face and opens the sketch.
 
         Returns:
             str: The resolved SolidWorks sketch name.
 
         Raises:
             Exception: If no plane candidate could be selected.
+            LookupError: If ``face_point`` is not on a flat face.
         """
-        plane_name_map = {
-            "Top": "Top Plane",
-            "Front": "Front Plane",
-            "Right": "Right Plane",
-            "XY": "Top Plane",
-            "XZ": "Front Plane",
-            "YZ": "Right Plane",
-        }
-
-        semantic_plane_aliases = {
-            "Top": ["Top Plane", "Planta", "上视基准面", "上視基準面"],
-            "Front": ["Front Plane", "Alzado", "前视基准面", "前視基準面"],
-            "Right": ["Right Plane", "Vista lateral", "右视基准面", "右視基準面"],
-            "XY": ["Top Plane", "Planta", "上视基准面"],
-            "XZ": ["Front Plane", "Alzado", "前视基准面"],
-            "YZ": ["Right Plane", "Vista lateral", "右视基准面"],
-        }
-
-        actual_plane = plane_name_map.get(plane, plane)
-        selected = False
-        selection_error = None
-
-        plane_candidates = [
-            *semantic_plane_aliases.get(plane, []),
-            actual_plane,
-            plane,
-            "Top Plane",
-            "Front Plane",
-            "Right Plane",
-            "Planta",
-            "Alzado",
-            "Vista lateral",
-            "上视基准面",
-            "前视基准面",
-            "右视基准面",
-            "上視基準面",
-            "前視基準面",
-            "右視基準面",
-        ]
-        for candidate in plane_candidates:
-            if not candidate:
-                continue
-            plane_feature, selection_error_candidate = adapter._attempt_with_error(
-                lambda c=candidate: adapter.currentModel.FeatureByName(c)
-            )
-            if selection_error_candidate:
-                selection_error = selection_error_candidate
-                continue
-            selected = bool(
-                plane_feature
-                and adapter._attempt(
-                    lambda pf=plane_feature: pf.Select2(False, 0), default=False
-                )
-            )
-            if selected:
-                break
-
-        if not selected:
-            # SW 2022: callout must be None (empty string causes type mismatch)
-            selected, selection_error_candidate = adapter._attempt_with_error(
-                lambda: adapter.currentModel.Extension.SelectByID2(
-                    actual_plane,
-                    "PLANE",
-                    0,
-                    0,
-                    0,
-                    False,
-                    0,
-                    None,
-                    0,
-                )
-            )
-            if selection_error_candidate:
-                selection_error = selection_error_candidate
-            elif selected:
-                pass
-
-        if not selected:
-            if selection_error:
-                raise Exception(
-                    f"Failed to select plane: {actual_plane} ({selection_error})"
-                )
-            raise Exception(f"Failed to select plane: {actual_plane}")
+        if face_point is not None:
+            _select_sketch_face(adapter, face_point)
+        else:
+            _select_sketch_plane(adapter, str(plane or ""))
 
         adapter.currentSketchManager = adapter.currentModel.SketchManager
         adapter._attempt(

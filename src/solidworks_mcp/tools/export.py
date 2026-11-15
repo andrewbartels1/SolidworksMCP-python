@@ -285,7 +285,8 @@ async def register_export_tools(
         extension, so end `file_path` in .stl. Needs: an open, active part or assembly.
         Changes: writes the file, creating its folder and replacing a file already
         there; the open document is unchanged. Returns: `export` with `file_path` and
-        `format`.
+        `format`, plus `warning` when SolidWorks wrote the file without its STL options
+        (bodies not merged into one file).
 
         Args:
             input_data: The export. `file_path` (ending in .stl) is required;
@@ -309,7 +310,7 @@ async def register_export_tools(
                 "data": result.data,
                 "execution_time": result.execution_time,
             }
-        return {
+        reply: dict[str, Any] = {
             "status": "success",
             "message": f"Exported to STL format: {input_data.file_path}",
             "export": {
@@ -320,6 +321,11 @@ async def register_export_tools(
             },
             "execution_time": result.execution_time,
         }
+        # The adapter's data is a dict only when its fallback wrote the file
+        # without the STL options.
+        if isinstance(result.data, dict) and result.data.get("warning"):
+            reply["warning"] = result.data["warning"]
+        return reply
 
     @mcp.tool()
     async def export_pdf(input_data: ExportFileInput) -> dict[str, Any]:

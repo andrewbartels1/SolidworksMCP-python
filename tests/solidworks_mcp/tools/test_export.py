@@ -750,3 +750,41 @@ async def test_a_file_export_without_format_type_uses_the_tools_own(
     assert result["status"] == "success"
     assert mock_adapter.export_step.call_args.args[0]["format_type"] == "step"
     assert ExportFileInput(file_path="C:/out/part.step").format_type is None
+
+
+class _StlFallbackAdapter:
+    """An adapter whose STL export went through the SaveAs3 fallback."""
+
+    async def export_file(self, file_path: str, format_type: str):
+        """Report the fallback's note, as the real adapter does."""
+        return SimpleNamespace(
+            is_success=True,
+            error=None,
+            data={"warning": "the STL options were not applied"},
+            execution_time=0.01,
+        )
+
+
+@pytest.mark.asyncio
+async def test_export_stl_passes_the_fallback_warning_on(mcp_server, mock_config):
+    """A file written without the STL options says so in the reply."""
+    await register_export_tools(mcp_server, _StlFallbackAdapter(), mock_config)
+
+    reply = await (await _tool(mcp_server, "export_stl"))(
+        input_data=ExportFileInput(file_path="a.stl")
+    )
+
+    assert reply["status"] == "success"
+    assert reply["warning"] == "the STL options were not applied"
+
+
+@pytest.mark.asyncio
+async def test_export_stl_without_a_fallback_has_no_warning(mcp_server, mock_config):
+    """The usual export carries no warning."""
+    await register_export_tools(mcp_server, _ExportFallbackAdapter(), mock_config)
+
+    reply = await (await _tool(mcp_server, "export_stl"))(
+        input_data=ExportFileInput(file_path="a.stl")
+    )
+
+    assert "warning" not in reply

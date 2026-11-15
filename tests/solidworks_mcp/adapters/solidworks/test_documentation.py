@@ -283,6 +283,99 @@ async def test_list_model_dimensions_unknown_feature_is_not_found() -> None:
     assert "No dimensions found on feature 'Fillet9'" in result.error
 
 
+class _TreeFeature(_Feature):
+    """A feature with a type, for walks that skip folders."""
+
+    def __init__(self, name: str, kind: str, dims: list[Any]) -> None:
+        super().__init__(name, dims)
+        self._kind = kind
+
+    def GetTypeName2(self):  # noqa: N802 - COM name
+        return self._kind
+
+
+def _monitor_stand() -> SimpleNamespace:
+    """A part whose forward walk stops at the folders, as on the monitor stand.
+
+    The cut sketched on ``Plane1`` also reports the plane's offset.
+    """
+    tree = [
+        _TreeFeature("Comments", "CommentsFolder", [_dim("D9@Bogus@P.Part", 1.0)]),
+        _TreeFeature("Front Plane", "RefPlane", []),
+        _TreeFeature("Boss-Extrude1", "Extrusion", [_dim("D1@Boss-Extrude1", 20.0)]),
+        _TreeFeature("Plane1", "RefPlane", [_dim("D1@Plane1@Stand.Part", 20.0)]),
+        _TreeFeature(
+            "Cut-Extrude3",
+            "Cut",
+            [_dim("D1@Cut-Extrude3", 3.0), _dim("D1@Plane1@Stand.Part", 20.0)],
+        ),
+    ]
+    count = len(tree)
+    return SimpleNamespace(
+        GetType=lambda: 1,
+        FirstFeature=lambda: tree[0],  # its GetNextFeature is None: the walk stops
+        FeatureByPositionReverse=lambda pos: tree[count - pos - 1],
+        FeatureManager=SimpleNamespace(GetFeatureCount=lambda _all: count),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_model_dimensions_finds_what_the_reverse_pass_finds() -> None:
+    result = await _Harness(_monitor_stand()).list_model_dimensions()
+
+    assert result.is_success
+    assert [(d["full_name"], d["feature"]) for d in result.data] == [
+        ("D1@Boss-Extrude1", "Boss-Extrude1"),
+        ("D1@Plane1", "Plane1"),
+        ("D1@Cut-Extrude3", "Cut-Extrude3"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_model_dimensions_for_a_cut_leaves_out_its_plane() -> None:
+    result = await _Harness(_monitor_stand()).list_model_dimensions("Cut-Extrude3")
+
+    assert [d["full_name"] for d in result.data] == ["D1@Cut-Extrude3"]
+
+
+@pytest.mark.asyncio
+async def test_list_model_dimensions_keeps_a_dimension_with_no_full_name() -> None:
+    nameless = SimpleNamespace(
+        FullName=None, Value=5.0, SystemValue=0.005, ReadOnly=True
+    )
+    feature = _Feature("Fillet1", [nameless, nameless])
+    model = SimpleNamespace(GetType=lambda: 1, FirstFeature=lambda: feature)
+
+    result = await _Harness(model).list_model_dimensions()
+
+    assert [(d["full_name"], d["feature"]) for d in result.data] == [
+        (None, "Fillet1"),
+        (None, "Fillet1"),
+    ]
+    assert result.data[0]["read_only"] is True
+
+
+@pytest.mark.parametrize(
+    ("full_name", "owner"),
+    [("D1@Plane1", "Plane1"), ("D1@Sketch@2", "Sketch@2"), ("D1", None), (None, None)],
+)
+def test_owning_feature(full_name, owner) -> None:
+    assert doc._owning_feature(full_name) == owner
+
+
+@pytest.mark.parametrize(
+    ("type_name", "folder"),
+    [
+        ("MaterialFolder", True),
+        ("DetailCabinet", True),
+        ("RefPlane", False),
+        ("Unknown", False),
+    ],
+)
+def test_is_folder(type_name, folder) -> None:
+    assert doc._is_folder(type_name) is folder
+
+
 # ---- measure_entities ---------------------------------------------------------
 
 

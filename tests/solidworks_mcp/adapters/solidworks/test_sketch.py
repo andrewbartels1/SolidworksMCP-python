@@ -2433,3 +2433,83 @@ def test_text_beside_line(ends, point, expected) -> None:
     text = sketch._text_beside_line(adapter, object(), point)
 
     assert text == (None if expected is None else pytest.approx(expected))
+
+
+# ---- create_sketch on a face (face_point) --------------------------------------
+
+
+def _face_model(cleared: list[bool]) -> SimpleNamespace:
+    """A model whose sketch manager opens ``FaceSketch``; records clears."""
+    return SimpleNamespace(
+        ClearSelection2=lambda _all: cleared.append(True),
+        SketchManager=SimpleNamespace(
+            InsertSketch=lambda *args: SimpleNamespace(Name="FaceSketch")
+        ),
+    )
+
+
+def test_create_sketch_on_a_flat_face(monkeypatch) -> None:
+    from solidworks_mcp.adapters.solidworks import features
+
+    picked: list[list[float]] = []
+    monkeypatch.setattr(
+        features,
+        "_select_face_at_point",
+        lambda _adapter, point, mark: picked.append(point) or True,
+    )
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = _face_model([])
+
+    result = sketch._create_sketch_impl(adapter, None, (5.0, 20.0, 5.0))
+
+    assert result.is_success
+    assert result.data == "FaceSketch"
+    assert picked == [[5.0, 20.0, 5.0]]
+
+
+def test_create_sketch_point_off_the_body_names_the_point(monkeypatch) -> None:
+    from solidworks_mcp.adapters.solidworks import features
+
+    def _no_face(_adapter, point, _mark):
+        raise LookupError(f"No face found at point {point} mm.")
+
+    monkeypatch.setattr(features, "_select_face_at_point", _no_face)
+    cleared: list[bool] = []
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = _face_model(cleared)
+
+    result = sketch._create_sketch_impl(adapter, None, (0.0, 70.0, 0.0))
+
+    assert not result.is_success
+    assert "face_point [0.0, 70.0, 0.0] mm is not on a flat face" in result.error
+    assert "No face found" in result.error
+    assert len(cleared) == 2  # before the pick, and again after the failure
+    assert adapter.currentSketch is None
+
+
+def test_create_sketch_face_that_will_not_select(monkeypatch) -> None:
+    from solidworks_mcp.adapters.solidworks import features
+
+    monkeypatch.setattr(features, "_select_face_at_point", lambda *_: False)
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = _face_model([])
+
+    result = sketch._create_sketch_impl(adapter, None, (1.0, 2.0, 3.0))
+
+    assert "SolidWorks would not select it" in result.error
+
+
+@pytest.mark.asyncio
+async def test_mixin_create_sketch_forwards_face_point(monkeypatch) -> None:
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        sketch,
+        "_create_sketch_impl",
+        lambda adapter, plane, face_point: calls.append((plane, face_point)) or "ok",
+    )
+
+    class _Mixin(SolidWorksSketchMixin):
+        pass
+
+    assert await _Mixin().create_sketch(None, (1.0, 2.0, 3.0)) == "ok"
+    assert calls == [(None, (1.0, 2.0, 3.0))]

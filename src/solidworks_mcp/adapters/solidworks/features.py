@@ -2977,7 +2977,7 @@ def _select_face_at_point(adapter: Any, point_mm: list[float], mark: int) -> boo
     face = selector.face_at_point(selector.faces(), point_mm)
     if not face.is_planar:
         raise LookupError(
-            f"The face at {list(point_mm)} mm is not flat; a plane needs a flat face."
+            f"The face at {list(point_mm)} mm is not flat; a plane or a sketch needs a flat face."
         )
     sel_mgr = adapter.currentModel.SelectionManager
     _flag(adapter, sel_mgr, "CreateSelectData")

@@ -1429,3 +1429,71 @@ async def test_the_hole_tutorial_points_at_the_cut_tool(
     assert cut["sketch_name"] == "Sketch1"
     assert cut["end_condition"] == "ThroughAll"
     assert cut["depth"] > 0
+
+
+# ---- create_sketch on a face ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"plane": "Top", "face_point": [0, 0, 0]},
+        {},
+        {"plane": "  "},
+        {"face_point": [1, 2]},
+    ],
+)
+def test_create_sketch_input_needs_exactly_one_place(kwargs) -> None:
+    """Both, neither, a blank plane or a short point are refused."""
+    with pytest.raises(ValueError):
+        CreateSketchInput(**kwargs)
+
+
+def test_create_sketch_input_takes_a_face_point() -> None:
+    data = CreateSketchInput(face_point=[5, 10, 5])
+    assert data.plane is None
+    assert data.face_point == [5, 10, 5]
+
+
+async def _create_sketch_tool(mcp_server, adapter, config):
+    await register_sketching_tools(mcp_server, adapter, config)
+    for tool in await mcp_server.list_tools():
+        if tool.name == "create_sketch":
+            return tool.fn
+    raise AssertionError("create_sketch is not registered")
+
+
+@pytest.mark.asyncio
+async def test_create_sketch_on_a_face_of_the_mock_block(mcp_server, mock_config):
+    """A point on the block's top face opens a sketch there."""
+    from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    tool = await _create_sketch_tool(mcp_server, adapter, mock_config)
+
+    reply = await tool({"face_point": [5, 5, 10]})
+
+    assert reply["status"] == "success"
+    assert reply["sketch"]["face_point"] == [5.0, 5.0, 10.0]
+    assert reply["sketch"]["plane"] is None
+    assert "the face at [5.0, 5.0, 10.0] mm" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_create_sketch_point_in_the_air_is_invalid_input(mcp_server, mock_config):
+    """A point off the body fails with invalid_input naming the point."""
+    from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
+
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+    await adapter.create_part()
+    tool = await _create_sketch_tool(mcp_server, adapter, mock_config)
+
+    reply = await tool({"face_point": [5, 60, 5]})
+
+    assert reply["status"] == "error"
+    assert reply["error_type"] == "invalid_input"
+    assert "[5.0, 60.0, 5.0]" in reply["message"]
+    assert adapter._current_sketch is None

@@ -600,8 +600,9 @@ class _DummyAdapter(SolidWorksAdapter):
         """Test helper for create loft."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 
-    async def create_sketch(self, plane: str):
-        """Test helper for create sketch."""
+    async def create_sketch(self, plane: str | None, face_point=None):
+        """Test helper for create sketch; echoes where it was asked to sketch."""
+        self.last_sketch_args = (plane, face_point)
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="Sketch1")
 
     async def add_line(self, x1: float, y1: float, x2: float, y2: float):
@@ -1116,3 +1117,23 @@ class TestReset:
         result = await breaker.reset_circuit_breakers()
 
         assert result.is_success and result.data == {"reset": ["a"]}
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_create_sketch_forwards_face_point(monkeypatch):
+    """face_point reaches the wrapped adapter and the breaker's input record."""
+    inner = _DummyAdapter({})
+    cb = CircuitBreakerAdapter(adapter=inner, config={})
+    recorded: dict = {}
+
+    async def _run(name, operation, **kwargs):
+        recorded.update(kwargs.get("input_dict") or {})
+        return await operation()
+
+    monkeypatch.setattr(cb, "_execute_with_circuit_breaker", _run)
+
+    result = await cb.create_sketch(None, (1.0, 2.0, 3.0))
+
+    assert result.is_success
+    assert inner.last_sketch_args == (None, (1.0, 2.0, 3.0))
+    assert recorded == {"plane": None, "face_point": (1.0, 2.0, 3.0)}
