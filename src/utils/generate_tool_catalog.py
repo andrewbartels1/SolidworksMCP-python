@@ -18,6 +18,10 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
+# Realistic placeholder for path-like sample fields so generated samples never
+# contain null for a required field (e.g. model_path).
+SAMPLE_MODEL_PATH = r"C:\Temp\mcp_demo\part.SLDPRT"
+
 # ---------------------------------------------------------------------------
 # Tool registry — built from AST, not runtime import, so no SolidWorks needed
 # ---------------------------------------------------------------------------
