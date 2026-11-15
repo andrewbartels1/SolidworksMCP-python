@@ -80,6 +80,8 @@ Each still works until 3.0.0; use the tool named instead (#174):
 
 32 tools that were registered but never implemented: every call returned
 `not_supported` (#174). Clients that listed them only ever got an error.
+Why each one went, and what does its job now, is in `openspec/queue.md`
+("Removed tools").
 
 - Analysis: `analyze_geometry`, `get_material_properties`.
 - Automation: `automation_start_macro_recording`,
