@@ -61,7 +61,7 @@ if ($Record) {
         $line = "$_"
         if ($line -match "\[evidence\]") { $inEvidence = $true }
         elseif ($line.Trim() -eq "") { $inEvidence = $false }
-        if ($inEvidence -or $line -match "\[live\]|\[recorder\]|PASSED|FAILED|SKIPPED|passed|failed|skipped|Error") {
+        if ($inEvidence -or $line -match "\[live\]|\[note\]|\[recorder\]|PASSED|FAILED|SKIPPED|passed|failed|skipped|Error") {
             $line
         }
     }

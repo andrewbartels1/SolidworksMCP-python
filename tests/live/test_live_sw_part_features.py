@@ -10,7 +10,9 @@ One bundle, run together, then failures are fixed one at a time:
 6. ``create_rib``: a rib across the open box;
 7. ``add_cosmetic_thread`` on a 10 mm shaft, volume unchanged;
 8. ``sketch_convert_entities``: the top face's outline, cut 2 mm down;
-9. ``create_hole`` with ``positions``: three holes in one feature.
+9. ``create_hole`` with ``positions`` on a plate: counterbores (mirrored),
+   countersinks and tapped holes from points, a ring of six, and a point off
+   the face refused on purpose (the docs demo).
 
 The block every test starts from is 40 x 40 x 20 mm on the Top Plane: x and
 z from -20 to 20, y from 0 to 20, so its top face is at y = 20.
@@ -30,7 +32,7 @@ from typing import Any
 
 import pytest
 
-from tests.live.evidence import evidence
+from tests.live.evidence import evidence, note, starting
 from tests.live.test_live_sw_beta_tools import _sketch
 
 pytestmark = pytest.mark.asyncio
@@ -250,49 +252,189 @@ async def test_create_hole_blind_through_and_off_the_part(scratch: Any) -> None:
     assert in_air["status"] == "error"
 
 
+_ISO_VIEW = 7  # swStandardViews_e.swIsometricView
+
+
+def _iso(adapter: Any) -> None:
+    """Turn the camera isometric, zoomed to fit.
+
+    Staging for the recording, not a tool call: an agent does not need it.
+    Editing a hole's position sketch turns the view normal to the face, so
+    the demo turns it back after each hole.
+    """
+    model = adapter.currentModel
+    adapter._attempt(lambda: model.ShowNamedView2("", _ISO_VIEW), default=None)
+    adapter._zoom_to_fit(model)
+
+
+def _brief(made: dict[str, Any], key: str) -> Any:
+    """A short caption of a tool's reply: the feature, holes and volume."""
+    if made["status"] != "success":
+        return made["message"]
+    data = made[key]
+    brief = {"name": data.get("name"), "volume_change": round(data["volume_change"], 1)}
+    if "hole_count" in data:
+        brief["hole_count"] = data["hole_count"]
+    return brief
+
+
 async def test_holes_at_several_points(scratch: Any) -> None:
-    """Three M6 counterbores in one feature (points in its position sketch),
-    the way holes go on sketch points in the Hole Wizard; a point off the top
-    face is refused and the hole removed again."""
-    tools = await _tools(scratch.adapter)
-    await _block(tools, "hole_points")
+    """Hole Wizard holes on a 100 x 60 x 15 mm plate, placed the way you place
+    them by hand: one hole, then a point in its position sketch per other hole.
+
+    Three M6 counterbores in one feature, mirrored about the Right Plane;
+    three M6 countersinks; three M6 tapped holes through; a Ø6 hole patterned
+    six times round the y axis. Then, on purpose, a point 5 mm above the top
+    face: the call is refused, the half-made hole is deleted again, and the
+    volume doesn't change.
+    """
+    adapter = scratch.adapter
+    tools = await _tools(adapter)
+    assert (await tools["create_part"]({"name": "hole_plate"}))["status"] == "success"
+    await _sketch(tools, "Top", {"x1": -50, "y1": -30, "x2": 50, "y2": 30})
+    assert (await tools["create_extrusion"]({"depth": 15}))["status"] == "success"
+    _iso(adapter)
     before = await _volume(tools)
+    note(
+        "Prompt",
+        "Drill a 100 x 60 x 15 mm plate: M6 counterbores down both ends, "
+        "countersinks and tapped holes inside them, a ring of six Ø6 holes in "
+        "the middle.",
+        seconds=4.0,
+    )
 
-    holes = await tools["create_hole"](
+    async def holes(label: str, call: dict[str, Any]) -> dict[str, Any]:
+        text = f"create_hole({call})"
+        starting(label, text)
+        made = await tools["create_hole"](call)
+        _iso(adapter)
+        evidence(label, _brief(made, "hole"), call=text)
+        assert made["status"] == "success", made
+        return made
+
+    column = [[0, 15, -18], [0, 15, 0], [0, 15, 18]]
+
+    def at(x: float) -> list[list[float]]:
+        return [[x, y, z] for _, y, z in column]
+
+    cbore = await holes(
+        "three M6 counterbores, one feature",
         {
-            "face_point": [-10, 20, -10],
+            "face_point": at(-38)[0],
             "hole_type": "counterbore",
             "size": "M6",
             "end_condition": "blind",
             "depth": 8,
-            "positions": [[10, 20, -10], [0, 20, 10]],
-        }
-    )
-    middle = await _volume(tools)
-    off_face = await tools["create_hole"](
-        {
-            "face_point": [-10, 20, 10],
-            "hole_type": "counterbore",
-            "size": "M6",
-            "end_condition": "blind",
-            "depth": 8,
-            "positions": [[10, 25, 10]],
-        }
-    )
-    after = await _volume(tools)
-
-    evidence(
-        "create_hole with positions",
-        {
-            "holes": holes.get("hole", holes.get("message")),
-            "volume_change": round(middle - before, 1),
-            "off_face": [off_face["status"], off_face["message"]],
-            "volume_after_refusal_unchanged": round(after - middle, 1) == 0,
+            "positions": at(-38)[1:],
         },
     )
-    assert holes["status"] == "success", holes
-    assert holes["hole"]["hole_count"] == 3
+    mirror_call = {
+        "features": [cbore["hole"]["name"]],
+        "mirror_plane": "Right Plane",
+        "mirror_bodies": False,
+    }
+    starting("mirrored to the other end", f"mirror_feature({mirror_call})")
+    mirrored = await tools["mirror_feature"](mirror_call)
+    _iso(adapter)
+    evidence(
+        "mirrored to the other end",
+        _brief(mirrored, "mirror"),
+        call=f"mirror_feature({mirror_call})",
+    )
+    assert mirrored["status"] == "success", mirrored
+    csk = await holes(
+        "three M6 countersinks",
+        {
+            "face_point": at(-22)[0],
+            "hole_type": "countersink",
+            "size": "M6",
+            "end_condition": "blind",
+            "depth": 10,
+            "positions": at(-22)[1:],
+        },
+    )
+    tapped = await holes(
+        "three M6 tapped holes, through",
+        {
+            "face_point": at(22)[0],
+            "hole_type": "tapped",
+            "size": "M6x1.0",
+            "positions": at(22)[1:],
+        },
+    )
+    seed = await holes(
+        "a Ø6 hole for the ring",
+        {
+            "face_point": [10, 15, 0],
+            "hole_type": "simple",
+            "size": "Ø6.0",
+            "end_condition": "blind",
+            "depth": 10,
+        },
+    )
+    axis = await tools["create_axis"]({"reference": "y"})
+    assert axis["status"] == "success", axis
+    ring_call = {
+        "features": [seed["hole"]["name"]],
+        "axis": axis["axis"]["name"],
+        "count": 6,
+    }
+    starting("a ring of six round the y axis", f"pattern_circular({ring_call})")
+    ring = await tools["pattern_circular"](ring_call)
+    _iso(adapter)
+    evidence(
+        "a ring of six round the y axis",
+        _brief(ring, "pattern"),
+        call=f"pattern_circular({ring_call})",
+    )
+    assert ring["status"] == "success", ring
+    middle = await _volume(tools)
+
+    note(
+        "Next, on purpose: a point the tool must refuse",
+        "One position is 5 mm above the top face. The tool should refuse it, "
+        "delete the hole it started, and leave the plate as it is. The error "
+        "that follows is the check passing.",
+        seconds=5.0,
+    )
+    off_call = {
+        "face_point": [0, 15, 22],
+        "hole_type": "counterbore",
+        "size": "M6",
+        "end_condition": "blind",
+        "depth": 8,
+        "positions": [[0, 20, -22]],
+    }
+    starting("expected refusal", f"create_hole({off_call})")
+    off_face = await tools["create_hole"](off_call)
+    after = await _volume(tools)
+    _iso(adapter)
+    evidence(
+        "Refused, as intended: the half-made hole was deleted again",
+        {
+            "status": off_face["status"],
+            "message": off_face["message"],
+            "plate_unchanged": round(after - middle, 1) == 0,
+        },
+        call=f"create_hole({off_call})",
+        hold=5.0,
+    )
+    evidence(
+        "The plate: 18 holes from 4 Hole Wizard features, a mirror and a ring",
+        {
+            "holes_per_feature": {
+                "counterbores": cbore["hole"]["hole_count"],
+                "countersinks": csk["hole"]["hole_count"],
+                "tapped": tapped["hole"]["hole_count"],
+            },
+            "volume_mm3": [round(before, 1), round(after, 1)],
+        },
+        hold=5.0,
+    )
+    for made in (cbore, csk, tapped):
+        assert made["hole"]["hole_count"] == 3
     assert off_face["status"] == "error"
+    assert "was removed again" in off_face["message"]
     assert after == pytest.approx(middle)
 
 

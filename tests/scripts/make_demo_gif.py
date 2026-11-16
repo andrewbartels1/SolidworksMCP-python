@@ -77,12 +77,16 @@ def build_gifs(
     return written
 
 
-_STAMP = re.compile(r"^(?P<kind>frame|caption|end)-(?P<ms>\d{8})(?:\.png)?$")
+_STAMP = re.compile(
+    r"^(?P<kind>frame|caption|end)-(?P<ms>\d{8})(?:-hold(?P<hold>\d+))?(?:\.png)?$"
+)
 
 
-def _timeline(folder: Path) -> tuple[list, list, int]:
-    """A recording's frames and captions as ``(ms, path)``, and its end time."""
+def _timeline(folder: Path) -> tuple[list, list, int, dict[Path, float]]:
+    """A recording's frames and captions as ``(ms, path)``, its end time, and
+    the seconds each held caption asks to be shown (``caption-<ms>-hold<ms>``)."""
     frames, captions, end = [], [], 0
+    holds: dict[Path, float] = {}
     for path in sorted(folder.iterdir()):
         match = _STAMP.match(path.name)
         if not match:
@@ -92,10 +96,12 @@ def _timeline(folder: Path) -> tuple[list, list, int]:
             frames.append((ms, path))
         elif match["kind"] == "caption":
             captions.append((ms, path))
+            if match["hold"]:
+                holds[path] = int(match["hold"]) / 1000.0
         else:
             end = max(end, ms)
     last = max([ms for ms, _ in frames + captions] or [0])
-    return frames, captions, max(end, last + 1000)
+    return frames, captions, max(end, last + 1000), holds
 
 
 def _latest(items: list, ms: int) -> Path | None:
@@ -121,11 +127,11 @@ def build_recording(
     """One recording as a GIF; ``None`` when it holds no frames.
 
     A frame where a new caption appears shows for at least ``min_caption``
-    seconds, so a tool call can be read however fast the rest plays; the
+    seconds (or the hold the caption was saved with), so a tool call can be read however fast the rest plays; the
     first caption, the prompt, for at least ``prompt_seconds``; and the last
     frame, the result, for at least ``end_seconds`` before the GIF loops.
     """
-    frames, captions, end = _timeline(folder)
+    frames, captions, end, holds = _timeline(folder)
     if not frames:
         return None
     events = sorted(
@@ -165,7 +171,8 @@ def build_recording(
         if caption_path is not None and caption_path != _latest(captions, ms - 1):
             # The first caption is the prompt: give it time to be read.
             first = caption_path == captions[0][1]
-            seconds = max(seconds, prompt_seconds if first else min_caption)
+            least = prompt_seconds if first else holds.get(caption_path, min_caption)
+            seconds = max(seconds, least)
         if i == len(events) - 1:
             seconds = max(seconds, end_seconds)
         images.append(frame.quantize(palette=palette, dither=Image.Dither.NONE))

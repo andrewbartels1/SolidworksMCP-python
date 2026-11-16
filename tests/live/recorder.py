@@ -20,6 +20,8 @@ Files, under ``<SW_DEMO_CAPTURE_DIR>/recording/<test>/`` (or
 
 - ``frame-<ms>.png``: a changed frame, ``ms`` after the recording started;
 - ``caption-<ms>.png``: an evidence caption panel, shown from then on;
+  ``caption-<ms>-hold<hold ms>.png`` for one the GIF holds at least that long
+  (a narrated step, such as a failure the demo makes on purpose);
 - ``end-<ms>``: when the recording stopped.
 """
 
@@ -77,9 +79,17 @@ class Recorder:
         (self.directory / f"end-{self._ms():08d}").touch()
 
     def caption(
-        self, label: str, payload: Any, call: str | None, max_lines: int | None = None
+        self,
+        label: str,
+        payload: Any,
+        call: str | None,
+        max_lines: int | None = None,
+        hold: float | None = None,
     ) -> None:
-        """Save an evidence caption, shown under every frame from now on."""
+        """Save an evidence caption, shown under every frame from now on.
+
+        ``hold`` (seconds) makes the GIF show it at least that long.
+        """
         from tests.live.evidence import caption_panel
 
         width = self._width or 1280
@@ -87,7 +97,8 @@ class Recorder:
             panel = caption_panel(width, label, payload, call)
         else:
             panel = caption_panel(width, label, payload, call, max_lines)
-        panel.save(self.directory / f"caption-{self._ms():08d}.png")
+        suffix = f"-hold{round(hold * 1000)}" if hold else ""
+        panel.save(self.directory / f"caption-{self._ms():08d}{suffix}.png")
 
     def _run(self) -> None:
         """Grab, compare and save until stopped; a failure ends the recording."""
@@ -163,15 +174,20 @@ def stop(recorder: Recorder) -> None:
 
 
 def note_caption(
-    label: str, payload: Any, call: str | None, max_lines: int | None = None
+    label: str,
+    payload: Any,
+    call: str | None,
+    max_lines: int | None = None,
+    hold: float | None = None,
 ) -> None:
     """Stamp an evidence caption into the running recording, if there is one.
 
-    ``max_lines`` overrides the caption's usual line limit (see ``evidence``).
+    ``max_lines`` overrides the caption's usual line limit (see ``evidence``);
+    ``hold`` is the least time, in seconds, the GIF shows it.
     """
     if _ACTIVE is None:
         return
     try:
-        _ACTIVE.caption(label, payload, call, max_lines)
+        _ACTIVE.caption(label, payload, call, max_lines, hold)
     except Exception as exc:  # noqa: BLE001 - a recording never fails a test
         print(f"[recorder] caption skipped: {exc}", flush=True)

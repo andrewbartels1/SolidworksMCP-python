@@ -62,6 +62,7 @@ def evidence(
     picture: Any = None,
     quick: bool = False,
     max_lines: int = _CAPTION_MAX_LINES,
+    hold: float | None = None,
 ) -> None:
     """Print one proof, hold if asked, then capture it if asked.
 
@@ -79,13 +80,15 @@ def evidence(
             still, for a run of small steps the recording shows as motion.
         max_lines: Caption lines kept before the rest is cut to ``...``;
             raise it for a caption that must show in full, such as a prompt.
+        hold: Seconds a recording's GIF shows this caption at least, for a
+            step the viewer must read, such as a failure made on purpose.
     """
     _print(label, payload, call)
     from tests.live import recorder
 
     if quick:
         return
-    recorder.note_caption(label, payload, call, max_lines)
+    recorder.note_caption(label, payload, call, max_lines, hold)
     try:
         hold = float(os.getenv("SW_DEMO_HOLD_SECONDS", "0"))
     except ValueError:
@@ -98,6 +101,20 @@ def evidence(
             _capture(Path(capture_dir), label, payload, call, picture, max_lines)
         except Exception as exc:  # noqa: BLE001 - a picture never fails a test
             print(f"[evidence] (capture skipped: {exc})", flush=True)
+
+
+def note(label: str, text: str, seconds: float = 5.0) -> None:
+    """Narrate the next step, held long enough to read, e.g. "next, on purpose".
+
+    Printed, and stamped into a recording so its GIF shows it at least
+    ``seconds``; in a watched run it pauses that long too.
+    """
+    from tests.live import recorder
+
+    print(f"[note] {label}: {text}", flush=True)
+    recorder.note_caption(label, text, None, None, seconds)
+    if os.getenv("SW_DEMO_HOLD_SECONDS") and not recorder.asked():
+        time.sleep(seconds)
 
 
 def starting(label: str, call: str | None = None) -> None:
