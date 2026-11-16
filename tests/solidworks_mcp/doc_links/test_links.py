@@ -167,7 +167,7 @@ def test_check_internal_resolves_readme_links_from_the_root(site_root: Path) -> 
             "https://objects.githubusercontent.com/z",
             True,
         ),
-        ("https://andrewbartels1.github.io/p/", "https://andrewbartels1.com/p/", True),
+        ("https://andrewbartels1.github.io/p/", "https://andrewbartels1.com/p/", False),
         ("https://a.com/", "https://parked.example/", False),
         ("https://notcodecov.io/", "https://codecov.io/", False),
     ],

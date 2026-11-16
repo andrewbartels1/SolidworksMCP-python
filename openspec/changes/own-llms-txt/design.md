@@ -198,8 +198,10 @@ read by hand:
 - Every `andrewbartels1.github.io/SolidworksMCP-python/...` URL redirects
   to `andrewbartels1.com/SolidworksMCP-python/...`, the custom domain set
   on the owner's GitHub Pages site. Only the account owner can set that,
-  so it is listed in `SAME_SITE`. The owner may prefer to make
-  `andrewbartels1.com` the `site_url`; that's their call.
+  The owner chose (2026-11-15) to point every link at
+  `https://andrewbartels1.com/SolidworksMCP-python/` directly: `site_url`,
+  the READMEs and the docs home page now use it, and the redirect is not
+  allowed as the same site.
 - `codecov.io` sends the badge link to `app.codecov.io`: subdomains now
   count as the same site.
 - `console.anthropic.com/settings/keys` now redirects to

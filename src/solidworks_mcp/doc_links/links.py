@@ -260,10 +260,8 @@ def _host(url: str) -> str:
     return (urlsplit(url).hostname or "").lower().removeprefix("www.")
 
 
-#: Hosts a site legitimately hands its pages to. GitHub serves release
-#: downloads, raw files and avatars from its content hosts; GitHub Pages
-#: sends ``<owner>.github.io`` to the custom domain the owner set on their
-#: Pages site, which only the owner can configure.
+#: Hosts a site legitimately hands its pages to: GitHub serves release
+#: downloads, raw files and avatars from its content hosts.
 SAME_SITE: dict[str, tuple[str, ...]] = {
     "github.com": (
         "objects.githubusercontent.com",
@@ -271,7 +269,6 @@ SAME_SITE: dict[str, tuple[str, ...]] = {
         "release-assets.githubusercontent.com",
         "avatars.githubusercontent.com",
     ),
-    "andrewbartels1.github.io": ("andrewbartels1.com",),
 }
 
 #: URLs (by prefix) a script can't check, and why. The report lists each

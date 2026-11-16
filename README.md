@@ -12,7 +12,7 @@
 
 Python MCP server for SolidWorks automation with 123 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
-[![115 MCP tools by support level (the 8 deprecated ones not counted), and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.github.io/SolidworksMCP-python/progress/)
+[![115 MCP tools by support level (the 8 deprecated ones not counted), and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.com/SolidworksMCP-python/progress/)
 
 <sub>Generated from the code; click it for every tool, its level and why, filterable by level and family.</sub>
 
@@ -108,7 +108,7 @@ I took SolidWorks' own U-Joint sample, read every part, sketch, feature and mate
 
 ![The agent's 294 tool calls replayed in SolidWorks: eight parts sketched and cut, then the crank sub-assembly and the U-joint mated together](docs/assets/demos/ujoint/test_ujoint_from_prompt_to_assembly-motion.gif)
 
-Six of the eight parts match the sample's volume within 0.2 %, and all eight within 1 %. The mates leave the mechanism free to turn. The recording replays the session's 294 calls (sped up 80 times). The [walkthrough](https://andrewbartels1.github.io/SolidworksMCP-python/demos/#ujoint) has the prompt, the part-by-part comparison, and what the agent couldn't do. The same prompt run with and without the [agent skill](https://andrewbartels1.github.io/SolidworksMCP-python/agents/agent-skill/) made the same parts, which is why I want skills that improve results (#207).
+Six of the eight parts match the sample's volume within 0.2 %, and all eight within 1 %. The mates leave the mechanism free to turn. The recording replays the session's 294 calls (sped up 80 times). The [walkthrough](https://andrewbartels1.com/SolidworksMCP-python/demos/#ujoint) has the prompt, the part-by-part comparison, and what the agent couldn't do. The same prompt run with and without the [agent skill](https://andrewbartels1.com/SolidworksMCP-python/agents/agent-skill/) made the same parts, which is why I want skills that improve results (#207).
 
 ### A drawing package from one prompt
 
@@ -120,7 +120,7 @@ The 58 tool calls an agent made from that prompt, run against SolidWorks 2026 th
 
 > **Note:** the demo is not perfect, and is not the most efficient way to get this result. The run pauses after each call so it can be read, and the calls are chosen to show what the tools can do: every sketch dimension is added one at a time, and the mate distance is stepped down only so the plates are seen coming together.
 
-The [walkthrough in the docs](https://andrewbartels1.github.io/SolidworksMCP-python/demos/#prompt-to-drawing) has the agent's plan and every call with its arguments. Run it yourself with the [README demo](tests/live/test_live_sw_readme_demo.py); the calls are also in [`plate_stack_calls.json`](docs/assets/demos/readme/plate_stack_calls.json).
+The [walkthrough in the docs](https://andrewbartels1.com/SolidworksMCP-python/demos/#prompt-to-drawing) has the agent's plan and every call with its arguments. Run it yourself with the [README demo](tests/live/test_live_sw_readme_demo.py); the calls are also in [`plate_stack_calls.json`](docs/assets/demos/readme/plate_stack_calls.json).
 
 <details>
 <summary>The 58 tool calls</summary>
@@ -160,45 +160,45 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 
 <table>
 <tr>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#monitor-stand"><img src="docs/assets/demos/monitor-stand/test_monitor_stand_from_prompt_to_part-motion.gif" alt="A 3D-printable monitor stand from a prompt" width="100%"><img src="docs/assets/demos/monitor-stand/monitor_stand_printing.gif" alt="The monitor stand being 3D printed" width="100%"></a><br><sub>A 3D-printable monitor stand from a prompt, then printed</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-block"><img src="docs/assets/demos/verify-model/test_verify_model_passes_a_block_and_names_what_is_wrong.gif" alt="verify_model passes a block and names what is wrong" width="100%"></a><br><sub><code>verify_model</code> passes a block and names what is wrong</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-assembly"><img src="docs/assets/demos/verify-model/test_assembly_counts_components_mates_and_interference.gif" alt="An assembly: parts, mates and interference" width="100%"></a><br><sub>An assembly: parts, mates and interference</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#monitor-stand"><img src="docs/assets/demos/monitor-stand/test_monitor_stand_from_prompt_to_part-motion.gif" alt="A 3D-printable monitor stand from a prompt" width="100%"><img src="docs/assets/demos/monitor-stand/monitor_stand_printing.gif" alt="The monitor stand being 3D printed" width="100%"></a><br><sub>A 3D-printable monitor stand from a prompt, then printed</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#verify-block"><img src="docs/assets/demos/verify-model/test_verify_model_passes_a_block_and_names_what_is_wrong.gif" alt="verify_model passes a block and names what is wrong" width="100%"></a><br><sub><code>verify_model</code> passes a block and names what is wrong</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#verify-assembly"><img src="docs/assets/demos/verify-model/test_assembly_counts_components_mates_and_interference.gif" alt="An assembly: parts, mates and interference" width="100%"></a><br><sub>An assembly: parts, mates and interference</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-cut"><img src="docs/assets/demos/verify-model/test_cut_reports_the_volume_it_removed.gif" alt="A cut reports the volume it removed" width="100%"></a><br><sub>A cut reports the volume it removed</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-revolve"><img src="docs/assets/demos/verify-model/test_revolve_reports_the_volume_it_added.gif" alt="A revolve reports the volume it added" width="100%"></a><br><sub>A revolve reports the volume it added</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-round"><img src="docs/assets/demos/verify-model/test_round_part_size_is_exact.gif" alt="A round part's size is exact" width="100%"></a><br><sub>A round part's size is exact</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#verify-cut"><img src="docs/assets/demos/verify-model/test_cut_reports_the_volume_it_removed.gif" alt="A cut reports the volume it removed" width="100%"></a><br><sub>A cut reports the volume it removed</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#verify-revolve"><img src="docs/assets/demos/verify-model/test_revolve_reports_the_volume_it_added.gif" alt="A revolve reports the volume it added" width="100%"></a><br><sub>A revolve reports the volume it added</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#verify-round"><img src="docs/assets/demos/verify-model/test_round_part_size_is_exact.gif" alt="A round part's size is exact" width="100%"></a><br><sub>A round part's size is exact</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#verify-selection"><img src="docs/assets/demos/verify-model/test_reading_the_model_keeps_the_selection.gif" alt="Reading the model keeps the selection" width="100%"></a><br><sub>Reading the model keeps the selection</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#package-block"><img src="docs/assets/demos/drawing-package/test_generate_drawing_package_on_a_block.gif" alt="A full drawing package from one call" width="100%"></a><br><sub>A full drawing package from one call</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#sheet-scale"><img src="docs/assets/demos/drawing-package/test_set_sheet_scale_halves_the_views.gif" alt="Setting the sheet scale" width="100%"></a><br><sub>Setting the sheet scale</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#verify-selection"><img src="docs/assets/demos/verify-model/test_reading_the_model_keeps_the_selection.gif" alt="Reading the model keeps the selection" width="100%"></a><br><sub>Reading the model keeps the selection</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#package-block"><img src="docs/assets/demos/drawing-package/test_generate_drawing_package_on_a_block.gif" alt="A full drawing package from one call" width="100%"></a><br><sub>A full drawing package from one call</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#sheet-scale"><img src="docs/assets/demos/drawing-package/test_set_sheet_scale_halves_the_views.gif" alt="Setting the sheet scale" width="100%"></a><br><sub>Setting the sheet scale</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#bom"><img src="docs/assets/demos/drawing-package/test_insert_bom_table_lists_both_parts.gif" alt="A BOM on an assembly drawing" width="100%"></a><br><sub>A BOM on an assembly drawing</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#insert-model-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_insert_model_dimensions_shows_each_dimension_once.gif" alt="Each model dimension shown once" width="100%"></a><br><sub>Each model dimension shown once</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#arrange-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_arrange_dimensions_clears_every_overlap.gif" alt="Clearing every overlap" width="100%"></a><br><sub>Clearing every overlap</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#bom"><img src="docs/assets/demos/drawing-package/test_insert_bom_table_lists_both_parts.gif" alt="A BOM on an assembly drawing" width="100%"></a><br><sub>A BOM on an assembly drawing</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#insert-model-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_insert_model_dimensions_shows_each_dimension_once.gif" alt="Each model dimension shown once" width="100%"></a><br><sub>Each model dimension shown once</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#arrange-dimensions"><img src="docs/assets/demos/drawing-dimensions/test_arrange_dimensions_clears_every_overlap.gif" alt="Clearing every overlap" width="100%"></a><br><sub>Clearing every overlap</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#material"><img src="docs/assets/demos/engineering-data/test_material_applies_and_changes_mass.gif" alt="Material and mass" width="100%"></a><br><sub>Material and mass</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#dimensions-and-measure"><img src="docs/assets/demos/engineering-data/test_dimensions_list_and_measure.gif" alt="Listing dimensions and measuring a face" width="100%"></a><br><sub>Listing dimensions and measuring a face</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#flat-pattern"><img src="docs/assets/demos/engineering-data/test_export_flat_pattern_writes_a_dxf.gif" alt="Flat pattern of a sheet-metal part" width="100%"></a><br><sub>Flat pattern of a sheet-metal part</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#material"><img src="docs/assets/demos/engineering-data/test_material_applies_and_changes_mass.gif" alt="Material and mass" width="100%"></a><br><sub>Material and mass</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#dimensions-and-measure"><img src="docs/assets/demos/engineering-data/test_dimensions_list_and_measure.gif" alt="Listing dimensions and measuring a face" width="100%"></a><br><sub>Listing dimensions and measuring a face</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#flat-pattern"><img src="docs/assets/demos/engineering-data/test_export_flat_pattern_writes_a_dxf.gif" alt="Flat pattern of a sheet-metal part" width="100%"></a><br><sub>Flat pattern of a sheet-metal part</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#custom-property"><img src="docs/assets/demos/engineering-data/test_custom_property_round_trip.gif" alt="Custom properties" width="100%"></a><br><sub>Custom properties</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#face-mate"><img src="docs/assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces-motion.gif" alt="A pin seated in its hole by two face mates" width="100%"></a><br><sub>A pin seated in its hole by two face mates</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.github.io/SolidworksMCP-python/demos/#thin-plate"><img src="docs/assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate-motion.gif" alt="A bent plate from an open outline" width="100%"></a><br><sub>A bent plate from an open outline</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#custom-property"><img src="docs/assets/demos/engineering-data/test_custom_property_round_trip.gif" alt="Custom properties" width="100%"></a><br><sub>Custom properties</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#face-mate"><img src="docs/assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces-motion.gif" alt="A pin seated in its hole by two face mates" width="100%"></a><br><sub>A pin seated in its hole by two face mates</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#thin-plate"><img src="docs/assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate-motion.gif" alt="A bent plate from an open outline" width="100%"></a><br><sub>A bent plate from an open outline</sub></td>
 </tr>
 </table>
 
-**[See every demo in the docs](https://andrewbartels1.github.io/SolidworksMCP-python/demos/)**: what each one shows, its prompt, every tool call with its arguments (all 58 for the demo at the top), and how to run them yourself.
+**[See every demo in the docs](https://andrewbartels1.com/SolidworksMCP-python/demos/)**: what each one shows, its prompt, every tool call with its arguments (all 58 for the demo at the top), and how to run them yourself.
 
 ## Supported Today
 
 - Windows + SolidWorks COM automation for the main CAD lifecycle.
-- Tested on SolidWorks 2026. Earlier versions may work but are untested. To check yours, run `uvx solidworks-mcp-python selftest` with SolidWorks open, then send the result with the [compatibility report form](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=compatibility.yml). The [compatibility page](https://andrewbartels1.github.io/SolidworksMCP-python/compatibility/) lists the releases checked so far.
+- Tested on SolidWorks 2026. Earlier versions may work but are untested. To check yours, run `uvx solidworks-mcp-python selftest` with SolidWorks open, then send the result with the [compatibility report form](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=compatibility.yml). The [compatibility page](https://andrewbartels1.com/SolidworksMCP-python/compatibility/) lists the releases checked so far.
 - Modeling, sketching, drawing, analysis, export, file and engineering-data tools, plus VBA generation and running macros.
-- Every tool's support level, and the reason a tool isn't stable yet, is on the [progress page](https://andrewbartels1.github.io/SolidworksMCP-python/progress/).
+- Every tool's support level, and the reason a tool isn't stable yet, is on the [progress page](https://andrewbartels1.com/SolidworksMCP-python/progress/).
 
 ## Not Yet / Simulated
 
@@ -228,7 +228,7 @@ Nothing needs a login or an API key, and the server runs only on your PC. Setup 
 
 **To check it worked:** open SolidWorks, restart your client, and ask *"What model is open in SolidWorks?"*
 
-The package is `solidworks-mcp-python`. `uvx solidworks-mcp` installs a different project. To work on the server itself, [install from a clone](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#install-from-source). More fixes are in [Troubleshooting](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#troubleshooting).
+The package is `solidworks-mcp-python`. `uvx solidworks-mcp` installs a different project. To work on the server itself, [install from a clone](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#install-from-source). More fixes are in [Troubleshooting](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#troubleshooting).
 
 ## Connect your client
 
@@ -392,7 +392,7 @@ To mirror GitHub Actions CI locally (Ubuntu, the conda env from `solidworks_mcp.
 
 ## Docs
 
-- Main docs site: <https://andrewbartels1.github.io/SolidworksMCP-python/>
+- Main docs site: <https://andrewbartels1.com/SolidworksMCP-python/>
 - Home/overview: [docs/index.md](docs/index.md)
 
 Key docs sections:
