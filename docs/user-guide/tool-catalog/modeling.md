@@ -470,7 +470,7 @@ Every point in `positions` adds another hole to the same feature, as placing hol
 
 List the Hole Wizard's hole types and sizes for a standard, or one size's dimensions.
 
-Read from SolidWorks' installed Hole Wizard library (the Toolbox file `swbrowser.sldedb`, found through the registry or the `SOLIDWORKS_MCP_HOLE_LIBRARY` setting), read-only, so it works without SolidWorks running. With `size`, it gives that size's dimensions as the library stores them: counterbore diameter and depth, head diameter, pitch, in mm (inches for `ansi_inch`). This tool is beta until its live check.
+Read from SolidWorks' installed Hole Wizard library (the Toolbox file `swbrowser.sldedb`, found through the registry or the `SOLIDWORKS_MCP_HOLE_LIBRARY` setting), read-only, so it works without SolidWorks running. With `size`, it gives that size's dimensions as the library stores them: counterbore diameter and depth, head diameter, pitch, in mm (inches for `ansi_inch`).
 
 **Prerequisite:** SolidWorks' Toolbox library on this machine.
 

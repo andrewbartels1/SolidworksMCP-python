@@ -28,12 +28,12 @@ the names are checked in the adapter, not the tool (design decision 1).
 
 ## 4. Live bundle (one set, run together, then fixes one by one)
 
-- [ ] 4.1 (create/activate/delete passed live 2026-11-16; the scoped changes are in `test_changes_in_chosen_configurations`, not yet run) Live tests: create `Long`, activate it and back; delete refused while active; a length in `Long` only, read in both; `Fillet1` suppressed in `all`; an unknown name refused
-- [ ] 4.2 Hand the user the bundle; fix each failure afterwards, one at a time
+- [x] 4.1 (all passed live 2026-11-16, `test_changes_in_chosen_configurations` included: SetSystemValue3 and SetSuppression2 with the names array work under late binding) Live tests: create `Long`, activate it and back; delete refused while active; a length in `Long` only, read in both; `Fillet1` suppressed in `all`; an unknown name refused
+- [x] 4.2 Hand the user the bundle; fix each failure afterwards, one at a time
 
 ## 5. Docs and finish
 
 - [x] 5.1 Catalog pages; the agent skill's note on configurations (scope defaults to the active one)
 - [x] 5.2 CHANGELOG (Added; Changed: `list_configurations` reports `active`), progress bars regenerated
 - [x] 5.3 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
-- [ ] 5.4 Sign-off, PR (no attribution), archive, the queue updated
+- [x] 5.4 Sign-off, PR (no attribution), archive, the queue updated

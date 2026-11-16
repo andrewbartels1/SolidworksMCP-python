@@ -3,7 +3,7 @@
 1. ``list_hole_sizes`` reads the installed library: ISO simple hole types,
    and an M6 cap screw's counterbore dimensions;
 2. ``create_hole`` with ``M6`` (a screw clearance hole), ``6`` (a drilled
-   Ø6.0 hole) and ``M6x1.0`` (the coarse tapped M6); an unknown size is
+   Ø6.0 hole) and ``M6x1.0`` (the coarse tapped M6); an unknown size (M15) is
    refused, with the nearest sizes, and nothing is made.
 
 The block is 40 x 40 x 20 mm on the Top Plane, its top face at y = 20.
@@ -49,7 +49,10 @@ async def test_list_hole_sizes_reads_the_installed_library(scratch: Any) -> None
 
 
 async def test_sizes_come_from_the_library(scratch: Any) -> None:
-    """M6 clearance, a 6 mm drill and M6x1.0 tapped build; M7 is refused."""
+    """M6 clearance, a 6 mm drill and M6x1.0 tapped build; M15 is refused.
+
+    M15 is not in the ISO clearance table (M7 is: the first run assumed not).
+    """
     tools = await _tools(scratch.adapter)
     await _block(tools, "hole_sizes")
 
@@ -66,7 +69,7 @@ async def test_sizes_come_from_the_library(scratch: Any) -> None:
     drilled = await tools["create_hole"](hole(10, -10, "simple", "6"))
     tapped = await tools["create_hole"](hole(0, 10, "tapped", "M6x1.0"))
     before = await _volume(tools)
-    unknown = await tools["create_hole"](hole(-10, 10, "simple", "M7"))
+    unknown = await tools["create_hole"](hole(-10, 10, "simple", "M15"))
     after = await _volume(tools)
 
     def brief(made: dict[str, Any]) -> Any:
@@ -81,8 +84,8 @@ async def test_sizes_come_from_the_library(scratch: Any) -> None:
             "M6 simple": brief(clearance),
             "6 simple": brief(drilled),
             "M6x1.0 tapped": brief(tapped),
-            "M7 simple": [unknown["status"], unknown["message"]],
-            "volume_unchanged_after_M7": round(after - before, 1) == 0,
+            "M15 simple": [unknown["status"], unknown["message"]],
+            "volume_unchanged_after_M15": round(after - before, 1) == 0,
         },
     )
     assert clearance["hole"]["fastener"] == "Screw Clearances"

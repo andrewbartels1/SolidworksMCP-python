@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   active one, as before), `all`, or a list of names, and the reply names
   where the change applied. An unknown name is refused as `invalid_input`
   before anything changes.
-- **The Hole Wizard library** (queue item 22): `list_hole_sizes` lists a
+- **The Hole Wizard library** (queue item 22), checked live on SolidWorks
+  2026: `list_hole_sizes` lists a
   standard's hole types and sizes, or one size's dimensions, read-only from
   SolidWorks' installed Toolbox library (no SolidWorks needed). `create_hole`
   now checks the size there first and refuses one that doesn't exist, naming

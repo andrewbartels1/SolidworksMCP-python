@@ -2,8 +2,8 @@
  "tools": {
   "total": 134,
   "by_level": {
-   "stable": 118,
-   "beta": 1,
+   "stable": 119,
+   "beta": 0,
    "experimental": 0,
    "planned": 7,
    "deprecated": 8
@@ -663,8 +663,8 @@
    {
     "name": "list_hole_sizes",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 22's live check).",
+    "level": "stable",
+    "reason": "",
     "summary": "List the Hole Wizard's hole types and sizes for a standard, or one size's dimensions."
    },
    {

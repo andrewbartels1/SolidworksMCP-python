@@ -22,5 +22,5 @@
 
 ## 5. Live checks
 
-- [ ] 5.1 (written 2026-11-16, not yet run) `tests/live/test_live_sw_hole_library.py`: list ISO simple and counterbore sizes from the installed library; `create_hole` with `M6` (clearance), `6` (drill) and an unknown size refused with no feature made
-- [ ] 5.2 Rerun the pattern demo (`test_pattern_a_row_and_a_grid`) with the clearance hole
+- [x] 5.1 (passed 2026-11-16; the unknown size is M15, as M7 is in the ISO table) `tests/live/test_live_sw_hole_library.py`: list ISO simple and counterbore sizes from the installed library; `create_hole` with `M6` (clearance), `6` (drill) and an unknown size refused with no feature made
+- [x] 5.2 (passed 2026-11-16) Rerun the pattern demo (`test_pattern_a_row_and_a_grid`) with the clearance hole
