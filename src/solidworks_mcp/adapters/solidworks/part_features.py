@@ -31,6 +31,8 @@ from .features import (
     _select_named_feature,
     _with_volume_change,
 )
+from .rebuild_diagnostics import explain
+from .rebuild_inspector import collect_rebuild_issues
 
 #: ``swWzdGeneralHoleTypes_e``.
 HOLE_TYPES: dict[str, int] = {
@@ -197,7 +199,54 @@ class SolidWorksPartFeaturesMixin:
                     f"{after:.1f} mm³); a cosmetic thread must not."
                 ),
             )
-        return _with_volume_change(result, before, after)
+        name = (result.data or {}).get("name")
+        issues = self._rebuild_issues(operation, name)
+        errors = [issue for issue in issues if issue["severity"] == "error"]
+        if errors:
+            if name:
+                await adapter.delete_feature(name)
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"{operation}: SolidWorks reports {errors[0]['code_name']} on "
+                    f"{name}: {errors[0]['description']} {errors[0]['hint']} The "
+                    "feature was removed again."
+                ),
+            )
+        measured = _with_volume_change(result, before, after)
+        if issues:
+            data = dict(measured.data or {})
+            data["rebuild_warnings"] = issues
+            measured = AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data=data,
+                execution_time=measured.execution_time,
+            )
+        return measured
+
+    def _rebuild_issues(self, operation: str, name: str | None) -> list[dict[str, Any]]:
+        """The new feature's rebuild errors and warnings, explained.
+
+        Args:
+            operation: The operation's name (for the COM call's log).
+            name: The new feature's name; nothing is read without one.
+
+        Returns:
+            One explained entry (``severity``, ``code_name``, ``description``,
+            ``hint``) per issue SolidWorks reports on that feature.
+        """
+        adapter: Any = self
+        if not name:
+            return []
+        read = adapter._handle_com_operation(
+            f"{operation}_rebuild_check",
+            lambda: [
+                explain(issue)
+                for issue in collect_rebuild_issues(adapter, adapter.currentModel)
+                if issue.feature == name
+            ],
+        )
+        return list(read.data or []) if read.is_success else []
 
     async def pattern_linear(
         self,

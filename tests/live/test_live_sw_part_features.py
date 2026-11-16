@@ -84,12 +84,19 @@ _HOLE_GRID = [
 
 
 async def test_hole_wizard_diagnostic(scratch: Any) -> None:
-    """Each hole type for ISO and ANSI inch, one per block corner region."""
-    tools = await _tools(scratch.adapter)
-    await _block(tools, "hole_grid")
-    spots = [(x, z) for z in (-12.0, 12.0) for x in (-15.0, -5.0, 5.0, 15.0)]
+    """Each hole type for ISO and ANSI inch, 20 mm apart on an 80 x 40 block.
 
-    results = {}
+    Holes up to a 12.4 mm countersink fit without overlapping. Any rebuild
+    warning SolidWorks gives a hole is printed with it.
+    """
+    tools = await _tools(scratch.adapter)
+    assert (await tools["create_part"]({"name": "hole_grid"}))["status"] == "success"
+    await _sketch(tools, "Top", {"x1": -40, "y1": -20, "x2": 40, "y2": 20})
+    made = await tools["create_extrusion"]({"depth": 20})
+    assert made["status"] == "success", made
+    spots = [(x, z) for z in (-10.0, 10.0) for x in (-30.0, -10.0, 10.0, 30.0)]
+
+    results: dict[str, Any] = {}
     for (hole_type, standard, size), (x, z) in zip(_HOLE_GRID, spots, strict=True):
         made = await tools["create_hole"](
             {
@@ -101,13 +108,19 @@ async def test_hole_wizard_diagnostic(scratch: Any) -> None:
                 "depth": 8,
             }
         )
-        results[f"{hole_type}/{standard}/{size}"] = (
-            round(made["hole"]["volume_change"], 1)
-            if made["status"] == "success"
-            else made["message"]
-        )
+        if made["status"] != "success":
+            results[f"{hole_type}/{standard}/{size}"] = made["message"]
+            continue
+        hole = made["hole"]
+        results[f"{hole_type}/{standard}/{size}"] = {
+            "volume_change": round(hole["volume_change"], 1),
+            "warnings": [
+                f"{w['code_name']}: {w['description']}"
+                for w in hole.get("rebuild_warnings", [])
+            ],
+        }
 
-    evidence("Hole Wizard: each type and standard (volume change, mm³)", results)
+    evidence("Hole Wizard: each type and standard", results)
     failed = {k: v for k, v in results.items() if isinstance(v, str)}
     assert not failed, failed
 

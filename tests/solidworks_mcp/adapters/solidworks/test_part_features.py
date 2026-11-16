@@ -21,6 +21,7 @@ from solidworks_mcp.adapters.solidworks.part_features import (
     HOLE_FASTENERS,
     SolidWorksPartFeaturesMixin,
 )
+from solidworks_mcp.adapters.solidworks.rebuild_diagnostics import RawRebuildIssue
 
 
 class FakeAdapter(SolidWorksPartFeaturesMixin):
@@ -103,6 +104,7 @@ def picks(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, ...]]:
     monkeypatch.setattr(pf, "_select_named_feature", select_named)
     monkeypatch.setattr(pf, "_BodyEntityPicker", lambda adapter: None)
     monkeypatch.setattr(pf.sw_type_info, "flagged", lambda obj, *_: obj)
+    monkeypatch.setattr(pf, "collect_rebuild_issues", lambda adapter, model: [])
     return seen
 
 
@@ -376,3 +378,70 @@ async def test_convert_entities_failures(picks: list[Any]) -> None:
 
     assert missing.error == "No active sketch"
     assert "SketchUseEdge3 copied nothing" in (copied_nothing.error or "")
+
+
+# --- rebuild warnings and errors on the new feature -------------------------
+
+
+def _issues(monkeypatch: pytest.MonkeyPatch, *issues: RawRebuildIssue) -> None:
+    monkeypatch.setattr(
+        pf, "collect_rebuild_issues", lambda adapter, model: list(issues)
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_rebuild_warning_on_the_new_feature_is_passed_on(
+    picks: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _issues(
+        monkeypatch,
+        RawRebuildIssue("Feature9", "HoleWzd", 1, True),
+        RawRebuildIssue("Other", "Fillet", 1, True),
+    )
+
+    result = await FakeAdapter([1000.0, 900.0]).create_hole(
+        [0, 0, 20], "tapped", "iso", "M6x1.0"
+    )
+
+    assert result.is_success
+    (warning,) = result.data["rebuild_warnings"]
+    assert (warning["feature"], warning["severity"]) == ("Feature9", "warning")
+
+
+@pytest.mark.asyncio
+async def test_a_rebuild_error_on_the_new_feature_removes_it(
+    picks: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _issues(monkeypatch, RawRebuildIssue("Feature9", "HoleWzd", 1, False))
+    adapter = FakeAdapter([1000.0, 900.0])
+
+    result = await adapter.create_hole([0, 0, 20], "simple", "iso", "M6")
+
+    assert adapter.deleted == ["Feature9"]
+    assert (result.error or "").startswith("create_hole: SolidWorks reports")
+    assert "on Feature9" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_rebuild_read_reports_nothing(
+    picks: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(adapter: Any, model: Any) -> list[Any]:
+        raise RuntimeError("GetWhatsWrong failed")
+
+    monkeypatch.setattr(pf, "collect_rebuild_issues", broken)
+
+    result = await FakeAdapter([1000.0, 900.0]).create_hole(
+        [0, 0, 20], "simple", "iso", "M6"
+    )
+
+    assert result.is_success
+    assert "rebuild_warnings" not in result.data
+
+
+@pytest.mark.asyncio
+async def test_no_name_means_no_rebuild_read(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 800.0])
+    adapter.currentModel.FeatureByPositionReverse.return_value = None
+
+    assert adapter._rebuild_issues("create_shell", None) == []
