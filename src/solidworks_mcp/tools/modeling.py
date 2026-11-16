@@ -390,6 +390,27 @@ class GetDimensionInput(CompatInput):
             raise ValueError("name is required")
 
 
+def _check_configurations(configurations: str | list[str]) -> None:
+    """A list of configuration names must name at least one, each non-blank.
+
+    Raises:
+        ValueError: For an empty list or a blank name.
+    """
+    if isinstance(configurations, list) and (
+        not configurations or any(not str(n).strip() for n in configurations)
+    ):
+        raise ValueError(
+            "configurations is 'this', 'all' or a list of configuration names"
+        )
+
+
+def _configurations_named(data: Any) -> list[str]:
+    """The configuration names an adapter reply says a change applied to."""
+    if isinstance(data, dict) and isinstance(data.get("configurations"), list):
+        return [str(n) for n in data["configurations"]]
+    return []
+
+
 class SetDimensionInput(CompatInput):
     """Input schema for setting a dimension value.
 
@@ -398,6 +419,7 @@ class SetDimensionInput(CompatInput):
         name (str | None): The name value.
         units (str | None): The units value.
         value (float): The value value.
+        configurations (str | list[str]): "this", "all" or configuration names.
     """
 
     name: str | None = Field(
@@ -407,6 +429,11 @@ class SetDimensionInput(CompatInput):
     dimension_name: str | None = Field(default=None, description="Dimension name alias")
     value: float = Field(description="New dimension value in millimeters")
     units: str | None = Field(default=None, description="Units alias")
+    configurations: Literal["this", "all"] | list[str] = Field(
+        default="this",
+        description="Where it applies: 'this' (the active configuration), 'all', "
+        "or a list of configuration names from `list_configurations`",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the set dimension input.
@@ -424,6 +451,7 @@ class SetDimensionInput(CompatInput):
             self.name = self.dimension_name
         if not self.name:
             raise ValueError("name is required")
+        _check_configurations(self.configurations)
 
 
 class SetUnitsInput(CompatInput):
@@ -656,12 +684,21 @@ class SuppressFeatureInput(CompatInput):
     Attributes:
         name (str): Feature name to toggle.
         suppress (bool): True to suppress, False to unsuppress.
+        configurations (str | list[str]): "this", "all" or configuration names.
     """
 
     name: str = Field(description="Feature name, e.g. 'Fillet1'")
     suppress: bool = Field(
         default=True, description="True to suppress, False to unsuppress"
     )
+    configurations: Literal["this", "all"] | list[str] = Field(
+        default="this",
+        description="Where it applies: 'this' (the active configuration), 'all', "
+        "or a list of configuration names from `list_configurations`",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_configurations(self.configurations)
 
 
 class RenameFeatureInput(CompatInput):
@@ -1726,8 +1763,9 @@ async def register_modeling_tools(
     async def get_dimension(input_data: GetDimensionInput) -> dict[str, Any]:
         """Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
-        Find names with `list_model_dimensions`. Needs: an open part or assembly.
-        Read-only. Returns: `dimension` with `name`, `value` and `units`: "mm" for a
+        Find names with `list_model_dimensions`. It reads the active configuration's
+        value; `activate_configuration` to read another. Needs: an open part or
+        assembly. Read-only. Returns: `dimension` with `name`, `value` and `units`: "mm" for a
         length, "deg" for an angle, and null for a count (such as a pattern's
         instance count).
 
@@ -1763,9 +1801,11 @@ async def register_modeling_tools(
 
         Use it to resize an existing model; find the full name with
         `list_model_dimensions` and check the result with `rebuild_model` or
-        `verify_model`. The value is always millimetres. Needs: an open part or
-        assembly. Changes: the dimension and the geometry it drives. Returns:
-        `dimension_update` with `name`, `old_value` and `new_value`.
+        `verify_model`. The value is always millimetres. It changes the active
+        configuration only, unless `configurations` is "all" or a list of names.
+        Needs: an open part or assembly. Changes: the dimension and the geometry it
+        drives. Returns: `dimension_update` with `name`, `old_value`, `new_value`
+        and `configurations` (the names it was set in).
 
         Args:
             input_data: The change. `value` (mm) is required, with `name` (or
@@ -1775,13 +1815,17 @@ async def register_modeling_tools(
             dict[str, Any]: The old and new values.
         """
         input_data = normalize_input(input_data, SetDimensionInput)
-        result = await adapter.set_dimension(input_data.name, input_data.value)
+        result = await adapter.set_dimension(
+            input_data.name, input_data.value, input_data.configurations
+        )
 
         require_success(result, context="Failed to set dimension")
         payload = result.data
+        where = _configurations_named(payload)
         return {
             "status": "success",
-            "message": f"Set dimension {input_data.name} = {input_data.value} mm",
+            "message": f"Set dimension {input_data.name} = {input_data.value} mm"
+            + (f" in {', '.join(where)}" if where else ""),
             "dimension_update": {
                 "name": input_data.name,
                 "old_value": _result_value(payload, "old_value"),
@@ -1789,6 +1833,7 @@ async def register_modeling_tools(
                     payload, "new_value", default=input_data.value
                 ),
                 "units": input_data.units or "mm",
+                "configurations": where,
             },
             "execution_time": result.execution_time,
         }
@@ -2234,10 +2279,12 @@ async def register_modeling_tools(
     async def suppress_feature(input_data: SuppressFeatureInput) -> dict[str, Any]:
         """Suppress or unsuppress a feature of the active model; suppressed features stay in the tree but are not built.
 
-        Use it to turn off a feature that breaks the rebuild without deleting it. Needs:
-        an open part or assembly. Changes: the feature's suppression state, and its
-        children's. Returns: `data` with `feature`, `requested`, `suppressed` (read
-        back; null when unreadable) and `was_suppressed`.
+        Use it to turn off a feature that breaks the rebuild without deleting it. It
+        acts in the active configuration only, unless `configurations` is "all" or a
+        list of names. Needs: an open part or assembly. Changes: the feature's
+        suppression state, and its children's. Returns: `data` with `feature`,
+        `requested`, `suppressed` (read back in the active configuration; null when
+        unreadable), `was_suppressed` and `configurations` (where it applied).
 
         Args:
             input_data: The feature. `name` is required; `suppress` defaults to on
@@ -2247,11 +2294,16 @@ async def register_modeling_tools(
             dict[str, Any]: The new state.
         """
         input_data = normalize_input(input_data, SuppressFeatureInput)
-        result = await adapter.suppress_feature(input_data.name, input_data.suppress)
+        result = await adapter.suppress_feature(
+            input_data.name, input_data.suppress, input_data.configurations
+        )
         require_success(result, context="Failed to suppress feature")
         data = result.data if isinstance(result.data, dict) else {}
         verb = "Suppressed" if input_data.suppress else "Unsuppressed"
         message = f"{verb} {input_data.name}"
+        where = _configurations_named(data)
+        if where:
+            message += f" in {', '.join(where)}"
         if data.get("suppressed") is None:
             message += " (state could not be read back)"
         return {

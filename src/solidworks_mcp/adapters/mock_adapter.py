@@ -191,6 +191,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
         self._configurations_made: dict[str, list[str]] = {}
+        #: Per-configuration dimension values and suppressed features.
+        self._config_dimensions: dict[str, dict[str, float]] = {}
+        self._config_suppressed: dict[str, set[str]] = {}
         # Names currently "selected" via select_feature / select_face_edges,
         # so append and selection_count behave like the real selection set.
         self._selection: list[str] = []
@@ -1005,6 +1008,29 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             made.append(active)
         return made
 
+    def _mock_active(self) -> str:
+        """The active model's active configuration (Default with none open)."""
+        model = self._current_model
+        return (model.configuration if model else None) or "Default"
+
+    def _mock_scope(
+        self, configurations: str | list[str]
+    ) -> list[str] | AdapterResult[Any]:
+        """The configurations a change applies to, or an error for unknown names."""
+        if configurations == "this":
+            return [self._mock_active()]
+        known = self._mock_configs() if self._current_model else ["Default"]
+        if configurations == "all":
+            return list(known)
+        unknown = [n for n in configurations if n not in known]
+        if unknown:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No configuration named {', '.join(repr(n) for n in unknown)}; "
+                f"the model has {', '.join(known)}.",
+            )
+        return list(configurations)
+
     async def create_configuration(
         self,
         name: str,
@@ -1082,6 +1108,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return refused
         previous = self._current_model.configuration or "Default"
         self._current_model.configuration = name
+        self._dimensions.update(self._config_dimensions.get(name, {}))
+        if name in self._config_suppressed or previous in self._config_suppressed:
+            self._suppressed_features = set(self._config_suppressed.get(name, set()))
         self._operation_count += 1
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -2570,23 +2599,39 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 ),
             )
 
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
-        """Mock setting a dimension value.
+    async def set_dimension(
+        self, name: str, value: float, configurations: str | list[str] = "this"
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock setting a dimension value, per configuration.
 
         Args:
             name (str): The name value.
             value (float): The value value.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
-            AdapterResult[None]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``configurations``, the names set in.
         """
         await asyncio.sleep(0.1)  # Fast operation
+        names = self._mock_scope(configurations)
+        if isinstance(names, AdapterResult):
+            return names
         self._operation_count += 1
-
-        self._dimensions[name] = value
+        current = self._dimensions.get(name)
+        known = self._mock_configs() if self._current_model else names
+        for config in dict.fromkeys([*known, *names]):
+            record = self._config_dimensions.setdefault(config, {})
+            if config in names:
+                record[name] = value
+            elif name not in record and current is not None:
+                record[name] = current  # the others keep the value they had
+        if self._mock_active() in names:
+            self._dimensions[name] = value
 
         return AdapterResult(
-            status=AdapterResultStatus.SUCCESS, data=None, execution_time=0.1
+            status=AdapterResultStatus.SUCCESS,
+            data={"configurations": names},
+            execution_time=0.1,
         )
 
     async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
@@ -3189,13 +3234,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def suppress_feature(
-        self, name: str, suppress: bool = True
+        self, name: str, suppress: bool = True, configurations: str | list[str] = "this"
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock suppressing or unsuppressing a named feature.
+        """Mock suppressing or unsuppressing a named feature, per configuration.
 
         Args:
             name (str): Feature name.
             suppress (bool): True to suppress, False to unsuppress.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -3207,12 +3253,22 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error=f"Feature not found: {name}"
             )
+        names = self._mock_scope(configurations)
+        if isinstance(names, AdapterResult):
+            return names
 
         was = name in self._suppressed_features
-        if suppress:
-            self._suppressed_features.add(name)
-        else:
-            self._suppressed_features.discard(name)
+        for config in names:
+            held = self._config_suppressed.setdefault(config, set())
+            if suppress:
+                held.add(name)
+            else:
+                held.discard(name)
+        if self._mock_active() in names:
+            if suppress:
+                self._suppressed_features.add(name)
+            else:
+                self._suppressed_features.discard(name)
         self._operation_count += 1
 
         return AdapterResult(
@@ -3220,8 +3276,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             data={
                 "feature": name,
                 "requested": suppress,
-                "suppressed": bool(suppress),
+                "suppressed": name in self._suppressed_features,
                 "was_suppressed": was,
+                "configurations": names,
             },
             execution_time=self._delays["model_operation"],
         )

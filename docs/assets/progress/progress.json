@@ -952,11 +952,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 232,
+   "covered": 234,
    "total": 2838
   },
   "api": {
-   "covered": 252,
+   "covered": 253,
    "total": 5985
   },
   "interfaces": [
@@ -1223,7 +1223,8 @@
      "IsSuppressed",
      "Select",
      "Select2",
-     "Select4"
+     "Select4",
+     "SetSuppression2"
     ],
     "total": 147
    },
@@ -1250,7 +1251,8 @@
      "ModifyDefinition",
      "Parameter",
      "Select",
-     "Select2"
+     "Select2",
+     "SetSuppression2"
     ],
     "total": 115
    },

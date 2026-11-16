@@ -103,6 +103,15 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 To turn a feature off without deleting it, `suppress_feature`. After
 `delete_feature`, call `list_features`: dependents may have gone too.
 
+## Variants of one part (configurations)
+
+1. `create_configuration` with a name (`Long`); the active one doesn't change.
+2. `set_dimension` or `suppress_feature` with `configurations: ["Long"]`
+   changes only `Long`; `"all"` changes every one. Without it, only the
+   active configuration changes.
+3. `activate_configuration` to look at a variant; `get_dimension` reads the
+   active one.
+
 ## An assembly
 
 1. Save each part first (`save_file`): `insert_component` takes a file path.

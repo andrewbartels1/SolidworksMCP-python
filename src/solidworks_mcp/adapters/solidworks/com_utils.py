@@ -56,6 +56,19 @@ def strip_op_prefix(error: str | None, operation_name: str) -> str | None:
     return error.removeprefix(f"Error in {operation_name}: ")
 
 
+def string_array(values: list[str]) -> Any:
+    """``VARIANT(VT_ARRAY | VT_BSTR)``, e.g. configuration names (tuple when pywin32 is absent)."""
+    try:
+        import pythoncom
+        import win32com.client as w32
+
+        return w32.VARIANT(
+            pythoncom.VT_ARRAY | pythoncom.VT_BSTR, [str(v) for v in values]
+        )
+    except ImportError:  # non-Windows
+        return tuple(values)
+
+
 def double_array(values: list[float]) -> Any:
     """``VARIANT(VT_ARRAY | VT_R8)`` for array-valued COM properties (tuple when pywin32 is absent)."""
     try:

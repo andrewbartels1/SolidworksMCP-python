@@ -236,6 +236,8 @@ Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
 Change one length dimension of the active model, in mm, and rebuild.
 
+It changes the active configuration only, unless `configurations` is `"all"` or a list of names; the reply's `configurations` names where it was set. An unknown name is refused (`invalid_input`) before anything changes.
+
 **Prerequisite:** Active document with named dimensions
 
 **Parameters:**
@@ -246,12 +248,15 @@ Change one length dimension of the active model, in mm, and rebuild.
 | `dimension_name` | `str?` | — | `None` | Dimension name alias |
 | `value` | `float` | ✅ | `` | New dimension value in millimeters |
 | `units` | `str?` | — | `None` | Units alias |
+| `configurations` | `str \| list[str]` | — | `this` | `this` (the active configuration), `all`, or names from `list_configurations` |
 
 **Sample call:**
 
 ```json
 {
-  "value": 50.0
+  "name": "D1@Boss-Extrude1",
+  "value": 50.0,
+  "configurations": ["Long"]
 }
 ```
 

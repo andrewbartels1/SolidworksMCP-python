@@ -637,7 +637,7 @@ class _DummyAdapter(SolidWorksAdapter):
         """Test helper for get dimension."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=1.0)
 
-    async def set_dimension(self, name: str, value: float):
+    async def set_dimension(self, name: str, value: float, configurations="this"):
         """Test helper for set dimension."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=None)
 

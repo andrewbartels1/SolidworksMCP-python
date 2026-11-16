@@ -173,6 +173,14 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(r"face_point \[[^\]]*\] mm is not on a flat face",),
     ),
     ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "Use a configuration name from list_configurations, 'this' for the "
+            "active one or 'all'; create_configuration adds a new one."
+        ),
+        patterns=(r"No configuration named",),
+    ),
+    ErrorRule(
         error_type="not_found",
         hint=(
             "Check the name or path - list what exists first (list_features, "

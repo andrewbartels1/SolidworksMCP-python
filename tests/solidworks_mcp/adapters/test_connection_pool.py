@@ -858,7 +858,9 @@ class TestConnectionPoolAdapterExtras:
             async def delete_feature(self, name):
                 return _ok({"deleted": name})
 
-            async def suppress_feature(self, name, suppress=True):
+            async def suppress_feature(
+                self, name, suppress=True, configurations="this"
+            ):
                 return _ok({"name": name})
 
             async def rename_feature(self, old_name, new_name):

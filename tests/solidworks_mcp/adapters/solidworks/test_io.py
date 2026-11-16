@@ -4384,3 +4384,40 @@ async def test_a_missing_dimension_points_at_the_lister() -> None:
     assert "not found; list the names with list_model_dimensions" in (
         result.error or ""
     )
+
+
+class _ConfiguredModel(SimpleNamespace):
+    """A model with configurations, a dimension and a rebuild."""
+
+    def GetConfigurationNames(self) -> tuple[str, ...]:
+        return ("Default", "Long")
+
+    def GetActiveConfiguration(self) -> Any:
+        return SimpleNamespace(Name="Default")
+
+    def EditRebuild3(self) -> bool:
+        return True
+
+
+@pytest.mark.asyncio
+async def test_set_dimension_in_named_configurations(monkeypatch) -> None:
+    """A list goes through SetSystemValue3 with option 3 and the names."""
+    adapter = _build_adapter(monkeypatch)
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.solidworks.configurations.string_array",
+        lambda names: ("ARRAY", *names),
+    )
+    dimension = SimpleNamespace(SetSystemValue3=Mock(return_value=0))
+    adapter.currentModel = _ConfiguredModel(Parameter=Mock(return_value=dimension))
+
+    done = await adapter.set_dimension("D1@Boss-Extrude1", 80.0, ["Long"])
+    dimension.SetSystemValue3.return_value = 2
+    refused = await adapter.set_dimension("D1@Boss-Extrude1", 80.0, "all")
+    unknown = await adapter.set_dimension("D1@Boss-Extrude1", 80.0, ["Short"])
+
+    dimension.SetSystemValue3.assert_any_call(0.08, 3, ("ARRAY", "Long"))
+    assert done.data == {"configurations": ["Long"]}
+    assert "SetSystemValue3 refused D1@Boss-Extrude1 in Default, Long" in (
+        refused.error or ""
+    )
+    assert "No configuration named 'Short'" in (unknown.error or "")

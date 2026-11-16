@@ -1600,20 +1600,23 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"name": name},
         )
 
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
+    async def set_dimension(
+        self, name: str, value: float, configurations: str | list[str] = "this"
+    ) -> AdapterResult[dict[str, Any]]:
         """Set dimension through circuit breaker.
 
         Args:
             name (str): The name value.
             value (float): The value value.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
-            AdapterResult[None]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``configurations``, the names set in.
         """
         return await self._execute_with_circuit_breaker(
             "set_dimension",
-            lambda: self.adapter.set_dimension(name, value),
-            input_dict={"name": name, "value": value},
+            lambda: self.adapter.set_dimension(name, value, configurations),
+            input_dict={"name": name, "value": value, "configurations": configurations},
         )
 
     async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
@@ -1862,21 +1865,26 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def suppress_feature(
-        self, name: str, suppress: bool = True
+        self, name: str, suppress: bool = True, configurations: str | list[str] = "this"
     ) -> AdapterResult[dict[str, Any]]:
         """Suppress or unsuppress a feature through circuit breaker.
 
         Args:
             name (str): Feature name.
             suppress (bool): True to suppress, False to unsuppress.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
             "suppress_feature",
-            lambda: self.adapter.suppress_feature(name, suppress),
-            input_dict={"name": name, "suppress": suppress},
+            lambda: self.adapter.suppress_feature(name, suppress, configurations),
+            input_dict={
+                "name": name,
+                "suppress": suppress,
+                "configurations": configurations,
+            },
         )
 
     async def rename_feature(
