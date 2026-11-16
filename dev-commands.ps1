@@ -132,6 +132,8 @@ function dev-help {
     Write-Host "  dev-ui              Start the FastAPI UI backend"
     Write-Host "  dev-docs-build      Build documentation once (mkdocs build --clean)"
     Write-Host "  dev-docs-strict     Build documentation in strict mode"
+    Write-Host "  dev-llms            Rebuild docs/llms.txt from the docs, then check it and every project link"
+    Write-Host "  dev-links           Visit every external link in the docs (online; writes tests/.generated/link-report.md)"
     Write-Host "  dev-docs-audit      Run verbose + strict docs audit and write summary"
     Write-Host "  dev-docs            Build and serve documentation (http://localhost:8000)"
     Write-Host "  dev-docs-discovery  Index SolidWorks COM/VBA documentation (Windows + SW running)"
@@ -385,7 +387,8 @@ function dev-ui {
     # FastAPI backend (solidworks_mcp.ui.server:app) - still real,
     # independent infrastructure other things build on.
     Write-Host "Starting UI backend (FastAPI)..." -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "scriptsun-ui.ps1")
+    & (Join-Path $PSScriptRoot "scripts
+un-ui.ps1")
 }
 
 function dev-docs {
@@ -401,6 +404,16 @@ function dev-docs-build {
     & (Join-Path $PSScriptRoot "scripts\docs\build-docs.ps1")
     if ($LASTEXITCODE -eq 0) { Write-Host "Docs build passed." -ForegroundColor Green }
     else { Write-Host "Docs build failed." -ForegroundColor Red }
+}
+
+function dev-llms {
+    $py = Get-VenvPython
+    & $py -m solidworks_mcp.doc_links build
+    if ($LASTEXITCODE -eq 0) { & $py -m solidworks_mcp.doc_links check }
+}
+
+function dev-links {
+    & (Get-VenvPython) -m solidworks_mcp.doc_links check-external
 }
 
 function dev-docs-strict {

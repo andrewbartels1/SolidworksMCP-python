@@ -1,9 +1,11 @@
 # COM API Pitfalls for LLM Agents
 
-This page documents hard-won lessons from debugging the SolidWorks COM bridge.
+This page documents hard-won lessons from debugging the SolidWorks COM bridge,
+for anyone changing the server's COM code. Every entry below caused a real
+runtime failure that required hours to diagnose.
+
 If you are an AI coding assistant (Claude, GPT-4, Gemini, Copilot, etc.) working on this codebase,
 **read this page before touching any COM-related code**.
-Every entry below caused a real runtime failure that required hours to diagnose.
 
 !!! tip "For LLM agents"
     The patterns here are not obvious from the SolidWorks API docs alone.

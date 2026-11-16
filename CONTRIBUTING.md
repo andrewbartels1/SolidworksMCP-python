@@ -89,6 +89,16 @@ When needed (credentials/SolidWorks environment available):
 - Update docs for user-visible behavior changes.
 - Keep architecture docs implementation-accurate.
 - Put roadmap/aspirational content in `docs/planning/`, not runtime architecture pages.
+- Every page in the nav opens with a `# ` title and a plain paragraph that
+  says what the page is. `docs/llms.txt` is built from those: each entry's
+  title and summary are copied word for word from its page, so never edit
+  the file by hand. After changing a page's title or opening, or the nav,
+  run `.\dev-commands.ps1 dev-llms` (or
+  `python -m solidworks_mcp.doc_links build`) and commit the result; a test
+  fails until you do. The same test checks every relative link and anchor.
+- `.\dev-commands.ps1 dev-links` visits every external link and writes
+  `tests/.generated/link-report.md`. CI runs it after each docs deploy and
+  weekly.
 
 Current docs structure:
 

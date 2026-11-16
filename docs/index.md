@@ -11,7 +11,7 @@
 [![Tests](https://github.com/andrewbartels1/SolidworksMCP-python/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewbartels1/SolidworksMCP-python/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-**AI-Assisted SolidWorks Automation with MCP**
+An MCP server that lets AI agents drive SolidWorks: describe a part, and the agent builds it with the server's 123 tools and checks what SolidWorks reports back.
 
 🚀 **123 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
 

@@ -1,5 +1,7 @@
 # VS Code MCP Setup
 
+Connect VS Code's MCP client to the SolidWorks MCP server, with the setup command or by editing `mcp.json` by hand.
+
 ## Connect with setup
 
 With [uv](https://docs.astral.sh/uv/) installed:

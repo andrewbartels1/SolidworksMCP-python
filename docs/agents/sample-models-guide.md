@@ -1,6 +1,8 @@
 # Sample Models Guide
 
-This guide describes the SolidWorks 2026 learn samples shipped with SolidWorks and explains which MCP tools and prompting strategies best recreate each part from scratch. Reference files live at:
+This guide describes the SolidWorks 2026 learn samples shipped with SolidWorks and explains which MCP tools and prompting strategies best recreate each part from scratch.
+
+Reference files live at:
 
 ```
 C:\Users\Public\Documents\SOLIDWORKS\SOLIDWORKS 2026\samples\learn\

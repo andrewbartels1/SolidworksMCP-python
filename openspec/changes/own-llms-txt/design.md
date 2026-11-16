@@ -133,9 +133,13 @@ when `markdown` isn't installed.
 - One `GET` per unique URL (some sites refuse `HEAD`), following
   redirects, 15 s timeout, a plain `User-Agent` naming the project (no
   personal details), up to 8 at a time.
-- Pass: final status 2xx, and the final host equals the original with a
-  leading `www.` ignored. A URL under `repo_url` or `site_url` must end
-  under one of them.
+- Pass: final status 2xx, and the redirects stayed on the same site: the
+  same host (`www.` ignored), a subdomain either way, or a host listed in
+  `SAME_SITE` with a reason. (Changed after the first run, below.)
+- GitHub issue and pull request links are checked through
+  `api.github.com/repos/<owner>/<repo>/issues/<n>`, with the CI token when
+  one is set; the pages answer 429 to scripts. At most two requests at
+  once per host.
 - Retry twice on timeouts, connection resets and 429/5xx, with a short
   back-off; a 4xx other than 429, or a host that doesn't resolve, fails
   at once.
@@ -163,12 +167,50 @@ The package imports `yaml` at module level. `pyyaml` is added to the
 mkdocs). The server never imports `doc_links`, so no runtime dependency
 is added.
 
-### 9. Security review, recorded at the end
+### 9. Security review and the first runs (2026-11-15)
 
-Task 6 reads the generated file line by line and records here: the
-count of entries, that every URL is ours (the check proves it, the
-review confirms it), that no summary reads as an instruction to an
-agent, and the result of the first online run.
+**The file.** 54 entries in six sections (Overview 4, Getting Started 11,
+MCP Server Guide 8, Tool Catalog 15, Agents and Skills 14, Planning 2).
+Every URL is under `site_url`; the checker proves it on every test run.
+No HTML, no comments, no control or format characters. Every line was
+read by hand:
+
+- Ten pages opened badly and were fixed in the page: the home page (a
+  bold tagline), the VS Code setup (no opening at all), the U-Joint
+  prompts (a "**Note:**"), integration testing, worked examples, SoC and
+  the sample models guide (sentences ending in a colon), the agent skill,
+  the roadmap and the API coverage map ("Last updated" lines first).
+- The local-LLM page's opening carried `http://127.0.0.1:11434/v1`; the
+  address moved to the page's second paragraph, so the strict URL rule
+  stands.
+- The COM pitfalls page opened with "If you are an AI coding assistant
+  … read this page before touching any COM-related code", an instruction
+  to agents. It's ours and harmless, but `llms.txt` should describe, not
+  instruct, so that sentence moved to the second paragraph.
+- No summary now addresses the reader as an agent or tells it to do
+  anything.
+
+**Offline run.** 402 links (219 relative) in the README, 60-odd pages and
+`llms.txt`: no broken page, file or anchor.
+
+**First online run.** 145 URLs. Findings and what changed:
+
+- Every `andrewbartels1.github.io/SolidworksMCP-python/...` URL redirects
+  to `andrewbartels1.com/SolidworksMCP-python/...`, the custom domain set
+  on the owner's GitHub Pages site. Only the account owner can set that,
+  so it is listed in `SAME_SITE`. The owner may prefer to make
+  `andrewbartels1.com` the `site_url`; that's their call.
+- `codecov.io` sends the badge link to `app.codecov.io`: subdomains now
+  count as the same site.
+- `console.anthropic.com/settings/keys` now redirects to
+  `platform.claude.com`: the link was updated.
+- 22 GitHub issue pages answered 429: they are now checked through the
+  API (above).
+- `towardsdatascience.com` answers 403 to scripts and `www.solidworks.com`
+  never answers one; both are in `NOT_CHECKED` with the reason. The
+  checker does not pretend to be a browser to get past them.
+
+After those changes: 145 URLs, 143 visited and passing, 2 not checked.
 
 ## Risks / Trade-offs
 

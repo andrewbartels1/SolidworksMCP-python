@@ -85,6 +85,7 @@ dev = [
     "tox>=4.11.0",
     "factory-boy>=3.3.0",
     "build>=1.0.0",  # `python -m build`, used by `make build`
+    "pyyaml>=6.0",  # solidworks_mcp.doc_links reads mkdocs.yml
 ]
 test = [
     "pytest>=7.4.0",
@@ -98,6 +99,7 @@ test = [
     "fastapi>=0.115.0",
     "numpy>=1.26.0",
     "pypdfium2>=4.30.0",  # live demos render each exported PDF into a frame
+    "pyyaml>=6.0",  # solidworks_mcp.doc_links reads mkdocs.yml
 ]
 docs = [
     # <2: MkDocs 2 is announced to drop support for existing themes, plugins

@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Our own `llms.txt`**, served at the docs site's root and built from the
+  docs: each entry's title and summary are copied word for word from its
+  page, and a test fails when the file and the pages disagree, when it
+  links outside this project, or when it holds HTML or hidden characters.
+  Nothing in it is written by hand. Ten pages got a real opening paragraph
+  to serve as their summary.
+- **Every link in the docs is checked.** Links within the project (pages,
+  files, anchors, repository files) on every test run; every link to
+  another site after each docs deploy and weekly, failing a dead link or a
+  redirect to a different site, with a report of every URL
+  (`python -m solidworks_mcp.doc_links check-external`). The first run
+  fixed one moved link (the Anthropic console).
 - **`create_sketch` takes `face_point`** (#206): a point in mm on a flat
   face of the body, in place of `plane`. The sketch opens on that face and
   moves with it when the model changes, so a pocket cut from it follows a

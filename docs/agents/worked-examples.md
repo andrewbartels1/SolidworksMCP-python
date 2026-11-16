@@ -1,6 +1,8 @@
 # Worked Examples: SolidWorks MCP + Agent Workflow
 
-This page shows three practical reconstruction examples using the same inspect -> classify -> delegate loop:
+This page shows three practical reconstruction examples, each using the same inspect, classify and delegate loop.
+
+The loop:
 
 1. Read the original model state.
 2. Classify the feature family before writing geometry.

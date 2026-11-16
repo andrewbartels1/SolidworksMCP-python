@@ -1,6 +1,6 @@
 # SolidWorks UI + LLM Tutorial
 
-This tutorial is for mechanical engineers who are new to MCP tools and want a repeatable way to drive SolidWorks from an LLM while still using the SolidWorks UI. This is meant to help take the repetition out of a workflow and optimize and engineer's time on the design and things that matter, not dull repetitive tasks.
+This tutorial is for mechanical engineers who are new to MCP tools and want a repeatable way to drive SolidWorks from an LLM while still using the SolidWorks UI. This is meant to help take the repetition out of a workflow and optimize an engineer's time on the design and things that matter, not dull repetitive tasks.
 
 ## What This Tutorial Covers
 

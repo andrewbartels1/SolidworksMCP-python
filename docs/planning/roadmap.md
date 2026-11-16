@@ -1,8 +1,8 @@
 # Roadmap
 
-**Last updated:** 2026-10-31
+This page tracks the order the open backlog gets worked in.
 
-This page tracks the order the open backlog gets worked in. It replaces the
+It replaces the
 old `docs/planning/ROADMAP_2026_2027.md`, which described a GUI-dashboard-first,
 PydanticAI-agent-first strategy that was superseded on 2026-05-17 when the
 project pivoted to [SolidWorks-as-Code](../getting-started/solidworks-as-code.md)
@@ -14,6 +14,8 @@ ranked by priority and by what blocks what, not by calendar quarter.
 For per-tool SolidWorks COM API coverage (what's implemented vs. missing at
 the interface/method level), see
 [SolidWorks API Coverage](solidworks-api-coverage.md).
+
+**Last updated:** 2026-10-31
 
 ## How work is ordered
 

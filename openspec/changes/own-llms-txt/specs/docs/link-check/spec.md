@@ -18,7 +18,7 @@ The checks SHALL cover every link in `README.md`, every Markdown page under `doc
 
 ### Requirement: Links within the project are checked offline
 
-On every test run, without network access, the check SHALL fail when a relative link (or a link to `site_url`) points at a page or file that does not exist, or at a `#anchor` that the target page has no heading or explicit `{#id}` for. Anchors SHALL be worked out the way the docs site makes them.
+On every test run, without network access, the check SHALL fail when a relative link, a link to `site_url`, or a `<repo_url>/blob/<branch>/<path>` or `tree` link points at a page or file that does not exist, or at a `#anchor` that the target page has no heading or explicit `{#id}` for. Anchors SHALL be worked out the way the docs site makes them.
 
 #### Scenario: A moved page
 - **WHEN** a page links to `getting-started/old-name.md` and that file does not exist
@@ -34,7 +34,7 @@ On every test run, without network access, the check SHALL fail when a relative 
 
 ### Requirement: Links to other sites are checked online
 
-A separate command SHALL visit every external URL once and fail when a URL does not answer with success, or when it redirects to a different site. A different site means a different host, with `www.` ignored; a link to this repository or the docs site that redirects anywhere outside them SHALL always fail. The command SHALL write a report listing every link, where it appears, the result and, for a redirect, where it went. Network trouble that is not the link's fault (a timeout) SHALL be retried before the link is failed. The command SHALL run after each docs deploy and once a week, and SHALL NOT run as part of the unit tests.
+A separate command SHALL visit every external URL once and fail when a URL does not answer with success, or when it redirects to a different site. The same site means the same host with `www.` ignored, a subdomain of it (`codecov.io` to `app.codecov.io`), or a host listed with a reason as belonging to it (GitHub's content hosts; the custom domain the owner set for this project's GitHub Pages site). A GitHub issue or pull request link SHALL be checked through GitHub's API, which serves scripts, since the pages themselves rate-limit them. A site that refuses every script SHALL be listed with its reason, and the report SHALL show it as "not checked" rather than leave it out. The command SHALL write a report listing every link, where it appears, the result and, for a redirect, where it went. Network trouble that is not the link's fault (a timeout) SHALL be retried before the link is failed. The command SHALL run after each docs deploy and once a week, and SHALL NOT run as part of the unit tests.
 
 #### Scenario: A dead link
 - **WHEN** a URL answers 404, or its host does not resolve
@@ -47,6 +47,14 @@ A separate command SHALL visit every external URL once and fail when a URL does 
 #### Scenario: A redirect on the same site
 - **WHEN** `https://www.microsoft.com/windows` redirects to `https://www.microsoft.com/en-us/windows`
 - **THEN** the link passes, and the report shows where it went
+
+#### Scenario: A subdomain redirect
+- **WHEN** `https://codecov.io/gh/owner/repo` redirects to `https://app.codecov.io/gh/owner/repo`
+- **THEN** the link passes
+
+#### Scenario: A site that refuses scripts
+- **WHEN** a URL's site is on the not-checked list
+- **THEN** it is not visited, and the report lists it as "not checked" with the reason
 
 #### Scenario: Every link is reported
 - **WHEN** the command finishes
