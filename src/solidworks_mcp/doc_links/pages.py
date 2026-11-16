@@ -25,21 +25,11 @@ class DocsError(Exception):
     """A page can't give what ``llms.txt`` needs from it (names the page)."""
 
 
-class _MkDocsLoader(yaml.SafeLoader):
-    """A safe loader that reads ``!!python/...`` tags as ``None``.
-
-    ``mkdocs.yml`` names Python callables for some Markdown extensions;
-    only the site settings and the nav are needed here, so those tags are
-    read as nothing instead of importing anything.
-    """
-
-
-def _ignore_tag(loader: yaml.SafeLoader, suffix: str, node: yaml.Node) -> None:
-    """Read a tagged node as ``None``."""
-    return None
-
-
-_MkDocsLoader.add_multi_constructor("tag:yaml.org,2002:python/", _ignore_tag)
+#: ``!!python/name:...`` tags in ``mkdocs.yml`` (Markdown extension
+#: callables). Only the site settings and the nav are needed here, so each tag
+#: is read as ``null`` and the file goes through ``yaml.safe_load``: nothing
+#: is ever imported or built from it.
+_PYTHON_TAG = re.compile(r"!!python/\S+")
 
 
 @dataclass(frozen=True)
@@ -71,7 +61,7 @@ def load_site(root: Path) -> Site:
         The site settings and nav.
     """
     text = (root / "mkdocs.yml").read_text(encoding="utf-8")
-    config = yaml.load(text, Loader=_MkDocsLoader)  # noqa: S506 - a SafeLoader subclass
+    config = yaml.safe_load(_PYTHON_TAG.sub("null", text))
     return Site(
         name=config["site_name"],
         description=config["site_description"],
