@@ -36,7 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type, a mirror and a ring of six.
 - **Demo GIFs:** a caption can hold for a set time (used to say a failure
   is on purpose before it happens), and motion GIFs play at 2.5x instead of
-  5x.
+  5x. Every motion GIF now opens on its finished result for 2 s: most opened
+  on SolidWorks' empty start screen, so their README cells looked blank (the
+  monitor stand's had lost its 2026-11-06 fix when it was re-recorded).
+  `make_demo_gif.py --poster` adds that frame to a GIF already built without
+  re-encoding it.
 - **Our own `llms.txt`**, served at the docs site's root and built from the
   docs: each entry's title and summary are copied word for word from its
   page, and a test fails when the file and the pages disagree, when it
