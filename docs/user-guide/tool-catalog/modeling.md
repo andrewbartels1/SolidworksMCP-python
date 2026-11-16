@@ -4,7 +4,7 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 > **Prerequisite:** An active SolidWorks session. Most feature tools require an open Part document.
 
-**Total tools in this category: 31**
+**Total tools in this category: 37**
 
 ## Measured change
 
@@ -423,6 +423,169 @@ Add a reference point on an edge (at a distance or percentage along it) or at th
   "x": 25, "y": 0, "z": 10,
   "percent": 50
 }
+```
+
+---
+
+### `create_hole`
+
+Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face.
+
+**Prerequisite:** Active part with a flat face at `face_point`. Beta: not yet checked on SolidWorks (queue item 11's live bundle).
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `face_point` | `list[float]` | ✅ | `` | `[x, y, z]` in mm on a flat face: the hole's centre |
+| `hole_type` | `str` | ✅ | `` | `simple`, `counterbore`, `countersink` or `tapped` |
+| `standard` | `str` | — | `iso` | `iso` or `ansi_inch` |
+| `size` | `str` | ✅ | `` | As SolidWorks lists it: `M6`, `M6x1.0` (tapped), `#10`, `1/4` |
+| `end_condition` | `str` | — | `through_all` | `through_all` or `blind` |
+| `depth` | `float?` | — | `None` | Blind depth in mm (required for `blind`) |
+
+**Sample call:**
+
+```json
+{
+  "face_point": [10, 10, 20],
+  "hole_type": "counterbore",
+  "size": "M6"
+}
+```
+
+---
+
+### `add_cosmetic_thread`
+
+Add a cosmetic thread to a hole or shaft, so drawings show the thread callout.
+
+**Prerequisite:** Active part with a round edge at `edge_point`. Beta: not yet checked on SolidWorks.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `edge_point` | `list[float]` | ✅ | `` | `[x, y, z]` in mm on the circular edge where the thread starts |
+| `size` | `str` | ✅ | `` | Thread size, e.g. `M10x1.5` or `1/4-20` |
+| `diameter` | `float?` | — | from a metric size | Major diameter in mm |
+| `end_type` | `str` | — | `blind` | `blind`, `up_to_next` or `through` |
+| `depth` | `float?` | — | `None` | Blind length in mm (required for `blind`) |
+| `standard` | `str` | — | `iso` | `iso` or `ansi_inch` |
+
+**Sample call:**
+
+```json
+{
+  "edge_point": [5, 0, 30],
+  "size": "M10x1.5",
+  "depth": 15
+}
+```
+
+---
+
+### `pattern_linear`
+
+Repeat features of the active part in a row or a grid, e.g. a row of holes.
+
+**Prerequisite:** Active part with the named features. Beta: not yet checked on SolidWorks.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `features` | `list[str]` | ✅ | `` | Names of the features to repeat |
+| `direction` | `list[float]` or `str` | ✅ | `` | `[x, y, z]` mm on a straight edge, or an axis name |
+| `count` | `int` | ✅ | `` | Instances along it, the original included (2+) |
+| `spacing` | `float` | ✅ | `` | Distance between instances, mm |
+| `direction2` | `list[float]` or `str` | — | `None` | Second direction, for a grid |
+| `count2` | `int` | — | `1` | Instances along the second direction |
+| `spacing2` | `float` | — | `0` | Spacing along the second direction, mm |
+| `reverse`, `reverse2` | `bool` | — | `false` | Flip a direction |
+
+**Sample call:**
+
+```json
+{
+  "features": ["CBORE for M6 Socket Head Cap Screw1"],
+  "direction": [0, -20, 20],
+  "count": 3,
+  "spacing": 12
+}
+```
+
+---
+
+### `create_shell`
+
+Hollow the active part to a wall thickness, opening the faces picked.
+
+**Prerequisite:** Active part with a solid body. Beta: not yet checked on SolidWorks.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `thickness` | `float` | ✅ | `` | Wall thickness, mm |
+| `faces` | `list[list[float]]` | — | `[]` | `[x, y, z]` mm on each face to remove |
+| `outward` | `bool` | — | `false` | Put the wall outside the body |
+
+**Sample call:**
+
+```json
+{"thickness": 2, "faces": [[0, 0, 20]]}
+```
+
+---
+
+### `add_draft`
+
+Draft faces of the active part by an angle, e.g. for a moulded part.
+
+**Prerequisite:** Active part. Beta: not yet checked on SolidWorks.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `angle` | `float` | ✅ | `` | Draft angle in degrees (under 90) |
+| `faces` | `list[list[float]]` | ✅ | `` | `[x, y, z]` mm on each face to draft |
+| `neutral_face` | `list[float]` | ✅ | `` | `[x, y, z]` mm on the face the draft pivots on |
+| `reverse` | `bool` | — | `false` | Draft the other way |
+
+**Sample call:**
+
+```json
+{
+  "angle": 3,
+  "faces": [[20, 0, 10], [-20, 0, 10]],
+  "neutral_face": [0, 0, 0]
+}
+```
+
+---
+
+### `create_rib`
+
+Add a rib from a sketched line, stiffening a wall or the inside of a shell.
+
+**Prerequisite:** Active part and a closed rib sketch holding an open line. Beta: not yet checked on SolidWorks.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `sketch` | `str` | ✅ | `` | The rib sketch's name |
+| `thickness` | `float` | ✅ | `` | Rib thickness, mm |
+| `both_sides` | `bool` | — | `true` | Thicken both sides of the sketch |
+| `flip_material` | `bool` | — | `false` | Extend the rib the other way |
+| `normal_to_sketch` | `bool` | — | `false` | Extrude normal to the sketch instead of parallel |
+
+**Sample call:**
+
+```json
+{"sketch": "Sketch3", "thickness": 2}
 ```
 
 ---

@@ -1,6 +1,6 @@
-# Tool Catalog — All 123 Tools
+# Tool Catalog — All 130 Tools
 
-This reference documents all **123 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **130 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -9,8 +9,8 @@ Each section covers one functional category with parameter tables and copy-paste
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Modeling Tools](modeling.md) | 31 | Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
-| [Sketching Tools](sketching.md) | 18 | Sketches on a plane or a flat face: lines, circles, arcs, splines, polygons, relations, dimensions, offsets, mirrors and patterns. |
+| [Modeling Tools](modeling.md) | 37 | Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
+| [Sketching Tools](sketching.md) | 19 | Sketches on a plane or a flat face: lines, circles, arcs, splines, polygons, relations, dimensions, offsets, mirrors and patterns. |
 | [Drawing Tools](drawing.md) | 13 | Drawings from a model: views, notes and centre marks. Section and detail views, dimensions, the title block and a drawing check are planned. |
 | [Drawing Analysis Tools](drawing-analysis.md) | 1 | Compare two versions of a drawing file. |
 | [Drawing Automation Tools](drawing-automation.md) | 7 | Model dimensions laid out without overlaps, datum tags, tolerances, BOM tables, sheet scale and complete A3 drawings. |

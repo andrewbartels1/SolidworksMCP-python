@@ -167,6 +167,10 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
+#: New in queue item 11 (part-feature-depth); stable once its live bundle passes.
+_BETA_PART_FEATURE = Support(
+    SupportLevel.BETA, "not yet checked on SolidWorks (queue item 11's live bundle)."
+)
 _PLANNED_DRAWING = Support(
     SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
 )
@@ -281,6 +285,12 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "mirror_feature": _STABLE,
     "open_model": _STABLE,
     "pattern_circular": _STABLE,
+    "pattern_linear": _BETA_PART_FEATURE,
+    "create_shell": _BETA_PART_FEATURE,
+    "add_draft": _BETA_PART_FEATURE,
+    "create_rib": _BETA_PART_FEATURE,
+    "create_hole": _BETA_PART_FEATURE,
+    "add_cosmetic_thread": _BETA_PART_FEATURE,
     "rebuild_model": _STABLE,
     "rename_feature": _STABLE,
     "select_face_edges": _STABLE,
@@ -310,6 +320,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "sketch_linear_pattern": _STABLE,
     "sketch_mirror": _STABLE,
     "sketch_offset": _STABLE,
+    "sketch_convert_entities": _BETA_PART_FEATURE,
     "sketch_tutorial_simple_hole": _deprecated(None),
     # template_management
     "compare_templates": _STABLE,

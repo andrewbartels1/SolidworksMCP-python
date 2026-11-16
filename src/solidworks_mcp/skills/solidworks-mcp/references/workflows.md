@@ -69,6 +69,26 @@ plane; the reply's `end_condition` says `MidPlane`.
 Don't use `pattern_circular` on a cut: it reports an error unless the
 volume grows.
 
+## Standard holes, threads, shells and ribs (beta)
+
+These tools are beta until their live check passes; their results say so.
+
+- **A hole for a screw:** `create_hole` with a point on the face where the
+  hole's centre goes, the `hole_type` and the size SolidWorks lists
+  (`M6`, `M6x1.0` for tapped). One hole per call; repeat it with
+  `pattern_linear` (a row or a grid) or `pattern_circular`.
+- **A thread on a shaft or a plain hole:** make the round feature first,
+  then `add_cosmetic_thread` with a point on its circular edge. Tapped
+  holes already carry their thread.
+- **A box or a housing:** model the solid, then `create_shell` with a
+  point on the face to open. Add stiffeners with `create_rib`: sketch an
+  open line where the rib goes, close the sketch, pass its name.
+- **Moulded walls:** `add_draft` with a point on each wall and on the face
+  the draft pivots on.
+- **Following an existing edge:** in an open sketch, `sketch_convert_entities`
+  copies edges (or a face's outline) exactly; cut or extrude from that
+  sketch instead of re-drawing the edge at guessed coordinates.
+
 ## Changing an existing model
 
 1. `open_model`, then `list_features` and `list_model_dimensions`.

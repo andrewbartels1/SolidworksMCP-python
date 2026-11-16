@@ -106,3 +106,34 @@ table. This change depends on that change being merged first.
   item 14's toolsets can turn families off.
 - [Shell or draft fails on a body with fillets] → SolidWorks' own error is
   passed on through the error classifier; no retry.
+
+## Implementation notes (2026-11-15)
+
+- **Codes from the type libraries, not memory.** Argument lists come from
+  the gen_py wrapper of `sldworks.tlb`; enum values from `swconst.tlb`
+  (read directly with `pythoncom.LoadTypeLib`): hole types
+  (`swWzdGeneralHoleTypes_e`: counterbore 0, countersink 1, simple 2,
+  tapped 4), standards (`swWzdHoleStandards_e`: ANSI inch 0, ISO 8), the
+  fastener lists (`swWzdHoleStandardFastenerTypes_e`: ISO drill sizes 143,
+  socket head cap 139, CTSK flat head 141, tapped hole 147; ANSI inch all
+  drill sizes 18, socket cap screw 9, flat head 82 15, tapped hole 27),
+  end conditions and `swCosmeticThreadType_e`.
+- **`HoleWizard5` sizes from the table.** Diameter, length and Value1-12
+  are passed as -1 so the standard's table for the size fills them; only a
+  blind depth is given. The live diagnostic confirms which sizes each
+  standard accepts (e.g. whether ISO drill sizes read `Ø6.0`).
+- **One adapter module.** The six solid features and convert entities live
+  in `adapters/solidworks/part_features.py` (`SolidWorksPartFeaturesMixin`),
+  sharing `_measured`, the volume rule with the delete-on-no-change step.
+- **Selection marks to confirm live.** The shell's faces are picked with
+  mark 0; the draft's neutral face with mark 1 and its faces with mark 2.
+  The SolidWorks help for these calls couldn't be read here; the live
+  bundle settles them.
+- **Calls that return nothing.** `InsertRib` and `InsertFeatureShell`
+  return no feature, so the new feature's name is read from the end of the
+  tree, and the volume decides success.
+- **Linear pattern directions** are a point on a straight edge or a name
+  (axis or edge); marks 1 and 2, features mark 4, as the circular pattern.
+- All seven are `beta` with the reason "not yet checked on SolidWorks
+  (queue item 11's live bundle)"; each moves to `stable` when its live test
+  passes.

@@ -779,6 +779,123 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    async def pattern_linear(
+        self,
+        features: list[str],
+        direction: list[float] | str,
+        count: int,
+        spacing: float,
+        direction2: list[float] | str | None = None,
+        count2: int = 1,
+        spacing2: float = 0.0,
+        reverse: bool = False,
+        reverse2: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Repeat features along one or two directions using pool."""
+        return await self._execute_with_pool(
+            "pattern_linear",
+            lambda adapter: adapter.pattern_linear(
+                features,
+                direction,
+                count,
+                spacing,
+                direction2,
+                count2,
+                spacing2,
+                reverse,
+                reverse2,
+            ),
+        )
+
+    async def create_shell(
+        self,
+        thickness: float,
+        faces: list[list[float]],
+        outward: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Hollow the body to a wall thickness using pool."""
+        return await self._execute_with_pool(
+            "create_shell",
+            lambda adapter: adapter.create_shell(thickness, faces, outward),
+        )
+
+    async def add_draft(
+        self,
+        angle: float,
+        faces: list[list[float]],
+        neutral_face: list[float],
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Draft faces against a neutral face using pool."""
+        return await self._execute_with_pool(
+            "add_draft",
+            lambda adapter: adapter.add_draft(angle, faces, neutral_face, reverse),
+        )
+
+    async def create_rib(
+        self,
+        sketch: str,
+        thickness: float,
+        both_sides: bool = True,
+        flip_material: bool = False,
+        normal_to_sketch: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a rib from an open sketch using pool."""
+        return await self._execute_with_pool(
+            "create_rib",
+            lambda adapter: adapter.create_rib(
+                sketch, thickness, both_sides, flip_material, normal_to_sketch
+            ),
+        )
+
+    async def create_hole(
+        self,
+        face_point: list[float],
+        hole_type: str,
+        standard: str,
+        size: str,
+        end_condition: str = "through_all",
+        depth: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a Hole Wizard hole at a point on a flat face using pool."""
+        return await self._execute_with_pool(
+            "create_hole",
+            lambda adapter: adapter.create_hole(
+                face_point, hole_type, standard, size, end_condition, depth
+            ),
+        )
+
+    async def add_cosmetic_thread(
+        self,
+        edge_point: list[float],
+        size: str,
+        diameter: float,
+        end_type: str = "blind",
+        depth: float | None = None,
+        standard: str = "iso",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a cosmetic thread on a circular edge using pool."""
+        return await self._execute_with_pool(
+            "add_cosmetic_thread",
+            lambda adapter: adapter.add_cosmetic_thread(
+                edge_point, size, diameter, end_type, depth, standard
+            ),
+        )
+
+    async def sketch_convert_entities(
+        self,
+        edge_points: list[list[float]] | None = None,
+        face_point: list[float] | None = None,
+        construction: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Copy model edges or a face outline into the open sketch using pool."""
+        return await self._execute_with_pool(
+            "sketch_convert_entities",
+            lambda adapter: adapter.sketch_convert_entities(
+                edge_points, face_point, construction
+            ),
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:

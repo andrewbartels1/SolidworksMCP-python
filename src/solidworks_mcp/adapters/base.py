@@ -1225,6 +1225,133 @@ class SolidWorksAdapter(ABC):
             error="pattern_circular is not implemented by this adapter",
         )
 
+    async def pattern_linear(
+        self,
+        features: list[str],
+        direction: list[float] | str,
+        count: int,
+        spacing: float,
+        direction2: list[float] | str | None = None,
+        count2: int = 1,
+        spacing2: float = 0.0,
+        reverse: bool = False,
+        reverse2: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Repeat features along one or two directions.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="pattern_linear is not implemented by this adapter",
+        )
+
+    async def create_shell(
+        self,
+        thickness: float,
+        faces: list[list[float]],
+        outward: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Hollow the body to a wall thickness.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_shell is not implemented by this adapter",
+        )
+
+    async def add_draft(
+        self,
+        angle: float,
+        faces: list[list[float]],
+        neutral_face: list[float],
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Draft faces against a neutral face.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_draft is not implemented by this adapter",
+        )
+
+    async def create_rib(
+        self,
+        sketch: str,
+        thickness: float,
+        both_sides: bool = True,
+        flip_material: bool = False,
+        normal_to_sketch: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a rib from an open sketch.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_rib is not implemented by this adapter",
+        )
+
+    async def create_hole(
+        self,
+        face_point: list[float],
+        hole_type: str,
+        standard: str,
+        size: str,
+        end_condition: str = "through_all",
+        depth: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a Hole Wizard hole at a point on a flat face.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_hole is not implemented by this adapter",
+        )
+
+    async def add_cosmetic_thread(
+        self,
+        edge_point: list[float],
+        size: str,
+        diameter: float,
+        end_type: str = "blind",
+        depth: float | None = None,
+        standard: str = "iso",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a cosmetic thread on a circular edge.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_cosmetic_thread is not implemented by this adapter",
+        )
+
+    async def sketch_convert_entities(
+        self,
+        edge_points: list[list[float]] | None = None,
+        face_point: list[float] | None = None,
+        construction: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Copy model edges or a face outline into the open sketch.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_convert_entities is not implemented by this adapter",
+        )
+
     # Assembly Operations
     async def insert_component(
         self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0

@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Seven part-feature tools** (queue item 11, #105), beta until their
+  live check passes: `create_hole` (Hole Wizard: simple, counterbore,
+  countersink or tapped, ISO or ANSI inch, at a point on a flat face),
+  `add_cosmetic_thread`, `pattern_linear` (a row or a grid), `create_shell`,
+  `add_draft`, `create_rib`, and `sketch_convert_entities` (copy model edges
+  or a face's outline into the open sketch). Faces and edges are picked by a
+  point in mm. Each solid feature reports its volume change, and one that
+  changed nothing is removed again and reported as a failure. 123 tools
+  become 130.
 - **Our own `llms.txt`**, served at the docs site's root and built from the
   docs: each entry's title and summary are copied word for word from its
   page, and a test fails when the file and the pages disagree, when it

@@ -294,6 +294,38 @@ class CheckSketchDefinitionInput(CompatInput):
     )
 
 
+class SketchConvertEntitiesInput(CompatInput):
+    """Input schema for copying model edges into the open sketch.
+
+    Attributes:
+        edge_points (list[list[float]]): A point in mm on each edge to copy.
+        face_point (list[float] | None): A point in mm on a face whose outline
+            to copy.
+        construction (bool): Make the copies construction geometry.
+    """
+
+    edge_points: list[list[float]] = Field(
+        default_factory=list, description="[x, y, z] in mm on each model edge to copy"
+    )
+    face_point: list[float] | None = Field(
+        default=None,
+        description="[x, y, z] in mm on a face whose whole outline to copy",
+    )
+    construction: bool = Field(
+        default=False, description="Make the copies construction geometry"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.edge_points and self.face_point is None:
+            raise ValueError("give edge_points or face_point")
+        for point in [
+            *self.edge_points,
+            *([self.face_point] if self.face_point else []),
+        ]:
+            if len(point) != 3:
+                raise ValueError("each point must be [x, y, z] in mm")
+
+
 async def register_sketching_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -1037,6 +1069,41 @@ async def register_sketching_tools(
                 "distance": offset_distance,
                 "direction": direction,
             },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def sketch_convert_entities(
+        input_data: SketchConvertEntitiesInput,
+    ) -> dict[str, Any]:
+        """Copy model edges, or a face's whole outline, into the open sketch (Convert Entities).
+
+        Use it to sketch on an existing edge exactly, e.g. to cut a pocket that
+        follows a face, instead of re-drawing it at guessed coordinates. Pick edges
+        or a face with a point on each (mm). Needs: an open sketch
+        (`create_sketch`) and a part with those edges. Changes: adds the copied
+        entities, tied to the edges. Returns: `converted` with `entities` (ids for
+        the other sketch tools), `count` and `construction`.
+
+        Args:
+            input_data: The edges. Give `edge_points`, `face_point`, or both;
+                `construction` makes the copies construction geometry.
+
+        Returns:
+            dict[str, Any]: The entities added.
+        """
+        input_data = normalize_input(input_data, SketchConvertEntitiesInput)
+        result = await adapter.sketch_convert_entities(
+            input_data.edge_points or None,
+            input_data.face_point,
+            input_data.construction,
+        )
+        require_success(result, context="Failed to convert entities")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Copied {data.get('count', 0)} edge(s) into the sketch",
+            "converted": data,
             "execution_time": result.execution_time,
         }
 

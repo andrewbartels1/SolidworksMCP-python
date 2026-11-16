@@ -202,6 +202,12 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "create_reference_point": _adds("Create Reference Point"),
     "mirror_feature": _adds("Mirror Feature"),
     "pattern_circular": _adds("Circular Pattern"),
+    "pattern_linear": _adds("Linear Pattern"),
+    "create_shell": _adds("Shell"),
+    "add_draft": _adds("Draft Faces"),
+    "create_rib": _adds("Rib"),
+    "create_hole": _adds("Hole Wizard Hole"),
+    "add_cosmetic_thread": _adds("Cosmetic Thread"),
     # sketching
     "create_sketch": _adds("Create Sketch"),
     "add_line": _adds("Add Sketch Line"),
@@ -220,6 +226,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "sketch_circular_pattern": _adds("Sketch Circular Pattern"),
     "sketch_mirror": _adds("Mirror Sketch Entities"),
     "sketch_offset": _adds("Offset Sketch Entities"),
+    "sketch_convert_entities": _adds("Convert Entities"),
     "sketch_tutorial_simple_hole": _adds("Tutorial: Hole Sketch"),
     # template_management
     "compare_templates": _reads("Compare Templates"),
