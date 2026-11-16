@@ -297,11 +297,17 @@ async def test_holes_at_several_points(scratch: Any) -> None:
 
 
 async def test_pattern_a_row_and_a_grid(scratch: Any) -> None:
-    """An M6 simple hole (listed as Ø6.0) repeated 3 times, then 3 x 2."""
+    """An M6 simple hole (listed as Ø6.0) repeated 3 times, then 3 x 2.
+
+    The seed sits 15 mm from three edges of the block's top and 5 mm off the
+    middle in z, so the 10 mm steps stay on the block whichever way SolidWorks
+    reads each edge. Should the grid fail anyway, it is retried with the
+    second direction flipped and both answers are shown.
+    """
     tools = await _tools(scratch.adapter)
     await _block(tools, "pattern")
     hole = await tools["create_hole"](
-        {"face_point": [-10, 20, -10], "hole_type": "simple", "size": "M6"}
+        {"face_point": [-10, 20, -5], "hole_type": "simple", "size": "M6"}
     )
     assert hole["status"] == "success", hole
     seed = hole["hole"]["volume_change"]
@@ -314,17 +320,19 @@ async def test_pattern_a_row_and_a_grid(scratch: Any) -> None:
             "spacing": 10,
         }
     )
-    grid = await tools["pattern_linear"](
-        {
-            "features": [hole["hole"]["name"]],
-            "direction": [0, 20, 20],
-            "count": 3,
-            "spacing": 10,
-            "direction2": [20, 20, 0],
-            "count2": 2,
-            "spacing2": 15,
-        }
-    )
+    grid_call = {
+        "features": [hole["hole"]["name"]],
+        "direction": [0, 20, 20],
+        "count": 3,
+        "spacing": 10,
+        "direction2": [20, 20, 0],
+        "count2": 2,
+        "spacing2": 10,
+    }
+    grid = await tools["pattern_linear"](grid_call)
+    flipped = None
+    if grid["status"] != "success":
+        flipped = await tools["pattern_linear"]({**grid_call, "reverse2": True})
     nothing = await tools["pattern_linear"](
         {
             "features": ["NoSuchFeature"],
@@ -340,6 +348,9 @@ async def test_pattern_a_row_and_a_grid(scratch: Any) -> None:
             "seed": round(seed, 1),
             "row": row.get("pattern", row.get("message")),
             "grid": grid.get("pattern", grid.get("message")),
+            "grid_reverse2": (
+                None if flipped is None else flipped.get("pattern", flipped["message"])
+            ),
             "unknown_feature": [nothing["status"], nothing["message"]],
         },
     )

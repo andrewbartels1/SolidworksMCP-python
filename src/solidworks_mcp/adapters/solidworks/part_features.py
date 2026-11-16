@@ -536,8 +536,11 @@ class SolidWorksPartFeaturesMixin:
             )
             if feature is None:
                 raise RuntimeError(
-                    "FeatureLinearPattern5 returned nothing; check the features "
-                    "and that the direction is a straight edge or an axis."
+                    "FeatureLinearPattern5 returned nothing. SolidWorks picks "
+                    "which way an edge points, so an instance may have landed "
+                    "off the part: try reverse (or reverse2). Also check the "
+                    "features, and that each direction is a straight edge or an "
+                    "axis."
                 )
             return {
                 "name": _feature_name(adapter, feature),

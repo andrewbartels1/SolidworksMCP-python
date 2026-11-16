@@ -2616,8 +2616,10 @@ async def register_modeling_tools(
         """Repeat features of the active part in a row or a grid, e.g. a row of holes.
 
         Give the direction as a point on a straight edge (mm) or an axis name; add
-        `direction2` for a grid. Bosses and cuts both work. It fails when the volume
-        doesn't change, which means no instance landed on the part. Needs: an open
+        `direction2` for a grid. Bosses and cuts both work. SolidWorks picks which
+        way an edge points; if instances land off the part, set `reverse` or
+        `reverse2`. It fails when the volume doesn't change, which means no
+        instance landed on the part. Needs: an open
         part with the named features. Changes: adds a linear pattern feature.
         Returns: `pattern` with `name`, `patterned`, `count`, `spacing_mm`, and
         `volume_before`, `volume_after` and `volume_change` (mm³).
