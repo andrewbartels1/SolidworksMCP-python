@@ -1,6 +1,6 @@
 # SolidWorks MCP Server - Simplified Makefile
 
-.PHONY: help install test test-context-budget test-full test-clean docs build run clean lint format
+.PHONY: help install test test-context-budget llms links test-full test-clean docs build run clean lint format
 
 # Default target
 .DEFAULT_GOAL := help
@@ -56,6 +56,13 @@ test: ## Run test suite with coverage
 		--cov-report=xml:coverage.xml \
 		--durations=10 \
 		-v
+
+llms: ## Rebuild docs/llms.txt, then check it and every project link (offline)
+	python -m solidworks_mcp.doc_links build
+	python -m solidworks_mcp.doc_links check
+
+links: ## Visit every external link in the docs (online)
+	python -m solidworks_mcp.doc_links check-external
 
 test-context-budget: ## Run smoke response-size guard test (CI-friendly)
 	@echo "$(BLUE)Running smoke response-size guard test...$(NC)"

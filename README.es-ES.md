@@ -64,7 +64,7 @@ Solo cambia la entrada `solidworks` de cada configuración, hace antes una copia
 
 **Para comprobarlo:** abre SolidWorks, reinicia tu cliente y pregunta *"¿Qué modelo está abierto en SolidWorks?"*
 
-El paquete se llama `solidworks-mcp-python`. `uvx solidworks-mcp` instala otro proyecto distinto. Para trabajar en el propio servidor, [instala desde un clon](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#install-from-source).
+El paquete se llama `solidworks-mcp-python`. `uvx solidworks-mcp` instala otro proyecto distinto. Para trabajar en el propio servidor, [instala desde un clon](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#install-from-source).
 
 ## Conectar un cliente a mano
 
@@ -140,11 +140,11 @@ La primera ejecución compila la imagen. Vuelve a ejecutar sin recompilar cuando
 
 ## Soluciones Comunes en Windows
 
-Si `uvx` no se encuentra después de instalar uv, abre una ventana nueva de PowerShell. Más soluciones en [Troubleshooting](https://andrewbartels1.github.io/SolidworksMCP-python/getting-started/installation/#troubleshooting).
+Si `uvx` no se encuentra después de instalar uv, abre una ventana nueva de PowerShell. Más soluciones en [Troubleshooting](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#troubleshooting).
 
 ## Documentación
 
-- Sitio principal de documentación: <https://andrewbartels1.github.io/SolidworksMCP-python/>
+- Sitio principal de documentación: <https://andrewbartels1.com/SolidworksMCP-python/>
 - Inicio/visión general: [docs/index.md](docs/index.md)
 
 Secciones clave de la documentación:

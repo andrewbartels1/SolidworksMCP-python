@@ -1,6 +1,6 @@
 # U-Joint Rebuild Prompts
 
-**Note:** These prompts are for when you have access to the reference SolidWorks sample models and want to match them exactly. For learning and from-scratch builds, start with the [U-Joint Assembly Tutorial](../tutorials/u-joint-assembly-build.md) instead.
+These prompts rebuild the U-Joint from SolidWorks' sample models, for when you have the reference models and want to match them exactly. For learning and from-scratch builds, start with the [U-Joint Assembly Tutorial](../tutorials/u-joint-assembly-build.md) instead.
 
 Reference models location:
 

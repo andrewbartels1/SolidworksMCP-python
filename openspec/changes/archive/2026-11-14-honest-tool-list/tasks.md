@@ -45,4 +45,4 @@
 ## 8. Finish
 
 - [x] 8.1 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
-- [ ] 8.2 Sign-off, PR (no attribution) closing #174, archive, the queue updated
+- [x] 8.2 Sign-off, PR (no attribution) closing #174, archive, the queue updated

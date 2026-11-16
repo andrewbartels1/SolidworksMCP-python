@@ -1,6 +1,8 @@
 # Local LLM with Ollama (Gemma 4)
 
-The SolidWorks MCP UI can route all LLM calls to a local Ollama instance instead of GitHub Models or OpenAI. This works offline, keeps design data private, and uses Ollama's OpenAI-compatible endpoint at `http://127.0.0.1:11434/v1`.
+The SolidWorks MCP UI can route all LLM calls to a local Ollama instance instead of GitHub Models or OpenAI. This works offline and keeps design data private.
+
+It uses Ollama's OpenAI-compatible endpoint at `http://127.0.0.1:11434/v1`.
 
 The official Ollama Gemma 4 library page is here: <https://ollama.com/library/gemma4>
 

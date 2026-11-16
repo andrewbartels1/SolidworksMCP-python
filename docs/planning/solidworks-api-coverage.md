@@ -1,5 +1,7 @@
 # SolidWorks API Coverage Map
 
+This page maps every major SolidWorks API area against what this MCP server implements, as a planning reference for new tools.
+
 **Last updated:** 2026-06-13  
 **Reference:** SolidWorks 2026 API (SOLIDWORKS COM API via pywin32)  
 **Purpose:** Planning reference for future tool development — maps every major SolidWorks API functional category against what this MCP server currently implements.

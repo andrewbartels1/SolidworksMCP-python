@@ -1,6 +1,7 @@
 # Agent Skill
 
-The server ships a skill, `solidworks-mcp`, for agents that use its tools.
+The server ships a skill, `solidworks-mcp`, that teaches agents how to use its tools together: the order to build in, units, choosing geometry, checking results and recovering from errors.
+
 Each tool's own description says what that tool does
 ([Tool Description Standard](tool-description-standard.md)); the skill
 covers what spans tools:

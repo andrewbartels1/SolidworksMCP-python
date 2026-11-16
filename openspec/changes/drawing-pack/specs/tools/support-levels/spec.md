@@ -12,6 +12,6 @@ The check SHALL fail when a level contradicts what the code shows. A `planned` t
 - **WHEN** a tool is `stable`
 - **THEN** at least one test under `tests/live/` calls it by name
 
-#### Scenario: After the drawing pack
+#### Scenario: After the clean-up
 - **WHEN** the levels are counted after this change
-- **THEN** no tool is `planned`
+- **THEN** no tool is `planned`: the seven drawing tools the honest tool list left planned are built

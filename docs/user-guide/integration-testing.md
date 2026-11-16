@@ -1,6 +1,8 @@
 # Integration Testing (Real SolidWorks)
 
-This project now includes two test modes:
+This project has two test modes: a fast default mode that needs no SolidWorks, and a full mode that adds real SolidWorks integration tests.
+
+The two modes:
 
 - Default mode: fast tests, mock-friendly, no real SolidWorks dependency.
 - Full mode: includes real SolidWorks integration tests.

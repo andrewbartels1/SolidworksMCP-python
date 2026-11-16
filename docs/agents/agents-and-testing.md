@@ -245,7 +245,7 @@ You should see structured JSON output like this:
 === "Anthropic API (BYOK)"
 
     Requires an Anthropic account with active billing credits (separate from Claude Code subscription).
-    Get your key at: https://console.anthropic.com/settings/keys
+    Get your key at: https://platform.claude.com/settings/keys
 
     ```powershell
     [System.Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-...", "User")

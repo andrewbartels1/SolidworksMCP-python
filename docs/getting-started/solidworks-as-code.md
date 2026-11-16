@@ -1,6 +1,8 @@
 # SolidWorks as Code (SoC)
 
-SolidWorks as Code lets you record an interactive MCP session and export it as a clean, runnable Python script.  The round-trip is:
+SolidWorks as Code lets you record an interactive MCP session and export it as a clean, runnable Python script.
+
+The round-trip is:
 
 ```text
 MCP tool calls  →  SQLite log  →  soc_exporter  →  script.py

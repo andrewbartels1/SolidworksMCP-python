@@ -7,6 +7,10 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    # Weekly: check every link in the docs (the link-check job only).
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,6 +27,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -108,3 +113,40 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
+  # Every link in the README, the docs and llms.txt, after each deploy and
+  # weekly (spec docs/link-check). A failure flags a link to fix; it does not
+  # undo the deploy.
+  link-check:
+    if: >-
+      always() && (github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      needs.deploy.result == 'success')
+    runs-on: ubuntu-latest
+    needs: deploy
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . "pyyaml>=6.0"
+
+      - name: Check every link
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m solidworks_mcp.doc_links check-external
+
+      - name: Upload the link report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: link-report
+          path: tests/.generated/link-report.md

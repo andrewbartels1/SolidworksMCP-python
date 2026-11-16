@@ -63,7 +63,7 @@ def test_file_links_open_on_github(description: str) -> None:
 
 
 def test_absolute_urls_and_anchors_are_untouched(description: str) -> None:
-    assert "](https://andrewbartels1.github.io/SolidworksMCP-python/" in description
+    assert "](https://andrewbartels1.com/SolidworksMCP-python/" in description
     assert (
         "https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/https"
         not in description
