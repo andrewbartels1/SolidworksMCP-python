@@ -20,6 +20,7 @@ from solidworks_mcp.tools.modeling import (
     PatternLinearInput,
     metric_diameter,
     register_modeling_tools,
+    simple_iso_size,
 )
 
 
@@ -34,6 +35,33 @@ async def _tool(mcp_server: Any, adapter: Any, config: Any, name: str) -> Any:
 )
 def test_metric_diameter(size: str, diameter: float | None) -> None:
     assert metric_diameter(size) == diameter
+
+
+@pytest.mark.parametrize(
+    ("size", "listed"),
+    [
+        ("M4", "Ø4.0"),
+        ("4", "Ø4.0"),
+        ("4.5 mm", "Ø4.5"),
+        ("Ø6", "Ø6.0"),
+        ("Ø6.0", "Ø6.0"),
+        ("Letter A", "Letter A"),
+    ],
+)
+def test_simple_iso_size(size: str, listed: str) -> None:
+    """The ISO drill table lists simple holes by diameter (M4 made no hole live)."""
+    assert simple_iso_size(size) == listed
+
+
+def test_only_a_simple_iso_hole_size_is_converted() -> None:
+    def size(hole_type: str, standard: str, given: str) -> str:
+        return CreateHoleInput(
+            face_point=[0, 0, 20], hole_type=hole_type, standard=standard, size=given
+        ).size
+
+    assert size("simple", "iso", "M4") == "Ø4.0"
+    assert size("counterbore", "iso", "M4") == "M4"
+    assert size("simple", "ansi_inch", "1/4") == "1/4"
 
 
 CASES = [

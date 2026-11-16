@@ -147,10 +147,18 @@ def _last_feature_name(adapter: Any) -> str | None:
 class _Picks:
     """Picks faces and edges by points (mm), sharing one body walk."""
 
-    def __init__(self, adapter: Any) -> None:
+    def __init__(self, adapter: Any, *, rebuild: bool = True) -> None:
+        """Start a pick set.
+
+        Args:
+            adapter: The connected adapter.
+            rebuild: Rebuild before the first pick; False inside an open
+                sketch, which a rebuild would close.
+        """
         self._adapter = adapter
         self._picker = _BodyEntityPicker(adapter)
         self._first = True
+        self._rebuild = rebuild
 
     def pick(self, point: list[float], kind: str, mark: int) -> None:
         """Select the ``kind`` ("FACE" or "EDGE") at ``point`` under ``mark``.
@@ -168,6 +176,7 @@ class _Picks:
             mark=mark,
             entity_type=kind,
             picker=self._picker,
+            rebuild=self._rebuild,
         )
         self._first = False
         if not selected:
@@ -698,7 +707,8 @@ class SolidWorksPartFeaturesMixin:
         def build() -> dict[str, Any]:
             before = len(segments())
             adapter.currentModel.ClearSelection2(True)
-            picks = _Picks(adapter)
+            # No rebuild: it would close the sketch being copied into.
+            picks = _Picks(adapter, rebuild=False)
             for point in edge_points or []:
                 picks.pick(point, "EDGE", 0)
             if face_point is not None:

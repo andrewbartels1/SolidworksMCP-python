@@ -79,11 +79,19 @@ class FakeAdapter(SolidWorksPartFeaturesMixin):
 
 
 @pytest.fixture
-def picks(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, ...]]:
+def pick_rebuilds() -> list[bool]:
+    """Whether each pick asked for a rebuild first (filled by ``picks``)."""
+    return []
+
+
+@pytest.fixture
+def picks(
+    monkeypatch: pytest.MonkeyPatch, pick_rebuilds: list[bool]
+) -> list[tuple[Any, ...]]:
     """Fake the pick helpers; record every pick."""
     seen: list[tuple[Any, ...]] = []
 
-    def select_by_coord(adapter, x, y, z, append, mark, entity_type, picker):  # type: ignore[no-untyped-def]
+    def select_by_coord(adapter, x, y, z, append, mark, entity_type, picker, rebuild):  # type: ignore[no-untyped-def]
         seen.append(
             (
                 round(x * 1000, 6),
@@ -94,6 +102,7 @@ def picks(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, ...]]:
                 entity_type,
             )
         )
+        pick_rebuilds.append(rebuild)
         return x != 0.999  # 999 mm: nothing there
 
     def select_named(adapter, name, mark, append):  # type: ignore[no-untyped-def]
@@ -347,7 +356,11 @@ async def test_cosmetic_thread_through_and_failures(picks: list[Any]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_convert_entities_registers_the_new_segments(picks: list[Any]) -> None:
+async def test_convert_entities_registers_the_new_segments(
+    picks: list[Any], pick_rebuilds: list[bool]
+) -> None:
+    """The copies get ids; the picks skip the rebuild, which would close the
+    sketch (seen live)."""
     adapter = FakeAdapter([])
     adapter.segments = [SimpleNamespace(ConstructionGeometry=False)]
     new = [SimpleNamespace(ConstructionGeometry=False) for _ in range(4)]
@@ -364,6 +377,7 @@ async def test_convert_entities_registers_the_new_segments(picks: list[Any]) -> 
     assert all(segment.ConstructionGeometry for segment in new)
     assert adapter._sketch_entities["Converted_1"] is new[0]
     assert [p[5] for p in picks] == ["EDGE", "FACE"]
+    assert pick_rebuilds == [False, False]
 
 
 @pytest.mark.asyncio

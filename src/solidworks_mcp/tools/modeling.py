@@ -1111,6 +1111,25 @@ def metric_diameter(size: str) -> float | None:
     return float(match.group(1)) if match else None
 
 
+def simple_iso_size(size: str) -> str:
+    """A simple ISO hole's size as SolidWorks lists it: by diameter, ``Ø4.0``.
+
+    The ISO drill table names sizes by diameter, not by screw (seen live:
+    ``M4`` made no hole). ``M4``, ``4``, ``4mm`` and ``Ø4`` all become
+    ``Ø4.0``; anything else is passed on unchanged.
+
+    Args:
+        size: The size the caller gave.
+
+    Returns:
+        The size SolidWorks lists.
+    """
+    match = re.fullmatch(
+        r"\s*(?:M|Ø)?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*", size, re.IGNORECASE
+    )
+    return f"Ø{float(match.group(1)):.1f}" if match else size
+
+
 Point3 = list[float]
 
 
@@ -1277,7 +1296,8 @@ class CreateHoleInput(CompatInput):
     )
     size: str = Field(
         description="Size as SolidWorks lists it: 'M6' (iso), 'M6x1.0' (iso "
-        "tapped), '#10' or '1/4' (ansi_inch)"
+        "tapped), '#10' or '1/4' (ansi_inch). A simple iso hole is listed by "
+        "diameter ('Ø4.0'); 'M4' or '4' is converted to that."
     )
     end_condition: Literal["through_all", "blind"] = Field(
         default="through_all", description="through_all or blind"
@@ -1292,6 +1312,8 @@ class CreateHoleInput(CompatInput):
         _point(self.face_point, "face_point")
         if not self.size.strip():
             raise ValueError("size is required")
+        if self.hole_type == "simple" and self.standard == "iso":
+            self.size = simple_iso_size(self.size)
         if self.end_condition == "blind" and self.depth is None:
             raise ValueError("a blind hole needs depth")
 
