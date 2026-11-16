@@ -30,9 +30,8 @@ The COM calls, from the type library index (`lookup_api_method`):
   do.
 
 **Non-Goals:**
-- Several holes in one call: one hole per call, then `pattern_linear` or
-  `pattern_circular`. Editing a Hole Wizard position sketch is a second
-  feature's worth of work.
+- Several holes in one call was out of scope at first; added after the
+  live demos (2026-11-15) at the user's request: see decision 7.
 - Every Hole Wizard standard and fastener type: ISO and ANSI inch, four
   hole types, a fixed size list each.
 - Variable-pitch patterns, step draft, drafted ribs, multi-thickness
@@ -137,3 +136,28 @@ table. This change depends on that change being merged first.
 - All seven are `beta` with the reason "not yet checked on SolidWorks
   (queue item 11's live bundle)"; each moves to `stable` when its live test
   passes.
+
+## Added after the live demos (2026-11-15)
+
+### 7. Several holes: points in the hole's position sketch
+
+The user places holes by clicking sketch points in the Hole Wizard's
+Positions tab: every point of the hole's position sketch is a hole. The API
+does the same: after `HoleWizard5` makes the first hole, the position sketch
+(the hole's sub-feature sketch holding a point at `face_point`) is opened
+with `EditSketch`, a point is added for each of `positions` with
+`ISketchManager.CreatePoint` (model millimetres turned into sketch
+coordinates through `ISketch.ModelToSketchTransform`, `AddToDB` on so no
+point snaps to the first hole), and the sketch is closed with
+`InsertSketch(True)`, which rebuilds the hole at every point. A point the
+sketch can't take, or a hole count short of the points after the rebuild,
+deletes the feature and fails. Alternative: a hole per call and a pattern;
+kept for regular grids, but scattered holes need points.
+
+### 8. Simple holes through all fall back to blind
+
+The diagnostic `test_simple_hole_through_all_diagnostic` showed `HoleWizard5`
+returns nothing for a simple hole with `through_all` whatever the diameter,
+depth or table, while blind simple holes and through-all tapped holes build.
+So a simple hole that comes back empty is retried blind, the depth being the
+part box's diagonal (`IPartDoc.GetPartBox`) plus 1 mm, and the reply says so.

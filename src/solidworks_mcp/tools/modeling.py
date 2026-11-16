@@ -1284,6 +1284,7 @@ class CreateHoleInput(CompatInput):
         size (str): The size as SolidWorks lists it.
         end_condition (str): through_all or blind.
         depth (float | None): Depth for a blind hole, mm.
+        positions (list[list[float]] | None): More holes on the same face, mm.
     """
 
     face_point: list[float] = Field(
@@ -1308,9 +1309,18 @@ class CreateHoleInput(CompatInput):
         gt=0,
         description=("Blind depth, mm. A tapped hole's thread goes at most 80% of it."),
     )
+    positions: list[list[float]] | None = Field(
+        default=None,
+        description=(
+            "More holes in the same feature: [x, y, z] mm points on the same "
+            "face, as when Hole Wizard holes are placed on sketch points"
+        ),
+    )
 
     def model_post_init(self, __context: Any) -> None:
         _point(self.face_point, "face_point")
+        for point in self.positions or []:
+            _point(point, "each of positions")
         if not self.size.strip():
             raise ValueError("size is required")
         if self.hole_type == "simple" and self.standard == "iso":
@@ -2745,12 +2755,15 @@ async def register_modeling_tools(
         """Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face.
 
         Use it instead of sketching a circle and cutting: the hole is sized from the
-        standard, so it fits the fastener and a drawing shows its callout. One hole
-        per call; repeat it with `pattern_linear` or `pattern_circular`. It fails
-        when the volume doesn't change. Needs: an open part with a flat face at
-        `face_point`. Changes: adds a hole feature. Returns: `hole` with `name`,
-        `hole_type`, `standard`, `size`, `end_condition`, and `volume_before`,
-        `volume_after` and `volume_change` (mm³).
+        standard, so it fits the fastener and a drawing shows its callout. Several
+        holes on one face: give the rest as `positions` (one feature, a hole at each
+        point); a regular grid can also use `pattern_linear`. A simple hole can't be
+        through all in SolidWorks, so it is made blind through the part
+        (`end_condition_used`, with a warning). It fails when the volume doesn't
+        change. Needs: an open part with a flat face at `face_point`. Changes: adds
+        a hole feature. Returns: `hole` with `name`, `hole_count`, `hole_type`,
+        `standard`, `size`, `end_condition`, `end_condition_used`, and
+        `volume_before`, `volume_after` and `volume_change` (mm³).
 
         Args:
             input_data: The hole. `face_point`, `hole_type` and `size` are
@@ -2768,12 +2781,17 @@ async def register_modeling_tools(
             input_data.size,
             input_data.end_condition,
             input_data.depth,
+            input_data.positions,
         )
         require_success(result, context="Failed to create hole")
         data = result.data if isinstance(result.data, dict) else {}
+        count = int(data.get("hole_count", 1))
+        kind = f"{input_data.size} {input_data.hole_type}"
         return {
             "status": "success",
-            "message": f"Added a {input_data.size} {input_data.hole_type} hole",
+            "message": (
+                f"Added a {kind} hole" if count == 1 else f"Added {count} {kind} holes"
+            ),
             "hole": data,
             "execution_time": result.execution_time,
         }

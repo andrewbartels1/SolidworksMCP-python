@@ -967,12 +967,13 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         size: str,
         end_condition: str = "through_all",
         depth: float | None = None,
+        positions: list[list[float]] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "create_hole",
             lambda: self.adapter.create_hole(
-                face_point, hole_type, standard, size, end_condition, depth
+                face_point, hole_type, standard, size, end_condition, depth, positions
             ),
             input_dict={
                 "face_point": face_point,
@@ -981,6 +982,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "size": size,
                 "end_condition": end_condition,
                 "depth": depth,
+                "positions": positions,
             },
         )
 

@@ -23,8 +23,9 @@ from typing import Any, cast
 
 from .. import sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
-from .com_utils import as_list
+from .com_utils import as_list, double_array
 from .features import (
+    _PICK_TOLERANCE_M,
     _BodyEntityPicker,
     _null_callout,
     _select_edge_by_coord,
@@ -127,6 +128,148 @@ def _cap_thread_depth(
         adapter._attempt(lambda: data.ReleaseSelectionAccess(), None)
         return thread
     return cap
+
+
+def _through_depth_m(adapter: Any, model: Any) -> float:
+    """A blind depth that passes through the part: its box diagonal + 1 mm.
+
+    SolidWorks refuses ``through_all`` for a simple Hole Wizard hole (seen
+    live, every argument variant), so such a hole is made blind this deep.
+
+    Args:
+        adapter: The connected adapter.
+        model: The active part.
+
+    Returns:
+        The depth in metres; 1 m when the part box can't be read.
+    """
+    part = sw_type_info.flagged(model, "IPartDoc")
+    box = as_list(adapter._attempt(lambda: part.GetPartBox(True), default=None))
+    if len(box) < 6:
+        return 1.0
+    corners = [float(v) for v in box[:6]]
+    return math.dist(corners[:3], corners[3:]) + 0.001
+
+
+def _to_sketch(adapter: Any, sketch: Any, point_m: list[float]) -> list[float]:
+    """A model point (metres) in ``sketch``'s coordinates.
+
+    Args:
+        adapter: The connected adapter (its ``swApp`` gives the math utility).
+        sketch: An ``ISketch``.
+        point_m: ``[x, y, z]`` in metres, model space.
+
+    Returns:
+        ``[x, y, z]`` in the sketch's space; ``z`` is 0 on the sketch plane.
+    """
+    app = sw_type_info.flagged(adapter.swApp, "ISldWorks")
+    math_utility = sw_type_info.flagged(app.GetMathUtility(), "IMathUtility")
+    point = sw_type_info.flagged(
+        math_utility.CreatePoint(double_array(point_m)), "IMathPoint"
+    )
+    moved = sw_type_info.flagged(
+        point.MultiplyTransform(sketch.ModelToSketchTransform), "IMathPoint"
+    )
+    return [float(v) for v in as_list(moved.ArrayData)[:3]]
+
+
+def _sketch_points(adapter: Any, sketch: Any) -> list[list[float]]:
+    """The points of an ``ISketch``, ``[x, y, z]`` in sketch metres."""
+    points = as_list(adapter._attempt(lambda: sketch.GetSketchPoints2(), default=None))
+    return [[float(p.X), float(p.Y), float(p.Z)] for p in points]
+
+
+def _position_sketch(adapter: Any, feature: Any, first_m: list[float]) -> Any:
+    """The hole's position sketch feature: its sketch has a point at ``first_m``.
+
+    Args:
+        adapter: The connected adapter.
+        feature: The new Hole Wizard feature.
+        first_m: The first hole's point, metres, model space.
+
+    Returns:
+        ``(sketch_feature, sketch)``.
+
+    Raises:
+        LookupError: When no sub-feature sketch holds that point.
+    """
+    hole = sw_type_info.flagged(feature, "IFeature")
+    sub = adapter._attempt(lambda: hole.GetFirstSubFeature(), default=None)
+    while sub is not None:
+        sub = sw_type_info.flagged(sub, "IFeature")
+        kind = adapter._attempt(lambda s=sub: s.GetTypeName2(), default="")
+        if kind in ("ProfileFeature", "3DProfileFeature"):
+            sketch = sw_type_info.flagged(
+                adapter._attempt(lambda s=sub: s.GetSpecificFeature2(), None),
+                "ISketch",
+            )
+            if sketch is not None:
+                at = _to_sketch(adapter, sketch, first_m)
+                if any(
+                    math.dist(at, p) <= _PICK_TOLERANCE_M
+                    for p in _sketch_points(adapter, sketch)
+                ):
+                    return sub, sketch
+        sub = adapter._attempt(lambda s=sub: s.GetNextSubFeature(), default=None)
+    raise LookupError("The hole's position sketch couldn't be found.")
+
+
+def _add_hole_positions(
+    adapter: Any,
+    model: Any,
+    feature: Any,
+    first_mm: list[float],
+    positions_mm: list[list[float]],
+) -> int:
+    """Put a hole at every point of ``positions_mm`` (Hole Wizard positions).
+
+    Each point is added to the hole's position sketch, as clicking sketch
+    points on the Hole Wizard's Positions tab does; closing the sketch
+    rebuilds the hole at every point.
+
+    Args:
+        adapter: The connected adapter.
+        model: The active part.
+        feature: The new Hole Wizard feature.
+        first_mm: The first hole's point, mm.
+        positions_mm: The further points, mm, on the same face.
+
+    Returns:
+        The number of points in the position sketch afterwards.
+
+    Raises:
+        ValueError: A point that is off the face's plane.
+        RuntimeError: When the sketch didn't take every point.
+    """
+    sketch_feature, sketch = _position_sketch(
+        adapter, feature, [_mm(v) for v in first_mm]
+    )
+    local = [_to_sketch(adapter, sketch, [_mm(v) for v in p]) for p in positions_mm]
+    for point, at in zip(positions_mm, local, strict=True):
+        if abs(at[2]) > _PICK_TOLERANCE_M:
+            raise ValueError(
+                f"Position {list(point)} mm is {abs(at[2]) * 1000:.3f} mm off the "
+                "face the hole is on; give points on that face."
+            )
+    model.ClearSelection2(True)
+    sw_type_info.flagged(sketch_feature, "IFeature").Select2(False, 0)
+    model.EditSketch()
+    manager = sw_type_info.flagged(model.SketchManager, "ISketchManager")
+    manager.AddToDB = True  # no snapping onto the first hole
+    try:
+        for x, y, _z in local:
+            manager.CreatePoint(x, y, 0.0)
+    finally:
+        manager.AddToDB = False
+        manager.InsertSketch(True)
+    count = len(_sketch_points(adapter, sketch))
+    expected = 1 + len(positions_mm)
+    if count != expected:
+        raise RuntimeError(
+            f"The hole's position sketch has {count} points after adding "
+            f"{len(positions_mm)}; expected {expected}."
+        )
+    return count
 
 
 def _feature_name(adapter: Any, feature: Any) -> str | None:
@@ -545,79 +688,126 @@ class SolidWorksPartFeaturesMixin:
         size: str,
         end_condition: str = "through_all",
         depth: float | None = None,
+        positions: list[list[float]] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """A Hole Wizard hole at a point on a flat face (``HoleWizard5``).
+        """Hole Wizard holes at points on a flat face (``HoleWizard5``).
 
         The face is selected at ``face_point`` with ``SelectByID2``, and the
         hole is placed at that selection point. Dimensions not given are -1,
-        which leaves them to the standard's table for the size.
+        which leaves them to the standard's table for the size. Each point of
+        ``positions`` is added to the hole's position sketch, so one feature
+        holds every hole (:func:`_add_hole_positions`). A simple hole that
+        SolidWorks won't make through all is made blind through the part
+        (:func:`_through_depth_m`).
 
         Args:
-            face_point: ``[x, y, z]`` mm on the face, where the hole goes.
+            face_point: ``[x, y, z]`` mm on the face, where the first hole goes.
             hole_type: A key of :data:`HOLE_TYPES`.
             standard: A key of :data:`HOLE_STANDARDS`.
             size: The size as SolidWorks lists it (``M6``, ``M6x1.0``, ``#10``).
             end_condition: A key of :data:`HOLE_END_CONDITIONS`.
             depth: Hole depth for a blind hole, mm.
+            positions: Further ``[x, y, z]`` mm points on the same face.
 
         Returns:
-            The hole's name, inputs and volume change.
+            The hole's name, inputs, ``hole_count``, ``end_condition_used``
+            and volume change. When adding the positions fails, the hole is
+            removed again and the error says why.
         """
         adapter: Any = self
+        extra = [list(p) for p in positions or []]
+        made: dict[str, str | None] = {}
 
         def build() -> dict[str, Any]:
             model = adapter.currentModel
             model.ClearSelection2(True)
             adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
             x, y, z = (_mm(v) for v in face_point)
-            if not model.Extension.SelectByID2(
-                "", "FACE", x, y, z, False, 0, _null_callout(), 0
-            ):
-                raise LookupError(
-                    f"No face at {list(face_point)} mm to put the hole on."
-                )
             manager = sw_type_info.flagged(model.FeatureManager, "IFeatureManager")
+
+            def make(end: str, depth_m: float) -> Any:
+                model.ClearSelection2(True)
+                if not model.Extension.SelectByID2(
+                    "", "FACE", x, y, z, False, 0, _null_callout(), 0
+                ):
+                    raise LookupError(
+                        f"No face at {list(face_point)} mm to put the hole on."
+                    )
+                return manager.HoleWizard5(
+                    HOLE_TYPES[hole_type],  # GenericHoleType
+                    HOLE_STANDARDS[standard],  # StandardIndex
+                    HOLE_FASTENERS[(hole_type, standard)],  # FastenerTypeIndex
+                    size,  # SSize
+                    HOLE_END_CONDITIONS[end],  # EndType
+                    -1.0,  # Diameter (from the size table)
+                    depth_m,  # Depth
+                    -1.0,  # Length
+                    *([-1.0] * 12),  # Value1..Value12 (from the size table)
+                    "",  # ThreadClass
+                    False,  # RevDir
+                    True,  # FeatureScope
+                    True,  # AutoSelect
+                    True,  # AssemblyFeatureScope
+                    True,  # AutoSelectComponents
+                    False,  # PropagateFeatureToParts
+                )
+
             blind_depth = _mm(depth) if depth is not None else -1.0
-            feature = manager.HoleWizard5(
-                HOLE_TYPES[hole_type],  # GenericHoleType
-                HOLE_STANDARDS[standard],  # StandardIndex
-                HOLE_FASTENERS[(hole_type, standard)],  # FastenerTypeIndex
-                size,  # SSize
-                HOLE_END_CONDITIONS[end_condition],  # EndType
-                -1.0,  # Diameter (from the size table)
-                blind_depth,  # Depth
-                -1.0,  # Length
-                *([-1.0] * 12),  # Value1..Value12 (from the size table)
-                "",  # ThreadClass
-                False,  # RevDir
-                True,  # FeatureScope
-                True,  # AutoSelect
-                True,  # AssemblyFeatureScope
-                True,  # AutoSelectComponents
-                False,  # PropagateFeatureToParts
-            )
+            end_used, warnings = end_condition, []
+            feature = make(end_condition, blind_depth)
+            if feature is None and hole_type == "simple" and end_condition != "blind":
+                blind_depth = _through_depth_m(adapter, model)
+                end_used = "blind"
+                feature = make("blind", blind_depth)
+                warnings.append(
+                    "SolidWorks makes no simple hole through all, so this one is "
+                    f"blind, {blind_depth * 1000:.1f} mm deep (through the part). "
+                    "If the part is made thicker, deepen the hole."
+                )
             if feature is None:
                 raise RuntimeError(
                     f"HoleWizard5 made no hole ({hole_type}, {standard}, {size}); "
                     "check the size is one SolidWorks lists for that standard."
                 )
+            name = _feature_name(adapter, feature)
+            made["name"] = name
             thread_m = (
                 _cap_thread_depth(adapter, model, feature, blind_depth)
                 if hole_type == "tapped" and end_condition == "blind" and depth
                 else None
             )
-            return {
-                "name": _feature_name(adapter, feature),
+            count = (
+                _add_hole_positions(adapter, model, feature, list(face_point), extra)
+                if extra
+                else 1
+            )
+            made["name"] = None  # finished: nothing to clean up
+            data: dict[str, Any] = {
+                "name": name,
+                "hole_count": count,
                 "thread_depth_mm": None if thread_m is None else thread_m * 1000,
                 "hole_type": hole_type,
                 "standard": standard,
                 "size": size,
                 "end_condition": end_condition,
-                "depth_mm": depth,
+                "end_condition_used": end_used,
+                "depth_mm": depth if end_used == end_condition else blind_depth * 1000,
                 "at_mm": list(face_point),
+                "positions_mm": extra,
             }
+            if warnings:
+                data["warnings"] = warnings
+            return data
 
-        return await self._measured("create_hole", build)
+        result = await self._measured("create_hole", build)
+        orphan = made.get("name")
+        if not result.is_success and orphan:
+            await adapter.delete_feature(orphan)
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"{result.error} The hole {orphan} was removed again.",
+            )
+        return result
 
     async def add_cosmetic_thread(
         self,

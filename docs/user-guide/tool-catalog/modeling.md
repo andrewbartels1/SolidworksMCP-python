@@ -431,6 +431,8 @@ Add a reference point on an edge (at a distance or percentage along it) or at th
 
 Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face.
 
+Every point in `positions` adds another hole to the same feature, as placing holes on sketch points does in the Hole Wizard. SolidWorks makes no simple hole through all, so a simple `through_all` hole is made blind through the part; the reply's `end_condition_used` says `blind` and a warning explains.
+
 **Prerequisite:** Active part with a flat face at `face_point`. Beta: not yet checked on SolidWorks (queue item 11's live bundle).
 
 **Parameters:**
@@ -443,6 +445,7 @@ Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at
 | `size` | `str` | ✅ | `` | As SolidWorks lists it: `M6`, `M6x1.0` (tapped), `#10`, `1/4` |
 | `end_condition` | `str` | — | `through_all` | `through_all` or `blind` |
 | `depth` | `float?` | — | `None` | Blind depth in mm (required for `blind`) |
+| `positions` | `list[list[float]]?` | — | `None` | More holes in the same feature: `[x, y, z]` mm points on the same face |
 
 **Sample call:**
 
@@ -450,7 +453,8 @@ Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at
 {
   "face_point": [10, 10, 20],
   "hole_type": "counterbore",
-  "size": "M6"
+  "size": "M6",
+  "positions": [[30, 10, 20], [10, 30, 20]]
 }
 ```
 

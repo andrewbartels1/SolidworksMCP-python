@@ -9,7 +9,8 @@ One bundle, run together, then failures are fixed one at a time:
 5. ``add_draft``: two side walls drafted 3 degrees;
 6. ``create_rib``: a rib across the open box;
 7. ``add_cosmetic_thread`` on a 10 mm shaft, volume unchanged;
-8. ``sketch_convert_entities``: the top face's outline, cut 2 mm down.
+8. ``sketch_convert_entities``: the top face's outline, cut 2 mm down;
+9. ``create_hole`` with ``positions``: three holes in one feature.
 
 The block every test starts from is 40 x 40 x 20 mm on the Top Plane: x and
 z from -20 to 20, y from 0 to 20, so its top face is at y = 20.
@@ -247,6 +248,52 @@ async def test_create_hole_blind_through_and_off_the_part(scratch: Any) -> None:
     assert blind["hole"]["volume_change"] < 0
     assert through["status"] == "success", through
     assert in_air["status"] == "error"
+
+
+async def test_holes_at_several_points(scratch: Any) -> None:
+    """Three M6 counterbores in one feature (points in its position sketch),
+    the way holes go on sketch points in the Hole Wizard; a point off the top
+    face is refused and the hole removed again."""
+    tools = await _tools(scratch.adapter)
+    await _block(tools, "hole_points")
+    before = await _volume(tools)
+
+    holes = await tools["create_hole"](
+        {
+            "face_point": [-10, 20, -10],
+            "hole_type": "counterbore",
+            "size": "M6",
+            "end_condition": "blind",
+            "depth": 8,
+            "positions": [[10, 20, -10], [0, 20, 10]],
+        }
+    )
+    middle = await _volume(tools)
+    off_face = await tools["create_hole"](
+        {
+            "face_point": [-10, 20, 10],
+            "hole_type": "counterbore",
+            "size": "M6",
+            "end_condition": "blind",
+            "depth": 8,
+            "positions": [[10, 25, 10]],
+        }
+    )
+    after = await _volume(tools)
+
+    evidence(
+        "create_hole with positions",
+        {
+            "holes": holes.get("hole", holes.get("message")),
+            "volume_change": round(middle - before, 1),
+            "off_face": [off_face["status"], off_face["message"]],
+            "volume_after_refusal_unchanged": round(after - middle, 1) == 0,
+        },
+    )
+    assert holes["status"] == "success", holes
+    assert holes["hole"]["hole_count"] == 3
+    assert off_face["status"] == "error"
+    assert after == pytest.approx(middle)
 
 
 async def test_pattern_a_row_and_a_grid(scratch: Any) -> None:

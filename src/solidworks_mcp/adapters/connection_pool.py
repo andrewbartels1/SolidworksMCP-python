@@ -856,12 +856,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         size: str,
         end_condition: str = "through_all",
         depth: float | None = None,
+        positions: list[list[float]] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face using pool."""
         return await self._execute_with_pool(
             "create_hole",
             lambda adapter: adapter.create_hole(
-                face_point, hole_type, standard, size, end_condition, depth
+                face_point, hole_type, standard, size, end_condition, depth, positions
             ),
         )
 

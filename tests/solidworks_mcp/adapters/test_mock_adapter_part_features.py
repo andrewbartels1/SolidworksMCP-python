@@ -41,6 +41,17 @@ async def test_a_hole_that_is_not_metric_is_6_mm_through(
 
 
 @pytest.mark.asyncio
+async def test_positions_are_more_holes(mock: MockSolidWorksAdapter) -> None:
+    hole = await mock.create_hole(
+        [0, 0, 20], "simple", "iso", "M6", "blind", 10, [[10, 0, 20], [-10, 0, 20]]
+    )
+
+    assert hole.data["hole_count"] == 3
+    assert hole.data["positions_mm"] == [[10, 0, 20], [-10, 0, 20]]
+    assert hole.data["volume_change"] == pytest.approx(-math.pi * 9 * 10 * 3)
+
+
+@pytest.mark.asyncio
 async def test_pattern_rib_draft_and_thread(mock: MockSolidWorksAdapter) -> None:
     one_row = await mock.pattern_linear(["Hole1"], "Edge1", 3, 10)
     grid = await mock.pattern_linear(["Hole1"], [0, 0, 0], 3, 10, [1, 0, 0], 2, 5)

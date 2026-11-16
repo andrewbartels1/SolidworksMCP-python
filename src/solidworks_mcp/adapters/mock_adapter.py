@@ -3997,8 +3997,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         size: str,
         end_condition: str = "through_all",
         depth: float | None = None,
+        positions: list[list[float]] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock hole: a cylinder of the size's diameter (6 mm when not metric).
+        """Mock holes: cylinders of the size's diameter (6 mm when not metric).
 
         Args:
             face_point: Where the hole goes, mm.
@@ -4007,23 +4008,29 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             size: The size.
             end_condition: Blind or through all.
             depth: Blind depth, mm.
+            positions: Further points, mm; one more hole each.
 
         Returns:
-            AdapterResult[dict[str, Any]]: The hole and its volume change.
+            AdapterResult[dict[str, Any]]: The holes and their volume change.
         """
         match = re.match(r"^\s*M(\d+(?:\.\d+)?)", size, re.IGNORECASE)
         radius = (float(match.group(1)) if match else 6.0) / 2.0
         length = float(depth) if depth is not None else 40.0
+        extra = [list(p) for p in positions or []]
+        count = 1 + len(extra)
         return self._mock_feature(
             "Hole",
-            -math.pi * radius * radius * length,
+            -math.pi * radius * radius * length * count,
             {
                 "hole_type": hole_type,
                 "standard": standard,
                 "size": size,
                 "end_condition": end_condition,
+                "end_condition_used": end_condition,
                 "depth_mm": depth,
+                "hole_count": count,
                 "at_mm": list(face_point),
+                "positions_mm": extra,
             },
         )
 

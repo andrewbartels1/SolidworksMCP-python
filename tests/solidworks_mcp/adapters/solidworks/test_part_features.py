@@ -567,3 +567,167 @@ async def test_a_tapped_hole_without_depth_is_not_capped(picks: list[Any]) -> No
 
     assert hole.saved is None
     assert result.data["thread_depth_mm"] is None
+
+
+# --- a simple hole through all, and several holes in one feature ------------
+
+
+@pytest.mark.asyncio
+async def test_a_simple_hole_through_all_falls_back_to_blind(picks: list[Any]) -> None:
+    """SolidWorks makes no simple hole through all (seen live); it is retried
+    blind, as deep as the part box's diagonal + 1 mm."""
+    adapter = FakeAdapter([1000.0, 900.0])
+    made = SimpleNamespace(Name="Hole1")
+    adapter.manager.HoleWizard5.side_effect = [None, made]
+    adapter.currentModel.GetPartBox.return_value = (0, 0, 0, 0.03, 0.04, 0)
+
+    result = await adapter.create_hole([0, 20, 0], "simple", "iso", "Ø6.0")
+
+    first, second = (c.args for c in adapter.manager.HoleWizard5.call_args_list)
+    assert (first[4], first[6]) == (1, -1.0)
+    assert second[4] == 0 and second[6] == pytest.approx(0.051)
+    assert result.data["end_condition"] == "through_all"
+    assert result.data["end_condition_used"] == "blind"
+    assert result.data["depth_mm"] == pytest.approx(51.0)
+    assert "blind, 51.0 mm deep" in result.data["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_part_box_gives_a_metre(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 900.0])
+    adapter.manager.HoleWizard5.side_effect = [None, SimpleNamespace(Name="Hole1")]
+    adapter.currentModel.GetPartBox.return_value = None
+
+    result = await adapter.create_hole([0, 20, 0], "simple", "iso", "Ø6.0")
+
+    assert result.data["depth_mm"] == pytest.approx(1000.0)
+
+
+@pytest.mark.asyncio
+async def test_only_a_simple_hole_falls_back(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0], feature=None)
+
+    result = await adapter.create_hole([0, 20, 0], "tapped", "iso", "M6x1.0")
+
+    assert adapter.manager.HoleWizard5.call_count == 1
+    assert "HoleWizard5 made no hole" in (result.error or "")
+
+
+class _PositionSketch:
+    """An ``ISketch`` whose points grow as the sketch manager adds them."""
+
+    def __init__(self, points: list[list[float]]) -> None:
+        self.points = [SimpleNamespace(X=x, Y=y, Z=z) for x, y, z in points]
+
+    def GetSketchPoints2(self) -> list[Any]:
+        return list(self.points)
+
+
+def _hole_with_sketch(sketch: Any, kinds: tuple[str, ...] = ("ProfileFeature",)) -> Any:
+    """A hole feature whose sub-features are ``kinds``; the last holds ``sketch``."""
+    subs = [
+        SimpleNamespace(
+            GetTypeName2=lambda k=kind: k,
+            GetSpecificFeature2=lambda: sketch,
+            Select2=MagicMock(),
+        )
+        for kind in kinds
+    ]
+    for sub, nxt in zip(subs, [*subs[1:], None], strict=True):
+        sub.GetNextSubFeature = lambda n=nxt: n
+    return SimpleNamespace(Name="Hole1", GetFirstSubFeature=lambda: subs[0])
+
+
+@pytest.fixture
+def sketch_space(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sketch space is model space shifted: z - 0.02 m (the face at z = 20 mm)."""
+    monkeypatch.setattr(
+        pf, "_to_sketch", lambda adapter, sketch, p: [p[0], p[1], p[2] - 0.02]
+    )
+
+
+def _adding(adapter: FakeAdapter, sketch: _PositionSketch, keep: bool = True) -> None:
+    def create_point(x: float, y: float, z: float) -> None:
+        if keep:
+            sketch.points.append(SimpleNamespace(X=x, Y=y, Z=z))
+
+    adapter.currentModel.SketchManager.CreatePoint.side_effect = create_point
+
+
+@pytest.mark.asyncio
+async def test_positions_go_into_the_hole_sketch(
+    picks: list[Any], sketch_space: None
+) -> None:
+    """Each position is a point of the hole's position sketch: one feature,
+    three holes (the Hole Wizard's Positions tab, done through the API)."""
+    sketch = _PositionSketch([[0.0, 0.0, 0.0]])
+    hole = _hole_with_sketch(sketch, ("HoleWzdProfile", "ProfileFeature"))
+    adapter = FakeAdapter([1000.0, 700.0], feature=hole)
+    _adding(adapter, sketch)
+
+    result = await adapter.create_hole(
+        [0, 0, 20], "counterbore", "iso", "M6", positions=[[10, 0, 20], [0, 10, 20]]
+    )
+
+    assert result.data["hole_count"] == 3
+    assert result.data["positions_mm"] == [[10, 0, 20], [0, 10, 20]]
+    manager = adapter.currentModel.SketchManager
+    assert [c.args for c in manager.CreatePoint.call_args_list] == [
+        (0.01, 0.0, 0.0),
+        (0.0, 0.01, 0.0),
+    ]
+    assert manager.AddToDB is False
+    manager.InsertSketch.assert_called_once_with(True)
+    adapter.currentModel.EditSketch.assert_called_once()
+    assert adapter.deleted == []
+
+
+@pytest.mark.parametrize(
+    ("positions", "sketch_points", "keep", "message"),
+    [
+        ([[10, 0, 25]], [[0.0, 0.0, 0.0]], True, "is 5.000 mm off the face"),
+        ([[10, 0, 20]], [[0.05, 0.0, 0.0]], True, "position sketch couldn't be found"),
+        ([[10, 0, 20]], [[0.0, 0.0, 0.0]], False, "has 1 points after adding 1"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_failed_position_removes_the_hole(
+    picks: list[Any],
+    sketch_space: None,
+    positions: list[list[float]],
+    sketch_points: list[list[float]],
+    keep: bool,
+    message: str,
+) -> None:
+    sketch = _PositionSketch(sketch_points)
+    adapter = FakeAdapter([1000.0], feature=_hole_with_sketch(sketch))
+    _adding(adapter, sketch, keep)
+
+    result = await adapter.create_hole(
+        [0, 0, 20], "simple", "iso", "Ø6.0", "blind", 5, positions
+    )
+
+    assert message in (result.error or "")
+    assert (result.error or "").endswith("The hole Hole1 was removed again.")
+    assert adapter.deleted == ["Hole1"]
+
+
+def test_a_model_point_in_sketch_space(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The point goes through the math utility and the sketch's transform."""
+    monkeypatch.setattr(pf.sw_type_info, "flagged", lambda obj, *_: obj)
+    monkeypatch.setattr(pf, "double_array", lambda values: tuple(values))
+    transform = object()
+    moved = SimpleNamespace(ArrayData=(0.1, 0.2, 0.0))
+    point = MagicMock()
+    point.MultiplyTransform.return_value = moved
+    utility = MagicMock()
+    utility.CreatePoint.return_value = point
+    adapter = SimpleNamespace(swApp=SimpleNamespace(GetMathUtility=lambda: utility))
+
+    at = pf._to_sketch(
+        adapter, SimpleNamespace(ModelToSketchTransform=transform), [1.0, 2.0, 3.0]
+    )
+
+    assert at == [0.1, 0.2, 0.0]
+    utility.CreatePoint.assert_called_once_with((1.0, 2.0, 3.0))
+    point.MultiplyTransform.assert_called_once_with(transform)

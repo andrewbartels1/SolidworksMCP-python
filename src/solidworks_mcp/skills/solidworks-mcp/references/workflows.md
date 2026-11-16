@@ -75,8 +75,11 @@ These tools are beta until their live check passes; their results say so.
 
 - **A hole for a screw:** `create_hole` with a point on the face where the
   hole's centre goes, the `hole_type` and the size SolidWorks lists
-  (`M6`, `M6x1.0` for tapped). One hole per call; repeat it with
-  `pattern_linear` (a row or a grid) or `pattern_circular`.
+  (`M6`, `M6x1.0` for tapped). More holes on the same face go in
+  `positions` (points in mm): one feature, a hole at each point. A
+  regular row or grid can also use `pattern_linear`. A simple hole can't
+  be through all in SolidWorks: it is made blind through the part, and the
+  reply says so.
 - **A thread on a shaft or a plain hole:** make the round feature first,
   then `add_cosmetic_thread` with a point on its circular edge. Tapped
   holes already carry their thread.

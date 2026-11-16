@@ -1306,6 +1306,7 @@ class SolidWorksAdapter(ABC):
         size: str,
         end_condition: str = "through_all",
         depth: float | None = None,
+        positions: list[list[float]] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face.
 

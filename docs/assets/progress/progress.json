@@ -945,11 +945,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 226,
+   "covered": 232,
    "total": 2838
   },
   "api": {
-   "covered": 247,
+   "covered": 252,
    "total": 5985
   },
   "interfaces": [
@@ -965,6 +965,7 @@
      "GetExecutablePath",
      "GetExportFileData",
      "GetMassProperties",
+     "GetMathUtility",
      "GetOpenDocumentByName",
      "GetUserPreferenceStringValue",
      "GetUserPreferenceToggle",
@@ -997,8 +998,10 @@
      "CreateEllipse",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
+     "CreatePoint",
      "DeleteConfiguration2",
      "EditRebuild3",
+     "EditSketch",
      "EditSuppress2",
      "EditUndo",
      "EditUndo2",
@@ -1125,6 +1128,7 @@
      "Create3rdAngleViews2",
      "CreateDrawViewFromModelView3",
      "EditSheet",
+     "EditSketch",
      "EditTemplate",
      "FeatureByName",
      "GetCurrentSheet",
@@ -1173,6 +1177,7 @@
      "CreateEllipse",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
+     "CreatePoint",
      "CreatePolygon",
      "CreateSpline2",
      "InsertSketch",
@@ -1247,6 +1252,7 @@
     "covered": [
      "AutoDimension",
      "GetLineCount",
+     "GetSketchPoints2",
      "GetSketchSegments"
     ],
     "total": 102

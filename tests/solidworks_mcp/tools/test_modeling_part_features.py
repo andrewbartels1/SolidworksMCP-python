@@ -72,6 +72,17 @@ CASES = [
         "Added a M6 counterbore hole",
     ),
     (
+        "create_hole",
+        CreateHoleInput(
+            face_point=[0, 0, 20],
+            hole_type="counterbore",
+            size="M6",
+            positions=[[10, 0, 20], [-10, 0, 20]],
+        ),
+        "hole",
+        "Added 3 M6 counterbore holes",
+    ),
+    (
         "add_cosmetic_thread",
         AddCosmeticThreadInput(edge_point=[3, 0, 20], size="M6x1.0", depth=8),
         "thread",
@@ -209,6 +220,16 @@ async def test_a_missing_capability_is_an_error(
             CreateHoleInput,
             {"face_point": [0, 0, 0], "hole_type": "simple", "size": " "},
             "size is required",
+        ),
+        (
+            CreateHoleInput,
+            {
+                "face_point": [0, 0, 0],
+                "hole_type": "simple",
+                "size": "M6",
+                "positions": [[1, 2]],
+            },
+            "each of positions must be",
         ),
         (
             CreateHoleInput,

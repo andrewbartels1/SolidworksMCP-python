@@ -9,7 +9,6 @@ material, properties, save, export, dimensions) are recorded stubs.
 
 from __future__ import annotations
 
-import builtins
 import os
 from types import SimpleNamespace
 from typing import Any
@@ -114,32 +113,6 @@ class TestSheetMaths:
             company="",
         )
         assert drawing == {"DrawnDate": "1 Jan 2026", "Revision": "A"}
-
-
-class TestDoubleArray:
-    def test_variant_on_windows(self, monkeypatch) -> None:
-        fake_w32 = SimpleNamespace(VARIANT=lambda vt, values: ("VARIANT", vt, values))
-        monkeypatch.setitem(
-            __import__("sys").modules,
-            "pythoncom",
-            SimpleNamespace(VT_ARRAY=0x2000, VT_R8=5),
-        )
-        monkeypatch.setitem(
-            __import__("sys").modules, "win32com", SimpleNamespace(client=fake_w32)
-        )
-        monkeypatch.setitem(__import__("sys").modules, "win32com.client", fake_w32)
-        assert std._double_array([1, 2]) == ("VARIANT", 0x2005, [1.0, 2.0])
-
-    def test_plain_tuple_without_pywin32(self, monkeypatch) -> None:
-        real_import = builtins.__import__
-
-        def no_pythoncom(name, *args, **kwargs):
-            if name == "pythoncom":
-                raise ImportError(name)
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", no_pythoncom)
-        assert std._double_array([1.0, 2.0]) == (1.0, 2.0)
 
 
 class TestFindSheetFormat:
