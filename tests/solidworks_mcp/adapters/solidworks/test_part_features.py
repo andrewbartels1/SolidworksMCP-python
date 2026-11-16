@@ -357,10 +357,18 @@ async def test_cosmetic_thread_through_and_failures(picks: list[Any]) -> None:
 
 @pytest.mark.asyncio
 async def test_convert_entities_registers_the_new_segments(
-    picks: list[Any], pick_rebuilds: list[bool]
+    picks: list[Any], pick_rebuilds: list[bool], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The copies get ids; the picks skip the rebuild, which would close the
-    sketch (seen live)."""
+    sketch, and the sketch is flagged so its segments can be read (both seen
+    live)."""
+    flagged_as: list[str] = []
+
+    def flagged(obj: Any, *interfaces: str) -> Any:
+        flagged_as.extend(interfaces)
+        return obj
+
+    monkeypatch.setattr(pf.sw_type_info, "flagged", flagged)
     adapter = FakeAdapter([])
     adapter.segments = [SimpleNamespace(ConstructionGeometry=False)]
     new = [SimpleNamespace(ConstructionGeometry=False) for _ in range(4)]
@@ -378,6 +386,7 @@ async def test_convert_entities_registers_the_new_segments(
     assert adapter._sketch_entities["Converted_1"] is new[0]
     assert [p[5] for p in picks] == ["EDGE", "FACE"]
     assert pick_rebuilds == [False, False]
+    assert "ISketch" in flagged_as
 
 
 @pytest.mark.asyncio

@@ -699,7 +699,11 @@ class SolidWorksPartFeaturesMixin:
             )
 
         def segments() -> list[Any]:
-            sketch = adapter.currentSketchManager.ActiveSketch
+            # Flagged, or GetSketchSegments reads as a property and calling
+            # its tuple fails, so every count is 0 (seen live).
+            sketch = sw_type_info.flagged(
+                adapter.currentSketchManager.ActiveSketch, "ISketch"
+            )
             return as_list(
                 adapter._attempt(lambda: sketch.GetSketchSegments(), default=None)
             )

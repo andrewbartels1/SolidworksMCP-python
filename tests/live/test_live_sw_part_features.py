@@ -161,11 +161,11 @@ async def test_create_hole_blind_through_and_off_the_part(scratch: Any) -> None:
 
 
 async def test_pattern_a_row_and_a_grid(scratch: Any) -> None:
-    """A hole repeated 3 times along x, then 3 x 2 along x and z."""
+    """An M6 simple hole (listed as Ø6.0) repeated 3 times, then 3 x 2."""
     tools = await _tools(scratch.adapter)
     await _block(tools, "pattern")
     hole = await tools["create_hole"](
-        {"face_point": [-10, 20, -10], "hole_type": "simple", "size": "M4"}
+        {"face_point": [-10, 20, -10], "hole_type": "simple", "size": "M6"}
     )
     assert hole["status"] == "success", hole
     seed = hole["hole"]["volume_change"]

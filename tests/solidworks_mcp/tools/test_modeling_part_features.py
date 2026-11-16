@@ -49,7 +49,7 @@ def test_metric_diameter(size: str, diameter: float | None) -> None:
     ],
 )
 def test_simple_iso_size(size: str, listed: str) -> None:
-    """The ISO drill table lists simple holes by diameter (M4 made no hole live)."""
+    """The ISO drill table lists simple holes by diameter (Ø6.0 built live)."""
     assert simple_iso_size(size) == listed
 
 

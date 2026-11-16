@@ -1115,8 +1115,9 @@ def simple_iso_size(size: str) -> str:
     """A simple ISO hole's size as SolidWorks lists it: by diameter, ``Ø4.0``.
 
     The ISO drill table names sizes by diameter, not by screw (seen live:
-    ``M4`` made no hole). ``M4``, ``4``, ``4mm`` and ``Ø4`` all become
-    ``Ø4.0``; anything else is passed on unchanged.
+    ``Ø6.0`` builds). ``M4``, ``4``, ``4mm`` and ``Ø4`` all become ``Ø4.0``;
+    anything else is passed on unchanged. A diameter missing from the
+    installed table still makes no hole (``Ø4.0`` on a default install).
 
     Args:
         size: The size the caller gave.
