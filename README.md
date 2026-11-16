@@ -10,7 +10,7 @@
 [![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 130 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 133 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
 [![115 MCP tools by support level (the 8 deprecated ones not counted), and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.com/SolidworksMCP-python/progress/)
 

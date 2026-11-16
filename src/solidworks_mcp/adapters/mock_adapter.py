@@ -185,6 +185,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._assembly_components: dict[str, dict[str, Any]] = {}
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
+        self._configurations_made: dict[str, list[str]] = {}
         # Names currently "selected" via select_feature / select_face_edges,
         # so append and selection_count behave like the real selection set.
         self._selection: list[str] = []
@@ -990,6 +991,143 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     return (normal[0], normal[1], normal[2])
         return None
 
+    def _mock_configs(self) -> list[str]:
+        """The active model's configurations: Default, any made, and the active one."""
+        model = self._current_model
+        made = self._configurations_made.setdefault(model.name, ["Default"])
+        active = model.configuration or "Default"
+        if active not in made:
+            made.append(active)
+        return made
+
+    async def create_configuration(
+        self,
+        name: str,
+        parent: str | None = None,
+        description: str = "",
+        activate: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding a configuration, as the real adapter does.
+
+        Args:
+            name: The new configuration's name.
+            parent: A configuration to derive it from, or None.
+            description: Its description.
+            activate: Leave it active.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The configuration and every name.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        names = self._mock_configs()
+        if name in names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"A configuration named '{name}' already exists.",
+            )
+        if parent is not None and parent not in names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No configuration named '{parent}' to derive from; the "
+                f"model has {', '.join(names)}.",
+            )
+        names.append(name)
+        if activate:
+            self._current_model.configuration = name
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": name,
+                "parent": parent,
+                "active": self._current_model.configuration or "Default",
+                "configurations": list(names),
+            },
+        )
+
+    def _mock_unknown(self, name: str) -> AdapterResult[dict[str, Any]] | None:
+        """An error when no model is open or ``name`` isn't a configuration."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        names = self._mock_configs()
+        if name not in names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No configuration named '{name}'; the model has "
+                f"{', '.join(names)}.",
+            )
+        return None
+
+    async def activate_configuration(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock showing a configuration.
+
+        Args:
+            name: The configuration to show.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The active and the previous one.
+        """
+        refused = self._mock_unknown(name)
+        if refused:
+            return refused
+        previous = self._current_model.configuration or "Default"
+        self._current_model.configuration = name
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"active": name, "previous": previous},
+        )
+
+    async def delete_configuration(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock deleting a configuration that isn't active or the only one.
+
+        Args:
+            name: The configuration to delete.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The deleted name and those left.
+        """
+        refused = self._mock_unknown(name)
+        if refused:
+            return refused
+        names = self._mock_configs()
+        if len(names) == 1:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"'{name}' is the model's only configuration.",
+            )
+        if (self._current_model.configuration or "Default") == name:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"'{name}' is the active configuration; activate another first.",
+            )
+        names.remove(name)
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"deleted": name, "configurations": list(names)},
+        )
+
+    async def active_configuration(self) -> AdapterResult[str]:
+        """Mock reading the active configuration's name.
+
+        Returns:
+            AdapterResult[str]: The name, or an error with no model open.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=self._current_model.configuration or "Default",
+        )
+
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """Mock configuration listing for the active model.
 
@@ -1005,8 +1143,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["model_operation"] / 2)
         self._operation_count += 1
 
-        active = self._current_model.configuration or "Default"
-        configs = [active] if active == "Default" else ["Default", active]
+        configs = list(self._mock_configs())
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,

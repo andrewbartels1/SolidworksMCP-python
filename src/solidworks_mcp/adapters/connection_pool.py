@@ -896,6 +896,50 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    async def create_configuration(
+        self,
+        name: str,
+        parent: str | None = None,
+        description: str = "",
+        activate: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a configuration to the active model using pool."""
+        return await self._execute_with_pool(
+            "create_configuration",
+            lambda adapter: adapter.create_configuration(
+                name, parent, description, activate
+            ),
+        )
+
+    async def activate_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make a configuration active using pool."""
+        return await self._execute_with_pool(
+            "activate_configuration",
+            lambda adapter: adapter.activate_configuration(name),
+        )
+
+    async def delete_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete a configuration using pool."""
+        return await self._execute_with_pool(
+            "delete_configuration",
+            lambda adapter: adapter.delete_configuration(name),
+        )
+
+    async def active_configuration(
+        self,
+    ) -> AdapterResult[str]:
+        """Read the active configuration's name using pool."""
+        return await self._execute_with_pool(
+            "active_configuration",
+            lambda adapter: adapter.active_configuration(),
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:

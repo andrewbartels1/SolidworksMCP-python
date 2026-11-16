@@ -22,6 +22,7 @@ from .input_compat import CompatInput
 from .tool_boundary import (
     InvalidInputError,
     ToolOperationError,
+    normalize_input,
     require_capability,
     require_success,
     with_tool_boundary,
@@ -260,6 +261,45 @@ class SaveBodyAsPartInput(CompatInput):
             raise ValueError("body_name is required")
         if not self.file_path.strip():
             raise ValueError("file_path is required")
+
+
+class CreateConfigurationInput(CompatInput):
+    """Input schema for adding a configuration.
+
+    Attributes:
+        name (str): The new configuration's name.
+        parent (str | None): A configuration to derive it from.
+        description (str): Its description.
+        activate (bool): Leave it active.
+    """
+
+    name: str = Field(description="The new configuration's name, e.g. 'Long'")
+    parent: str | None = Field(
+        default=None, description="A configuration to derive it from (a child)"
+    )
+    description: str = Field(default="", description="Its description")
+    activate: bool = Field(
+        default=False,
+        description="Leave it active; otherwise the current one stays active",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.name.strip():
+            raise ValueError("name is required")
+
+
+class ConfigurationNameInput(CompatInput):
+    """Input schema naming one configuration.
+
+    Attributes:
+        name (str): The configuration's name.
+    """
+
+    name: str = Field(description="The configuration's name, e.g. 'Default'")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.name.strip():
+            raise ValueError("name is required")
 
 
 async def register_file_management_tools(
@@ -881,11 +921,12 @@ async def register_file_management_tools(
 
     @mcp.tool()
     async def list_configurations() -> dict[str, Any]:
-        """List the names of the active model's configurations.
+        """List the names of the active model's configurations, and which one is active.
 
-        Use it to see which configurations a part or assembly has. Needs: an open part
-        or assembly. Read-only. Returns: `configurations` (names) and `count`.
-        `get_model_info` says which one is active.
+        Use it to see which configurations a part or assembly has before
+        `activate_configuration` or `delete_configuration`. Needs: an open part or
+        assembly. Read-only. Returns: `configurations` (names), `count` and
+        `active` (null when it can't be read).
         """
         require_capability(
             adapter,
@@ -894,10 +935,15 @@ async def register_file_management_tools(
         )
         result = await adapter.list_configurations()
         require_success(result, "Failed to list configurations")
+        active: str | None = None
+        if callable(getattr(adapter, "active_configuration", None)):
+            read = await adapter.active_configuration()
+            active = read.data if read.is_success else None
         return {
             "status": "success",
             "configurations": result.data or [],
             "count": len(result.data or []),
+            "active": active,
             "execution_time": result.execution_time,
         }
 
@@ -1277,5 +1323,108 @@ async def register_file_management_tools(
             "execution_time": result.execution_time,
         }
 
-    tool_count = 16  # Total number of registered tools in this module
+    @mcp.tool()
+    async def create_configuration(
+        input_data: CreateConfigurationInput,
+    ) -> dict[str, Any]:
+        """Add a configuration to the active part or assembly, e.g. a long and a short version of one part.
+
+        A configuration holds its own dimension values and suppressed features;
+        give `parent` to derive it from another. The configuration that was active
+        stays active unless `activate` is on. Needs: an open part or assembly.
+        Changes: adds a configuration. Returns: `configuration` with `name`,
+        `parent`, `active` and every name in `configurations`.
+
+        Args:
+            input_data: The configuration. `name` is required; `parent`,
+                `description` and `activate` are optional.
+
+        Returns:
+            dict[str, Any]: The configuration added.
+        """
+        input_data = normalize_input(input_data, CreateConfigurationInput)
+        require_capability(
+            adapter, "create_configuration", "Active adapter can't add configurations"
+        )
+        result = await adapter.create_configuration(
+            input_data.name,
+            input_data.parent,
+            input_data.description,
+            input_data.activate,
+        )
+        require_success(result, "Failed to create configuration")
+        return {
+            "status": "success",
+            "message": f"Added configuration {input_data.name}",
+            "configuration": result.data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def activate_configuration(
+        input_data: ConfigurationNameInput,
+    ) -> dict[str, Any]:
+        """Make a configuration of the active model the active one, and rebuild.
+
+        Dimensions and suppression then read and change in that configuration.
+        Needs: an open part or assembly with that configuration. Changes: the
+        active configuration. Returns: `active` and `previous`.
+
+        Args:
+            input_data: `name`, the configuration to show.
+
+        Returns:
+            dict[str, Any]: The active configuration.
+        """
+        input_data = normalize_input(input_data, ConfigurationNameInput)
+        require_capability(
+            adapter,
+            "activate_configuration",
+            "Active adapter can't switch configurations",
+        )
+        result = await adapter.activate_configuration(input_data.name)
+        require_success(result, "Failed to activate configuration")
+        data = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Activated configuration {input_data.name}",
+            "active": data.get("active"),
+            "previous": data.get("previous"),
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def delete_configuration(
+        input_data: ConfigurationNameInput,
+    ) -> dict[str, Any]:
+        """Delete a configuration of the active model; not the active one or the only one.
+
+        Activate another configuration first to delete the active one. Needs: an
+        open part or assembly with that configuration. Changes: removes it.
+        Returns: `deleted` and the `configurations` left.
+
+        Args:
+            input_data: `name`, the configuration to delete.
+
+        Returns:
+            dict[str, Any]: What was deleted.
+        """
+        input_data = normalize_input(input_data, ConfigurationNameInput)
+        require_capability(
+            adapter,
+            "delete_configuration",
+            "Active adapter can't delete configurations",
+        )
+        result = await adapter.delete_configuration(input_data.name)
+        require_success(result, "Failed to delete configuration")
+        data = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Deleted configuration {input_data.name}",
+            "deleted": data.get("deleted"),
+            "configurations": data.get("configurations", []),
+            "execution_time": result.execution_time,
+        }
+
+    tool_count = 19  # Total number of registered tools in this module
     return tool_count

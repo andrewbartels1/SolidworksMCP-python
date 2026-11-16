@@ -171,6 +171,10 @@ _STABLE = Support(SupportLevel.STABLE)
 _BETA_PART_FEATURE = Support(
     SupportLevel.BETA, "not yet checked on SolidWorks (queue item 11's live bundle)."
 )
+#: New in queue item 13 (configuration-tools); stable once its live bundle passes.
+_BETA_CONFIGURATIONS = Support(
+    SupportLevel.BETA, "not yet checked on SolidWorks (queue item 13's live bundle)."
+)
 _PLANNED_DRAWING = Support(
     SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
 )
@@ -250,6 +254,9 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "get_model_info": _STABLE,
     "get_selected_entities": _STABLE,
     "list_configurations": _STABLE,
+    "create_configuration": _BETA_CONFIGURATIONS,
+    "activate_configuration": _BETA_CONFIGURATIONS,
+    "delete_configuration": _BETA_CONFIGURATIONS,
     "list_features": _STABLE,
     "list_open_documents": _STABLE,
     "load_assembly": _deprecated("open_model"),

@@ -1028,6 +1028,63 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
+    async def create_configuration(
+        self,
+        name: str,
+        parent: str | None = None,
+        description: str = "",
+        activate: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a configuration to the active model through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_configuration",
+            lambda: self.adapter.create_configuration(
+                name, parent, description, activate
+            ),
+            input_dict={
+                "name": name,
+                "parent": parent,
+                "description": description,
+                "activate": activate,
+            },
+        )
+
+    async def activate_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make a configuration active through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "activate_configuration",
+            lambda: self.adapter.activate_configuration(name),
+            input_dict={
+                "name": name,
+            },
+        )
+
+    async def delete_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete a configuration through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "delete_configuration",
+            lambda: self.adapter.delete_configuration(name),
+            input_dict={
+                "name": name,
+            },
+        )
+
+    async def active_configuration(
+        self,
+    ) -> AdapterResult[str]:
+        """Read the active configuration's name through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "active_configuration",
+            lambda: self.adapter.active_configuration(),
+            input_dict={},
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:

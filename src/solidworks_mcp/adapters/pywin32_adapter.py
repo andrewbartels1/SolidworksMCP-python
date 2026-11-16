@@ -24,6 +24,7 @@ from .base import (
     SolidWorksAdapter,
 )
 from .solidworks import (
+    SolidWorksConfigurationsMixin,
     SolidWorksDocumentationMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksFeaturesMixin,
@@ -1712,6 +1713,7 @@ class PyWin32Adapter(
     SolidWorksDrawingStandardMixin,
     SolidWorksDocumentationMixin,
     SolidWorksSketchMixin,
+    SolidWorksConfigurationsMixin,
     SolidWorksPartFeaturesMixin,
     SolidWorksFeaturesMixin,
     SolidWorksIOMixin,

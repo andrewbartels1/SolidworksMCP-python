@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 130 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
+The SolidWorks MCP Server provides 133 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
 
 ## Read this first
 
@@ -90,7 +90,7 @@ The SolidWorks MCP Server provides 130 specialized tools for CAD automation. Thi
 
     Open, save, switch and inspect documents; the feature tree, configurations and the current selection; Pack and Go.
 
-    [**16 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
+    [**19 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
 
 - :material-code-braces:{ .lg .middle } **VBA Generation**
 
@@ -142,7 +142,7 @@ The SolidWorks MCP Server provides 130 specialized tools for CAD automation. Thi
 
 </div>
 
-**Total: 130 Tools**
+**Total: 133 Tools**
 
 ## Deprecated tools
 

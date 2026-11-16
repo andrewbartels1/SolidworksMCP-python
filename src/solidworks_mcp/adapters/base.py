@@ -1352,6 +1352,64 @@ class SolidWorksAdapter(ABC):
             error="sketch_convert_entities is not implemented by this adapter",
         )
 
+    async def create_configuration(
+        self,
+        name: str,
+        parent: str | None = None,
+        description: str = "",
+        activate: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a configuration to the active model.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_configuration is not implemented by this adapter",
+        )
+
+    async def activate_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make a configuration active.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="activate_configuration is not implemented by this adapter",
+        )
+
+    async def delete_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete a configuration.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="delete_configuration is not implemented by this adapter",
+        )
+
+    async def active_configuration(
+        self,
+    ) -> AdapterResult[str]:
+        """Read the active configuration's name.
+
+        Returns:
+            AdapterResult[str]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="active_configuration is not implemented by this adapter",
+        )
+
     # Assembly Operations
     async def insert_component(
         self, file_path: str, x: float = 0.0, y: float = 0.0, z: float = 0.0

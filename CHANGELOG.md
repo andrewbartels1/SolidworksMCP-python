@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Configurations** (queue item 13), beta until their live check passes:
+  `create_configuration` (optionally derived from another),
+  `activate_configuration` and `delete_configuration` (not the active one or
+  the only one). `list_configurations` now also reports `active`. With
+  design tables out (they don't work through COM here), this is how an agent
+  makes variants of a part. 130 tools become 133.
 - **Seven part-feature tools** (queue item 11, #105), beta until their
   live check passes: `create_hole` (Hole Wizard: simple, counterbore,
   countersink or tapped, ISO or ANSI inch, at a point on a flat face),

@@ -1,14 +1,21 @@
 {
  "tools": {
-  "total": 130,
+  "total": 133,
   "by_level": {
    "stable": 108,
-   "beta": 7,
+   "beta": 10,
    "experimental": 0,
    "planned": 7,
    "deprecated": 8
   },
   "list": [
+   {
+    "name": "activate_configuration",
+    "family": "file_management",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 13's live bundle).",
+    "summary": "Make a configuration of the active model the active one, and rebuild."
+   },
    {
     "name": "activate_document",
     "family": "file_management",
@@ -248,6 +255,13 @@
     "summary": "Add a reference axis along the model's x, y or z direction, through the origin."
    },
    {
+    "name": "create_configuration",
+    "family": "file_management",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 13's live bundle).",
+    "summary": "Add a configuration to the active part or assembly, e.g. a long and a short version of one part."
+   },
+   {
     "name": "create_cut_extrude",
     "family": "modeling",
     "level": "stable",
@@ -365,6 +379,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
+   },
+   {
+    "name": "delete_configuration",
+    "family": "file_management",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 13's live bundle).",
+    "summary": "Delete a configuration of the active model; not the active one or the only one."
    },
    {
     "name": "delete_feature",
@@ -623,7 +644,7 @@
     "family": "file_management",
     "level": "stable",
     "reason": "",
-    "summary": "List the names of the active model's configurations."
+    "summary": "List the names of the active model's configurations, and which one is active."
    },
    {
     "name": "list_drawing_views",
@@ -924,11 +945,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 221,
+   "covered": 224,
    "total": 2838
   },
   "api": {
-   "covered": 240,
+   "covered": 243,
    "total": 5985
   },
   "interfaces": [
@@ -962,6 +983,7 @@
    {
     "name": "IModelDoc2",
     "covered": [
+     "AddConfiguration2",
      "AddDiameterDimension2",
      "AddDimension",
      "AddDimension2",
@@ -975,6 +997,7 @@
      "CreateEllipse",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
+     "DeleteConfiguration2",
      "EditRebuild3",
      "EditSuppress2",
      "EditUndo",
@@ -1024,6 +1047,7 @@
      "SetSaveFlag",
      "SetUserPreferenceIntegerValue",
      "SetUserPreferenceToggle",
+     "ShowConfiguration2",
      "ShowNamedView2",
      "SketchAddConstraints",
      "SketchMirror",
