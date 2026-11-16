@@ -119,8 +119,8 @@ _CODE_HINTS: dict[int, tuple[str, str]] = {
 # ``IFeature::GetTypeName2`` values.
 _TYPE_HINTS: dict[str, str] = {
     "HoleWzd": (
-        "Check the Hole Wizard hole: a tapped hole's thread can't be deeper "
-        "than a blind hole, the size must be one the standard lists, and the "
+        "Check the Hole Wizard hole: a tapped hole's thread must end short of "
+        "a blind hole's bottom, the size must be one the standard lists, and the "
         "hole must sit on the face it was placed on."
     ),
     "Extrusion": (

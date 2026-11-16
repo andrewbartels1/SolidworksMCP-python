@@ -1282,7 +1282,11 @@ class CreateHoleInput(CompatInput):
     end_condition: Literal["through_all", "blind"] = Field(
         default="through_all", description="through_all or blind"
     )
-    depth: float | None = Field(default=None, gt=0, description="Blind depth, mm")
+    depth: float | None = Field(
+        default=None,
+        gt=0,
+        description=("Blind depth, mm. A tapped hole's thread goes at most 80% of it."),
+    )
 
     def model_post_init(self, __context: Any) -> None:
         _point(self.face_point, "face_point")

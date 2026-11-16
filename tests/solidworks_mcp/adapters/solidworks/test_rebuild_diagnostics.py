@@ -56,7 +56,7 @@ def test_a_hole_wizard_warning_names_the_thread_depth() -> None:
     assert entry["description"] == (
         "Hole Wizard hole 'M6 Tapped Hole1' failed to rebuild (swFeatureErrorUnknown)."
     )
-    assert "thread can't be deeper than a blind hole" in entry["hint"]
+    assert "thread must end short of a blind hole's bottom" in entry["hint"]
 
 
 def test_empty_parent_sketch_overrides_other_hints() -> None:

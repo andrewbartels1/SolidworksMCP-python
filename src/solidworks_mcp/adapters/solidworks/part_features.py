@@ -74,6 +74,11 @@ _MARK_DRAFT_FACES = 2
 #: A volume change smaller than this share of the volume counts as none.
 _NO_CHANGE = 1e-4
 
+#: The deepest a blind tapped hole's thread may go, as a share of the hole
+#: depth. A thread ending exactly at the bottom leaves a zero-length line in
+#: the hole's profile sketch, which SolidWorks refuses to solve (seen live).
+_THREAD_SHARE = 0.8
+
 
 def _mm(value: float) -> float:
     """Millimetres to metres."""
@@ -83,13 +88,16 @@ def _mm(value: float) -> float:
 def _cap_thread_depth(
     adapter: Any, model: Any, feature: Any, depth_m: float
 ) -> float | None:
-    """Cap a blind tapped hole's thread depth at its hole depth, in metres.
+    """Keep a blind tapped hole's thread inside the hole, in metres.
 
     ``HoleWizard5`` takes the thread depth from the size table (about twice
     the diameter), which SolidWorks then refuses when the blind hole is
     shallower: "The Tap Thread Depth cannot be larger than Blind Hole Depth"
-    (seen live on SolidWorks 2026). The hole's ``IWizardHoleFeatureData2`` is
-    opened, ``ThreadDepth`` lowered, and the definition saved.
+    (seen live on SolidWorks 2026). A thread exactly as deep as the hole is
+    refused too (a zero-length line in the hole's sketch), so the thread is
+    capped at :data:`_THREAD_SHARE` of the hole depth: the hole's
+    ``IWizardHoleFeatureData2`` is opened, ``ThreadDepth`` lowered, and the
+    definition saved.
 
     Args:
         adapter: The connected adapter.
@@ -107,17 +115,18 @@ def _cap_thread_depth(
         return None
     data = sw_type_info.flagged(data, "IWizardHoleFeatureData2")
     thread = adapter._attempt(lambda: float(data.ThreadDepth), None)
-    if thread is None or thread <= depth_m:
+    cap = depth_m * _THREAD_SHARE
+    if thread is None or thread <= cap:
         return thread
     adapter._attempt(lambda: data.AccessSelections(model, _null_callout()), None)
-    data.ThreadDepth = depth_m
+    data.ThreadDepth = cap
     saved = adapter._attempt(
         lambda: hole.ModifyDefinition(data, model, _null_callout()), False
     )
     if not saved:
         adapter._attempt(lambda: data.ReleaseSelectionAccess(), None)
         return thread
-    return depth_m
+    return cap
 
 
 def _feature_name(adapter: Any, feature: Any) -> str | None:

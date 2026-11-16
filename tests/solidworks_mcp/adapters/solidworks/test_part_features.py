@@ -490,16 +490,21 @@ async def _tapped(hole: _Hole, depth: float | None = 8) -> Any:
     )
 
 
+@pytest.mark.parametrize("thread", [0.012, 0.008])
 @pytest.mark.asyncio
-async def test_a_deep_thread_is_capped_at_the_hole_depth(picks: list[Any]) -> None:
-    definition = _HoleDefinition(0.012)
+async def test_a_deep_thread_stops_short_of_the_hole_bottom(
+    picks: list[Any], thread: float
+) -> None:
+    """Deeper than the hole, or exactly as deep (a zero-length sketch line,
+    seen live): capped at 80% of the 8 mm hole."""
+    definition = _HoleDefinition(thread)
     hole = _Hole(definition)
 
     result = await _tapped(hole)
 
-    assert definition.ThreadDepth == pytest.approx(0.008)
+    assert definition.ThreadDepth == pytest.approx(0.0064)
     assert definition.accessed and hole.saved is definition
-    assert result.data["thread_depth_mm"] == pytest.approx(8.0)
+    assert result.data["thread_depth_mm"] == pytest.approx(6.4)
 
 
 @pytest.mark.asyncio
