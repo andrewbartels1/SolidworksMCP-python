@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 133,
+  "total": 134,
   "by_level": {
    "stable": 118,
-   "beta": 0,
+   "beta": 1,
    "experimental": 0,
    "planned": 7,
    "deprecated": 8
@@ -659,6 +659,13 @@
     "level": "stable",
     "reason": "",
     "summary": "List the feature tree of the active part or assembly, in order."
+   },
+   {
+    "name": "list_hole_sizes",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 22's live check).",
+    "summary": "List the Hole Wizard's hole types and sizes for a standard, or one size's dimensions."
    },
    {
     "name": "list_model_dimensions",

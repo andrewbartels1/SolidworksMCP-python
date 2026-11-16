@@ -72,6 +72,18 @@ is a table entry, later).
    empty answer); `create_hole` goes ahead with the codes it has and adds a
    warning, since the hole may still build.
 
+8. **A size with its pitch** (found while building it): the ISO tapped
+   table lists coarse threads without the pitch (`M6`, not `M6x1.0`), though
+   `HoleWizard5` accepted `M6x1.0` live. `M6x1.0` is matched to the `M6` row
+   when that row's pitch is 1.0, and the table's spelling is passed on.
+9. **The file is closed after each read** (`contextlib.closing`): `with
+   sqlite3.connect()` only commits, and a connection left open would keep
+   SolidWorks' own library file locked on Windows. The unit tests found it.
+10. **Unit tests never read this machine's library:** a conftest gives the
+   real adapter's tests the built-in sample library (`sample_library()`, the
+   mock adapter's), and the reader is tested against a SQLite file each test
+   builds.
+
 ## Adding sizes (not in this change)
 
 The user asked for a way to install whole standards and sizes. Findings so

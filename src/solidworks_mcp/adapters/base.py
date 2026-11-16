@@ -1298,6 +1298,23 @@ class SolidWorksAdapter(ABC):
             error="create_rib is not implemented by this adapter",
         )
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """List the Hole Wizard hole types and sizes of a standard.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_hole_sizes is not implemented by this adapter",
+        )
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -1307,6 +1324,7 @@ class SolidWorksAdapter(ABC):
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face.
 

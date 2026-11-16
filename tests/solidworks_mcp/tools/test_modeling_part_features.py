@@ -17,10 +17,10 @@ from solidworks_mcp.tools.modeling import (
     CreateHoleInput,
     CreateRibInput,
     CreateShellInput,
+    ListHoleSizesInput,
     PatternLinearInput,
     metric_diameter,
     register_modeling_tools,
-    simple_iso_size,
 )
 
 
@@ -37,31 +37,12 @@ def test_metric_diameter(size: str, diameter: float | None) -> None:
     assert metric_diameter(size) == diameter
 
 
-@pytest.mark.parametrize(
-    ("size", "listed"),
-    [
-        ("M4", "Ø4.0"),
-        ("4", "Ø4.0"),
-        ("4.5 mm", "Ø4.5"),
-        ("Ø6", "Ø6.0"),
-        ("Ø6.0", "Ø6.0"),
-        ("Letter A", "Letter A"),
-    ],
-)
-def test_simple_iso_size(size: str, listed: str) -> None:
-    """The ISO drill table lists simple holes by diameter (Ø6.0 built live)."""
-    assert simple_iso_size(size) == listed
-
-
-def test_only_a_simple_iso_hole_size_is_converted() -> None:
-    def size(hole_type: str, standard: str, given: str) -> str:
-        return CreateHoleInput(
-            face_point=[0, 0, 20], hole_type=hole_type, standard=standard, size=given
-        ).size
-
-    assert size("simple", "iso", "M4") == "Ø4.0"
-    assert size("counterbore", "iso", "M4") == "M4"
-    assert size("simple", "ansi_inch", "1/4") == "1/4"
+def test_a_hole_size_is_passed_on_as_given() -> None:
+    """The size is checked by the adapter against the library, not here."""
+    made = CreateHoleInput(
+        face_point=[0, 0, 20], hole_type="simple", standard="din", size="6"
+    )
+    assert (made.size, made.standard, made.fastener) == ("6", "din", None)
 
 
 CASES = [
@@ -271,3 +252,61 @@ def test_a_metric_thread_reads_its_diameter() -> None:
     )
 
     assert data.diameter == 10.0
+
+
+@pytest.mark.asyncio
+async def test_a_simple_hole_names_the_size_it_used(
+    mcp_server: Any, mock_adapter: Any, mock_config: Any
+) -> None:
+    tool = await _tool(mcp_server, mock_adapter, mock_config, "create_hole")
+
+    result = await tool(
+        CreateHoleInput(
+            face_point=[0, 0, 20],
+            hole_type="simple",
+            size="6",
+            end_condition="blind",
+            depth=5,
+        )
+    )
+
+    assert result["message"] == "Added a Ø6.0 simple hole"
+    assert result["hole"]["fastener"] == "Drill sizes"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("data", "message"),
+    [
+        (
+            ListHoleSizesInput(hole_type="simple"),
+            "simple hole types (iso): Drill sizes, Screw Clearances",
+        ),
+        (
+            ListHoleSizesInput(hole_type="counterbore", size="M6"),
+            "Cap (4762) M6 dimensions",
+        ),
+    ],
+)
+async def test_list_hole_sizes(
+    mcp_server: Any, mock_adapter: Any, mock_config: Any, data: Any, message: str
+) -> None:
+    tool = await _tool(mcp_server, mock_adapter, mock_config, "list_hole_sizes")
+
+    result = await tool(data)
+
+    assert result["status"] == "success", result
+    assert result["message"] == message
+    assert result["library"]["units"] == "mm"
+
+
+@pytest.mark.asyncio
+async def test_list_hole_sizes_names_the_nearest(
+    mcp_server: Any, mock_adapter: Any, mock_config: Any
+) -> None:
+    tool = await _tool(mcp_server, mock_adapter, mock_config, "list_hole_sizes")
+
+    result = await tool(ListHoleSizesInput(hole_type="tapped", size="M7"))
+
+    assert result["status"] == "error"
+    assert "nearest: M4, M5, M6, M8, M8x1.0" in result["message"]

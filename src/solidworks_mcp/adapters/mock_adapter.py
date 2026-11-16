@@ -32,6 +32,7 @@ from .base import (
 )
 from .solidworks.drawing_standard import gtol_problem
 from .solidworks.features import _AXIS_PLANE_PAIRS
+from .solidworks.hole_library import HoleSizeError, describe, sample_library
 from .solidworks.io import _normalise_unit_system as _normalise_mock_unit_system
 from .solidworks.sketch import RELATION_NAME_MAP
 
@@ -93,6 +94,10 @@ _DEFAULT_ASSEMBLY_COMPONENTS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+#: The mock adapter's Hole Wizard library.
+_MOCK_HOLES = sample_library()
 
 
 class _BoolCallable:
@@ -3989,6 +3994,31 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             },
         )
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock Hole Wizard library: a few real ISO and ANSI inch sizes.
+
+        Args:
+            standard: The standard.
+            hole_type: The kind of hole.
+            fastener: One hole type's name.
+            size: One size, for its dimensions.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: As the real adapter's, from
+            :func:`sample_library`; other standards have no hole types.
+        """
+        try:
+            data = describe(_MOCK_HOLES, standard, hole_type, fastener, size)
+        except HoleSizeError as exc:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -3998,8 +4028,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock holes: cylinders of the size's diameter (6 mm when not metric).
+        """Mock holes: cylinders of the size's diameter, checked like the real ones.
+
+        The size is checked against :func:`sample_library` first, as the real
+        adapter checks the installed library.
 
         Args:
             face_point: Where the hole goes, mm.
@@ -4009,12 +4043,19 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             end_condition: Blind or through all.
             depth: Blind depth, mm.
             positions: Further points, mm; one more hole each.
+            fastener: The hole type's name; the default when ``None``.
 
         Returns:
-            AdapterResult[dict[str, Any]]: The holes and their volume change.
+            AdapterResult[dict[str, Any]]: The holes and their volume change,
+            or the nearest sizes for one the library lacks.
         """
-        match = re.match(r"^\s*M(\d+(?:\.\d+)?)", size, re.IGNORECASE)
-        radius = (float(match.group(1)) if match else 6.0) / 2.0
+        try:
+            chosen = _MOCK_HOLES.resolve(standard, hole_type, size, fastener)
+        except HoleSizeError as exc:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+        found = re.search(r"\d+(?:\.\d+)?", chosen.size)
+        diameter = float(found.group(0)) if found and standard != "ansi_inch" else 6.0
+        radius = diameter / 2.0
         length = float(depth) if depth is not None else 40.0
         extra = [list(p) for p in positions or []]
         count = 1 + len(extra)
@@ -4024,7 +4065,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             {
                 "hole_type": hole_type,
                 "standard": standard,
-                "size": size,
+                "fastener": chosen.fastener,
+                "size": chosen.size,
                 "end_condition": end_condition,
                 "end_condition_used": end_condition,
                 "depth_mm": depth,

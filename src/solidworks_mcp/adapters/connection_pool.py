@@ -848,6 +848,21 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """List the Hole Wizard hole types and sizes using pool."""
+        return await self._execute_with_pool(
+            "list_hole_sizes",
+            lambda adapter: adapter.list_hole_sizes(
+                standard, hole_type, fastener, size
+            ),
+        )
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -857,12 +872,20 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face using pool."""
         return await self._execute_with_pool(
             "create_hole",
             lambda adapter: adapter.create_hole(
-                face_point, hole_type, standard, size, end_condition, depth, positions
+                face_point,
+                hole_type,
+                standard,
+                size,
+                end_condition,
+                depth,
+                positions,
+                fastener,
             ),
         )
 

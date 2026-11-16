@@ -210,6 +210,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "add_draft": _adds("Draft Faces"),
     "create_rib": _adds("Rib"),
     "create_hole": _adds("Hole Wizard Hole"),
+    "list_hole_sizes": _reads("List Hole Wizard Sizes"),
     "add_cosmetic_thread": _adds("Cosmetic Thread"),
     # sketching
     "create_sketch": _adds("Create Sketch"),

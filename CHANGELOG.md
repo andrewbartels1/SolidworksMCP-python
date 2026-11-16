@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The Hole Wizard library** (queue item 22): `list_hole_sizes` lists a
+  standard's hole types and sizes, or one size's dimensions, read-only from
+  SolidWorks' installed Toolbox library (no SolidWorks needed). `create_hole`
+  now checks the size there first and refuses one that doesn't exist, naming
+  the nearest; takes `fastener` to pick a hole type (dowel holes, a bolt's
+  counterbore); and adds the standards `ansi_metric`, `din` and `jis`. On a
+  simple hole `M6` now means a screw clearance hole and `6` a drilled one.
+  134 tools.
 - **Configurations** (queue item 13), checked live on SolidWorks 2026:
   `create_configuration` (optionally derived from another),
   `activate_configuration` and `delete_configuration` (not the active one or

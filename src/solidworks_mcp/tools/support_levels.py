@@ -167,6 +167,10 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
+#: New in queue item 22 (hole-wizard-library); stable once its live check passes.
+_BETA_HOLE_LIBRARY = Support(
+    SupportLevel.BETA, "not yet checked on SolidWorks (queue item 22's live check)."
+)
 _PLANNED_DRAWING = Support(
     SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
 )
@@ -289,6 +293,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "add_draft": _STABLE,
     "create_rib": _STABLE,
     "create_hole": _STABLE,
+    "list_hole_sizes": _BETA_HOLE_LIBRARY,
     "add_cosmetic_thread": _STABLE,
     "rebuild_model": _STABLE,
     "rename_feature": _STABLE,

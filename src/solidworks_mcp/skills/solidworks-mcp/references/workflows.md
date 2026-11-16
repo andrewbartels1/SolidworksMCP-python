@@ -73,8 +73,9 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 ## Standard holes, threads, shells and ribs
 
 - **A hole for a screw:** `create_hole` with a point on the face where the
-  hole's centre goes, the `hole_type` and the size SolidWorks lists
-  (`M6`, `M6x1.0` for tapped). More holes on the same face go in
+  hole's centre goes, the `hole_type` and a size from `list_hole_sizes`
+  (`M6`, `#10`; on a simple hole `M6` is a clearance hole, `6` a drilled
+  one). An unknown size is refused with the nearest ones. More holes on the same face go in
   `positions` (points in mm): one feature, a hole at each point. A
   regular row or grid can also use `pattern_linear`. A simple hole can't
   be through all in SolidWorks: it is made blind through the part, and the
