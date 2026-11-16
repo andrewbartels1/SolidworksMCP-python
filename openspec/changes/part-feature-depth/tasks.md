@@ -47,8 +47,8 @@
 
 ## 8. After the live demos (2026-11-15)
 
-- [ ] 8.1 `create_hole` `positions`: the points added to the hole's position sketch (design decision 7), through base, circuit breaker, connection pool and the real adapter, with tests
-- [ ] 8.2 The mock adapter's `create_hole` takes `positions` (one hole's volume per point), with tests
-- [ ] 8.3 A simple hole through all falls back to blind at the part box's diagonal (decision 8), with tests
-- [ ] 8.4 The tool input and description (`positions`, `hole_count`, `end_condition_used`), the skill's workflow note, the catalog page
+- [x] 8.1 `create_hole` `positions`: the points added to the hole's position sketch (design decision 7), through base, circuit breaker, connection pool and the real adapter, with tests
+- [x] 8.2 The mock adapter's `create_hole` takes `positions` (one hole's volume per point), with tests
+- [x] 8.3 A simple hole through all falls back to blind at the part box's diagonal (decision 8), with tests
+- [x] 8.4 The tool input and description (`positions`, `hole_count`, `end_condition_used`), the skill's workflow note, the catalog page
 - [ ] 8.5 Live: `test_holes_at_several_points` (three holes, one feature) and the pattern demo rerun
