@@ -80,6 +80,46 @@ def _mm(value: float) -> float:
     return float(value) / 1000.0
 
 
+def _cap_thread_depth(
+    adapter: Any, model: Any, feature: Any, depth_m: float
+) -> float | None:
+    """Cap a blind tapped hole's thread depth at its hole depth, in metres.
+
+    ``HoleWizard5`` takes the thread depth from the size table (about twice
+    the diameter), which SolidWorks then refuses when the blind hole is
+    shallower: "The Tap Thread Depth cannot be larger than Blind Hole Depth"
+    (seen live on SolidWorks 2026). The hole's ``IWizardHoleFeatureData2`` is
+    opened, ``ThreadDepth`` lowered, and the definition saved.
+
+    Args:
+        adapter: The connected adapter.
+        model: The active ``IModelDoc2``.
+        feature: The new hole feature.
+        depth_m: The blind hole's depth, metres.
+
+    Returns:
+        The thread depth in metres after the call, or ``None`` when the
+        definition couldn't be read (the rebuild check then reports why).
+    """
+    hole = sw_type_info.flagged(feature, "IFeature")
+    data = adapter._attempt(lambda: hole.GetDefinition(), None)
+    if data is None:
+        return None
+    data = sw_type_info.flagged(data, "IWizardHoleFeatureData2")
+    thread = adapter._attempt(lambda: float(data.ThreadDepth), None)
+    if thread is None or thread <= depth_m:
+        return thread
+    adapter._attempt(lambda: data.AccessSelections(model, _null_callout()), None)
+    data.ThreadDepth = depth_m
+    saved = adapter._attempt(
+        lambda: hole.ModifyDefinition(data, model, _null_callout()), False
+    )
+    if not saved:
+        adapter._attempt(lambda: data.ReleaseSelectionAccess(), None)
+        return thread
+    return depth_m
+
+
 def _feature_name(adapter: Any, feature: Any) -> str | None:
     """A COM feature's name, or ``None``."""
     name = adapter._attempt(
@@ -543,8 +583,14 @@ class SolidWorksPartFeaturesMixin:
                     f"HoleWizard5 made no hole ({hole_type}, {standard}, {size}); "
                     "check the size is one SolidWorks lists for that standard."
                 )
+            thread_m = (
+                _cap_thread_depth(adapter, model, feature, blind_depth)
+                if hole_type == "tapped" and end_condition == "blind" and depth
+                else None
+            )
             return {
                 "name": _feature_name(adapter, feature),
+                "thread_depth_mm": None if thread_m is None else thread_m * 1000,
                 "hole_type": hole_type,
                 "standard": standard,
                 "size": size,

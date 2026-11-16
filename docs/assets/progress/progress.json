@@ -945,11 +945,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 224,
+   "covered": 226,
    "total": 2838
   },
   "api": {
-   "covered": 243,
+   "covered": 247,
    "total": 5985
   },
   "interfaces": [
@@ -1220,6 +1220,7 @@
     "covered": [
      "GetBox",
      "GetChildren",
+     "GetDefinition",
      "GetErrorCode2",
      "GetFaces",
      "GetFirstDisplayDimension",
@@ -1234,6 +1235,7 @@
      "GetTypeName2",
      "IsSuppressed",
      "IsSuppressed2",
+     "ModifyDefinition",
      "Parameter",
      "Select",
      "Select2"

@@ -445,3 +445,97 @@ async def test_no_name_means_no_rebuild_read(picks: list[Any]) -> None:
     adapter.currentModel.FeatureByPositionReverse.return_value = None
 
     assert adapter._rebuild_issues("create_shell", None) == []
+
+
+# --- a blind tapped hole's thread depth ---------------------------------------
+
+
+class _HoleDefinition:
+    """``IWizardHoleFeatureData2`` with a thread depth (metres)."""
+
+    def __init__(self, thread: float) -> None:
+        self.ThreadDepth = thread
+        self.accessed = False
+        self.released = False
+
+    def AccessSelections(self, model: Any, component: Any) -> bool:
+        self.accessed = True
+        return True
+
+    def ReleaseSelectionAccess(self) -> None:
+        self.released = True
+
+
+class _Hole:
+    """A hole feature whose definition can be read and saved."""
+
+    def __init__(self, definition: Any, saves: bool = True) -> None:
+        self.Name = "M6 Tapped Hole1"
+        self.definition = definition
+        self.saves = saves
+        self.saved: Any = None
+
+    def GetDefinition(self) -> Any:
+        return self.definition
+
+    def ModifyDefinition(self, data: Any, model: Any, component: Any) -> bool:
+        self.saved = data
+        return self.saves
+
+
+async def _tapped(hole: _Hole, depth: float | None = 8) -> Any:
+    adapter = FakeAdapter([1000.0, 900.0], feature=hole)
+    return await adapter.create_hole(
+        [0, 0, 20], "tapped", "iso", "M6x1.0", "blind", depth
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_deep_thread_is_capped_at_the_hole_depth(picks: list[Any]) -> None:
+    definition = _HoleDefinition(0.012)
+    hole = _Hole(definition)
+
+    result = await _tapped(hole)
+
+    assert definition.ThreadDepth == pytest.approx(0.008)
+    assert definition.accessed and hole.saved is definition
+    assert result.data["thread_depth_mm"] == pytest.approx(8.0)
+
+
+@pytest.mark.asyncio
+async def test_a_shallow_thread_is_left_alone(picks: list[Any]) -> None:
+    hole = _Hole(_HoleDefinition(0.006))
+
+    result = await _tapped(hole)
+
+    assert hole.saved is None
+    assert result.data["thread_depth_mm"] == pytest.approx(6.0)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_save_keeps_the_table_depth(picks: list[Any]) -> None:
+    definition = _HoleDefinition(0.012)
+
+    result = await _tapped(_Hole(definition, saves=False))
+
+    assert definition.released
+    assert result.data["thread_depth_mm"] == pytest.approx(12.0)
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_definition_reports_no_thread_depth(
+    picks: list[Any],
+) -> None:
+    result = await _tapped(_Hole(None))
+
+    assert result.data["thread_depth_mm"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_tapped_hole_without_depth_is_not_capped(picks: list[Any]) -> None:
+    hole = _Hole(_HoleDefinition(0.012))
+
+    result = await _tapped(hole, depth=None)
+
+    assert hole.saved is None
+    assert result.data["thread_depth_mm"] is None
