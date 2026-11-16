@@ -125,6 +125,95 @@ async def test_hole_wizard_diagnostic(scratch: Any) -> None:
     assert not failed, failed
 
 
+async def test_simple_hole_through_all_diagnostic(scratch: Any) -> None:
+    """Why a simple ISO hole through all makes no hole (Ø6.0 blind builds).
+
+    Six raw ``HoleWizard5`` calls on an 80 x 40 block, each changing one
+    thing: the end condition, an explicit diameter or depth, and the ISO
+    screw-clearance table (144, sized ``M6``) in place of drill sizes (143).
+    Each row says whether a feature came back and the volume it removed.
+    """
+    from solidworks_mcp.adapters.solidworks import part_features as pf
+
+    tools = await _tools(scratch.adapter)
+    assert (await tools["create_part"]({"name": "simple_hole_probe"}))[
+        "status"
+    ] == "success"
+    await _sketch(tools, "Top", {"x1": -40, "y1": -20, "x2": 40, "y2": 20})
+    assert (await tools["create_extrusion"]({"depth": 20}))["status"] == "success"
+    adapter = scratch.adapter
+    blind, through = (
+        pf.HOLE_END_CONDITIONS["blind"],
+        pf.HOLE_END_CONDITIONS["through_all"],
+    )
+    drill, clearance = 143, 144
+    probes = [
+        ("drill Ø6.0 blind 8 (control)", drill, "Ø6.0", blind, -1.0, 0.008),
+        ("drill Ø6.0 through, all -1", drill, "Ø6.0", through, -1.0, -1.0),
+        ("drill Ø6.0 through, diameter 6", drill, "Ø6.0", through, 0.006, -1.0),
+        ("drill Ø6.0 through, depth 20", drill, "Ø6.0", through, -1.0, 0.02),
+        ("drill Ø6.0 through, both", drill, "Ø6.0", through, 0.006, 0.02),
+        ("clearance M6 through, all -1", clearance, "M6", through, -1.0, -1.0),
+    ]
+    spots = [(x, z) for z in (-10.0, 10.0) for x in (-30.0, -10.0, 10.0)]
+
+    async def volume() -> float:
+        mass = await tools["get_mass_properties"]()
+        return float(mass["mass_properties"]["volume"]["value"])
+
+    results: dict[str, Any] = {}
+    for (label, fastener, size, end, diameter, depth), (x, z) in zip(
+        probes, spots, strict=True
+    ):
+        before = await volume()
+
+        def call(
+            fastener: int = fastener,
+            size: str = size,
+            end: int = end,
+            diameter: float = diameter,
+            depth: float = depth,
+            x: float = x,
+            z: float = z,
+        ) -> bool:
+            model = adapter.currentModel
+            model.ClearSelection2(True)
+            model.ForceRebuild3(True)
+            if not model.Extension.SelectByID2(
+                "", "FACE", x / 1000, 0.02, z / 1000, False, 0, pf._null_callout(), 0
+            ):
+                raise LookupError("face not selected")
+            manager = pf.sw_type_info.flagged(model.FeatureManager, "IFeatureManager")
+            feature = manager.HoleWizard5(
+                pf.HOLE_TYPES["simple"],
+                pf.HOLE_STANDARDS["iso"],
+                fastener,
+                size,
+                end,
+                diameter,
+                depth,
+                -1.0,
+                *([-1.0] * 12),
+                "",
+                False,
+                True,
+                True,
+                True,
+                True,
+                False,
+            )
+            return feature is not None
+
+        made = adapter._handle_com_operation("hole_probe", call)
+        after = await volume()
+        results[label] = {
+            "feature": made.data if made.is_success else f"error: {made.error}",
+            "volume_change": round(after - before, 1),
+        }
+
+    evidence("simple hole through all: which call builds", results)
+
+
 async def test_create_hole_blind_through_and_off_the_part(scratch: Any) -> None:
     """A blind M6 counterbore and a through M5 tapped hole; a point in the air fails."""
     tools = await _tools(scratch.adapter)
