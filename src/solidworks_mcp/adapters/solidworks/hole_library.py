@@ -24,10 +24,14 @@ import os
 import re
 import sqlite3
 from abc import ABC, abstractmethod
-from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from sqlalchemy import Engine, MetaData, Table, inspect
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import NullPool
+from sqlmodel import create_engine, select
 
 #: Our standard names -> the library's table prefix.
 STANDARD_PREFIXES: dict[str, str] = {
@@ -389,9 +393,10 @@ class SqliteHoleLibrary(HoleLibrary):
     """The installed library, read read-only and immutable.
 
     Table names come from the library's own rows; each is checked against
-    ``sqlite_master`` and quoted, never taken from a caller. Rows are read
-    once per table, and the file is closed after each read, so SolidWorks
-    (or Toolbox Settings) can always replace it.
+    the file's own table list and reflected, never taken from a caller, and
+    rows are read with SQLModel's ``select()``: no SQL is built as text.
+    Rows are read once per table, and the file is closed after each read, so
+    SolidWorks (or Toolbox Settings) can always replace it.
 
     Args:
         path: The ``swbrowser.sldedb`` file.
@@ -402,37 +407,56 @@ class SqliteHoleLibrary(HoleLibrary):
         self._tables: dict[str, str] | None = None
         self._cache: dict[str, list[dict[str, Any]]] = {}
 
+    def _engine(self) -> Engine:
+        """A read-only engine on the file: no lock taken, nothing written.
+
+        ``immutable=1`` lets the file be read while SolidWorks has it open;
+        ``NullPool`` closes each connection when its ``with`` block ends, so
+        the file is never held open between reads.
+        """
+        uri = f"{self.path.resolve().as_uri()}?mode=ro&immutable=1"
+        return create_engine(
+            "sqlite://",
+            creator=lambda: sqlite3.connect(uri, uri=True),
+            poolclass=NullPool,
+        )
+
     def _rows(self, table: str) -> list[dict[str, Any]]:
         """Every row of a table, columns keyed by their lower-case name.
+
+        No SQL is written as text: the table is reflected from the file
+        (named only if the file's own table list has it) and read with
+        ``select()``, so SQLAlchemy quotes every identifier.
 
         Raises:
             HoleLibraryError: When the file can't be read or lacks the table.
         """
         if table.lower() in self._cache:
             return self._cache[table.lower()]
-        uri = f"{self.path.resolve().as_uri()}?mode=ro&immutable=1"
+        engine = self._engine()
         try:
-            with closing(sqlite3.connect(uri, uri=True)) as connection:
+            with engine.connect() as connection:
                 if self._tables is None:
                     self._tables = {
                         name.lower(): name
-                        for (name,) in connection.execute(
-                            "SELECT name FROM sqlite_master WHERE type = 'table'"
-                        )
+                        for name in inspect(connection).get_table_names()
                     }
                 real = self._tables.get(table.lower())
                 if real is None:
                     raise HoleLibraryError(
                         f"The Hole Wizard library {self.path} has no table {table}."
                     )
-                quoted = real.replace('"', '""')
-                cursor = connection.execute(f'SELECT * FROM "{quoted}"')  # noqa: S608
-                names = [column[0].lower() for column in cursor.description]
-                rows = [dict(zip(names, values, strict=True)) for values in cursor]
-        except sqlite3.Error as exc:
+                reflected = Table(real, MetaData(), autoload_with=connection)
+                rows = [
+                    {str(key).lower(): value for key, value in row.items()}
+                    for row in connection.execute(select(reflected)).mappings()
+                ]
+        except SQLAlchemyError as exc:
             raise HoleLibraryError(
                 f"The Hole Wizard library {self.path} couldn't be read: {exc}."
             ) from exc
+        finally:
+            engine.dispose()
         self._cache[table.lower()] = rows
         return rows
 

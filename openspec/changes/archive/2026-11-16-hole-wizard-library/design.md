@@ -50,7 +50,10 @@ is a table entry, later).
 2. **Open read-only and immutable:** `sqlite3.connect("file:...?mode=ro&immutable=1", uri=True)`.
    SolidWorks may have the file open; `immutable` takes no lock and writes
    nothing. Table names come from the library's own rows; every one is
-   checked against `sqlite_master` and quoted, never formatted from input.
+   checked against the file's table list. Revised in review (PR #234,
+   Bandit B608): no SQL is built as text. A SQLModel engine over that
+   connection (`NullPool`, so it closes after each read) reflects the table
+   and reads it with `select()`, so SQLAlchemy quotes every identifier.
 3. **Finding the file**, first hit wins: the `SOLIDWORKS_MCP_HOLE_LIBRARY`
    setting (a file path); `Toolbox Data Location` from HKCU, then HKLM, for
    each installed SolidWorks year, newest first, with
