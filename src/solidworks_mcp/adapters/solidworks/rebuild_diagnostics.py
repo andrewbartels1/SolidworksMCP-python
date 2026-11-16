@@ -118,6 +118,11 @@ _CODE_HINTS: dict[int, tuple[str, str]] = {
 # (``swFeatureErrorUnknown``) or has no curated hint. Keys are
 # ``IFeature::GetTypeName2`` values.
 _TYPE_HINTS: dict[str, str] = {
+    "HoleWzd": (
+        "Check the Hole Wizard hole: a tapped hole's thread must end short of "
+        "a blind hole's bottom, the size must be one the standard lists, and the "
+        "hole must sit on the face it was placed on."
+    ),
     "Extrusion": (
         "Check the boss's parent sketch: it must contain at least one closed "
         "contour, and the depth/end condition must reach geometry."
@@ -153,6 +158,7 @@ _TYPE_HINTS: dict[str, str] = {
 #: Readable names for GetTypeName2 values used in descriptions.
 _TYPE_LABELS: dict[str, str] = {
     "ICE": "Extrude",
+    "HoleWzd": "Hole Wizard hole",
     "Extrusion": "Boss-extrude",
     "Cut": "Cut-extrude",
     "ProfileFeature": "Sketch",

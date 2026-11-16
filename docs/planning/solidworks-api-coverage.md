@@ -642,8 +642,13 @@ These are the most impactful gaps — operations that a typical modeling workflo
 
 **Why needed:** "Convert Entities" projects existing model edges/faces into the active sketch. This is used in nearly every sketch-on-face workflow (e.g., pocket on a face that matches the face boundary). Without it, users must manually redraw geometry.
 
-**Tools to add:**
-- `sketch_convert_entities(entity_names: list[str])` → `ISketchManager::SketchConvertEntities`
+**Status (2026-11-16):** added and checked live on SolidWorks 2026:
+`sketch_convert_entities` takes points on edges or a face (mm) and calls
+`ISketchManager::SketchUseEdge3`. The same change added `create_hole`
+(`HoleWizard5`), `add_cosmetic_thread` (`InsertCosmeticThread3`),
+`pattern_linear` (`FeatureLinearPattern5`), `create_shell`
+(`InsertFeatureShell`), `add_draft` (`InsertMultiFaceDraft`) and
+`create_rib` (`InsertRib`).
 
 ---
 

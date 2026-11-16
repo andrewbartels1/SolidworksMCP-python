@@ -4,7 +4,8 @@ Provides tools for creating and manipulating SolidWorks models, including parts,
 assemblies, drawings, and features like extrusions, revolves, etc.
 """
 
-from typing import Any, Literal
+import re
+from typing import Any, Literal, cast
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
@@ -1095,6 +1096,276 @@ class CreateDrawingInput(CompatInput):
             "Drawing template (.drwdot) path; omit to use the SolidWorks default"
         ),
     )
+
+
+def metric_diameter(size: str) -> float | None:
+    """The nominal diameter in mm of a metric size such as ``M6`` or ``M10x1.5``.
+
+    Args:
+        size: The size as SolidWorks lists it.
+
+    Returns:
+        The diameter, or ``None`` when ``size`` isn't metric.
+    """
+    match = re.match(r"^\s*M(\d+(?:\.\d+)?)", size, re.IGNORECASE)
+    return float(match.group(1)) if match else None
+
+
+def simple_iso_size(size: str) -> str:
+    """A simple ISO hole's size as SolidWorks lists it: by diameter, ``Ø4.0``.
+
+    The ISO drill table names sizes by diameter, not by screw (seen live:
+    ``Ø6.0`` builds). ``M4``, ``4``, ``4mm`` and ``Ø4`` all become ``Ø4.0``;
+    anything else is passed on unchanged. A diameter missing from the
+    installed table still makes no hole (``Ø4.0`` on a default install).
+
+    Args:
+        size: The size the caller gave.
+
+    Returns:
+        The size SolidWorks lists.
+    """
+    match = re.fullmatch(
+        r"\s*(?:M|Ø)?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*", size, re.IGNORECASE
+    )
+    return f"Ø{float(match.group(1)):.1f}" if match else size
+
+
+Point3 = list[float]
+
+
+def _point(value: list[float], name: str) -> list[float]:
+    """Check a point is ``[x, y, z]`` in mm."""
+    if len(value) != 3:
+        raise ValueError(f"{name} must be [x, y, z] in mm")
+    return value
+
+
+class PatternLinearInput(CompatInput):
+    """Input schema for repeating features along one or two directions.
+
+    Attributes:
+        features (list[str]): Names of the features to repeat.
+        direction (list[float] | str): A point in mm on a straight edge, or
+            the name of an axis or edge, giving the first direction.
+        count (int): Instances along it, the original included.
+        spacing (float): Distance between instances, mm.
+        direction2 (list[float] | str | None): The second direction, if any.
+        count2 (int): Instances along the second direction.
+        spacing2 (float): Spacing along the second direction, mm.
+        reverse (bool): Flip the first direction.
+        reverse2 (bool): Flip the second direction.
+    """
+
+    features: list[str] = Field(
+        default_factory=list,
+        description="Names of the features to repeat. At least one required.",
+    )
+    direction: list[float] | str = Field(
+        description="First direction: [x, y, z] in mm on a straight edge, or an "
+        "axis name such as 'Axis1'"
+    )
+    count: int = Field(
+        description="Instances along the first direction, original included (2+)"
+    )
+    spacing: float = Field(gt=0, description="Distance between instances, mm")
+    direction2: list[float] | str | None = Field(
+        default=None, description="Second direction, as `direction`; omit for one row"
+    )
+    count2: int = Field(default=1, description="Instances along the second direction")
+    spacing2: float = Field(
+        default=0.0, ge=0, description="Spacing along the second direction, mm"
+    )
+    reverse: bool = Field(default=False, description="Flip the first direction")
+    reverse2: bool = Field(default=False, description="Flip the second direction")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not [f for f in self.features if f.strip()]:
+            raise ValueError("features must contain at least one name")
+        if self.count < 2:
+            raise ValueError("count must be at least 2")
+        if isinstance(self.direction, list):
+            _point(self.direction, "direction")
+        if self.direction2 is not None:
+            if isinstance(self.direction2, list):
+                _point(self.direction2, "direction2")
+            if self.count2 < 2 or self.spacing2 <= 0:
+                raise ValueError(
+                    "a second direction needs count2 of 2+ and spacing2 > 0"
+                )
+
+
+class CreateShellInput(CompatInput):
+    """Input schema for hollowing a body.
+
+    Attributes:
+        thickness (float): Wall thickness, mm.
+        faces (list[list[float]]): A point in mm on each face to remove.
+        outward (bool): Add the wall outside the body.
+    """
+
+    thickness: float = Field(gt=0, description="Wall thickness, mm")
+    faces: list[list[float]] = Field(
+        default_factory=list,
+        description="[x, y, z] in mm on each face to remove (open the shell "
+        "there); empty for a closed, hollow body",
+    )
+    outward: bool = Field(default=False, description="Add the wall outside the body")
+
+    def model_post_init(self, __context: Any) -> None:
+        for point in self.faces:
+            _point(point, "each face point")
+
+
+class AddDraftInput(CompatInput):
+    """Input schema for drafting faces.
+
+    Attributes:
+        angle (float): Draft angle, degrees.
+        faces (list[list[float]]): A point in mm on each face to draft.
+        neutral_face (list[float]): A point in mm on the neutral face.
+        reverse (bool): Draft the other way.
+    """
+
+    angle: float = Field(gt=0, lt=90, description="Draft angle, degrees")
+    faces: list[list[float]] = Field(
+        default_factory=list, description="[x, y, z] in mm on each face to draft"
+    )
+    neutral_face: list[float] = Field(
+        description="[x, y, z] in mm on the neutral face the draft pivots on, "
+        "e.g. the bottom face"
+    )
+    reverse: bool = Field(default=False, description="Draft the other way")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.faces:
+            raise ValueError("faces must contain at least one point")
+        for point in self.faces:
+            _point(point, "each face point")
+        _point(self.neutral_face, "neutral_face")
+
+
+class CreateRibInput(CompatInput):
+    """Input schema for a rib.
+
+    Attributes:
+        sketch (str): The rib sketch's name (an open line or arc).
+        thickness (float): Rib thickness, mm.
+        both_sides (bool): Thicken both sides of the sketch.
+        flip_material (bool): Extend the rib the other way.
+        normal_to_sketch (bool): Extrude normal to the sketch.
+    """
+
+    sketch: str = Field(description="The rib sketch's name, e.g. 'Sketch3'")
+    thickness: float = Field(gt=0, description="Rib thickness, mm")
+    both_sides: bool = Field(
+        default=True, description="Thicken both sides of the sketch"
+    )
+    flip_material: bool = Field(
+        default=False, description="Extend the rib the other way"
+    )
+    normal_to_sketch: bool = Field(
+        default=False,
+        description="Extrude normal to the sketch instead of parallel to it",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.sketch.strip():
+            raise ValueError("sketch is required")
+
+
+class CreateHoleInput(CompatInput):
+    """Input schema for a Hole Wizard hole.
+
+    Attributes:
+        face_point (list[float]): Where the hole goes: [x, y, z] mm on a flat face.
+        hole_type (str): simple, counterbore, countersink or tapped.
+        standard (str): iso or ansi_inch.
+        size (str): The size as SolidWorks lists it.
+        end_condition (str): through_all or blind.
+        depth (float | None): Depth for a blind hole, mm.
+        positions (list[list[float]] | None): More holes on the same face, mm.
+    """
+
+    face_point: list[float] = Field(
+        description="[x, y, z] in mm on a flat face: the hole's centre"
+    )
+    hole_type: Literal["simple", "counterbore", "countersink", "tapped"] = Field(
+        description="simple, counterbore, countersink or tapped"
+    )
+    standard: Literal["iso", "ansi_inch"] = Field(
+        default="iso", description="iso (metric) or ansi_inch"
+    )
+    size: str = Field(
+        description="Size as SolidWorks lists it: 'M6' (iso), 'M6x1.0' (iso "
+        "tapped), '#10' or '1/4' (ansi_inch). A simple iso hole is listed by "
+        "diameter ('Ø4.0'); 'M4' or '4' is converted to that."
+    )
+    end_condition: Literal["through_all", "blind"] = Field(
+        default="through_all", description="through_all or blind"
+    )
+    depth: float | None = Field(
+        default=None,
+        gt=0,
+        description=("Blind depth, mm. A tapped hole's thread goes at most 80% of it."),
+    )
+    positions: list[list[float]] | None = Field(
+        default=None,
+        description=(
+            "More holes in the same feature: [x, y, z] mm points on the same "
+            "face, as when Hole Wizard holes are placed on sketch points"
+        ),
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        _point(self.face_point, "face_point")
+        for point in self.positions or []:
+            _point(point, "each of positions")
+        if not self.size.strip():
+            raise ValueError("size is required")
+        if self.hole_type == "simple" and self.standard == "iso":
+            self.size = simple_iso_size(self.size)
+        if self.end_condition == "blind" and self.depth is None:
+            raise ValueError("a blind hole needs depth")
+
+
+class AddCosmeticThreadInput(CompatInput):
+    """Input schema for a cosmetic thread.
+
+    Attributes:
+        edge_point (list[float]): A point in mm on the circular edge.
+        size (str): The thread size, e.g. 'M10x1.5'.
+        diameter (float | None): Major diameter, mm (read from a metric size).
+        end_type (str): blind, up_to_next or through.
+        depth (float | None): Thread length for a blind thread, mm.
+        standard (str): iso or ansi_inch.
+    """
+
+    edge_point: list[float] = Field(
+        description="[x, y, z] in mm on the circular edge where the thread starts"
+    )
+    size: str = Field(description="Thread size, e.g. 'M10x1.5' or '1/4-20'")
+    diameter: float | None = Field(
+        default=None,
+        gt=0,
+        description="Major diameter, mm; read from the size when it is metric",
+    )
+    end_type: Literal["blind", "up_to_next", "through"] = Field(
+        default="blind", description="blind, up_to_next or through"
+    )
+    depth: float | None = Field(default=None, gt=0, description="Blind length, mm")
+    standard: Literal["iso", "ansi_inch"] = Field(
+        default="iso", description="iso or ansi_inch"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        _point(self.edge_point, "edge_point")
+        if self.diameter is None:
+            self.diameter = metric_diameter(self.size)
+        if self.diameter is None:
+            raise ValueError("diameter is required for a size that isn't metric")
+        if self.end_type == "blind" and self.depth is None:
+            raise ValueError("a blind thread needs depth")
 
 
 async def register_modeling_tools(
@@ -2337,6 +2608,229 @@ async def register_modeling_tools(
             "message": f"Patterned {', '.join(input_data.features)} "
             f"around {input_data.axis} ({input_data.count} instances)",
             "pattern": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def pattern_linear(input_data: PatternLinearInput) -> dict[str, Any]:
+        """Repeat features of the active part in a row or a grid, e.g. a row of holes.
+
+        Give the direction as a point on a straight edge (mm) or an axis name; add
+        `direction2` for a grid. Bosses and cuts both work. SolidWorks picks which
+        way an edge points; if instances land off the part, set `reverse` or
+        `reverse2`. It fails when the volume doesn't change, which means no
+        instance landed on the part. Needs: an open
+        part with the named features. Changes: adds a linear pattern feature.
+        Returns: `pattern` with `name`, `patterned`, `count`, `spacing_mm`, and
+        `volume_before`, `volume_after` and `volume_change` (mm³).
+
+        Args:
+            input_data: The pattern. `features`, `direction`, `count` (2+) and
+                `spacing` (mm) are required; `direction2`, `count2` and `spacing2`
+                make a grid.
+
+        Returns:
+            dict[str, Any]: The pattern created.
+        """
+        input_data = normalize_input(input_data, PatternLinearInput)
+        result = await adapter.pattern_linear(
+            input_data.features,
+            input_data.direction,
+            input_data.count,
+            input_data.spacing,
+            input_data.direction2,
+            input_data.count2,
+            input_data.spacing2,
+            input_data.reverse,
+            input_data.reverse2,
+        )
+        require_success(result, context="Failed to pattern features")
+        data = result.data if isinstance(result.data, dict) else {}
+        grid = f" x {input_data.count2}" if input_data.direction2 is not None else ""
+        return {
+            "status": "success",
+            "message": f"Patterned {', '.join(input_data.features)} "
+            f"({input_data.count}{grid} instances)",
+            "pattern": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def create_shell(input_data: CreateShellInput) -> dict[str, Any]:
+        """Hollow the active part to a wall thickness, opening the faces picked.
+
+        Use it for boxes, housings and cups: pick the face to open with a point on
+        it (mm). It fails when the volume doesn't change. Needs: an open part with a
+        solid body. Changes: adds a Shell feature. Returns: `shell` with `name`,
+        `thickness_mm`, `faces_removed`, and `volume_before`, `volume_after` and
+        `volume_change` (mm³).
+
+        Args:
+            input_data: The shell. `thickness` (mm) is required; `faces` lists a
+                point on each face to remove; `outward` puts the wall outside.
+
+        Returns:
+            dict[str, Any]: The shell created.
+        """
+        input_data = normalize_input(input_data, CreateShellInput)
+        result = await adapter.create_shell(
+            input_data.thickness, input_data.faces, input_data.outward
+        )
+        require_success(result, context="Failed to shell the part")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Shelled the part to {input_data.thickness} mm walls",
+            "shell": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_draft(input_data: AddDraftInput) -> dict[str, Any]:
+        """Draft faces of the active part by an angle, e.g. for a moulded part.
+
+        Pick each face to draft and the neutral face it pivots on (usually the
+        parting or bottom face) with a point on each (mm). It fails when the volume
+        doesn't change. Needs: an open part. Changes: adds a Draft feature.
+        Returns: `draft` with `name`, `angle`, `faces_drafted`, and
+        `volume_before`, `volume_after` and `volume_change` (mm³).
+
+        Args:
+            input_data: The draft. `angle` (degrees, under 90), `faces` (at least
+                one point) and `neutral_face` (a point) are required.
+
+        Returns:
+            dict[str, Any]: The draft created.
+        """
+        input_data = normalize_input(input_data, AddDraftInput)
+        result = await adapter.add_draft(
+            input_data.angle,
+            input_data.faces,
+            input_data.neutral_face,
+            input_data.reverse,
+        )
+        require_success(result, context="Failed to draft faces")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Drafted {len(input_data.faces)} face(s) by {input_data.angle} degrees",
+            "draft": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def create_rib(input_data: CreateRibInput) -> dict[str, Any]:
+        """Add a rib from a sketched line, stiffening a wall or the inside of a shell.
+
+        Sketch an open line where the rib goes (it can stop short of the walls; the
+        rib extends to meet them), close the sketch, then call this with its name.
+        It fails when the volume doesn't change. Needs: an open part and the rib
+        sketch. Changes: adds a Rib feature. Returns: `rib` with `name`, `sketch`,
+        `thickness_mm`, and `volume_before`, `volume_after` and `volume_change` (mm³).
+
+        Args:
+            input_data: The rib. `sketch` and `thickness` (mm) are required;
+                `both_sides` is on.
+
+        Returns:
+            dict[str, Any]: The rib created.
+        """
+        input_data = normalize_input(input_data, CreateRibInput)
+        result = await adapter.create_rib(
+            input_data.sketch,
+            input_data.thickness,
+            input_data.both_sides,
+            input_data.flip_material,
+            input_data.normal_to_sketch,
+        )
+        require_success(result, context="Failed to create rib")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Added a {input_data.thickness} mm rib from {input_data.sketch}",
+            "rib": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def create_hole(input_data: CreateHoleInput) -> dict[str, Any]:
+        """Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face.
+
+        Use it instead of sketching a circle and cutting: the hole is sized from the
+        standard, so it fits the fastener and a drawing shows its callout. Several
+        holes on one face: give the rest as `positions` (one feature, a hole at each
+        point); a regular grid can also use `pattern_linear`. A simple hole can't be
+        through all in SolidWorks, so it is made blind through the part
+        (`end_condition_used`, with a warning). It fails when the volume doesn't
+        change. Needs: an open part with a flat face at `face_point`. Changes: adds
+        a hole feature. Returns: `hole` with `name`, `hole_count`, `hole_type`,
+        `standard`, `size`, `end_condition`, `end_condition_used`, and
+        `volume_before`, `volume_after` and `volume_change` (mm³).
+
+        Args:
+            input_data: The hole. `face_point`, `hole_type` and `size` are
+                required; `standard` is iso and `end_condition` through_all (blind
+                needs `depth`).
+
+        Returns:
+            dict[str, Any]: The hole created.
+        """
+        input_data = normalize_input(input_data, CreateHoleInput)
+        result = await adapter.create_hole(
+            input_data.face_point,
+            input_data.hole_type,
+            input_data.standard,
+            input_data.size,
+            input_data.end_condition,
+            input_data.depth,
+            input_data.positions,
+        )
+        require_success(result, context="Failed to create hole")
+        data = result.data if isinstance(result.data, dict) else {}
+        count = int(data.get("hole_count", 1))
+        kind = f"{input_data.size} {input_data.hole_type}"
+        return {
+            "status": "success",
+            "message": (
+                f"Added a {kind} hole" if count == 1 else f"Added {count} {kind} holes"
+            ),
+            "hole": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_cosmetic_thread(input_data: AddCosmeticThreadInput) -> dict[str, Any]:
+        """Add a cosmetic thread to a hole or shaft, so drawings show the thread callout.
+
+        Pick the circular edge where the thread starts with a point on it (mm). The
+        thread is drawn, not modelled, so the volume must not change; it fails if it
+        does. Needs: an open part with a round edge at `edge_point`. Changes: adds a
+        Cosmetic Thread feature. Returns: `thread` with `name`, `size`,
+        `diameter_mm`, `end_type` and `depth_mm`.
+
+        Args:
+            input_data: The thread. `edge_point` and `size` are required;
+                `diameter` comes from a metric size; blind (the default) needs
+                `depth`.
+
+        Returns:
+            dict[str, Any]: The thread added.
+        """
+        input_data = normalize_input(input_data, AddCosmeticThreadInput)
+        result = await adapter.add_cosmetic_thread(
+            input_data.edge_point,
+            input_data.size,
+            cast(float, input_data.diameter),
+            input_data.end_type,
+            input_data.depth,
+            input_data.standard,
+        )
+        require_success(result, context="Failed to add cosmetic thread")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Added a {input_data.size} cosmetic thread",
+            "thread": data,
             "execution_time": result.execution_time,
         }
 

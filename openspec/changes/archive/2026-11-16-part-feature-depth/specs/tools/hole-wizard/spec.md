@@ -43,3 +43,34 @@ SHALL fail with `invalid_input`, name the point, and add nothing.
 - **WHEN** `position` is 50 mm above the plate
 - **THEN** the call fails with `invalid_input` and the feature tree is
   unchanged
+
+### Requirement: Several holes in one feature
+`create_hole` SHALL take an optional `positions`, a list of further
+`[x, y, z]` points in millimetres on the same face. The holes at
+`face_point` and at every point of `positions` SHALL be one Hole Wizard
+feature, each point a point of the hole's position sketch, as when holes are
+placed on sketch points in SolidWorks' Hole Wizard. The reply SHALL give
+`hole_count`.
+
+#### Scenario: Three holes in one call
+- **WHEN** `create_hole` is called with a `face_point` and two `positions`
+  on the same face
+- **THEN** one hole feature is added, its position sketch has three points,
+  `hole_count` is 3, and the volume falls by three holes' worth
+
+#### Scenario: A position off the face
+- **WHEN** a point of `positions` is not on the face
+- **THEN** the call fails naming the point, and the hole feature is removed
+
+### Requirement: A simple hole through all
+SolidWorks refuses `through_all` for a simple Hole Wizard hole (seen live on
+SolidWorks 2026, every argument variant). `create_hole` SHALL then make the
+simple hole blind, as deep as the part's bounding-box diagonal so it passes
+through, and reply with `end_condition_used: "blind"`, the depth used, and a
+warning that a part made thicker later needs the depth changed.
+
+#### Scenario: A simple M6 hole through all
+- **WHEN** `create_hole` is called with `simple`, `iso`, `Ø6.0` and
+  `through_all` on a 20 mm block
+- **THEN** the hole goes through the block, `end_condition_used` is `blind`,
+  and the reply carries the warning

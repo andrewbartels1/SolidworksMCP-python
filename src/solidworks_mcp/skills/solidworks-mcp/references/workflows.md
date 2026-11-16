@@ -66,8 +66,30 @@ plane; the reply's `end_condition` says `MidPlane`.
    centre is always the sketch origin.
 3. `exit_sketch`, then one `create_cut_extrude`.
 
-Don't use `pattern_circular` on a cut: it reports an error unless the
-volume grows.
+A cut or a `create_hole` hole that already exists can be repeated instead:
+`create_axis` with `reference: "y"` (an axis through the origin), then
+`pattern_circular` with the feature's name, the axis and `count`.
+
+## Standard holes, threads, shells and ribs
+
+- **A hole for a screw:** `create_hole` with a point on the face where the
+  hole's centre goes, the `hole_type` and the size SolidWorks lists
+  (`M6`, `M6x1.0` for tapped). More holes on the same face go in
+  `positions` (points in mm): one feature, a hole at each point. A
+  regular row or grid can also use `pattern_linear`. A simple hole can't
+  be through all in SolidWorks: it is made blind through the part, and the
+  reply says so.
+- **A thread on a shaft or a plain hole:** make the round feature first,
+  then `add_cosmetic_thread` with a point on its circular edge. Tapped
+  holes already carry their thread.
+- **A box or a housing:** model the solid, then `create_shell` with a
+  point on the face to open. Add stiffeners with `create_rib`: sketch an
+  open line where the rib goes, close the sketch, pass its name.
+- **Moulded walls:** `add_draft` with a point on each wall and on the face
+  the draft pivots on.
+- **Following an existing edge:** in an open sketch, `sketch_convert_entities`
+  copies edges (or a face's outline) exactly; cut or extrude from that
+  sketch instead of re-drawing the edge at guessed coordinates.
 
 ## Changing an existing model
 

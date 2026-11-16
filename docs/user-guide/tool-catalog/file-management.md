@@ -8,7 +8,7 @@ replacement.
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 16**
+**Total tools in this category: 19**
 
 ---
 
@@ -134,7 +134,7 @@ and low-confidence “inspect more” cases before any write operations.
 
 ### `list_configurations`
 
-List the names of the active model's configurations.
+List the names of the active model's configurations, and which one is active.
 
 **Prerequisite:** Active document
 
@@ -142,6 +142,57 @@ List the names of the active model's configurations.
 
 ```json
 {}
+```
+
+---
+
+### `create_configuration`
+
+Add a configuration to the active part or assembly, e.g. a long and a short version of one part. The configuration that was active stays active unless `activate` is on.
+
+**Prerequisite:** Active part or assembly.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | `str` | ✅ | `` | The new configuration's name |
+| `parent` | `str?` | — | `None` | A configuration to derive it from |
+| `description` | `str` | — | `""` | Its description |
+| `activate` | `bool` | — | `false` | Leave it active |
+
+**Sample call:**
+
+```json
+{"name": "Long", "parent": "Default"}
+```
+
+---
+
+### `activate_configuration`
+
+Make a configuration of the active model the active one, and rebuild.
+
+**Prerequisite:** Active part or assembly with that configuration. Beta.
+
+**Sample call:**
+
+```json
+{"name": "Long"}
+```
+
+---
+
+### `delete_configuration`
+
+Delete a configuration of the active model; not the active one or the only one.
+
+**Prerequisite:** Active part or assembly with that configuration. Beta.
+
+**Sample call:**
+
+```json
+{"name": "Long"}
 ```
 
 ---

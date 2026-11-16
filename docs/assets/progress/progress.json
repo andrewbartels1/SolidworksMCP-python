@@ -1,14 +1,21 @@
 {
  "tools": {
-  "total": 123,
+  "total": 133,
   "by_level": {
-   "stable": 108,
+   "stable": 118,
    "beta": 0,
    "experimental": 0,
    "planned": 7,
    "deprecated": 8
   },
   "list": [
+   {
+    "name": "activate_configuration",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Make a configuration of the active model the active one, and rebuild."
+   },
    {
     "name": "activate_document",
     "family": "file_management",
@@ -45,6 +52,13 @@
     "summary": "Draw a circle in the open sketch from its centre and radius, in mm."
    },
    {
+    "name": "add_cosmetic_thread",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a cosmetic thread to a hole or shaft, so drawings show the thread callout."
+   },
+   {
     "name": "add_datum_tag",
     "family": "drawing_automation",
     "level": "stable",
@@ -57,6 +71,13 @@
     "level": "planned",
     "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Add one dimension between drawing entities at a position on the sheet."
+   },
+   {
+    "name": "add_draft",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Draft faces of the active part by an angle, e.g. for a moulded part."
    },
    {
     "name": "add_drawing_view",
@@ -234,6 +255,13 @@
     "summary": "Add a reference axis along the model's x, y or z direction, through the origin."
    },
    {
+    "name": "create_configuration",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a configuration to the active part or assembly, e.g. a long and a short version of one part."
+   },
+   {
     "name": "create_cut_extrude",
     "family": "modeling",
     "level": "stable",
@@ -267,6 +295,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Extrude the sketch you just closed into a solid boss, added to the active part."
+   },
+   {
+    "name": "create_hole",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face."
    },
    {
     "name": "create_loft",
@@ -304,11 +339,25 @@
     "summary": "Revolve a closed sketch around an axis, adding a solid to the active part."
    },
    {
+    "name": "create_rib",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add a rib from a sketched line, stiffening a wall or the inside of a shell."
+   },
+   {
     "name": "create_section_view",
     "family": "drawing",
     "level": "planned",
     "reason": "planned in queue item 12 (the drawing pack).",
     "summary": "Cut a section view along a line across a drawing view."
+   },
+   {
+    "name": "create_shell",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Hollow the active part to a wall thickness, opening the faces picked."
    },
    {
     "name": "create_sketch",
@@ -330,6 +379,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
+   },
+   {
+    "name": "delete_configuration",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Delete a configuration of the active model; not the active one or the only one."
    },
    {
     "name": "delete_feature",
@@ -588,7 +644,7 @@
     "family": "file_management",
     "level": "stable",
     "reason": "",
-    "summary": "List the names of the active model's configurations."
+    "summary": "List the names of the active model's configurations, and which one is active."
    },
    {
     "name": "list_drawing_views",
@@ -680,6 +736,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Repeat features of the active part around an axis, e.g. a ring of bosses or ribs."
+   },
+   {
+    "name": "pattern_linear",
+    "family": "modeling",
+    "level": "stable",
+    "reason": "",
+    "summary": "Repeat features of the active part in a row or a grid, e.g. a row of holes."
    },
    {
     "name": "rebuild_model",
@@ -808,6 +871,13 @@
     "summary": "Repeat sketch entities around the sketch origin, e.g. a bolt circle."
    },
    {
+    "name": "sketch_convert_entities",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Copy model edges, or a face's whole outline, into the open sketch (Convert Entities)."
+   },
+   {
     "name": "sketch_linear_pattern",
     "family": "sketching",
     "level": "stable",
@@ -875,11 +945,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 213,
+   "covered": 232,
    "total": 2838
   },
   "api": {
-   "covered": 233,
+   "covered": 252,
    "total": 5985
   },
   "interfaces": [
@@ -895,6 +965,7 @@
      "GetExecutablePath",
      "GetExportFileData",
      "GetMassProperties",
+     "GetMathUtility",
      "GetOpenDocumentByName",
      "GetUserPreferenceStringValue",
      "GetUserPreferenceToggle",
@@ -913,6 +984,7 @@
    {
     "name": "IModelDoc2",
     "covered": [
+     "AddConfiguration2",
      "AddDiameterDimension2",
      "AddDimension",
      "AddDimension2",
@@ -926,7 +998,10 @@
      "CreateEllipse",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
+     "CreatePoint",
+     "DeleteConfiguration2",
      "EditRebuild3",
+     "EditSketch",
      "EditSuppress2",
      "EditUndo",
      "EditUndo2",
@@ -956,10 +1031,12 @@
      "GraphicsRedraw2",
      "InsertAxis2",
      "InsertDatumTag2",
+     "InsertFeatureShell",
      "InsertGtol",
      "InsertNote",
      "InsertProtrusionBlend2",
      "InsertProtrusionSwept4",
+     "InsertRib",
      "InsertSketch",
      "Lock",
      "Parameter",
@@ -973,6 +1050,7 @@
      "SetSaveFlag",
      "SetUserPreferenceIntegerValue",
      "SetUserPreferenceToggle",
+     "ShowConfiguration2",
      "ShowNamedView2",
      "SketchAddConstraints",
      "SketchMirror",
@@ -1050,6 +1128,7 @@
      "Create3rdAngleViews2",
      "CreateDrawViewFromModelView3",
      "EditSheet",
+     "EditSketch",
      "EditTemplate",
      "FeatureByName",
      "GetCurrentSheet",
@@ -1071,14 +1150,19 @@
      "FeatureExtrusion3",
      "FeatureExtrusionThin2",
      "FeatureFillet3",
+     "FeatureLinearPattern5",
      "FeatureRevolve2",
      "GetFeatureCount",
+     "HoleWizard5",
+     "InsertCosmeticThread3",
      "InsertFeatureChamfer",
      "InsertMirrorFeature",
+     "InsertMultiFaceDraft",
      "InsertProtrusionBlend2",
      "InsertProtrusionSwept4",
      "InsertRefPlane",
-     "InsertReferencePoint"
+     "InsertReferencePoint",
+     "InsertRib"
     ],
     "total": 268
    },
@@ -1093,10 +1177,12 @@
      "CreateEllipse",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
+     "CreatePoint",
      "CreatePolygon",
      "CreateSpline2",
      "InsertSketch",
-     "SketchOffset2"
+     "SketchOffset2",
+     "SketchUseEdge3"
     ],
     "total": 83
    },
@@ -1139,6 +1225,7 @@
     "covered": [
      "GetBox",
      "GetChildren",
+     "GetDefinition",
      "GetErrorCode2",
      "GetFaces",
      "GetFirstDisplayDimension",
@@ -1153,6 +1240,7 @@
      "GetTypeName2",
      "IsSuppressed",
      "IsSuppressed2",
+     "ModifyDefinition",
      "Parameter",
      "Select",
      "Select2"
@@ -1164,6 +1252,7 @@
     "covered": [
      "AutoDimension",
      "GetLineCount",
+     "GetSketchPoints2",
      "GetSketchSegments"
     ],
     "total": 102

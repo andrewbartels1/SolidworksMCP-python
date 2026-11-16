@@ -50,6 +50,15 @@ def test_unknown_code_uses_feature_type_hint() -> None:
     assert "Boss-Extrude2" in entry["description"]
 
 
+def test_a_hole_wizard_warning_names_the_thread_depth() -> None:
+    """Code 1 on a Hole Wizard hole points at the tap thread depth (seen live)."""
+    entry = rd.explain(rd.RawRebuildIssue("M6 Tapped Hole1", "HoleWzd", 1, True))
+    assert entry["description"] == (
+        "Hole Wizard hole 'M6 Tapped Hole1' failed to rebuild (swFeatureErrorUnknown)."
+    )
+    assert "thread must end short of a blind hole's bottom" in entry["hint"]
+
+
 def test_empty_parent_sketch_overrides_other_hints() -> None:
     """A parent sketch with zero segments is named in the hint."""
     entry = rd.explain(

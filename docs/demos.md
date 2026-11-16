@@ -873,6 +873,50 @@ with `not_found` and a message saying so, and no file is written.
 
 1. `export_flat_pattern({"file_path": "flat.dxf"})`: `not_found`
 
+## Holes {#holes}
+
+Source: [`tests/live/test_live_sw_part_features.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_part_features.py).
+
+### A plate of holes, placed from points {#hole-positions}
+
+![create_hole drilling a 100 x 60 x 15 mm plate: counterbores, countersinks and tapped holes from points, a mirror, a ring of six, and a point off the face refused on purpose](assets/demos/part-features/test_holes_at_several_points-motion.gif)
+
+> *Example prompt:* Drill a 100 x 60 x 15 mm plate: M6 counterbores down
+> both ends, countersinks and tapped holes inside them, a ring of six Ø6
+> holes in the middle.
+
+**What it shows.** Holes placed the way you place them by hand in the Hole
+Wizard: one hole, then a point in its position sketch for each of the
+others. Each `create_hole` call below is one Hole Wizard feature holding
+three holes (`hole_count: 3`). The counterbores are mirrored about the Right
+Plane, and one Ø6 hole is patterned six times round an axis through the
+origin. 18 holes in all, and each step's volume change adds up: the plate
+goes from 90,000 to 81,745.7 mm³.
+
+| Step | Feature | Volume change (mm³) |
+| --- | --- | --- |
+| 3 M6 counterbores, 8 mm deep | `CBORE for M6 Hex Socket Head Cap Screw1` | -2,056.7 |
+| mirrored to the other end | `Mirror1` | -2,056.7 |
+| 3 M6 countersinks, 10 mm deep | `CSK for M6 Countersunk Flat Head Screw1` | -1,458.9 |
+| 3 M6x1.0 tapped holes, through | `M6 Tapped Hole1` | -883.6 |
+| one Ø6 hole, 10 mm deep | `Ø6.0 (6) Diameter Hole1` | -299.7 |
+| five more round the y axis | `CirPattern1` | -1,498.7 (5 x 299.7) |
+
+The last call fails **on purpose**, and the GIF says so before it runs: one
+position is 5 mm above the top face. The tool refuses it with the distance,
+deletes the hole it had started, and the plate's volume doesn't change.
+
+**Tool calls**
+
+1. `create_hole({"face_point": [-38, 15, -18], "hole_type": "counterbore", "size": "M6", "end_condition": "blind", "depth": 8, "positions": [[-38, 15, 0], [-38, 15, 18]]})`
+2. `mirror_feature({"features": ["CBORE for M6 Hex Socket Head Cap Screw1"], "mirror_plane": "Right Plane", "mirror_bodies": false})`
+3. `create_hole({"face_point": [-22, 15, -18], "hole_type": "countersink", "size": "M6", "end_condition": "blind", "depth": 10, "positions": [[-22, 15, 0], [-22, 15, 18]]})`
+4. `create_hole({"face_point": [22, 15, -18], "hole_type": "tapped", "size": "M6x1.0", "positions": [[22, 15, 0], [22, 15, 18]]})`
+5. `create_hole({"face_point": [10, 15, 0], "hole_type": "simple", "size": "Ø6.0", "end_condition": "blind", "depth": 10})`
+6. `create_axis({"reference": "y"})`
+7. `pattern_circular({"features": ["Ø6.0 (6) Diameter Hole1"], "axis": "Axis1", "count": 6})`
+8. `create_hole({"face_point": [0, 15, 22], "hole_type": "counterbore", "size": "M6", "end_condition": "blind", "depth": 8, "positions": [[0, 20, -22]]})`, refused on purpose
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.

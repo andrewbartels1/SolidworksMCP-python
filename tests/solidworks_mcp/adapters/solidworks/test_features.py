@@ -3284,6 +3284,18 @@ def test_edge_pick_selects_with_select4_under_the_requested_mark() -> None:
     adapter.currentModel.ForceRebuild3.assert_called_once_with(True)
 
 
+def test_a_pick_inside_a_sketch_skips_the_rebuild() -> None:
+    """A rebuild would close the open sketch (seen live), so it can be skipped."""
+    edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
+    adapter = _picking_adapter([edge])
+
+    assert features._select_edge_by_coord(
+        adapter, 0.005, 0.0, 0.0, False, rebuild=False
+    )
+
+    adapter.currentModel.ForceRebuild3.assert_not_called()
+
+
 def test_edge_pick_refuses_a_point_that_is_on_no_edge() -> None:
     edge = _Segment("e", (0.0, 0.0, 0.0), (0.01, 0.0, 0.0))
     adapter = _picking_adapter([edge])

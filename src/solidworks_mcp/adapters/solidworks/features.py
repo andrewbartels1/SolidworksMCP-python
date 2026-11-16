@@ -1900,6 +1900,7 @@ def _select_edge_by_coord(
     mark: int = 0,
     entity_type: str = "EDGE",
     picker: _BodyEntityPicker | None = None,
+    rebuild: bool = True,
 ) -> bool:
     """Select the edge (or face) nearest to (x, y, z) in metres.
 
@@ -1925,6 +1926,8 @@ def _select_edge_by_coord(
         entity_type: ``"EDGE"``, ``"FACE"``, or another ``SelectByID2``
             type such as ``"VERTEX"``.
         picker: Reuse a picker (and its body walk) across several picks.
+        rebuild: Rebuild before the first pick. Pass False inside an open
+            sketch: a rebuild there closes the sketch (seen live).
 
     Returns:
         bool: True if an entity was selected; False otherwise.
@@ -1938,7 +1941,7 @@ def _select_edge_by_coord(
 
     # Rebuild to tessellate geometry from recent features before the first
     # entity in the selection set (when append=False this is the first one).
-    if not append:
+    if not append and rebuild:
         adapter._attempt(lambda: model.ForceRebuild3(True), default=None)
 
     # Only edges and faces are walked on the body; anything else (a vertex)

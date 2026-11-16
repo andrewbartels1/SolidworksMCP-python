@@ -4,7 +4,7 @@ Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply ge
 
 > **Prerequisite:** An active part document with an active sketch edit session.
 
-**Total tools in this category: 18**
+**Total tools in this category: 19**
 
 ---
 
@@ -443,6 +443,28 @@ Offset sketch entities by a distance in mm, outward or inward, e.g. for a wall o
 
 ```json
 {}
+```
+
+---
+
+### `sketch_convert_entities`
+
+Copy model edges, or a face's whole outline, into the open sketch (Convert Entities).
+
+**Prerequisite:** Active sketch edit mode, on a part with those edges.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `edge_points` | `list[list[float]]` | one of | `[]` | `[x, y, z]` mm on each model edge to copy |
+| `face_point` | `list[float]` | one of | `None` | `[x, y, z]` mm on a face whose outline to copy |
+| `construction` | `bool` | — | `false` | Make the copies construction geometry |
+
+**Sample call:**
+
+```json
+{"face_point": [0, 0, 20]}
 ```
 
 ---

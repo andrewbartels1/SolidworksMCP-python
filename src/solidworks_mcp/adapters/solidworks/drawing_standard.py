@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
 from . import dimension_layout as _layout
+from .com_utils import double_array as _double_array
 from .features import _null_callout
 from .io import _as_com, _resolve_drawing_view, _sw_type_info, _view_names
 
@@ -148,19 +149,6 @@ def gtol_problem(
     if len(letters) > 3 or any(len(d) != 1 or not d.isalpha() for d in letters):
         return "at most three datums, each a single letter"
     return None
-
-
-def _double_array(values: list[float]) -> Any:
-    """``VARIANT(VT_ARRAY | VT_R8)`` for array-valued COM properties (tuple when pywin32 is absent)."""
-    try:
-        import pythoncom
-        import win32com.client as w32
-
-        return w32.VARIANT(
-            pythoncom.VT_ARRAY | pythoncom.VT_R8, [float(v) for v in values]
-        )
-    except ImportError:  # non-Windows
-        return tuple(values)
 
 
 def _grow(box: tuple[float, ...], by: float) -> Box:

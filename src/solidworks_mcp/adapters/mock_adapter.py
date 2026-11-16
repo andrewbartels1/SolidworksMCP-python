@@ -10,6 +10,7 @@ import asyncio
 import math
 import os
 import random
+import re
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -184,6 +185,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._assembly_components: dict[str, dict[str, Any]] = {}
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
+        self._configurations_made: dict[str, list[str]] = {}
         # Names currently "selected" via select_feature / select_face_edges,
         # so append and selection_count behave like the real selection set.
         self._selection: list[str] = []
@@ -989,6 +991,143 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                     return (normal[0], normal[1], normal[2])
         return None
 
+    def _mock_configs(self) -> list[str]:
+        """The active model's configurations: Default, any made, and the active one."""
+        model = self._current_model
+        made = self._configurations_made.setdefault(model.name, ["Default"])
+        active = model.configuration or "Default"
+        if active not in made:
+            made.append(active)
+        return made
+
+    async def create_configuration(
+        self,
+        name: str,
+        parent: str | None = None,
+        description: str = "",
+        activate: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding a configuration, as the real adapter does.
+
+        Args:
+            name: The new configuration's name.
+            parent: A configuration to derive it from, or None.
+            description: Its description.
+            activate: Leave it active.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The configuration and every name.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        names = self._mock_configs()
+        if name in names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"A configuration named '{name}' already exists.",
+            )
+        if parent is not None and parent not in names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No configuration named '{parent}' to derive from; the "
+                f"model has {', '.join(names)}.",
+            )
+        names.append(name)
+        if activate:
+            self._current_model.configuration = name
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": name,
+                "parent": parent,
+                "active": self._current_model.configuration or "Default",
+                "configurations": list(names),
+            },
+        )
+
+    def _mock_unknown(self, name: str) -> AdapterResult[dict[str, Any]] | None:
+        """An error when no model is open or ``name`` isn't a configuration."""
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        names = self._mock_configs()
+        if name not in names:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No configuration named '{name}'; the model has "
+                f"{', '.join(names)}.",
+            )
+        return None
+
+    async def activate_configuration(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock showing a configuration.
+
+        Args:
+            name: The configuration to show.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The active and the previous one.
+        """
+        refused = self._mock_unknown(name)
+        if refused:
+            return refused
+        previous = self._current_model.configuration or "Default"
+        self._current_model.configuration = name
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"active": name, "previous": previous},
+        )
+
+    async def delete_configuration(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Mock deleting a configuration that isn't active or the only one.
+
+        Args:
+            name: The configuration to delete.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The deleted name and those left.
+        """
+        refused = self._mock_unknown(name)
+        if refused:
+            return refused
+        names = self._mock_configs()
+        if len(names) == 1:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"'{name}' is the model's only configuration.",
+            )
+        if (self._current_model.configuration or "Default") == name:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"'{name}' is the active configuration; activate another first.",
+            )
+        names.remove(name)
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"deleted": name, "configurations": list(names)},
+        )
+
+    async def active_configuration(self) -> AdapterResult[str]:
+        """Mock reading the active configuration's name.
+
+        Returns:
+            AdapterResult[str]: The name, or an error with no model open.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data=self._current_model.configuration or "Default",
+        )
+
     async def list_configurations(self) -> AdapterResult[list[str]]:
         """Mock configuration listing for the active model.
 
@@ -1004,8 +1143,7 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         await asyncio.sleep(self._delays["model_operation"] / 2)
         self._operation_count += 1
 
-        active = self._current_model.configuration or "Default"
-        configs = [active] if active == "Default" else ["Default", active]
+        configs = list(self._mock_configs())
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -3689,6 +3827,277 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 "volume_ratio": round(volume_after / volume_before, 6),
             },
             execution_time=self._delays["feature_operation"],
+        )
+
+    # --- Part features (mirrors SolidWorksPartFeaturesMixin) ---
+    # The mock has no geometry, so each feature moves a tracked part volume
+    # (a 40 mm block, 64000 mm³, to start) by an amount worked out from its
+    # inputs, keeping volume_before/after self-consistent across calls.
+
+    _MOCK_PART_VOLUME = 64000.0
+
+    def _mock_feature(
+        self, prefix: str, change: float, data: dict[str, Any]
+    ) -> AdapterResult[dict[str, Any]]:
+        """Record a mock feature that moved the part volume by ``change`` mm³.
+
+        Args:
+            prefix: The feature name's prefix.
+            change: The volume change, mm³.
+            data: The feature's data.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``data`` with a name and the volumes.
+        """
+        before = getattr(self, "_part_volume", self._MOCK_PART_VOLUME)
+        after = before + change
+        self._part_volume = after
+        self._feature_tree_count += 1
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "name": f"{prefix}{self._feature_tree_count}",
+                **data,
+                "volume_before": before,
+                "volume_after": after,
+                "volume_change": change,
+                "volume_ratio": round(after / before, 6),
+            },
+            execution_time=self._delays["feature_operation"],
+        )
+
+    async def pattern_linear(
+        self,
+        features: list[str],
+        direction: list[float] | str,
+        count: int,
+        spacing: float,
+        direction2: list[float] | str | None = None,
+        count2: int = 1,
+        spacing2: float = 0.0,
+        reverse: bool = False,
+        reverse2: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock linear pattern: each extra instance adds a 1000 mm³ seed.
+
+        Args:
+            features: Names of the features to repeat.
+            direction: The first direction (a point or a name).
+            count: Instances along it, the original included.
+            spacing: Spacing, mm.
+            direction2: The second direction, or None.
+            count2: Instances along the second direction.
+            spacing2: Spacing along it, mm.
+            reverse: Flip the first direction.
+            reverse2: Flip the second direction.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The pattern and its volume change.
+        """
+        two = direction2 is not None
+        total = int(count) * (int(count2) if two else 1)
+        return self._mock_feature(
+            "LPattern",
+            1000.0 * (total - 1),
+            {
+                "patterned": list(features),
+                "count": int(count),
+                "spacing_mm": float(spacing),
+                "count2": int(count2) if two else None,
+                "spacing2_mm": float(spacing2) if two else None,
+            },
+        )
+
+    async def create_shell(
+        self, thickness: float, faces: list[list[float]], outward: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock shell: a 40 mm block hollowed to ``thickness`` walls.
+
+        Args:
+            thickness: Wall thickness, mm.
+            faces: Points on the faces to remove.
+            outward: Add the wall outside.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The shell and its volume change.
+        """
+        inner = max(40.0 - 2 * float(thickness), 0.0)
+        return self._mock_feature(
+            "Shell",
+            -(inner**3),
+            {
+                "thickness_mm": float(thickness),
+                "faces_removed": len(faces),
+                "outward": bool(outward),
+            },
+        )
+
+    async def add_draft(
+        self,
+        angle: float,
+        faces: list[list[float]],
+        neutral_face: list[float],
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock draft: each drafted 40 x 40 mm face loses a thin wedge.
+
+        Args:
+            angle: Draft angle, degrees.
+            faces: Points on the faces to draft.
+            neutral_face: A point on the neutral face.
+            reverse: Draft the other way.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The draft and its volume change.
+        """
+        wedge = 0.5 * 40.0 * 40.0 * 40.0 * math.tan(math.radians(float(angle)))
+        sign = 1.0 if reverse else -1.0
+        return self._mock_feature(
+            "Draft",
+            sign * wedge * len(faces),
+            {"angle": float(angle), "faces_drafted": len(faces)},
+        )
+
+    async def create_rib(
+        self,
+        sketch: str,
+        thickness: float,
+        both_sides: bool = True,
+        flip_material: bool = False,
+        normal_to_sketch: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock rib: a 40 x 20 mm web of ``thickness``.
+
+        Args:
+            sketch: The rib sketch's name.
+            thickness: Rib thickness, mm.
+            both_sides: Thicken both sides.
+            flip_material: Extend the other way.
+            normal_to_sketch: Extrude normal to the sketch.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The rib and its volume change.
+        """
+        return self._mock_feature(
+            "Rib",
+            40.0 * 20.0 * float(thickness),
+            {
+                "sketch": sketch,
+                "thickness_mm": float(thickness),
+                "both_sides": bool(both_sides),
+            },
+        )
+
+    async def create_hole(
+        self,
+        face_point: list[float],
+        hole_type: str,
+        standard: str,
+        size: str,
+        end_condition: str = "through_all",
+        depth: float | None = None,
+        positions: list[list[float]] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock holes: cylinders of the size's diameter (6 mm when not metric).
+
+        Args:
+            face_point: Where the hole goes, mm.
+            hole_type: The hole type.
+            standard: The standard.
+            size: The size.
+            end_condition: Blind or through all.
+            depth: Blind depth, mm.
+            positions: Further points, mm; one more hole each.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The holes and their volume change.
+        """
+        match = re.match(r"^\s*M(\d+(?:\.\d+)?)", size, re.IGNORECASE)
+        radius = (float(match.group(1)) if match else 6.0) / 2.0
+        length = float(depth) if depth is not None else 40.0
+        extra = [list(p) for p in positions or []]
+        count = 1 + len(extra)
+        return self._mock_feature(
+            "Hole",
+            -math.pi * radius * radius * length * count,
+            {
+                "hole_type": hole_type,
+                "standard": standard,
+                "size": size,
+                "end_condition": end_condition,
+                "end_condition_used": end_condition,
+                "depth_mm": depth,
+                "hole_count": count,
+                "at_mm": list(face_point),
+                "positions_mm": extra,
+            },
+        )
+
+    async def add_cosmetic_thread(
+        self,
+        edge_point: list[float],
+        size: str,
+        diameter: float,
+        end_type: str = "blind",
+        depth: float | None = None,
+        standard: str = "iso",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock cosmetic thread: a feature that leaves the volume alone.
+
+        Args:
+            edge_point: A point on the circular edge, mm.
+            size: The thread size.
+            diameter: The major diameter, mm.
+            end_type: Blind, up to next or through.
+            depth: Blind length, mm.
+            standard: The standard.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The thread, volume unchanged.
+        """
+        return self._mock_feature(
+            "Cosmetic Thread",
+            0.0,
+            {
+                "size": size,
+                "diameter_mm": float(diameter),
+                "end_type": end_type,
+                "depth_mm": depth,
+            },
+        )
+
+    async def sketch_convert_entities(
+        self,
+        edge_points: list[list[float]] | None = None,
+        face_point: list[float] | None = None,
+        construction: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock convert entities: one line per edge, four for a face.
+
+        Args:
+            edge_points: Points on the edges to copy.
+            face_point: A point on a face whose outline to copy.
+            construction: Make the copies construction geometry.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The new entity ids.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        made = len(edge_points or []) + (4 if face_point is not None else 0)
+        ids = []
+        for _ in range(made):
+            entity_id = f"Converted_{len(self._sketch_entity_ids) + 1}"
+            self._sketch_entity_ids.add(entity_id)
+            ids.append(entity_id)
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"entities": ids, "count": len(ids), "construction": construction},
+            execution_time=self._delays["sketch_operation"],
         )
 
     # --- Engineering-data and drawing-documentation methods ---

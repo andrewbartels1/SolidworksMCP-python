@@ -24,10 +24,12 @@ from .base import (
     SolidWorksAdapter,
 )
 from .solidworks import (
+    SolidWorksConfigurationsMixin,
     SolidWorksDocumentationMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksFeaturesMixin,
     SolidWorksIOMixin,
+    SolidWorksPartFeaturesMixin,
     SolidWorksSelectionMixin,
     SolidWorksSketchMixin,
     bitmap,
@@ -1711,6 +1713,8 @@ class PyWin32Adapter(
     SolidWorksDrawingStandardMixin,
     SolidWorksDocumentationMixin,
     SolidWorksSketchMixin,
+    SolidWorksConfigurationsMixin,
+    SolidWorksPartFeaturesMixin,
     SolidWorksFeaturesMixin,
     SolidWorksIOMixin,
     SolidWorksSelectionMixin,

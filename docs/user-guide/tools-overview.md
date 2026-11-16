@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 123 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
+The SolidWorks MCP Server provides 133 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
 
 ## Read this first
 
@@ -24,17 +24,17 @@ The SolidWorks MCP Server provides 123 specialized tools for CAD automation. Thi
 
     ---
 
-    Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, fillets, chamfers, patterns, reference geometry, mates, dimensions and the feature tree.
+    Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, fillets, chamfers, linear and circular patterns, reference geometry, mates, dimensions and the feature tree.
 
-    [**31 tools available** :octicons-arrow-right-24:](tool-catalog/modeling.md)
+    [**37 tools available** :octicons-arrow-right-24:](tool-catalog/modeling.md)
 
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
     ---
 
-    Sketches on a plane or a flat face: lines, arcs, circles, rectangles, polygons, splines, relations, dimensions, offsets, mirrors and patterns.
+    Sketches on a plane or a flat face: lines, arcs, circles, rectangles, polygons, splines, relations, dimensions, offsets, mirrors, patterns and edges converted from the model.
 
-    [**18 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
+    [**19 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
 
 - :material-technical-draw:{ .lg .middle } **Drawing Tools**
 
@@ -90,7 +90,7 @@ The SolidWorks MCP Server provides 123 specialized tools for CAD automation. Thi
 
     Open, save, switch and inspect documents; the feature tree, configurations and the current selection; Pack and Go.
 
-    [**16 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
+    [**19 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
 
 - :material-code-braces:{ .lg .middle } **VBA Generation**
 
@@ -142,7 +142,7 @@ The SolidWorks MCP Server provides 123 specialized tools for CAD automation. Thi
 
 </div>
 
-**Total: 123 Tools**
+**Total: 133 Tools**
 
 ## Deprecated tools
 

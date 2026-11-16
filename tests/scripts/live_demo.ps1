@@ -31,7 +31,7 @@ param(
     [string]$CaptureDir = "",
     [switch]$Record,
     [switch]$Trace,
-    [double]$Speed = 5.0,
+    [double]$Speed = 2.5,
     [double]$PromptSeconds = 4.0
 )
 
@@ -61,7 +61,7 @@ if ($Record) {
         $line = "$_"
         if ($line -match "\[evidence\]") { $inEvidence = $true }
         elseif ($line.Trim() -eq "") { $inEvidence = $false }
-        if ($inEvidence -or $line -match "\[live\]|\[recorder\]|PASSED|FAILED|SKIPPED|passed|failed|skipped|Error") {
+        if ($inEvidence -or $line -match "\[live\]|\[note\]|\[recorder\]|PASSED|FAILED|SKIPPED|passed|failed|skipped|Error") {
             $line
         }
     }

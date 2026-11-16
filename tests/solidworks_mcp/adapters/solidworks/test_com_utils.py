@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import builtins
+import sys
+from types import SimpleNamespace
+
 import pytest
 
-from solidworks_mcp.adapters.solidworks.com_utils import as_list, strip_op_prefix
+from solidworks_mcp.adapters.solidworks.com_utils import (
+    as_list,
+    double_array,
+    strip_op_prefix,
+)
 
 
 @pytest.mark.parametrize(
@@ -26,3 +34,27 @@ def test_as_list_normalises_com_returns(value: object, expected: list) -> None:
 )
 def test_strip_op_prefix(error: str | None, expected: str | None) -> None:
     assert strip_op_prefix(error, "select_feature") == expected
+
+
+class TestDoubleArray:
+    def test_variant_on_windows(self, monkeypatch) -> None:
+        fake_w32 = SimpleNamespace(VARIANT=lambda vt, values: ("VARIANT", vt, values))
+        monkeypatch.setitem(
+            sys.modules,
+            "pythoncom",
+            SimpleNamespace(VT_ARRAY=0x2000, VT_R8=5),
+        )
+        monkeypatch.setitem(sys.modules, "win32com", SimpleNamespace(client=fake_w32))
+        monkeypatch.setitem(sys.modules, "win32com.client", fake_w32)
+        assert double_array([1, 2]) == ("VARIANT", 0x2005, [1.0, 2.0])
+
+    def test_plain_tuple_without_pywin32(self, monkeypatch) -> None:
+        real_import = builtins.__import__
+
+        def no_pythoncom(name, *args, **kwargs):
+            if name == "pythoncom":
+                raise ImportError(name)
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_pythoncom)
+        assert double_array([1.0, 2.0]) == (1.0, 2.0)

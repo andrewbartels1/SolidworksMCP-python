@@ -10,7 +10,7 @@
 [![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 123 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 133 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
 [![115 MCP tools by support level (the 8 deprecated ones not counted), and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.com/SolidworksMCP-python/progress/)
 
@@ -188,6 +188,9 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#custom-property"><img src="docs/assets/demos/engineering-data/test_custom_property_round_trip.gif" alt="Custom properties" width="100%"></a><br><sub>Custom properties</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#face-mate"><img src="docs/assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces-motion.gif" alt="A pin seated in its hole by two face mates" width="100%"></a><br><sub>A pin seated in its hole by two face mates</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#thin-plate"><img src="docs/assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate-motion.gif" alt="A bent plate from an open outline" width="100%"></a><br><sub>A bent plate from an open outline</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#hole-positions"><img src="docs/assets/demos/part-features/test_holes_at_several_points-motion.gif" alt="A plate of Hole Wizard holes placed from points, a mirror and a ring" width="100%"></a><br><sub>A plate of Hole Wizard holes from points, a mirror and a ring</sub></td>
 </tr>
 </table>
 

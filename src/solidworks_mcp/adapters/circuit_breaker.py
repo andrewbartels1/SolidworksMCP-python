@@ -861,6 +861,232 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
+    async def pattern_linear(
+        self,
+        features: list[str],
+        direction: list[float] | str,
+        count: int,
+        spacing: float,
+        direction2: list[float] | str | None = None,
+        count2: int = 1,
+        spacing2: float = 0.0,
+        reverse: bool = False,
+        reverse2: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Repeat features along one or two directions through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "pattern_linear",
+            lambda: self.adapter.pattern_linear(
+                features,
+                direction,
+                count,
+                spacing,
+                direction2,
+                count2,
+                spacing2,
+                reverse,
+                reverse2,
+            ),
+            input_dict={
+                "features": features,
+                "direction": direction,
+                "count": count,
+                "spacing": spacing,
+                "direction2": direction2,
+                "count2": count2,
+                "spacing2": spacing2,
+                "reverse": reverse,
+                "reverse2": reverse2,
+            },
+        )
+
+    async def create_shell(
+        self,
+        thickness: float,
+        faces: list[list[float]],
+        outward: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Hollow the body to a wall thickness through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_shell",
+            lambda: self.adapter.create_shell(thickness, faces, outward),
+            input_dict={
+                "thickness": thickness,
+                "faces": faces,
+                "outward": outward,
+            },
+        )
+
+    async def add_draft(
+        self,
+        angle: float,
+        faces: list[list[float]],
+        neutral_face: list[float],
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Draft faces against a neutral face through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_draft",
+            lambda: self.adapter.add_draft(angle, faces, neutral_face, reverse),
+            input_dict={
+                "angle": angle,
+                "faces": faces,
+                "neutral_face": neutral_face,
+                "reverse": reverse,
+            },
+        )
+
+    async def create_rib(
+        self,
+        sketch: str,
+        thickness: float,
+        both_sides: bool = True,
+        flip_material: bool = False,
+        normal_to_sketch: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a rib from an open sketch through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_rib",
+            lambda: self.adapter.create_rib(
+                sketch, thickness, both_sides, flip_material, normal_to_sketch
+            ),
+            input_dict={
+                "sketch": sketch,
+                "thickness": thickness,
+                "both_sides": both_sides,
+                "flip_material": flip_material,
+                "normal_to_sketch": normal_to_sketch,
+            },
+        )
+
+    async def create_hole(
+        self,
+        face_point: list[float],
+        hole_type: str,
+        standard: str,
+        size: str,
+        end_condition: str = "through_all",
+        depth: float | None = None,
+        positions: list[list[float]] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a Hole Wizard hole at a point on a flat face through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_hole",
+            lambda: self.adapter.create_hole(
+                face_point, hole_type, standard, size, end_condition, depth, positions
+            ),
+            input_dict={
+                "face_point": face_point,
+                "hole_type": hole_type,
+                "standard": standard,
+                "size": size,
+                "end_condition": end_condition,
+                "depth": depth,
+                "positions": positions,
+            },
+        )
+
+    async def add_cosmetic_thread(
+        self,
+        edge_point: list[float],
+        size: str,
+        diameter: float,
+        end_type: str = "blind",
+        depth: float | None = None,
+        standard: str = "iso",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a cosmetic thread on a circular edge through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_cosmetic_thread",
+            lambda: self.adapter.add_cosmetic_thread(
+                edge_point, size, diameter, end_type, depth, standard
+            ),
+            input_dict={
+                "edge_point": edge_point,
+                "size": size,
+                "diameter": diameter,
+                "end_type": end_type,
+                "depth": depth,
+                "standard": standard,
+            },
+        )
+
+    async def sketch_convert_entities(
+        self,
+        edge_points: list[list[float]] | None = None,
+        face_point: list[float] | None = None,
+        construction: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Copy model edges or a face outline into the open sketch through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_convert_entities",
+            lambda: self.adapter.sketch_convert_entities(
+                edge_points, face_point, construction
+            ),
+            input_dict={
+                "edge_points": edge_points,
+                "face_point": face_point,
+                "construction": construction,
+            },
+        )
+
+    async def create_configuration(
+        self,
+        name: str,
+        parent: str | None = None,
+        description: str = "",
+        activate: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a configuration to the active model through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_configuration",
+            lambda: self.adapter.create_configuration(
+                name, parent, description, activate
+            ),
+            input_dict={
+                "name": name,
+                "parent": parent,
+                "description": description,
+                "activate": activate,
+            },
+        )
+
+    async def activate_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make a configuration active through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "activate_configuration",
+            lambda: self.adapter.activate_configuration(name),
+            input_dict={
+                "name": name,
+            },
+        )
+
+    async def delete_configuration(
+        self,
+        name: str,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete a configuration through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "delete_configuration",
+            lambda: self.adapter.delete_configuration(name),
+            input_dict={
+                "name": name,
+            },
+        )
+
+    async def active_configuration(
+        self,
+    ) -> AdapterResult[str]:
+        """Read the active configuration's name through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "active_configuration",
+            lambda: self.adapter.active_configuration(),
+            input_dict={},
+        )
+
     async def create_revolve(
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
