@@ -167,14 +167,6 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
-#: New in queue item 11 (part-feature-depth); stable once its live bundle passes.
-_BETA_PART_FEATURE = Support(
-    SupportLevel.BETA, "not yet checked on SolidWorks (queue item 11's live bundle)."
-)
-#: New in queue item 13 (configuration-tools); stable once its live bundle passes.
-_BETA_CONFIGURATIONS = Support(
-    SupportLevel.BETA, "not yet checked on SolidWorks (queue item 13's live bundle)."
-)
 _PLANNED_DRAWING = Support(
     SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
 )
@@ -254,9 +246,9 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "get_model_info": _STABLE,
     "get_selected_entities": _STABLE,
     "list_configurations": _STABLE,
-    "create_configuration": _BETA_CONFIGURATIONS,
-    "activate_configuration": _BETA_CONFIGURATIONS,
-    "delete_configuration": _BETA_CONFIGURATIONS,
+    "create_configuration": _STABLE,
+    "activate_configuration": _STABLE,
+    "delete_configuration": _STABLE,
     "list_features": _STABLE,
     "list_open_documents": _STABLE,
     "load_assembly": _deprecated("open_model"),
@@ -292,12 +284,12 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "mirror_feature": _STABLE,
     "open_model": _STABLE,
     "pattern_circular": _STABLE,
-    "pattern_linear": _BETA_PART_FEATURE,
-    "create_shell": _BETA_PART_FEATURE,
-    "add_draft": _BETA_PART_FEATURE,
-    "create_rib": _BETA_PART_FEATURE,
-    "create_hole": _BETA_PART_FEATURE,
-    "add_cosmetic_thread": _BETA_PART_FEATURE,
+    "pattern_linear": _STABLE,
+    "create_shell": _STABLE,
+    "add_draft": _STABLE,
+    "create_rib": _STABLE,
+    "create_hole": _STABLE,
+    "add_cosmetic_thread": _STABLE,
     "rebuild_model": _STABLE,
     "rename_feature": _STABLE,
     "select_face_edges": _STABLE,
@@ -327,7 +319,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "sketch_linear_pattern": _STABLE,
     "sketch_mirror": _STABLE,
     "sketch_offset": _STABLE,
-    "sketch_convert_entities": _BETA_PART_FEATURE,
+    "sketch_convert_entities": _STABLE,
     "sketch_tutorial_simple_hole": _deprecated(None),
     # template_management
     "compare_templates": _STABLE,

@@ -189,6 +189,9 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#face-mate"><img src="docs/assets/demos/tool-gaps/test_a_pin_mates_concentric_in_its_hole_by_two_faces-motion.gif" alt="A pin seated in its hole by two face mates" width="100%"></a><br><sub>A pin seated in its hole by two face mates</sub></td>
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#thin-plate"><img src="docs/assets/demos/tool-gaps/test_a_thin_wall_from_an_open_sketch_makes_a_bent_plate-motion.gif" alt="A bent plate from an open outline" width="100%"></a><br><sub>A bent plate from an open outline</sub></td>
 </tr>
+<tr>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#hole-positions"><img src="docs/assets/demos/part-features/test_holes_at_several_points-motion.gif" alt="A plate of Hole Wizard holes placed from points, a mirror and a ring" width="100%"></a><br><sub>A plate of Hole Wizard holes from points, a mirror and a ring</sub></td>
+</tr>
 </table>
 
 **[See every demo in the docs](https://andrewbartels1.com/SolidworksMCP-python/demos/)**: what each one shows, its prompt, every tool call with its arguments (all 58 for the demo at the top), and how to run them yourself.

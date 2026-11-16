@@ -37,4 +37,4 @@
 - [x] 6.1 CONTRIBUTING: a short note that `docs/llms.txt` is generated and how to rebuild it, and that page openings are its summaries; the CHANGELOG `Added` entries
 - [x] 6.2 Security review of the generated file (design decision 9): entry count, every URL ours, no hidden characters, no summary that reads as an instruction to an agent; recorded in the design
 - [x] 6.3 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`, `openspec validate --all`
-- [ ] 6.4 Hand the user the file, the link report and the review (no live SolidWorks demo: nothing here touches SolidWorks); PR closing queue item 19, no attribution; archive and update the queue after the merge
+- [x] 6.4 (merged as #232 2026-11-16) Hand the user the file, the link report and the review (no live SolidWorks demo: nothing here touches SolidWorks); PR closing queue item 19, no attribution; archive and update the queue after the merge

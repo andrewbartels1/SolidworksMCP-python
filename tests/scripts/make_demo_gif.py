@@ -247,15 +247,15 @@ def main() -> None:
         "--recording", action="store_true", help="also build the motion GIFs"
     )
     parser.add_argument(
-        "--speed", type=float, default=5.0, help="motion GIF playback speed-up"
+        "--speed", type=float, default=2.5, help="motion GIF playback speed-up"
     )
     parser.add_argument(
-        "--max-hold", type=float, default=0.6, help="longest a motion frame shows (s)"
+        "--max-hold", type=float, default=1.0, help="longest a motion frame shows (s)"
     )
     parser.add_argument(
         "--min-caption",
         type=float,
-        default=0.6,
+        default=1.2,
         help="shortest a frame with a new caption shows (s)",
     )
     parser.add_argument(

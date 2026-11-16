@@ -31,7 +31,7 @@ param(
     [string]$CaptureDir = "",
     [switch]$Record,
     [switch]$Trace,
-    [double]$Speed = 5.0,
+    [double]$Speed = 2.5,
     [double]$PromptSeconds = 4.0
 )
 

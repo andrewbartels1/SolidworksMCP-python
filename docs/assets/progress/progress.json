@@ -2,8 +2,8 @@
  "tools": {
   "total": 133,
   "by_level": {
-   "stable": 108,
-   "beta": 10,
+   "stable": 118,
+   "beta": 0,
    "experimental": 0,
    "planned": 7,
    "deprecated": 8
@@ -12,8 +12,8 @@
    {
     "name": "activate_configuration",
     "family": "file_management",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 13's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Make a configuration of the active model the active one, and rebuild."
    },
    {
@@ -54,8 +54,8 @@
    {
     "name": "add_cosmetic_thread",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Add a cosmetic thread to a hole or shaft, so drawings show the thread callout."
    },
    {
@@ -75,8 +75,8 @@
    {
     "name": "add_draft",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Draft faces of the active part by an angle, e.g. for a moulded part."
    },
    {
@@ -257,8 +257,8 @@
    {
     "name": "create_configuration",
     "family": "file_management",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 13's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Add a configuration to the active part or assembly, e.g. a long and a short version of one part."
    },
    {
@@ -299,8 +299,8 @@
    {
     "name": "create_hole",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face."
    },
    {
@@ -341,8 +341,8 @@
    {
     "name": "create_rib",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Add a rib from a sketched line, stiffening a wall or the inside of a shell."
    },
    {
@@ -355,8 +355,8 @@
    {
     "name": "create_shell",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Hollow the active part to a wall thickness, opening the faces picked."
    },
    {
@@ -383,8 +383,8 @@
    {
     "name": "delete_configuration",
     "family": "file_management",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 13's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Delete a configuration of the active model; not the active one or the only one."
    },
    {
@@ -740,8 +740,8 @@
    {
     "name": "pattern_linear",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Repeat features of the active part in a row or a grid, e.g. a row of holes."
    },
    {
@@ -873,8 +873,8 @@
    {
     "name": "sketch_convert_entities",
     "family": "sketching",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 11's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Copy model edges, or a face's whole outline, into the open sketch (Convert Entities)."
    },
    {

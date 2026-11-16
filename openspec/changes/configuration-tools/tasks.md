@@ -28,7 +28,7 @@ configuration tools reach the morning live run.
 
 ## 4. Live bundle (one set, run together, then fixes one by one)
 
-- [ ] 4.1 (create/activate/delete written in tests/live/test_live_sw_configurations.py, not yet run; the scoped-change scenarios wait on section 3) Live tests: create `Long`, activate it and back; delete refused while active; a length in `Long` only, read in both; `Fillet1` suppressed in `all`; an unknown name refused
+- [ ] 4.1 (create/activate/delete passed live 2026-11-16; the scoped-change scenarios wait on section 3) Live tests: create `Long`, activate it and back; delete refused while active; a length in `Long` only, read in both; `Fillet1` suppressed in `all`; an unknown name refused
 - [ ] 4.2 Hand the user the bundle; fix each failure afterwards, one at a time
 
 ## 5. Docs and finish

@@ -150,7 +150,7 @@ List the names of the active model's configurations, and which one is active.
 
 Add a configuration to the active part or assembly, e.g. a long and a short version of one part. The configuration that was active stays active unless `activate` is on.
 
-**Prerequisite:** Active part or assembly. Beta: not yet checked on SolidWorks (queue item 13's live bundle).
+**Prerequisite:** Active part or assembly.
 
 **Parameters:**
 

@@ -66,12 +66,11 @@ plane; the reply's `end_condition` says `MidPlane`.
    centre is always the sketch origin.
 3. `exit_sketch`, then one `create_cut_extrude`.
 
-Don't use `pattern_circular` on a cut: it reports an error unless the
-volume grows.
+A cut or a `create_hole` hole that already exists can be repeated instead:
+`create_axis` with `reference: "y"` (an axis through the origin), then
+`pattern_circular` with the feature's name, the axis and `count`.
 
-## Standard holes, threads, shells and ribs (beta)
-
-These tools are beta until their live check passes; their results say so.
+## Standard holes, threads, shells and ribs
 
 - **A hole for a screw:** `create_hole` with a point on the face where the
   hole's centre goes, the `hole_type` and the size SolidWorks lists

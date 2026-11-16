@@ -433,7 +433,7 @@ Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at
 
 Every point in `positions` adds another hole to the same feature, as placing holes on sketch points does in the Hole Wizard. SolidWorks makes no simple hole through all, so a simple `through_all` hole is made blind through the part; the reply's `end_condition_used` says `blind` and a warning explains.
 
-**Prerequisite:** Active part with a flat face at `face_point`. Beta: not yet checked on SolidWorks (queue item 11's live bundle).
+**Prerequisite:** Active part with a flat face at `face_point`.
 
 **Parameters:**
 
@@ -464,7 +464,7 @@ Every point in `positions` adds another hole to the same feature, as placing hol
 
 Add a cosmetic thread to a hole or shaft, so drawings show the thread callout.
 
-**Prerequisite:** Active part with a round edge at `edge_point`. Beta: not yet checked on SolidWorks.
+**Prerequisite:** Active part with a round edge at `edge_point`.
 
 **Parameters:**
 
@@ -493,7 +493,7 @@ Add a cosmetic thread to a hole or shaft, so drawings show the thread callout.
 
 Repeat features of the active part in a row or a grid, e.g. a row of holes.
 
-**Prerequisite:** Active part with the named features. Beta: not yet checked on SolidWorks.
+**Prerequisite:** Active part with the named features.
 
 **Parameters:**
 
@@ -525,7 +525,7 @@ Repeat features of the active part in a row or a grid, e.g. a row of holes.
 
 Hollow the active part to a wall thickness, opening the faces picked.
 
-**Prerequisite:** Active part with a solid body. Beta: not yet checked on SolidWorks.
+**Prerequisite:** Active part with a solid body.
 
 **Parameters:**
 
@@ -547,7 +547,7 @@ Hollow the active part to a wall thickness, opening the faces picked.
 
 Draft faces of the active part by an angle, e.g. for a moulded part.
 
-**Prerequisite:** Active part. Beta: not yet checked on SolidWorks.
+**Prerequisite:** Active part.
 
 **Parameters:**
 
@@ -574,7 +574,7 @@ Draft faces of the active part by an angle, e.g. for a moulded part.
 
 Add a rib from a sketched line, stiffening a wall or the inside of a shell.
 
-**Prerequisite:** Active part and a closed rib sketch holding an open line. Beta: not yet checked on SolidWorks.
+**Prerequisite:** Active part and a closed rib sketch holding an open line.
 
 **Parameters:**
 

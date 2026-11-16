@@ -451,7 +451,7 @@ Offset sketch entities by a distance in mm, outward or inward, e.g. for a wall o
 
 Copy model edges, or a face's whole outline, into the open sketch (Convert Entities).
 
-**Prerequisite:** Active sketch edit mode, on a part with those edges. Beta: not yet checked on SolidWorks.
+**Prerequisite:** Active sketch edit mode, on a part with those edges.
 
 **Parameters:**
 

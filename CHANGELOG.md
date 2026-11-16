@@ -14,21 +14,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Configurations** (queue item 13), beta until their live check passes:
+- **Configurations** (queue item 13), checked live on SolidWorks 2026:
   `create_configuration` (optionally derived from another),
   `activate_configuration` and `delete_configuration` (not the active one or
   the only one). `list_configurations` now also reports `active`. With
   design tables out (they don't work through COM here), this is how an agent
   makes variants of a part. 130 tools become 133.
-- **Seven part-feature tools** (queue item 11, #105), beta until their
-  live check passes: `create_hole` (Hole Wizard: simple, counterbore,
-  countersink or tapped, ISO or ANSI inch, at a point on a flat face),
+- **Seven part-feature tools** (queue item 11, #105), checked live on
+  SolidWorks 2026: `create_hole` (Hole Wizard: simple, counterbore,
+  countersink or tapped, ISO or ANSI inch, at a point on a flat face, and
+  with `positions` several holes in one feature, the way you place holes on
+  sketch points by hand),
   `add_cosmetic_thread`, `pattern_linear` (a row or a grid), `create_shell`,
   `add_draft`, `create_rib`, and `sketch_convert_entities` (copy model edges
   or a face's outline into the open sketch). Faces and edges are picked by a
   point in mm. Each solid feature reports its volume change, and one that
   changed nothing is removed again and reported as a failure. 123 tools
-  become 130.
+  become 130. A simple hole through all, which SolidWorks won't make, is
+  made blind through the part with a warning; a tapped hole's thread stops
+  at 80% of a blind hole's depth. A new demo drills a plate with each hole
+  type, a mirror and a ring of six.
+- **Demo GIFs:** a caption can hold for a set time (used to say a failure
+  is on purpose before it happens), and motion GIFs play at 2.5x instead of
+  5x.
 - **Our own `llms.txt`**, served at the docs site's root and built from the
   docs: each entry's title and summary are copied word for word from its
   page, and a test fails when the file and the pages disagree, when it
